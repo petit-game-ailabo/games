@@ -1,21 +1,20 @@
-# 今日のミニゲーム / TodaysMinigame
+# ぷちゲーム部-AIラボ
 
-毎日新しいミニゲームをお届けします🎮
+毎日新しいミニゲームをお届けします🎮 AI自動生成ゲーム
 
 ## 🎮 最新のゲーム
 
-最新ゲームはこちら → [今日のゲーム](https://todaysminigame.github.io/latest/)
+最新ゲームはこちら → [トップページ](https://petit-game-ailabo.github.io/games/)
 
 ## 📅 過去のゲーム
 
-- [2026-03-07](./2026-03-07/) - ブロック崩し
-- [2026-03-08](./2026-03-08/) - タップゲーム
+- [day00001](./day00001/) - タップゲーム
 - *(今後追加予定)*
 
 ## 🔗 リンク
 
-- Twitter: [@TodaysMinigame](https://twitter.com/TodaysMinigame)
-- YouTube: [今日のミニゲーム](https://youtube.com/@TodaysMinigame)
+- Twitter: (準備中)
+- YouTube: (準備中)
 
 ## 📜 ライセンス
 
