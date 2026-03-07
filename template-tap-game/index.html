@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タップゲーム - 今日のミニゲーム</title>
+    <meta name="description" content="10秒でどれだけタップできる？">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .info {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+        }
+        .credits {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <div id="game-container"></div>
+        <div class="info">
+            <p>10秒でどれだけタップできる？</p>
+        </div>
+    </div>
+    <div class="credits">Powered by Phaser</div>
+    
+    <script>
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: 'game-container',
+            backgroundColor: '#2d3436',
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        
+        let score = 0;
+        let timeLeft = 10;
+        let gameStarted = false;
+        let gameOver = false;
+        let scoreText;
+        let timeText;
+        let startText;
+        let resultText;
+        let targetCircle;
+        let timerEvent;
+
+        function preload() {
+            // 画像なし・シンプルな図形のみ
+        }
+
+        function create() {
+            // スコア表示
+            scoreText = this.add.text(20, 20, 'Score: 0', {
+                fontSize: '32px',
+                fill: '#fff',
+                fontStyle: 'bold'
+            });
+
+            // タイマー表示
+            timeText = this.add.text(20, 60, 'Time: 10', {
+                fontSize: '32px',
+                fill: '#fff',
+                fontStyle: 'bold'
+            });
+
+            // スタートテキスト
+            startText = this.add.text(400, 300, 'クリックしてスタート！', {
+                fontSize: '48px',
+                fill: '#fff',
+                fontStyle: 'bold'
+            });
+            startText.setOrigin(0.5);
+
+            // ターゲット円（非表示で開始）
+            targetCircle = this.add.circle(400, 350, 50, 0xff6b6b);
+            targetCircle.setInteractive();
+            targetCircle.setVisible(false);
+
+            // クリックイベント
+            this.input.on('pointerdown', handleClick, this);
+        }
+
+        function handleClick(pointer) {
+            if (!gameStarted && !gameOver) {
+                // ゲーム開始
+                startGame(this);
+            } else if (gameStarted && !gameOver) {
+                // ターゲットがクリックされたか判定
+                const distance = Phaser.Math.Distance.Between(
+                    pointer.x, pointer.y,
+                    targetCircle.x, targetCircle.y
+                );
+                
+                if (distance <= 50) {
+                    score++;
+                    scoreText.setText('Score: ' + score);
+                    
+                    // ターゲットを新しい位置に移動
+                    moveTarget(this);
+                    
+                    // クリックエフェクト
+                    const effect = this.add.circle(pointer.x, pointer.y, 20, 0xffffff, 0.8);
+                    this.tweens.add({
+                        targets: effect,
+                        alpha: 0,
+                        scale: 2,
+                        duration: 300,
+                        onComplete: () => effect.destroy()
+                    });
+                }
+            }
+        }
+
+        function startGame(scene) {
+            gameStarted = true;
+            startText.setVisible(false);
+            targetCircle.setVisible(true);
+            
+            // 初期位置設定
+            moveTarget(scene);
+
+            // タイマー開始
+            timerEvent = scene.time.addEvent({
+                delay: 1000,
+                callback: updateTimer,
+                callbackScope: scene,
+                loop: true
+            });
+        }
+
+        function updateTimer() {
+            timeLeft--;
+            timeText.setText('Time: ' + timeLeft);
+
+            if (timeLeft <= 0) {
+                endGame(this);
+            }
+        }
+
+        function moveTarget(scene) {
+            // ランダムな位置に移動（画面端を避ける）
+            const x = Phaser.Math.Between(100, 700);
+            const y = Phaser.Math.Between(150, 500);
+            
+            targetCircle.x = x;
+            targetCircle.y = y;
+
+            // 色をランダムに変更
+            const colors = [0xff6b6b, 0x4ecdc4, 0xffe66d, 0x95e1d3, 0xf38181];
+            const randomColor = Phaser.Utils.Array.GetRandom(colors);
+            targetCircle.fillColor = randomColor;
+        }
+
+        function endGame(scene) {
+            gameOver = true;
+            gameStarted = false;
+            timerEvent.remove();
+            
+            targetCircle.setVisible(false);
+            
+            // 結果表示
+            resultText = scene.add.text(400, 300, `ゲーム終了！\n\nスコア: ${score}\n\nクリックで再プレイ`, {
+                fontSize: '48px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                align: 'center'
+            });
+            resultText.setOrigin(0.5);
+            
+            // 再プレイ可能にする
+            scene.time.delayedCall(1000, () => {
+                scene.input.once('pointerdown', () => {
+                    resetGame(scene);
+                });
+            });
+        }
+
+        function resetGame(scene) {
+            score = 0;
+            timeLeft = 10;
+            gameOver = false;
+            
+            scoreText.setText('Score: 0');
+            timeText.setText('Time: 10');
+            
+            if (resultText) {
+                resultText.destroy();
+            }
+            
+            startText.setVisible(true);
+            startText.setText('クリックしてスタート！');
+        }
+
+        function update() {
+            // 更新処理（必要に応じて）
+        }
+    </script>
+</body>
+</html>
