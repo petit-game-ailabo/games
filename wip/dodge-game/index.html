@@ -73,7 +73,7 @@
 </head>
 <body>
     <div id="game-container"></div>
-    <div class="info">何秒生き延びられる？左右タップで移動！</div>
+    <div class="info">何秒生き延びられる？タップした位置に移動！</div>
     <div class="credits">Powered by Phaser</div>
     
     <script>
@@ -180,7 +180,7 @@
             });
 
             // スタートテキスト
-            startText = this.add.text(400, 300, 'タップしてスタート！\n\n左半分タップ: 左移動\n右半分タップ: 右移動', {
+            startText = this.add.text(400, 300, 'タップしてスタート！\n\nタップした位置に移動するわよ', {
                 fontSize: '36px',
                 fill: '#fff',
                 fontStyle: 'bold',
@@ -210,24 +210,19 @@
                 // ゲーム開始
                 startGame(this);
             } else if (gameStarted && !gameOver) {
-                // プレイヤー移動
-                if (pointer.x < 400) {
-                    // 左移動
-                    player.body.setVelocityX(-playerSpeed);
-                } else {
-                    // 右移動
-                    player.body.setVelocityX(playerSpeed);
-                }
+                // タップした位置にプレイヤーを移動
+                const targetX = Phaser.Math.Clamp(pointer.x, 30, 770); // 画面端からマージン
+                
+                // スムーズに移動
+                this.tweens.add({
+                    targets: player,
+                    x: targetX,
+                    duration: 150,
+                    ease: 'Power2'
+                });
                 
                 // 移動音
                 playDodgeSound();
-                
-                // すぐに停止（タップのたびに移動）
-                this.time.delayedCall(100, () => {
-                    if (player && player.body) {
-                        player.body.setVelocityX(0);
-                    }
-                });
             } else if (gameOver) {
                 // 再スタート
                 resetGame(this);
@@ -245,6 +240,9 @@
                 callback: () => updateScore(scene),
                 loop: true
             });
+            
+            // 最初の障害物を即座に生成
+            spawnObstacle(scene);
             
             // 障害物生成タイマー
             obstacleTimer = scene.time.addEvent({
@@ -392,7 +390,7 @@
             
             // スタート画面表示
             startText.setVisible(true);
-            startText.setText('タップしてスタート！\n\n左半分タップ: 左移動\n右半分タップ: 右移動');
+            startText.setText('タップしてスタート！\n\nタップした位置に移動するわよ');
             player.setVisible(false);
         }
 
