@@ -197,8 +197,9 @@
             // 障害物グループ
             obstacles = this.physics.add.group();
 
-            // 衝突検出
-            this.physics.add.overlap(player, obstacles, hitObstacle, null, this);
+            // 衝突検出（sceneを保持）
+            const scene = this;
+            this.physics.add.overlap(player, obstacles, (p, o) => hitObstacle(scene, p, o));
 
             // タップ/クリックイベント
             this.input.on('pointerdown', handleInput, this);
@@ -319,7 +320,7 @@
             });
         }
 
-        function hitObstacle(player, obstacle) {
+        function hitObstacle(scene, player, obstacle) {
             if (gameOver) return;
             
             // ゲームオーバー
@@ -339,8 +340,8 @@
             player.fillColor = 0xff0000;
             
             // 爆発エフェクト
-            const explosion = this.add.circle(player.x, player.y, 30, 0xffffff, 0.8);
-            this.tweens.add({
+            const explosion = scene.add.circle(player.x, player.y, 30, 0xffffff, 0.8);
+            scene.tweens.add({
                 targets: explosion,
                 alpha: 0,
                 scale: 3,
@@ -353,7 +354,7 @@
             
             // 結果表示
             const grade = survivalTime >= 30 ? 'S' : survivalTime >= 20 ? 'A' : survivalTime >= 10 ? 'B' : 'C';
-            resultText = this.add.text(400, 300, `ゲームオーバー！\n\n生存時間: ${survivalTime.toFixed(1)}秒\nスコア: ${score}\nランク: ${grade}\n\nタップで再プレイ`, {
+            resultText = scene.add.text(400, 300, `ゲームオーバー！\n\n生存時間: ${survivalTime.toFixed(1)}秒\nスコア: ${score}\nランク: ${grade}\n\nタップで再プレイ`, {
                 fontSize: '42px',
                 fill: '#fff',
                 fontStyle: 'bold',
