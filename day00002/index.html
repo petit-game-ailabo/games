@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タップゲーム v2 v2 - 今日のミニゲーム</title>
+    <meta name="description" content="20秒でどれだけタップできる？コンボでスコアアップ！">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .info {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+        }
+        .credits {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <div id="game-container"></div>
+        <div class="info">
+            <p>20秒でどれだけタップできる？連続タップでコンボボーナス！</p>
+        </div>
+    </div>
+    <div class="credits">Powered by Phaser</div>
+    
+    <script>
+        // 効果音生成（Web Audio API）
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playTapSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        function playComboSound(combo) {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 400 + (combo * 100); // コンボ数で音程上昇
+            oscillator.type = 'square';
+            
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.15);
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 800,
+            height: 600,
+            parent: 'game-container',
+            backgroundColor: '#2d3436',
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        
+        let score = 0;
+        let combo = 0;
+        let timeLeft = 20; // 20秒に延長
+        let gameStarted = false;
+        let gameOver = false;
+        let scoreText;
+        let comboText;
+        let timeText;
+        let startText;
+        let resultText;
+        let targetCircle;
+        let timerEvent;
+        let comboTimer;
+        let targetSize = 50; // 初期サイズ
+
+        function preload() {
+            // 画像なし・シンプルな図形のみ
+        }
+
+        function create() {
+            // スコア表示（2倍サイズ）
+            scoreText = this.add.text(20, 20, 'Score: 0', {
+                fontSize: '64px', // 32px → 64px
+                fill: '#fff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 4
+            });
+
+            // コンボ表示
+            comboText = this.add.text(20, 100, '', {
+                fontSize: '48px',
+                fill: '#FFD700',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            });
+
+            // タイマー表示
+            timeText = this.add.text(600, 20, 'Time: 20', {
+                fontSize: '48px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            });
+
+            // スタートテキスト
+            startText = this.add.text(400, 300, 'クリックしてスタート！', {
+                fontSize: '48px',
+                fill: '#fff',
+                fontStyle: 'bold'
+            });
+            startText.setOrigin(0.5);
+
+            // ターゲット円（非表示で開始）
+            targetCircle = this.add.circle(400, 350, targetSize, 0xff6b6b);
+            targetCircle.setInteractive();
+            targetCircle.setVisible(false);
+
+            // クリックイベント
+            this.input.on('pointerdown', handleClick, this);
+        }
+
+        function handleClick(pointer) {
+            if (!gameStarted && !gameOver) {
+                // ゲーム開始
+                startGame(this);
+            } else if (gameStarted && !gameOver) {
+                // ターゲットがクリックされたか判定
+                const distance = Phaser.Math.Distance.Between(
+                    pointer.x, pointer.y,
+                    targetCircle.x, targetCircle.y
+                );
+                
+                if (distance <= targetSize) {
+                    // コンボ継続
+                    combo++;
+                    
+                    // スコア加算（コンボボーナス）
+                    const points = 1 + Math.floor(combo / 5); // 5コンボごとに+1点
+                    score += points;
+                    scoreText.setText('Score: ' + score);
+                    
+                    // コンボ表示更新
+                    if (combo > 1) {
+                        comboText.setText(`${combo} COMBO!`);
+                        if (combo % 5 === 0) {
+                            playComboSound(combo);
+                        } else {
+                            playTapSound();
+                        }
+                    } else {
+                        comboText.setText('');
+                        playTapSound();
+                    }
+                    
+                    // コンボタイマーリセット
+                    if (comboTimer) {
+                        comboTimer.remove();
+                    }
+                    comboTimer = this.time.delayedCall(1000, () => {
+                        combo = 0;
+                        comboText.setText('');
+                    });
+                    
+                    // ターゲットを新しい位置に移動
+                    moveTarget(this);
+                    
+                    // クリックエフェクト（改善版）
+                    const effect = this.add.circle(pointer.x, pointer.y, 30, 0xffffff, 0.9);
+                    const ring = this.add.circle(pointer.x, pointer.y, 30, 0xffffff, 0);
+                    ring.setStrokeStyle(4, 0xffffff, 1);
+                    
+                    this.tweens.add({
+                        targets: effect,
+                        alpha: 0,
+                        scale: 2.5,
+                        duration: 400,
+                        onComplete: () => effect.destroy()
+                    });
+                    
+                    this.tweens.add({
+                        targets: ring,
+                        scale: 3,
+                        alpha: 0,
+                        duration: 500,
+                        onComplete: () => ring.destroy()
+                    });
+                } else {
+                    // ミスでコンボリセット
+                    combo = 0;
+                    comboText.setText('');
+                }
+            }
+        }
+
+        function startGame(scene) {
+            gameStarted = true;
+            startText.setVisible(false);
+            targetCircle.setVisible(true);
+            
+            // 初期位置設定
+            moveTarget(scene);
+
+            // タイマー開始
+            timerEvent = scene.time.addEvent({
+                delay: 1000,
+                callback: updateTimer,
+                callbackScope: scene,
+                loop: true
+            });
+        }
+
+        function updateTimer() {
+            timeLeft--;
+            timeText.setText('Time: ' + timeLeft);
+
+            // 難易度上昇: 時間経過でターゲットが小さくなる
+            if (timeLeft === 15) {
+                targetSize = 45;
+            } else if (timeLeft === 10) {
+                targetSize = 40;
+            } else if (timeLeft === 5) {
+                targetSize = 35;
+            }
+
+            if (timeLeft <= 0) {
+                endGame(this);
+            }
+        }
+
+        function moveTarget(scene) {
+            // ランダムな位置に移動（画面端を避ける）
+            const margin = targetSize + 50;
+            const x = Phaser.Math.Between(margin, 800 - margin);
+            const y = Phaser.Math.Between(150, 550);
+            
+            // サイズ変更アニメーション
+            scene.tweens.add({
+                targets: targetCircle,
+                x: x,
+                y: y,
+                radius: targetSize,
+                duration: 200,
+                ease: 'Back.easeOut'
+            });
+
+            // 色をランダムに変更
+            const colors = [0xff6b6b, 0x4ecdc4, 0xffe66d, 0x95e1d3, 0xf38181];
+            const randomColor = Phaser.Utils.Array.GetRandom(colors);
+            targetCircle.fillColor = randomColor;
+        }
+
+        function endGame(scene) {
+            gameOver = true;
+            gameStarted = false;
+            timerEvent.remove();
+            if (comboTimer) {
+                comboTimer.remove();
+            }
+            
+            targetCircle.setVisible(false);
+            comboText.setVisible(false);
+            
+            // 結果表示
+            const grade = score >= 50 ? 'S' : score >= 40 ? 'A' : score >= 30 ? 'B' : score >= 20 ? 'C' : 'D';
+            resultText = scene.add.text(400, 300, `ゲーム終了！\n\nスコア: ${score}\nランク: ${grade}\n\nクリックで再プレイ`, {
+                fontSize: '48px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                align: 'center',
+                stroke: '#000',
+                strokeThickness: 4
+            });
+            resultText.setOrigin(0.5);
+            
+            // 再プレイ可能にする
+            scene.time.delayedCall(1000, () => {
+                scene.input.once('pointerdown', () => {
+                    resetGame(scene);
+                });
+            });
+        }
+
+        function resetGame(scene) {
+            score = 0;
+            combo = 0;
+            timeLeft = 20;
+            gameOver = false;
+            targetSize = 50;
+            
+            scoreText.setText('Score: 0');
+            timeText.setText('Time: 20');
+            comboText.setText('');
+            comboText.setVisible(true);
+            
+            if (resultText) {
+                resultText.destroy();
+            }
+            
+            startText.setVisible(true);
+            startText.setText('クリックしてスタート！');
+        }
+
+        function update() {
+            // 更新処理（必要に応じて）
+        }
+    </script>
+</body>
+</html>
