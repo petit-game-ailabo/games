@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>反射神経ランナー - 今日のミニゲーム</title>
+    <meta name="description" content="矢印の方向に素早くタップ！何メートル走れる？">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .credits {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="credits">Powered by Phaser</div>
+    
+    <script>
+        // 効果音
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playCorrectSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 800;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.08);
+        }
+        
+        function playWrongSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 200;
+            oscillator.type = 'sawtooth';
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 400,
+            height: 700,
+            parent: 'game-container',
+            backgroundColor: '#87CEEB',
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+            scene: {
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        
+        let distance = 0;
+        let timeLeft = 30;
+        let gameStarted = false;
+        let gameOver = false;
+        let currentArrow = null;
+        let arrowText;
+        let distanceText;
+        let timeText;
+        let startText;
+        let resultText;
+        let runner;
+        let roadLines = [];
+        let roadSpeed = 0;
+        let nextArrowDelay = 1000;
+
+        function create() {
+            // 道路
+            for (let i = 0; i < 8; i++) {
+                const line = this.add.rectangle(200, i * 100 + 50, 10, 60, 0xffffff);
+                roadLines.push(line);
+            }
+            
+            // ランナー（シンプルなキャラ）
+            runner = this.add.container(80, 500);
+            const body = this.add.circle(0, 0, 20, 0xFFD700);
+            const head = this.add.circle(0, -25, 15, 0xffd4a3);
+            runner.add([body, head]);
+            
+            // 矢印表示エリア
+            arrowText = this.add.text(200, 250, '', {
+                fontSize: '120px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 6
+            }).setOrigin(0.5);
+            
+            // 距離表示
+            distanceText = this.add.text(20, 20, '0m', {
+                fontSize: '42px',
+                fill: '#FFD700',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 4
+            });
+            
+            // 残り時間表示
+            timeText = this.add.text(20, 80, '30.0秒', {
+                fontSize: '36px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            });
+            
+            // スタート画面
+            startText = this.add.text(200, 350, '⚡ 反射神経ランナー ⚡\n\n矢印の方向に素早くタップ！\n30秒でどこまで走れる？\n\n📱 スマホ: 左右タップ\n⌨️ PC: ←→キー\n\nタップしてスタート', {
+                fontSize: '26px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                align: 'center',
+                stroke: '#000',
+                strokeThickness: 4,
+                lineSpacing: 10
+            }).setOrigin(0.5);
+            
+            // 左右タップエリア（スマホ用）
+            const leftArea = this.add.rectangle(100, 350, 200, 700, 0x000000, 0);
+            leftArea.setInteractive();
+            leftArea.on('pointerdown', () => handleInput(this, 'left'));
+            
+            const rightArea = this.add.rectangle(300, 350, 200, 700, 0x000000, 0);
+            rightArea.setInteractive();
+            rightArea.on('pointerdown', () => handleInput(this, 'right'));
+            
+            // キーボード入力
+            this.input.keyboard.on('keydown-LEFT', () => handleInput(this, 'left'));
+            this.input.keyboard.on('keydown-RIGHT', () => handleInput(this, 'right'));
+        }
+
+        function handleInput(scene, direction) {
+            if (!gameStarted && !gameOver) {
+                startGame(scene);
+            } else if (gameStarted && !gameOver && currentArrow) {
+                checkAnswer(scene, direction);
+            } else if (gameOver) {
+                resetGame(scene);
+            }
+        }
+
+        function startGame(scene) {
+            gameStarted = true;
+            startText.setVisible(false);
+            distance = 0;
+            timeLeft = 30;
+            roadSpeed = 3;
+            nextArrowDelay = 1000;
+            distanceText.setText('0m');
+            timeText.setText('30.0秒');
+            
+            // タイマー
+            scene.time.addEvent({
+                delay: 100,
+                callback: () => updateTimer(scene),
+                loop: true
+            });
+            
+            // 最初の矢印
+            showNextArrow(scene);
+        }
+
+        function showNextArrow(scene) {
+            if (!gameStarted || gameOver) return;
+            
+            currentArrow = Math.random() < 0.5 ? 'left' : 'right';
+            arrowText.setText(currentArrow === 'left' ? '←' : '→');
+            arrowText.setAlpha(1);
+            
+            // タイムアウト（答えなかったら自動的に次へ）
+            scene.time.delayedCall(nextArrowDelay, () => {
+                if (currentArrow) {
+                    currentArrow = null;
+                    arrowText.setText('');
+                    scene.time.delayedCall(200, () => showNextArrow(scene));
+                }
+            });
+        }
+
+        function checkAnswer(scene, answer) {
+            if (answer === currentArrow) {
+                // 正解
+                playCorrectSound();
+                distance += 10;
+                distanceText.setText(distance + 'm');
+                
+                // 道路スピードアップ
+                roadSpeed += 0.2;
+                
+                // 次の矢印までの時間を短縮
+                if (nextArrowDelay > 400) {
+                    nextArrowDelay -= 20;
+                }
+                
+                // 正解エフェクト
+                scene.tweens.add({
+                    targets: arrowText,
+                    scaleX: 1.3,
+                    scaleY: 1.3,
+                    alpha: 0,
+                    duration: 150,
+                    onComplete: () => {
+                        arrowText.setScale(1);
+                        currentArrow = null;
+                        arrowText.setText('');
+                        scene.time.delayedCall(200, () => showNextArrow(scene));
+                    }
+                });
+            } else {
+                // 不正解
+                playWrongSound();
+                
+                // ペナルティ: 1秒ロス
+                scene.tweens.add({
+                    targets: arrowText,
+                    tint: 0xff0000,
+                    duration: 200,
+                    yoyo: true,
+                    onComplete: () => {
+                        arrowText.clearTint();
+                    }
+                });
+            }
+        }
+
+        function updateTimer(scene) {
+            if (!gameStarted || gameOver) return;
+            
+            timeLeft -= 0.1;
+            if (timeLeft <= 0) {
+                timeLeft = 0;
+                endGame(scene);
+            }
+            timeText.setText(timeLeft.toFixed(1) + '秒');
+            
+            // 残り時間が少なくなったら警告色
+            if (timeLeft <= 5) {
+                timeText.setStyle({ fill: '#ff0000' });
+            }
+        }
+
+        function endGame(scene) {
+            gameOver = true;
+            gameStarted = false;
+            
+            currentArrow = null;
+            arrowText.setText('');
+            roadSpeed = 0;
+            
+            let message, rank;
+            if (distance >= 300) {
+                rank = 'S';
+                message = '神反射！';
+            } else if (distance >= 200) {
+                rank = 'A';
+                message = 'すごい！';
+            } else if (distance >= 100) {
+                rank = 'B';
+                message = 'いい感じ！';
+            } else {
+                rank = 'C';
+                message = '次はもっといけるよ！';
+            }
+            
+            resultText = scene.add.text(200, 350, `タイムアップ！\n\nランク: ${rank}\n記録: ${distance}m\n\n${message}\n\nタップで再プレイ`, {
+                fontSize: '36px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                align: 'center',
+                stroke: '#000',
+                strokeThickness: 4,
+                lineSpacing: 10
+            }).setOrigin(0.5);
+        }
+
+        function resetGame(scene) {
+            if (resultText) {
+                resultText.destroy();
+            }
+            
+            gameOver = false;
+            arrowText.setText('');
+            timeText.setStyle({ fill: '#fff' });
+            startText.setVisible(true);
+        }
+
+        function update() {
+            if (!gameStarted || gameOver) return;
+            
+            // 道路をスクロール
+            roadLines.forEach(line => {
+                line.y += roadSpeed;
+                if (line.y > 750) {
+                    line.y = -50;
+                }
+            });
+            
+            // ランナーを少し上下に動かす（走ってる感じ）
+            if (roadSpeed > 0) {
+                runner.y = 500 + Math.sin(Date.now() / 100) * 5;
+            }
+        }
+    </script>
+</body>
+</html>
