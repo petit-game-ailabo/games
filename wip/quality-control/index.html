@@ -50,7 +50,9 @@
         
         // UI要素
         let startBg, startText, scoreText, coinsText, timeText, resultText;
-        let speedBtn, speedText, speedCost, spawnBtn, spawnText, spawnCost, autoBtn, autoText, autoCost;
+        let speedBtn, speedText, speedCost, speedLevelText;
+        let spawnBtn, spawnText, spawnCost, spawnLevelText;
+        let autoBtn, autoText, autoCost, autoLevelText;
         
         // アップグレード
         let speedLevel = 0;
@@ -172,6 +174,14 @@
                 fontStyle: 'bold'
             }).setOrigin(0.5);
             
+            speedLevelText = this.add.text(65, btnY - 30, 'Lv0 (速度3)', {
+                fontSize: '12px',
+                fill: '#ffffff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 1
+            }).setOrigin(0.5);
+            
             // 生産速度アップ
             spawnBtn = this.add.rectangle(200, btnY, btnW, btnH, 0x2a5298);
             spawnBtn.setStrokeStyle(3, 0xffffff);
@@ -186,6 +196,14 @@
                 fontSize: '18px',
                 fill: '#FFD700',
                 fontStyle: 'bold'
+            }).setOrigin(0.5);
+            
+            spawnLevelText = this.add.text(200, btnY - 30, 'Lv0 (1.0s)', {
+                fontSize: '12px',
+                fill: '#ffffff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 1
             }).setOrigin(0.5);
             
             // 自動化ロボット
@@ -204,27 +222,27 @@
                 fontStyle: 'bold'
             }).setOrigin(0.5);
             
-            // ロボットレベル表示用（後で使う）
-            window.autoLevelText = this.add.text(335, btnY - 35, '', {
-                fontSize: '16px',
+            autoLevelText = this.add.text(335, btnY - 30, 'Lv0 (0%)', {
+                fontSize: '12px',
                 fill: '#00ff00',
                 fontStyle: 'bold',
                 stroke: '#000',
-                strokeThickness: 2
+                strokeThickness: 1
             }).setOrigin(0.5);
-            window.autoLevelText.setVisible(false);
             
             // ボタンを非表示
             speedBtn.setVisible(false);
             speedText.setVisible(false);
             speedCost.setVisible(false);
+            speedLevelText.setVisible(false);
             spawnBtn.setVisible(false);
             spawnText.setVisible(false);
             spawnCost.setVisible(false);
+            spawnLevelText.setVisible(false);
             autoBtn.setVisible(false);
             autoText.setVisible(false);
             autoCost.setVisible(false);
-            if (window.autoLevelText) window.autoLevelText.setVisible(false);
+            autoLevelText.setVisible(false);
             
             // スタート画面（最後に描画）
             startBg = this.add.rectangle(200, 350, 400, 700, 0x4a7c9e);
@@ -265,13 +283,15 @@
             speedBtn.setVisible(true);
             speedText.setVisible(true);
             speedCost.setVisible(true);
+            speedLevelText.setVisible(true);
             spawnBtn.setVisible(true);
             spawnText.setVisible(true);
             spawnCost.setVisible(true);
+            spawnLevelText.setVisible(true);
             autoBtn.setVisible(true);
             autoText.setVisible(true);
             autoCost.setVisible(true);
-            if (window.autoLevelText) window.autoLevelText.setVisible(false);
+            autoLevelText.setVisible(true);
             
             score = 0;
             coins = 0;
@@ -282,6 +302,11 @@
             speedLevel = 0;
             spawnLevel = 0;
             autoLevel = 0;
+            
+            // レベル表示リセット
+            speedLevelText.setText('Lv0 (速度3)');
+            spawnLevelText.setText('Lv0 (1.0s)');
+            autoLevelText.setText('Lv0 (0%)');
             
             updateUI();
             updateButtonStates();
@@ -342,31 +367,71 @@
                 if (Math.random() < autoChance) {
                     product.autoRejected = true;
                     
-                    // 派手なエフェクト
+                    // 製品を緑色に光らせる
+                    product.setTint(0x00ff00);
+                    
+                    // 超派手なエフェクト
                     const robotText = scene.add.text(product.x, product.y, '🤖', {
-                        fontSize: '48px'
+                        fontSize: '64px'
                     }).setOrigin(0.5);
                     
-                    const flash = scene.add.circle(product.x, product.y, 40, 0x00ff00, 0.5);
+                    // 緑の光の輪（複数）
+                    const ring1 = scene.add.circle(product.x, product.y, 30, 0x00ff00, 0);
+                    ring1.setStrokeStyle(4, 0x00ff00, 0.8);
                     
+                    const ring2 = scene.add.circle(product.x, product.y, 30, 0x00ff00, 0);
+                    ring2.setStrokeStyle(4, 0x00ff00, 0.8);
+                    
+                    const flash = scene.add.circle(product.x, product.y, 50, 0x00ff00, 0.7);
+                    
+                    // ロボットアイコンの上昇
                     scene.tweens.add({
                         targets: robotText,
-                        y: product.y - 70,
-                        scale: 1.5,
+                        y: product.y - 80,
+                        scale: 1.8,
                         alpha: 0,
-                        duration: 600,
+                        duration: 700,
                         onComplete: () => robotText.destroy()
                     });
                     
+                    // リング1の拡大
+                    scene.tweens.add({
+                        targets: ring1,
+                        scale: 2.5,
+                        alpha: 0,
+                        duration: 500,
+                        onComplete: () => ring1.destroy()
+                    });
+                    
+                    // リング2の拡大（遅延）
+                    scene.tweens.add({
+                        targets: ring2,
+                        scale: 3,
+                        alpha: 0,
+                        duration: 600,
+                        delay: 100,
+                        onComplete: () => ring2.destroy()
+                    });
+                    
+                    // フラッシュの拡大
                     scene.tweens.add({
                         targets: flash,
-                        scale: 2,
+                        scale: 2.5,
                         alpha: 0,
-                        duration: 400,
+                        duration: 500,
                         onComplete: () => flash.destroy()
                     });
                     
-                    playSound(1000, 'square', 0.15);
+                    // 製品を脈打たせる
+                    scene.tweens.add({
+                        targets: product,
+                        scale: 1.3,
+                        duration: 200,
+                        yoyo: true,
+                        repeat: 1
+                    });
+                    
+                    playSound(1000, 'square', 0.2);
                 }
             }
             
@@ -534,6 +599,7 @@
                     coins -= cost;
                     speedLevel++;
                     beltSpeed += 2;
+                    speedLevelText.setText(`Lv${speedLevel} (速度${beltSpeed})`);
                     success = true;
                 }
             } else if (type === 'spawn') {
@@ -543,6 +609,7 @@
                     spawnLevel++;
                     spawnDelay -= 100;
                     spawnTimer.delay = spawnDelay;
+                    spawnLevelText.setText(`Lv${spawnLevel} (${(spawnDelay / 1000).toFixed(1)}s)`);
                     success = true;
                 }
             } else if (type === 'auto') {
@@ -578,10 +645,7 @@
                     });
                     
                     // ボタン上のレベル表示更新
-                    if (window.autoLevelText) {
-                        window.autoLevelText.setText(`Lv${autoLevel}`);
-                        window.autoLevelText.setVisible(true);
-                    }
+                    autoLevelText.setText(`Lv${autoLevel} (${autoLevel * 40}%)`);
                 }
             }
             
@@ -602,13 +666,15 @@
             speedBtn.setVisible(false);
             speedText.setVisible(false);
             speedCost.setVisible(false);
+            speedLevelText.setVisible(false);
             spawnBtn.setVisible(false);
             spawnText.setVisible(false);
             spawnCost.setVisible(false);
+            spawnLevelText.setVisible(false);
             autoBtn.setVisible(false);
             autoText.setVisible(false);
             autoCost.setVisible(false);
-            if (window.autoLevelText) window.autoLevelText.setVisible(false);
+            autoLevelText.setVisible(false);
             
             for (const product of products) {
                 product.destroy();
