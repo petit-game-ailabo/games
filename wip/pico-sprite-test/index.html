@@ -41,101 +41,94 @@
 
         function createPico48(scene, x, y) {
             const container = scene.add.container(x, y);
-            const ps = 2; // pixel size (1ドット = 2px)
+            const ps = 2; // pixel size
             
-            // 色定義
+            // 色定義（参考画像に合わせる）
             const c = {
-                hair: 0x66b3ff,      // 青い髪
-                hairDark: 0x4d94e6,  // 髪の影
-                skin: 0xffcc99,      // 肌
-                white: 0xffffff,     // 白い服
-                whiteShade: 0xe6e6e6,// 服の影
-                pink: 0xffb3d9,      // リボン・装飾
+                hair: 0xb3d9ff,      // 水色の髪（明るめ）
+                hairDark: 0x99ccff,  // 髪の影
+                skin: 0xffd4b8,      // 肌
+                pink: 0xffb3e6,      // ピンクの服
+                pinkDark: 0xff99d9,  // 服の影
             };
             
-            // 48x48 ドット配置（中心を0,0として -24～+24）
+            // 64x64 ドット（-32～+32）、2頭身
             const dots = [];
             
-            // ツインテール（左）
-            for (let y = -18; y <= -12; y++) {
-                for (let x = -22; x <= -16; x++) {
-                    if (y === -18 && (x < -20 || x > -18)) continue;
-                    dots.push([x, y, y === -12 ? 'hairDark' : 'hair']);
+            // === 頭部（上半分） ===
+            
+            // 髪の上部（丸い形）
+            for (let y = -28; y <= -24; y++) {
+                const w = 8 - Math.abs(y + 26) * 2;
+                for (let x = -w; x <= w; x++) {
+                    dots.push([x, y, 'hair']);
                 }
             }
             
-            // ツインテール（右）
-            for (let y = -18; y <= -12; y++) {
-                for (let x = 16; x <= 22; x++) {
-                    if (y === -18 && (x < 18 || x > 20)) continue;
-                    dots.push([x, y, y === -12 ? 'hairDark' : 'hair']);
+            // 髪のメイン部分
+            for (let y = -23; y <= -8; y++) {
+                for (let x = -12; x <= 12; x++) {
+                    if (y >= -12 && Math.abs(x) <= 6) continue; // 顔部分
+                    dots.push([x, y, Math.abs(x) > 10 ? 'hairDark' : 'hair']);
                 }
             }
             
-            // 頭部の髪
-            for (let y = -20; y <= -10; y++) {
-                for (let x = -14; x <= 14; x++) {
-                    if (y === -20 && Math.abs(x) > 12) continue;
-                    if (y === -19 && Math.abs(x) > 13) continue;
-                    if (y >= -12 && y <= -10 && Math.abs(x) <= 8) continue; // 顔部分を空ける
-                    dots.push([x, y, y <= -18 ? 'hair' : (Math.abs(x) > 10 ? 'hairDark' : 'hair')]);
+            // サイドの丸い膨らみ（左）
+            for (let y = -16; y <= -8; y++) {
+                for (let x = -18; x <= -13; x++) {
+                    if (Math.abs(y + 12) > 4 && Math.abs(x + 15) > 3) continue;
+                    dots.push([x, y, x < -16 ? 'hairDark' : 'hair']);
                 }
             }
             
-            // 顔・首（肌色）
-            for (let y = -12; y <= -6; y++) {
-                for (let x = -8; x <= 8; x++) {
-                    if (y === -12 && Math.abs(x) > 6) continue;
-                    if (y === -6 && Math.abs(x) > 4) continue;
-                    dots.push([x, y, 'skin']);
+            // サイドの丸い膨らみ（右）
+            for (let y = -16; y <= -8; y++) {
+                for (let x = 13; x <= 18; x++) {
+                    if (Math.abs(y + 12) > 4 && Math.abs(x - 15) > 3) continue;
+                    dots.push([x, y, x > 16 ? 'hairDark' : 'hair']);
                 }
             }
             
-            // 首
-            for (let y = -5; y <= -3; y++) {
+            // 後ろの髪
+            for (let y = -7; y <= 0; y++) {
+                for (let x = -10; x <= 10; x++) {
+                    if (Math.abs(x) <= 6) continue; // 首部分
+                    dots.push([x, y, 'hairDark']);
+                }
+            }
+            
+            // 首（細い）
+            for (let y = -4; y <= 0; y++) {
                 for (let x = -3; x <= 3; x++) {
                     dots.push([x, y, 'skin']);
                 }
             }
             
-            // 体（白い服）
-            // 肩
-            for (let y = -2; y <= 0; y++) {
-                for (let x = -10; x <= 10; x++) {
-                    if (Math.abs(x) < 4) continue; // 首周り
-                    dots.push([x, y, Math.abs(x) > 8 ? 'whiteShade' : 'white']);
+            // === 体部（下半分、2頭身なので同じサイズ） ===
+            
+            // 肩〜上半身
+            for (let y = 1; y <= 8; y++) {
+                const w = 8 + Math.min(y, 4);
+                for (let x = -w; x <= w; x++) {
+                    dots.push([x, y, Math.abs(x) > w - 2 ? 'pinkDark' : 'pink']);
                 }
             }
             
-            // 胴体
-            for (let y = 1; y <= 10; y++) {
-                const width = Math.min(12, 8 + y);
-                for (let x = -width; x <= width; x++) {
-                    if (y >= 6 && y <= 8 && Math.abs(x) <= width - 2) {
-                        dots.push([x, y, 'pink']); // ウエストのリボン
-                    } else {
-                        dots.push([x, y, Math.abs(x) > width - 2 ? 'whiteShade' : 'white']);
-                    }
+            // 腰〜スカート
+            for (let y = 9; y <= 18; y++) {
+                const w = 12 + (y - 9) * 0.5;
+                for (let x = -w; x <= w; x++) {
+                    dots.push([x, y, Math.abs(x) > w - 1 ? 'pinkDark' : 'pink']);
                 }
             }
             
-            // スカート
-            for (let y = 11; y <= 16; y++) {
-                const width = 10 + (y - 11);
-                for (let x = -width; x <= width; x++) {
-                    dots.push([x, y, Math.abs(x) > width - 1 ? 'whiteShade' : 'white']);
-                }
-            }
-            
-            // 足
-            // 左足
-            for (let y = 17; y <= 24; y++) {
+            // 足（短い）
+            for (let y = 19; y <= 28; y++) {
+                // 左足
                 for (let x = -8; x <= -3; x++) {
                     dots.push([x, y, 'skin']);
                 }
-            }
-            // 右足
-            for (let y = 17; y <= 24; y++) {
+                // 右足
                 for (let x = 3; x <= 8; x++) {
                     dots.push([x, y, 'skin']);
                 }
@@ -162,7 +155,7 @@
             const pico = createPico48(this, 200, 200);
             
             // 説明テキスト
-            this.add.text(200, 50, 'ピコ（48x48 ドット絵）', {
+            this.add.text(200, 50, 'ピコ（64x64 ドット絵 v2）', {
                 fontSize: '24px',
                 fill: '#ffffff',
                 fontStyle: 'bold',
