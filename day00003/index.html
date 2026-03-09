@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>避けゲー - 今日のミニゲーム</title>
+    <meta name="description" content="何秒生き延びられる？ギリギリ回避でボーナス！">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #a8e6ff 0%, #ffd6f7 100%);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .credits {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(0,0,0,0.5);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="credits">Powered by Phaser</div>
+    
+    <script>
+        // 効果音
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playDodgeSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 600;
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.05);
+        }
+        
+        function playNearMissSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 1000;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        function playGameOverSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 200;
+            oscillator.type = 'sawtooth';
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 400,
+            height: 700,
+            parent: 'game-container',
+            backgroundColor: '#ffeef8',
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        
+        let player;
+        let playerSprite;
+        let obstacleArray = [];
+        let score = 0;
+        let nearMissBonus = 0;
+        let combo = 0;
+        let survivalTime = 0;
+        let gameStarted = false;
+        let gameOver = false;
+        let scoreText;
+        let comboText;
+        let timeText;
+        let startText;
+        let resultText;
+        let timerEvent;
+        let obstacleTimer;
+        let playerSpeed = 400;
+        let obstacleSpeed = 200;
+        let spawnRate = 1000;
+        let nearMissChecked = [];
+
+        function preload() {}
+
+        // ドット絵風ピコを作成
+        function createPixelPico(scene, x, y) {
+            const container = scene.add.container(x, y);
+            const pixelSize = 3; // 1ドット = 3px
+            
+            // ドット配置（16x16グリッド）
+            // 色定義
+            const colors = {
+                hair: 0x88ccff,      // 青い髪
+                skin: 0xffd4a3,      // 肌
+                dress: 0xffa5d8,     // ピンクの服
+                white: 0xffffff,     // 白
+                dark: 0x6699cc       // 髪の影
+            };
+            
+            // ドット配置データ（16x24）- 後ろ姿
+            const pixels = [
+                // 髪（ツインテール）
+                [4,2,'hair'], [5,2,'hair'], [10,2,'hair'], [11,2,'hair'],
+                [3,3,'hair'], [4,3,'hair'], [5,3,'hair'], [6,3,'hair'], 
+                [9,3,'hair'], [10,3,'hair'], [11,3,'hair'], [12,3,'hair'],
+                [4,4,'dark'], [5,4,'hair'], [6,4,'hair'], [7,4,'hair'],
+                [8,4,'hair'], [9,4,'hair'], [10,4,'hair'], [11,4,'dark'],
+                
+                // 頭
+                [5,5,'hair'], [6,5,'hair'], [7,5,'hair'], [8,5,'hair'], [9,5,'hair'], [10,5,'hair'],
+                [5,6,'hair'], [6,6,'skin'], [7,6,'skin'], [8,6,'skin'], [9,6,'skin'], [10,6,'hair'],
+                [6,7,'hair'], [7,7,'skin'], [8,8,'skin'], [9,7,'skin'], [10,7,'hair'],
+                
+                // 体（ワンピース）
+                [6,8,'dress'], [7,8,'dress'], [8,8,'dress'], [9,8,'dress'],
+                [5,9,'dress'], [6,9,'dress'], [7,9,'dress'], [8,9,'dress'], [9,9,'dress'], [10,9,'dress'],
+                [5,10,'dress'], [6,10,'white'], [7,10,'white'], [8,10,'white'], [9,10,'white'], [10,10,'dress'],
+                [5,11,'dress'], [6,11,'dress'], [7,11,'dress'], [8,11,'dress'], [9,11,'dress'], [10,11,'dress'],
+                [6,12,'dress'], [7,12,'dress'], [8,12,'dress'], [9,12,'dress'],
+                
+                // 脚
+                [6,13,'skin'], [7,13,'skin'], [8,13,'skin'], [9,13,'skin'],
+                [6,14,'skin'], [7,14,'skin'], [8,14,'skin'], [9,14,'skin'],
+            ];
+            
+            // ドットを描画
+            pixels.forEach(([x, y, color]) => {
+                const rect = scene.add.rectangle(
+                    (x - 8) * pixelSize, 
+                    (y - 8) * pixelSize, 
+                    pixelSize, 
+                    pixelSize, 
+                    colors[color]
+                );
+                rect.setStrokeStyle(0.5, 0x000000, 0.2); // 薄い枠線
+                container.add(rect);
+            });
+            
+            return container;
+        }
+
+        function create() {
+            // 背景グラデーション
+            const graphics = this.add.graphics();
+            graphics.fillGradientStyle(0xa8e6ff, 0xa8e6ff, 0xffd6f7, 0xffd6f7, 1);
+            graphics.fillRect(0, 0, 400, 700);
+            
+            // スコア表示
+            scoreText = this.add.text(20, 20, 'スコア: 0', {
+                fontSize: '36px',
+                fill: '#ff69b4',
+                fontStyle: 'bold',
+                stroke: '#fff',
+                strokeThickness: 3
+            });
+
+            // コンボ表示
+            comboText = this.add.text(20, 70, '', {
+                fontSize: '28px',
+                fill: '#FFD700',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 2
+            });
+
+            // 時間表示
+            timeText = this.add.text(250, 20, '0.0秒', {
+                fontSize: '36px',
+                fill: '#ff69b4',
+                fontStyle: 'bold',
+                stroke: '#fff',
+                strokeThickness: 3
+            });
+
+            // スタートテキスト
+            startText = this.add.text(200, 300, 'タップしてスタート！\n\nギリギリ回避で\nボーナス！', {
+                fontSize: '28px',
+                fill: '#ff69b4',
+                fontStyle: 'bold',
+                align: 'center',
+                stroke: '#fff',
+                strokeThickness: 4
+            });
+            startText.setOrigin(0.5);
+
+            // ドット絵ピコ
+            playerSprite = createPixelPico(this, 200, 650);
+            
+            // 物理ボディ（見えない当たり判定）
+            player = this.add.circle(200, 650, 25, 0x000000, 0);
+            this.physics.add.existing(player);
+            player.body.setCollideWorldBounds(true);
+
+            // タップイベント
+            this.input.on('pointerdown', handleInput, this);
+        }
+
+        function handleInput(pointer) {
+            if (!gameStarted && !gameOver) {
+                startGame(this);
+            } else if (gameStarted && !gameOver) {
+                const targetX = Phaser.Math.Clamp(pointer.x, 30, 370);
+                
+                this.tweens.add({
+                    targets: [player, playerSprite],
+                    x: targetX,
+                    duration: 150,
+                    ease: 'Power2'
+                });
+                
+                playDodgeSound();
+            } else if (gameOver) {
+                resetGame(this);
+            }
+        }
+
+        function startGame(scene) {
+            gameStarted = true;
+            startText.setVisible(false);
+            
+            timerEvent = scene.time.addEvent({
+                delay: 100,
+                callback: () => updateScore(scene),
+                loop: true
+            });
+            
+            spawnObstacle(scene);
+            
+            obstacleTimer = scene.time.addEvent({
+                delay: spawnRate,
+                callback: () => spawnObstacle(scene),
+                loop: true
+            });
+        }
+
+        function updateScore(scene) {
+            survivalTime += 0.1;
+            score = Math.floor(survivalTime * 10) + nearMissBonus;
+            
+            scoreText.setText('スコア: ' + score);
+            timeText.setText(survivalTime.toFixed(1) + '秒');
+            
+            if (survivalTime > 10 && spawnRate > 700) {
+                spawnRate = 700;
+                obstacleSpeed = 250;
+                if (obstacleTimer) {
+                    obstacleTimer.remove();
+                    obstacleTimer = scene.time.addEvent({
+                        delay: spawnRate,
+                        callback: () => spawnObstacle(scene),
+                        loop: true
+                    });
+                }
+            }
+            if (survivalTime > 20 && spawnRate > 500) {
+                spawnRate = 500;
+                obstacleSpeed = 300;
+                if (obstacleTimer) {
+                    obstacleTimer.remove();
+                    obstacleTimer = scene.time.addEvent({
+                        delay: spawnRate,
+                        callback: () => spawnObstacle(scene),
+                        loop: true
+                    });
+                }
+            }
+        }
+
+        function spawnObstacle(scene) {
+            if (!gameStarted || gameOver) return;
+            
+            const x = Phaser.Math.Between(30, 370);
+            const obstacle = scene.add.circle(x, -30, 25, 0xff6b6b);
+            scene.physics.add.existing(obstacle);
+            obstacle.body.velocity.y = obstacleSpeed;
+            
+            obstacleArray.push(obstacle);
+            nearMissChecked.push(false);
+            
+            scene.time.delayedCall(5000, () => {
+                if (obstacle && obstacle.active) {
+                    const index = obstacleArray.indexOf(obstacle);
+                    if (index > -1) {
+                        obstacleArray.splice(index, 1);
+                        nearMissChecked.splice(index, 1);
+                    }
+                    obstacle.destroy();
+                }
+            });
+        }
+
+        function hitObstacle(scene, player, obstacle) {
+            if (gameOver) return;
+            
+            gameOver = true;
+            gameStarted = false;
+            
+            timerEvent.remove();
+            obstacleTimer.remove();
+            
+            obstacleArray.forEach(obs => {
+                if (obs && obs.body) {
+                    obs.body.setVelocity(0, 0);
+                }
+            });
+            
+            player.fillColor = 0xff0000;
+            
+            const explosion = scene.add.circle(player.x, player.y, 30, 0xffffff, 0.8);
+            scene.tweens.add({
+                targets: explosion,
+                alpha: 0,
+                scale: 3,
+                duration: 500,
+                onComplete: () => explosion.destroy()
+            });
+            
+            playGameOverSound();
+            
+            const grade = survivalTime >= 30 ? 'S' : survivalTime >= 20 ? 'A' : survivalTime >= 10 ? 'B' : 'C';
+            resultText = scene.add.text(200, 300, `ゲームオーバー！\n\n生存時間: ${survivalTime.toFixed(1)}秒\nスコア: ${score}\nランク: ${grade}\n\nタップで再プレイ`, {
+                fontSize: '32px',
+                fill: '#ff69b4',
+                fontStyle: 'bold',
+                align: 'center',
+                stroke: '#fff',
+                strokeThickness: 4
+            });
+            resultText.setOrigin(0.5);
+        }
+
+        function resetGame(scene) {
+            score = 0;
+            nearMissBonus = 0;
+            combo = 0;
+            survivalTime = 0;
+            gameOver = false;
+            spawnRate = 1000;
+            obstacleSpeed = 200;
+            
+            scoreText.setText('スコア: 0');
+            timeText.setText('0.0秒');
+            comboText.setText('');
+            
+            player.x = 200;
+            player.y = 650;
+            player.fillColor = 0x000000;
+            player.body.setVelocity(0, 0);
+            
+            playerSprite.x = 200;
+            playerSprite.y = 650;
+            
+            obstacleArray.forEach(obs => {
+                if (obs && obs.active) {
+                    obs.destroy();
+                }
+            });
+            obstacleArray = [];
+            nearMissChecked = [];
+            
+            if (resultText) {
+                resultText.destroy();
+            }
+            
+            startText.setVisible(true);
+            startText.setText('タップしてスタート！\n\nギリギリ回避で\nボーナス！');
+        }
+
+        function update(time, delta) {
+            if (gameStarted && !gameOver && player && player.body) {
+                for (let i = 0; i < obstacleArray.length; i++) {
+                    const obs = obstacleArray[i];
+                    if (obs && obs.body) {
+                        const distance = Phaser.Math.Distance.Between(
+                            player.x, player.y, obs.x, obs.y
+                        );
+                        
+                        // ニアミス判定
+                        if (!nearMissChecked[i] && distance < 60 && distance > 50 && obs.y > player.y - 100) {
+                            nearMissChecked[i] = true;
+                            combo++;
+                            nearMissBonus += 5 * combo;
+                            
+                            comboText.setText(`ニアミス！x${combo} +${5*combo}`);
+                            
+                            const effect = this.add.text(player.x, player.y - 50, '+' + (5*combo), {
+                                fontSize: '24px',
+                                fill: '#FFD700',
+                                fontStyle: 'bold'
+                            });
+                            effect.setOrigin(0.5);
+                            this.tweens.add({
+                                targets: effect,
+                                y: player.y - 100,
+                                alpha: 0,
+                                duration: 800,
+                                onComplete: () => effect.destroy()
+                            });
+                            
+                            playNearMissSound();
+                            
+                            this.time.delayedCall(1500, () => {
+                                if (comboText.text.includes('ニアミス')) {
+                                    comboText.setText('');
+                                }
+                            });
+                        }
+                        
+                        // 衝突判定
+                        if (distance < 50) {
+                            hitObstacle(this, player, obs);
+                            break;
+                        }
+                        
+                        // 通り過ぎたらコンボリセット
+                        if (obs.y > player.y + 100 && !nearMissChecked[i]) {
+                            combo = 0;
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
