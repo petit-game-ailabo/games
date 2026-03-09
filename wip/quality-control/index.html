@@ -295,6 +295,7 @@
             
             // 残りの製品とエフェクトをクリア
             for (const product of products) {
+                if (product.robotMark) product.robotMark.destroy();
                 product.destroy();
             }
             scene.tweens.killAll();
@@ -376,46 +377,19 @@
                 if (Math.random() < autoChance) {
                     product.autoRejected = true;
                     
-                    // 製品を緑色に光らせる
+                    // 製品を緑色に光らせる（tweenは使わない）
                     product.setTint(0x00ff00);
+                    product.alpha = 0.6;
                     
-                    // シンプルで軽いエフェクト
-                    const robotText = scene.add.text(product.x, product.y, '🤖', {
-                        fontSize: '48px'
+                    // 🤖マークだけ表示（シンプル・安全）
+                    const robotMark = scene.add.text(product.x, product.y - 30, '🤖', {
+                        fontSize: '32px'
                     }).setOrigin(0.5);
                     
-                    // 緑の光の輪（1つだけ）
-                    const ring = scene.add.circle(product.x, product.y, 30, 0x00ff00, 0);
-                    ring.setStrokeStyle(4, 0x00ff00, 0.8);
+                    // ロボットマークを製品と一緒に移動させる
+                    product.robotMark = robotMark;
                     
-                    // ロボットアイコンの上昇
-                    scene.tweens.add({
-                        targets: robotText,
-                        y: product.y - 60,
-                        scale: 1.3,
-                        alpha: 0,
-                        duration: 500,
-                        onComplete: () => robotText.destroy()
-                    });
-                    
-                    // リングの拡大
-                    scene.tweens.add({
-                        targets: ring,
-                        scale: 2,
-                        alpha: 0,
-                        duration: 400,
-                        onComplete: () => ring.destroy()
-                    });
-                    
-                    // 製品を0.3秒後にフェードアウト
-                    scene.tweens.add({
-                        targets: product,
-                        alpha: 0.3,
-                        duration: 300,
-                        delay: 100
-                    });
-                    
-                    playSound(1000, 'square', 0.15);
+                    playSound(1000, 'square', 0.1);
                 }
             }
             
@@ -477,6 +451,7 @@
                         });
                     }
                     
+                    if (product.robotMark) product.robotMark.destroy();
                     product.destroy();
                     products.splice(i, 1);
                     updateUI();
@@ -502,10 +477,16 @@
                 const product = products[i];
                 product.x -= beltSpeed;
                 
+                // ロボットマークも一緒に移動
+                if (product.robotMark) {
+                    product.robotMark.x = product.x;
+                }
+                
                 // 自動排除された製品は早めに削除（x < 100で削除）
                 if (product.autoRejected && product.x < 100) {
                     score += 5;
                     coins += 5;
+                    if (product.robotMark) product.robotMark.destroy();
                     product.destroy();
                     products.splice(i, 1);
                     updateUI();
@@ -524,6 +505,7 @@
                         score += 10;
                         coins += 10;
                     }
+                    if (product.robotMark) product.robotMark.destroy();
                     product.destroy();
                     products.splice(i, 1);
                     updateUI();
@@ -671,6 +653,7 @@
             autoLevelText.setVisible(false);
             
             for (const product of products) {
+                if (product.robotMark) product.robotMark.destroy();
                 product.destroy();
             }
             products = [];
