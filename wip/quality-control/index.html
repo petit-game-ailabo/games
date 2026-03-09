@@ -50,7 +50,7 @@
         
         // UI要素
         let startBg, startText, scoreText, coinsText, timeText, resultText;
-        let upgradeButtons = [];
+        let speedBtn, speedText, speedCost, spawnBtn, spawnText, spawnCost, autoBtn, autoText, autoCost;
         
         // アップグレード
         let speedLevel = 0;
@@ -99,16 +99,8 @@
                 beltLines.push(line2);
             }
             
-            // スコア表示
-            coinsText = this.add.text(20, 20, 'コイン: 0', {
-                fontSize: '28px',
-                fill: '#FFD700',
-                fontStyle: 'bold',
-                stroke: '#000',
-                strokeThickness: 3
-            });
-            
-            scoreText = this.add.text(20, 55, 'スコア: 0', {
+            // スコア表示（上部）
+            scoreText = this.add.text(20, 20, 'スコア: 0', {
                 fontSize: '24px',
                 fill: '#ffffff',
                 fontStyle: 'bold',
@@ -116,7 +108,7 @@
                 strokeThickness: 2
             });
             
-            timeText = this.add.text(20, 90, '60秒', {
+            timeText = this.add.text(20, 55, '60秒', {
                 fontSize: '24px',
                 fill: '#ffffff',
                 fontStyle: 'bold',
@@ -150,64 +142,78 @@
                 align: 'center'
             }).setOrigin(0.5);
             
+            // コイン表示（下部中央）
+            coinsText = this.add.text(200, 530, 'コイン: 0', {
+                fontSize: '28px',
+                fill: '#FFD700',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            }).setOrigin(0.5);
+            
             // アップグレードボタン（画面下部）
             const btnY = 610;
             const btnW = 120;
             const btnH = 70;
             
             // スピードアップ
-            const speedBtn = this.add.rectangle(65, btnY, btnW, btnH, 0x2a5298);
+            speedBtn = this.add.rectangle(65, btnY, btnW, btnH, 0x2a5298);
             speedBtn.setStrokeStyle(3, 0xffffff);
             speedBtn.setInteractive();
             speedBtn.on('pointerdown', () => buyUpgrade(this, 'speed'));
             
-            const speedText = this.add.text(65, btnY - 15, '⚡', {
+            speedText = this.add.text(65, btnY - 15, '⚡', {
                 fontSize: '32px'
             }).setOrigin(0.5);
             
-            const speedCost = this.add.text(65, btnY + 15, '50c', {
+            speedCost = this.add.text(65, btnY + 15, '50c', {
                 fontSize: '18px',
                 fill: '#FFD700',
                 fontStyle: 'bold'
             }).setOrigin(0.5);
             
             // 生産速度アップ
-            const spawnBtn = this.add.rectangle(200, btnY, btnW, btnH, 0x2a5298);
+            spawnBtn = this.add.rectangle(200, btnY, btnW, btnH, 0x2a5298);
             spawnBtn.setStrokeStyle(3, 0xffffff);
             spawnBtn.setInteractive();
             spawnBtn.on('pointerdown', () => buyUpgrade(this, 'spawn'));
             
-            const spawnText = this.add.text(200, btnY - 15, '⏩', {
+            spawnText = this.add.text(200, btnY - 15, '⏩', {
                 fontSize: '32px'
             }).setOrigin(0.5);
             
-            const spawnCost = this.add.text(200, btnY + 15, '30c', {
+            spawnCost = this.add.text(200, btnY + 15, '30c', {
                 fontSize: '18px',
                 fill: '#FFD700',
                 fontStyle: 'bold'
             }).setOrigin(0.5);
             
             // 自動化ロボット
-            const autoBtn = this.add.rectangle(335, btnY, btnW, btnH, 0x2a5298);
+            autoBtn = this.add.rectangle(335, btnY, btnW, btnH, 0x2a5298);
             autoBtn.setStrokeStyle(3, 0xffffff);
             autoBtn.setInteractive();
             autoBtn.on('pointerdown', () => buyUpgrade(this, 'auto'));
             
-            const autoText = this.add.text(335, btnY - 15, '🤖', {
+            autoText = this.add.text(335, btnY - 15, '🤖', {
                 fontSize: '32px'
             }).setOrigin(0.5);
             
-            const autoCost = this.add.text(335, btnY + 15, '100c', {
+            autoCost = this.add.text(335, btnY + 15, '100c', {
                 fontSize: '18px',
                 fill: '#FFD700',
                 fontStyle: 'bold'
             }).setOrigin(0.5);
             
-            upgradeButtons = [speedBtn, speedText, speedCost, spawnBtn, spawnText, spawnCost, autoBtn, autoText, autoCost];
-            
-            for (const btn of upgradeButtons) {
-                btn.setVisible(false);
-            }
+            // ボタンを非表示
+            speedBtn.setVisible(false);
+            speedText.setVisible(false);
+            speedCost.setVisible(false);
+            spawnBtn.setVisible(false);
+            spawnText.setVisible(false);
+            spawnCost.setVisible(false);
+            autoBtn.setVisible(false);
+            autoText.setVisible(false);
+            autoCost.setVisible(false);
             
             // スタート画面（最後に描画）
             startBg = this.add.rectangle(200, 350, 400, 700, 0x4a7c9e);
@@ -246,9 +252,15 @@
             startText.setVisible(false);
             startBg.setVisible(false);
             
-            for (const btn of upgradeButtons) {
-                btn.setVisible(true);
-            }
+            speedBtn.setVisible(true);
+            speedText.setVisible(true);
+            speedCost.setVisible(true);
+            spawnBtn.setVisible(true);
+            spawnText.setVisible(true);
+            spawnCost.setVisible(true);
+            autoBtn.setVisible(true);
+            autoText.setVisible(true);
+            autoCost.setVisible(true);
             
             score = 0;
             coins = 0;
@@ -261,6 +273,7 @@
             autoLevel = 0;
             
             updateUI();
+            updateButtonStates();
             
             // 製品生成
             spawnTimer = scene.time.addEvent({
@@ -391,6 +404,7 @@
                     product.destroy();
                     products.splice(i, 1);
                     updateUI();
+                    updateButtonStates();
                     break;
                 }
             }
@@ -430,6 +444,7 @@
                     product.destroy();
                     products.splice(i, 1);
                     updateUI();
+                    updateButtonStates();
                 }
             }
         }
@@ -438,6 +453,47 @@
             coinsText.setText(`コイン: ${coins}`);
             scoreText.setText(`スコア: ${score}`);
             timeText.setText(`${timeLeft}秒`);
+        }
+        
+        function updateButtonStates() {
+            // スピードアップボタン
+            if (coins >= 50) {
+                speedBtn.setFillStyle(0x2a5298);
+                speedBtn.setAlpha(1);
+                speedText.setAlpha(1);
+                speedCost.setAlpha(1);
+            } else {
+                speedBtn.setFillStyle(0x1a3a4d);
+                speedBtn.setAlpha(0.5);
+                speedText.setAlpha(0.5);
+                speedCost.setAlpha(0.5);
+            }
+            
+            // 生産速度アップボタン
+            if (coins >= 30) {
+                spawnBtn.setFillStyle(0x2a5298);
+                spawnBtn.setAlpha(1);
+                spawnText.setAlpha(1);
+                spawnCost.setAlpha(1);
+            } else {
+                spawnBtn.setFillStyle(0x1a3a4d);
+                spawnBtn.setAlpha(0.5);
+                spawnText.setAlpha(0.5);
+                spawnCost.setAlpha(0.5);
+            }
+            
+            // 自動化ロボットボタン
+            if (coins >= 100) {
+                autoBtn.setFillStyle(0x2a5298);
+                autoBtn.setAlpha(1);
+                autoText.setAlpha(1);
+                autoCost.setAlpha(1);
+            } else {
+                autoBtn.setFillStyle(0x1a3a4d);
+                autoBtn.setAlpha(0.5);
+                autoText.setAlpha(0.5);
+                autoCost.setAlpha(0.5);
+            }
         }
         
         function buyUpgrade(scene, type) {
@@ -455,10 +511,10 @@
                 }
             } else if (type === 'spawn') {
                 cost = 30;
-                if (coins >= cost && spawnDelay > 400) {
+                if (coins >= cost && spawnDelay > 100) {
                     coins -= cost;
                     spawnLevel++;
-                    spawnDelay -= 100;
+                    spawnDelay -= 50;
                     spawnTimer.delay = spawnDelay;
                     success = true;
                 }
@@ -474,6 +530,7 @@
             if (success) {
                 playSound(1200, 'square', 0.2);
                 updateUI();
+                updateButtonStates();
             } else {
                 playSound(150, 'sawtooth', 0.3);
             }
@@ -484,9 +541,15 @@
             spawnTimer.remove();
             countdownTimer.remove();
             
-            for (const btn of upgradeButtons) {
-                btn.setVisible(false);
-            }
+            speedBtn.setVisible(false);
+            speedText.setVisible(false);
+            speedCost.setVisible(false);
+            spawnBtn.setVisible(false);
+            spawnText.setVisible(false);
+            spawnCost.setVisible(false);
+            autoBtn.setVisible(false);
+            autoText.setVisible(false);
+            autoCost.setVisible(false);
             
             for (const product of products) {
                 product.destroy();
@@ -506,9 +569,20 @@
         function resetGame(scene) {
             if (resultText) {
                 resultText.destroy();
+                resultText = null;
+            }
+            
+            // 前回のfinalBgも削除
+            const objects = scene.children.list;
+            for (let i = objects.length - 1; i >= 0; i--) {
+                const obj = objects[i];
+                if (obj.type === 'Rectangle' && obj.fillColor === 0x000000 && obj.fillAlpha === 0.8) {
+                    obj.destroy();
+                }
             }
             
             gameOver = false;
+            gameStarted = false;
             startText.setVisible(true);
             startBg.setVisible(true);
         }
