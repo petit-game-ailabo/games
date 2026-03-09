@@ -293,6 +293,12 @@
             autoCost.setVisible(true);
             autoLevelText.setVisible(true);
             
+            // 残りの製品とエフェクトをクリア
+            for (const product of products) {
+                product.destroy();
+            }
+            scene.tweens.killAll();
+            
             score = 0;
             coins = 0;
             timeLeft = 60;
@@ -333,6 +339,9 @@
         }
         
         function spawnProduct(scene) {
+            // 画面上の製品数を制限（パフォーマンス対策）
+            if (products.length > 20) return;
+            
             const isDefect = Math.random() < 0.4;
             let color, shape;
             
@@ -370,68 +379,43 @@
                     // 製品を緑色に光らせる
                     product.setTint(0x00ff00);
                     
-                    // 超派手なエフェクト
+                    // シンプルで軽いエフェクト
                     const robotText = scene.add.text(product.x, product.y, '🤖', {
-                        fontSize: '64px'
+                        fontSize: '48px'
                     }).setOrigin(0.5);
                     
-                    // 緑の光の輪（複数）
-                    const ring1 = scene.add.circle(product.x, product.y, 30, 0x00ff00, 0);
-                    ring1.setStrokeStyle(4, 0x00ff00, 0.8);
-                    
-                    const ring2 = scene.add.circle(product.x, product.y, 30, 0x00ff00, 0);
-                    ring2.setStrokeStyle(4, 0x00ff00, 0.8);
-                    
-                    const flash = scene.add.circle(product.x, product.y, 50, 0x00ff00, 0.7);
+                    // 緑の光の輪（1つだけ）
+                    const ring = scene.add.circle(product.x, product.y, 30, 0x00ff00, 0);
+                    ring.setStrokeStyle(4, 0x00ff00, 0.8);
                     
                     // ロボットアイコンの上昇
                     scene.tweens.add({
                         targets: robotText,
-                        y: product.y - 80,
-                        scale: 1.8,
+                        y: product.y - 60,
+                        scale: 1.3,
                         alpha: 0,
-                        duration: 700,
+                        duration: 500,
                         onComplete: () => robotText.destroy()
                     });
                     
-                    // リング1の拡大
+                    // リングの拡大
                     scene.tweens.add({
-                        targets: ring1,
-                        scale: 2.5,
+                        targets: ring,
+                        scale: 2,
                         alpha: 0,
-                        duration: 500,
-                        onComplete: () => ring1.destroy()
+                        duration: 400,
+                        onComplete: () => ring.destroy()
                     });
                     
-                    // リング2の拡大（遅延）
-                    scene.tweens.add({
-                        targets: ring2,
-                        scale: 3,
-                        alpha: 0,
-                        duration: 600,
-                        delay: 100,
-                        onComplete: () => ring2.destroy()
-                    });
-                    
-                    // フラッシュの拡大
-                    scene.tweens.add({
-                        targets: flash,
-                        scale: 2.5,
-                        alpha: 0,
-                        duration: 500,
-                        onComplete: () => flash.destroy()
-                    });
-                    
-                    // 製品を脈打たせる
+                    // 製品を0.3秒後にフェードアウト
                     scene.tweens.add({
                         targets: product,
-                        scale: 1.3,
-                        duration: 200,
-                        yoyo: true,
-                        repeat: 1
+                        alpha: 0.3,
+                        duration: 300,
+                        delay: 100
                     });
                     
-                    playSound(1000, 'square', 0.2);
+                    playSound(1000, 'square', 0.15);
                 }
             }
             
@@ -518,6 +502,17 @@
                 const product = products[i];
                 product.x -= beltSpeed;
                 
+                // 自動排除された製品は早めに削除（x < 100で削除）
+                if (product.autoRejected && product.x < 100) {
+                    score += 5;
+                    coins += 5;
+                    product.destroy();
+                    products.splice(i, 1);
+                    updateUI();
+                    updateButtonStates();
+                    continue;
+                }
+                
                 if (product.x < -50) {
                     if (product.isDefect && !product.tapped && !product.autoRejected) {
                         // 不良品を見逃した（ペナルティ）
@@ -528,10 +523,6 @@
                         // 良品を正しくスルー
                         score += 10;
                         coins += 10;
-                    } else if (product.autoRejected) {
-                        // 自動排除成功
-                        score += 5;
-                        coins += 5;
                     }
                     product.destroy();
                     products.splice(i, 1);
@@ -663,6 +654,9 @@
             spawnTimer.remove();
             countdownTimer.remove();
             
+            // すべてのtweenを停止（パフォーマンス対策）
+            scene.tweens.killAll();
+            
             speedBtn.setVisible(false);
             speedText.setVisible(false);
             speedCost.setVisible(false);
@@ -704,6 +698,9 @@
         }
         
         function resetGame(scene) {
+            // すべてのtweenを停止
+            scene.tweens.killAll();
+            
             if (resultText) {
                 resultText.destroy();
                 resultText = null;
