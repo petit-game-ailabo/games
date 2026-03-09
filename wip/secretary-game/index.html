@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>宝箱ガチャ - 今日のミニゲーム</title>
-    <meta name="description" content="最高得点の宝箱を選べるか？一度パスしたら戻れない！">
+    <title>宝箱バトル - 今日のミニゲーム</title>
+    <meta name="description" content="CPUと対戦！良い箱を取られる前に選べ！">
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
     <style>
         * {
@@ -120,16 +120,19 @@
         
         let boxes = [];
         let currentBox = 0;
-        let selectedBox = -1;
+        let currentPlayer = 0; // 0: プレイヤー, 1: CPU1, 2: CPU2
+        let playerScores = [-1, -1, -1]; // 各プレイヤーの選んだ箱のindex
         let gameStarted = false;
         let gameOver = false;
         let boxText;
         let scoreText;
         let hintText;
+        let turnText;
         let resultText;
         let selectButton;
         let passButton;
         let startText;
+        let cpuNames = ['CPU(慎重派)', 'CPU(欲張り派)'];
 
         function create() {
             // 背景グラデーション
@@ -138,7 +141,7 @@
             graphics.fillRect(0, 0, 400, 700);
             
             // タイトル
-            this.add.text(200, 40, '🎁 宝箱ガチャ', {
+            this.add.text(200, 40, '🎁 宝箱バトル', {
                 fontSize: '42px',
                 fill: '#fff',
                 fontStyle: 'bold',
@@ -146,15 +149,22 @@
                 strokeThickness: 4
             }).setOrigin(0.5);
             
-            // 進捗表示
-            boxText = this.add.text(200, 100, '', {
-                fontSize: '32px',
+            // ターン表示
+            turnText = this.add.text(200, 100, '', {
+                fontSize: '28px',
                 fill: '#FFD700',
                 fontStyle: 'bold'
             }).setOrigin(0.5);
             
+            // 進捗表示
+            boxText = this.add.text(200, 140, '', {
+                fontSize: '32px',
+                fill: '#fff',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            
             // 得点表示
-            scoreText = this.add.text(200, 300, '', {
+            scoreText = this.add.text(200, 280, '', {
                 fontSize: '72px',
                 fill: '#fff',
                 fontStyle: 'bold',
@@ -163,18 +173,18 @@
             }).setOrigin(0.5);
             
             // ヒントテキスト
-            hintText = this.add.text(200, 400, '', {
+            hintText = this.add.text(200, 380, '', {
                 fontSize: '20px',
                 fill: '#FFD700',
                 align: 'center'
             }).setOrigin(0.5);
             
             // スタート画面
-            startText = this.add.text(200, 250, '10個の宝箱が順番に現れるよ！\n\n開けると中身の得点が見える\n「これにする！」or「次へ」を選択\n\n⚠️ 一度パスしたら戻れない！\n\n最高得点の箱を選べるかな？\n\n💡最適戦略💡\n最初の3～4個は見送って\nその後ベストが来たら即決！\n\nタップしてスタート', {
+            startText = this.add.text(200, 280, '🎁 宝箱ガチャ - CPU対戦\n\nあなた vs CPU2体の3人対戦！\n\n順番に箱を開けて選ぶ\n選ばれた箱は他の人は取れない\n\n⚠️ 一度パスしたら戻れない！\n良い箱はCPUに取られるかも...\n\n💡戦略💡\n最初の3～4個は見送って\nその後ベストが来たら即決！\n\nタップしてスタート', {
                 fontSize: '22px',
                 fill: '#fff',
                 align: 'center',
-                lineSpacing: 8
+                lineSpacing: 10
             }).setOrigin(0.5);
             
             // ボタン
@@ -215,57 +225,118 @@
             // 10個の箱を生成（1～100のランダムな得点）
             boxes = [];
             for (let i = 0; i < 10; i++) {
-                boxes.push(Math.floor(Math.random() * 100) + 1);
+                boxes.push({
+                    score: Math.floor(Math.random() * 100) + 1,
+                    taken: false,
+                    takenBy: -1
+                });
             }
             
             currentBox = 0;
-            selectedBox = -1;
+            currentPlayer = 0;
+            playerScores = [-1, -1, -1];
             showBox(scene);
         }
 
         function showBox(scene) {
-            if (currentBox >= boxes.length) {
-                // 最後まで選ばなかった場合、最後の箱を自動選択
-                selectedBox = currentBox - 1;
+            // 次の空いてる箱を探す
+            while (currentBox < boxes.length && boxes[currentBox].taken) {
+                currentBox++;
+            }
+            
+            // 全員選んだ、または箱が尽きたらゲーム終了
+            if (currentBox >= boxes.length || playerScores.every(s => s >= 0)) {
                 endGame(scene);
                 return;
             }
             
+            // 現在のプレイヤー名
+            const playerName = currentPlayer === 0 ? 'あなた' : cpuNames[currentPlayer - 1];
+            turnText.setText(`${playerName}のターン`);
+            
             playOpenSound();
             
-            const score = boxes[currentBox];
+            const box = boxes[currentBox];
             boxText.setText(`宝箱 ${currentBox + 1} / 10`);
-            scoreText.setText(score + '点');
+            scoreText.setText(box.score + '点');
             
-            // ヒント表示
-            if (currentBox < 3) {
-                hintText.setText('💡 まだ見送った方がいいかも...');
-            } else {
-                const maxSoFar = Math.max(...boxes.slice(0, currentBox + 1));
-                if (score === maxSoFar) {
-                    hintText.setText('🔥 今までで最高！');
+            if (currentPlayer === 0) {
+                // プレイヤーのターン
+                // ヒント表示
+                const availableBoxes = boxes.filter(b => !b.taken);
+                const maxSoFar = Math.max(...availableBoxes.map(b => b.score));
+                if (currentBox < 3) {
+                    hintText.setText('💡 まだ見送った方がいいかも...');
+                } else if (box.score === maxSoFar) {
+                    hintText.setText('🔥 残りで最高！');
                 } else {
                     hintText.setText('');
                 }
+                
+                selectButton.setVisible(true);
+                passButton.setVisible(true);
+            } else {
+                // CPUのターン
+                hintText.setText('CPUが考え中...');
+                selectButton.setVisible(false);
+                passButton.setVisible(false);
+                
+                scene.time.delayedCall(1000, () => {
+                    cpuDecision(scene);
+                });
+            }
+        }
+
+        function cpuDecision(scene) {
+            const availableBoxes = boxes.filter(b => !b.taken);
+            const maxAvailable = Math.max(...availableBoxes.map(b => b.score));
+            const currentScore = boxes[currentBox].score;
+            
+            let decision = false;
+            
+            if (currentPlayer === 1) {
+                // CPU1（慎重派）: 最初の40%はパス、その後ベストなら選ぶ
+                const passedCount = boxes.slice(0, currentBox).filter(b => !b.taken).length;
+                if (passedCount >= 4 && currentScore === maxAvailable) {
+                    decision = true;
+                }
+            } else if (currentPlayer === 2) {
+                // CPU2（欲張り派）: 70点以上なら選ぶ、またはランダム
+                if (currentScore >= 70 || (Math.random() < 0.3 && currentScore >= 50)) {
+                    decision = true;
+                }
             }
             
-            selectButton.setVisible(true);
-            passButton.setVisible(currentBox < 9); // 最後の箱はパスできない
+            if (decision) {
+                handleSelect(scene);
+            } else {
+                handlePass(scene);
+            }
         }
 
         function handleSelect(scene) {
             playSelectSound();
-            selectedBox = currentBox;
+            playerScores[currentPlayer] = currentBox;
+            boxes[currentBox].taken = true;
+            boxes[currentBox].takenBy = currentPlayer;
+            
             selectButton.setVisible(false);
             passButton.setVisible(false);
-            endGame(scene);
+            
+            currentPlayer = (currentPlayer + 1) % 3;
+            currentBox++;
+            
+            scene.time.delayedCall(500, () => showBox(scene));
         }
 
         function handlePass(scene) {
             playPassSound();
-            currentBox++;
+            
             selectButton.setVisible(false);
             passButton.setVisible(false);
+            
+            currentPlayer = (currentPlayer + 1) % 3;
+            currentBox++;
             
             scene.time.delayedCall(500, () => showBox(scene));
         }
@@ -274,37 +345,60 @@
             gameOver = true;
             gameStarted = false;
             
+            turnText.setText('');
             boxText.setText('');
             scoreText.setText('');
             hintText.setText('');
             selectButton.setVisible(false);
             passButton.setVisible(false);
             
-            const selectedScore = boxes[selectedBox];
-            const maxScore = Math.max(...boxes);
-            const ratio = selectedScore / maxScore;
+            // 各プレイヤーの得点
+            const scores = playerScores.map(idx => idx >= 0 ? boxes[idx].score : 0);
+            
+            // ランキング
+            const rankings = [
+                { player: 0, name: 'あなた', score: scores[0] },
+                { player: 1, name: cpuNames[0], score: scores[1] },
+                { player: 2, name: cpuNames[1], score: scores[2] }
+            ].sort((a, b) => b.score - a.score);
             
             let rank, message;
-            if (selectedScore === maxScore) {
-                rank = 'S';
-                message = '完璧！最高得点を選んだ！';
-            } else if (ratio >= 0.8) {
-                rank = 'A';
-                message = '惜しい！もう少しで最高得点！';
-            } else if (ratio >= 0.6) {
-                rank = 'B';
-                message = 'まあまあ！次はもっといけるよ！';
+            if (rankings[0].player === 0) {
+                rank = '🏆 1位';
+                message = '完璧！CPUに勝った！';
+            } else if (rankings[1].player === 0) {
+                rank = '🥈 2位';
+                message = '惜しい！もう少しで勝てた！';
             } else {
-                rank = 'C';
-                message = '残念...もっといい箱があったよ';
+                rank = '🥉 3位';
+                message = 'CPUに負けちゃった...';
             }
             
-            resultText = scene.add.text(200, 250, `結果: ランク ${rank}\n\nあなたの選択: ${selectedScore}点\n最高得点: ${maxScore}点\n\n${message}\n\n全10箱の得点:\n${boxes.map((s, i) => i === selectedBox ? `[${s}]` : s).join(', ')}\n\nタップで再プレイ`, {
+            const resultLines = [
+                `結果: ${rank}`,
+                '',
+                ...rankings.map(r => `${r.name}: ${r.score}点`),
+                '',
+                message,
+                '',
+                '全10箱の得点:',
+                boxes.map((b, i) => {
+                    if (b.takenBy === 0) return `[${b.score}]`;
+                    if (b.takenBy === 1) return `(${b.score})`;
+                    if (b.takenBy === 2) return `<${b.score}>`;
+                    return b.score;
+                }).join(', '),
+                '[あなた] (CPU1) <CPU2>',
+                '',
+                'タップで再プレイ'
+            ];
+            
+            resultText = scene.add.text(200, 300, resultLines.join('\n'), {
                 fontSize: '24px',
                 fill: '#fff',
                 fontStyle: 'bold',
                 align: 'center',
-                lineSpacing: 10,
+                lineSpacing: 8,
                 stroke: '#000',
                 strokeThickness: 3
             }).setOrigin(0.5);
@@ -315,6 +409,10 @@
                 resultText.destroy();
             }
             gameOver = false;
+            turnText.setText('');
+            boxText.setText('');
+            scoreText.setText('');
+            hintText.setText('');
             startText.setVisible(true);
         }
 
