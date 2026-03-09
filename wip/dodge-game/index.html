@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>【開発中】避けゲー - 今日のミニゲーム</title>
-    <meta name="description" content="※これは開発中のゲームです。何秒生き延びられる？">
+    <title>避けゲー - 今日のミニゲーム</title>
+    <meta name="description" content="何秒生き延びられる？タップした位置に移動して障害物を避けるわよ！">
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
     <style>
         * {
@@ -128,7 +128,7 @@
                 default: 'arcade',
                 arcade: {
                     gravity: { y: 0 },
-                    debug: true  // デバッグモード有効
+                    debug: false
                 }
             },
             scene: {
@@ -154,9 +154,8 @@
         let timerEvent;
         let obstacleTimer;
         let playerSpeed = 400;
-        let obstacleSpeed = 500;  // 200 → 500（デバッグ用に速く）
+        let obstacleSpeed = 200;  // 元に戻す
         let spawnRate = 1000; // 1秒ごと
-        let debugText;
 
         function preload() {
             // 画像なし・シンプルな図形のみ
@@ -179,14 +178,6 @@
                 fontStyle: 'bold',
                 stroke: '#000',
                 strokeThickness: 4
-            });
-            
-            // デバッグテキスト（スマホで確認用）
-            debugText = this.add.text(20, 150, 'デバッグ', {
-                fontSize: '24px',
-                fill: '#00ff00',
-                stroke: '#000',
-                strokeThickness: 2
             });
 
             // スタートテキスト
@@ -313,7 +304,7 @@
             const x = Phaser.Math.Between(50, 750);
             
             // プレイヤーと全く同じ方法で作成
-            const obstacle = scene.add.circle(x, 50, 40, 0xff6b6b);
+            const obstacle = scene.add.circle(x, -30, 25, 0xff6b6b);
             scene.physics.add.existing(obstacle);
             
             // 速度を直接設定
@@ -387,7 +378,7 @@
             survivalTime = 0;
             gameOver = false;
             spawnRate = 1000;
-            obstacleSpeed = 500;
+            obstacleSpeed = 200;
             
             scoreText.setText('スコア: 0');
             timeText.setText('0.0秒');
@@ -427,23 +418,12 @@
                         const distance = Phaser.Math.Distance.Between(
                             player.x, player.y, obs.x, obs.y
                         );
-                        if (distance < 70) {  // 30 + 40 = 70
+                        if (distance < 55) {  // 30 + 25 = 55
                             hitObstacle(this, player, obs);
                             break;
                         }
                     }
                 }
-            }
-            
-            // デバッグ情報表示（スマホで確認用）
-            if (debugText && gameStarted) {
-                const obstacleCount = obstacleArray.length;
-                let firstObstacleInfo = 'なし';
-                if (obstacleCount > 0) {
-                    const firstObs = obstacleArray[0];
-                    firstObstacleInfo = `y=${Math.floor(firstObs.y)} vy=${firstObs.body ? firstObs.body.velocity.y : 'なし'}`;
-                }
-                debugText.setText(`障害物数: ${obstacleCount}\n最初: ${firstObstacleInfo}\nspeed: ${obstacleSpeed}`);
             }
         }
     </script>
