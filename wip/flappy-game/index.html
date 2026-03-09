@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>フラッピー - 今日のミニゲーム</title>
+    <meta name="description" content="タップで飛べ！障害物を避けろ！">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #87CEEB 0%, #98D8E8 100%);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .credits {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(0,0,0,0.5);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="credits">Powered by Phaser</div>
+    
+    <script>
+        // 効果音
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playJumpSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 800;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        function playScoreSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 1200;
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.15);
+        }
+        
+        function playGameOverSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 200;
+            oscillator.type = 'sawtooth';
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 400,
+            height: 700,
+            parent: 'game-container',
+            backgroundColor: '#87CEEB',
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 1000 },
+                    debug: false
+                }
+            },
+            scene: {
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        
+        let bird;
+        let pipes = [];
+        let score = 0;
+        let highScore = 0;
+        let gameStarted = false;
+        let gameOver = false;
+        let scoreText;
+        let highScoreText;
+        let startText;
+        let resultText;
+        let ground;
+        let pipeTimer;
+
+        function create() {
+            // 地面
+            ground = this.add.rectangle(200, 680, 400, 40, 0x8B4513);
+            this.physics.add.existing(ground, true);
+            
+            // 鳥（青い丸）
+            bird = this.add.circle(100, 350, 20, 0xFFD700);
+            this.physics.add.existing(bird);
+            bird.body.setCollideWorldBounds(true);
+            bird.body.setBounce(0);
+            
+            // スコア表示
+            scoreText = this.add.text(20, 20, 'スコア: 0', {
+                fontSize: '36px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            });
+            
+            // ハイスコア表示
+            highScoreText = this.add.text(20, 70, 'ハイスコア: 0', {
+                fontSize: '24px',
+                fill: '#FFD700',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 2
+            });
+            
+            // スタート画面
+            startText = this.add.text(200, 300, 'フラッピー\n\nタップで上昇！\n障害物を避けろ！\n\nタップしてスタート', {
+                fontSize: '32px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                align: 'center',
+                stroke: '#000',
+                strokeThickness: 4,
+                lineSpacing: 10
+            }).setOrigin(0.5);
+            
+            // タップイベント
+            this.input.on('pointerdown', () => handleInput(this));
+        }
+
+        function handleInput(scene) {
+            if (!gameStarted && !gameOver) {
+                startGame(scene);
+            } else if (gameStarted && !gameOver) {
+                // ジャンプ
+                bird.body.setVelocityY(-400);
+                playJumpSound();
+            } else if (gameOver) {
+                resetGame(scene);
+            }
+        }
+
+        function startGame(scene) {
+            gameStarted = true;
+            startText.setVisible(false);
+            score = 0;
+            scoreText.setText('スコア: 0');
+            
+            // 重力を有効化
+            bird.body.setVelocityY(0);
+            
+            // パイプ生成タイマー
+            pipeTimer = scene.time.addEvent({
+                delay: 2000,
+                callback: () => spawnPipe(scene),
+                loop: true
+            });
+            
+            // 最初のパイプ
+            spawnPipe(scene);
+        }
+
+        function spawnPipe(scene) {
+            if (!gameStarted || gameOver) return;
+            
+            // ランダムな隙間位置
+            const gapY = Phaser.Math.Between(150, 500);
+            const gapSize = 180;
+            
+            // 上のパイプ
+            const pipeTop = scene.add.rectangle(450, gapY - gapSize / 2, 60, gapY - gapSize / 2, 0x228B22);
+            pipeTop.setOrigin(0.5, 1);
+            scene.physics.add.existing(pipeTop, true);
+            
+            // 下のパイプ
+            const pipeBottom = scene.add.rectangle(450, gapY + gapSize / 2, 60, 700 - (gapY + gapSize / 2), 0x228B22);
+            pipeBottom.setOrigin(0.5, 0);
+            scene.physics.add.existing(pipeBottom, true);
+            
+            pipes.push({ top: pipeTop, bottom: pipeBottom, scored: false });
+        }
+
+        function checkCollision(scene) {
+            if (gameOver) return;
+            
+            // 地面・天井判定
+            if (bird.y <= 20 || bird.y >= 660) {
+                endGame(scene);
+                return;
+            }
+            
+            // パイプ判定
+            for (let pipe of pipes) {
+                if (!pipe.top.active) continue;
+                
+                const birdBounds = bird.getBounds();
+                const topBounds = pipe.top.getBounds();
+                const bottomBounds = pipe.bottom.getBounds();
+                
+                if (Phaser.Geom.Intersects.RectangleToRectangle(birdBounds, topBounds) ||
+                    Phaser.Geom.Intersects.RectangleToRectangle(birdBounds, bottomBounds)) {
+                    endGame(scene);
+                    return;
+                }
+                
+                // スコア判定（パイプを通過）
+                if (!pipe.scored && bird.x > pipe.top.x + 30) {
+                    pipe.scored = true;
+                    score++;
+                    scoreText.setText('スコア: ' + score);
+                    playScoreSound();
+                    
+                    if (score > highScore) {
+                        highScore = score;
+                        highScoreText.setText('ハイスコア: ' + highScore);
+                    }
+                }
+            }
+        }
+
+        function endGame(scene) {
+            gameOver = true;
+            gameStarted = false;
+            
+            pipeTimer.remove();
+            
+            // パイプの移動停止
+            pipes.forEach(pipe => {
+                if (pipe.top.active) {
+                    pipe.top.destroy();
+                    pipe.bottom.destroy();
+                }
+            });
+            pipes = [];
+            
+            playGameOverSound();
+            
+            let message;
+            if (score >= 20) {
+                message = '神プレイ！';
+            } else if (score >= 10) {
+                message = 'すごい！';
+            } else if (score >= 5) {
+                message = 'いい感じ！';
+            } else {
+                message = '次はもっといけるよ！';
+            }
+            
+            resultText = scene.add.text(200, 300, `ゲームオーバー！\n\nスコア: ${score}\nハイスコア: ${highScore}\n\n${message}\n\nタップで再プレイ`, {
+                fontSize: '32px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                align: 'center',
+                stroke: '#000',
+                strokeThickness: 4,
+                lineSpacing: 10
+            }).setOrigin(0.5);
+        }
+
+        function resetGame(scene) {
+            if (resultText) {
+                resultText.destroy();
+            }
+            
+            gameOver = false;
+            bird.x = 100;
+            bird.y = 350;
+            bird.body.setVelocity(0, 0);
+            
+            startText.setVisible(true);
+        }
+
+        function update() {
+            if (!gameStarted || gameOver) return;
+            
+            // パイプを移動
+            pipes.forEach(pipe => {
+                if (pipe.top.active) {
+                    pipe.top.x -= 3;
+                    pipe.bottom.x -= 3;
+                    
+                    // 画面外に出たら削除
+                    if (pipe.top.x < -50) {
+                        pipe.top.destroy();
+                        pipe.bottom.destroy();
+                    }
+                }
+            });
+            
+            // 衝突判定
+            checkCollision(this);
+        }
+    </script>
+</body>
+</html>
