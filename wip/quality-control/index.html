@@ -340,7 +340,7 @@
         
         function spawnProduct(scene) {
             // 画面上の製品数を制限（パフォーマンス対策）
-            if (products.length > 20) return;
+            if (products.length >= 15) return;
             
             const isDefect = Math.random() < 0.4;
             let color, shape;
@@ -372,7 +372,7 @@
             
             // 自動排除機の効果
             if (isDefect && autoLevel > 0) {
-                const autoChance = autoLevel * 0.4; // 40%/レベル
+                const autoChance = Math.min(autoLevel * 0.4, 0.95); // 40%/レベル、最大95%
                 if (Math.random() < autoChance) {
                     product.autoRejected = true;
                     
@@ -453,6 +453,11 @@
         function update() {
             if (!gameStarted || gameOver) return;
             
+            // デバッグ情報（1秒に1回）
+            if (Math.random() < 0.016) {  // 60fpsで約1秒に1回
+                console.log(`製品数: ${products.length}, 自動排除: ${products.filter(p => p.autoRejected).length}`);
+            }
+            
             // ベルト移動
             for (const line of beltLines) {
                 line.x -= beltSpeed;
@@ -462,18 +467,19 @@
             }
             
             // 製品移動
+            let needsUpdate = false;
+            
             for (let i = products.length - 1; i >= 0; i--) {
                 const product = products[i];
                 product.x -= beltSpeed;
                 
-                // 自動排除された製品は早めに削除（x < 100で削除）
-                if (product.autoRejected && product.x < 100) {
+                // 自動排除された製品は早めに削除（x < 50で削除）
+                if (product.autoRejected === true && product.x < 50) {
                     score += 5;
                     coins += 5;
                     product.destroy();
                     products.splice(i, 1);
-                    updateUI();
-                    updateButtonStates();
+                    needsUpdate = true;
                     continue;
                 }
                 
@@ -490,9 +496,14 @@
                     }
                     product.destroy();
                     products.splice(i, 1);
-                    updateUI();
-                    updateButtonStates();
+                    needsUpdate = true;
                 }
+            }
+            
+            // 1フレームに1回だけ更新
+            if (needsUpdate) {
+                updateUI();
+                updateButtonStates();
             }
         }
         
