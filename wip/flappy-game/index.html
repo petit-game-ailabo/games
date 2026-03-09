@@ -113,7 +113,7 @@
             physics: {
                 default: 'arcade',
                 arcade: {
-                    gravity: { y: 1000 },
+                    gravity: { y: 0 }, // スタート前は重力なし
                     debug: false
                 }
             },
@@ -137,6 +137,8 @@
         let resultText;
         let ground;
         let pipeTimer;
+        let pipeSpeed = 3;
+        let gapSize = 180;
 
         function create() {
             // 地面
@@ -198,9 +200,12 @@
             gameStarted = true;
             startText.setVisible(false);
             score = 0;
+            pipeSpeed = 3;
+            gapSize = 180;
             scoreText.setText('スコア: 0');
             
             // 重力を有効化
+            scene.physics.world.gravity.y = 1000;
             bird.body.setVelocityY(0);
             
             // パイプ生成タイマー
@@ -219,7 +224,6 @@
             
             // ランダムな隙間位置
             const gapY = Phaser.Math.Between(150, 500);
-            const gapSize = 180;
             
             // 上のパイプ
             const pipeTop = scene.add.rectangle(450, gapY - gapSize / 2, 60, gapY - gapSize / 2, 0x228B22);
@@ -267,6 +271,30 @@
                     if (score > highScore) {
                         highScore = score;
                         highScoreText.setText('ハイスコア: ' + highScore);
+                    }
+                    
+                    // 難易度上昇（5点ごと）
+                    if (score % 5 === 0) {
+                        pipeSpeed += 0.5; // 速度UP
+                        if (gapSize > 140) {
+                            gapSize -= 5; // 隙間が狭くなる
+                        }
+                        
+                        // フラッシュエフェクト
+                        const flash = scene.add.text(200, 200, 'SPEED UP!', {
+                            fontSize: '48px',
+                            fill: '#FFD700',
+                            fontStyle: 'bold',
+                            stroke: '#000',
+                            strokeThickness: 4
+                        }).setOrigin(0.5);
+                        scene.tweens.add({
+                            targets: flash,
+                            alpha: 0,
+                            y: 150,
+                            duration: 1000,
+                            onComplete: () => flash.destroy()
+                        });
                     }
                 }
             }
@@ -321,6 +349,9 @@
             bird.y = 350;
             bird.body.setVelocity(0, 0);
             
+            // 重力を無効化
+            scene.physics.world.gravity.y = 0;
+            
             startText.setVisible(true);
         }
 
@@ -330,8 +361,8 @@
             // パイプを移動
             pipes.forEach(pipe => {
                 if (pipe.top.active) {
-                    pipe.top.x -= 3;
-                    pipe.bottom.x -= 3;
+                    pipe.top.x -= pipeSpeed;
+                    pipe.bottom.x -= pipeSpeed;
                     
                     // 画面外に出たら削除
                     if (pipe.top.x < -50) {
