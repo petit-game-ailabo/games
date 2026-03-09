@@ -142,6 +142,7 @@
         
         let player;
         let obstacles;
+        let obstacleArray = [];  // 配列で管理
         let score = 0;
         let survivalTime = 0;
         let gameStarted = false;
@@ -205,10 +206,8 @@
 
             // 障害物グループ
             obstacles = this.physics.add.group();
-
-            // 衝突検出（sceneを保持）
-            const scene = this;
-            this.physics.add.overlap(player, obstacles, (p, o) => hitObstacle(scene, p, o));
+            
+            // 衝突検出は update() で個別にチェック
 
             // タップ/クリックイベント
             this.input.on('pointerdown', handleInput, this);
@@ -313,24 +312,23 @@
             // ランダムなX座標
             const x = Phaser.Math.Between(50, 750);
             
-            // Graphicsで円を描画
-            const obstacle = scene.add.graphics();
-            obstacle.fillStyle(0xff6b6b, 1);
-            obstacle.fillCircle(0, 0, 40);  // 中心(0,0)に描画
-            obstacle.x = x;
-            obstacle.y = 50;
-            
-            // 物理ボディを追加
+            // プレイヤーと全く同じ方法で作成
+            const obstacle = scene.add.circle(x, 50, 40, 0xff6b6b);
             scene.physics.add.existing(obstacle);
-            obstacle.body.setCircle(40);  // 当たり判定を円形に
-            obstacle.body.setVelocityY(obstacleSpeed);  // 速度設定
             
-            // グループに追加
-            obstacles.add(obstacle);
+            // 速度を直接設定
+            obstacle.body.velocity.y = obstacleSpeed;
+            
+            // 配列に追加
+            obstacleArray.push(obstacle);
             
             // 画面外に出たら削除
             scene.time.delayedCall(5000, () => {
                 if (obstacle && obstacle.active) {
+                    const index = obstacleArray.indexOf(obstacle);
+                    if (index > -1) {
+                        obstacleArray.splice(index, 1);
+                    }
                     obstacle.destroy();
                 }
             });
@@ -348,8 +346,10 @@
             obstacleTimer.remove();
             
             // 全ての障害物を停止
-            obstacles.children.iterate((obs) => {
-                obs.body.setVelocity(0, 0);
+            obstacleArray.forEach(obs => {
+                if (obs && obs.body) {
+                    obs.body.setVelocity(0, 0);
+                }
             });
             
             // プレイヤーを赤くする
@@ -399,7 +399,12 @@
             player.body.setVelocity(0, 0);
             
             // 障害物を全削除
-            obstacles.clear(true, true);
+            obstacleArray.forEach(obs => {
+                if (obs && obs.active) {
+                    obs.destroy();
+                }
+            });
+            obstacleArray = [];
             
             // 結果テキスト削除
             if (resultText) {
@@ -412,13 +417,30 @@
             player.setVisible(false);
         }
 
-        function update() {
+        function update(time, delta) {
+            // 衝突検出（個別チェック）
+            if (gameStarted && !gameOver && player && player.body) {
+                for (let i = 0; i < obstacleArray.length; i++) {
+                    const obs = obstacleArray[i];
+                    if (obs && obs.body) {
+                        // 衝突判定
+                        const distance = Phaser.Math.Distance.Between(
+                            player.x, player.y, obs.x, obs.y
+                        );
+                        if (distance < 70) {  // 30 + 40 = 70
+                            hitObstacle(this, player, obs);
+                            break;
+                        }
+                    }
+                }
+            }
+            
             // デバッグ情報表示（スマホで確認用）
             if (debugText && gameStarted) {
-                const obstacleCount = obstacles.getChildren().length;
+                const obstacleCount = obstacleArray.length;
                 let firstObstacleInfo = 'なし';
                 if (obstacleCount > 0) {
-                    const firstObs = obstacles.getChildren()[0];
+                    const firstObs = obstacleArray[0];
                     firstObstacleInfo = `y=${Math.floor(firstObs.y)} vy=${firstObs.body ? firstObs.body.velocity.y : 'なし'}`;
                 }
                 debugText.setText(`障害物数: ${obstacleCount}\n最初: ${firstObstacleInfo}\nspeed: ${obstacleSpeed}`);
