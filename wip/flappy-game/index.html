@@ -133,12 +133,17 @@
         let gameOver = false;
         let scoreText;
         let highScoreText;
+        let recoveryText;
         let startText;
         let resultText;
         let ground;
         let pipeTimer;
         let pipeSpeed = 3;
         let gapSize = 180;
+        let recoveryCount = 1;
+        let invincible = false;
+        let invincibleEffect = null;
+        let holdStartTime = 0;
 
         function create() {
             // 地面
@@ -169,8 +174,17 @@
                 strokeThickness: 2
             });
             
+            // リカバリー表示
+            recoveryText = this.add.text(350, 20, '🛡️ 1', {
+                fontSize: '36px',
+                fill: '#00ff00',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            }).setOrigin(1, 0);
+            
             // スタート画面
-            startText = this.add.text(200, 300, 'フラッピー\n\nタップで上昇！\n障害物を避けろ！\n\nタップしてスタート', {
+            startText = this.add.text(200, 300, 'フラッピー\n\nタップで上昇！\n障害物を避けろ！\n\n💡長押し(0.5秒)で\n緊急ブースト(1回のみ)\n3秒間無敵＆大ジャンプ！\n\nタップしてスタート', {
                 fontSize: '32px',
                 fill: '#fff',
                 fontStyle: 'bold',
@@ -181,19 +195,66 @@
             }).setOrigin(0.5);
             
             // タップイベント
-            this.input.on('pointerdown', () => handleInput(this));
+            this.input.on('pointerdown', (pointer) => {
+                holdStartTime = Date.now();
+                handleInput(this, false);
+            });
+            
+            this.input.on('pointerup', (pointer) => {
+                const holdDuration = Date.now() - holdStartTime;
+                if (holdDuration >= 500 && gameStarted && !gameOver && recoveryCount > 0) {
+                    activateRecovery(this);
+                }
+                holdStartTime = 0;
+            });
         }
 
-        function handleInput(scene) {
+        function handleInput(scene, isHold) {
             if (!gameStarted && !gameOver) {
                 startGame(scene);
-            } else if (gameStarted && !gameOver) {
+            } else if (gameStarted && !gameOver && !isHold) {
                 // ジャンプ
                 bird.body.setVelocityY(-400);
                 playJumpSound();
             } else if (gameOver) {
                 resetGame(scene);
             }
+        }
+        
+        function activateRecovery(scene) {
+            if (recoveryCount === 0 || invincible) return;
+            
+            recoveryCount = 0;
+            invincible = true;
+            recoveryText.setText('🛡️ 0');
+            recoveryText.setStyle({ fill: '#ff0000' });
+            
+            // 無敵エフェクト（光る）
+            invincibleEffect = scene.add.circle(bird.x, bird.y, 35, 0xFFD700, 0.5);
+            
+            // 大きくジャンプ
+            bird.body.setVelocityY(-500);
+            
+            // 効果音
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 1500;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+            
+            // 3秒後に無敵解除
+            scene.time.delayedCall(3000, () => {
+                invincible = false;
+                if (invincibleEffect) {
+                    invincibleEffect.destroy();
+                    invincibleEffect = null;
+                }
+            });
         }
 
         function startGame(scene) {
@@ -202,7 +263,11 @@
             score = 0;
             pipeSpeed = 3;
             gapSize = 180;
+            recoveryCount = 1;
+            invincible = false;
             scoreText.setText('スコア: 0');
+            recoveryText.setText('🛡️ 1');
+            recoveryText.setStyle({ fill: '#00ff00' });
             
             // 重力を有効化
             scene.physics.world.gravity.y = 1000;
@@ -243,8 +308,10 @@
             
             // 地面・天井判定
             if (bird.y <= 20 || bird.y >= 660) {
-                endGame(scene);
-                return;
+                if (!invincible) {
+                    endGame(scene);
+                    return;
+                }
             }
             
             // パイプ判定
@@ -257,8 +324,10 @@
                 
                 if (Phaser.Geom.Intersects.RectangleToRectangle(birdBounds, topBounds) ||
                     Phaser.Geom.Intersects.RectangleToRectangle(birdBounds, bottomBounds)) {
-                    endGame(scene);
-                    return;
+                    if (!invincible) {
+                        endGame(scene);
+                        return;
+                    }
                 }
                 
                 // スコア判定（パイプを通過）
@@ -345,8 +414,13 @@
             if (resultText) {
                 resultText.destroy();
             }
+            if (invincibleEffect) {
+                invincibleEffect.destroy();
+                invincibleEffect = null;
+            }
             
             gameOver = false;
+            invincible = false;
             bird.x = 100;
             bird.y = 350;
             bird.body.setVelocity(0, 0);
@@ -359,6 +433,12 @@
 
         function update() {
             if (!gameStarted || gameOver) return;
+            
+            // 無敵エフェクトを鳥の位置に追従
+            if (invincibleEffect) {
+                invincibleEffect.x = bird.x;
+                invincibleEffect.y = bird.y;
+            }
             
             // パイプを移動
             pipes.forEach(pipe => {
