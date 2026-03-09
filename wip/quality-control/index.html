@@ -3,90 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
     <title>品質管理 - 今日のミニゲーム</title>
-    <meta name="description" content="不良品を見つけてタップ！正確さが試される！">
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
         body {
-            margin: 0;
-            padding: 0;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             background: linear-gradient(180deg, #2c5f7c 0%, #1a3a4d 100%);
-            font-family: Arial, sans-serif;
             overflow: hidden;
-        }
-        
-        #game-container {
-            width: 100%;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        canvas {
-            display: block;
-            margin: 0 auto;
-        }
-        
-        .credits {
-            position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: rgba(255,255,255,0.7);
-            font-size: 12px;
         }
     </style>
 </head>
 <body>
     <div id="game-container"></div>
-    <div class="credits">Powered by Phaser</div>
-    
     <script>
-        // 効果音
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        function playCorrectSound() {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            oscillator.frequency.value = 800;
-            oscillator.type = 'sine';
-            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.1);
-        }
-        
-        function playWrongSound() {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            oscillator.frequency.value = 200;
-            oscillator.type = 'sawtooth';
-            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.2);
-        }
-
         const config = {
             type: Phaser.AUTO,
             width: 400,
@@ -97,187 +30,230 @@
                 mode: Phaser.Scale.FIT,
                 autoCenter: Phaser.Scale.CENTER_BOTH
             },
-            scene: {
-                create: create,
-                update: update
-            }
+            scene: { create: create, update: update }
         };
-
         const game = new Phaser.Game(config);
         
-        let products = [];
-        let score = 0;
-        let lives = 3;
-        let timeLeft = 60;
+        // ゲーム変数
         let gameStarted = false;
         let gameOver = false;
-        let scoreText;
-        let livesText;
-        let timeText;
-        let patternText;
-        let startText;
-        let resultText;
+        let score = 0;
+        let coins = 0;
+        let lives = 3;
+        let timeLeft = 60;
+        let products = [];
         let beltLines = [];
         let beltSpeed = 3;
-        let startBg;
         let spawnTimer;
-        let gameTimer;
-        let currentPattern = { color: 0x4169E1, shape: 'circle' }; // 良品パターン
-
+        let countdownTimer;
+        let currentPattern;
+        
+        // UI要素
+        let startBg, startText, patternText, scoreText, coinsText, livesText, timeText, resultText, shopBtn;
+        
+        // アップグレード
+        let autoRejectLevel = 0; // 自動排除レベル
+        let speedBoostLevel = 0; // スピードブーストレベル
+        let shopOpen = false;
+        let shopBg, shopTitle, shopClose, upgradeButtons = [];
+        
+        // 効果音
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(freq, type = 'sine', duration = 0.1) {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.frequency.value = freq;
+            osc.type = type;
+            gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            osc.start();
+            osc.stop(audioContext.currentTime + duration);
+        }
+        
+        // 良品パターン
+        const patterns = [
+            { color: 0x4169e1, shape: 'circle' }
+        ];
+        
+        // 不良品パターン
+        const defectPatterns = [
+            { color: 0xff0000, shape: 'circle' },
+            { color: 0x00ff00, shape: 'circle' },
+            { color: 0xffff00, shape: 'circle' },
+            { color: 0x4169e1, shape: 'square' },
+            { color: 0x4169e1, shape: 'triangle' }
+        ];
+        
         function create() {
-            // ベルトコンベア（見た目改善）
-            // ベルトの土台
-            this.add.rectangle(200, 500, 400, 150, 0x3a3a3a);
+            currentPattern = patterns[0];
             
-            // ベルトライン（黄色の警告線風）
+            // ベルトコンベア
+            this.add.rectangle(200, 500, 400, 150, 0x3a3a3a);
             for (let i = 0; i < 5; i++) {
                 const line = this.add.rectangle(i * 100 + 50, 490, 80, 8, 0xffcc00);
                 beltLines.push(line);
-            }
-            for (let i = 0; i < 5; i++) {
                 const line2 = this.add.rectangle(i * 100 + 50, 510, 80, 8, 0xffcc00);
                 beltLines.push(line2);
             }
             
-            // 良品パターン表示（枠で囲む）
-            const exampleBg = this.add.rectangle(200, 200, 250, 120, 0xffffff, 0.2);
-            exampleBg.setStrokeStyle(3, 0xffffff);
-            
-            patternText = this.add.text(200, 170, '✅ 良品（スルー）', {
-                fontSize: '28px',
-                fill: '#ffffff',
-                fontStyle: 'bold',
-                stroke: '#000',
-                strokeThickness: 2
-            }).setOrigin(0.5);
-            
-            const goodExample = this.add.circle(200, 220, 30, currentPattern.color);
-            goodExample.setStrokeStyle(3, 0xffffff);
-            
-            // スコア表示（見やすく）
-            scoreText = this.add.text(20, 20, 'スコア: 0', {
-                fontSize: '36px',
-                fill: '#ffffff',
+            // スコア表示
+            coinsText = this.add.text(20, 20, 'コイン: 0', {
+                fontSize: '32px',
+                fill: '#FFD700',
                 fontStyle: 'bold',
                 stroke: '#000',
                 strokeThickness: 4
             });
             
-            // ライフ表示
-            livesText = this.add.text(20, 70, 'ライフ: ❤️❤️❤️', {
-                fontSize: '32px',
+            scoreText = this.add.text(20, 60, 'スコア: 0', {
+                fontSize: '28px',
+                fill: '#ffffff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            });
+            
+            livesText = this.add.text(20, 100, 'ライフ: ❤️❤️❤️', {
+                fontSize: '28px',
                 fill: '#ff0000',
                 fontStyle: 'bold',
                 stroke: '#000',
                 strokeThickness: 3
             });
             
-            // 残り時間表示
-            timeText = this.add.text(20, 120, '60秒', {
-                fontSize: '32px',
+            timeText = this.add.text(20, 140, '60秒', {
+                fontSize: '28px',
                 fill: '#ffffff',
                 fontStyle: 'bold',
                 stroke: '#000',
                 strokeThickness: 3
             });
             
-            // 説明（目立たせる）
-            const instructionBg = this.add.rectangle(200, 340, 350, 80, 0xff6b35, 0.9);
-            instructionBg.setStrokeStyle(3, 0xffffff);
+            // ショップボタン
+            shopBtn = this.add.rectangle(350, 40, 80, 50, 0x00aa00);
+            shopBtn.setStrokeStyle(3, 0xffffff);
+            shopBtn.setInteractive();
+            shopBtn.on('pointerdown', () => openShop(this));
+            const shopText = this.add.text(350, 40, '🏪', {
+                fontSize: '32px'
+            }).setOrigin(0.5);
+            shopBtn.setVisible(false);
+            shopText.setVisible(false);
+            shopBtn.shopText = shopText;
             
-            const instruction = this.add.text(200, 340, '❌ 不良品: 色違い・形違い\nタップして排除！', {
+            // 良品パターン表示
+            const exampleBg = this.add.rectangle(200, 230, 250, 100, 0xffffff, 0.2);
+            exampleBg.setStrokeStyle(3, 0xffffff);
+            
+            patternText = this.add.text(200, 200, '✅ 良品（スルー）', {
                 fontSize: '24px',
                 fill: '#ffffff',
                 fontStyle: 'bold',
-                align: 'center',
-                lineSpacing: 5
+                stroke: '#000',
+                strokeThickness: 2
             }).setOrigin(0.5);
             
-            // スタート画面の背景（ゲーム画面を隠す）
+            const goodExample = this.add.circle(200, 250, 30, currentPattern.color);
+            goodExample.setStrokeStyle(3, 0xffffff);
+            
+            // 説明
+            const instructionBg = this.add.rectangle(200, 350, 350, 70, 0xff6b35, 0.9);
+            instructionBg.setStrokeStyle(3, 0xffffff);
+            
+            const instruction = this.add.text(200, 350, '❌ 不良品だけタップして排除！', {
+                fontSize: '24px',
+                fill: '#ffffff',
+                fontStyle: 'bold',
+                align: 'center'
+            }).setOrigin(0.5);
+            
+            // スタート画面の背景
             startBg = this.add.rectangle(200, 350, 400, 700, 0x4a7c9e);
+            startBg.setDepth(-1);
             
             // スタート画面
-            startText = this.add.text(200, 450, '🏭 品質管理ゲーム 🏭\n\n不良品だけタップして排除！\n良品はスルーしてね\n\n60秒でどこまで正確に？\n\nタップしてスタート', {
-                fontSize: '32px',
+            startText = this.add.text(200, 480, '🏭 品質管理ゲーム 🏭\n\n不良品を見つけて排除！\nコインでアップグレード購入\n\nタップしてスタート', {
+                fontSize: '28px',
                 fill: '#ffffff',
                 fontStyle: 'bold',
                 align: 'center',
-                lineSpacing: 15,
+                lineSpacing: 12,
                 stroke: '#000',
                 strokeThickness: 3
             }).setOrigin(0.5);
             
-            // タップイベント
-            this.input.on('pointerdown', (pointer) => handleInput(this, pointer));
+            // タップでスタート
+            this.input.on('pointerdown', (pointer) => {
+                if (!gameStarted && !gameOver) {
+                    startGame(this);
+                } else if (gameOver) {
+                    resetGame(this);
+                } else if (!shopOpen) {
+                    handleTap(this, pointer);
+                }
+            });
+            
+            // Powered by Phaser
+            this.add.text(200, 680, 'Powered by Phaser', {
+                fontSize: '14px',
+                fill: '#ffffff',
+                alpha: 0.5
+            }).setOrigin(0.5);
         }
-
-        function handleInput(scene, pointer) {
-            if (!gameStarted && !gameOver) {
-                startGame(scene);
-            } else if (gameStarted && !gameOver) {
-                checkTap(scene, pointer);
-            } else if (gameOver) {
-                resetGame(scene);
-            }
-        }
-
+        
         function startGame(scene) {
             gameStarted = true;
             startText.setVisible(false);
             startBg.setVisible(false);
+            shopBtn.setVisible(true);
+            shopBtn.shopText.setVisible(true);
             score = 0;
             lives = 3;
             timeLeft = 60;
-            beltSpeed = 2;
-            scoreText.setText('スコア: 0');
-            livesText.setText('ライフ: ❤️❤️❤️');
-            timeText.setText('60秒');
+            products = [];
+            updateUI();
             
-            // 製品生成タイマー（間隔を短く）
+            // 製品生成
             spawnTimer = scene.time.addEvent({
                 delay: 1000,
                 callback: () => spawnProduct(scene),
                 loop: true
             });
             
-            // ゲームタイマー
-            gameTimer = scene.time.addEvent({
+            // カウントダウン
+            countdownTimer = scene.time.addEvent({
                 delay: 1000,
-                callback: () => updateGameTimer(scene),
+                callback: () => {
+                    timeLeft--;
+                    updateUI();
+                    if (timeLeft <= 0) {
+                        endGame(scene);
+                    }
+                    // 難易度上昇
+                    if (timeLeft % 10 === 0) {
+                        beltSpeed += 0.5;
+                    }
+                },
                 loop: true
             });
-            
-            // 最初の製品
-            spawnProduct(scene);
         }
-
+        
         function spawnProduct(scene) {
-            if (!gameStarted || gameOver) return;
-            
-            // 20%の確率で不良品
-            const isDefective = Math.random() < 0.2;
-            
+            const isDefect = Math.random() < 0.4;
             let color, shape;
-            if (isDefective) {
-                // 不良品: 色違いor形違い
-                const defectType = Math.random();
-                if (defectType < 0.5) {
-                    // 色違い
-                    const colors = [0xff0000, 0x00ff00, 0xffff00]; // 赤、緑、黄
-                    color = Phaser.Utils.Array.GetRandom(colors);
-                    shape = 'circle';
-                } else {
-                    // 形違い
-                    color = currentPattern.color;
-                    shape = Math.random() < 0.5 ? 'square' : 'triangle';
-                }
+            
+            if (isDefect) {
+                const pattern = Phaser.Utils.Array.GetRandom(defectPatterns);
+                color = pattern.color;
+                shape = pattern.shape;
             } else {
-                // 良品
                 color = currentPattern.color;
                 shape = currentPattern.shape;
             }
             
-            // 製品オブジェクト作成
             let product;
             if (shape === 'circle') {
                 product = scene.add.circle(450, 500, 25, color);
@@ -290,29 +266,47 @@
                 product.setStrokeStyle(2, 0xffffff);
             }
             
-            product.setData('isDefective', isDefective);
-            product.setData('tapped', false);
-            product.setInteractive();
+            product.isDefect = isDefect;
+            product.tapped = false;
+            product.autoRejected = false;
+            
+            // 自動排除機の効果
+            if (isDefect && autoRejectLevel > 0) {
+                const autoChance = autoRejectLevel * 0.2; // 20%/レベル
+                if (Math.random() < autoChance) {
+                    product.autoRejected = true;
+                    const robotText = scene.add.text(product.x, product.y, '🤖', {
+                        fontSize: '32px'
+                    }).setOrigin(0.5);
+                    scene.tweens.add({
+                        targets: robotText,
+                        y: product.y - 50,
+                        alpha: 0,
+                        duration: 500,
+                        onComplete: () => robotText.destroy()
+                    });
+                }
+            }
             
             products.push(product);
         }
-
-        function checkTap(scene, pointer) {
-            // タップ位置にある製品を探す
-            for (let product of products) {
-                if (!product.active || product.getData('tapped')) continue;
+        
+        function handleTap(scene, pointer) {
+            for (let i = products.length - 1; i >= 0; i--) {
+                const product = products[i];
+                if (product.autoRejected) continue;
                 
-                const bounds = product.getBounds();
-                if (Phaser.Geom.Rectangle.Contains(bounds, pointer.x, pointer.y)) {
-                    product.setData('tapped', true);
+                const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, product.x, product.y);
+                
+                if (distance < 40) {
+                    product.tapped = true;
                     
-                    if (product.getData('isDefective')) {
-                        // 正解: 不良品をタップ
-                        playCorrectSound();
+                    if (product.isDefect) {
+                        // 不良品を正しくタップ
                         score += 10;
-                        scoreText.setText('スコア: ' + score);
+                        coins += 10;
+                        playSound(800);
                         
-                        // ○マーク（製品の真上）
                         const mark = scene.add.text(product.x, product.y, '○', {
                             fontSize: '64px',
                             fill: '#00ff00',
@@ -320,30 +314,18 @@
                             stroke: '#000',
                             strokeThickness: 4
                         }).setOrigin(0.5);
+                        
                         scene.tweens.add({
                             targets: mark,
                             alpha: 0,
-                            y: product.y - 100,
-                            duration: 500,
+                            duration: 300,
                             onComplete: () => mark.destroy()
                         });
-                        
-                        // 製品を消す
-                        scene.tweens.add({
-                            targets: product,
-                            alpha: 0,
-                            scaleX: 0.5,
-                            scaleY: 0.5,
-                            duration: 200,
-                            onComplete: () => product.destroy()
-                        });
                     } else {
-                        // 不正解: 良品をタップ
-                        playWrongSound();
+                        // 良品をタップ（ミス）
                         lives--;
-                        updateLives();
+                        playSound(200);
                         
-                        // ×マーク（製品の真上）
                         const mark = scene.add.text(product.x, product.y, '×', {
                             fontSize: '64px',
                             fill: '#ff0000',
@@ -351,11 +333,11 @@
                             stroke: '#000',
                             strokeThickness: 4
                         }).setOrigin(0.5);
+                        
                         scene.tweens.add({
                             targets: mark,
                             alpha: 0,
-                            y: product.y - 100,
-                            duration: 500,
+                            duration: 300,
                             onComplete: () => mark.destroy()
                         });
                         
@@ -364,77 +346,83 @@
                         }
                     }
                     
+                    product.destroy();
+                    products.splice(i, 1);
+                    updateUI();
                     break;
                 }
             }
         }
-
-        function updateLives() {
-            const hearts = '❤️'.repeat(lives);
-            livesText.setText('ライフ: ' + hearts);
-        }
-
-        function updateGameTimer(scene) {
+        
+        function update() {
             if (!gameStarted || gameOver) return;
             
-            timeLeft--;
-            timeText.setText(timeLeft + '秒');
-            
-            if (timeLeft <= 0) {
-                endGame(scene);
-                return;
+            // ベルト移動
+            for (const line of beltLines) {
+                line.x -= beltSpeed;
+                if (line.x < -50) {
+                    line.x += 500;
+                }
             }
             
-            // 難易度上昇
-            if (timeLeft % 10 === 0 && beltSpeed < 5) {
-                beltSpeed += 0.5;
-                if (spawnTimer && spawnTimer.delay > 800) {
-                    spawnTimer.delay -= 100;
+            // 製品移動
+            for (let i = products.length - 1; i >= 0; i--) {
+                const product = products[i];
+                product.x -= beltSpeed + (speedBoostLevel * 0.5);
+                
+                if (product.x < -50) {
+                    if (product.isDefect && !product.tapped && !product.autoRejected) {
+                        // 不良品を見逃した
+                        lives--;
+                        playSound(200);
+                        if (lives <= 0) {
+                            endGame(this.scene.scenes[0]);
+                        }
+                    } else if (!product.isDefect && !product.tapped) {
+                        // 良品を正しくスルー
+                        score += 5;
+                        coins += 5;
+                    } else if (product.autoRejected) {
+                        // 自動排除成功
+                        score += 10;
+                        coins += 10;
+                    }
+                    product.destroy();
+                    products.splice(i, 1);
+                    updateUI();
                 }
             }
         }
-
+        
+        function updateUI() {
+            coinsText.setText(`コイン: ${coins}`);
+            scoreText.setText(`スコア: ${score}`);
+            livesText.setText('ライフ: ' + '❤️'.repeat(lives));
+            timeText.setText(`${timeLeft}秒`);
+        }
+        
         function endGame(scene) {
             gameOver = true;
-            gameStarted = false;
+            spawnTimer.remove();
+            countdownTimer.remove();
+            shopBtn.setVisible(false);
+            shopBtn.shopText.setVisible(false);
             
-            if (spawnTimer) spawnTimer.remove();
-            if (gameTimer) gameTimer.remove();
-            
-            // 製品を全て停止
-            products.forEach(p => {
-                if (p.active) p.destroy();
-            });
+            for (const product of products) {
+                product.destroy();
+            }
             products = [];
             
-            beltSpeed = 0;
-            
-            let rank, message;
-            if (score >= 200) {
-                rank = 'S';
-                message = '完璧な品質管理！';
-            } else if (score >= 150) {
-                rank = 'A';
-                message = '素晴らしい！';
-            } else if (score >= 100) {
-                rank = 'B';
-                message = 'いい感じ！';
-            } else {
-                rank = 'C';
-                message = '次はもっといけるよ！';
-            }
-            
-            const reason = lives <= 0 ? 'ライフ0' : 'タイムアップ';
-            
-            resultText = scene.add.text(200, 400, `ゲームオーバー\n(${reason})\n\nランク: ${rank}\nスコア: ${score}\n\n${message}\n\nタップで再プレイ`, {
+            const finalBg = scene.add.rectangle(200, 350, 380, 300, 0x000000, 0.8);
+            resultText = scene.add.text(200, 280, `ゲームオーバー！\n\nスコア: ${score}\nコイン: ${coins}\n\nタップして再プレイ`, {
                 fontSize: '32px',
-                fill: '#fff',
+                fill: '#ffffff',
                 fontStyle: 'bold',
                 align: 'center',
                 lineSpacing: 10
             }).setOrigin(0.5);
         }
-
+        
         function resetGame(scene) {
             if (resultText) {
                 resultText.destroy();
@@ -444,48 +432,110 @@
             startText.setVisible(true);
             startBg.setVisible(true);
         }
-
-        function update() {
-            if (!gameStarted || gameOver) return;
-            
-            // ベルトコンベアをスクロール
-            beltLines.forEach(line => {
-                line.x -= beltSpeed;
-                if (line.x < -50) {
-                    line.x += 500;
-                }
-            });
-            
-            // 製品を移動（逆順で処理してspliceの問題を回避）
-            for (let i = products.length - 1; i >= 0; i--) {
-                const product = products[i];
-                if (!product.active) {
-                    products.splice(i, 1);
-                    continue;
-                }
+        
+        function openShop(scene) {
+            if (gameStarted && !gameOver) {
+                shopOpen = true;
                 
-                product.x -= beltSpeed;
+                // 背景暗転
+                shopBg = scene.add.rectangle(200, 350, 400, 700, 0x000000, 0.85);
+                shopBg.setInteractive();
                 
-                // 画面外に出たら
-                if (product.x < -50) {
-                    if (product.getData('isDefective') && !product.getData('tapped')) {
-                        // 不良品を見逃した → ライフ減少
-                        playWrongSound();
-                        lives--;
-                        updateLives();
-                        if (lives <= 0) {
-                            endGame(this);
-                        }
-                    } else if (!product.getData('isDefective') && !product.getData('tapped')) {
-                        // 良品をスルー → 正解
-                        score += 5;
-                        scoreText.setText('スコア: ' + score);
-                    }
-                    
-                    product.destroy();
-                    products.splice(i, 1);
-                }
+                // ショップタイトル
+                shopTitle = scene.add.text(200, 80, '🏪 アップグレードショップ', {
+                    fontSize: '28px',
+                    fill: '#FFD700',
+                    fontStyle: 'bold',
+                    stroke: '#000',
+                    strokeThickness: 3
+                }).setOrigin(0.5);
+                
+                // コイン表示
+                const coinDisplay = scene.add.text(200, 130, `所持コイン: ${coins}`, {
+                    fontSize: '24px',
+                    fill: '#ffffff',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+                
+                // アップグレード1: 自動排除機
+                const upgrade1Bg = scene.add.rectangle(200, 220, 360, 100, 0x2a5298);
+                upgrade1Bg.setStrokeStyle(3, 0xffffff);
+                upgrade1Bg.setInteractive();
+                
+                const upgrade1Text = scene.add.text(200, 200, `🤖 自動排除機 Lv${autoRejectLevel}`, {
+                    fontSize: '24px',
+                    fill: '#ffffff',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+                
+                const upgrade1Desc = scene.add.text(200, 230, `不良品を自動排除 (${autoRejectLevel * 20}%)\nコスト: 100コイン`, {
+                    fontSize: '18px',
+                    fill: '#cccccc',
+                    align: 'center'
+                }).setOrigin(0.5);
+                
+                upgrade1Bg.on('pointerdown', () => buyUpgrade(scene, 'auto', 100));
+                
+                // アップグレード2: スピードブースト
+                const upgrade2Bg = scene.add.rectangle(200, 350, 360, 100, 0x2a5298);
+                upgrade2Bg.setStrokeStyle(3, 0xffffff);
+                upgrade2Bg.setInteractive();
+                
+                const upgrade2Text = scene.add.text(200, 330, `⚡ スピードブースト Lv${speedBoostLevel}`, {
+                    fontSize: '24px',
+                    fill: '#ffffff',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+                
+                const upgrade2Desc = scene.add.text(200, 360, `ベルト速度+0.5\nコスト: 50コイン`, {
+                    fontSize: '18px',
+                    fill: '#cccccc',
+                    align: 'center'
+                }).setOrigin(0.5);
+                
+                upgrade2Bg.on('pointerdown', () => buyUpgrade(scene, 'speed', 50));
+                
+                // 閉じるボタン
+                shopClose = scene.add.rectangle(200, 500, 200, 60, 0xff0000);
+                shopClose.setStrokeStyle(3, 0xffffff);
+                shopClose.setInteractive();
+                
+                const closeText = scene.add.text(200, 500, '✖ 閉じる', {
+                    fontSize: '24px',
+                    fill: '#ffffff',
+                    fontStyle: 'bold'
+                }).setOrigin(0.5);
+                
+                shopClose.on('pointerdown', () => closeShop(scene));
+                
+                upgradeButtons = [shopBg, shopTitle, coinDisplay, upgrade1Bg, upgrade1Text, upgrade1Desc, upgrade2Bg, upgrade2Text, upgrade2Desc, shopClose, closeText];
             }
+        }
+        
+        function buyUpgrade(scene, type, cost) {
+            if (coins >= cost) {
+                coins -= cost;
+                playSound(1200, 'square', 0.2);
+                
+                if (type === 'auto') {
+                    autoRejectLevel++;
+                } else if (type === 'speed') {
+                    speedBoostLevel++;
+                }
+                
+                updateUI();
+                closeShop(scene);
+            } else {
+                playSound(150, 'sawtooth', 0.3);
+            }
+        }
+        
+        function closeShop(scene) {
+            shopOpen = false;
+            for (const obj of upgradeButtons) {
+                obj.destroy();
+            }
+            upgradeButtons = [];
         }
     </script>
 </body>
