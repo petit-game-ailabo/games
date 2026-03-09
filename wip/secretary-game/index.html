@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>宝箱ガチャ - 今日のミニゲーム</title>
+    <meta name="description" content="最高得点の宝箱を選べるか？一度パスしたら戻れない！">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #ffd89b 0%, #19547b 100%);
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .credits {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="credits">Powered by Phaser</div>
+    
+    <script>
+        // 効果音
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playOpenSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+        
+        function playSelectSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 1200;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.15);
+        }
+        
+        function playPassSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 400;
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: 400,
+            height: 700,
+            parent: 'game-container',
+            backgroundColor: '#1a1a2e',
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+            scene: {
+                create: create,
+                update: update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+        
+        let boxes = [];
+        let currentBox = 0;
+        let selectedBox = -1;
+        let gameStarted = false;
+        let gameOver = false;
+        let boxText;
+        let scoreText;
+        let hintText;
+        let resultText;
+        let selectButton;
+        let passButton;
+        let startText;
+
+        function create() {
+            // 背景グラデーション
+            const graphics = this.add.graphics();
+            graphics.fillGradientStyle(0xffd89b, 0xffd89b, 0x19547b, 0x19547b, 1);
+            graphics.fillRect(0, 0, 400, 700);
+            
+            // タイトル
+            this.add.text(200, 40, '🎁 宝箱ガチャ', {
+                fontSize: '42px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 4
+            }).setOrigin(0.5);
+            
+            // 進捗表示
+            boxText = this.add.text(200, 100, '', {
+                fontSize: '32px',
+                fill: '#FFD700',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            
+            // 得点表示
+            scoreText = this.add.text(200, 300, '', {
+                fontSize: '72px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 5
+            }).setOrigin(0.5);
+            
+            // ヒントテキスト
+            hintText = this.add.text(200, 400, '', {
+                fontSize: '20px',
+                fill: '#FFD700',
+                align: 'center'
+            }).setOrigin(0.5);
+            
+            // スタート画面
+            startText = this.add.text(200, 250, '10個の宝箱が順番に現れるよ！\n\n開けると中身の得点が見える\n「これにする！」or「次へ」を選択\n\n⚠️ 一度パスしたら戻れない！\n\n最高得点の箱を選べるかな？\n\n💡最適戦略💡\n最初の3～4個は見送って\nその後ベストが来たら即決！\n\nタップしてスタート', {
+                fontSize: '22px',
+                fill: '#fff',
+                align: 'center',
+                lineSpacing: 8
+            }).setOrigin(0.5);
+            
+            // ボタン
+            selectButton = this.add.text(200, 500, '✨ これにする！', {
+                fontSize: '32px',
+                fill: '#FFD700',
+                fontStyle: 'bold',
+                backgroundColor: '#2d5016',
+                padding: { x: 30, y: 15 }
+            }).setOrigin(0.5).setInteractive();
+            selectButton.setVisible(false);
+            
+            passButton = this.add.text(200, 580, '➡️ 次へ', {
+                fontSize: '32px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                backgroundColor: '#444',
+                padding: { x: 30, y: 15 }
+            }).setOrigin(0.5).setInteractive();
+            passButton.setVisible(false);
+            
+            // イベント
+            selectButton.on('pointerdown', () => handleSelect(this));
+            passButton.on('pointerdown', () => handlePass(this));
+            this.input.on('pointerdown', (pointer) => {
+                if (!gameStarted && !gameOver) {
+                    startGame(this);
+                } else if (gameOver) {
+                    resetGame(this);
+                }
+            });
+        }
+
+        function startGame(scene) {
+            gameStarted = true;
+            startText.setVisible(false);
+            
+            // 10個の箱を生成（1～100のランダムな得点）
+            boxes = [];
+            for (let i = 0; i < 10; i++) {
+                boxes.push(Math.floor(Math.random() * 100) + 1);
+            }
+            
+            currentBox = 0;
+            selectedBox = -1;
+            showBox(scene);
+        }
+
+        function showBox(scene) {
+            if (currentBox >= boxes.length) {
+                // 最後まで選ばなかった場合、最後の箱を自動選択
+                selectedBox = currentBox - 1;
+                endGame(scene);
+                return;
+            }
+            
+            playOpenSound();
+            
+            const score = boxes[currentBox];
+            boxText.setText(`宝箱 ${currentBox + 1} / 10`);
+            scoreText.setText(score + '点');
+            
+            // ヒント表示
+            if (currentBox < 3) {
+                hintText.setText('💡 まだ見送った方がいいかも...');
+            } else {
+                const maxSoFar = Math.max(...boxes.slice(0, currentBox + 1));
+                if (score === maxSoFar) {
+                    hintText.setText('🔥 今までで最高！');
+                } else {
+                    hintText.setText('');
+                }
+            }
+            
+            selectButton.setVisible(true);
+            passButton.setVisible(currentBox < 9); // 最後の箱はパスできない
+        }
+
+        function handleSelect(scene) {
+            playSelectSound();
+            selectedBox = currentBox;
+            selectButton.setVisible(false);
+            passButton.setVisible(false);
+            endGame(scene);
+        }
+
+        function handlePass(scene) {
+            playPassSound();
+            currentBox++;
+            selectButton.setVisible(false);
+            passButton.setVisible(false);
+            
+            scene.time.delayedCall(500, () => showBox(scene));
+        }
+
+        function endGame(scene) {
+            gameOver = true;
+            gameStarted = false;
+            
+            boxText.setText('');
+            scoreText.setText('');
+            hintText.setText('');
+            selectButton.setVisible(false);
+            passButton.setVisible(false);
+            
+            const selectedScore = boxes[selectedBox];
+            const maxScore = Math.max(...boxes);
+            const ratio = selectedScore / maxScore;
+            
+            let rank, message;
+            if (selectedScore === maxScore) {
+                rank = 'S';
+                message = '完璧！最高得点を選んだ！';
+            } else if (ratio >= 0.8) {
+                rank = 'A';
+                message = '惜しい！もう少しで最高得点！';
+            } else if (ratio >= 0.6) {
+                rank = 'B';
+                message = 'まあまあ！次はもっといけるよ！';
+            } else {
+                rank = 'C';
+                message = '残念...もっといい箱があったよ';
+            }
+            
+            resultText = scene.add.text(200, 250, `結果: ランク ${rank}\n\nあなたの選択: ${selectedScore}点\n最高得点: ${maxScore}点\n\n${message}\n\n全10箱の得点:\n${boxes.map((s, i) => i === selectedBox ? `[${s}]` : s).join(', ')}\n\nタップで再プレイ`, {
+                fontSize: '24px',
+                fill: '#fff',
+                fontStyle: 'bold',
+                align: 'center',
+                lineSpacing: 10,
+                stroke: '#000',
+                strokeThickness: 3
+            }).setOrigin(0.5);
+        }
+
+        function resetGame(scene) {
+            if (resultText) {
+                resultText.destroy();
+            }
+            gameOver = false;
+            startText.setVisible(true);
+        }
+
+        function update() {}
+    </script>
+</body>
+</html>
