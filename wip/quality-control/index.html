@@ -204,6 +204,14 @@
                 fontStyle: 'bold'
             }).setOrigin(0.5);
             
+            // ロボットレベル表示用（後で使う）
+            window.autoLevelText = this.add.text(335, btnY - 30, '', {
+                fontSize: '14px',
+                fill: '#00ff00',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            window.autoLevelText.setVisible(false);
+            
             // ボタンを非表示
             speedBtn.setVisible(false);
             speedText.setVisible(false);
@@ -214,6 +222,7 @@
             autoBtn.setVisible(false);
             autoText.setVisible(false);
             autoCost.setVisible(false);
+            if (window.autoLevelText) window.autoLevelText.setVisible(false);
             
             // スタート画面（最後に描画）
             startBg = this.add.rectangle(200, 350, 400, 700, 0x4a7c9e);
@@ -261,6 +270,7 @@
             autoBtn.setVisible(true);
             autoText.setVisible(true);
             autoCost.setVisible(true);
+            if (window.autoLevelText) window.autoLevelText.setVisible(false);
             
             score = 0;
             coins = 0;
@@ -327,19 +337,35 @@
             
             // 自動排除機の効果
             if (isDefect && autoLevel > 0) {
-                const autoChance = autoLevel * 0.2;
+                const autoChance = autoLevel * 0.4; // 40%/レベル
                 if (Math.random() < autoChance) {
                     product.autoRejected = true;
+                    
+                    // 派手なエフェクト
                     const robotText = scene.add.text(product.x, product.y, '🤖', {
-                        fontSize: '32px'
+                        fontSize: '48px'
                     }).setOrigin(0.5);
+                    
+                    const flash = scene.add.circle(product.x, product.y, 40, 0x00ff00, 0.5);
+                    
                     scene.tweens.add({
                         targets: robotText,
-                        y: product.y - 50,
+                        y: product.y - 70,
+                        scale: 1.5,
                         alpha: 0,
-                        duration: 500,
+                        duration: 600,
                         onComplete: () => robotText.destroy()
                     });
+                    
+                    scene.tweens.add({
+                        targets: flash,
+                        scale: 2,
+                        alpha: 0,
+                        duration: 400,
+                        onComplete: () => flash.destroy()
+                    });
+                    
+                    playSound(1000, 'square', 0.15);
                 }
             }
             
@@ -506,7 +532,7 @@
                 if (coins >= cost) {
                     coins -= cost;
                     speedLevel++;
-                    beltSpeed += 1;
+                    beltSpeed += 2;
                     success = true;
                 }
             } else if (type === 'spawn') {
@@ -514,7 +540,7 @@
                 if (coins >= cost && spawnDelay > 100) {
                     coins -= cost;
                     spawnLevel++;
-                    spawnDelay -= 50;
+                    spawnDelay -= 100;
                     spawnTimer.delay = spawnDelay;
                     success = true;
                 }
@@ -524,6 +550,37 @@
                     coins -= cost;
                     autoLevel++;
                     success = true;
+                    
+                    // ロボット購入エフェクト
+                    const robotBig = scene.add.text(200, 400, '🤖', {
+                        fontSize: '128px'
+                    }).setOrigin(0.5);
+                    
+                    const levelText = scene.add.text(200, 500, `レベル ${autoLevel}!\n自動排除率 ${autoLevel * 40}%`, {
+                        fontSize: '32px',
+                        fill: '#00ff00',
+                        fontStyle: 'bold',
+                        stroke: '#000',
+                        strokeThickness: 3,
+                        align: 'center'
+                    }).setOrigin(0.5);
+                    
+                    scene.tweens.add({
+                        targets: [robotBig, levelText],
+                        alpha: 0,
+                        scale: 1.5,
+                        duration: 1000,
+                        onComplete: () => {
+                            robotBig.destroy();
+                            levelText.destroy();
+                        }
+                    });
+                    
+                    // ボタン上のレベル表示更新
+                    if (window.autoLevelText) {
+                        window.autoLevelText.setText(`Lv${autoLevel}`);
+                        window.autoLevelText.setVisible(true);
+                    }
                 }
             }
             
@@ -550,6 +607,7 @@
             autoBtn.setVisible(false);
             autoText.setVisible(false);
             autoCost.setVisible(false);
+            if (window.autoLevelText) window.autoLevelText.setVisible(false);
             
             for (const product of products) {
                 product.destroy();
