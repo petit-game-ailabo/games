@@ -39,111 +39,144 @@
 
         const game = new Phaser.Game(config);
 
-        function createPico48(scene, x, y) {
+        function createPico96(scene, x, y) {
             const container = scene.add.container(x, y);
-            const ps = 2; // pixel size
+            const ps = 1.5; // pixel size
             
-            // 色定義（参考画像に合わせる）
+            // 色定義（参考画像に近い色）
             const c = {
-                hair: 0xb3d9ff,      // 水色の髪（明るめ）
-                hairDark: 0x99ccff,  // 髪の影
-                skin: 0xffd4b8,      // 肌
-                pink: 0xffb3e6,      // ピンクの服
-                pinkDark: 0xff99d9,  // 服の影
+                hair: 0xadd8ff,      // 水色の髪
+                hairShade: 0x8fc7ff, // 髪の影
+                hairDark: 0x70b0ff,  // 髪の濃い影
+                skin: 0xffd4a3,      // 肌
+                pink: 0xffb3d9,      // ピンクの服
+                pinkShade: 0xff99cc, // 服の影
+                white: 0xffffff,     // ハイライト
             };
             
-            // 64x64 ドット（-32～+32）、2頭身
-            const dots = [];
+            // 96x96 ドット（-48～+48）、2頭身、後ろ姿
+            const pixels = {};
             
-            // === 頭部（上半分） ===
+            function dot(x, y, color) {
+                pixels[`${x},${y}`] = color;
+            }
+            
+            // === 頭部（上半分 -48～0） ===
             
             // 髪の上部（丸い形）
-            for (let y = -28; y <= -24; y++) {
-                const w = 8 - Math.abs(y + 26) * 2;
+            for (let y = -42; y <= -36; y++) {
+                const w = Math.min(14, 8 + (42 + y) * 1.5);
                 for (let x = -w; x <= w; x++) {
-                    dots.push([x, y, 'hair']);
+                    if (y === -42 && Math.abs(x) > 10) continue;
+                    if (y === -41 && Math.abs(x) > 12) continue;
+                    dot(x, y, y < -40 ? 'hairDark' : 'hair');
                 }
             }
             
-            // 髪のメイン部分
-            for (let y = -23; y <= -8; y++) {
-                for (let x = -12; x <= 12; x++) {
-                    if (y >= -12 && Math.abs(x) <= 6) continue; // 顔部分
-                    dots.push([x, y, Math.abs(x) > 10 ? 'hairDark' : 'hair']);
+            // 髪のメイン部分（後頭部）
+            for (let y = -35; y <= -12; y++) {
+                for (let x = -16; x <= 16; x++) {
+                    if (y >= -18 && Math.abs(x) <= 10) continue; // 顔部分は空ける
+                    const color = Math.abs(x) > 14 ? 'hairDark' : (Math.abs(x) > 12 ? 'hairShade' : 'hair');
+                    dot(x, y, color);
                 }
             }
             
-            // サイドの丸い膨らみ（左）
-            for (let y = -16; y <= -8; y++) {
-                for (let x = -18; x <= -13; x++) {
-                    if (Math.abs(y + 12) > 4 && Math.abs(x + 15) > 3) continue;
-                    dots.push([x, y, x < -16 ? 'hairDark' : 'hair']);
+            // サイドの丸い膨らみ（ボブ風、左側）
+            for (let y = -24; y <= -8; y++) {
+                for (let x = -26; x <= -17; x++) {
+                    const cy = -16; // 円の中心Y
+                    const cx = -21; // 円の中心X
+                    const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+                    if (dist <= 10) {
+                        const color = x < -24 ? 'hairDark' : (x < -22 ? 'hairShade' : 'hair');
+                        dot(x, y, color);
+                    }
                 }
             }
             
-            // サイドの丸い膨らみ（右）
-            for (let y = -16; y <= -8; y++) {
-                for (let x = 13; x <= 18; x++) {
-                    if (Math.abs(y + 12) > 4 && Math.abs(x - 15) > 3) continue;
-                    dots.push([x, y, x > 16 ? 'hairDark' : 'hair']);
+            // サイドの丸い膨らみ（ボブ風、右側）
+            for (let y = -24; y <= -8; y++) {
+                for (let x = 17; x <= 26; x++) {
+                    const cy = -16;
+                    const cx = 21;
+                    const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+                    if (dist <= 10) {
+                        const color = x > 24 ? 'hairDark' : (x > 22 ? 'hairShade' : 'hair');
+                        dot(x, y, color);
+                    }
                 }
             }
             
-            // 後ろの髪
-            for (let y = -7; y <= 0; y++) {
-                for (let x = -10; x <= 10; x++) {
-                    if (Math.abs(x) <= 6) continue; // 首部分
-                    dots.push([x, y, 'hairDark']);
+            // 後ろ髪（ロング、首まで）
+            for (let y = -11; y <= 2; y++) {
+                for (let x = -14; x <= 14; x++) {
+                    if (Math.abs(x) <= 8 && y >= -4) continue; // 首部分
+                    const color = Math.abs(x) > 12 ? 'hairDark' : 'hairShade';
+                    dot(x, y, color);
                 }
             }
             
             // 首（細い）
-            for (let y = -4; y <= 0; y++) {
-                for (let x = -3; x <= 3; x++) {
-                    dots.push([x, y, 'skin']);
+            for (let y = -4; y <= 2; y++) {
+                for (let x = -5; x <= 5; x++) {
+                    dot(x, y, 'skin');
                 }
             }
             
-            // === 体部（下半分、2頭身なので同じサイズ） ===
+            // === 体部（下半分 0～48）、2頭身 ===
             
-            // 肩〜上半身
-            for (let y = 1; y <= 8; y++) {
-                const w = 8 + Math.min(y, 4);
+            // 肩
+            for (let y = 3; y <= 8; y++) {
+                const w = 12 + y - 3;
                 for (let x = -w; x <= w; x++) {
-                    dots.push([x, y, Math.abs(x) > w - 2 ? 'pinkDark' : 'pink']);
+                    if (Math.abs(x) <= 6) continue; // 首の下
+                    const color = Math.abs(x) > w - 2 ? 'pinkShade' : 'pink';
+                    dot(x, y, color);
                 }
             }
             
-            // 腰〜スカート
+            // 上半身
             for (let y = 9; y <= 18; y++) {
-                const w = 12 + (y - 9) * 0.5;
+                const w = 18;
                 for (let x = -w; x <= w; x++) {
-                    dots.push([x, y, Math.abs(x) > w - 1 ? 'pinkDark' : 'pink']);
+                    const color = Math.abs(x) > w - 3 ? 'pinkShade' : 'pink';
+                    dot(x, y, color);
                 }
             }
             
-            // 足（短い）
-            for (let y = 19; y <= 28; y++) {
+            // ウエスト〜スカート
+            for (let y = 19; y <= 32; y++) {
+                const w = Math.min(24, 18 + (y - 19) * 0.5);
+                for (let x = -w; x <= w; x++) {
+                    const color = Math.abs(x) > w - 2 ? 'pinkShade' : 'pink';
+                    dot(x, y, color);
+                }
+            }
+            
+            // 足（短い、2頭身なので）
+            for (let y = 33; y <= 46; y++) {
                 // 左足
-                for (let x = -8; x <= -3; x++) {
-                    dots.push([x, y, 'skin']);
+                for (let x = -12; x <= -5; x++) {
+                    dot(x, y, 'skin');
                 }
                 // 右足
-                for (let x = 3; x <= 8; x++) {
-                    dots.push([x, y, 'skin']);
+                for (let x = 5; x <= 12; x++) {
+                    dot(x, y, 'skin');
                 }
             }
             
             // ドットを描画
-            dots.forEach(([dx, dy, color]) => {
+            Object.entries(pixels).forEach(([pos, color]) => {
+                const [x, y] = pos.split(',').map(Number);
                 const rect = scene.add.rectangle(
-                    dx * ps, 
-                    dy * ps, 
+                    x * ps, 
+                    y * ps, 
                     ps, 
                     ps, 
                     c[color]
                 );
-                rect.setStrokeStyle(0.3, 0x000000, 0.1);
+                rect.setStrokeStyle(0.2, 0x000000, 0.05);
                 container.add(rect);
             });
             
@@ -152,10 +185,10 @@
 
         function create() {
             // 中央にピコを表示
-            const pico = createPico48(this, 200, 200);
+            const pico = createPico96(this, 200, 200);
             
             // 説明テキスト
-            this.add.text(200, 50, 'ピコ（64x64 ドット絵 v2）', {
+            this.add.text(200, 50, 'ピコ（96x96 ドット絵 v3）', {
                 fontSize: '24px',
                 fill: '#ffffff',
                 fontStyle: 'bold',
