@@ -118,7 +118,8 @@
         let startText;
         let resultText;
         let beltLines = [];
-        let beltSpeed = 2;
+        let beltSpeed = 3;
+        let startBg;
         let spawnTimer;
         let gameTimer;
         let currentPattern = { color: 0x4169E1, shape: 'circle' }; // 良品パターン
@@ -192,6 +193,9 @@
                 lineSpacing: 5
             }).setOrigin(0.5);
             
+            // スタート画面の背景（ゲーム画面を隠す）
+            startBg = this.add.rectangle(200, 350, 400, 700, 0x4a7c9e);
+            
             // スタート画面
             startText = this.add.text(200, 450, '🏭 品質管理ゲーム 🏭\n\n不良品だけタップして排除！\n良品はスルーしてね\n\n60秒でどこまで正確に？\n\nタップしてスタート', {
                 fontSize: '32px',
@@ -220,6 +224,7 @@
         function startGame(scene) {
             gameStarted = true;
             startText.setVisible(false);
+            startBg.setVisible(false);
             score = 0;
             lives = 3;
             timeLeft = 60;
@@ -228,9 +233,9 @@
             livesText.setText('ライフ: ❤️❤️❤️');
             timeText.setText('60秒');
             
-            // 製品生成タイマー
+            // 製品生成タイマー（間隔を短く）
             spawnTimer = scene.time.addEvent({
-                delay: 1500,
+                delay: 1000,
                 callback: () => spawnProduct(scene),
                 loop: true
             });
@@ -307,11 +312,13 @@
                         score += 10;
                         scoreText.setText('スコア: ' + score);
                         
-                        // ○マーク
-                        const mark = scene.add.text(product.x, product.y - 50, '○', {
-                            fontSize: '48px',
+                        // ○マーク（製品の真上）
+                        const mark = scene.add.text(product.x, product.y, '○', {
+                            fontSize: '64px',
                             fill: '#00ff00',
-                            fontStyle: 'bold'
+                            fontStyle: 'bold',
+                            stroke: '#000',
+                            strokeThickness: 4
                         }).setOrigin(0.5);
                         scene.tweens.add({
                             targets: mark,
@@ -336,11 +343,13 @@
                         lives--;
                         updateLives();
                         
-                        // ×マーク
-                        const mark = scene.add.text(product.x, product.y - 50, '×', {
-                            fontSize: '48px',
+                        // ×マーク（製品の真上）
+                        const mark = scene.add.text(product.x, product.y, '×', {
+                            fontSize: '64px',
                             fill: '#ff0000',
-                            fontStyle: 'bold'
+                            fontStyle: 'bold',
+                            stroke: '#000',
+                            strokeThickness: 4
                         }).setOrigin(0.5);
                         scene.tweens.add({
                             targets: mark,
@@ -433,6 +442,7 @@
             
             gameOver = false;
             startText.setVisible(true);
+            startBg.setVisible(true);
         }
 
         function update() {
