@@ -119,6 +119,7 @@
         let roadLines = [];
         let roadSpeed = 0;
         let nextArrowDelay = 1000;
+        let arrowTimeoutEvent = null;
 
         function create() {
             // 道路
@@ -219,18 +220,15 @@
         function showNextArrow(scene) {
             if (!gameStarted || gameOver) return;
             
+            // 前のタイムアウトをキャンセル
+            if (arrowTimeoutEvent) {
+                arrowTimeoutEvent.remove();
+                arrowTimeoutEvent = null;
+            }
+            
             currentArrow = Math.random() < 0.5 ? 'left' : 'right';
             arrowText.setText(currentArrow === 'left' ? '←' : '→');
             arrowText.setAlpha(1);
-            
-            // タイムアウト（答えなかったら自動的に次へ）
-            scene.time.delayedCall(nextArrowDelay, () => {
-                if (currentArrow) {
-                    currentArrow = null;
-                    arrowText.setText('');
-                    scene.time.delayedCall(200, () => showNextArrow(scene));
-                }
-            });
         }
 
         function checkAnswer(scene, answer) {
