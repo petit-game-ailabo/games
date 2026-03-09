@@ -471,14 +471,39 @@
                 }
             }
             
-            // 製品移動
             let needsUpdate = false;
             
+            // ステップ1: ロボットの削除処理（完全に分離）
+            const toDelete = [];
+            for (let i = 0; i < products.length; i++) {
+                const product = products[i];
+                if (product.markedForDeletion) {
+                    product.deletionTimer--;
+                    if (product.deletionTimer <= 0) {
+                        toDelete.push(product);
+                    }
+                }
+            }
+            
+            // 削除実行
+            for (const product of toDelete) {
+                const idx = products.indexOf(product);
+                if (idx !== -1) {
+                    product.destroy();
+                    products.splice(idx, 1);
+                }
+            }
+            
+            // ステップ2: 製品移動と通常の削除
             for (let i = products.length - 1; i >= 0; i--) {
                 const product = products[i];
+                
+                // 削除予定の製品はスキップ
+                if (product.markedForDeletion) continue;
+                
                 product.x -= beltSpeed;
                 
-                // ロボットの自動排除（x < 350でチェック、1回だけ）
+                // ロボットのチェック（x < 350でチェック、1回だけ）
                 if (!product.checked && product.isDefect && autoLevel > 0 && product.x < 350) {
                     product.checked = true;
                     const autoChance = Math.min(autoLevel * 0.4, 0.95);
@@ -487,7 +512,7 @@
                         // 緑色にして削除対象としてマーク
                         product.setTint(0x00ff00);
                         product.markedForDeletion = true;
-                        product.deletionTimer = 30; // 0.5秒（60fps想定）
+                        product.deletionTimer = 30;
                         score += 5;
                         coins += 5;
                         playSound(1000, 'square', 0.1);
@@ -495,24 +520,13 @@
                     }
                 }
                 
-                // 削除対象の製品をカウントダウン
-                if (product.markedForDeletion) {
-                    product.deletionTimer--;
-                    if (product.deletionTimer <= 0) {
-                        product.destroy();
-                        products.splice(i, 1);
-                        continue;
-                    }
-                }
-                
+                // 画面外に出た製品の処理
                 if (product.x < -50) {
                     if (product.isDefect && !product.tapped) {
-                        // 不良品を見逃した（ペナルティ）
                         score = Math.max(0, score - 5);
                         coins = Math.max(0, coins - 5);
                         playSound(200);
                     } else if (!product.isDefect && !product.tapped) {
-                        // 良品を正しくスルー
                         score += 10;
                         coins += 10;
                     }
