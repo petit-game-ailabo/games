@@ -25,7 +25,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: linear-gradient(180deg, #434343 0%, #000000 100%);
+            background: linear-gradient(180deg, #2c5f7c 0%, #1a3a4d 100%);
             font-family: Arial, sans-serif;
             overflow: hidden;
         }
@@ -92,7 +92,7 @@
             width: 400,
             height: 700,
             parent: 'game-container',
-            backgroundColor: '#2c2c2c',
+            backgroundColor: '#4a7c9e',
             scale: {
                 mode: Phaser.Scale.FIT,
                 autoCenter: Phaser.Scale.CENTER_BOTH
@@ -124,56 +124,83 @@
         let currentPattern = { color: 0x4169E1, shape: 'circle' }; // 良品パターン
 
         function create() {
-            // ベルトコンベア
+            // ベルトコンベア（見た目改善）
+            // ベルトの土台
+            this.add.rectangle(200, 500, 400, 150, 0x3a3a3a);
+            
+            // ベルトライン（黄色の警告線風）
             for (let i = 0; i < 5; i++) {
-                const line = this.add.rectangle(i * 100 + 50, 400, 80, 10, 0x666666);
+                const line = this.add.rectangle(i * 100 + 50, 490, 80, 8, 0xffcc00);
                 beltLines.push(line);
             }
+            for (let i = 0; i < 5; i++) {
+                const line2 = this.add.rectangle(i * 100 + 50, 510, 80, 8, 0xffcc00);
+                beltLines.push(line2);
+            }
             
-            // 良品パターン表示
-            patternText = this.add.text(200, 80, '良品: ', {
+            // 良品パターン表示（枠で囲む）
+            const exampleBg = this.add.rectangle(200, 200, 250, 120, 0xffffff, 0.2);
+            exampleBg.setStrokeStyle(3, 0xffffff);
+            
+            patternText = this.add.text(200, 170, '✅ 良品（スルー）', {
                 fontSize: '28px',
-                fill: '#fff',
-                fontStyle: 'bold'
+                fill: '#ffffff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 2
             }).setOrigin(0.5);
             
-            const goodExample = this.add.circle(280, 80, 25, currentPattern.color);
+            const goodExample = this.add.circle(200, 220, 30, currentPattern.color);
+            goodExample.setStrokeStyle(3, 0xffffff);
             
-            // スコア表示
+            // スコア表示（見やすく）
             scoreText = this.add.text(20, 20, 'スコア: 0', {
-                fontSize: '32px',
-                fill: '#FFD700',
-                fontStyle: 'bold'
+                fontSize: '36px',
+                fill: '#ffffff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 4
             });
             
             // ライフ表示
-            livesText = this.add.text(20, 60, 'ライフ: ❤️❤️❤️', {
-                fontSize: '28px',
+            livesText = this.add.text(20, 70, 'ライフ: ❤️❤️❤️', {
+                fontSize: '32px',
                 fill: '#ff0000',
-                fontStyle: 'bold'
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
             });
             
             // 残り時間表示
-            timeText = this.add.text(20, 100, '60秒', {
-                fontSize: '28px',
-                fill: '#fff',
-                fontStyle: 'bold'
+            timeText = this.add.text(20, 120, '60秒', {
+                fontSize: '32px',
+                fill: '#ffffff',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
             });
             
-            // 説明
-            const instruction = this.add.text(200, 150, '不良品だけタップ！\n良品はスルー', {
+            // 説明（目立たせる）
+            const instructionBg = this.add.rectangle(200, 340, 350, 80, 0xff6b35, 0.9);
+            instructionBg.setStrokeStyle(3, 0xffffff);
+            
+            const instruction = this.add.text(200, 340, '❌ 不良品: 色違い・形違い\nタップして排除！', {
                 fontSize: '24px',
-                fill: '#FFD700',
-                align: 'center'
+                fill: '#ffffff',
+                fontStyle: 'bold',
+                align: 'center',
+                lineSpacing: 5
             }).setOrigin(0.5);
             
             // スタート画面
-            startText = this.add.text(200, 400, '🏭 品質管理ゲーム 🏭\n\nベルトコンベアで製品が流れる\n\n【良品】スルー（何もしない）\n【不良品】タップして排除\n\n不良品:\n・色違い（赤、緑、黄）\n・形違い（四角、三角）\n\n誤判定でライフ減少\n60秒でどこまで正確に？\n\nタップしてスタート', {
-                fontSize: '24px',
-                fill: '#fff',
+            startText = this.add.text(200, 450, '🏭 品質管理ゲーム 🏭\n\n不良品だけタップして排除！\n良品はスルーしてね\n\n60秒でどこまで正確に？\n\nタップしてスタート', {
+                fontSize: '32px',
+                fill: '#ffffff',
                 fontStyle: 'bold',
                 align: 'center',
-                lineSpacing: 8
+                lineSpacing: 15,
+                stroke: '#000',
+                strokeThickness: 3
             }).setOrigin(0.5);
             
             // タップイベント
@@ -248,11 +275,14 @@
             // 製品オブジェクト作成
             let product;
             if (shape === 'circle') {
-                product = scene.add.circle(450, 400, 25, color);
+                product = scene.add.circle(450, 500, 25, color);
+                product.setStrokeStyle(2, 0xffffff);
             } else if (shape === 'square') {
-                product = scene.add.rectangle(450, 400, 50, 50, color);
+                product = scene.add.rectangle(450, 500, 50, 50, color);
+                product.setStrokeStyle(2, 0xffffff);
             } else {
-                product = scene.add.triangle(450, 400, 0, 25, -25, -25, 25, -25, color);
+                product = scene.add.triangle(450, 500, 0, 25, -25, -25, 25, -25, color);
+                product.setStrokeStyle(2, 0xffffff);
             }
             
             product.setData('isDefective', isDefective);
