@@ -205,10 +205,12 @@
             }).setOrigin(0.5);
             
             // ロボットレベル表示用（後で使う）
-            window.autoLevelText = this.add.text(335, btnY - 30, '', {
-                fontSize: '14px',
+            window.autoLevelText = this.add.text(335, btnY - 35, '', {
+                fontSize: '16px',
                 fill: '#00ff00',
-                fontStyle: 'bold'
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 2
             }).setOrigin(0.5);
             window.autoLevelText.setVisible(false);
             
@@ -241,11 +243,10 @@
             this.input.on('pointerdown', (pointer) => {
                 if (!gameStarted && !gameOver) {
                     startGame(this);
-                } else if (gameOver) {
-                    resetGame(this);
-                } else {
+                } else if (!gameOver) {
                     handleTap(this, pointer);
                 }
+                // gameOver時のリスタートはボタンから行う
             });
             
             // Powered by Phaser
@@ -387,8 +388,8 @@
                     
                     if (product.isDefect) {
                         // 不良品を正しくタップ
-                        score += 10;
-                        coins += 10;
+                        score += 5;
+                        coins += 5;
                         playSound(800);
                         
                         const mark = scene.add.text(product.x, product.y, '○', {
@@ -460,12 +461,12 @@
                         playSound(200);
                     } else if (!product.isDefect && !product.tapped) {
                         // 良品を正しくスルー
-                        score += 5;
-                        coins += 5;
-                    } else if (product.autoRejected) {
-                        // 自動排除成功
                         score += 10;
                         coins += 10;
+                    } else if (product.autoRejected) {
+                        // 自動排除成功
+                        score += 5;
+                        coins += 5;
                     }
                     product.destroy();
                     products.splice(i, 1);
@@ -614,13 +615,25 @@
             }
             products = [];
             
-            const finalBg = scene.add.rectangle(200, 350, 380, 300, 0x000000, 0.8);
-            resultText = scene.add.text(200, 280, `ゲームオーバー！\n\nスコア: ${score}\nコイン: ${coins}\n\nタップして再プレイ`, {
+            const finalBg = scene.add.rectangle(200, 350, 380, 350, 0x000000, 0.8);
+            resultText = scene.add.text(200, 260, `ゲームオーバー！\n\nスコア: ${score}\nコイン: ${coins}`, {
                 fontSize: '32px',
                 fill: '#ffffff',
                 fontStyle: 'bold',
                 align: 'center',
                 lineSpacing: 10
+            }).setOrigin(0.5);
+            
+            // 再プレイボタン
+            const restartBtn = scene.add.rectangle(200, 420, 200, 60, 0x00aa00);
+            restartBtn.setStrokeStyle(3, 0xffffff);
+            restartBtn.setInteractive();
+            restartBtn.on('pointerdown', () => resetGame(scene));
+            
+            const restartText = scene.add.text(200, 420, '再プレイ', {
+                fontSize: '28px',
+                fill: '#ffffff',
+                fontStyle: 'bold'
             }).setOrigin(0.5);
         }
         
@@ -630,11 +643,15 @@
                 resultText = null;
             }
             
-            // 前回のfinalBgも削除
+            // 前回のfinalBg、再プレイボタンも削除
             const objects = scene.children.list;
             for (let i = objects.length - 1; i >= 0; i--) {
                 const obj = objects[i];
                 if (obj.type === 'Rectangle' && obj.fillColor === 0x000000 && obj.fillAlpha === 0.8) {
+                    obj.destroy();
+                } else if (obj.type === 'Rectangle' && obj.fillColor === 0x00aa00) {
+                    obj.destroy();
+                } else if (obj.type === 'Text' && obj.text === '再プレイ') {
                     obj.destroy();
                 }
             }
