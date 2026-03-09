@@ -47,12 +47,14 @@
         let spawnTimer;
         let countdownTimer;
         let currentPattern;
+        let frameCount = 0; // フレームカウンター
         
         // UI要素
         let startBg, startText, scoreText, coinsText, timeText, resultText;
         let speedBtn, speedText, speedCost, speedLevelText;
         let spawnBtn, spawnText, spawnCost, spawnLevelText;
         let autoBtn, autoText, autoCost, autoLevelText;
+        let debugText; // デバッグ表示
         
         // アップグレード
         let speedLevel = 0;
@@ -117,6 +119,16 @@
                 stroke: '#000',
                 strokeThickness: 2
             });
+            
+            // デバッグ表示（右上）
+            debugText = this.add.text(380, 20, '', {
+                fontSize: '14px',
+                fill: '#ffff00',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 2,
+                align: 'right'
+            }).setOrigin(1, 0);
             
             // 良品パターン表示
             const exampleBg = this.add.rectangle(200, 180, 250, 100, 0xffffff, 0.2);
@@ -243,6 +255,7 @@
             autoText.setVisible(false);
             autoCost.setVisible(false);
             autoLevelText.setVisible(false);
+            debugText.setVisible(false);
             
             // スタート画面（最後に描画）
             startBg = this.add.rectangle(200, 350, 400, 700, 0x4a7c9e);
@@ -292,6 +305,7 @@
             autoText.setVisible(true);
             autoCost.setVisible(true);
             autoLevelText.setVisible(true);
+            debugText.setVisible(true);
             
             // 残りの製品とエフェクトをクリア
             for (const product of products) {
@@ -308,6 +322,7 @@
             speedLevel = 0;
             spawnLevel = 0;
             autoLevel = 0;
+            frameCount = 0;
             
             // レベル表示リセット
             speedLevelText.setText('Lv0 (速度3)');
@@ -442,10 +457,11 @@
         function update() {
             if (!gameStarted || gameOver) return;
             
-            // デバッグ情報（1秒に1回）
-            if (Math.random() < 0.016) {  // 60fpsで約1秒に1回
-                console.log(`製品数: ${products.length}, 削除予定: ${products.filter(p => p.markedForDeletion).length}`);
-            }
+            frameCount++;
+            
+            // デバッグ情報を画面に表示
+            const markedCount = products.filter(p => p.markedForDeletion).length;
+            debugText.setText(`F:${frameCount}\n製品:${products.length}\n削除:${markedCount}\nロボ:Lv${autoLevel}`);
             
             // ベルト移動
             for (const line of beltLines) {
@@ -650,6 +666,7 @@
             autoText.setVisible(false);
             autoCost.setVisible(false);
             autoLevelText.setVisible(false);
+            debugText.setVisible(false);
             
             // 全ての製品を削除
             for (const product of products) {
