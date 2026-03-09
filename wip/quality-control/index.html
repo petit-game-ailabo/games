@@ -368,20 +368,9 @@
             
             product.isDefect = isDefect;
             product.tapped = false;
-            product.autoRejected = false;
-            
-            // 自動排除機の効果（一時的に無効化）
-            // if (isDefect && autoLevel > 0) {
-            //     const autoChance = Math.min(autoLevel * 0.4, 0.95); // 40%/レベル、最大95%
-            //     if (Math.random() < autoChance) {
-            //         product.autoRejected = true;
-            //         
-            //         // 製品を緑色にするだけ（最もシンプル・安全）
-            //         product.setTint(0x00ff00);
-            //         
-            //         playSound(1000, 'square', 0.1);
-            //     }
-            // }
+            product.checked = false; // ロボットがチェック済みか
+            product.markedForDeletion = false; // 削除予定か
+            product.deletionTimer = 0;
             
             products.push(product);
         }
@@ -392,7 +381,7 @@
             
             for (let i = products.length - 1; i >= 0; i--) {
                 const product = products[i];
-                if (product.autoRejected) continue;
+                if (product.markedForDeletion) continue; // 削除予定の製品は無視
                 
                 const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, product.x, product.y);
                 
@@ -455,7 +444,7 @@
             
             // デバッグ情報（1秒に1回）
             if (Math.random() < 0.016) {  // 60fpsで約1秒に1回
-                console.log(`製品数: ${products.length}, 自動排除: ${products.filter(p => p.autoRejected).length}`);
+                console.log(`製品数: ${products.length}, 削除予定: ${products.filter(p => p.markedForDeletion).length}`);
             }
             
             // ベルト移動
@@ -473,18 +462,35 @@
                 const product = products[i];
                 product.x -= beltSpeed;
                 
-                // 自動排除された製品は早めに削除（x < 50で削除）
-                if (product.autoRejected === true && product.x < 50) {
-                    score += 5;
-                    coins += 5;
-                    product.destroy();
-                    products.splice(i, 1);
-                    needsUpdate = true;
-                    continue;
+                // ロボットの自動排除（x < 350でチェック、1回だけ）
+                if (!product.checked && product.isDefect && autoLevel > 0 && product.x < 350) {
+                    product.checked = true;
+                    const autoChance = Math.min(autoLevel * 0.4, 0.95);
+                    
+                    if (Math.random() < autoChance) {
+                        // 緑色にして削除対象としてマーク
+                        product.setTint(0x00ff00);
+                        product.markedForDeletion = true;
+                        product.deletionTimer = 30; // 0.5秒（60fps想定）
+                        score += 5;
+                        coins += 5;
+                        playSound(1000, 'square', 0.1);
+                        needsUpdate = true;
+                    }
+                }
+                
+                // 削除対象の製品をカウントダウン
+                if (product.markedForDeletion) {
+                    product.deletionTimer--;
+                    if (product.deletionTimer <= 0) {
+                        product.destroy();
+                        products.splice(i, 1);
+                        continue;
+                    }
                 }
                 
                 if (product.x < -50) {
-                    if (product.isDefect && !product.tapped && !product.autoRejected) {
+                    if (product.isDefect && !product.tapped) {
                         // 不良品を見逃した（ペナルティ）
                         score = Math.max(0, score - 5);
                         coins = Math.max(0, coins - 5);
@@ -645,10 +651,19 @@
             autoCost.setVisible(false);
             autoLevelText.setVisible(false);
             
+            // 全ての製品を削除
             for (const product of products) {
                 product.destroy();
             }
             products = [];
+            
+            // 画面上の全てのテキスト（○×マーク）を削除
+            const allObjects = scene.children.list.slice(); // コピーを作成
+            for (const obj of allObjects) {
+                if (obj.type === 'Text' && (obj.text === '○' || obj.text === '×')) {
+                    obj.destroy();
+                }
+            }
             
             const finalBg = scene.add.rectangle(200, 350, 380, 350, 0x000000, 0.8);
             resultText = scene.add.text(200, 260, `ゲームオーバー！\n\nスコア: ${score}\nコイン: ${coins}`, {
