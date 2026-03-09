@@ -301,18 +301,27 @@
         function spawnObstacle(scene) {
             if (!gameStarted || gameOver) return;
             
+            console.log('spawnObstacle開始 - obstacleSpeed:', obstacleSpeed);
+            
             // ランダムなX座標
             const x = Phaser.Math.Between(50, 750);
             
             // 障害物（赤い円）を作成 - デバッグ用に大きく
             const obstacle = scene.add.circle(x, 50, 40, 0xff6b6b);  // y=-30 → 50, radius=25 → 40
-            scene.physics.add.existing(obstacle);
-            obstacle.body.setVelocityY(obstacleSpeed);
+            
+            // 物理ボディを追加（第二引数 true で有効化）
+            scene.physics.add.existing(obstacle, false);
+            
+            // 速度を明示的に設定
+            if (obstacle.body) {
+                obstacle.body.setVelocity(0, obstacleSpeed);  // setVelocity(x, y) 形式に変更
+                console.log('速度設定 - Y:', obstacle.body.velocity.y, 'obstacleSpeed:', obstacleSpeed);
+            } else {
+                console.error('物理ボディがない！');
+            }
             
             // グループに追加
             obstacles.add(obstacle);
-            
-            console.log('障害物生成:', x, obstacleSpeed); // デバッグ用
             
             // 画面外に出たら削除
             scene.time.delayedCall(5000, () => {
