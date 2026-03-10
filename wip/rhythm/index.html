@@ -111,10 +111,17 @@ function playTone(freq, dur, vol, type, harmonic = false) {
 
 function playNote(lane, type) {
     const freqs = [261.6, 329.6, 392.0, 523.3];
-    const vol = type === 'perfect' ? 0.35 : type === 'great' ? 0.25 : 0.15;
+    const vol = type === 'perfect' ? 0.4 : type === 'great' ? 0.28 : 0.16;
     const t = type === 'perfect' ? 'sine' : 'triangle';
     const harmonic = type === 'perfect' || type === 'great';
-    playTone(freqs[lane], 0.25, vol, t, harmonic);
+    playTone(freqs[lane], type === 'perfect' ? 0.35 : 0.25, vol, t, harmonic);
+    
+    // PERFECT時は追加のキラキラ音を重ねる
+    if (type === 'perfect') {
+        setTimeout(() => {
+            playTone(freqs[lane] * 2, 0.15, 0.15, 'sine');
+        }, 50);
+    }
 }
 
 function playMiss() { playTone(80, 0.12, 0.1, 'sawtooth'); }
@@ -278,18 +285,19 @@ function generateSongPattern() {
         [{ b:0, l:0 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3.5, l:1 }],
     ];
 
-    // 曲構成（68ビート - 最初の4ビートは空白）
+    // 曲構成（72ビート - 最初の8ビート = 4拍/2小節は完全に空白）
     const structure = [
-        // イントロ: 4ビート空白後、ゆったり開始
-        { p:6, s:4 },  { p:0, s:8 },
+        // イントロ: beat 8から開始（最初の4拍/2小節は完全に空白にしてプレイヤーが準備できるように）
+        { p:6, s:8 },   // beat 8~11: 休符多めでゆったり開始
+        { p:0, s:12 },  // beat 12~15: シンプルなパターン
         // Aメロ
-        { p:0, s:12 }, { p:1, s:16 }, { p:0, s:20 }, { p:4, s:24 },
+        { p:0, s:16 }, { p:1, s:20 }, { p:0, s:24 }, { p:4, s:28 },
         // Bメロ
-        { p:2, s:28 }, { p:5, s:32 }, { p:7, s:36 }, { p:1, s:40 },
+        { p:2, s:32 }, { p:5, s:36 }, { p:7, s:40 }, { p:1, s:44 },
         // サビ
-        { p:3, s:44 }, { p:5, s:48 }, { p:7, s:52 }, { p:4, s:56 },
+        { p:3, s:48 }, { p:5, s:52 }, { p:7, s:56 }, { p:4, s:60 },
         // アウトロ
-        { p:6, s:60 }, { p:0, s:64 },
+        { p:6, s:64 }, { p:0, s:68 },
     ];
 
     for (const sec of structure) {
@@ -479,20 +487,37 @@ function updateHitParticles() {
 
 function addHitParticles(lane, color, isPerfect) {
     const cx = lane * LANE_W + LANE_W / 2;
-    const count = isPerfect ? 15 : 8;
+    const count = isPerfect ? 25 : 12; // パーティクル数を増やして派手に
     for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
-        const speed = isPerfect ? 3 + Math.random() * 3 : 2 + Math.random() * 2;
+        const speed = isPerfect ? 4 + Math.random() * 4 : 2.5 + Math.random() * 2.5;
         hitParticles.push({
             x: cx,
             y: JUDGE_Y,
             vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - (isPerfect ? 3 : 1.5),
-            life: isPerfect ? 35 : 25,
-            maxLife: isPerfect ? 35 : 25,
+            vy: Math.sin(angle) * speed - (isPerfect ? 4 : 2),
+            life: isPerfect ? 45 : 30, // 寿命を伸ばして余韻を
+            maxLife: isPerfect ? 45 : 30,
             color: color,
-            size: isPerfect ? 3 + Math.random() * 2 : 2 + Math.random() * 1.5,
+            size: isPerfect ? 4 + Math.random() * 3 : 2.5 + Math.random() * 2,
         });
+    }
+    // PERFECT時は追加で星形パーティクルを生成
+    if (isPerfect) {
+        for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI * 2 * i) / 8;
+            const speed = 5 + Math.random() * 3;
+            hitParticles.push({
+                x: cx,
+                y: JUDGE_Y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 3,
+                life: 50,
+                maxLife: 50,
+                color: '#fff',
+                size: 2 + Math.random() * 1.5,
+            });
+        }
     }
 }
 
@@ -500,19 +525,37 @@ function activateFever() {
     if (feverActive) return;
     feverActive = true;
     feverTimer = FEVER_DURATION;
-    // フィーバー開始エフェクト
-    for (let i = 0; i < 30; i++) {
+    // フィーバー開始の爆発的なエフェクト
+    for (let i = 0; i < 60; i++) {
+        const angle = (Math.PI * 2 * i) / 60;
+        const speed = 8 + Math.random() * 6;
         feverParticles.push({
-            x: W / 2 + (Math.random() - 0.5) * 200,
-            y: H / 2 + (Math.random() - 0.5) * 200,
-            vx: (Math.random() - 0.5) * 6,
-            vy: (Math.random() - 0.5) * 6,
-            life: 40 + Math.random() * 40,
-            maxLife: 80,
+            x: W / 2,
+            y: H / 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 60 + Math.random() * 40,
+            maxLife: 100,
             color: LANE_COLORS[Math.floor(Math.random() * 4)],
-            size: 4 + Math.random() * 6,
+            size: 5 + Math.random() * 7,
         });
     }
+    // 追加の星形エフェクト
+    for (let i = 0; i < 20; i++) {
+        feverParticles.push({
+            x: W / 2 + (Math.random() - 0.5) * 100,
+            y: H / 2 + (Math.random() - 0.5) * 100,
+            vx: (Math.random() - 0.5) * 10,
+            vy: (Math.random() - 0.5) * 10,
+            life: 50 + Math.random() * 30,
+            maxLife: 80,
+            color: '#ffe66b',
+            size: 6 + Math.random() * 4,
+        });
+    }
+    // 発動音
+    playTone(523.3, 0.3, 0.4, 'sine', true);
+    setTimeout(() => playTone(659.3, 0.3, 0.4, 'sine', true), 100);
 }
 
 // ── タップ判定 ──
@@ -723,14 +766,29 @@ function drawGame() {
         ctx.strokeStyle = color; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R, 0, Math.PI*2); ctx.stroke();
 
-        // フィーバー中はノーツが光る
+        // フィーバー中はノーツが派手に光る
         if (feverActive) {
-            const pulse = Math.sin(performance.now() / 100) * 0.3 + 0.5;
-            ctx.strokeStyle = '#ffe66b'; ctx.lineWidth = 2;
-            ctx.globalAlpha = pulse;
-            ctx.shadowColor = '#ffe66b'; ctx.shadowBlur = 15;
-            ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R + 6, 0, Math.PI*2); ctx.stroke();
-            ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R + 10, 0, Math.PI*2); ctx.stroke();
+            const pulse = Math.sin(performance.now() / 80) * 0.4 + 0.6;
+            const pulse2 = Math.sin(performance.now() / 120 + n.y * 0.01) * 0.3 + 0.7;
+            
+            // 内側の光輪
+            ctx.strokeStyle = '#ffe66b'; ctx.lineWidth = 3;
+            ctx.globalAlpha = pulse * 0.8;
+            ctx.shadowColor = '#ffe66b'; ctx.shadowBlur = 20;
+            ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R + 4, 0, Math.PI*2); ctx.stroke();
+            
+            // 外側の光輪
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = pulse2 * 0.5;
+            ctx.shadowBlur = 25;
+            ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R + 12, 0, Math.PI*2); ctx.stroke();
+            
+            // さらに外側の薄い光輪
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = pulse * 0.3;
+            ctx.shadowBlur = 30;
+            ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R + 20, 0, Math.PI*2); ctx.stroke();
+            
             ctx.shadowBlur = 0;
             ctx.globalAlpha = 1;
         }
@@ -773,14 +831,30 @@ function drawGame() {
     ctx.font = 'bold 22px sans-serif';
     ctx.fillText(`${score}`, 12, 35);
 
-    // コンボ
+    // コンボ（強化版：派手な演出）
     if (combo >= 3) {
         ctx.textAlign = 'center';
-        ctx.fillStyle = feverActive ? '#ffe66b' : combo >= 20 ? '#ffe66b' : combo >= 10 ? '#6bddff' : '#fff';
-        ctx.font = `bold ${combo >= 20 ? 34 : 26}px sans-serif`;
-        ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = combo >= 10 ? 10 : 0;
+        const comboColor = feverActive ? '#ffe66b' : combo >= 50 ? '#ff6b9d' : combo >= 30 ? '#ffe66b' : combo >= 10 ? '#6bddff' : '#fff';
+        const comboSize = combo >= 50 ? 40 : combo >= 30 ? 36 : combo >= 20 ? 32 : combo >= 10 ? 28 : 26;
+        const comboPulse = combo >= 10 ? Math.sin(performance.now() / 100) * 0.15 + 1 : 1;
+        
+        ctx.fillStyle = comboColor;
+        ctx.font = `bold ${Math.floor(comboSize * comboPulse)}px sans-serif`;
+        ctx.shadowColor = comboColor;
+        ctx.shadowBlur = combo >= 30 ? 20 : combo >= 10 ? 15 : 0;
         ctx.fillText(`${combo} COMBO`, W/2, 75);
         ctx.shadowBlur = 0;
+        
+        // 50コンボ以上で追加の光輪
+        if (combo >= 50 && Math.floor(performance.now() / 200) % 2 === 0) {
+            ctx.strokeStyle = comboColor;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.arc(W/2, 75, 45 + Math.sin(performance.now() / 150) * 5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
     }
 
     // フィーバーゲージ
