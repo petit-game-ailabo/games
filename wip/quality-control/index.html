@@ -44,10 +44,18 @@
 
         // レベル
         let speedLv = 0, spawnLv = 0, qualityLv = 0;
+        let totalEarned = 0; // 総獲得コイン追跡
 
         // 品質改善テーブル（初期80%、-10%ずつ）
         const Q_COSTS = [25, 40, 60, 85, 110, 140];
         const Q_RATES = [0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20];
+
+        // 速度UP: max Lv3, コスト段階制
+        const SPEED_COSTS = [50, 75, 100];
+        const SPEED_MAX = 3;
+        // 生産UP: max Lv5, コスト段階制
+        const SPAWN_COSTS = [30, 45, 60, 80, 100];
+        const SPAWN_MAX = 5;
 
         // コイン報酬
         const R = {
@@ -245,7 +253,7 @@
             const icons = ['⚡', '⏩', '🔧'];
             const labels = ['速度UP', '生産UP', '品質UP'];
             const keys = ['speed', 'spawn', 'quality'];
-            const costs = ['50', '30', String(Q_COSTS[0])];
+            const costs = [String(SPEED_COSTS[0]), String(SPAWN_COSTS[0]), String(Q_COSTS[0])];
 
             ui.btns = {};
             keys.forEach((key, i) => {
@@ -298,7 +306,7 @@
             score = 0; coins = 0; timeLeft = 60; combo = 0;
             beltSpeed = 2.5; spawnDelay = 1200;
             speedLv = 0; spawnLv = 0; qualityLv = 0;
-            defectRate = 0.80;
+            defectRate = 0.80; totalEarned = 0;
 
             updateAllUI();
 
@@ -312,6 +320,14 @@
                 callback: () => {
                     timeLeft--;
                     updateTimeUI();
+                    if (timeLeft === 10) {
+                        // 残り10秒パルスアニメ開始
+                        scene.tweens.add({
+                            targets: ui.timeText, scaleX: 1.2, scaleY: 1.2,
+                            duration: 400, yoyo: true, repeat: 9,
+                            ease: 'Sine.easeInOut'
+                        });
+                    }
                     if (timeLeft <= 0) endGame(scene);
                 },
                 loop: true
@@ -378,7 +394,7 @@
                         const comboMult = Math.min(combo, 5);
                         const sc = R.defectTap.score + (comboMult - 1) * 2;
                         const co = R.defectTap.coins + (comboMult - 1);
-                        score += sc; coins += co;
+                        score += sc; coins += co; totalEarned += co;
                         sndGood();
                         if (combo > 1) sndCombo();
 
@@ -465,9 +481,12 @@
 
             let changed = false;
 
+            const time = sceneRef.time.now;
             for (let i = products.length - 1; i >= 0; i--) {
                 const p = products[i];
                 p.container.x -= beltSpeed;
+                // ベルト振動（微揺れ）
+                p.container.y = 390 + Math.sin(time * 0.006 + i * 1.7) * 1.5;
 
                 if (p.container.x < -50) {
                     if (p.isDefect && !p.tapped) {
@@ -481,6 +500,7 @@
                         // 良品通過（正解）
                         score += R.goodPass.score;
                         coins += R.goodPass.coins;
+                        totalEarned += R.goodPass.coins;
                         sndPass();
                         showEdgeFeedback(sceneRef, p.container.y, true, R.goodPass.coins);
                     }
@@ -523,20 +543,19 @@
         }
         function updateLevelTexts() {
             ui.btns.speed.lv.setText(`Lv${speedLv}`);
+            ui.btns.speed.cost.setText(speedLv < SPEED_MAX ? `${SPEED_COSTS[speedLv]}c` : 'MAX');
+
             ui.btns.spawn.lv.setText(`Lv${spawnLv}`);
-            const pct = Math.round(defectRate * 100);
+            ui.btns.spawn.cost.setText(spawnLv < SPAWN_MAX ? `${SPAWN_COSTS[spawnLv]}c` : 'MAX');
+
             ui.btns.quality.lv.setText(`Lv${qualityLv}`);
-            if (qualityLv < Q_COSTS.length) {
-                ui.btns.quality.cost.setText(`${Q_COSTS[qualityLv]}c`);
-            } else {
-                ui.btns.quality.cost.setText('MAX');
-            }
+            ui.btns.quality.cost.setText(qualityLv < Q_COSTS.length ? `${Q_COSTS[qualityLv]}c` : 'MAX');
         }
 
         function updateButtonStates() {
             const checks = {
-                speed:  coins >= 50,
-                spawn:  coins >= 30 && spawnDelay > 200,
+                speed:  speedLv < SPEED_MAX && coins >= SPEED_COSTS[speedLv],
+                spawn:  spawnLv < SPAWN_MAX && coins >= SPAWN_COSTS[spawnLv],
                 quality: qualityLv < Q_COSTS.length && coins >= Q_COSTS[qualityLv],
             };
             for (const [key, can] of Object.entries(checks)) {
@@ -551,12 +570,12 @@
             if (state !== 'playing') return;
             let ok = false;
 
-            if (type === 'speed' && coins >= 50) {
-                coins -= 50; speedLv++;
-                beltSpeed += 1.5;
+            if (type === 'speed' && speedLv < SPEED_MAX && coins >= SPEED_COSTS[speedLv]) {
+                coins -= SPEED_COSTS[speedLv]; speedLv++;
+                beltSpeed += 0.8;
                 ok = true;
-            } else if (type === 'spawn' && coins >= 30 && spawnDelay > 200) {
-                coins -= 30; spawnLv++;
+            } else if (type === 'spawn' && spawnLv < SPAWN_MAX && coins >= SPAWN_COSTS[spawnLv]) {
+                coins -= SPAWN_COSTS[spawnLv]; spawnLv++;
                 spawnDelay -= 100;
                 spawnTimer.delay = spawnDelay;
                 ok = true;
@@ -628,8 +647,9 @@
             }).setOrigin(0.5);
             endObjs.push(t3);
 
+            const totalSpent = totalEarned - coins;
             const t4 = scene.add.text(W/2, 355,
-                `🪙 ${coins}　　不良率 ${finalPct}%\n⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
+                `🪙 ${coins} (総獲得 ${totalEarned})　不良率 ${finalPct}%\n⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
                 fontSize: '16px', fill: '#bdc3c7', fontStyle: 'bold',
                 align: 'center', lineSpacing: 8
             }).setOrigin(0.5);
