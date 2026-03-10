@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>パニック厨房 - 今日のミニゲーム</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a0a0a; overflow: hidden; }
+    </style>
+</head>
+<body>
+<div id="game-container"></div>
+<script>
+const W = 400, H = 700;
+const config = {
+    type: Phaser.AUTO, width: W, height: H,
+    parent: 'game-container', backgroundColor: '#1a1020',
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    scene: { create, update }
+};
+const game = new Phaser.Game(config);
+
+// パレット
+const C = {
+    bg: '#1a1020', panelBg: 0x221530,
+    pico: 0x88ccff, purple: 0x9b6dff, pink: 0xff6b9d,
+    green: 0x6bff8e, red: 0xff4757, yellow: 0xffe66b, orange: 0xffa502, white: 0xecf0f1,
+};
+
+// 食材定義
+const INGREDIENTS = [
+    { id: 'rice',    emoji: '🍚', name: 'ごはん',   color: 0xffffff },
+    { id: 'meat',    emoji: '🥩', name: 'にく',     color: 0xcc4444 },
+    { id: 'fish',    emoji: '🐟', name: 'さかな',   color: 0x4488cc },
+    { id: 'egg',     emoji: '🥚', name: 'たまご',   color: 0xffdd88 },
+    { id: 'veggie',  emoji: '🥬', name: 'やさい',   color: 0x44bb44 },
+    { id: 'noodle',  emoji: '🍜', name: 'めん',     color: 0xeedd88 },
+    { id: 'shrimp',  emoji: '🍤', name: 'えび',     color: 0xff8844 },
+    { id: 'cheese',  emoji: '🧀', name: 'チーズ',   color: 0xffcc00 },
+];
+
+// レシピ定義（段階的に解禁）
+const RECIPES = [
+    // 簡単（2材料）
+    { name: '🍙おにぎり',     ingredients: ['rice', 'fish'],       difficulty: 1, reward: 15 },
+    { name: '🍳目玉焼き',     ingredients: ['egg', 'veggie'],      difficulty: 1, reward: 15 },
+    { name: '🥩焼肉丼',       ingredients: ['rice', 'meat'],       difficulty: 1, reward: 15 },
+    // 普通（3材料）
+    { name: '🍛カレー',       ingredients: ['rice', 'meat', 'veggie'],    difficulty: 2, reward: 25 },
+    { name: '🍜ラーメン',     ingredients: ['noodle', 'egg', 'meat'],     difficulty: 2, reward: 25 },
+    { name: '🍤天丼',         ingredients: ['rice', 'shrimp', 'veggie'],  difficulty: 2, reward: 25 },
+    // 難しい（4材料）
+    { name: '🍱幕の内弁当',   ingredients: ['rice', 'fish', 'egg', 'veggie'],       difficulty: 3, reward: 40 },
+    { name: '🧀グラタン',     ingredients: ['noodle', 'cheese', 'shrimp', 'meat'],  difficulty: 3, reward: 40 },
+];
+
+let state = 'title';
+
+// ゲーム状態
+let score = 0, coins = 0, combo = 0, maxCombo = 0;
+let timeLeft = 90;
+let orders = [];       // 現在の注文 [{recipe, remaining[], timer, orderObj}]
+let maxOrders = 2;     // 同時注文数
+let orderInterval = 0; // 次の注文までのフレーム
+let orderSpeed = 300;  // 注文間隔（フレーム）
+let orderTimeLimit = 600; // 注文の制限時間（フレーム）
+let difficultyLevel = 1;
+let tickCount = 0;
+let missCount = 0;
+
+// 育成
+let speedLv = 0, slotLv = 0, autoLv = 0;
+const UPG = {
+    speed: { icon: '⏱', name: '時間+', costs: [40, 80, 150], desc: '制限+5s' },
+    slot:  { icon: '📋', name: '注文枠', costs: [60, 120, 200], desc: '同時+1' },
+    auto:  { icon: '🤖', name: 'オート', costs: [80, 160, 280], desc: '自動調理' },
+};
+
+let ui = {}, endObjs = [], sceneRef, countdownTimer;
+
+// 音
+const actx = new (window.AudioContext || window.webkitAudioContext)();
+function snd(f,t='sine',d=0.1,v=0.2){const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=f;o.type=t;g.gain.setValueAtTime(v,actx.currentTime);g.gain.exponentialRampToValueAtTime(0.01,actx.currentTime+d);o.start();o.stop(actx.currentTime+d);}
+function sndTap(){snd(600,'sine',0.04,0.15);}
+function sndCorrect(){snd(523,'sine',0.06);setTimeout(()=>snd(659,'sine',0.06),50);setTimeout(()=>snd(784,'sine',0.1),100);}
+function sndComplete(){snd(784,'sine',0.08);setTimeout(()=>snd(988,'sine',0.08),60);setTimeout(()=>snd(1175,'sine',0.12),120);}
+function sndMiss(){snd(150,'square',0.15,0.12);}
+function sndOrder(){snd(440,'square',0.03,0.1);setTimeout(()=>snd(550,'square',0.03,0.1),50);}
+function sndUpgrade(){snd(880,'square',0.05);setTimeout(()=>snd(1100,'square',0.05),50);setTimeout(()=>snd(1320,'square',0.1),100);}
+
+function create() {
+    sceneRef = this;
+
+    // 背景
+    const bg = this.add.graphics();
+    bg.fillStyle(0x1a1020); bg.fillRect(0, 0, W, H);
+    // タイル模様
+    bg.lineStyle(1, 0x221530, 0.6);
+    for (let y = 0; y < H; y += 25) bg.lineBetween(0, y, W, y);
+    for (let x = 0; x < W; x += 25) bg.lineBetween(x, 0, x, H);
+
+    // === ゲームUI ===
+    // 上部HUD
+    ui.hudBg = this.add.rectangle(W/2, 22, W, 44, 0x0a0a18, 0.9);
+    ui.scoreText = this.add.text(12, 8, '🍳 0', { fontSize: '16px', fill: '#fff', fontStyle: 'bold' });
+    ui.coinText = this.add.text(12, 28, '💰 0', { fontSize: '12px', fill: '#ffe66b', fontFamily: 'monospace' });
+    ui.timeText = this.add.text(W-12, 8, '90s', { fontSize: '16px', fill: '#9b6dff', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(1,0);
+    ui.comboText = this.add.text(W/2, 8, '', { fontSize: '14px', fill: '#ff6b9d', fontStyle: 'bold' }).setOrigin(0.5, 0);
+
+    // 注文エリア（上部）
+    ui.orderLabel = this.add.text(W/2, 52, '📋 注文', { fontSize: '13px', fill: '#888' }).setOrigin(0.5);
+    ui.orderArea = this.add.rectangle(W/2, 170, W-16, 220, C.panelBg, 0.5);
+    ui.orderArea.setStrokeStyle(1, C.purple, 0.3);
+
+    // 食材ボタンエリア
+    ui.ingredLabel = this.add.text(W/2, 300, '🍴 食材をタップ！', { fontSize: '13px', fill: '#888' }).setOrigin(0.5);
+
+    // 食材ボタン（2行4列）
+    ui.ingredBtns = [];
+    const btnW = 85, btnH = 65, startX = 52, startY = 345, gapX = 98, gapY = 78;
+    INGREDIENTS.forEach((ing, i) => {
+        const col = i % 4, row = Math.floor(i / 4);
+        const x = startX + col * gapX, y = startY + row * gapY;
+        const bg = this.add.rectangle(x, y, btnW, btnH, 0x1a1a30, 0.9);
+        bg.setStrokeStyle(2, ing.color, 0.5);
+        bg.setInteractive();
+        bg.on('pointerdown', () => tapIngredient(ing.id));
+
+        const emoji = this.add.text(x, y - 10, ing.emoji, { fontSize: '28px' }).setOrigin(0.5);
+        const name = this.add.text(x, y + 18, ing.name, { fontSize: '10px', fill: '#aaa', fontFamily: 'monospace' }).setOrigin(0.5);
+
+        ui.ingredBtns.push({ bg, emoji, name, ing });
+    });
+
+    // 育成ボタン
+    const upY = 520;
+    ui.upBtns = {};
+    const upKeys = ['speed', 'slot', 'auto'];
+    const upXs = [70, 200, 330];
+    upKeys.forEach((key, i) => {
+        const u = UPG[key];
+        const bg = this.add.rectangle(upXs[i], upY, 118, 50, 0x0a0a18, 0.9);
+        bg.setStrokeStyle(1, C.purple, 0.4);
+        bg.setInteractive();
+        bg.on('pointerdown', () => buyUpgrade(key));
+        const icon = this.add.text(upXs[i], upY - 10, `${u.icon} ${u.name}`, { fontSize: '12px', fill: '#bbb', fontStyle: 'bold' }).setOrigin(0.5);
+        const cost = this.add.text(upXs[i], upY + 10, `¥${u.costs[0]}`, { fontSize: '11px', fill: '#ffe66b', fontFamily: 'monospace' }).setOrigin(0.5);
+        const lv = this.add.text(upXs[i]+54, upY-20, 'Lv0', { fontSize: '9px', fill: '#9b6dff', fontFamily: 'monospace' }).setOrigin(1,0);
+        ui.upBtns[key] = { bg, icon, cost, lv };
+    });
+
+    // ステータスバー
+    ui.statusText = this.add.text(W/2, 560, '', { fontSize: '11px', fill: '#666', fontFamily: 'monospace' }).setOrigin(0.5);
+
+    setGameUIVisible(false);
+
+    // === タイトル画面 ===
+    ui.startBg = this.add.rectangle(W/2, H/2, W, H, 0x1a1020);
+
+    // ピコシェフ
+    const picoC = this.add.container(W/2, 120);
+    picoC.add(this.add.ellipse(0, 15, 50, 60, 0x88ccff));  // 体
+    picoC.add(this.add.circle(0, -20, 25, 0xffddbb));       // 顔
+    picoC.add(this.add.circle(-25, -15, 12, 0x9b6dff));     // ツインテ左
+    picoC.add(this.add.circle(25, -15, 12, 0x9b6dff));      // ツインテ右
+    picoC.add(this.add.circle(-8, -22, 3, 0x333));           // 目左
+    picoC.add(this.add.circle(8, -22, 3, 0x333));            // 目右
+    picoC.add(this.add.text(0, -14, '◡', { fontSize: '10px', fill: '#cc8877' }).setOrigin(0.5));
+    // コック帽
+    picoC.add(this.add.rectangle(0, -42, 30, 20, 0xffffff));
+    picoC.add(this.add.ellipse(0, -52, 36, 16, 0xffffff));
+    ui.picoChar = picoC;
+    this.tweens.add({ targets: picoC, y: 115, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    ui.titleText = this.add.text(W/2, 210, 'パニック厨房', {
+        fontSize: '30px', fill: '#fff', fontStyle: 'bold', stroke: '#0a0a1a', strokeThickness: 4
+    }).setOrigin(0.5);
+    ui.titleSub = this.add.text(W/2, 245, 'PANIC KITCHEN', {
+        fontSize: '11px', fill: '#9b6dff', fontFamily: 'monospace'
+    }).setOrigin(0.5);
+
+    // デコ
+    ui.titleDeco = this.add.text(W/2, 310, '🍙🍳🍛🍜🍤🍱🧀🥩', {
+        fontSize: '24px'
+    }).setOrigin(0.5);
+    this.tweens.add({ targets: ui.titleDeco, y: 305, duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    ui.titleDesc = this.add.text(W/2, 400,
+        '注文通りに食材をタップ！\n\n🍚 レシピの順番通りにタップ\n⏱ 時間切れで注文失敗\n💰 コインでキッチンを強化\n🔥 コンボで高得点！', {
+        fontSize: '14px', fill: '#bdc3c7', align: 'center', lineSpacing: 5
+    }).setOrigin(0.5);
+
+    let bs = ''; try { const b = localStorage.getItem('kitchen_best'); if(b) bs = `BEST: ${b}点`; } catch(e){}
+    ui.titleBest = this.add.text(W/2, 500, bs, {
+        fontSize: '16px', fill: '#ffe66b', fontFamily: 'monospace', fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    ui.titleStart = this.add.text(W/2, 550, '▶ TAP TO START', {
+        fontSize: '22px', fill: '#88ccff', fontStyle: 'bold', fontFamily: 'monospace'
+    }).setOrigin(0.5);
+    this.tweens.add({ targets: ui.titleStart, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
+
+    this.add.text(W/2, H-10, 'Powered by Phaser', { fontSize: '10px', fill: '#fff' }).setOrigin(0.5).setAlpha(0.2);
+
+    this.input.on('pointerdown', () => { if (state === 'title') startGame(this); });
+}
+
+function setGameUIVisible(v) {
+    [ui.hudBg, ui.scoreText, ui.coinText, ui.timeText, ui.comboText,
+     ui.orderLabel, ui.orderArea, ui.ingredLabel, ui.statusText
+    ].forEach(e => e && e.setVisible(v));
+    ui.ingredBtns.forEach(b => { b.bg.setVisible(v); b.emoji.setVisible(v); b.name.setVisible(v); });
+    Object.values(ui.upBtns).forEach(b => Object.values(b).forEach(o => o.setVisible(v)));
+}
+
+function startGame(scene) {
+    state = 'playing';
+    [ui.startBg, ui.picoChar, ui.titleText, ui.titleSub, ui.titleDeco, ui.titleDesc, ui.titleBest, ui.titleStart].forEach(o => o.setVisible(false));
+    scene.tweens.killAll();
+    setGameUIVisible(true);
+
+    score = 0; coins = 0; combo = 0; maxCombo = 0;
+    timeLeft = 90; tickCount = 0; missCount = 0;
+    orders = []; maxOrders = 2;
+    orderSpeed = 250; orderTimeLimit = 600;
+    difficultyLevel = 1;
+    speedLv = 0; slotLv = 0; autoLv = 0;
+    orderInterval = 60; // 最初の注文はすぐ
+
+    updateHUD();
+    updateUpgradeUI();
+
+    countdownTimer = scene.time.addEvent({
+        delay: 1000,
+        callback: () => {
+            timeLeft--;
+            ui.timeText.setText(`${timeLeft}s`);
+            if (timeLeft <= 10) ui.timeText.setFill('#ff4757');
+            if (timeLeft <= 0) endGame(scene);
+        },
+        loop: true
+    });
+}
+
+function getAvailableRecipes() {
+    // 難易度に応じてレシピ解禁
+    if (difficultyLevel >= 3) return RECIPES;
+    if (difficultyLevel >= 2) return RECIPES.filter(r => r.difficulty <= 2);
+    return RECIPES.filter(r => r.difficulty <= 1);
+}
+
+function addOrder() {
+    if (orders.length >= maxOrders) return;
+
+    const available = getAvailableRecipes();
+    const recipe = Phaser.Utils.Array.GetRandom(available);
+
+    // 注文カードUI
+    const orderIndex = orders.length;
+    const cardY = 85 + orderIndex * 73;
+    const container = sceneRef.add.container(0, 0);
+
+    const cardBg = sceneRef.add.rectangle(W/2, cardY, W - 30, 65, 0x1a1a30, 0.95);
+    cardBg.setStrokeStyle(2, C.purple, 0.5);
+    container.add(cardBg);
+
+    // レシピ名
+    const nameText = sceneRef.add.text(20, cardY - 22, recipe.name, {
+        fontSize: '15px', fill: '#fff', fontStyle: 'bold'
+    });
+    container.add(nameText);
+
+    // 食材リスト（絵文字で表示、次にタップすべきものをハイライト）
+    const ingTexts = [];
+    recipe.ingredients.forEach((ingId, i) => {
+        const ing = INGREDIENTS.find(ig => ig.id === ingId);
+        const tx = sceneRef.add.text(20 + i * 42, cardY + 2, ing.emoji, {
+            fontSize: '22px'
+        });
+        container.add(tx);
+        ingTexts.push(tx);
+    });
+
+    // タイマーバー
+    const timerBg = sceneRef.add.rectangle(W/2, cardY + 26, W - 40, 6, 0x333);
+    container.add(timerBg);
+    const timerBar = sceneRef.add.rectangle(W/2, cardY + 26, W - 40, 6, C.green);
+    timerBar.setOrigin(0.5, 0.5);
+    container.add(timerBar);
+
+    // 報酬表示
+    const rewardText = sceneRef.add.text(W - 25, cardY - 22, `+${recipe.reward}`, {
+        fontSize: '12px', fill: '#ffe66b', fontFamily: 'monospace'
+    }).setOrigin(1, 0);
+    container.add(rewardText);
+
+    const order = {
+        recipe,
+        remaining: [...recipe.ingredients],
+        timer: orderTimeLimit,
+        maxTimer: orderTimeLimit,
+        container,
+        cardBg,
+        ingTexts,
+        timerBar,
+        timerBg,
+        nameText,
+        rewardText,
+        cardY,
+    };
+
+    orders.push(order);
+    sndOrder();
+    updateOrderHighlights();
+}
+
+function updateOrderHighlights() {
+    orders.forEach(order => {
+        order.ingTexts.forEach((tx, i) => {
+            if (i < order.recipe.ingredients.length - order.remaining.length) {
+                tx.setAlpha(0.3); // 完了
+            } else if (i === order.recipe.ingredients.length - order.remaining.length) {
+                tx.setAlpha(1.0); // 次
+                tx.setScale(1.1);
+            } else {
+                tx.setAlpha(0.6); // 未着手
+                tx.setScale(1.0);
+            }
+        });
+    });
+}
+
+function tapIngredient(ingId) {
+    if (state !== 'playing') return;
+    sndTap();
+
+    // ボタンフラッシュ
+    const btn = ui.ingredBtns.find(b => b.ing.id === ingId);
+    if (btn) {
+        sceneRef.tweens.add({ targets: btn.bg, scaleX: 0.9, scaleY: 0.9, duration: 60, yoyo: true });
+    }
+
+    // いずれかの注文の次の食材と一致するか
+    let matched = false;
+    for (let i = 0; i < orders.length; i++) {
+        const order = orders[i];
+        if (order.remaining.length > 0 && order.remaining[0] === ingId) {
+            order.remaining.shift();
+            matched = true;
+
+            if (order.remaining.length === 0) {
+                // 注文完成！
+                completeOrder(i);
+            } else {
+                sndCorrect();
+                updateOrderHighlights();
+            }
+            break;
+        }
+    }
+
+    if (!matched) {
+        // ミス
+        combo = 0;
+        missCount++;
+        score = Math.max(0, score - 3);
+        sndMiss();
+
+        const fx = sceneRef.add.text(W/2, 280, '❌ ミス！', {
+            fontSize: '18px', fill: '#ff4757', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+        }).setOrigin(0.5);
+        sceneRef.tweens.add({ targets: fx, y: 260, alpha: 0, duration: 500, onComplete: () => fx.destroy() });
+
+        // 食材ボタンを赤く光らせる
+        if (btn) {
+            btn.bg.setStrokeStyle(2, C.red, 1);
+            sceneRef.time.delayedCall(200, () => btn.bg.setStrokeStyle(2, btn.ing.color, 0.5));
+        }
+    }
+
+    updateHUD();
+}
+
+function completeOrder(index) {
+    const order = orders[index];
+    const reward = order.recipe.reward;
+    combo++;
+    maxCombo = Math.max(maxCombo, combo);
+    const comboBonus = Math.floor(reward * combo * 0.2);
+    const total = reward + comboBonus;
+
+    score += total;
+    coins += total;
+
+    sndComplete();
+
+    // 完成エフェクト
+    const fx = sceneRef.add.text(W/2, order.cardY, `✅ ${order.recipe.name} +${total}`, {
+        fontSize: '16px', fill: '#6bff8e', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+    }).setOrigin(0.5);
+    sceneRef.tweens.add({ targets: fx, y: order.cardY - 30, alpha: 0, duration: 600, onComplete: () => fx.destroy() });
+
+    if (combo > 1) {
+        const cfx = sceneRef.add.text(W/2, order.cardY + 20, `🔥 ${combo}コンボ! +${comboBonus}`, {
+            fontSize: '13px', fill: '#ff6b9d', fontStyle: 'bold', stroke: '#000', strokeThickness: 1
+        }).setOrigin(0.5);
+        sceneRef.tweens.add({ targets: cfx, y: order.cardY - 5, alpha: 0, duration: 500, onComplete: () => cfx.destroy() });
+    }
+
+    // 注文削除
+    order.container.destroy();
+    orders.splice(index, 1);
+
+    // 残り注文のカードを再配置
+    repositionOrders();
+    updateHUD();
+    updateUpgradeUI();
+}
+
+function failOrder(index) {
+    const order = orders[index];
+    combo = 0;
+    missCount++;
+    score = Math.max(0, score - 10);
+
+    sndMiss();
+
+    const fx = sceneRef.add.text(W/2, order.cardY, `⏱ 時間切れ！ -10`, {
+        fontSize: '14px', fill: '#ff4757', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+    }).setOrigin(0.5);
+    sceneRef.tweens.add({ targets: fx, y: order.cardY - 25, alpha: 0, duration: 500, onComplete: () => fx.destroy() });
+
+    order.container.destroy();
+    orders.splice(index, 1);
+    repositionOrders();
+    updateHUD();
+}
+
+function repositionOrders() {
+    orders.forEach((order, i) => {
+        const newY = 85 + i * 73;
+        const dy = newY - order.cardY;
+        order.cardY = newY;
+        order.container.list.forEach(child => {
+            child.y += dy;
+        });
+    });
+    updateOrderHighlights();
+}
+
+function buyUpgrade(key) {
+    if (state !== 'playing') return;
+    let lv, costs;
+    if (key === 'speed') { lv = speedLv; costs = UPG.speed.costs; }
+    else if (key === 'slot') { lv = slotLv; costs = UPG.slot.costs; }
+    else { lv = autoLv; costs = UPG.auto.costs; }
+
+    if (lv >= costs.length) return;
+    if (coins < costs[lv]) { snd(100,'square',0.1,0.1); return; }
+
+    coins -= costs[lv];
+
+    if (key === 'speed') {
+        speedLv++;
+        timeLeft += 5; // 時間+5秒
+    } else if (key === 'slot') {
+        slotLv++;
+        maxOrders++;
+    } else {
+        autoLv++;
+    }
+
+    sndUpgrade();
+    updateHUD();
+    updateUpgradeUI();
+
+    const u = UPG[key];
+    const lvNow = key === 'speed' ? speedLv : key === 'slot' ? slotLv : autoLv;
+    const fx = sceneRef.add.text(W/2, 495, `${u.icon} ${u.name} Lv${lvNow}!`, {
+        fontSize: '18px', fill: '#9b6dff', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+    }).setOrigin(0.5);
+    sceneRef.tweens.add({ targets: fx, y: 475, alpha: 0, scale: 1.2, duration: 700, onComplete: () => fx.destroy() });
+}
+
+function updateUpgradeUI() {
+    const lvs = { speed: speedLv, slot: slotLv, auto: autoLv };
+    for (const [key, b] of Object.entries(ui.upBtns)) {
+        const lv = lvs[key];
+        const u = UPG[key];
+        b.lv.setText(`Lv${lv}`);
+        if (lv >= u.costs.length) {
+            b.cost.setText('MAX');
+            b.bg.setAlpha(0.4);
+        } else {
+            b.cost.setText(`¥${u.costs[lv]}`);
+            const canBuy = coins >= u.costs[lv];
+            b.bg.setAlpha(canBuy ? 0.9 : 0.4);
+            [b.icon, b.cost].forEach(e => e.setAlpha(canBuy ? 1 : 0.4));
+        }
+    }
+}
+
+function updateHUD() {
+    ui.scoreText.setText(`🍳 ${score}`);
+    ui.coinText.setText(`💰 ${coins}`);
+    ui.timeText.setText(`${timeLeft}s`);
+    if (combo > 1) {
+        ui.comboText.setText(`🔥 ${combo}コンボ`).setVisible(true);
+    } else {
+        ui.comboText.setText('').setVisible(true);
+    }
+    ui.statusText.setText(`注文枠: ${orders.length}/${maxOrders}  難易度: ${'★'.repeat(difficultyLevel)}${'☆'.repeat(3-difficultyLevel)}`);
+}
+
+function update() {
+    if (state !== 'playing') return;
+    tickCount++;
+
+    // 難易度上昇
+    if (tickCount === 600) { difficultyLevel = 2; orderSpeed = 200; orderTimeLimit = 500; }
+    if (tickCount === 1500) { difficultyLevel = 3; orderSpeed = 160; orderTimeLimit = 450; }
+    if (tickCount === 2500) { orderSpeed = 120; orderTimeLimit = 380; }
+
+    // 注文タイマー更新
+    for (let i = orders.length - 1; i >= 0; i--) {
+        orders[i].timer--;
+        const ratio = orders[i].timer / orders[i].maxTimer;
+        const barW = (W - 40) * ratio;
+        orders[i].timerBar.setDisplaySize(Math.max(0, barW), 6);
+
+        // 色変化
+        if (ratio < 0.3) {
+            orders[i].timerBar.setFillStyle(C.red);
+            orders[i].cardBg.setStrokeStyle(2, C.red, 0.7);
+        } else if (ratio < 0.5) {
+            orders[i].timerBar.setFillStyle(C.yellow);
+        }
+
+        if (orders[i].timer <= 0) {
+            failOrder(i);
+        }
+    }
+
+    // オート調理（Lv1以上で一定確率で自動タップ）
+    if (autoLv > 0 && tickCount % 30 === 0) {
+        const chance = [0, 0.2, 0.4, 0.6][autoLv];
+        if (orders.length > 0 && Math.random() < chance) {
+            const order = orders[0];
+            if (order.remaining.length > 0) {
+                tapIngredient(order.remaining[0]);
+            }
+        }
+    }
+
+    // 新しい注文追加
+    orderInterval--;
+    if (orderInterval <= 0 && orders.length < maxOrders) {
+        addOrder();
+        orderInterval = orderSpeed;
+    }
+
+    updateHUD();
+}
+
+function endGame(scene) {
+    state = 'over';
+    countdownTimer.remove();
+
+    // 残り注文を削除
+    orders.forEach(o => o.container.destroy());
+    orders = [];
+
+    setGameUIVisible(false);
+
+    const prev = parseInt(localStorage.getItem('kitchen_best') || '0');
+    const isNew = score > prev;
+    if (isNew) try { localStorage.setItem('kitchen_best', String(score)); } catch(e){}
+
+    let rank = 'D';
+    if (score >= 500) rank = 'S';
+    else if (score >= 300) rank = 'A';
+    else if (score >= 150) rank = 'B';
+    else if (score >= 50) rank = 'C';
+    const rc = { D: '#ff6b9d', C: '#ffe66b', B: '#88ccff', A: '#6bff8e', S: '#9b6dff' };
+
+    endObjs = [];
+    endObjs.push(scene.add.rectangle(W/2, H/2, W, H, 0x000000, 0.85));
+    const card = scene.add.rectangle(W/2, H/2, 350, 460, 0x1a1020, 0.95);
+    card.setStrokeStyle(2, C.purple, 0.5);
+    endObjs.push(card);
+
+    endObjs.push(scene.add.text(W/2, 160, '🍳 閉店！', { fontSize: '28px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 200, 'スコア', { fontSize: '13px', fill: '#888', fontFamily: 'monospace' }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 235, `${score}`, {
+        fontSize: '42px', fill: '#ffe66b', fontStyle: 'bold', fontFamily: 'monospace'
+    }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 275, 'RANK', { fontSize: '13px', fill: '#888', fontFamily: 'monospace' }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 310, rank, {
+        fontSize: '48px', fill: rc[rank], fontStyle: 'bold', fontFamily: 'monospace'
+    }).setOrigin(0.5));
+
+    endObjs.push(scene.add.text(W/2, 365,
+        `🔥 最大コンボ: ${maxCombo}\n💰 獲得コイン: ${coins}\n❌ ミス: ${missCount}回\n⏱ Lv${speedLv}  📋 Lv${slotLv}  🤖 Lv${autoLv}`, {
+        fontSize: '13px', fill: '#bbb', fontFamily: 'monospace', align: 'center', lineSpacing: 5
+    }).setOrigin(0.5));
+
+    if (isNew) {
+        const nb = scene.add.text(W/2, 420, '🎉 NEW BEST!', { fontSize: '16px', fill: '#ffe66b', fontStyle: 'bold' }).setOrigin(0.5);
+        scene.tweens.add({ targets: nb, scale: 1.2, duration: 500, yoyo: true, repeat: -1 });
+        endObjs.push(nb);
+    }
+
+    const btn = scene.add.rectangle(W/2, 475, 170, 48, C.purple);
+    btn.setStrokeStyle(2, 0xffffff, 0.4);
+    btn.setInteractive();
+    btn.on('pointerdown', () => resetGame(scene));
+    endObjs.push(btn);
+    endObjs.push(scene.add.text(W/2, 475, '▶ RETRY', {
+        fontSize: '18px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace'
+    }).setOrigin(0.5));
+}
+
+function resetGame(scene) {
+    for (const o of endObjs) o.destroy();
+    endObjs = [];
+    scene.tweens.killAll();
+    state = 'title';
+    const b = localStorage.getItem('kitchen_best');
+    ui.titleBest.setText(b ? `BEST: ${b}点` : '');
+    [ui.startBg, ui.picoChar, ui.titleText, ui.titleSub, ui.titleDeco, ui.titleDesc, ui.titleBest, ui.titleStart].forEach(o => o.setVisible(true));
+    scene.tweens.add({ targets: ui.titleStart, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
+    scene.tweens.add({ targets: ui.picoChar, y: 115, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    scene.tweens.add({ targets: ui.titleDeco, y: 305, duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+}
+</script>
+</body>
+</html>
