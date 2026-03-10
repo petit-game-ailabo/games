@@ -113,19 +113,143 @@ function playMiss() {
     osc.stop(now + 0.15);
 }
 
-function playBeat() {
+// ── ドラムマシン ──
+let drumScheduler = null;
+let nextDrumBeat = 0;
+let drumStartTime = 0;
+
+function playKick() {
     if (!audioCtx) return;
     const now = audioCtx.currentTime;
+    // キックドラム: 低音のサイン波 + ピッチダウン
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(60, now);
-    gain.gain.setValueAtTime(0.05, now);
+    osc.frequency.setValueAtTime(150, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+    gain.gain.setValueAtTime(0.5, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.start(now);
+    osc.stop(now + 0.25);
+}
+
+function playSnare() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    // スネア: ノイズ + トーン
+    const bufSize = audioCtx.sampleRate * 0.1;
+    const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buf;
+    const noiseGain = audioCtx.createGain();
+    noise.connect(noiseGain);
+    noiseGain.connect(audioCtx.destination);
+    noiseGain.gain.setValueAtTime(0.3, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    noise.start(now);
+    noise.stop(now + 0.12);
+    // トーン部分
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(200, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
+    gain.gain.setValueAtTime(0.25, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
     osc.start(now);
-    osc.stop(now + 0.1);
+    osc.stop(now + 0.08);
+}
+
+function playHihat(open) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    // ハイハット: フィルタードノイズ
+    const dur = open ? 0.15 : 0.05;
+    const bufSize = audioCtx.sampleRate * dur;
+    const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buf;
+    // ハイパスフィルター
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(8000, now);
+    const gain = audioCtx.createGain();
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+    gain.gain.setValueAtTime(open ? 0.15 : 0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    noise.start(now);
+    noise.stop(now + dur);
+}
+
+function playBassline(beatInBar) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    // シンプルなベースライン（1小節パターン）
+    const bassNotes = [65.4, 0, 82.4, 0, 73.4, 0, 82.4, 65.4]; // C2, _, E2, _, D2, _, E2, C2
+    const freq = bassNotes[beatInBar % bassNotes.length];
+    if (freq === 0) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    osc.start(now);
+    osc.stop(now + 0.2);
+}
+
+// ドラムパターン: 8分音符単位で1小節(8ステップ)
+// K=キック, S=スネア, H=ハイハット(closed), O=ハイハット(open)
+// ステップ: 0  1  2  3  4  5  6  7
+// キック:   x        x  x
+// スネア:         x           x
+// HH:       x  x  x  x  x  x  x  x
+const DRUM_KICK =   [1, 0, 0, 1, 1, 0, 0, 0];
+const DRUM_SNARE =  [0, 0, 1, 0, 0, 0, 1, 0];
+const DRUM_HH =     [1, 1, 1, 1, 1, 1, 1, 1];
+const DRUM_HH_OPEN= [0, 0, 0, 0, 0, 0, 0, 1];
+
+function scheduleDrums() {
+    if (state !== 'playing' || !audioCtx) return;
+
+    songTime = performance.now() - songStartTime;
+    const halfBeatMs = BEAT_MS / 2; // 8分音符
+
+    while (songTime >= nextDrumBeat * halfBeatMs - 50) { // 50ms先読み
+        const step = nextDrumBeat % 8;
+        const beatInBar = nextDrumBeat % 8;
+
+        if (songTime > -500) { // 曲開始後のみ
+            if (DRUM_KICK[step]) playKick();
+            if (DRUM_SNARE[step]) playSnare();
+            if (DRUM_HH_OPEN[step]) playHihat(true);
+            else if (DRUM_HH[step]) playHihat(false);
+            if (step % 2 === 0) playBassline(beatInBar); // 4分音符ごとにベース
+        }
+
+        nextDrumBeat++;
+    }
+}
+
+function startDrums() {
+    nextDrumBeat = 0;
+    drumStartTime = performance.now();
+}
+
+function playBeat() {
+    // ドラムスケジューラーに統合されたので空関数
 }
 
 // ── 曲パターン生成 ──
@@ -358,6 +482,7 @@ function startGame() {
     // ノーツが判定ラインに到達するまでの時間を考慮
     const travelTime = (JUDGE_Y / SPEED) * (1000 / 60);
     songStartTime = performance.now() + 500; // 0.5秒の準備時間
+    startDrums();
 }
 
 // ── ノーツ生成 ──
@@ -757,12 +882,8 @@ function gameLoop() {
         updateNotes();
         drawGame();
 
-        // ビート音
-        const beatNum = Math.floor(songTime / BEAT_MS);
-        if (beatNum !== bgPulse && songTime > 0) {
-            bgPulse = beatNum;
-            playBeat();
-        }
+        // ドラムトラック再生
+        scheduleDrums();
     } else if (state === 'result') {
         drawResult();
     }
