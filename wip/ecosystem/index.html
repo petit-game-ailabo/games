@@ -9,7 +9,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
         body {
             display: flex; justify-content: center; align-items: center;
-            min-height: 100vh; background: #0a1a0a; overflow: hidden;
+            min-height: 100vh; background: #1a1030; overflow: hidden;
         }
     </style>
 </head>
@@ -20,47 +20,51 @@
         const config = {
             type: Phaser.AUTO, width: W, height: H,
             parent: 'game-container',
-            backgroundColor: '#1a2e1a',
+            backgroundColor: '#2a1f4e',
             scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
             scene: { create, update }
         };
         const game = new Phaser.Game(config);
 
-        // === 生態系パラメータ ===
-        let grass = 50, bugs = 30, birds = 20;
-        const MAX_POP = 100;
-        const MIN_POP = 0;
-
-        // バランスが崩壊する閾値
-        const DANGER_LOW = 10;
-        const DANGER_HIGH = 90;
-
-        // 自然変動パラメータ（1秒ごと）
-        const ECO = {
-            grassGrowth: 3,        // 草の自然成長
-            grassEaten: 0.08,      // 虫1匹あたりの草消費
-            bugGrowth: 0.06,       // 草1本あたりの虫増加
-            bugDeath: 0.1,         // 鳥1羽あたりの虫消費
-            bugNaturalDeath: 0.5,  // 虫の自然死
-            birdGrowth: 0.07,      // 虫1匹あたりの鳥増加
-            birdNaturalDeath: 1.5, // 鳥の自然死
+        // === ピコカラーパレット ===
+        const PAL = {
+            bg1: 0x667eea,    // 紫青
+            bg2: 0x764ba2,    // 紫
+            accent: 0x88ccff, // 水色（ピコの体）
+            purple: 0x9b6dff, // 紫（ツインテール）
+            pink: 0xff6b9d,   // ピンク
+            green: 0x6bff8e,  // 緑
+            yellow: 0xffe66b, // 黄色
+            white: 0xffffff,
+            dark: 0x1a1030,
         };
 
-        let state = 'title'; // title | playing | over
+        // === 生物定義 ===
+        const CREATURES = {
+            grass:  { emoji: '🌿', color: PAL.green,  name: '草', zone: { yMin: 480, yMax: 620 } },
+            bug:    { emoji: '🐛', color: PAL.yellow,  name: '虫', zone: { yMin: 280, yMax: 420 } },
+            bird:   { emoji: '🐦', color: PAL.accent,  name: '鳥', zone: { yMin: 80,  yMax: 220 } },
+        };
+
+        // ゲーム状態
+        let state = 'title';
+        let entities = []; // { type, x, y, vx, vy, sprite, hp, age }
         let survivalTime = 0;
-        let energy = 100;
-        const MAX_ENERGY = 100;
-        const ENERGY_REGEN = 8;   // 毎秒回復
-        const TAP_COST = 15;      // タップ1回のコスト
-        const TAP_AMOUNT = 8;     // タップで増える量
-        let difficulty = 1;       // 時間で上昇
+        let difficulty = 1;
         let ecoTimer;
         let bestTime = 0;
+        let dragTarget = null;
+        let lastSpawnTime = 0;
 
-        // 生物アイコン配列
-        let grassIcons = [], bugIcons = [], birdIcons = [];
+        // 個体数
+        let counts = { grass: 0, bug: 0, bird: 0 };
 
-        // UI
+        // ゲームパラメータ
+        const MAX_EACH = 20;         // 各種の上限
+        const MIN_EACH = 1;          // 下限（0で崩壊）
+        const SPAWN_INTERVAL = 2000; // 自動スポーン間隔(ms)
+        const EAT_RANGE = 50;        // 捕食範囲
+
         let ui = {};
         let endObjs = [];
         let sceneRef;
@@ -75,199 +79,260 @@
             g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + dur);
             o.start(); o.stop(actx.currentTime + dur);
         }
-        function sndTap() { snd(520, 'sine', 0.06); setTimeout(() => snd(660, 'sine', 0.06), 40); }
-        function sndFail() { snd(150, 'sawtooth', 0.3, 0.15); }
-        function sndWarn() { snd(300, 'square', 0.08, 0.1); }
-        function sndNoEnergy() { snd(100, 'square', 0.15, 0.1); }
+        function sndGrab() { snd(440, 'sine', 0.05, 0.15); }
+        function sndDrop() { snd(330, 'sine', 0.08, 0.15); }
+        function sndEat() { snd(600, 'square', 0.06, 0.1); }
+        function sndDeath() { snd(150, 'sawtooth', 0.2, 0.15); }
+        function sndSpawn() { snd(800, 'sine', 0.05, 0.1); }
+        function sndFail() { snd(120, 'sawtooth', 0.4, 0.2); }
 
         function create() {
             sceneRef = this;
-
-            // ハイスコア読み込み
-            try { bestTime = parseInt(localStorage.getItem('eco_best') || '0'); } catch(e) {}
+            try { bestTime = parseInt(localStorage.getItem('eco2_best') || '0'); } catch(e) {}
 
             // === 背景 ===
-            const bg = this.add.graphics();
-            // 空（上部）
-            bg.fillGradientStyle(0x1a3a5c, 0x1a3a5c, 0x1a2e1a, 0x1a2e1a, 1);
-            bg.fillRect(0, 0, W, H);
+            const bgGfx = this.add.graphics();
+            // グラデーション（ピコカラー紫系）
+            for (let y = 0; y < H; y += 2) {
+                const t = y / H;
+                const r = Math.floor(0x66 + (0x76 - 0x66) * t);
+                const g = Math.floor(0x7e + (0x4b - 0x7e) * t);
+                const b = Math.floor(0xea + (0xa2 - 0xea) * t);
+                bgGfx.fillStyle((r << 16) | (g << 8) | b, 0.3);
+                bgGfx.fillRect(0, y, W, 2);
+            }
 
-            // 3つのゾーン背景
-            // 鳥ゾーン（空）
-            this.add.rectangle(W/2, 165, W - 20, 170, 0x1e3a5a, 0.3).setStrokeStyle(1, 0x3a7abf, 0.2);
-            // 虫ゾーン（地表）
-            this.add.rectangle(W/2, 345, W - 20, 170, 0x2a3e1a, 0.3).setStrokeStyle(1, 0x5a8a3a, 0.2);
-            // 草ゾーン（地面）
-            this.add.rectangle(W/2, 525, W - 20, 170, 0x1a3a1a, 0.3).setStrokeStyle(1, 0x3a7a3a, 0.2);
+            // 星（背景装飾）
+            for (let i = 0; i < 30; i++) {
+                const sx = Phaser.Math.Between(5, W-5);
+                const sy = Phaser.Math.Between(5, H-5);
+                const sa = Phaser.Math.FloatBetween(0.1, 0.4);
+                this.add.circle(sx, sy, Phaser.Math.Between(1, 2), 0xffffff, sa);
+            }
 
-            // ゾーンラベル
-            this.add.text(20, 85, '🐦 鳥', { fontSize: '16px', fill: '#7ab8e0', fontStyle: 'bold' });
-            this.add.text(20, 265, '🐛 虫', { fontSize: '16px', fill: '#a0d060', fontStyle: 'bold' });
-            this.add.text(20, 445, '🌿 草', { fontSize: '16px', fill: '#60c060', fontStyle: 'bold' });
+            // === ゾーン表示 ===
+            // 鳥ゾーン（空 - 上部）
+            const skyZone = this.add.rectangle(W/2, 150, W - 30, 170, PAL.accent, 0.08);
+            skyZone.setStrokeStyle(1, PAL.accent, 0.15);
+            this.add.text(15, 75, '☁ 空', { fontSize: '13px', fill: '#88ccff', fontStyle: 'bold' }).setAlpha(0.5);
 
-            // === 個体数バー ===
-            const barX = 70, barW = 250, barH = 16;
+            // 虫ゾーン（森 - 中部）
+            const forestZone = this.add.rectangle(W/2, 350, W - 30, 170, PAL.yellow, 0.06);
+            forestZone.setStrokeStyle(1, PAL.yellow, 0.12);
+            this.add.text(15, 275, '🌳 森', { fontSize: '13px', fill: '#ffe66b', fontStyle: 'bold' }).setAlpha(0.5);
 
-            // 鳥バー
-            ui.birdBarBg = this.add.rectangle(barX + barW/2, 90, barW, barH, 0x111111);
-            ui.birdBar = this.add.rectangle(barX, 90, barW * 0.2, barH, 0x4a9ae0).setOrigin(0, 0.5);
-            ui.birdNum = this.add.text(barX + barW + 10, 90, '20', { fontSize: '14px', fill: '#7ab8e0', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(0, 0.5);
+            // 草ゾーン（地面 - 下部）
+            const groundZone = this.add.rectangle(W/2, 550, W - 30, 170, PAL.green, 0.08);
+            groundZone.setStrokeStyle(1, PAL.green, 0.15);
+            this.add.text(15, 475, '🌱 大地', { fontSize: '13px', fill: '#6bff8e', fontStyle: 'bold' }).setAlpha(0.5);
 
-            // 虫バー
-            ui.bugBarBg = this.add.rectangle(barX + barW/2, 270, barW, barH, 0x111111);
-            ui.bugBar = this.add.rectangle(barX, 270, barW * 0.3, barH, 0x80c040).setOrigin(0, 0.5);
-            ui.bugNum = this.add.text(barX + barW + 10, 270, '30', { fontSize: '14px', fill: '#a0d060', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(0, 0.5);
+            // 食物連鎖の矢印（ゾーン間）
+            this.add.text(W/2, 237, '🌿 → 🐛  食べる', {
+                fontSize: '11px', fill: '#aaa', fontFamily: 'monospace'
+            }).setOrigin(0.5).setAlpha(0.4);
+            this.add.text(W/2, 437, '🐛 → 🐦  食べる', {
+                fontSize: '11px', fill: '#aaa', fontFamily: 'monospace'
+            }).setOrigin(0.5).setAlpha(0.4);
 
-            // 草バー
-            ui.grassBarBg = this.add.rectangle(barX + barW/2, 450, barW, barH, 0x111111);
-            ui.grassBar = this.add.rectangle(barX, 450, barW * 0.5, barH, 0x40a040).setOrigin(0, 0.5);
-            ui.grassNum = this.add.text(barX + barW + 10, 450, '50', { fontSize: '14px', fill: '#60c060', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(0, 0.5);
+            // === HUD ===
+            ui.topBar = this.add.rectangle(W/2, 30, W, 60, 0x000000, 0.5);
 
-            // === 食物連鎖の矢印（関係性表示） ===
-            this.add.text(W - 40, 175, '🌿→🐛', { fontSize: '12px', fill: '#888' });
-            this.add.text(W - 40, 355, '🐛→🐦', { fontSize: '12px', fill: '#888' });
-
-            // === タップボタン（各ゾーン） ===
-            const btnW = 80, btnH = 45;
-
-            // 鳥を増やすボタン
-            ui.birdBtn = this.add.rectangle(W/2, 130, btnW, btnH, 0x2a4a6a, 0.9);
-            ui.birdBtn.setStrokeStyle(2, 0x4a9ae0, 0.6);
-            ui.birdBtn.setInteractive();
-            ui.birdBtn.on('pointerdown', () => tapAdd('birds'));
-            ui.birdBtnText = this.add.text(W/2, 130, '+🐦', { fontSize: '22px' }).setOrigin(0.5);
-
-            // 虫を増やすボタン
-            ui.bugBtn = this.add.rectangle(W/2, 310, btnW, btnH, 0x2a4a2a, 0.9);
-            ui.bugBtn.setStrokeStyle(2, 0x80c040, 0.6);
-            ui.bugBtn.setInteractive();
-            ui.bugBtn.on('pointerdown', () => tapAdd('bugs'));
-            ui.bugBtnText = this.add.text(W/2, 310, '+🐛', { fontSize: '22px' }).setOrigin(0.5);
-
-            // 草を増やすボタン
-            ui.grassBtn = this.add.rectangle(W/2, 490, btnW, btnH, 0x1a3a1a, 0.9);
-            ui.grassBtn.setStrokeStyle(2, 0x40a040, 0.6);
-            ui.grassBtn.setInteractive();
-            ui.grassBtn.on('pointerdown', () => tapAdd('grass'));
-            ui.grassBtnText = this.add.text(W/2, 490, '+🌿', { fontSize: '22px' }).setOrigin(0.5);
-
-            // === 上部HUD ===
-            ui.topPanel = this.add.rectangle(W/2, 35, W - 10, 50, 0x0a0a0a, 0.8);
-            ui.topPanel.setStrokeStyle(1, 0x3a7a3a, 0.3);
-
-            ui.timeText = this.add.text(20, 20, '⏱ 0s', {
-                fontSize: '20px', fill: '#ecf0f1', fontFamily: 'monospace', fontStyle: 'bold'
+            ui.timeText = this.add.text(15, 12, '⏱ 0s', {
+                fontSize: '18px', fill: '#fff', fontFamily: 'monospace', fontStyle: 'bold'
             });
-            ui.energyText = this.add.text(W - 20, 20, '⚡100', {
-                fontSize: '20px', fill: '#f1c40f', fontFamily: 'monospace', fontStyle: 'bold'
-            }).setOrigin(1, 0);
-            ui.energyBar = this.add.rectangle(W/2, 50, W - 40, 6, 0xf1c40f).setOrigin(0.5);
-            ui.diffText = this.add.text(W/2, 20, '🌍 Lv1', {
-                fontSize: '16px', fill: '#7f8c8d', fontFamily: 'monospace'
+            ui.diffText = this.add.text(W/2, 12, '🌍 Lv1', {
+                fontSize: '14px', fill: '#9b6dff', fontFamily: 'monospace'
             }).setOrigin(0.5, 0);
 
-            // === 警告テキスト ===
-            ui.warnText = this.add.text(W/2, 625, '', {
-                fontSize: '18px', fill: '#e74c3c', fontStyle: 'bold',
+            // 個体数カウンター（右上）
+            ui.birdCount = this.add.text(W - 15, 8, '🐦 0', {
+                fontSize: '14px', fill: '#88ccff', fontFamily: 'monospace', fontStyle: 'bold'
+            }).setOrigin(1, 0);
+            ui.bugCount = this.add.text(W - 15, 26, '🐛 0', {
+                fontSize: '14px', fill: '#ffe66b', fontFamily: 'monospace', fontStyle: 'bold'
+            }).setOrigin(1, 0);
+            ui.grassCount = this.add.text(W - 15, 44, '🌿 0', {
+                fontSize: '14px', fill: '#6bff8e', fontFamily: 'monospace', fontStyle: 'bold'
+            }).setOrigin(1, 0);
+
+            // 危険バー（画面下部）
+            ui.dangerBg = this.add.rectangle(W/2, 660, W - 40, 8, 0x333333);
+            ui.dangerBar = this.add.rectangle(W/2, 660, W - 40, 8, PAL.green);
+            ui.dangerLabel = this.add.text(W/2, 675, 'バランス: 安定', {
+                fontSize: '12px', fill: '#6bff8e', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+
+            // 警告
+            ui.warnText = this.add.text(W/2, 640, '', {
+                fontSize: '16px', fill: '#ff6b9d', fontStyle: 'bold',
                 stroke: '#000', strokeThickness: 2
             }).setOrigin(0.5).setAlpha(0);
 
-            // === 生物アイコン散布 ===
-            // 各ゾーンにランダムに絵文字を散布（視覚的フィードバック）
-            for (let i = 0; i < 15; i++) {
-                const icon = this.add.text(
-                    Phaser.Math.Between(30, W-30),
-                    Phaser.Math.Between(100, 230),
-                    '🐦', { fontSize: '18px' }
-                ).setOrigin(0.5).setAlpha(0.6);
-                birdIcons.push(icon);
-            }
-            for (let i = 0; i < 20; i++) {
-                const icon = this.add.text(
-                    Phaser.Math.Between(30, W-30),
-                    Phaser.Math.Between(280, 410),
-                    '🐛', { fontSize: '14px' }
-                ).setOrigin(0.5).setAlpha(0.6);
-                bugIcons.push(icon);
-            }
-            for (let i = 0; i < 25; i++) {
-                const icon = this.add.text(
-                    Phaser.Math.Between(30, W-30),
-                    Phaser.Math.Between(460, 590),
-                    '🌿', { fontSize: '14px' }
-                ).setOrigin(0.5).setAlpha(0.6);
-                grassIcons.push(icon);
-            }
+            // ピコちゃんガイド（左下）
+            ui.picoGuide = this.add.text(15, 640, '', {
+                fontSize: '11px', fill: '#88ccff', fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 1
+            }).setAlpha(0);
 
-            // ゲームUI非表示
             setGameUIVisible(false);
 
             // === スタート画面 ===
-            ui.startBg = this.add.rectangle(W/2, H/2, W, H, 0x1a2e1a);
-            ui.titleIcon = this.add.text(W/2, 160, '🌿🐛🐦', { fontSize: '60px' }).setOrigin(0.5);
-            ui.titleText = this.add.text(W/2, 250, '生態系バランサー', {
-                fontSize: '32px', fill: '#ecf0f1', fontStyle: 'bold',
-                stroke: '#000', strokeThickness: 4
+            ui.startBg = this.add.rectangle(W/2, H/2, W, H, 0x2a1f4e);
+
+            // ピコちゃん（簡易描画）
+            const picoContainer = this.add.container(W/2, 140);
+            // 体（水色）
+            const picoBody = this.add.ellipse(0, 15, 50, 60, 0x88ccff);
+            picoContainer.add(picoBody);
+            // 頭
+            const picoHead = this.add.circle(0, -20, 25, 0xffddbb);
+            picoContainer.add(picoHead);
+            // ツインテール
+            picoContainer.add(this.add.circle(-25, -15, 12, 0x9b6dff));
+            picoContainer.add(this.add.circle(25, -15, 12, 0x9b6dff));
+            // 目
+            picoContainer.add(this.add.circle(-8, -22, 3, 0x333333));
+            picoContainer.add(this.add.circle(8, -22, 3, 0x333333));
+            // 口
+            picoContainer.add(this.add.text(0, -14, '◡', { fontSize: '10px', fill: '#cc8877' }).setOrigin(0.5));
+            ui.picoChar = picoContainer;
+
+            // ふわふわアニメ
+            this.tweens.add({ targets: picoContainer, y: 135, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+            ui.titleText = this.add.text(W/2, 220, '生態系バランサー', {
+                fontSize: '30px', fill: '#fff', fontStyle: 'bold',
+                stroke: '#1a1030', strokeThickness: 4
             }).setOrigin(0.5);
-            ui.titleSub = this.add.text(W/2, 295, 'ECOSYSTEM BALANCER', {
-                fontSize: '12px', fill: '#5a8a3a', fontFamily: 'monospace'
+            ui.titleSub = this.add.text(W/2, 258, 'ECOSYSTEM BALANCER', {
+                fontSize: '11px', fill: '#9b6dff', fontFamily: 'monospace'
             }).setOrigin(0.5);
-            ui.titleDesc = this.add.text(W/2, 380,
-                '食物連鎖のバランスを守ろう\n\n🌿草 → 🐛虫 → 🐦鳥\n\n草が減ると虫が飢え\n虫が減ると鳥が飢える\nどれかが絶滅したらゲームオーバー', {
-                fontSize: '16px', fill: '#bdc3c7', align: 'center', lineSpacing: 6
+
+            ui.titleDesc = this.add.text(W/2, 340,
+                '🌿草 → 🐛虫 → 🐦鳥\nの食物連鎖を守ろう！\n\n生き物をドラッグで移動して\n捕食者から逃がしたり\nエサに近づけたり\n\nどれかが絶滅したらゲームオーバー', {
+                fontSize: '15px', fill: '#ddd', align: 'center', lineSpacing: 6
             }).setOrigin(0.5);
 
             const bestStr = bestTime > 0 ? `BEST: ${bestTime}s` : '';
-            ui.titleBest = this.add.text(W/2, 490, bestStr, {
-                fontSize: '16px', fill: '#f1c40f', fontFamily: 'monospace', fontStyle: 'bold'
+            ui.titleBest = this.add.text(W/2, 470, bestStr, {
+                fontSize: '16px', fill: '#ffe66b', fontFamily: 'monospace', fontStyle: 'bold'
             }).setOrigin(0.5);
 
-            ui.titleStart = this.add.text(W/2, 550, '▶ TAP TO START', {
-                fontSize: '22px', fill: '#5a8a3a', fontStyle: 'bold', fontFamily: 'monospace'
+            ui.titleStart = this.add.text(W/2, 530, '▶ TAP TO START', {
+                fontSize: '22px', fill: '#88ccff', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5);
             this.tweens.add({ targets: ui.titleStart, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
 
-            this.add.text(W/2, H - 15, 'Powered by Phaser', {
-                fontSize: '11px', fill: '#ffffff'
-            }).setOrigin(0.5).setAlpha(0.3);
+            this.add.text(W/2, H - 12, 'Powered by Phaser', {
+                fontSize: '10px', fill: '#fff'
+            }).setOrigin(0.5).setAlpha(0.2);
 
-            // タップハンドラ
+            // === 入力 ===
             this.input.on('pointerdown', (ptr) => {
-                if (state === 'title') startGame(this);
+                if (state === 'title') { startGame(this); return; }
+                if (state !== 'playing') return;
+
+                // エンティティをドラッグ
+                let closest = null, closestDist = 40;
+                for (const e of entities) {
+                    const d = Phaser.Math.Distance.Between(ptr.x, ptr.y, e.x, e.y);
+                    if (d < closestDist) { closest = e; closestDist = d; }
+                }
+                if (closest) {
+                    dragTarget = closest;
+                    dragTarget.sprite.setScale(1.4);
+                    sndGrab();
+                }
+            });
+
+            this.input.on('pointermove', (ptr) => {
+                if (dragTarget && state === 'playing') {
+                    dragTarget.x = Phaser.Math.Clamp(ptr.x, 20, W - 20);
+                    dragTarget.y = Phaser.Math.Clamp(ptr.y, 70, 630);
+                    dragTarget.sprite.setPosition(dragTarget.x, dragTarget.y);
+                }
+            });
+
+            this.input.on('pointerup', () => {
+                if (dragTarget) {
+                    dragTarget.sprite.setScale(1);
+                    sndDrop();
+                    dragTarget = null;
+                }
             });
         }
 
         function setGameUIVisible(v) {
-            const els = [
-                ui.topPanel, ui.timeText, ui.energyText, ui.energyBar, ui.diffText,
-                ui.birdBarBg, ui.birdBar, ui.birdNum,
-                ui.bugBarBg, ui.bugBar, ui.bugNum,
-                ui.grassBarBg, ui.grassBar, ui.grassNum,
-                ui.birdBtn, ui.birdBtnText,
-                ui.bugBtn, ui.bugBtnText,
-                ui.grassBtn, ui.grassBtnText,
-                ui.warnText,
-            ];
-            els.forEach(e => e && e.setVisible(v));
-            birdIcons.forEach(i => i.setVisible(v));
-            bugIcons.forEach(i => i.setVisible(v));
-            grassIcons.forEach(i => i.setVisible(v));
+            [ui.topBar, ui.timeText, ui.diffText,
+             ui.birdCount, ui.bugCount, ui.grassCount,
+             ui.dangerBg, ui.dangerBar, ui.dangerLabel,
+             ui.warnText, ui.picoGuide].forEach(e => e && e.setVisible(v));
+        }
+
+        function spawnEntity(scene, type, x, y) {
+            const def = CREATURES[type];
+            if (!x) x = Phaser.Math.Between(30, W - 30);
+            if (!y) y = Phaser.Math.Between(def.zone.yMin, def.zone.yMax);
+
+            const sprite = scene.add.text(x, y, def.emoji, {
+                fontSize: type === 'grass' ? '22px' : '26px'
+            }).setOrigin(0.5);
+
+            // 出現アニメ
+            sprite.setScale(0);
+            scene.tweens.add({ targets: sprite, scale: 1, duration: 200, ease: 'Back.easeOut' });
+
+            const e = {
+                type, x, y, sprite,
+                vx: Phaser.Math.FloatBetween(-0.3, 0.3),
+                vy: Phaser.Math.FloatBetween(-0.2, 0.2),
+                age: 0,
+                hungry: 0,        // 空腹度
+                maxHungry: type === 'bird' ? 300 : type === 'bug' ? 400 : 9999,
+            };
+            entities.push(e);
+            counts[type]++;
+            sndSpawn();
+            return e;
+        }
+
+        function removeEntity(scene, e, animate = true) {
+            const idx = entities.indexOf(e);
+            if (idx === -1) return;
+            entities.splice(idx, 1);
+            counts[e.type]--;
+
+            if (animate) {
+                scene.tweens.add({
+                    targets: e.sprite, scale: 0, alpha: 0, duration: 200,
+                    onComplete: () => e.sprite.destroy()
+                });
+            } else {
+                e.sprite.destroy();
+            }
         }
 
         function startGame(scene) {
             state = 'playing';
-            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleBest, ui.titleStart].forEach(o => o.setVisible(false));
+            [ui.startBg, ui.picoChar, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleBest, ui.titleStart].forEach(o => o.setVisible(false));
             scene.tweens.killAll();
 
             setGameUIVisible(true);
 
-            grass = 50; bugs = 30; birds = 20;
-            energy = 100; survivalTime = 0; difficulty = 1;
+            // クリア
+            for (const e of entities) e.sprite.destroy();
+            entities = [];
+            counts = { grass: 0, bug: 0, bird: 0 };
+            survivalTime = 0; difficulty = 1;
 
-            updateBars();
-            updateIcons();
+            // 初期配置
+            for (let i = 0; i < 10; i++) spawnEntity(scene, 'grass');
+            for (let i = 0; i < 5; i++) spawnEntity(scene, 'bug');
+            for (let i = 0; i < 3; i++) spawnEntity(scene, 'bird');
 
-            // 生態系シミュレーション（500msごと）
+            updateCountUI();
+
+            // メインループ
             ecoTimer = scene.time.addEvent({
                 delay: 500,
                 callback: () => ecoTick(scene),
@@ -277,237 +342,274 @@
 
         function ecoTick(scene) {
             survivalTime += 0.5;
-
-            // 難易度上昇（30秒ごとにレベルアップ）
-            difficulty = 1 + Math.floor(survivalTime / 30) * 0.3;
+            difficulty = 1 + survivalTime / 60;
             ui.diffText.setText(`🌍 Lv${Math.floor(1 + survivalTime / 30)}`);
+            ui.timeText.setText(`⏱ ${Math.floor(survivalTime)}s`);
 
-            // エネルギー回復
-            energy = Math.min(MAX_ENERGY, energy + ENERGY_REGEN * 0.5);
+            // === 自動スポーン（草のみ自然増殖） ===
+            if (counts.grass < MAX_EACH && Math.random() < 0.15 * difficulty) {
+                spawnEntity(scene, 'grass');
+            }
 
-            // === 生態系シミュレーション ===
-            const dt = 0.5 * difficulty;
+            // === 捕食ロジック ===
+            // 虫が草を食べる
+            for (const bug of entities.filter(e => e.type === 'bug')) {
+                bug.hungry += difficulty;
+                const nearGrass = entities.find(e =>
+                    e.type === 'grass' && e !== dragTarget &&
+                    Phaser.Math.Distance.Between(bug.x, bug.y, e.x, e.y) < EAT_RANGE
+                );
+                if (nearGrass) {
+                    removeEntity(scene, nearGrass);
+                    bug.hungry = 0;
+                    sndEat();
 
-            // 草: 自然に増える、虫に食べられる
-            const grassChange = (ECO.grassGrowth - ECO.grassEaten * bugs) * dt;
-            grass += grassChange;
+                    // 食べたら繁殖チャンス
+                    if (counts.bug < MAX_EACH && Math.random() < 0.3) {
+                        spawnEntity(scene, 'bug', bug.x + Phaser.Math.Between(-30, 30), bug.y + Phaser.Math.Between(-20, 20));
+                    }
 
-            // 虫: 草を食べて増える、鳥に食べられる、自然に減る
-            const bugChange = (ECO.bugGrowth * grass - ECO.bugDeath * birds - ECO.bugNaturalDeath) * dt;
-            bugs += bugChange;
+                    // 食べたエフェクト
+                    const fx = scene.add.text(bug.x, bug.y - 15, '😋', { fontSize: '16px' }).setOrigin(0.5);
+                    scene.tweens.add({ targets: fx, alpha: 0, y: bug.y - 35, duration: 400, onComplete: () => fx.destroy() });
+                }
+            }
 
-            // 鳥: 虫を食べて増える、自然に減る
-            const birdChange = (ECO.birdGrowth * bugs - ECO.birdNaturalDeath) * dt;
-            birds += birdChange;
+            // 鳥が虫を食べる
+            for (const bird of entities.filter(e => e.type === 'bird')) {
+                bird.hungry += difficulty;
+                const nearBug = entities.find(e =>
+                    e.type === 'bug' && e !== dragTarget &&
+                    Phaser.Math.Distance.Between(bird.x, bird.y, e.x, e.y) < EAT_RANGE
+                );
+                if (nearBug) {
+                    removeEntity(scene, nearBug);
+                    bird.hungry = 0;
+                    sndEat();
 
-            // 範囲制限
-            grass = Math.max(0, Math.min(MAX_POP, grass));
-            bugs = Math.max(0, Math.min(MAX_POP, bugs));
-            birds = Math.max(0, Math.min(MAX_POP, birds));
+                    if (counts.bird < MAX_EACH && Math.random() < 0.25) {
+                        spawnEntity(scene, 'bird', bird.x + Phaser.Math.Between(-30, 30), bird.y + Phaser.Math.Between(-20, 20));
+                    }
 
-            // 警告チェック
-            checkWarnings(scene);
+                    const fx = scene.add.text(bird.x, bird.y - 15, '😋', { fontSize: '16px' }).setOrigin(0.5);
+                    scene.tweens.add({ targets: fx, alpha: 0, y: bird.y - 35, duration: 400, onComplete: () => fx.destroy() });
+                }
+            }
 
-            // ゲームオーバー判定
-            if (grass <= 0 || bugs <= 0 || birds <= 0 ||
-                grass >= MAX_POP || bugs >= MAX_POP || birds >= MAX_POP) {
+            // === 飢餓死 ===
+            for (const e of [...entities]) {
+                if (e.type === 'grass') continue;
+                if (e.hungry > e.maxHungry) {
+                    const fx = scene.add.text(e.x, e.y, '💀', { fontSize: '20px' }).setOrigin(0.5);
+                    scene.tweens.add({ targets: fx, alpha: 0, y: e.y - 30, duration: 500, onComplete: () => fx.destroy() });
+                    removeEntity(scene, e);
+                    sndDeath();
+                }
+            }
+
+            // === ゲームオーバー判定 ===
+            if (counts.grass <= 0 || counts.bug <= 0 || counts.bird <= 0) {
                 endGame(scene);
                 return;
             }
 
-            updateBars();
-            updateIcons();
-            ui.timeText.setText(`⏱ ${Math.floor(survivalTime)}s`);
-            ui.energyText.setText(`⚡${Math.floor(energy)}`);
-            ui.energyBar.setScale(energy / MAX_ENERGY, 1);
+            updateCountUI();
+            updateDangerBar();
+            updateWarnings();
         }
 
-        function checkWarnings(scene) {
-            const warnings = [];
-            if (grass <= DANGER_LOW) warnings.push('🌿草が枯れそう！');
-            if (grass >= DANGER_HIGH) warnings.push('🌿草が増えすぎ！');
-            if (bugs <= DANGER_LOW) warnings.push('🐛虫が減りすぎ！');
-            if (bugs >= DANGER_HIGH) warnings.push('🐛虫が増えすぎ！');
-            if (birds <= DANGER_LOW) warnings.push('🐦鳥が減りすぎ！');
-            if (birds >= DANGER_HIGH) warnings.push('🐦鳥が増えすぎ！');
+        function updateCountUI() {
+            ui.birdCount.setText(`🐦 ${counts.bird}`);
+            ui.bugCount.setText(`🐛 ${counts.bug}`);
+            ui.grassCount.setText(`🌿 ${counts.grass}`);
+        }
 
-            if (warnings.length > 0) {
-                ui.warnText.setText(warnings[0]);
-                ui.warnText.setAlpha(1);
-                sndWarn();
+        function updateDangerBar() {
+            // バランス度 = 各種が2以上あればOK、少ないほど危険
+            const minCount = Math.min(counts.grass, counts.bug, counts.bird);
+            const balance = Math.min(1, minCount / 5);
+
+            ui.dangerBar.setScale(balance, 1);
+
+            if (balance > 0.6) {
+                ui.dangerBar.setFillStyle(PAL.green);
+                ui.dangerLabel.setText('バランス: 安定').setFill('#6bff8e');
+            } else if (balance > 0.3) {
+                ui.dangerBar.setFillStyle(PAL.yellow);
+                ui.dangerLabel.setText('バランス: 不安定').setFill('#ffe66b');
+            } else {
+                ui.dangerBar.setFillStyle(PAL.pink);
+                ui.dangerLabel.setText('バランス: 危険！').setFill('#ff6b9d');
+            }
+        }
+
+        function updateWarnings() {
+            const warns = [];
+            if (counts.grass <= 2) warns.push('🌿草が枯れそう！');
+            if (counts.bug <= 1) warns.push('🐛虫が絶滅寸前！');
+            if (counts.bird <= 1) warns.push('🐦鳥が絶滅寸前！');
+            if (counts.grass >= MAX_EACH - 2) warns.push('🌿草が繁茂しすぎ！');
+
+            if (warns.length > 0) {
+                ui.warnText.setText(warns[0]).setAlpha(1);
             } else {
                 ui.warnText.setAlpha(0);
             }
 
-            // バーの色変更（危険時）
-            updateBarColor(ui.birdBar, birds, 0x4a9ae0);
-            updateBarColor(ui.bugBar, bugs, 0x80c040);
-            updateBarColor(ui.grassBar, grass, 0x40a040);
-        }
-
-        function updateBarColor(bar, val, normalColor) {
-            if (val <= DANGER_LOW || val >= DANGER_HIGH) {
-                bar.setFillStyle(0xe74c3c);
-            } else if (val <= 20 || val >= 80) {
-                bar.setFillStyle(0xf39c12);
+            // ピコのヒント
+            if (counts.bug <= 2 && counts.grass > 5) {
+                ui.picoGuide.setText('ピコ「虫を草の近くに運んで！」').setAlpha(0.8);
+            } else if (counts.bird <= 1 && counts.bug > 3) {
+                ui.picoGuide.setText('ピコ「鳥を虫の近くに！」').setAlpha(0.8);
+            } else if (counts.grass <= 3) {
+                ui.picoGuide.setText('ピコ「虫を草から離して！」').setAlpha(0.8);
             } else {
-                bar.setFillStyle(normalColor);
+                ui.picoGuide.setAlpha(0);
             }
-        }
-
-        function tapAdd(type) {
-            if (state !== 'playing') return;
-
-            if (energy < TAP_COST) {
-                sndNoEnergy();
-                // エネルギー不足のフィードバック
-                const txt = sceneRef.add.text(W/2, 50, 'エネルギー不足！', {
-                    fontSize: '18px', fill: '#e74c3c', fontStyle: 'bold',
-                    stroke: '#000', strokeThickness: 2
-                }).setOrigin(0.5);
-                sceneRef.tweens.add({ targets: txt, alpha: 0, y: 30, duration: 500, onComplete: () => txt.destroy() });
-                return;
-            }
-
-            energy -= TAP_COST;
-            sndTap();
-
-            let y, emoji;
-            if (type === 'birds') {
-                birds = Math.min(MAX_POP, birds + TAP_AMOUNT);
-                y = 130; emoji = '🐦';
-            } else if (type === 'bugs') {
-                bugs = Math.min(MAX_POP, bugs + TAP_AMOUNT);
-                y = 310; emoji = '🐛';
-            } else {
-                grass = Math.min(MAX_POP, grass + TAP_AMOUNT);
-                y = 490; emoji = '🌿';
-            }
-
-            // フィードバック
-            const txt = sceneRef.add.text(W/2 + 60, y, `+${TAP_AMOUNT} ${emoji}`, {
-                fontSize: '20px', fill: '#2ecc71', fontStyle: 'bold',
-                stroke: '#000', strokeThickness: 2
-            }).setOrigin(0.5);
-            sceneRef.tweens.add({ targets: txt, alpha: 0, y: y - 30, duration: 400, onComplete: () => txt.destroy() });
-
-            updateBars();
-            updateIcons();
-            ui.energyText.setText(`⚡${Math.floor(energy)}`);
-            ui.energyBar.setScale(energy / MAX_ENERGY, 1);
-        }
-
-        function updateBars() {
-            const barW = 250;
-            ui.grassBar.setDisplaySize(barW * (grass / MAX_POP), 16);
-            ui.bugBar.setDisplaySize(barW * (bugs / MAX_POP), 16);
-            ui.birdBar.setDisplaySize(barW * (birds / MAX_POP), 16);
-            ui.grassNum.setText(Math.floor(grass));
-            ui.bugNum.setText(Math.floor(bugs));
-            ui.birdNum.setText(Math.floor(birds));
-        }
-
-        function updateIcons() {
-            // アイコンの表示/非表示で個体数を視覚化
-            const gShow = Math.floor(grassIcons.length * grass / MAX_POP);
-            const bShow = Math.floor(bugIcons.length * bugs / MAX_POP);
-            const dShow = Math.floor(birdIcons.length * birds / MAX_POP);
-
-            grassIcons.forEach((ic, i) => ic.setAlpha(i < gShow ? 0.5 : 0.05));
-            bugIcons.forEach((ic, i) => ic.setAlpha(i < bShow ? 0.5 : 0.05));
-            birdIcons.forEach((ic, i) => ic.setAlpha(i < dShow ? 0.5 : 0.05));
         }
 
         function update() {
-            // メインupdateでは軽い視覚更新のみ
+            if (state !== 'playing') return;
+
+            // 生き物の自律移動（ゆらゆら）
+            for (const e of entities) {
+                if (e === dragTarget) continue;
+
+                // ランダムウォーク
+                e.vx += Phaser.Math.FloatBetween(-0.05, 0.05);
+                e.vy += Phaser.Math.FloatBetween(-0.05, 0.05);
+                e.vx *= 0.98; e.vy *= 0.98;
+
+                // 虫は草に向かう傾向
+                if (e.type === 'bug' && e.hungry > 100) {
+                    const nearGrass = entities.find(g => g.type === 'grass' && g !== dragTarget);
+                    if (nearGrass) {
+                        const dx = nearGrass.x - e.x, dy = nearGrass.y - e.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > 0) { e.vx += (dx/dist) * 0.1; e.vy += (dy/dist) * 0.1; }
+                    }
+                }
+
+                // 鳥は虫に向かう傾向
+                if (e.type === 'bird' && e.hungry > 80) {
+                    const nearBug = entities.find(b => b.type === 'bug' && b !== dragTarget);
+                    if (nearBug) {
+                        const dx = nearBug.x - e.x, dy = nearBug.y - e.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > 0) { e.vx += (dx/dist) * 0.12; e.vy += (dy/dist) * 0.12; }
+                    }
+                }
+
+                // 速度制限
+                const spd = Math.sqrt(e.vx*e.vx + e.vy*e.vy);
+                const maxSpd = e.type === 'bird' ? 1.5 : e.type === 'bug' ? 1.0 : 0;
+                if (spd > maxSpd) { e.vx *= maxSpd/spd; e.vy *= maxSpd/spd; }
+
+                e.x += e.vx;
+                e.y += e.vy;
+
+                // 壁バウンド
+                if (e.x < 20) { e.x = 20; e.vx *= -1; }
+                if (e.x > W-20) { e.x = W-20; e.vx *= -1; }
+                if (e.y < 70) { e.y = 70; e.vy *= -1; }
+                if (e.y > 630) { e.y = 630; e.vy *= -1; }
+
+                e.sprite.setPosition(e.x, e.y);
+
+                // 空腹の視覚表示（赤くなる）
+                if (e.type !== 'grass') {
+                    const hungerRatio = e.hungry / e.maxHungry;
+                    if (hungerRatio > 0.7) {
+                        e.sprite.setAlpha(0.5 + Math.sin(Date.now() * 0.01) * 0.3);
+                    } else {
+                        e.sprite.setAlpha(1);
+                    }
+                }
+            }
         }
 
         function endGame(scene) {
             state = 'over';
             ecoTimer.remove();
-
-            setGameUIVisible(false);
             sndFail();
 
-            // 崩壊原因
+            setGameUIVisible(false);
+
             let cause = '';
-            if (grass <= 0) cause = '🌿 草が枯れた…';
-            else if (grass >= MAX_POP) cause = '🌿 草が繁茂しすぎた…';
-            else if (bugs <= 0) cause = '🐛 虫が絶滅した…';
-            else if (bugs >= MAX_POP) cause = '🐛 虫が大発生した…';
-            else if (birds <= 0) cause = '🐦 鳥が絶滅した…';
-            else if (birds >= MAX_POP) cause = '🐦 鳥が増えすぎた…';
+            if (counts.grass <= 0) cause = '🌿 草が枯れ果てた…';
+            else if (counts.bug <= 0) cause = '🐛 虫が絶滅した…';
+            else if (counts.bird <= 0) cause = '🐦 鳥が絶滅した…';
 
             const time = Math.floor(survivalTime);
             const isNewBest = time > bestTime;
             if (isNewBest) {
                 bestTime = time;
-                try { localStorage.setItem('eco_best', String(bestTime)); } catch(e) {}
+                try { localStorage.setItem('eco2_best', String(bestTime)); } catch(e) {}
             }
 
-            // ランク
             let rank = 'D';
             if (time >= 120) rank = 'S';
             else if (time >= 90) rank = 'A';
             else if (time >= 60) rank = 'B';
             else if (time >= 30) rank = 'C';
 
-            const rankColors = { D: '#e74c3c', C: '#f39c12', B: '#3498db', A: '#2ecc71', S: '#f1c40f' };
+            const rankColors = { D: '#ff6b9d', C: '#ffe66b', B: '#88ccff', A: '#6bff8e', S: '#9b6dff' };
+
+            // エンティティ消去
+            for (const e of entities) e.sprite.destroy();
+            entities = [];
 
             endObjs = [];
+            endObjs.push(scene.add.rectangle(W/2, H/2, W, H, 0x000000, 0.75));
 
-            const overlay = scene.add.rectangle(W/2, H/2, W, H, 0x000000, 0.75);
-            endObjs.push(overlay);
-
-            const card = scene.add.rectangle(W/2, H/2 - 10, 350, 420, 0x1a2e1a, 0.95);
-            card.setStrokeStyle(2, 0x5a8a3a, 0.6);
+            const card = scene.add.rectangle(W/2, H/2, 340, 400, 0x2a1f4e, 0.95);
+            card.setStrokeStyle(2, PAL.purple, 0.5);
             endObjs.push(card);
 
-            endObjs.push(scene.add.text(W/2, 185, '🌍 生態系崩壊', {
-                fontSize: '28px', fill: '#ecf0f1', fontStyle: 'bold'
+            endObjs.push(scene.add.text(W/2, 195, '🌍 生態系崩壊', {
+                fontSize: '26px', fill: '#fff', fontStyle: 'bold'
             }).setOrigin(0.5));
 
-            endObjs.push(scene.add.text(W/2, 225, cause, {
-                fontSize: '18px', fill: '#e74c3c', fontStyle: 'bold'
+            endObjs.push(scene.add.text(W/2, 230, cause, {
+                fontSize: '16px', fill: '#ff6b9d'
             }).setOrigin(0.5));
 
-            endObjs.push(scene.add.text(W/2, 270, `生存時間`, {
-                fontSize: '14px', fill: '#7f8c8d', fontFamily: 'monospace'
+            endObjs.push(scene.add.text(W/2, 275, 'SURVIVAL', {
+                fontSize: '13px', fill: '#888', fontFamily: 'monospace'
             }).setOrigin(0.5));
 
-            endObjs.push(scene.add.text(W/2, 300, `${time}秒`, {
-                fontSize: '44px', fill: '#ecf0f1', fontStyle: 'bold', fontFamily: 'monospace'
+            endObjs.push(scene.add.text(W/2, 305, `${time}秒`, {
+                fontSize: '42px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5));
 
-            endObjs.push(scene.add.text(W/2, 340, `RANK`, {
-                fontSize: '14px', fill: '#7f8c8d', fontFamily: 'monospace'
+            endObjs.push(scene.add.text(W/2, 345, `RANK`, {
+                fontSize: '13px', fill: '#888', fontFamily: 'monospace'
             }).setOrigin(0.5));
 
-            const rankText = scene.add.text(W/2, 375, rank, {
-                fontSize: '52px', fill: rankColors[rank], fontStyle: 'bold', fontFamily: 'monospace'
-            }).setOrigin(0.5);
-            endObjs.push(rankText);
+            endObjs.push(scene.add.text(W/2, 380, rank, {
+                fontSize: '48px', fill: rankColors[rank], fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5));
 
             if (isNewBest) {
-                const newBest = scene.add.text(W/2, 410, '🎉 NEW BEST!', {
-                    fontSize: '18px', fill: '#f1c40f', fontStyle: 'bold'
+                const nb = scene.add.text(W/2, 415, '🎉 NEW BEST!', {
+                    fontSize: '16px', fill: '#ffe66b', fontStyle: 'bold'
                 }).setOrigin(0.5);
-                scene.tweens.add({ targets: newBest, scale: 1.2, duration: 500, yoyo: true, repeat: -1 });
-                endObjs.push(newBest);
+                scene.tweens.add({ targets: nb, scale: 1.2, duration: 500, yoyo: true, repeat: -1 });
+                endObjs.push(nb);
             }
 
             endObjs.push(scene.add.text(W/2, 435, `BEST: ${bestTime}s`, {
-                fontSize: '14px', fill: '#7f8c8d', fontFamily: 'monospace'
+                fontSize: '13px', fill: '#888', fontFamily: 'monospace'
             }).setOrigin(0.5));
 
-            const btn = scene.add.rectangle(W/2, 480, 180, 50, 0x2ecc71);
-            btn.setStrokeStyle(2, 0xffffff, 0.5);
+            const btn = scene.add.rectangle(W/2, 480, 170, 48, PAL.purple);
+            btn.setStrokeStyle(2, 0xffffff, 0.4);
             btn.setInteractive();
             btn.on('pointerdown', () => resetGame(scene));
             endObjs.push(btn);
 
             endObjs.push(scene.add.text(W/2, 480, '▶ RETRY', {
-                fontSize: '20px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace'
+                fontSize: '18px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5));
         }
 
@@ -515,11 +617,13 @@
             for (const o of endObjs) o.destroy();
             endObjs = [];
             scene.tweens.killAll();
+            counts = { grass: 0, bug: 0, bird: 0 };
 
             state = 'title';
             ui.titleBest.setText(bestTime > 0 ? `BEST: ${bestTime}s` : '');
-            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleBest, ui.titleStart].forEach(o => o.setVisible(true));
+            [ui.startBg, ui.picoChar, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleBest, ui.titleStart].forEach(o => o.setVisible(true));
             scene.tweens.add({ targets: ui.titleStart, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
+            scene.tweens.add({ targets: ui.picoChar, y: 135, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         }
     </script>
 </body>
