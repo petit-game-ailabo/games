@@ -255,7 +255,7 @@
             });
 
             // Powered by
-            this.add.text(W/2, H - 15, 'Powered by Phaser', {
+            ui.poweredBy = this.add.text(W/2, H - 15, 'Powered by Phaser', {
                 fontSize: '11px', fill: '#ffffff'
             }).setOrigin(0.5).setAlpha(0.3);
 
@@ -317,7 +317,7 @@
             state = 'playing';
 
             // タイトル非表示
-            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleStart].forEach(o => o.setVisible(false));
+            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(false));
             scene.tweens.killAll();
 
             // ゲームUI表示
@@ -333,6 +333,17 @@
             defectRate = 0.80; totalEarned = 0;
 
             updateAllUI();
+
+            // 開始ヒント表示（3秒で消える）
+            const hint = scene.add.text(W/2, 300, '🔍 不良品をタップして排除！\n青丸以外が不良品です', {
+                fontSize: '18px', fill: '#ecf0f1', fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 3, align: 'center', lineSpacing: 6
+            }).setOrigin(0.5).setAlpha(0.9);
+            scene.tweens.add({
+                targets: hint, alpha: 0, y: 270,
+                delay: 2000, duration: 1000,
+                onComplete: () => hint.destroy()
+            });
 
             // スキャンラインアニメーション
             scene.tweens.add({
@@ -369,7 +380,8 @@
         }
 
         function spawnProduct(scene) {
-            if (products.length >= 12) return;
+            const maxProducts = 12 + speedLv * 2;
+            if (products.length >= maxProducts) return;
 
             const isDefect = Math.random() < defectRate;
             let color, shape;
@@ -410,6 +422,18 @@
 
             const prod = { container, body, isDefect, tapped: false, shape, baseY: 390 + yOff };
             products.push(prod);
+
+            // 不良品に微妙な揺れアニメーション（視覚的ヒント）
+            if (isDefect) {
+                scene.tweens.add({
+                    targets: body,
+                    angle: { from: -3, to: 3 },
+                    duration: 200 + Phaser.Math.Between(0, 100),
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+            }
         }
 
         function handleTap(scene, ptr) {
@@ -745,23 +769,34 @@
             }).setOrigin(0.5);
             endObjs.push(t3);
 
-            const t4 = scene.add.text(W/2, 345,
+            const t4 = scene.add.text(W/2, 340,
                 `🪙 ${coins} (総獲得 ${totalEarned})`, {
                 fontSize: '16px', fill: '#f1c40f', fontStyle: 'bold',
                 align: 'center'
             }).setOrigin(0.5);
             endObjs.push(t4);
 
+            // セパレーター
+            const sep1 = scene.add.graphics();
+            sep1.lineStyle(1, 0x3498db, 0.3);
+            sep1.lineBetween(W/2 - 140, 362, W/2 + 140, 362);
+            endObjs.push(sep1);
+
             const totalProcessed = correctTaps + wrongTaps + missedDefects;
-            // 良品通過数 = 総獲得コイン中の良品分を推定（概算）
-            const t5 = scene.add.text(W/2, 375,
+            const t5 = scene.add.text(W/2, 390,
                 `📊 処理数 ${totalProcessed}　正解 ${correctTaps}\nミス ${wrongTaps}　見逃し ${missedDefects}\n正確率 ${accuracy}%　最大コンボ ${maxCombo}`, {
                 fontSize: '13px', fill: '#95a5a6', fontStyle: 'bold',
                 align: 'center', lineSpacing: 6
             }).setOrigin(0.5);
             endObjs.push(t5);
 
-            const t6 = scene.add.text(W/2, 430,
+            // セパレーター
+            const sep2 = scene.add.graphics();
+            sep2.lineStyle(1, 0x3498db, 0.3);
+            sep2.lineBetween(W/2 - 140, 430, W/2 + 140, 430);
+            endObjs.push(sep2);
+
+            const t6 = scene.add.text(W/2, 448,
                 `不良率 ${finalPct}%　⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
                 fontSize: '13px', fill: '#7f8c8d',
                 align: 'center'
@@ -769,13 +804,13 @@
             endObjs.push(t6);
 
             // 再プレイボタン
-            const btn = scene.add.rectangle(W/2, 485, 180, 55, 0x2ecc71);
+            const btn = scene.add.rectangle(W/2, 500, 180, 55, 0x2ecc71);
             btn.setStrokeStyle(2, 0xffffff, 0.5);
             btn.setInteractive();
             btn.on('pointerdown', () => resetGame(scene));
             endObjs.push(btn);
 
-            const btnTxt = scene.add.text(W/2, 485, '▶ RETRY', {
+            const btnTxt = scene.add.text(W/2, 500, '▶ RETRY', {
                 fontSize: '22px', fill: '#ffffff', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5);
             endObjs.push(btnTxt);
@@ -786,7 +821,7 @@
             endObjs = [];
 
             state = 'title';
-            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleStart].forEach(o => o.setVisible(true));
+            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(true));
             scene.tweens.add({
                 targets: ui.titleStart, alpha: 0.3,
                 duration: 800, yoyo: true, repeat: -1
