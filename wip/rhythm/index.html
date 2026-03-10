@@ -67,6 +67,7 @@ let feverTimer = 0;       // フィーバー残りms
 const FEVER_DURATION = 8000; // 8秒
 const FEVER_THRESHOLD = 80;  // 発動に必要なゲージ量
 let feverParticles = [];
+let hitParticles = [];   // 判定時のパーティクル
 
 // メロディスケジューラ
 let nextMelodyBeat = 0;
@@ -83,7 +84,7 @@ function initAudio() {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 }
 
-function playTone(freq, dur, vol, type) {
+function playTone(freq, dur, vol, type, harmonic = false) {
     if (!audioCtx) return;
     const now = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
@@ -94,13 +95,26 @@ function playTone(freq, dur, vol, type) {
     g.gain.setValueAtTime(vol, now);
     g.gain.exponentialRampToValueAtTime(0.001, now + dur);
     osc.start(now); osc.stop(now + dur);
+    
+    // ハーモニクス追加（豊かな音）
+    if (harmonic) {
+        const osc2 = audioCtx.createOscillator();
+        const g2 = audioCtx.createGain();
+        osc2.connect(g2); g2.connect(audioCtx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(freq * 2, now);
+        g2.gain.setValueAtTime(vol * 0.3, now);
+        g2.gain.exponentialRampToValueAtTime(0.001, now + dur * 0.7);
+        osc2.start(now); osc2.stop(now + dur);
+    }
 }
 
 function playNote(lane, type) {
     const freqs = [261.6, 329.6, 392.0, 523.3];
     const vol = type === 'perfect' ? 0.35 : type === 'great' ? 0.25 : 0.15;
     const t = type === 'perfect' ? 'sine' : 'triangle';
-    playTone(freqs[lane], 0.25, vol, t);
+    const harmonic = type === 'perfect' || type === 'great';
+    playTone(freqs[lane], 0.25, vol, t, harmonic);
 }
 
 function playMiss() { playTone(80, 0.12, 0.1, 'sawtooth'); }
@@ -264,18 +278,18 @@ function generateSongPattern() {
         [{ b:0, l:0 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3.5, l:1 }],
     ];
 
-    // 曲構成（64ビート）
+    // 曲構成（68ビート - 最初の4ビートは空白）
     const structure = [
-        // イントロ: ゆったり
-        { p:6, s:0 },  { p:0, s:4 },
+        // イントロ: 4ビート空白後、ゆったり開始
+        { p:6, s:4 },  { p:0, s:8 },
         // Aメロ
-        { p:0, s:8 },  { p:1, s:12 },  { p:0, s:16 }, { p:4, s:20 },
+        { p:0, s:12 }, { p:1, s:16 }, { p:0, s:20 }, { p:4, s:24 },
         // Bメロ
-        { p:2, s:24 }, { p:5, s:28 },  { p:7, s:32 }, { p:1, s:36 },
+        { p:2, s:28 }, { p:5, s:32 }, { p:7, s:36 }, { p:1, s:40 },
         // サビ
-        { p:3, s:40 }, { p:5, s:44 },  { p:7, s:48 }, { p:4, s:52 },
+        { p:3, s:44 }, { p:5, s:48 }, { p:7, s:52 }, { p:4, s:56 },
         // アウトロ
-        { p:6, s:56 }, { p:0, s:60 },
+        { p:6, s:60 }, { p:0, s:64 },
     ];
 
     for (const sec of structure) {
@@ -376,6 +390,7 @@ function startPlaying() {
     judgmentText = null; noteIndex = 0;
     feverGauge = 0; feverActive = false; feverTimer = 0;
     feverParticles = [];
+    hitParticles = [];
     nextDrumStep = 0; nextMelodyBeat = 0;
     songPattern = generateSongPattern();
     melodyPattern = generateMelody();
@@ -450,6 +465,37 @@ function updateFever() {
     }
 }
 
+// ── ヒットパーティクル ──
+function updateHitParticles() {
+    for (let i = hitParticles.length - 1; i >= 0; i--) {
+        const p = hitParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.2; // 重力
+        p.life--;
+        if (p.life <= 0) hitParticles.splice(i, 1);
+    }
+}
+
+function addHitParticles(lane, color, isPerfect) {
+    const cx = lane * LANE_W + LANE_W / 2;
+    const count = isPerfect ? 15 : 8;
+    for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
+        const speed = isPerfect ? 3 + Math.random() * 3 : 2 + Math.random() * 2;
+        hitParticles.push({
+            x: cx,
+            y: JUDGE_Y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - (isPerfect ? 3 : 1.5),
+            life: isPerfect ? 35 : 25,
+            maxLife: isPerfect ? 35 : 25,
+            color: color,
+            size: isPerfect ? 3 + Math.random() * 2 : 2 + Math.random() * 1.5,
+        });
+    }
+}
+
 function activateFever() {
     if (feverActive) return;
     feverActive = true;
@@ -496,6 +542,7 @@ function handleTap(tx, ty) {
         feverGauge = Math.min(100, feverGauge + 8);
         showJudgment(feverActive ? '🔥 PERFECT!' : 'PERFECT!', '#ffe66b');
         addHitEffect(closest.lane, '#ffe66b', true);
+        addHitParticles(closest.lane, '#ffe66b', true);
         playNote(lane, 'perfect');
     } else if (closestDiff <= GREAT_MS) {
         closest.hit = true; combo++; greats++;
@@ -503,6 +550,7 @@ function handleTap(tx, ty) {
         feverGauge = Math.min(100, feverGauge + 5);
         showJudgment(feverActive ? '🔥 GREAT!' : 'GREAT!', '#6bddff');
         addHitEffect(closest.lane, '#6bddff', false);
+        addHitParticles(closest.lane, '#6bddff', false);
         playNote(lane, 'great');
     } else {
         closest.hit = true; combo++; goods++;
@@ -510,6 +558,7 @@ function handleTap(tx, ty) {
         feverGauge = Math.min(100, feverGauge + 2);
         showJudgment('GOOD', '#6bff8e');
         addHitEffect(closest.lane, '#6bff8e', false);
+        addHitParticles(closest.lane, '#6bff8e', false);
         playNote(lane, 'good');
     }
 
@@ -644,6 +693,17 @@ function drawGame() {
     }
     ctx.globalAlpha = 1;
 
+    // ヒットパーティクル
+    for (const p of hitParticles) {
+        ctx.globalAlpha = p.life / p.maxLife * 0.8;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 5;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+
     // ノーツ
     for (const n of notes) {
         if (n.hit || n.missed) continue;
@@ -665,9 +725,13 @@ function drawGame() {
 
         // フィーバー中はノーツが光る
         if (feverActive) {
-            ctx.strokeStyle = '#ffe66b'; ctx.lineWidth = 1;
-            ctx.globalAlpha = 0.4 + Math.sin(performance.now()/100) * 0.2;
-            ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R + 5, 0, Math.PI*2); ctx.stroke();
+            const pulse = Math.sin(performance.now() / 100) * 0.3 + 0.5;
+            ctx.strokeStyle = '#ffe66b'; ctx.lineWidth = 2;
+            ctx.globalAlpha = pulse;
+            ctx.shadowColor = '#ffe66b'; ctx.shadowBlur = 15;
+            ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R + 6, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx, n.y, NOTE_R + 10, 0, Math.PI*2); ctx.stroke();
+            ctx.shadowBlur = 0;
             ctx.globalAlpha = 1;
         }
     }
@@ -676,12 +740,15 @@ function drawGame() {
     for (let i = effects.length - 1; i >= 0; i--) {
         const e = effects[i];
         const prog = 1 - e.timer / e.maxTimer;
+        const alpha = (1 - prog) * 0.9;
         ctx.strokeStyle = e.color; ctx.lineWidth = e.isPerfect ? 3 : 2;
-        ctx.globalAlpha = 1 - prog;
-        ctx.beginPath(); ctx.arc(e.x, e.y, NOTE_R + prog * (e.isPerfect ? 40 : 28), 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = alpha;
+        ctx.shadowColor = e.color; ctx.shadowBlur = e.isPerfect ? 12 : 6;
+        ctx.beginPath(); ctx.arc(e.x, e.y, NOTE_R + prog * (e.isPerfect ? 45 : 30), 0, Math.PI*2); ctx.stroke();
         if (e.isPerfect) {
-            ctx.beginPath(); ctx.arc(e.x, e.y, NOTE_R + prog * 22, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(e.x, e.y, NOTE_R + prog * 25, 0, Math.PI*2); ctx.stroke();
         }
+        ctx.shadowBlur = 0;
         ctx.globalAlpha = 1;
         if (--e.timer <= 0) effects.splice(i, 1);
     }
@@ -812,7 +879,7 @@ function gameLoop() {
     if (state === 'title') drawTitle();
     else if (state === 'countdown') { updateCountdown(); drawCountdown(); }
     else if (state === 'playing') {
-        spawnNotes(); updateNotes(); updateFever();
+        spawnNotes(); updateNotes(); updateFever(); updateHitParticles();
         scheduleDrums(); scheduleMelody();
         drawGame();
     }
