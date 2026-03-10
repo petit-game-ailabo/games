@@ -41,6 +41,8 @@
         let spawnTimer, countdownTimer;
         let defectRate = 0.80;
         let combo = 0;
+        let maxCombo = 0;
+        let correctTaps = 0, wrongTaps = 0, missedDefects = 0;
 
         // レベル
         let speedLv = 0, spawnLv = 0, qualityLv = 0;
@@ -50,8 +52,8 @@
         const Q_COSTS = [25, 40, 60, 85, 110, 140];
         const Q_RATES = [0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20];
 
-        // 速度UP: max Lv3, コスト段階制
-        const SPEED_COSTS = [50, 75, 100];
+        // 速度UP: max Lv3, コスト段階制（速度増加を緩やかに）
+        const SPEED_COSTS = [40, 65, 90];
         const SPEED_MAX = 3;
         // 生産UP: max Lv5, コスト段階制
         const SPAWN_COSTS = [30, 45, 60, 80, 100];
@@ -179,7 +181,14 @@
             ui.rateText = this.add.text(W - 25, 52, '不良率 80%', {
                 fontSize: '16px', fill: '#e74c3c', fontFamily: 'monospace', fontStyle: 'bold'
             }).setOrigin(1, 0);
-            ui.comboText = this.add.text(W/2, 85, '', {
+
+            // タイムバー（残り時間の視覚化）
+            ui.timeBarBg = this.add.rectangle(W/2, 88, W - 40, 6, 0x2c3e50);
+            ui.timeBar = this.add.rectangle(W/2, 88, W - 40, 6, 0x3498db);
+            ui.timeBarBg._isTopPanel = true;
+            ui.timeBar._isTopPanel = true;
+
+            ui.comboText = this.add.text(W/2, 100, '', {
                 fontSize: '16px', fill: '#f39c12', fontStyle: 'bold'
             }).setOrigin(0.5).setAlpha(0);
 
@@ -303,7 +312,8 @@
             // リセット
             for (const p of products) p.container.destroy();
             products = [];
-            score = 0; coins = 0; timeLeft = 60; combo = 0;
+            score = 0; coins = 0; timeLeft = 60; combo = 0; maxCombo = 0;
+            correctTaps = 0; wrongTaps = 0; missedDefects = 0;
             beltSpeed = 2.5; spawnDelay = 1200;
             speedLv = 0; spawnLv = 0; qualityLv = 0;
             defectRate = 0.80; totalEarned = 0;
@@ -390,7 +400,9 @@
                     p.tapped = true;
                     if (p.isDefect) {
                         // 正解！不良品排除
+                        correctTaps++;
                         combo++;
+                        if (combo > maxCombo) maxCombo = combo;
                         const comboMult = Math.min(combo, 5);
                         const sc = R.defectTap.score + (comboMult - 1) * 2;
                         const co = R.defectTap.coins + (comboMult - 1);
@@ -401,6 +413,7 @@
                         showTapFeedback(scene, p.container.x, p.container.y, true, co, combo);
                     } else {
                         // ミス！良品を排除
+                        wrongTaps++;
                         combo = 0;
                         score = Math.max(0, score + R.goodTap.score);
                         coins = Math.max(0, coins + R.goodTap.coins);
@@ -491,11 +504,18 @@
                 if (p.container.x < -50) {
                     if (p.isDefect && !p.tapped) {
                         // 不良品見逃し
+                        missedDefects++;
                         combo = 0;
                         score = Math.max(0, score + R.defectMiss.score);
                         coins = Math.max(0, coins + R.defectMiss.coins);
                         sndBad();
                         showEdgeFeedback(sceneRef, p.container.y, false, R.defectMiss.coins);
+                        // 画面フラッシュ（見逃し警告）
+                        const flash = sceneRef.add.rectangle(W/2, H/2, W, H, 0xe74c3c, 0.15);
+                        sceneRef.tweens.add({
+                            targets: flash, alpha: 0, duration: 300,
+                            onComplete: () => flash.destroy()
+                        });
                     } else if (!p.isDefect && !p.tapped) {
                         // 良品通過（正解）
                         score += R.goodPass.score;
@@ -531,8 +551,20 @@
         }
         function updateTimeUI() {
             ui.timeText.setText(`${timeLeft}s`);
-            if (timeLeft <= 10) ui.timeText.setFill('#e74c3c');
-            else ui.timeText.setFill('#3498db');
+            const ratio = timeLeft / 60;
+            const barW = (W - 40) * ratio;
+            ui.timeBar.setDisplaySize(barW, 6);
+            ui.timeBar.setX(20 + barW / 2);
+            if (timeLeft <= 10) {
+                ui.timeText.setFill('#e74c3c');
+                ui.timeBar.setFillStyle(0xe74c3c);
+            } else if (timeLeft <= 20) {
+                ui.timeText.setFill('#f39c12');
+                ui.timeBar.setFillStyle(0xf39c12);
+            } else {
+                ui.timeText.setFill('#3498db');
+                ui.timeBar.setFillStyle(0x3498db);
+            }
         }
         function updateRateUI() {
             const pct = Math.round(defectRate * 100);
@@ -572,7 +604,7 @@
 
             if (type === 'speed' && speedLv < SPEED_MAX && coins >= SPEED_COSTS[speedLv]) {
                 coins -= SPEED_COSTS[speedLv]; speedLv++;
-                beltSpeed += 0.8;
+                beltSpeed += 0.6;
                 ok = true;
             } else if (type === 'spawn' && spawnLv < SPAWN_MAX && coins >= SPAWN_COSTS[spawnLv]) {
                 coins -= SPAWN_COSTS[spawnLv]; spawnLv++;
@@ -603,8 +635,29 @@
                 updateScoreUI();
                 updateLevelTexts();
                 updateButtonStates();
+                // ボタンタップフィードバック
+                const b = ui.btns[type];
+                scene.tweens.add({
+                    targets: b.bg, scaleX: 0.9, scaleY: 0.9,
+                    duration: 80, yoyo: true, ease: 'Sine.easeInOut'
+                });
+                // アップグレード成功テキスト
+                const lvTxt = scene.add.text(W/2, 560, `✨ ${type === 'speed' ? '速度' : type === 'spawn' ? '生産' : '品質'} UP!`, {
+                    fontSize: '22px', fill: '#2ecc71', fontStyle: 'bold',
+                    stroke: '#000', strokeThickness: 2
+                }).setOrigin(0.5);
+                scene.tweens.add({
+                    targets: lvTxt, y: 530, alpha: 0,
+                    duration: 700, onComplete: () => lvTxt.destroy()
+                });
             } else {
                 snd(120, 'sawtooth', 0.15, 0.1);
+                // 購入不可フィードバック
+                const b = ui.btns[type];
+                scene.tweens.add({
+                    targets: b.bg, x: b.bg.x + 4, duration: 40,
+                    yoyo: true, repeat: 2
+                });
             }
         }
 
@@ -626,43 +679,76 @@
             endObjs.push(overlay);
 
             // 結果カード
-            const card = scene.add.rectangle(W/2, H/2 - 20, 340, 380, 0x16213e, 0.95);
+            const card = scene.add.rectangle(W/2, H/2, 340, 440, 0x16213e, 0.95);
             card.setStrokeStyle(2, 0x3498db, 0.6);
             endObjs.push(card);
 
             const finalPct = Math.round(defectRate * 100);
+            const totalActions = correctTaps + wrongTaps + missedDefects;
+            const accuracy = totalActions > 0 ? Math.round((correctTaps / totalActions) * 100) : 0;
 
-            const t1 = scene.add.text(W/2, 200, '🏭 GAME OVER', {
+            // ランク判定
+            let rank = 'D', rankColor = '#7f8c8d';
+            if (score >= 500) { rank = 'S'; rankColor = '#f1c40f'; }
+            else if (score >= 350) { rank = 'A'; rankColor = '#2ecc71'; }
+            else if (score >= 200) { rank = 'B'; rankColor = '#3498db'; }
+            else if (score >= 100) { rank = 'C'; rankColor = '#f39c12'; }
+
+            const t1 = scene.add.text(W/2, 180, '🏭 GAME OVER', {
                 fontSize: '30px', fill: '#ecf0f1', fontStyle: 'bold'
             }).setOrigin(0.5);
             endObjs.push(t1);
 
-            const t2 = scene.add.text(W/2, 270, `SCORE`, {
-                fontSize: '16px', fill: '#7f8c8d', fontFamily: 'monospace'
+            const tRank = scene.add.text(W/2, 225, `RANK ${rank}`, {
+                fontSize: '28px', fill: rankColor, fontStyle: 'bold', fontFamily: 'monospace',
+                stroke: '#000', strokeThickness: 2
+            }).setOrigin(0.5);
+            endObjs.push(tRank);
+            // ランクアニメ
+            scene.tweens.add({
+                targets: tRank, scaleX: 1.3, scaleY: 1.3,
+                duration: 300, yoyo: true, ease: 'Back.easeOut'
+            });
+
+            const t2 = scene.add.text(W/2, 265, `SCORE`, {
+                fontSize: '14px', fill: '#7f8c8d', fontFamily: 'monospace'
             }).setOrigin(0.5);
             endObjs.push(t2);
 
-            const t3 = scene.add.text(W/2, 300, `${score}`, {
-                fontSize: '48px', fill: '#3498db', fontStyle: 'bold', fontFamily: 'monospace'
+            const t3 = scene.add.text(W/2, 295, `${score}`, {
+                fontSize: '44px', fill: '#3498db', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5);
             endObjs.push(t3);
 
-            const totalSpent = totalEarned - coins;
-            const t4 = scene.add.text(W/2, 355,
-                `🪙 ${coins} (総獲得 ${totalEarned})　不良率 ${finalPct}%\n⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
-                fontSize: '16px', fill: '#bdc3c7', fontStyle: 'bold',
-                align: 'center', lineSpacing: 8
+            const t4 = scene.add.text(W/2, 345,
+                `🪙 ${coins} (総獲得 ${totalEarned})`, {
+                fontSize: '16px', fill: '#f1c40f', fontStyle: 'bold',
+                align: 'center'
             }).setOrigin(0.5);
             endObjs.push(t4);
 
+            const t5 = scene.add.text(W/2, 380,
+                `正解 ${correctTaps}　ミス ${wrongTaps}　見逃し ${missedDefects}\n正確率 ${accuracy}%　最大コンボ ${maxCombo}`, {
+                fontSize: '13px', fill: '#95a5a6', fontStyle: 'bold',
+                align: 'center', lineSpacing: 6
+            }).setOrigin(0.5);
+            endObjs.push(t5);
+
+            const t6 = scene.add.text(W/2, 420,
+                `不良率 ${finalPct}%　⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
+                fontSize: '13px', fill: '#7f8c8d',
+                align: 'center'
+            }).setOrigin(0.5);
+            endObjs.push(t6);
+
             // 再プレイボタン
-            const btn = scene.add.rectangle(W/2, 440, 180, 55, 0x2ecc71);
+            const btn = scene.add.rectangle(W/2, 475, 180, 55, 0x2ecc71);
             btn.setStrokeStyle(2, 0xffffff, 0.5);
             btn.setInteractive();
             btn.on('pointerdown', () => resetGame(scene));
             endObjs.push(btn);
 
-            const btnTxt = scene.add.text(W/2, 440, '▶ RETRY', {
+            const btnTxt = scene.add.text(W/2, 475, '▶ RETRY', {
                 fontSize: '22px', fill: '#ffffff', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5);
             endObjs.push(btnTxt);
