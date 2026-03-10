@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>品質管理 - 今日のミニゲーム</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #0a0a12;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <script>
+        const W = 400, H = 700;
+        const config = {
+            type: Phaser.AUTO,
+            width: W, height: H,
+            parent: 'game-container',
+            backgroundColor: '#1a1a2e',
+            scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+            scene: { preload, create, update }
+        };
+        const game = new Phaser.Game(config);
+
+        // === 状態 ===
+        let state = 'title'; // title | playing | over
+        let score = 0, coins = 0, timeLeft = 60;
+        let products = [];
+        let beltDots = [];
+        let beltSpeed = 2.5;
+        let spawnDelay = 1200;
+        let spawnTimer, countdownTimer;
+        let defectRate = 0.80;
+        let combo = 0;
+        let maxCombo = 0;
+        let correctTaps = 0, wrongTaps = 0, missedDefects = 0;
+        let highScore = parseInt(localStorage.getItem('qc_highscore') || '0');
+
+        // レベル
+        let speedLv = 0, spawnLv = 0, qualityLv = 0;
+        let totalEarned = 0; // 総獲得コイン追跡
+
+        // 品質改善テーブル（初期80%、-10%ずつ）
+        const Q_COSTS = [25, 40, 60, 85, 110, 140];
+        const Q_RATES = [0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20];
+
+        // 速度UP: max Lv3, コスト段階制（速度増加を緩やかに）
+        const SPEED_COSTS = [40, 65, 90];
+        const SPEED_MAX = 3;
+        // 生産UP: max Lv5, コスト段階制
+        const SPAWN_COSTS = [30, 45, 60, 80, 100];
+        const SPAWN_MAX = 5;
+
+        // コイン報酬
+        const R = {
+            defectTap:   { score: 10, coins: 8 },
+            goodPass:    { score: 15, coins: 12 },
+            defectMiss:  { score: -8, coins: -5 },
+            goodTap:     { score: -5, coins: -3 },
+        };
+
+        // UI参照
+        let ui = {};
+        let endObjs = [];
+        let sceneRef;
+
+        // 良品
+        const GOOD = { color: 0x4a90d9, shape: 'circle', label: '青丸' };
+        // 不良品パターン
+        const DEFECTS = [
+            { color: 0xe74c3c, shape: 'circle' },
+            { color: 0x2ecc71, shape: 'circle' },
+            { color: 0xf39c12, shape: 'circle' },
+            { color: 0x4a90d9, shape: 'square' },
+            { color: 0x4a90d9, shape: 'triangle' },
+            { color: 0x9b59b6, shape: 'circle' },
+        ];
+
+        // === 音 ===
+        const actx = new (window.AudioContext || window.webkitAudioContext)();
+        function snd(freq, type='sine', dur=0.1, vol=0.25) {
+            const o = actx.createOscillator(), g = actx.createGain();
+            o.connect(g); g.connect(actx.destination);
+            o.frequency.value = freq; o.type = type;
+            g.gain.setValueAtTime(vol, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + dur);
+            o.start(); o.stop(actx.currentTime + dur);
+        }
+        function sndGood() { snd(523, 'sine', 0.08); setTimeout(() => snd(659, 'sine', 0.08), 60); }
+        function sndBad() { snd(180, 'square', 0.2, 0.15); }
+        function sndPass() { snd(440, 'sine', 0.04, 0.12); }
+        function sndSpawn() { snd(330, 'sine', 0.03, 0.06); }
+        function sndWarning() { snd(260, 'triangle', 0.08, 0.1); }
+        function sndUpgrade() { snd(880, 'square', 0.05); setTimeout(() => snd(1100, 'square', 0.05), 50); setTimeout(() => snd(1320, 'square', 0.1), 100); }
+        function sndCombo() { snd(700 + combo * 50, 'sine', 0.06, 0.2); }
+
+        function preload() {}
+
+        function create() {
+            sceneRef = this;
+
+            // === 背景 ===
+            // 工場の壁（タイル風グリッド）
+            const wallGfx = this.add.graphics();
+            wallGfx.fillStyle(0x16213e, 1);
+            wallGfx.fillRect(0, 0, W, H);
+            // 微妙なグリッドライン
+            wallGfx.lineStyle(1, 0x1a2744, 0.5);
+            for (let y = 0; y < H; y += 40) wallGfx.lineBetween(0, y, W, y);
+            for (let x = 0; x < W; x += 40) wallGfx.lineBetween(x, 0, x, H);
+
+            // 天井のライト風グラデーション
+            const light = this.add.graphics();
+            light.fillStyle(0x3498db, 0.06);
+            light.fillCircle(200, 0, 300);
+
+            // === ベルトコンベアエリア ===
+            const BELT_Y = 390, BELT_H = 90;
+
+            // ベルトの溝（暗い背景）
+            this.add.rectangle(W/2, BELT_Y, W, BELT_H + 20, 0x0d1117);
+            // ベルト本体
+            this.add.rectangle(W/2, BELT_Y, W - 20, BELT_H, 0x2c3e50);
+            // ベルト表面のメタリック感
+            this.add.rectangle(W/2, BELT_Y - BELT_H/2 + 4, W - 20, 8, 0x34495e);
+            this.add.rectangle(W/2, BELT_Y + BELT_H/2 - 4, W - 20, 8, 0x1a252f);
+
+            // 動くドット（ベルトのリベット）
+            for (let i = 0; i < 16; i++) {
+                const dot = this.add.circle(i * 30, BELT_Y - 20, 3, 0x4a6274);
+                beltDots.push(dot);
+                const dot2 = this.add.circle(i * 30 + 15, BELT_Y + 20, 3, 0x4a6274);
+                beltDots.push(dot2);
+            }
+
+            // ローラー（サイド）
+            for (const x of [12, W - 12]) {
+                this.add.circle(x, BELT_Y, 42, 0x1a252f);
+                this.add.circle(x, BELT_Y, 36, 0x2c3e50);
+                this.add.circle(x, BELT_Y, 28, 0x34495e);
+                this.add.circle(x, BELT_Y, 6, 0x4a6274);
+            }
+
+            // 金属フレーム
+            const frame = this.add.graphics();
+            frame.lineStyle(2, 0x5a7a8a, 0.8);
+            frame.strokeRect(10, BELT_Y - BELT_H/2 - 10, W - 20, BELT_H + 20);
+
+            // 支柱（4本）
+            for (const x of [20, 50, W - 20, W - 50]) {
+                this.add.rectangle(x, BELT_Y + BELT_H/2 + 30, 6, 50, 0x34495e);
+            }
+
+            // === 検査ゾーンマーカー ===
+            const zoneGfx = this.add.graphics();
+            zoneGfx.lineStyle(2, 0xe74c3c, 0.3);
+            zoneGfx.strokeRect(30, BELT_Y - 50, W - 60, 100);
+            this.add.text(W/2, BELT_Y - 55, '▼ 検査エリア ▼', {
+                fontSize: '13px', fill: '#e74c3c', fontStyle: 'bold'
+            }).setOrigin(0.5).setAlpha(0.5);
+
+            // === UI上部パネル ===
+            const topPanel = this.add.rectangle(W/2, 45, W - 20, 70, 0x0d1117, 0.8);
+            topPanel.setStrokeStyle(1, 0x3498db, 0.3);
+
+            ui.scoreText = this.add.text(25, 22, 'SCORE  0', {
+                fontSize: '22px', fill: '#ecf0f1', fontFamily: 'monospace', fontStyle: 'bold'
+            });
+            ui.coinText = this.add.text(25, 50, '🪙 0', {
+                fontSize: '20px', fill: '#f1c40f', fontFamily: 'monospace', fontStyle: 'bold'
+            });
+            ui.timeText = this.add.text(W - 25, 22, '60s', {
+                fontSize: '26px', fill: '#3498db', fontFamily: 'monospace', fontStyle: 'bold'
+            }).setOrigin(1, 0);
+            ui.rateText = this.add.text(W - 25, 52, '不良率 80%', {
+                fontSize: '16px', fill: '#e74c3c', fontFamily: 'monospace', fontStyle: 'bold'
+            }).setOrigin(1, 0);
+
+            // タイムバー（残り時間の視覚化）
+            ui.timeBarBg = this.add.rectangle(W/2, 88, W - 40, 6, 0x2c3e50);
+            ui.timeBar = this.add.rectangle(W/2, 88, W - 40, 6, 0x3498db);
+            ui.timeBarBg._isTopPanel = true;
+            ui.timeBar._isTopPanel = true;
+
+            ui.comboText = this.add.text(W/2, 100, '', {
+                fontSize: '16px', fill: '#f39c12', fontStyle: 'bold'
+            }).setOrigin(0.5).setAlpha(0);
+
+            // 上部パネル非表示（ゲーム開始まで）
+            [topPanel, ui.scoreText, ui.coinText, ui.timeText, ui.rateText, ui.comboText].forEach(o => {
+                o.setVisible(false);
+                o._isTopPanel = true;
+            });
+            ui.topPanel = topPanel;
+
+            // === 良品サンプル（ゲーム中のみ表示） ===
+            ui.sampleObjs = [];
+            const sampleBg = this.add.rectangle(W/2, 150, 200, 65, 0x0d1117, 0.6);
+            sampleBg.setStrokeStyle(2, 0x3498db, 0.4);
+            ui.sampleObjs.push(sampleBg);
+            const sampleLabel = this.add.text(W/2, 125, '良品 ✓', { fontSize: '14px', fill: '#3498db', fontStyle: 'bold' }).setOrigin(0.5);
+            ui.sampleObjs.push(sampleLabel);
+            const sampleCircle = this.add.circle(W/2 - 30, 155, 16, GOOD.color).setStrokeStyle(2, 0x6bb5e0);
+            ui.sampleObjs.push(sampleCircle);
+            const sampleHint = this.add.text(W/2 + 15, 155, '← これ以外をタップ', {
+                fontSize: '11px', fill: '#7f8c8d'
+            }).setOrigin(0, 0.5);
+            ui.sampleObjs.push(sampleHint);
+            ui.sampleObjs.forEach(o => o.setVisible(false));
+
+            // === 検査ゾーン スキャンライン ===
+            ui.scanLine = this.add.rectangle(W/2, BELT_Y - 45, W - 64, 2, 0x3498db, 0.6);
+            ui.scanLine.setVisible(false);
+
+            // === コイン表示（中段） ===
+            ui.bigCoin = this.add.text(W/2, 510, '🪙 0', {
+                fontSize: '32px', fill: '#f1c40f', fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 3
+            }).setOrigin(0.5);
+            ui.bigCoin.setVisible(false);
+
+            // === アップグレードボタン ===
+            createUpgradeButtons(this);
+
+            // === スタート画面（最前面） ===
+            ui.startBg = this.add.rectangle(W/2, H/2, W, H, 0x16213e);
+
+            // タイトルロゴ
+            ui.titleIcon = this.add.text(W/2, 200, '🏭', { fontSize: '80px' }).setOrigin(0.5);
+            ui.titleText = this.add.text(W/2, 300, '品質管理ゲーム', {
+                fontSize: '36px', fill: '#ecf0f1', fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 4
+            }).setOrigin(0.5);
+            ui.titleSub = this.add.text(W/2, 350, 'QUALITY CONTROL', {
+                fontSize: '14px', fill: '#3498db', fontFamily: 'monospace', letterSpacing: 8
+            }).setOrigin(0.5);
+            ui.titleDesc = this.add.text(W/2, 420,
+                '不良品をタップして排除しよう\nコインで工場をアップグレード\n品質を改善して利益を最大化！', {
+                fontSize: '16px', fill: '#bdc3c7', align: 'center', lineSpacing: 8
+            }).setOrigin(0.5);
+            ui.titleHigh = this.add.text(W/2, 490, highScore > 0 ? `🏆 BEST: ${highScore}` : '', {
+                fontSize: '16px', fill: '#f1c40f', fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+            ui.titleStart = this.add.text(W/2, 540, '▶ TAP TO START', {
+                fontSize: '22px', fill: '#3498db', fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+
+            // 点滅
+            this.tweens.add({
+                targets: ui.titleStart, alpha: 0.3,
+                duration: 800, yoyo: true, repeat: -1
+            });
+            // 工場アイコン浮遊アニメ
+            this.tweens.add({
+                targets: ui.titleIcon, y: 190,
+                duration: 1500, yoyo: true, repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+
+            // Powered by
+            ui.poweredBy = this.add.text(W/2, H - 15, 'Powered by Phaser', {
+                fontSize: '11px', fill: '#ffffff'
+            }).setOrigin(0.5).setAlpha(0.3);
+
+            // === タップハンドラ ===
+            this.input.on('pointerdown', (ptr) => {
+                if (state === 'title') startGame(this);
+                else if (state === 'playing') handleTap(this, ptr);
+            });
+        }
+
+        function createUpgradeButtons(scene) {
+            const btnY = 620, btnW = 115, btnH = 65, gap = 5;
+            const xs = [btnW/2 + gap + 5, W/2, W - btnW/2 - gap - 5];
+            const icons = ['⚡', '⏩', '🔧'];
+            const labels = ['速度UP', '生産UP', '品質UP'];
+            const keys = ['speed', 'spawn', 'quality'];
+            const costs = [String(SPEED_COSTS[0]), String(SPAWN_COSTS[0]), String(Q_COSTS[0])];
+
+            ui.btns = {};
+            keys.forEach((key, i) => {
+                const bg = scene.add.rectangle(xs[i], btnY, btnW, btnH, 0x0d1117, 0.9);
+                bg.setStrokeStyle(2, 0x3498db, 0.5);
+                bg.setInteractive();
+                bg.on('pointerdown', () => buyUpgrade(scene, key));
+
+                const icon = scene.add.text(xs[i], btnY - 14, icons[i], { fontSize: '24px' }).setOrigin(0.5);
+                const label = scene.add.text(xs[i], btnY + 8, labels[i], {
+                    fontSize: '11px', fill: '#bdc3c7', fontStyle: 'bold'
+                }).setOrigin(0.5);
+                const cost = scene.add.text(xs[i], btnY + 24, `${costs[i]}c`, {
+                    fontSize: '14px', fill: '#f1c40f', fontStyle: 'bold'
+                }).setOrigin(0.5);
+                const lv = scene.add.text(xs[i] + btnW/2 - 5, btnY - btnH/2 + 5, 'Lv0', {
+                    fontSize: '10px', fill: '#3498db', fontStyle: 'bold'
+                }).setOrigin(1, 0);
+
+                ui.btns[key] = { bg, icon, label, cost, lv };
+                [bg, icon, label, cost, lv].forEach(o => o.setVisible(false));
+            });
+        }
+
+        function setGameUIVisible(visible) {
+            // トップパネル
+            sceneRef.children.list.forEach(o => {
+                if (o._isTopPanel) o.setVisible(visible);
+            });
+            ui.bigCoin.setVisible(visible);
+            // 良品サンプル
+            ui.sampleObjs.forEach(o => o.setVisible(visible));
+            // スキャンライン
+            ui.scanLine.setVisible(visible);
+            // ボタン
+            Object.values(ui.btns).forEach(b => {
+                Object.values(b).forEach(o => o.setVisible(visible));
+            });
+        }
+
+        function startGame(scene) {
+            state = 'playing';
+
+            // タイトル非表示
+            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleHigh, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(false));
+            scene.tweens.killAll();
+
+            // ゲームUI表示
+            setGameUIVisible(true);
+
+            // リセット
+            for (const p of products) p.container.destroy();
+            products = [];
+            score = 0; coins = 0; timeLeft = 60; combo = 0; maxCombo = 0;
+            correctTaps = 0; wrongTaps = 0; missedDefects = 0;
+            beltSpeed = 2.5; spawnDelay = 1200;
+            speedLv = 0; spawnLv = 0; qualityLv = 0;
+            defectRate = 0.80; totalEarned = 0;
+
+            updateAllUI();
+
+            // 開始ヒント表示（3秒で消える）
+            const hint = scene.add.text(W/2, 300, '🔍 不良品をタップして排除！\n青丸以外が不良品です', {
+                fontSize: '18px', fill: '#ecf0f1', fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 3, align: 'center', lineSpacing: 6
+            }).setOrigin(0.5).setAlpha(0.9);
+            scene.tweens.add({
+                targets: hint, alpha: 0, y: 270,
+                delay: 2000, duration: 1000,
+                onComplete: () => hint.destroy()
+            });
+
+            // スキャンラインアニメーション
+            scene.tweens.add({
+                targets: ui.scanLine,
+                y: { from: 340, to: 440 },
+                duration: 1200,
+                repeat: -1,
+                yoyo: true,
+                ease: 'Sine.easeInOut'
+            });
+
+            spawnTimer = scene.time.addEvent({
+                delay: spawnDelay,
+                callback: () => spawnProduct(scene),
+                loop: true
+            });
+            countdownTimer = scene.time.addEvent({
+                delay: 1000,
+                callback: () => {
+                    timeLeft--;
+                    updateTimeUI();
+                    if (timeLeft === 10) {
+                        // 残り10秒パルスアニメ開始
+                        scene.tweens.add({
+                            targets: ui.timeText, scaleX: 1.2, scaleY: 1.2,
+                            duration: 400, yoyo: true, repeat: 9,
+                            ease: 'Sine.easeInOut'
+                        });
+                    }
+                    if (timeLeft <= 0) endGame(scene);
+                },
+                loop: true
+            });
+        }
+
+        function spawnProduct(scene) {
+            const maxProducts = 12 + speedLv * 2;
+            if (products.length >= maxProducts) return;
+
+            const isDefect = Math.random() < defectRate;
+            let color, shape;
+            if (isDefect) {
+                const p = Phaser.Utils.Array.GetRandom(DEFECTS);
+                color = p.color; shape = p.shape;
+            } else {
+                color = GOOD.color; shape = GOOD.shape;
+            }
+
+            // コンテナ方式（影 + 本体 + グロー）
+            const yOff = Phaser.Math.Between(-15, 15);
+            const container = scene.add.container(W + 40, 390 + yOff);
+
+            // 影
+            const shadow = scene.add.ellipse(3, 8, 50, 20, 0x000000, 0.3);
+            container.add(shadow);
+
+            // 本体
+            let body;
+            if (shape === 'circle') {
+                body = scene.add.circle(0, 0, 24, color);
+                body.setStrokeStyle(2, 0xffffff, 0.6);
+            } else if (shape === 'square') {
+                body = scene.add.rectangle(0, 0, 44, 44, color);
+                body.setStrokeStyle(2, 0xffffff, 0.6);
+            } else {
+                body = scene.add.triangle(0, -4, 0, -22, -22, 18, 22, 18, color);
+                body.setStrokeStyle(2, 0xffffff, 0.6);
+            }
+            container.add(body);
+
+            // ハイライト（立体感）
+            if (shape === 'circle') {
+                const hl = scene.add.circle(-6, -8, 8, 0xffffff, 0.25);
+                container.add(hl);
+            }
+
+            // スポーンアニメーション（ポップイン）
+            container.setScale(0);
+            scene.tweens.add({
+                targets: container, scaleX: 1, scaleY: 1,
+                duration: 200, ease: 'Back.easeOut'
+            });
+
+            const prod = { container, body, isDefect, tapped: false, shape, baseY: 390 + yOff, warned: false };
+            products.push(prod);
+            sndSpawn();
+
+            // 不良品に微妙な揺れアニメーション（視覚的ヒント）
+            if (isDefect) {
+                scene.tweens.add({
+                    targets: body,
+                    angle: { from: -3, to: 3 },
+                    duration: 200 + Phaser.Math.Between(0, 100),
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+            }
+        }
+
+        function handleTap(scene, ptr) {
+            if (ptr.y > 585) return; // ボタン領域除外（ボタン上端587.5px）
+
+            for (let i = products.length - 1; i >= 0; i--) {
+                const p = products[i];
+                const dx = ptr.x - p.container.x;
+                const dy = ptr.y - p.container.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                if (dist < 45) {
+                    p.tapped = true;
+                    if (p.isDefect) {
+                        // 正解！不良品排除
+                        correctTaps++;
+                        combo++;
+                        if (combo > maxCombo) maxCombo = combo;
+                        const comboMult = Math.min(combo, 5);
+                        const sc = R.defectTap.score + (comboMult - 1) * 2;
+                        const co = R.defectTap.coins + (comboMult - 1);
+                        score += sc; coins += co; totalEarned += co;
+                        sndGood();
+                        if (combo > 1) sndCombo();
+
+                        showTapFeedback(scene, p.container.x, p.container.y, true, co, combo);
+                    } else {
+                        // ミス！良品を排除
+                        wrongTaps++;
+                        combo = 0;
+                        score = Math.max(0, score + R.goodTap.score);
+                        coins = Math.max(0, coins + R.goodTap.coins);
+                        sndBad();
+                        showTapFeedback(scene, p.container.x, p.container.y, false, R.goodTap.coins, 0);
+                    }
+
+                    // 製品消滅アニメ
+                    scene.tweens.add({
+                        targets: p.container, scaleX: 0, scaleY: 0, alpha: 0,
+                        duration: 150, onComplete: () => p.container.destroy()
+                    });
+                    products.splice(i, 1);
+                    updateScoreUI();
+                    updateButtonStates();
+                    break;
+                }
+            }
+        }
+
+        function showTapFeedback(scene, x, y, correct, coinAmt, comboCount) {
+            const color = correct ? '#2ecc71' : '#e74c3c';
+            const mark = correct ? '✓' : '✗';
+            const coinStr = coinAmt >= 0 ? `+${coinAmt}` : `${coinAmt}`;
+
+            const txt = scene.add.text(x, y - 20, `${mark} ${coinStr}c`, {
+                fontSize: '24px', fill: color, fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 3
+            }).setOrigin(0.5);
+
+            scene.tweens.add({
+                targets: txt, y: y - 70, alpha: 0,
+                duration: 500, onComplete: () => txt.destroy()
+            });
+
+            if (comboCount > 1) {
+                const comboTxt = scene.add.text(x, y + 20, `${comboCount} COMBO!`, {
+                    fontSize: '18px', fill: '#f39c12', fontStyle: 'bold',
+                    stroke: '#000', strokeThickness: 2
+                }).setOrigin(0.5);
+                scene.tweens.add({
+                    targets: comboTxt, y: y - 10, alpha: 0, scale: 1.5,
+                    duration: 600, onComplete: () => comboTxt.destroy()
+                });
+                // 上部コンボ表示
+                ui.comboText.setText(`🔥 ${comboCount} COMBO`);
+                ui.comboText.setAlpha(1);
+                scene.tweens.add({
+                    targets: ui.comboText, alpha: 0, duration: 1500
+                });
+            }
+        }
+
+        function showEdgeFeedback(scene, y, correct, coinAmt) {
+            const color = correct ? '#2ecc71' : '#e74c3c';
+            const mark = correct ? '✓' : '✗';
+            const coinStr = coinAmt >= 0 ? `+${coinAmt}` : `${coinAmt}`;
+
+            const txt = scene.add.text(50, y, `${mark} ${coinStr}c`, {
+                fontSize: '22px', fill: color, fontStyle: 'bold',
+                stroke: '#000', strokeThickness: 3
+            }).setOrigin(0.5);
+
+            scene.tweens.add({
+                targets: txt, x: 20, alpha: 0,
+                duration: 500, onComplete: () => txt.destroy()
+            });
+        }
+
+        function update() {
+            if (state !== 'playing') return;
+
+            // ベルトドットアニメ
+            for (const d of beltDots) {
+                d.x -= beltSpeed;
+                if (d.x < -10) d.x += 16 * 30;
+            }
+
+            let changed = false;
+
+            const time = sceneRef.time.now;
+            for (let i = products.length - 1; i >= 0; i--) {
+                const p = products[i];
+                p.container.x -= beltSpeed;
+                // ベルト振動（微揺れ）
+                p.container.y = p.baseY + Math.sin(time * 0.006 + i * 1.7) * 1.5;
+
+                // 左端接近警告（不良品が画面端に近づいたら赤く点滅）
+                if (p.isDefect && !p.tapped && !p.warned && p.container.x < 80) {
+                    p.warned = true;
+                    sndWarning();
+                    // 赤いパルスリング
+                    const ring = sceneRef.add.circle(p.container.x, p.container.y, 35, 0xe74c3c, 0);
+                    ring.setStrokeStyle(3, 0xe74c3c, 0.8);
+                    sceneRef.tweens.add({
+                        targets: ring, scaleX: 1.8, scaleY: 1.8, alpha: 0,
+                        duration: 400, onComplete: () => ring.destroy()
+                    });
+                    // 「!」マーク
+                    const warn = sceneRef.add.text(p.container.x, p.container.y - 35, '⚠', {
+                        fontSize: '20px'
+                    }).setOrigin(0.5);
+                    sceneRef.tweens.add({
+                        targets: warn, y: p.container.y - 55, alpha: 0,
+                        duration: 600, onComplete: () => warn.destroy()
+                    });
+                }
+
+                if (p.container.x < -50) {
+                    if (p.isDefect && !p.tapped) {
+                        // 不良品見逃し
+                        missedDefects++;
+                        combo = 0;
+                        score = Math.max(0, score + R.defectMiss.score);
+                        coins = Math.max(0, coins + R.defectMiss.coins);
+                        sndBad();
+                        showEdgeFeedback(sceneRef, p.container.y, false, R.defectMiss.coins);
+                        // 画面フラッシュ（見逃し警告）
+                        const flash = sceneRef.add.rectangle(W/2, H/2, W, H, 0xe74c3c, 0.15);
+                        sceneRef.tweens.add({
+                            targets: flash, alpha: 0, duration: 300,
+                            onComplete: () => flash.destroy()
+                        });
+                        // カメラシェイク（見逃しの衝撃）
+                        sceneRef.cameras.main.shake(200, 0.008);
+                    } else if (!p.isDefect && !p.tapped) {
+                        // 良品通過（正解）
+                        score += R.goodPass.score;
+                        coins += R.goodPass.coins;
+                        totalEarned += R.goodPass.coins;
+                        sndPass();
+                        showEdgeFeedback(sceneRef, p.container.y, true, R.goodPass.coins);
+                        // 良品通過パーティクル（小さなキラキラ）
+                        for (let sp = 0; sp < 4; sp++) {
+                            const sparkle = sceneRef.add.circle(
+                                15 + Phaser.Math.Between(-10, 10),
+                                p.container.y + Phaser.Math.Between(-15, 15),
+                                Phaser.Math.Between(2, 4), 0x3498db, 0.8
+                            );
+                            sceneRef.tweens.add({
+                                targets: sparkle,
+                                x: sparkle.x + Phaser.Math.Between(-30, -5),
+                                y: sparkle.y + Phaser.Math.Between(-20, 20),
+                                alpha: 0, scale: 0,
+                                duration: 400 + sp * 50,
+                                onComplete: () => sparkle.destroy()
+                            });
+                        }
+                    }
+                    p.container.destroy();
+                    products.splice(i, 1);
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                updateScoreUI();
+                updateButtonStates();
+            }
+        }
+
+        // === UI更新 ===
+        function updateAllUI() {
+            updateScoreUI();
+            updateTimeUI();
+            updateRateUI();
+            updateButtonStates();
+            updateLevelTexts();
+        }
+        function updateScoreUI() {
+            ui.scoreText.setText(`SCORE  ${score}`);
+            ui.coinText.setText(`🪙 ${coins}`);
+            ui.bigCoin.setText(`🪙 ${coins}`);
+        }
+        function updateTimeUI() {
+            ui.timeText.setText(`${timeLeft}s`);
+            const ratio = timeLeft / 60;
+            const barW = (W - 40) * ratio;
+            ui.timeBar.setDisplaySize(barW, 6);
+            ui.timeBar.setX(20 + barW / 2);
+            if (timeLeft <= 10) {
+                ui.timeText.setFill('#e74c3c');
+                ui.timeBar.setFillStyle(0xe74c3c);
+            } else if (timeLeft <= 20) {
+                ui.timeText.setFill('#f39c12');
+                ui.timeBar.setFillStyle(0xf39c12);
+            } else {
+                ui.timeText.setFill('#3498db');
+                ui.timeBar.setFillStyle(0x3498db);
+            }
+        }
+        function updateRateUI() {
+            const pct = Math.round(defectRate * 100);
+            ui.rateText.setText(`不良率 ${pct}%`);
+            if (pct <= 30) ui.rateText.setFill('#2ecc71');
+            else if (pct <= 50) ui.rateText.setFill('#f39c12');
+            else ui.rateText.setFill('#e74c3c');
+        }
+        function updateLevelTexts() {
+            ui.btns.speed.lv.setText(`Lv${speedLv}`);
+            ui.btns.speed.cost.setText(speedLv < SPEED_MAX ? `${SPEED_COSTS[speedLv]}c` : 'MAX');
+
+            ui.btns.spawn.lv.setText(`Lv${spawnLv}`);
+            ui.btns.spawn.cost.setText(spawnLv < SPAWN_MAX ? `${SPAWN_COSTS[spawnLv]}c` : 'MAX');
+
+            ui.btns.quality.lv.setText(`Lv${qualityLv}`);
+            ui.btns.quality.cost.setText(qualityLv < Q_COSTS.length ? `${Q_COSTS[qualityLv]}c` : 'MAX');
+        }
+
+        function updateButtonStates() {
+            const checks = {
+                speed:  speedLv < SPEED_MAX && coins >= SPEED_COSTS[speedLv],
+                spawn:  spawnLv < SPAWN_MAX && coins >= SPAWN_COSTS[spawnLv],
+                quality: qualityLv < Q_COSTS.length && coins >= Q_COSTS[qualityLv],
+            };
+            for (const [key, can] of Object.entries(checks)) {
+                const b = ui.btns[key];
+                b.bg.setStrokeStyle(2, can ? 0x3498db : 0x2c3e50, can ? 0.8 : 0.3);
+                b.bg.setFillStyle(can ? 0x1a2a3e : 0x0d1117, can ? 0.95 : 0.6);
+                [b.icon, b.label, b.cost, b.lv].forEach(o => o.setAlpha(can ? 1 : 0.35));
+            }
+        }
+
+        function buyUpgrade(scene, type) {
+            if (state !== 'playing') return;
+            let ok = false;
+
+            if (type === 'speed' && speedLv < SPEED_MAX && coins >= SPEED_COSTS[speedLv]) {
+                coins -= SPEED_COSTS[speedLv]; speedLv++;
+                beltSpeed += 0.6;
+                ok = true;
+            } else if (type === 'spawn' && spawnLv < SPAWN_MAX && coins >= SPAWN_COSTS[spawnLv]) {
+                coins -= SPAWN_COSTS[spawnLv]; spawnLv++;
+                spawnDelay -= 100;
+                spawnTimer.delay = spawnDelay;
+                ok = true;
+            } else if (type === 'quality' && qualityLv < Q_COSTS.length && coins >= Q_COSTS[qualityLv]) {
+                coins -= Q_COSTS[qualityLv];
+                qualityLv++;
+                defectRate = Q_RATES[qualityLv];
+                updateRateUI();
+
+                // エフェクト
+                const pct = Math.round(defectRate * 100);
+                const fx = scene.add.text(W/2, 340, `🔧 品質改善!\n不良率 → ${pct}%`, {
+                    fontSize: '28px', fill: '#2ecc71', fontStyle: 'bold',
+                    stroke: '#000', strokeThickness: 3, align: 'center'
+                }).setOrigin(0.5);
+                scene.tweens.add({
+                    targets: fx, y: 290, alpha: 0, scale: 1.2,
+                    duration: 900, onComplete: () => fx.destroy()
+                });
+                ok = true;
+            }
+
+            if (ok) {
+                sndUpgrade();
+                updateScoreUI();
+                updateLevelTexts();
+                updateButtonStates();
+                // ボタンタップフィードバック
+                const b = ui.btns[type];
+                scene.tweens.add({
+                    targets: b.bg, scaleX: 0.9, scaleY: 0.9,
+                    duration: 80, yoyo: true, ease: 'Sine.easeInOut'
+                });
+                // アップグレード成功テキスト
+                const lvTxt = scene.add.text(W/2, 560, `✨ ${type === 'speed' ? '速度' : type === 'spawn' ? '生産' : '品質'} UP!`, {
+                    fontSize: '22px', fill: '#2ecc71', fontStyle: 'bold',
+                    stroke: '#000', strokeThickness: 2
+                }).setOrigin(0.5);
+                scene.tweens.add({
+                    targets: lvTxt, y: 530, alpha: 0,
+                    duration: 700, onComplete: () => lvTxt.destroy()
+                });
+            } else {
+                snd(120, 'sawtooth', 0.15, 0.1);
+                // 購入不可フィードバック
+                const b = ui.btns[type];
+                scene.tweens.add({
+                    targets: b.bg, x: b.bg.x + 4, duration: 40,
+                    yoyo: true, repeat: 2
+                });
+            }
+        }
+
+        function endGame(scene) {
+            state = 'over';
+            spawnTimer.remove();
+            countdownTimer.remove();
+
+            // 製品消去
+            for (const p of products) p.container.destroy();
+            products = [];
+
+            setGameUIVisible(false);
+
+            endObjs = [];
+
+            // 暗転
+            const overlay = scene.add.rectangle(W/2, H/2, W, H, 0x000000, 0.7);
+            endObjs.push(overlay);
+
+            // 結果カード
+            const card = scene.add.rectangle(W/2, H/2 + 10, 340, 460, 0x16213e, 0.95);
+            card.setStrokeStyle(2, 0x3498db, 0.6);
+            endObjs.push(card);
+
+            const finalPct = Math.round(defectRate * 100);
+            const totalActions = correctTaps + wrongTaps + missedDefects;
+            const accuracy = totalActions > 0 ? Math.round((correctTaps / totalActions) * 100) : 0;
+
+            // ランク判定
+            let rank = 'D', rankColor = '#7f8c8d';
+            if (score >= 500) { rank = 'S'; rankColor = '#f1c40f'; }
+            else if (score >= 350) { rank = 'A'; rankColor = '#2ecc71'; }
+            else if (score >= 200) { rank = 'B'; rankColor = '#3498db'; }
+            else if (score >= 100) { rank = 'C'; rankColor = '#f39c12'; }
+
+            const t1 = scene.add.text(W/2, 180, '🏭 GAME OVER', {
+                fontSize: '30px', fill: '#ecf0f1', fontStyle: 'bold'
+            }).setOrigin(0.5);
+            endObjs.push(t1);
+
+            const tRank = scene.add.text(W/2, 225, `RANK ${rank}`, {
+                fontSize: '28px', fill: rankColor, fontStyle: 'bold', fontFamily: 'monospace',
+                stroke: '#000', strokeThickness: 2
+            }).setOrigin(0.5);
+            endObjs.push(tRank);
+            // ランクアニメ
+            scene.tweens.add({
+                targets: tRank, scaleX: 1.3, scaleY: 1.3,
+                duration: 300, yoyo: true, ease: 'Back.easeOut'
+            });
+
+            const t2 = scene.add.text(W/2, 265, `SCORE`, {
+                fontSize: '14px', fill: '#7f8c8d', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+            endObjs.push(t2);
+
+            const t3 = scene.add.text(W/2, 295, `${score}`, {
+                fontSize: '44px', fill: '#3498db', fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+            endObjs.push(t3);
+
+            // ハイスコア更新チェック
+            const isNewHigh = score > highScore;
+            if (isNewHigh) {
+                highScore = score;
+                localStorage.setItem('qc_highscore', String(highScore));
+            }
+            const highTxt = scene.add.text(W/2, 322, isNewHigh ? `🎉 NEW HIGH SCORE!` : `BEST: ${highScore}`, {
+                fontSize: '14px', fill: isNewHigh ? '#f1c40f' : '#7f8c8d', fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+            endObjs.push(highTxt);
+            if (isNewHigh) {
+                scene.tweens.add({
+                    targets: highTxt, scaleX: 1.15, scaleY: 1.15,
+                    duration: 500, yoyo: true, repeat: 2, ease: 'Sine.easeInOut'
+                });
+            }
+
+            const t4 = scene.add.text(W/2, 348,
+                `🪙 ${coins} (総獲得 ${totalEarned})`, {
+                fontSize: '16px', fill: '#f1c40f', fontStyle: 'bold',
+                align: 'center'
+            }).setOrigin(0.5);
+            endObjs.push(t4);
+
+            // セパレーター
+            const sep1 = scene.add.graphics();
+            sep1.lineStyle(1, 0x3498db, 0.3);
+            sep1.lineBetween(W/2 - 140, 370, W/2 + 140, 370);
+            endObjs.push(sep1);
+
+            const totalProcessed = correctTaps + wrongTaps + missedDefects;
+            const t5 = scene.add.text(W/2, 395,
+                `✅ 排除成功  ${correctTaps}\n❌ 誤排除　  ${wrongTaps}\n💨 見逃し　  ${missedDefects}\n🎯 正確率　  ${accuracy}%\n🔥 最大コンボ ${maxCombo}`, {
+                fontSize: '13px', fill: '#bdc3c7', fontStyle: 'bold',
+                align: 'left', lineSpacing: 4, fontFamily: 'monospace'
+            }).setOrigin(0.5);
+            endObjs.push(t5);
+
+            // セパレーター
+            const sep2 = scene.add.graphics();
+            sep2.lineStyle(1, 0x3498db, 0.3);
+            sep2.lineBetween(W/2 - 140, 440, W/2 + 140, 440);
+            endObjs.push(sep2);
+
+            const t6 = scene.add.text(W/2, 455,
+                `不良率 ${finalPct}%　⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
+                fontSize: '13px', fill: '#7f8c8d',
+                align: 'center'
+            }).setOrigin(0.5);
+            endObjs.push(t6);
+
+            // パーフェクトボーナス表示
+            if (accuracy === 100 && totalProcessed > 5) {
+                const perfect = scene.add.text(W/2, 475, '🌟 PERFECT! 🌟', {
+                    fontSize: '18px', fill: '#f1c40f', fontStyle: 'bold',
+                    stroke: '#000', strokeThickness: 2
+                }).setOrigin(0.5);
+                scene.tweens.add({
+                    targets: perfect, scaleX: 1.15, scaleY: 1.15,
+                    duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+                });
+                endObjs.push(perfect);
+            }
+
+            // 再プレイボタン
+            const btn = scene.add.rectangle(W/2, 510, 180, 55, 0x2ecc71);
+            btn.setStrokeStyle(2, 0xffffff, 0.5);
+            btn.setInteractive();
+            btn.on('pointerdown', () => resetGame(scene));
+            endObjs.push(btn);
+
+            const btnTxt = scene.add.text(W/2, 510, '▶ RETRY', {
+                fontSize: '22px', fill: '#ffffff', fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+            endObjs.push(btnTxt);
+        }
+
+        function resetGame(scene) {
+            for (const o of endObjs) o.destroy();
+            endObjs = [];
+
+            state = 'title';
+            ui.titleHigh.setText(highScore > 0 ? `🏆 BEST: ${highScore}` : '');
+            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleHigh, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(true));
+            ui.titleIcon.setY(200);
+            scene.tweens.add({
+                targets: ui.titleStart, alpha: 0.3,
+                duration: 800, yoyo: true, repeat: -1
+            });
+            scene.tweens.add({
+                targets: ui.titleIcon, y: 190,
+                duration: 1500, yoyo: true, repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+    </script>
+</body>
+</html>
