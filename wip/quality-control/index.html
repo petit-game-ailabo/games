@@ -98,6 +98,8 @@
         function sndGood() { snd(523, 'sine', 0.08); setTimeout(() => snd(659, 'sine', 0.08), 60); }
         function sndBad() { snd(180, 'square', 0.2, 0.15); }
         function sndPass() { snd(440, 'sine', 0.04, 0.12); }
+        function sndSpawn() { snd(330, 'sine', 0.03, 0.06); }
+        function sndWarning() { snd(260, 'triangle', 0.08, 0.1); }
         function sndUpgrade() { snd(880, 'square', 0.05); setTimeout(() => snd(1100, 'square', 0.05), 50); setTimeout(() => snd(1320, 'square', 0.1), 100); }
         function sndCombo() { snd(700 + combo * 50, 'sine', 0.06, 0.2); }
 
@@ -256,6 +258,12 @@
             this.tweens.add({
                 targets: ui.titleStart, alpha: 0.3,
                 duration: 800, yoyo: true, repeat: -1
+            });
+            // 工場アイコン浮遊アニメ
+            this.tweens.add({
+                targets: ui.titleIcon, y: 190,
+                duration: 1500, yoyo: true, repeat: -1,
+                ease: 'Sine.easeInOut'
             });
 
             // Powered by
@@ -431,8 +439,9 @@
                 duration: 200, ease: 'Back.easeOut'
             });
 
-            const prod = { container, body, isDefect, tapped: false, shape, baseY: 390 + yOff };
+            const prod = { container, body, isDefect, tapped: false, shape, baseY: 390 + yOff, warned: false };
             products.push(prod);
+            sndSpawn();
 
             // 不良品に微妙な揺れアニメーション（視覚的ヒント）
             if (isDefect) {
@@ -561,6 +570,27 @@
                 // ベルト振動（微揺れ）
                 p.container.y = p.baseY + Math.sin(time * 0.006 + i * 1.7) * 1.5;
 
+                // 左端接近警告（不良品が画面端に近づいたら赤く点滅）
+                if (p.isDefect && !p.tapped && !p.warned && p.container.x < 80) {
+                    p.warned = true;
+                    sndWarning();
+                    // 赤いパルスリング
+                    const ring = sceneRef.add.circle(p.container.x, p.container.y, 35, 0xe74c3c, 0);
+                    ring.setStrokeStyle(3, 0xe74c3c, 0.8);
+                    sceneRef.tweens.add({
+                        targets: ring, scaleX: 1.8, scaleY: 1.8, alpha: 0,
+                        duration: 400, onComplete: () => ring.destroy()
+                    });
+                    // 「!」マーク
+                    const warn = sceneRef.add.text(p.container.x, p.container.y - 35, '⚠', {
+                        fontSize: '20px'
+                    }).setOrigin(0.5);
+                    sceneRef.tweens.add({
+                        targets: warn, y: p.container.y - 55, alpha: 0,
+                        duration: 600, onComplete: () => warn.destroy()
+                    });
+                }
+
                 if (p.container.x < -50) {
                     if (p.isDefect && !p.tapped) {
                         // 不良品見逃し
@@ -576,6 +606,8 @@
                             targets: flash, alpha: 0, duration: 300,
                             onComplete: () => flash.destroy()
                         });
+                        // カメラシェイク（見逃しの衝撃）
+                        sceneRef.cameras.main.shake(200, 0.008);
                     } else if (!p.isDefect && !p.tapped) {
                         // 良品通過（正解）
                         score += R.goodPass.score;
@@ -827,10 +859,10 @@
             endObjs.push(sep1);
 
             const totalProcessed = correctTaps + wrongTaps + missedDefects;
-            const t5 = scene.add.text(W/2, 398,
-                `📊 処理数 ${totalProcessed}　正解 ${correctTaps}\nミス ${wrongTaps}　見逃し ${missedDefects}\n正確率 ${accuracy}%　最大コンボ ${maxCombo}`, {
-                fontSize: '13px', fill: '#95a5a6', fontStyle: 'bold',
-                align: 'center', lineSpacing: 6
+            const t5 = scene.add.text(W/2, 395,
+                `✅ 排除成功  ${correctTaps}\n❌ 誤排除　  ${wrongTaps}\n💨 見逃し　  ${missedDefects}\n🎯 正確率　  ${accuracy}%\n🔥 最大コンボ ${maxCombo}`, {
+                fontSize: '13px', fill: '#bdc3c7', fontStyle: 'bold',
+                align: 'left', lineSpacing: 4, fontFamily: 'monospace'
             }).setOrigin(0.5);
             endObjs.push(t5);
 
@@ -840,12 +872,25 @@
             sep2.lineBetween(W/2 - 140, 440, W/2 + 140, 440);
             endObjs.push(sep2);
 
-            const t6 = scene.add.text(W/2, 458,
+            const t6 = scene.add.text(W/2, 455,
                 `不良率 ${finalPct}%　⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
                 fontSize: '13px', fill: '#7f8c8d',
                 align: 'center'
             }).setOrigin(0.5);
             endObjs.push(t6);
+
+            // パーフェクトボーナス表示
+            if (accuracy === 100 && totalProcessed > 5) {
+                const perfect = scene.add.text(W/2, 475, '🌟 PERFECT! 🌟', {
+                    fontSize: '18px', fill: '#f1c40f', fontStyle: 'bold',
+                    stroke: '#000', strokeThickness: 2
+                }).setOrigin(0.5);
+                scene.tweens.add({
+                    targets: perfect, scaleX: 1.15, scaleY: 1.15,
+                    duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+                });
+                endObjs.push(perfect);
+            }
 
             // 再プレイボタン
             const btn = scene.add.rectangle(W/2, 510, 180, 55, 0x2ecc71);
@@ -867,9 +912,15 @@
             state = 'title';
             ui.titleHigh.setText(highScore > 0 ? `🏆 BEST: ${highScore}` : '');
             [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleHigh, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(true));
+            ui.titleIcon.setY(200);
             scene.tweens.add({
                 targets: ui.titleStart, alpha: 0.3,
                 duration: 800, yoyo: true, repeat: -1
+            });
+            scene.tweens.add({
+                targets: ui.titleIcon, y: 190,
+                duration: 1500, yoyo: true, repeat: -1,
+                ease: 'Sine.easeInOut'
             });
         }
     </script>
