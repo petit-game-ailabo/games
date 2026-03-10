@@ -43,6 +43,7 @@
         let combo = 0;
         let maxCombo = 0;
         let correctTaps = 0, wrongTaps = 0, missedDefects = 0;
+        let highScore = parseInt(localStorage.getItem('qc_highscore') || '0');
 
         // レベル
         let speedLv = 0, spawnLv = 0, qualityLv = 0;
@@ -244,6 +245,9 @@
                 '不良品をタップして排除しよう\nコインで工場をアップグレード\n品質を改善して利益を最大化！', {
                 fontSize: '16px', fill: '#bdc3c7', align: 'center', lineSpacing: 8
             }).setOrigin(0.5);
+            ui.titleHigh = this.add.text(W/2, 490, highScore > 0 ? `🏆 BEST: ${highScore}` : '', {
+                fontSize: '16px', fill: '#f1c40f', fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5);
             ui.titleStart = this.add.text(W/2, 540, '▶ TAP TO START', {
                 fontSize: '22px', fill: '#3498db', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5);
@@ -317,7 +321,7 @@
             state = 'playing';
 
             // タイトル非表示
-            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(false));
+            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleHigh, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(false));
             scene.tweens.killAll();
 
             // ゲームUI表示
@@ -420,6 +424,13 @@
                 container.add(hl);
             }
 
+            // スポーンアニメーション（ポップイン）
+            container.setScale(0);
+            scene.tweens.add({
+                targets: container, scaleX: 1, scaleY: 1,
+                duration: 200, ease: 'Back.easeOut'
+            });
+
             const prod = { container, body, isDefect, tapped: false, shape, baseY: 390 + yOff };
             products.push(prod);
 
@@ -437,7 +448,7 @@
         }
 
         function handleTap(scene, ptr) {
-            if (ptr.y > 580) return; // ボタン領域除外
+            if (ptr.y > 585) return; // ボタン領域除外（ボタン上端587.5px）
 
             for (let i = products.length - 1; i >= 0; i--) {
                 const p = products[i];
@@ -572,6 +583,22 @@
                         totalEarned += R.goodPass.coins;
                         sndPass();
                         showEdgeFeedback(sceneRef, p.container.y, true, R.goodPass.coins);
+                        // 良品通過パーティクル（小さなキラキラ）
+                        for (let sp = 0; sp < 4; sp++) {
+                            const sparkle = sceneRef.add.circle(
+                                15 + Phaser.Math.Between(-10, 10),
+                                p.container.y + Phaser.Math.Between(-15, 15),
+                                Phaser.Math.Between(2, 4), 0x3498db, 0.8
+                            );
+                            sceneRef.tweens.add({
+                                targets: sparkle,
+                                x: sparkle.x + Phaser.Math.Between(-30, -5),
+                                y: sparkle.y + Phaser.Math.Between(-20, 20),
+                                alpha: 0, scale: 0,
+                                duration: 400 + sp * 50,
+                                onComplete: () => sparkle.destroy()
+                            });
+                        }
                     }
                     p.container.destroy();
                     products.splice(i, 1);
@@ -769,7 +796,24 @@
             }).setOrigin(0.5);
             endObjs.push(t3);
 
-            const t4 = scene.add.text(W/2, 340,
+            // ハイスコア更新チェック
+            const isNewHigh = score > highScore;
+            if (isNewHigh) {
+                highScore = score;
+                localStorage.setItem('qc_highscore', String(highScore));
+            }
+            const highTxt = scene.add.text(W/2, 322, isNewHigh ? `🎉 NEW HIGH SCORE!` : `BEST: ${highScore}`, {
+                fontSize: '14px', fill: isNewHigh ? '#f1c40f' : '#7f8c8d', fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5);
+            endObjs.push(highTxt);
+            if (isNewHigh) {
+                scene.tweens.add({
+                    targets: highTxt, scaleX: 1.15, scaleY: 1.15,
+                    duration: 500, yoyo: true, repeat: 2, ease: 'Sine.easeInOut'
+                });
+            }
+
+            const t4 = scene.add.text(W/2, 348,
                 `🪙 ${coins} (総獲得 ${totalEarned})`, {
                 fontSize: '16px', fill: '#f1c40f', fontStyle: 'bold',
                 align: 'center'
@@ -779,11 +823,11 @@
             // セパレーター
             const sep1 = scene.add.graphics();
             sep1.lineStyle(1, 0x3498db, 0.3);
-            sep1.lineBetween(W/2 - 140, 362, W/2 + 140, 362);
+            sep1.lineBetween(W/2 - 140, 370, W/2 + 140, 370);
             endObjs.push(sep1);
 
             const totalProcessed = correctTaps + wrongTaps + missedDefects;
-            const t5 = scene.add.text(W/2, 390,
+            const t5 = scene.add.text(W/2, 398,
                 `📊 処理数 ${totalProcessed}　正解 ${correctTaps}\nミス ${wrongTaps}　見逃し ${missedDefects}\n正確率 ${accuracy}%　最大コンボ ${maxCombo}`, {
                 fontSize: '13px', fill: '#95a5a6', fontStyle: 'bold',
                 align: 'center', lineSpacing: 6
@@ -793,10 +837,10 @@
             // セパレーター
             const sep2 = scene.add.graphics();
             sep2.lineStyle(1, 0x3498db, 0.3);
-            sep2.lineBetween(W/2 - 140, 430, W/2 + 140, 430);
+            sep2.lineBetween(W/2 - 140, 440, W/2 + 140, 440);
             endObjs.push(sep2);
 
-            const t6 = scene.add.text(W/2, 448,
+            const t6 = scene.add.text(W/2, 458,
                 `不良率 ${finalPct}%　⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
                 fontSize: '13px', fill: '#7f8c8d',
                 align: 'center'
@@ -804,13 +848,13 @@
             endObjs.push(t6);
 
             // 再プレイボタン
-            const btn = scene.add.rectangle(W/2, 500, 180, 55, 0x2ecc71);
+            const btn = scene.add.rectangle(W/2, 510, 180, 55, 0x2ecc71);
             btn.setStrokeStyle(2, 0xffffff, 0.5);
             btn.setInteractive();
             btn.on('pointerdown', () => resetGame(scene));
             endObjs.push(btn);
 
-            const btnTxt = scene.add.text(W/2, 500, '▶ RETRY', {
+            const btnTxt = scene.add.text(W/2, 510, '▶ RETRY', {
                 fontSize: '22px', fill: '#ffffff', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5);
             endObjs.push(btnTxt);
@@ -821,7 +865,8 @@
             endObjs = [];
 
             state = 'title';
-            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(true));
+            ui.titleHigh.setText(highScore > 0 ? `🏆 BEST: ${highScore}` : '');
+            [ui.startBg, ui.titleIcon, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleHigh, ui.titleStart, ui.poweredBy].forEach(o => o.setVisible(true));
             scene.tweens.add({
                 targets: ui.titleStart, alpha: 0.3,
                 duration: 800, yoyo: true, repeat: -1
