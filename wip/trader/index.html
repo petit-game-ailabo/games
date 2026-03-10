@@ -31,252 +31,274 @@
             green: 0x6bff8e, red: 0xff4757, yellow: 0xffe66b, white: 0xecf0f1,
         };
 
-        // ゲーム状態
         let state = 'title';
         let money = 1000, holdings = 0, buyPrice = 0;
         let totalProfit = 0, trades = 0, bestTrades = 0;
-        let timeLeft = 60;
+        let timeLeft = 90; // 90秒（育成の時間）
         let countdownTimer;
 
         // チャート
-        let price = 100;
-        let priceHistory = [];
-        let maHistory = [];      // 移動平均
+        let price = 100, priceHistory = [], maHistory = [];
         const CHART_POINTS = 80;
         let chartGfx;
         let tick = 0;
 
-        // 波動パラメータ（規則的な波 + 小さいノイズ）
+        // 波動
         let wavePhase = 0;
-        const WAVE_SPEED = 0.035;  // メインの波の速さ
-        const WAVE_AMP = 25;       // メインの波の振幅
+        const WAVE_SPEED = 0.035, WAVE_AMP = 25;
         let subPhase = 0;
-        const SUB_SPEED = 0.08;
-        const SUB_AMP = 8;
-        let basePrice = 100;       // ベース価格（ニュースで変動）
+        const SUB_SPEED = 0.08, SUB_AMP = 8;
+        let basePrice = 100;
 
-        // ニュースシステム
-        let newsQueue = [];        // {text, effect, delay, isFake}
-        let activeNews = null;
-        let newsTimer = 0;
-        let nextNewsAt = 0;
+        // === 育成（アップグレード）===
+        let analysisLv = 0;  // 分析ツール
+        let intelLv = 0;     // 情報網
+        let instinctLv = 0;  // 直感力
+
+        const UPGRADES = {
+            analysis: {
+                icon: '🔍', name: '分析',
+                costs: [80, 150, 250],
+                desc: ['予測矢印', '精度UP', '高精度'],
+            },
+            intel: {
+                icon: '📰', name: '情報網',
+                costs: [60, 120, 200],
+                desc: ['FAKE検出30%', '60%', '90%'],
+            },
+            instinct: {
+                icon: '💹', name: '直感',
+                costs: [100, 180, 300],
+                desc: ['売買ゲージ', '精度UP', '高精度'],
+            },
+        };
+
+        // ニュース
+        let activeNews = null, newsTimer = 0, nextNewsAt = 0;
         const NEWS_GOOD = [
             { text: '📰 好決算発表！', effect: 20 },
             { text: '📰 新製品が大ヒット！', effect: 15 },
             { text: '📰 大型提携を発表！', effect: 25 },
             { text: '📰 業績予想を上方修正！', effect: 18 },
-            { text: '📰 政府が支援策発表！', effect: 22 },
         ];
         const NEWS_BAD = [
             { text: '📰 業績下方修正…', effect: -20 },
             { text: '📰 不正会計が発覚！', effect: -25 },
             { text: '📰 主力商品にリコール！', effect: -18 },
             { text: '📰 CEOが突然辞任！', effect: -22 },
-            { text: '📰 競合が市場を奪取…', effect: -15 },
         ];
         const NEWS_FAKE = [
-            { text: '⚠ 噂: 買収されるらしい…？', realEffect: 0, fakeDirection: 1 },
-            { text: '⚠ 噂: 倒産の危機…？', realEffect: 0, fakeDirection: -1 },
-            { text: '⚠ 噂: 超大型案件受注…？', realEffect: 0, fakeDirection: 1 },
+            { text: '📰 噂: 買収されるらしい…', fakeDir: 1 },
+            { text: '📰 噂: 倒産の危機…', fakeDir: -1 },
+            { text: '📰 噂: 超大型案件受注…', fakeDir: 1 },
+            { text: '📰 噂: 大規模リストラ…', fakeDir: -1 },
         ];
 
-        let ui = {};
-        let endObjs = [];
-        let sceneRef;
+        // 予測矢印
+        let predictionArrows = []; // {tick, direction, x, y}
+
+        let ui = {}, endObjs = [], sceneRef;
 
         // 音
         const actx = new (window.AudioContext || window.webkitAudioContext)();
-        function snd(freq, type='sine', dur=0.1, vol=0.2) {
-            const o = actx.createOscillator(), g = actx.createGain();
+        function snd(f, t='sine', d=0.1, v=0.2) {
+            const o=actx.createOscillator(), g=actx.createGain();
             o.connect(g); g.connect(actx.destination);
-            o.frequency.value = freq; o.type = type;
-            g.gain.setValueAtTime(vol, actx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + dur);
-            o.start(); o.stop(actx.currentTime + dur);
+            o.frequency.value=f; o.type=t;
+            g.gain.setValueAtTime(v, actx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, actx.currentTime+d);
+            o.start(); o.stop(actx.currentTime+d);
         }
-        function sndBuy() { snd(440, 'sine', 0.05); setTimeout(() => snd(550, 'sine', 0.05), 40); }
-        function sndSell() { snd(660, 'sine', 0.05); setTimeout(() => snd(880, 'sine', 0.08), 40); }
-        function sndProfit() { snd(523, 'sine', 0.06); setTimeout(() => snd(659, 'sine', 0.06), 50); setTimeout(() => snd(784, 'sine', 0.1), 100); }
-        function sndLoss() { snd(200, 'square', 0.15, 0.12); }
-        function sndNews() { snd(800, 'square', 0.03, 0.15); setTimeout(() => snd(1000, 'square', 0.03, 0.15), 60); }
+        function sndBuy() { snd(440,'sine',0.05); setTimeout(()=>snd(550,'sine',0.05),40); }
+        function sndProfit() { snd(523,'sine',0.06); setTimeout(()=>snd(659,'sine',0.06),50); setTimeout(()=>snd(784,'sine',0.1),100); }
+        function sndLoss() { snd(200,'square',0.15,0.12); }
+        function sndNews() { snd(800,'square',0.03,0.15); setTimeout(()=>snd(1000,'square',0.03,0.15),60); }
+        function sndUpgrade() { snd(880,'square',0.05); setTimeout(()=>snd(1100,'square',0.05),50); setTimeout(()=>snd(1320,'square',0.1),100); }
 
         function create() {
             sceneRef = this;
 
             // 背景グリッド
-            const bgGfx = this.add.graphics();
-            bgGfx.lineStyle(1, 0x1a2540, 0.5);
-            for (let y = 0; y < H; y += 30) bgGfx.lineBetween(0, y, W, y);
-            for (let x = 0; x < W; x += 30) bgGfx.lineBetween(x, 0, x, H);
+            const bg = this.add.graphics();
+            bg.lineStyle(1, 0x1a2540, 0.5);
+            for (let y = 0; y < H; y += 30) bg.lineBetween(0, y, W, y);
+            for (let x = 0; x < W; x += 30) bg.lineBetween(x, 0, x, H);
 
             // チャートエリア
-            this.add.rectangle(W/2, 325, W - 20, 250, 0x0a0f1e, 0.8)
-                .setStrokeStyle(1, P.accent, 0.2);
-
+            this.add.rectangle(W/2, 280, W - 16, 220, 0x0a0f1e, 0.8).setStrokeStyle(1, P.accent, 0.2);
             chartGfx = this.add.graphics();
 
-            // === HUD上部 ===
-            ui.topBg = this.add.rectangle(W/2, 50, W, 100, 0x0a0f1e, 0.9);
-
-            ui.priceLabel = this.add.text(W/2, 12, '¥100', {
-                fontSize: '34px', fill: '#88ccff', fontFamily: 'monospace', fontStyle: 'bold'
+            // === HUD ===
+            ui.topBg = this.add.rectangle(W/2, 45, W, 90, 0x0a0f1e, 0.9);
+            ui.priceLabel = this.add.text(W/2, 8, '¥100', {
+                fontSize: '30px', fill: '#88ccff', fontFamily: 'monospace', fontStyle: 'bold'
             }).setOrigin(0.5, 0);
-
-            ui.priceChange = this.add.text(W/2, 50, '+0.0%', {
-                fontSize: '14px', fill: '#6bff8e', fontFamily: 'monospace'
+            ui.priceChange = this.add.text(W/2, 42, '+0.0%', {
+                fontSize: '13px', fill: '#6bff8e', fontFamily: 'monospace'
             }).setOrigin(0.5, 0);
-
-            ui.moneyText = this.add.text(15, 70, '💰 ¥1,000', {
-                fontSize: '13px', fill: '#ffe66b', fontFamily: 'monospace', fontStyle: 'bold'
+            ui.moneyText = this.add.text(12, 60, '💰 ¥1,000', {
+                fontSize: '12px', fill: '#ffe66b', fontFamily: 'monospace', fontStyle: 'bold'
             });
-            ui.holdText = this.add.text(W - 15, 70, '📦 0株', {
-                fontSize: '13px', fill: '#888', fontFamily: 'monospace', fontStyle: 'bold'
+            ui.holdText = this.add.text(W-12, 60, '📦 0株', {
+                fontSize: '12px', fill: '#888', fontFamily: 'monospace', fontStyle: 'bold'
             }).setOrigin(1, 0);
-            ui.timeText = this.add.text(W/2, 70, '60s', {
-                fontSize: '13px', fill: '#9b6dff', fontFamily: 'monospace'
+            ui.timeText = this.add.text(W/2, 60, '90s', {
+                fontSize: '12px', fill: '#9b6dff', fontFamily: 'monospace'
+            }).setOrigin(0.5, 0);
+            ui.plText = this.add.text(W/2, 76, '', {
+                fontSize: '11px', fill: '#888', fontFamily: 'monospace'
             }).setOrigin(0.5, 0);
 
-            ui.plText = this.add.text(W/2, 88, '', {
-                fontSize: '12px', fill: '#888', fontFamily: 'monospace'
-            }).setOrigin(0.5, 0);
+            // 直感メーター（RSI風）
+            ui.instinctBg = this.add.rectangle(W - 25, 280, 16, 200, 0x111111);
+            ui.instinctBg.setStrokeStyle(1, 0x333, 0.5);
+            ui.instinctBar = this.add.rectangle(W - 25, 380, 12, 4, P.accent);
+            ui.instinctHigh = this.add.text(W - 25, 185, '売', { fontSize: '10px', fill: '#ff4757' }).setOrigin(0.5);
+            ui.instinctLow = this.add.text(W - 25, 375, '買', { fontSize: '10px', fill: '#6bff8e' }).setOrigin(0.5);
+            ui.instinctLabel = this.add.text(W - 25, 390, '💹', { fontSize: '14px' }).setOrigin(0.5);
 
-            // === ニュースティッカー ===
-            ui.newsBg = this.add.rectangle(W/2, 470, W - 20, 36, 0x1a1030, 0.9);
+            // ニュースティッカー
+            ui.newsBg = this.add.rectangle(W/2, 405, W - 16, 30, 0x1a1030, 0.9);
             ui.newsBg.setStrokeStyle(1, P.purple, 0.3);
-            ui.newsText = this.add.text(W/2, 470, '', {
-                fontSize: '14px', fill: '#fff', fontStyle: 'bold',
-                stroke: '#000', strokeThickness: 1
+            ui.newsText = this.add.text(W/2, 400, '', {
+                fontSize: '13px', fill: '#fff', fontStyle: 'bold', stroke: '#000', strokeThickness: 1
             }).setOrigin(0.5);
-            ui.newsHint = this.add.text(W/2, 488, '', {
+            ui.newsHint = this.add.text(W/2, 414, '', {
                 fontSize: '10px', fill: '#888', fontFamily: 'monospace'
             }).setOrigin(0.5);
 
-            // === 買い/売りボタン ===
-            const btnY = 535, btnH = 60, btnW = 170;
+            // === 売買ボタン ===
+            const btnY = 455, btnH = 50, btnW = 185;
 
-            ui.buyBtn = this.add.rectangle(W/4 + 5, btnY, btnW, btnH, 0x1a3a2a, 0.95);
+            ui.buyBtn = this.add.rectangle(W/4+3, btnY, btnW, btnH, 0x1a3a2a, 0.95);
             ui.buyBtn.setStrokeStyle(2, P.green, 0.6);
             ui.buyBtn.setInteractive();
             ui.buyBtn.on('pointerdown', () => doBuy());
-            ui.buyLabel = this.add.text(W/4 + 5, btnY - 8, '📈 買う', {
-                fontSize: '20px', fill: '#6bff8e', fontStyle: 'bold'
-            }).setOrigin(0.5);
-            ui.buyCost = this.add.text(W/4 + 5, btnY + 16, '¥100', {
-                fontSize: '13px', fill: '#6bff8e', fontFamily: 'monospace'
-            }).setOrigin(0.5);
+            ui.buyLabel = this.add.text(W/4+3, btnY-6, '📈 買う', { fontSize: '18px', fill: '#6bff8e', fontStyle: 'bold' }).setOrigin(0.5);
+            ui.buyCost = this.add.text(W/4+3, btnY+15, '¥100', { fontSize: '12px', fill: '#6bff8e', fontFamily: 'monospace' }).setOrigin(0.5);
 
-            ui.sellBtn = this.add.rectangle(3*W/4 - 5, btnY, btnW, btnH, 0x3a1a2a, 0.95);
+            ui.sellBtn = this.add.rectangle(3*W/4-3, btnY, btnW, btnH, 0x3a1a2a, 0.95);
             ui.sellBtn.setStrokeStyle(2, P.red, 0.6);
             ui.sellBtn.setInteractive();
             ui.sellBtn.on('pointerdown', () => doSell());
-            ui.sellLabel = this.add.text(3*W/4 - 5, btnY - 8, '📉 売る', {
-                fontSize: '20px', fill: '#ff4757', fontStyle: 'bold'
-            }).setOrigin(0.5);
-            ui.sellInfo = this.add.text(3*W/4 - 5, btnY + 16, '保有なし', {
-                fontSize: '13px', fill: '#ff4757', fontFamily: 'monospace'
-            }).setOrigin(0.5);
+            ui.sellLabel = this.add.text(3*W/4-3, btnY-6, '📉 売る', { fontSize: '18px', fill: '#ff4757', fontStyle: 'bold' }).setOrigin(0.5);
+            ui.sellInfo = this.add.text(3*W/4-3, btnY+15, '保有なし', { fontSize: '12px', fill: '#666', fontFamily: 'monospace' }).setOrigin(0.5);
 
-            // 全額/全売ボタン
-            ui.buyAllBtn = this.add.rectangle(W/4 + 5, btnY + 48, btnW, 26, 0x0a0f1e);
+            // 全力ボタン
+            ui.buyAllBtn = this.add.rectangle(W/4+3, btnY+40, btnW, 22, 0x0a0f1e);
             ui.buyAllBtn.setStrokeStyle(1, P.green, 0.3);
             ui.buyAllBtn.setInteractive();
             ui.buyAllBtn.on('pointerdown', () => doBuy(true));
-            ui.buyAllLabel = this.add.text(W/4 + 5, btnY + 48, '全力買い', {
-                fontSize: '11px', fill: '#6bff8e', fontFamily: 'monospace'
-            }).setOrigin(0.5);
+            ui.buyAllText = this.add.text(W/4+3, btnY+40, '全力買い', { fontSize: '10px', fill: '#6bff8e', fontFamily: 'monospace' }).setOrigin(0.5);
 
-            ui.sellAllBtn = this.add.rectangle(3*W/4 - 5, btnY + 48, btnW, 26, 0x0a0f1e);
+            ui.sellAllBtn = this.add.rectangle(3*W/4-3, btnY+40, btnW, 22, 0x0a0f1e);
             ui.sellAllBtn.setStrokeStyle(1, P.red, 0.3);
             ui.sellAllBtn.setInteractive();
             ui.sellAllBtn.on('pointerdown', () => doSell(true));
-            ui.sellAllLabel = this.add.text(3*W/4 - 5, btnY + 48, '全売り', {
-                fontSize: '11px', fill: '#ff4757', fontFamily: 'monospace'
-            }).setOrigin(0.5);
+            ui.sellAllText = this.add.text(3*W/4-3, btnY+40, '全売り', { fontSize: '10px', fill: '#ff4757', fontFamily: 'monospace' }).setOrigin(0.5);
+
+            // === アップグレードボタン ===
+            const upY = 540;
+            const upKeys = ['analysis', 'intel', 'instinct'];
+            const upXs = [70, 200, 330];
+            ui.upBtns = {};
+
+            upKeys.forEach((key, i) => {
+                const u = UPGRADES[key];
+                const bg = this.add.rectangle(upXs[i], upY, 120, 55, 0x0a0f1e, 0.9);
+                bg.setStrokeStyle(1, P.purple, 0.4);
+                bg.setInteractive();
+                bg.on('pointerdown', () => buyUpgrade(key));
+
+                const icon = this.add.text(upXs[i], upY - 12, `${u.icon} ${u.name}`, {
+                    fontSize: '13px', fill: '#bbb', fontStyle: 'bold'
+                }).setOrigin(0.5);
+                const cost = this.add.text(upXs[i], upY + 8, `${u.costs[0]}c`, {
+                    fontSize: '12px', fill: '#ffe66b', fontFamily: 'monospace'
+                }).setOrigin(0.5);
+                const lv = this.add.text(upXs[i] + 55, upY - 22, 'Lv0', {
+                    fontSize: '9px', fill: '#9b6dff', fontFamily: 'monospace'
+                }).setOrigin(1, 0);
+
+                ui.upBtns[key] = { bg, icon, cost, lv };
+            });
 
             // 累計利益
-            ui.profitText = this.add.text(W/2, 620, '累計利益: ¥0', {
-                fontSize: '16px', fill: '#888', fontFamily: 'monospace', fontStyle: 'bold'
-            }).setOrigin(0.5);
-            ui.tradeText = this.add.text(W/2, 642, '取引: 0回', {
-                fontSize: '11px', fill: '#666', fontFamily: 'monospace'
+            ui.profitText = this.add.text(W/2, 585, '累計利益: ¥0', {
+                fontSize: '14px', fill: '#888', fontFamily: 'monospace', fontStyle: 'bold'
             }).setOrigin(0.5);
 
-            // チャート凡例
-            ui.legendMA = this.add.text(25, 200, '― 移動平均', {
-                fontSize: '10px', fill: '#9b6dff', fontFamily: 'monospace'
-            }).setAlpha(0.6);
-            ui.legendPrice = this.add.text(25, 213, '― 現在価格', {
-                fontSize: '10px', fill: '#88ccff', fontFamily: 'monospace'
-            }).setAlpha(0.6);
+            // 凡例
+            ui.legend1 = this.add.text(22, 172, '― 価格  ', { fontSize: '9px', fill: '#88ccff', fontFamily: 'monospace' }).setAlpha(0.5);
+            ui.legend2 = this.add.text(90, 172, '― 平均', { fontSize: '9px', fill: '#9b6dff', fontFamily: 'monospace' }).setAlpha(0.5);
 
             setGameUIVisible(false);
 
             // === スタート画面 ===
             ui.startBg = this.add.rectangle(W/2, H/2, W, H, 0x0f1628);
-
-            const picoC = this.add.container(W/2, 130);
+            const picoC = this.add.container(W/2, 120);
             picoC.add(this.add.ellipse(0, 15, 50, 60, 0x88ccff));
             picoC.add(this.add.circle(0, -20, 25, 0xffddbb));
             picoC.add(this.add.circle(-25, -15, 12, 0x9b6dff));
             picoC.add(this.add.circle(25, -15, 12, 0x9b6dff));
-            picoC.add(this.add.circle(-8, -22, 3, 0x333333));
-            picoC.add(this.add.circle(8, -22, 3, 0x333333));
+            picoC.add(this.add.circle(-8, -22, 3, 0x333));
+            picoC.add(this.add.circle(8, -22, 3, 0x333));
             picoC.add(this.add.text(0, -14, '◡', { fontSize: '10px', fill: '#cc8877' }).setOrigin(0.5));
-            picoC.add(this.add.rectangle(-8, -22, 12, 6, 0x333333));
-            picoC.add(this.add.rectangle(8, -22, 12, 6, 0x333333));
-            picoC.add(this.add.rectangle(0, -22, 8, 2, 0x333333));
+            picoC.add(this.add.rectangle(-8, -22, 12, 6, 0x333));
+            picoC.add(this.add.rectangle(8, -22, 12, 6, 0x333));
+            picoC.add(this.add.rectangle(0, -22, 8, 2, 0x333));
             ui.picoChar = picoC;
-            this.tweens.add({ targets: picoC, y: 125, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            this.tweens.add({ targets: picoC, y: 115, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-            ui.titleText = this.add.text(W/2, 215, '波乗りトレーダー', {
-                fontSize: '30px', fill: '#fff', fontStyle: 'bold', stroke: '#0a0a1a', strokeThickness: 4
+            ui.titleText = this.add.text(W/2, 200, '波乗りトレーダー', {
+                fontSize: '28px', fill: '#fff', fontStyle: 'bold', stroke: '#0a0a1a', strokeThickness: 4
             }).setOrigin(0.5);
-            ui.titleSub = this.add.text(W/2, 250, 'WAVE RIDER TRADER', {
-                fontSize: '11px', fill: '#9b6dff', fontFamily: 'monospace'
+            ui.titleSub = this.add.text(W/2, 232, 'WAVE RIDER TRADER', {
+                fontSize: '10px', fill: '#9b6dff', fontFamily: 'monospace'
             }).setOrigin(0.5);
 
-            const miniChart = this.add.graphics();
-            miniChart.lineStyle(2, P.accent, 0.4);
-            miniChart.beginPath();
+            const mc = this.add.graphics();
+            mc.lineStyle(2, P.accent, 0.3);
+            mc.beginPath();
             for (let i = 0; i < 200; i++) {
-                const x = 50 + i * 1.5;
-                const y = 340 + Math.sin(i * 0.05) * 30 + Math.sin(i * 0.12) * 15;
-                if (i === 0) miniChart.moveTo(x, y); else miniChart.lineTo(x, y);
+                const x = 50 + i * 1.5, y = 310 + Math.sin(i * 0.05) * 25 + Math.sin(i * 0.12) * 10;
+                if (i === 0) mc.moveTo(x, y); else mc.lineTo(x, y);
             }
-            miniChart.strokePath();
-            ui.miniChart = miniChart;
+            mc.strokePath();
+            ui.miniChart = mc;
 
-            ui.titleDesc = this.add.text(W/2, 420,
-                '安く買って、高く売ろう！\n\n📈 チャートの波を読んで売買\n📰 ニュース速報が値動きのヒント\n⚠ フェイクニュースに注意！\n💰 60秒で資産を最大化', {
-                fontSize: '15px', fill: '#bdc3c7', align: 'center', lineSpacing: 5
+            ui.titleDesc = this.add.text(W/2, 400,
+                '📈 波を読んで安く買い、高く売る\n📰 ニュースで値動きを予測\n🔍 利益で分析ツールをアップグレード\n⚠ フェイクニュースに注意！\n💰 90秒で資産を最大化', {
+                fontSize: '14px', fill: '#bdc3c7', align: 'center', lineSpacing: 5
             }).setOrigin(0.5);
 
-            let bestStr = '';
-            try { const b = localStorage.getItem('trader_best'); if (b) bestStr = `BEST: +¥${b}`; } catch(e) {}
-            ui.titleBest = this.add.text(W/2, 520, bestStr, {
+            let bs = ''; try { const b = localStorage.getItem('trader2_best'); if (b) bs = `BEST: +¥${b}`; } catch(e) {}
+            ui.titleBest = this.add.text(W/2, 490, bs, {
                 fontSize: '16px', fill: '#ffe66b', fontFamily: 'monospace', fontStyle: 'bold'
             }).setOrigin(0.5);
 
-            ui.titleStart = this.add.text(W/2, 565, '▶ TAP TO START', {
+            ui.titleStart = this.add.text(W/2, 540, '▶ TAP TO START', {
                 fontSize: '22px', fill: '#88ccff', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5);
             this.tweens.add({ targets: ui.titleStart, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
 
-            this.add.text(W/2, H - 12, 'Powered by Phaser', {
-                fontSize: '10px', fill: '#fff'
-            }).setOrigin(0.5).setAlpha(0.2);
+            this.add.text(W/2, H - 10, 'Powered by Phaser', { fontSize: '10px', fill: '#fff' }).setOrigin(0.5).setAlpha(0.2);
 
-            this.input.on('pointerdown', (ptr) => {
-                if (state === 'title') startGame(this);
-            });
+            this.input.on('pointerdown', (ptr) => { if (state === 'title') startGame(this); });
         }
 
         function setGameUIVisible(v) {
-            [ui.topBg, ui.priceLabel, ui.priceChange, ui.moneyText, ui.holdText, ui.timeText, ui.plText,
-             ui.newsBg, ui.newsText, ui.newsHint,
-             ui.buyBtn, ui.buyLabel, ui.buyCost, ui.buyAllBtn, ui.buyAllLabel,
-             ui.sellBtn, ui.sellLabel, ui.sellInfo, ui.sellAllBtn, ui.sellAllLabel,
-             ui.profitText, ui.tradeText, ui.legendMA, ui.legendPrice].forEach(e => e && e.setVisible(v));
+            const els = [ui.topBg, ui.priceLabel, ui.priceChange, ui.moneyText, ui.holdText, ui.timeText, ui.plText,
+                ui.instinctBg, ui.instinctBar, ui.instinctHigh, ui.instinctLow, ui.instinctLabel,
+                ui.newsBg, ui.newsText, ui.newsHint,
+                ui.buyBtn, ui.buyLabel, ui.buyCost, ui.buyAllBtn, ui.buyAllText,
+                ui.sellBtn, ui.sellLabel, ui.sellInfo, ui.sellAllBtn, ui.sellAllText,
+                ui.profitText, ui.legend1, ui.legend2];
+            els.forEach(e => e && e.setVisible(v));
+            Object.values(ui.upBtns).forEach(b => Object.values(b).forEach(o => o.setVisible(v)));
+            // 直感メーターは直感Lv1以上で表示
+            const showInstinct = v && instinctLv > 0;
+            [ui.instinctBg, ui.instinctBar, ui.instinctHigh, ui.instinctLow, ui.instinctLabel].forEach(e => e.setVisible(showInstinct));
         }
 
         function startGame(scene) {
@@ -287,19 +309,19 @@
 
             money = 1000; holdings = 0; buyPrice = 0;
             totalProfit = 0; trades = 0; bestTrades = 0;
-            timeLeft = 60; tick = 0;
+            timeLeft = 90; tick = 0;
             price = 100; basePrice = 100;
             priceHistory = []; maHistory = [];
+            analysisLv = 0; intelLv = 0; instinctLv = 0;
             wavePhase = Math.random() * Math.PI * 2;
             subPhase = Math.random() * Math.PI * 2;
-            newsQueue = []; activeNews = null; newsTimer = 0;
-            nextNewsAt = Phaser.Math.Between(40, 80); // 最初のニュース（tick単位）
+            activeNews = null; newsTimer = 0;
+            nextNewsAt = Phaser.Math.Between(50, 90);
+            predictionArrows = [];
 
-            for (let i = 0; i < CHART_POINTS; i++) {
-                const p = 100 + Math.sin(i * WAVE_SPEED) * WAVE_AMP * 0.5;
-                priceHistory.push(p);
-            }
+            for (let i = 0; i < CHART_POINTS; i++) priceHistory.push(100 + Math.sin(i * WAVE_SPEED) * WAVE_AMP * 0.5);
             calcMA();
+            updateUpgradeUI();
             updateAllUI();
 
             countdownTimer = scene.time.addEvent({
@@ -315,276 +337,306 @@
         }
 
         function calcMA() {
-            // 移動平均（直近20ポイント）
             maHistory = [];
             for (let i = 0; i < priceHistory.length; i++) {
-                const start = Math.max(0, i - 19);
-                const slice = priceHistory.slice(start, i + 1);
-                maHistory.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+                const s = Math.max(0, i - 19);
+                const sl = priceHistory.slice(s, i + 1);
+                maHistory.push(sl.reduce((a, b) => a + b, 0) / sl.length);
             }
         }
 
-        function scheduleNews() {
-            // 次のニュースを予約
-            nextNewsAt = tick + Phaser.Math.Between(60, 120);
+        // === 予測矢印（分析ツール） ===
+        function generatePrediction() {
+            if (analysisLv <= 0) return;
+            // 次の波の方向を予測
+            const futurePhase = wavePhase + WAVE_SPEED * 30;
+            const futurePrice = basePrice + Math.sin(futurePhase) * WAVE_AMP;
+            const direction = futurePrice > price ? 1 : -1;
+
+            // 精度（レベルで上がる）
+            const accuracy = [0, 0.6, 0.75, 0.9][analysisLv];
+            const isCorrect = Math.random() < accuracy;
+            const showDir = isCorrect ? direction : -direction;
+
+            // チャート右端に矢印表示
+            const arrow = sceneRef.add.text(W - 45, showDir > 0 ? 195 : 370, showDir > 0 ? '▲' : '▼', {
+                fontSize: '20px', fill: showDir > 0 ? '#6bff8e' : '#ff4757', fontStyle: 'bold'
+            }).setOrigin(0.5).setAlpha(0.8);
+
+            sceneRef.tweens.add({
+                targets: arrow, alpha: 0, duration: 3000,
+                onComplete: () => arrow.destroy()
+            });
+        }
+
+        // === 直感メーター（RSI風） ===
+        function updateInstinctMeter() {
+            if (instinctLv <= 0) {
+                [ui.instinctBg, ui.instinctBar, ui.instinctHigh, ui.instinctLow, ui.instinctLabel].forEach(e => e.setVisible(false));
+                return;
+            }
+            [ui.instinctBg, ui.instinctBar, ui.instinctHigh, ui.instinctLow, ui.instinctLabel].forEach(e => e.setVisible(true));
+
+            // 波の位相から「買われすぎ/売られすぎ」を算出
+            const sineVal = Math.sin(wavePhase); // -1 ~ 1
+            const noise = instinctLv >= 3 ? 0 : instinctLv >= 2 ? Phaser.Math.FloatBetween(-0.1, 0.1) : Phaser.Math.FloatBetween(-0.25, 0.25);
+            const rsi = Math.max(-1, Math.min(1, sineVal + noise));
+
+            // バー位置（上=売られすぎ=-1、下=買われすぎ=1）
+            const meterY = 185;
+            const meterH = 190;
+            const barY = meterY + (1 - rsi) / 2 * meterH;
+
+            ui.instinctBar.setPosition(W - 25, barY);
+
+            // 色
+            if (rsi > 0.5) {
+                ui.instinctBar.setFillStyle(P.red); // 売りどき
+            } else if (rsi < -0.5) {
+                ui.instinctBar.setFillStyle(P.green); // 買いどき
+            } else {
+                ui.instinctBar.setFillStyle(P.accent);
+            }
         }
 
         function triggerNews() {
             const roll = Math.random();
             let news;
-
             if (roll < 0.35) {
-                // 良いニュース
                 const n = Phaser.Utils.Array.GetRandom(NEWS_GOOD);
-                news = { text: n.text, effect: n.effect, isFake: false, countdown: 3 };
+                news = { text: n.text, effect: n.effect, isFake: false };
             } else if (roll < 0.70) {
-                // 悪いニュース
                 const n = Phaser.Utils.Array.GetRandom(NEWS_BAD);
-                news = { text: n.text, effect: n.effect, isFake: false, countdown: 3 };
+                news = { text: n.text, effect: n.effect, isFake: false };
             } else {
-                // フェイクニュース（実際には効果なし or 逆効果）
                 const n = Phaser.Utils.Array.GetRandom(NEWS_FAKE);
-                news = {
-                    text: n.text,
-                    effect: Phaser.Math.Between(-8, 8), // 少しだけ動く（騙し）
-                    isFake: true,
-                    countdown: 3
-                };
+                news = { text: n.text, effect: Phaser.Math.Between(-5, 5), isFake: true, fakeDir: n.fakeDir };
             }
 
             activeNews = news;
-            newsTimer = 180; // 3秒間表示（60fps × 3）
+            newsTimer = 180;
             sndNews();
 
-            // ニュース予告を表示
             ui.newsText.setText(news.text);
+
             if (news.isFake) {
-                ui.newsHint.setText('⚠ 未確認情報').setFill('#ff6b9d');
+                // 情報網レベルでフェイク検出
+                const detectChance = [0, 0.3, 0.6, 0.9][intelLv];
+                if (Math.random() < detectChance) {
+                    ui.newsHint.setText('🔍 FAKE検出！信用するな').setFill('#ff6b9d');
+                } else {
+                    const hint = news.fakeDir > 0 ? '↑ 上昇の噂' : '↓ 下落の噂';
+                    ui.newsHint.setText(hint).setFill(news.fakeDir > 0 ? '#6bff8e' : '#ff4757');
+                }
             } else {
                 ui.newsHint.setText(news.effect > 0 ? '↑ 価格上昇の予兆' : '↓ 価格下落の予兆');
                 ui.newsHint.setFill(news.effect > 0 ? '#6bff8e' : '#ff4757');
             }
 
-            scheduleNews();
-        }
-
-        function applyNewsEffect() {
-            if (!activeNews) return;
-            // 段階的にベース価格に反映
-            basePrice += activeNews.effect * 0.15;
-            basePrice = Math.max(30, Math.min(250, basePrice));
+            nextNewsAt = tick + Phaser.Math.Between(80, 140);
         }
 
         function updatePrice() {
             tick++;
 
-            // ニュースチェック
-            if (tick >= nextNewsAt && !activeNews) {
-                triggerNews();
-            }
+            if (tick >= nextNewsAt && !activeNews) triggerNews();
 
-            // ニュースタイマー
             if (newsTimer > 0) {
                 newsTimer--;
-                if (newsTimer === 120) {
-                    // 1秒後にカウントダウン表示
-                    if (activeNews) activeNews.countdown = 2;
-                }
-                if (newsTimer === 60) {
-                    if (activeNews) activeNews.countdown = 1;
-                }
                 if (newsTimer <= 0) {
-                    // ニュース効果を適用
-                    applyNewsEffect();
-                    // フェイクなら「ガセでした」表示
-                    if (activeNews && activeNews.isFake) {
-                        ui.newsText.setText('❌ フェイクニュースでした！');
-                        ui.newsHint.setText('').setFill('#888');
-                        setTimeout(() => {
-                            if (state === 'playing') {
-                                ui.newsText.setText('');
-                                ui.newsHint.setText('');
-                            }
-                        }, 1500);
-                    } else {
-                        ui.newsText.setText('');
+                    basePrice += activeNews.effect * 0.15;
+                    basePrice = Math.max(30, Math.min(250, basePrice));
+                    if (activeNews.isFake) {
+                        ui.newsText.setText('❌ フェイクでした！');
                         ui.newsHint.setText('');
+                        setTimeout(() => { if (state === 'playing') { ui.newsText.setText(''); ui.newsHint.setText(''); } }, 1200);
+                    } else {
+                        ui.newsText.setText(''); ui.newsHint.setText('');
                     }
                     activeNews = null;
                 }
             }
 
-            // === 規則的な波動 ===
             wavePhase += WAVE_SPEED;
             subPhase += SUB_SPEED;
-
-            // メイン波（読みやすい大きな波）+ サブ波（小さい変動）
-            const mainWave = Math.sin(wavePhase) * WAVE_AMP;
-            const subWave = Math.sin(subPhase) * SUB_AMP;
-            const noise = Phaser.Math.FloatBetween(-1, 1); // ごく小さいノイズ
-
-            price = basePrice + mainWave + subWave + noise;
+            price = basePrice + Math.sin(wavePhase) * WAVE_AMP + Math.sin(subPhase) * SUB_AMP + Phaser.Math.FloatBetween(-0.8, 0.8);
             price = Math.max(20, Math.min(300, price));
 
             priceHistory.push(price);
             if (priceHistory.length > CHART_POINTS) priceHistory.shift();
             calcMA();
+
+            // 分析予測（60tickごと）
+            if (tick % 60 === 0) generatePrediction();
         }
 
         function drawChart() {
             chartGfx.clear();
-            const cX = 20, cY = 200, cW = W - 40, cH = 240;
+            const cX = 20, cY = 172, cW = W - 55, cH = 210;
             const min = Math.min(...priceHistory) - 5;
             const max = Math.max(...priceHistory) + 5;
             const range = max - min || 1;
+            const toS = (v, i) => ({ x: cX + (i / (CHART_POINTS - 1)) * cW, y: cY + cH - ((v - min) / range) * cH });
 
-            const toScreen = (val, idx) => ({
-                x: cX + (idx / (CHART_POINTS - 1)) * cW,
-                y: cY + cH - ((val - min) / range) * cH
-            });
-
-            // 購入価格ライン
+            // 購入ライン
             if (holdings > 0) {
-                const buyY = cY + cH - ((buyPrice - min) / range) * cH;
-                if (buyY >= cY && buyY <= cY + cH) {
-                    chartGfx.lineStyle(1, P.yellow, 0.4);
-                    chartGfx.lineBetween(cX, buyY, cX + cW, buyY);
+                const by = cY + cH - ((buyPrice - min) / range) * cH;
+                if (by >= cY && by <= cY + cH) {
+                    chartGfx.lineStyle(1, P.yellow, 0.35);
+                    chartGfx.lineBetween(cX, by, cX + cW, by);
                 }
             }
 
-            // 移動平均ライン
-            chartGfx.lineStyle(1.5, P.purple, 0.5);
+            // 移動平均
+            chartGfx.lineStyle(1.5, P.purple, 0.45);
             chartGfx.beginPath();
-            maHistory.forEach((val, i) => {
-                const p = toScreen(val, i);
-                if (i === 0) chartGfx.moveTo(p.x, p.y); else chartGfx.lineTo(p.x, p.y);
-            });
+            maHistory.forEach((v, i) => { const p = toS(v, i); i === 0 ? chartGfx.moveTo(p.x, p.y) : chartGfx.lineTo(p.x, p.y); });
             chartGfx.strokePath();
 
             // 塗りつぶし
-            const points = priceHistory.map((val, i) => toScreen(val, i));
+            const pts = priceHistory.map((v, i) => toS(v, i));
             chartGfx.fillStyle(P.accent, 0.06);
             chartGfx.beginPath();
-            chartGfx.moveTo(points[0].x, cY + cH);
-            points.forEach(p => chartGfx.lineTo(p.x, p.y));
-            chartGfx.lineTo(points[points.length-1].x, cY + cH);
+            chartGfx.moveTo(pts[0].x, cY + cH);
+            pts.forEach(p => chartGfx.lineTo(p.x, p.y));
+            chartGfx.lineTo(pts[pts.length-1].x, cY + cH);
             chartGfx.closePath();
             chartGfx.fillPath();
 
             // 価格ライン
             chartGfx.lineStyle(2.5, P.accent, 0.9);
             chartGfx.beginPath();
-            points.forEach((p, i) => {
-                if (i === 0) chartGfx.moveTo(p.x, p.y); else chartGfx.lineTo(p.x, p.y);
-            });
+            pts.forEach((p, i) => { i === 0 ? chartGfx.moveTo(p.x, p.y) : chartGfx.lineTo(p.x, p.y); });
             chartGfx.strokePath();
 
-            // 最新ドット
-            const last = points[points.length - 1];
-            chartGfx.fillStyle(P.white, 1);
-            chartGfx.fillCircle(last.x, last.y, 5);
-            chartGfx.fillStyle(P.accent, 1);
-            chartGfx.fillCircle(last.x, last.y, 3);
+            // ドット
+            const last = pts[pts.length - 1];
+            chartGfx.fillStyle(P.white, 1); chartGfx.fillCircle(last.x, last.y, 4);
+            chartGfx.fillStyle(P.accent, 1); chartGfx.fillCircle(last.x, last.y, 2);
 
-            // ガイドライン
-            chartGfx.lineStyle(1, 0x333333, 0.3);
-            for (let i = 0; i <= 4; i++) {
-                const y = cY + (cH / 4) * i;
-                chartGfx.lineBetween(cX, y, cX + cW, y);
-            }
+            // ガイド
+            chartGfx.lineStyle(1, 0x333, 0.2);
+            for (let i = 0; i <= 4; i++) chartGfx.lineBetween(cX, cY + cH / 4 * i, cX + cW, cY + cH / 4 * i);
         }
 
         function doBuy(all = false) {
             if (state !== 'playing') return;
             const p = Math.floor(price);
             if (all) {
-                const canBuy = Math.floor(money / p);
-                if (canBuy <= 0) { snd(100, 'square', 0.1, 0.1); return; }
-                const cost = canBuy * p;
-                buyPrice = holdings > 0 ? ((buyPrice * holdings + cost) / (holdings + canBuy)) : p;
-                holdings += canBuy;
-                money -= cost;
+                const n = Math.floor(money / p);
+                if (n <= 0) { snd(100,'square',0.1,0.1); return; }
+                buyPrice = holdings > 0 ? ((buyPrice * holdings + n * p) / (holdings + n)) : p;
+                holdings += n; money -= n * p;
             } else {
-                if (money < p) { snd(100, 'square', 0.1, 0.1); return; }
+                if (money < p) { snd(100,'square',0.1,0.1); return; }
                 buyPrice = holdings > 0 ? ((buyPrice * holdings + p) / (holdings + 1)) : p;
-                holdings += 1;
-                money -= p;
+                holdings += 1; money -= p;
             }
             trades++; sndBuy();
-            showTradeEffect(true);
-            updateAllUI();
+            showEffect(true); updateAllUI();
         }
 
         function doSell(all = false) {
-            if (state !== 'playing' || holdings <= 0) { snd(100, 'square', 0.1, 0.1); return; }
+            if (state !== 'playing' || holdings <= 0) { snd(100,'square',0.1,0.1); return; }
             const p = Math.floor(price);
-            const sellCount = all ? holdings : 1;
-            const revenue = sellCount * p;
-            const profit = revenue - sellCount * buyPrice;
-            totalProfit += profit;
-            money += revenue;
-            holdings -= sellCount;
+            const n = all ? holdings : 1;
+            const rev = n * p, profit = rev - n * buyPrice;
+            totalProfit += profit; money += rev;
+            holdings -= n;
             if (holdings <= 0) { holdings = 0; buyPrice = 0; }
-            trades++;
-            bestTrades = Math.max(bestTrades, profit);
-            if (profit > 0) sndProfit(); else sndLoss();
-            showTradeEffect(false, profit);
-            updateAllUI();
+            trades++; bestTrades = Math.max(bestTrades, profit);
+            profit > 0 ? sndProfit() : sndLoss();
+            showEffect(false, profit); updateAllUI();
         }
 
-        function showTradeEffect(isBuy, profit = 0) {
-            const x = isBuy ? W/4 + 5 : 3*W/4 - 5;
-            const y = 505;
-            if (isBuy) {
-                const txt = sceneRef.add.text(x, y, '📈 BUY!', {
-                    fontSize: '18px', fill: '#6bff8e', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
-                }).setOrigin(0.5);
-                sceneRef.tweens.add({ targets: txt, y: y - 35, alpha: 0, duration: 500, onComplete: () => txt.destroy() });
-            } else {
-                const color = profit >= 0 ? '#6bff8e' : '#ff4757';
-                const sign = profit >= 0 ? '+' : '';
-                const txt = sceneRef.add.text(x, y, `📉 ${sign}¥${Math.floor(profit)}`, {
-                    fontSize: '18px', fill: color, fontStyle: 'bold', stroke: '#000', strokeThickness: 2
-                }).setOrigin(0.5);
-                sceneRef.tweens.add({ targets: txt, y: y - 35, alpha: 0, duration: 600, onComplete: () => txt.destroy() });
+        function showEffect(isBuy, profit = 0) {
+            const x = isBuy ? W/4 + 3 : 3*W/4 - 3, y = 430;
+            const txt = sceneRef.add.text(x, y,
+                isBuy ? '📈 BUY!' : `📉 ${profit >= 0 ? '+' : ''}¥${Math.floor(profit)}`, {
+                fontSize: '16px', fill: isBuy ? '#6bff8e' : (profit >= 0 ? '#6bff8e' : '#ff4757'),
+                fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+            }).setOrigin(0.5);
+            sceneRef.tweens.add({ targets: txt, y: y - 30, alpha: 0, duration: 500, onComplete: () => txt.destroy() });
+        }
+
+        function buyUpgrade(key) {
+            if (state !== 'playing') return;
+            let lv, costs;
+            if (key === 'analysis') { lv = analysisLv; costs = UPGRADES.analysis.costs; }
+            else if (key === 'intel') { lv = intelLv; costs = UPGRADES.intel.costs; }
+            else { lv = instinctLv; costs = UPGRADES.instinct.costs; }
+
+            if (lv >= costs.length) { snd(100,'square',0.1,0.1); return; }
+            const cost = costs[lv];
+            if (totalProfit < cost && money < cost) { snd(100,'square',0.1,0.1); return; }
+
+            // 所持金から引く
+            if (money >= cost) { money -= cost; }
+            else { snd(100,'square',0.1,0.1); return; }
+
+            if (key === 'analysis') analysisLv++;
+            else if (key === 'intel') intelLv++;
+            else instinctLv++;
+
+            sndUpgrade();
+            updateUpgradeUI();
+            updateAllUI();
+
+            // エフェクト
+            const u = UPGRADES[key];
+            const lvNow = key === 'analysis' ? analysisLv : key === 'intel' ? intelLv : instinctLv;
+            const fx = sceneRef.add.text(W/2, 520, `${u.icon} ${u.name} Lv${lvNow}!`, {
+                fontSize: '20px', fill: '#9b6dff', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+            }).setOrigin(0.5);
+            sceneRef.tweens.add({ targets: fx, y: 490, alpha: 0, scale: 1.2, duration: 700, onComplete: () => fx.destroy() });
+        }
+
+        function updateUpgradeUI() {
+            const lvs = { analysis: analysisLv, intel: intelLv, instinct: instinctLv };
+            for (const [key, b] of Object.entries(ui.upBtns)) {
+                const lv = lvs[key];
+                const u = UPGRADES[key];
+                b.lv.setText(`Lv${lv}`);
+                if (lv >= u.costs.length) {
+                    b.cost.setText('MAX');
+                    b.bg.setAlpha(0.4);
+                } else {
+                    b.cost.setText(`¥${u.costs[lv]}`);
+                    const canBuy = money >= u.costs[lv];
+                    b.bg.setAlpha(canBuy ? 0.9 : 0.4);
+                    [b.icon, b.cost].forEach(e => e.setAlpha(canBuy ? 1 : 0.4));
+                }
             }
         }
 
         function updateAllUI() {
             const p = Math.floor(price);
             ui.priceLabel.setText(`¥${p}`);
-
             if (priceHistory.length >= 2) {
                 const prev = priceHistory[priceHistory.length - 2];
-                const change = ((price - prev) / prev * 100).toFixed(1);
-                ui.priceChange.setText(`${change >= 0 ? '+' : ''}${change}%`);
-                ui.priceChange.setFill(change >= 0 ? '#6bff8e' : '#ff4757');
-                ui.priceLabel.setFill(change >= 0 ? '#88ccff' : '#ff8888');
+                const ch = ((price - prev) / prev * 100).toFixed(1);
+                ui.priceChange.setText(`${ch >= 0 ? '+' : ''}${ch}%`).setFill(ch >= 0 ? '#6bff8e' : '#ff4757');
             }
-
             ui.moneyText.setText(`💰 ¥${money.toLocaleString()}`);
             ui.holdText.setText(`📦 ${holdings}株`);
             ui.buyCost.setText(`¥${p}/株`);
-
             if (holdings > 0) {
                 const pl = Math.floor((price - buyPrice) * holdings);
                 ui.sellInfo.setText(`${pl >= 0 ? '+' : ''}¥${pl}`).setFill(pl >= 0 ? '#6bff8e' : '#ff4757');
-                ui.plText.setText(`平均 ¥${Math.floor(buyPrice)} × ${holdings}株`).setFill('#888');
+                ui.plText.setText(`平均¥${Math.floor(buyPrice)}×${holdings}株`);
                 ui.holdText.setFill('#ffe66b');
             } else {
                 ui.sellInfo.setText('保有なし').setFill('#666');
                 ui.plText.setText('');
                 ui.holdText.setFill('#666');
             }
+            ui.profitText.setText(`利益: ${totalProfit >= 0 ? '+' : ''}¥${Math.floor(totalProfit).toLocaleString()}`).setFill(totalProfit >= 0 ? '#6bff8e' : '#ff4757');
 
-            const profitColor = totalProfit >= 0 ? '#6bff8e' : '#ff4757';
-            ui.profitText.setText(`累計利益: ${totalProfit >= 0 ? '+' : ''}¥${Math.floor(totalProfit).toLocaleString()}`).setFill(profitColor);
-            ui.tradeText.setText(`取引: ${trades}回`);
+            [ui.buyBtn, ui.buyLabel, ui.buyCost, ui.buyAllBtn, ui.buyAllText].forEach(e => e.setAlpha(money >= p ? 1 : 0.35));
+            [ui.sellBtn, ui.sellLabel, ui.sellInfo, ui.sellAllBtn, ui.sellAllText].forEach(e => e.setAlpha(holdings > 0 ? 1 : 0.35));
 
-            const canBuy = money >= p;
-            [ui.buyBtn, ui.buyLabel, ui.buyCost, ui.buyAllBtn, ui.buyAllLabel].forEach(e => e.setAlpha(canBuy ? 1 : 0.35));
-            const canSell = holdings > 0;
-            [ui.sellBtn, ui.sellLabel, ui.sellInfo, ui.sellAllBtn, ui.sellAllLabel].forEach(e => e.setAlpha(canSell ? 1 : 0.35));
+            updateInstinctMeter();
+            updateUpgradeUI();
         }
 
         function update() {
@@ -597,79 +649,66 @@
         function endGame(scene) {
             state = 'over';
             countdownTimer.remove();
-
             if (holdings > 0) {
-                const revenue = holdings * Math.floor(price);
-                totalProfit += (revenue - holdings * buyPrice);
-                money += revenue;
+                totalProfit += holdings * (Math.floor(price) - buyPrice);
+                money += holdings * Math.floor(price);
                 holdings = 0;
             }
-
             setGameUIVisible(false);
             chartGfx.clear();
 
             const profit = Math.floor(totalProfit);
-            const prevBest = parseInt(localStorage.getItem('trader_best') || '0');
-            const isNewBest = profit > prevBest;
-            if (isNewBest) try { localStorage.setItem('trader_best', String(profit)); } catch(e) {}
+            const prev = parseInt(localStorage.getItem('trader2_best') || '0');
+            const isNew = profit > prev;
+            if (isNew) try { localStorage.setItem('trader2_best', String(profit)); } catch(e) {}
 
             let rank = 'D';
             if (profit >= 500) rank = 'S';
             else if (profit >= 300) rank = 'A';
             else if (profit >= 100) rank = 'B';
             else if (profit >= 0) rank = 'C';
-            const rankColors = { D: '#ff6b9d', C: '#ffe66b', B: '#88ccff', A: '#6bff8e', S: '#9b6dff' };
+            const rc = { D: '#ff6b9d', C: '#ffe66b', B: '#88ccff', A: '#6bff8e', S: '#9b6dff' };
 
             endObjs = [];
             endObjs.push(scene.add.rectangle(W/2, H/2, W, H, 0x000000, 0.8));
-            const card = scene.add.rectangle(W/2, H/2 - 10, 350, 430, 0x0f1628, 0.95);
+            const card = scene.add.rectangle(W/2, H/2, 350, 440, 0x0f1628, 0.95);
             card.setStrokeStyle(2, P.purple, 0.5);
             endObjs.push(card);
 
-            endObjs.push(scene.add.text(W/2, 175, '📊 取引終了', { fontSize: '26px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
-            endObjs.push(scene.add.text(W/2, 215, '累計利益', { fontSize: '13px', fill: '#888', fontFamily: 'monospace' }).setOrigin(0.5));
-
-            const sign = profit >= 0 ? '+' : '';
-            endObjs.push(scene.add.text(W/2, 250, `${sign}¥${profit.toLocaleString()}`, {
-                fontSize: '40px', fill: profit >= 0 ? '#6bff8e' : '#ff4757', fontStyle: 'bold', fontFamily: 'monospace'
+            endObjs.push(scene.add.text(W/2, 170, '📊 取引終了', { fontSize: '26px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
+            endObjs.push(scene.add.text(W/2, 210, '累計利益', { fontSize: '13px', fill: '#888', fontFamily: 'monospace' }).setOrigin(0.5));
+            endObjs.push(scene.add.text(W/2, 245, `${profit >= 0 ? '+' : ''}¥${profit.toLocaleString()}`, {
+                fontSize: '38px', fill: profit >= 0 ? '#6bff8e' : '#ff4757', fontStyle: 'bold', fontFamily: 'monospace'
+            }).setOrigin(0.5));
+            endObjs.push(scene.add.text(W/2, 285, 'RANK', { fontSize: '13px', fill: '#888', fontFamily: 'monospace' }).setOrigin(0.5));
+            endObjs.push(scene.add.text(W/2, 318, rank, { fontSize: '48px', fill: rc[rank], fontStyle: 'bold', fontFamily: 'monospace' }).setOrigin(0.5));
+            endObjs.push(scene.add.text(W/2, 370,
+                `💰 最終: ¥${money.toLocaleString()}  📊 ${trades}回\n🔍 分析Lv${analysisLv}  📰 情報Lv${intelLv}  💹 直感Lv${instinctLv}`, {
+                fontSize: '12px', fill: '#bbb', fontFamily: 'monospace', align: 'center', lineSpacing: 6
             }).setOrigin(0.5));
 
-            endObjs.push(scene.add.text(W/2, 295, 'RANK', { fontSize: '13px', fill: '#888', fontFamily: 'monospace' }).setOrigin(0.5));
-            endObjs.push(scene.add.text(W/2, 330, rank, {
-                fontSize: '48px', fill: rankColors[rank], fontStyle: 'bold', fontFamily: 'monospace'
-            }).setOrigin(0.5));
-
-            endObjs.push(scene.add.text(W/2, 378,
-                `💰 最終資産: ¥${money.toLocaleString()}\n📊 取引回数: ${trades}回\n🏆 最大利益: ¥${Math.floor(bestTrades)}`, {
-                fontSize: '13px', fill: '#bbb', fontFamily: 'monospace', align: 'center', lineSpacing: 5
-            }).setOrigin(0.5));
-
-            if (isNewBest) {
-                const nb = scene.add.text(W/2, 425, '🎉 NEW BEST!', { fontSize: '16px', fill: '#ffe66b', fontStyle: 'bold' }).setOrigin(0.5);
+            if (isNew) {
+                const nb = scene.add.text(W/2, 410, '🎉 NEW BEST!', { fontSize: '16px', fill: '#ffe66b', fontStyle: 'bold' }).setOrigin(0.5);
                 scene.tweens.add({ targets: nb, scale: 1.2, duration: 500, yoyo: true, repeat: -1 });
                 endObjs.push(nb);
             }
 
-            const btn = scene.add.rectangle(W/2, 475, 170, 48, P.purple);
-            btn.setStrokeStyle(2, 0xffffff, 0.4);
-            btn.setInteractive();
+            const btn = scene.add.rectangle(W/2, 465, 170, 48, P.purple);
+            btn.setStrokeStyle(2, 0xffffff, 0.4); btn.setInteractive();
             btn.on('pointerdown', () => resetGame(scene));
             endObjs.push(btn);
-            endObjs.push(scene.add.text(W/2, 475, '▶ RETRY', {
-                fontSize: '18px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace'
-            }).setOrigin(0.5));
+            endObjs.push(scene.add.text(W/2, 465, '▶ RETRY', { fontSize: '18px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace' }).setOrigin(0.5));
         }
 
         function resetGame(scene) {
             for (const o of endObjs) o.destroy();
-            endObjs = [];
-            scene.tweens.killAll();
+            endObjs = []; scene.tweens.killAll();
             state = 'title';
-            const best = localStorage.getItem('trader_best');
-            ui.titleBest.setText(best ? `BEST: +¥${best}` : '');
+            const b = localStorage.getItem('trader2_best');
+            ui.titleBest.setText(b ? `BEST: +¥${b}` : '');
             [ui.startBg, ui.picoChar, ui.miniChart, ui.titleText, ui.titleSub, ui.titleDesc, ui.titleBest, ui.titleStart].forEach(o => o.setVisible(true));
             scene.tweens.add({ targets: ui.titleStart, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
-            scene.tweens.add({ targets: ui.picoChar, y: 125, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+            scene.tweens.add({ targets: ui.picoChar, y: 115, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         }
     </script>
 </body>
