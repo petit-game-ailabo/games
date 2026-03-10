@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
-        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #0a0a2e 0%, #16213e 100%); overflow: hidden; }
+        body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #0a0a1a; overflow: hidden; }
     </style>
 </head>
 <body>
@@ -18,14 +18,13 @@ const game = new Phaser.Game({
     type: Phaser.AUTO, width: W, height: H,
     parent: 'game-container', backgroundColor: '#0a0e1a',
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    scene: { preload, create, update }
+    scene: { create, update }
 });
 
-const C = { blue: 0x88ccff, purple: 0x9b6dff, pink: 0xff6b9d, green: 0x6bff8e, red: 0xff4757, yellow: 0xffe66b, white: 0xffffff, orange: 0xffa502 };
+const C = { blue: 0x88ccff, purple: 0x9b6dff, pink: 0xff6b9d, green: 0x6bff8e, red: 0xff4757, yellow: 0xffe66b, white: 0xffffff };
 
 let state = 'title';
 let gfx, ui = {}, endObjs = [], sceneRef;
-let picoImg, bulletImg;
 
 // プレイヤー
 const PY = 520; // プレイヤーY座標
@@ -60,229 +59,97 @@ const UPG = {
 // エフェクト
 let particles = [];
 let screenShake = 0;
-let trails = [];
-let ringEffects = [];
 
 // 音
 const actx = new (window.AudioContext || window.webkitAudioContext)();
 function snd(f,t='sine',d=0.1,v=0.15){const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=f;o.type=t;g.gain.setValueAtTime(v,actx.currentTime);g.gain.exponentialRampToValueAtTime(0.01,actx.currentTime+d);o.start();o.stop(actx.currentTime+d);}
-function sndParry(){snd(800,'square',0.04,0.25);setTimeout(()=>snd(1200,'sine',0.06,0.2),30);}
-function sndPerfect(){snd(1000,'sine',0.05,0.25);setTimeout(()=>snd(1400,'sine',0.05,0.25),40);setTimeout(()=>snd(1800,'sine',0.1,0.2),80);}
-function sndHit(){snd(100,'sawtooth',0.25,0.25);snd(80,'square',0.2,0.12);}
-function sndBossDie(){for(let i=0;i<5;i++)setTimeout(()=>snd(200+i*100,'square',0.1,0.18),i*60);}
-function sndUpg(){snd(880,'square',0.05);setTimeout(()=>snd(1100,'square',0.05),50);setTimeout(()=>snd(1320,'square',0.12),100);}
-
-// SVG画像: 超かわいいピコ（ツインテ強調、デカ目、アニメ風）
-const PICO_SVG = `<svg width="80" height="90" xmlns="http://www.w3.org/2000/svg">
-  <!-- 影 -->
-  <ellipse cx="40" cy="85" rx="20" ry="4" fill="#000" opacity="0.2"/>
-  
-  <!-- 体（大きめの楕円） -->
-  <ellipse cx="40" cy="55" rx="26" ry="30" fill="#66b3ff" stroke="#4488cc" stroke-width="2"/>
-  
-  <!-- 顔（大きな円） -->
-  <circle cx="40" cy="30" r="24" fill="#ffe4c4" stroke="#ffb347" stroke-width="2"/>
-  
-  <!-- ツインテール左（もっと目立つように） -->
-  <ellipse cx="12" cy="25" rx="10" ry="16" fill="#8855ff" stroke="#6633cc" stroke-width="2"/>
-  <ellipse cx="8" cy="34" rx="7" ry="14" fill="#8855ff" stroke="#6633cc" stroke-width="1.5"/>
-  
-  <!-- ツインテール右 -->
-  <ellipse cx="68" cy="25" rx="10" ry="16" fill="#8855ff" stroke="#6633cc" stroke-width="2"/>
-  <ellipse cx="72" cy="34" rx="7" ry="14" fill="#8855ff" stroke="#6633cc" stroke-width="1.5"/>
-  
-  <!-- 目（デカ目アニメ風） -->
-  <!-- 左目 -->
-  <ellipse cx="30" cy="28" rx="6" ry="8" fill="#2c3e50"/>
-  <circle cx="31" cy="26" r="3" fill="#fff"/>
-  <circle cx="32" cy="29" r="1.5" fill="#fff" opacity="0.6"/>
-  
-  <!-- 右目 -->
-  <ellipse cx="50" cy="28" rx="6" ry="8" fill="#2c3e50"/>
-  <circle cx="51" cy="26" r="3" fill="#fff"/>
-  <circle cx="52" cy="29" r="1.5" fill="#fff" opacity="0.6"/>
-  
-  <!-- 口（小さくてかわいい） -->
-  <ellipse cx="40" cy="37" rx="4" ry="2.5" fill="#ff99aa"/>
-  
-  <!-- ほっぺ（ピンク） -->
-  <circle cx="22" cy="32" r="4" fill="#ffb3cc" opacity="0.7"/>
-  <circle cx="58" cy="32" r="4" fill="#ffb3cc" opacity="0.7"/>
-  
-  <!-- 前髪（ツインテに合わせて） -->
-  <path d="M 20 20 Q 40 12, 60 20" fill="#8855ff" stroke="#6633cc" stroke-width="1.5"/>
-  <circle cx="25" cy="18" r="4" fill="#8855ff"/>
-  <circle cx="40" cy="15" r="4" fill="#8855ff"/>
-  <circle cx="55" cy="18" r="4" fill="#8855ff"/>
-  
-  <!-- リボン装飾 -->
-  <circle cx="12" cy="20" r="3" fill="#ff66cc"/>
-  <circle cx="68" cy="20" r="3" fill="#ff66cc"/>
-</svg>`;
-
-// SVG画像: 超カッコいいエネルギー弾（グロー強化、稲妻模様）
-const BULLET_SVG = `<svg width="60" height="60" xmlns="http://www.w3.org/2000/svg">
-  <!-- 外側グロー -->
-  <circle cx="30" cy="30" r="28" fill="#ff4757" opacity="0.2"/>
-  <circle cx="30" cy="30" r="24" fill="#ff4757" opacity="0.4"/>
-  
-  <!-- メインコア -->
-  <circle cx="30" cy="30" r="20" fill="#ff2244"/>
-  
-  <!-- 稲妻エネルギー -->
-  <path d="M 30 15 L 25 25 L 30 23 L 27 35 L 33 25 L 30 27 Z" fill="#ffee00" opacity="0.8"/>
-  
-  <!-- ハイライト -->
-  <circle cx="22" cy="22" r="8" fill="#fff" opacity="0.6"/>
-  <circle cx="35" cy="32" r="4" fill="#fff" opacity="0.4"/>
-  
-  <!-- コアリング -->
-  <circle cx="30" cy="30" r="20" fill="none" stroke="#ffaa00" stroke-width="2" opacity="0.7"/>
-</svg>`;
-
-const BULLET_FAST_SVG = `<svg width="50" height="50" xmlns="http://www.w3.org/2000/svg">
-  <!-- スピードオーラ -->
-  <circle cx="25" cy="25" r="23" fill="#ff66ff" opacity="0.15"/>
-  <ellipse cx="25" cy="25" rx="22" ry="18" fill="#ff66ff" opacity="0.25"/>
-  
-  <!-- メインボディ -->
-  <circle cx="25" cy="25" r="16" fill="#ff4499"/>
-  
-  <!-- スピードライン -->
-  <path d="M 5 25 L 15 20 L 15 30 Z" fill="#ffcc00" opacity="0.7"/>
-  <path d="M 8 25 L 18 18 L 18 32 Z" fill="#ff6600" opacity="0.5"/>
-  
-  <!-- 光沢 -->
-  <circle cx="19" cy="19" r="6" fill="#fff" opacity="0.7"/>
-  <circle cx="28" cy="28" r="3" fill="#fff" opacity="0.5"/>
-  
-  <!-- 外周リング -->
-  <circle cx="25" cy="25" r="16" fill="none" stroke="#ffee00" stroke-width="1.5" opacity="0.8"/>
-</svg>`;
-
-const BULLET_BIG_SVG = `<svg width="80" height="80" xmlns="http://www.w3.org/2000/svg">
-  <!-- 巨大オーラ -->
-  <circle cx="40" cy="40" r="38" fill="#8833cc" opacity="0.15"/>
-  <circle cx="40" cy="40" r="34" fill="#8833cc" opacity="0.25"/>
-  
-  <!-- メインコア（大） -->
-  <circle cx="40" cy="40" r="30" fill="#6622aa"/>
-  
-  <!-- エネルギー結晶 -->
-  <path d="M 40 15 L 50 30 L 40 25 L 30 30 Z" fill="#cc44ff" opacity="0.7"/>
-  <path d="M 40 65 L 50 50 L 40 55 L 30 50 Z" fill="#cc44ff" opacity="0.7"/>
-  <path d="M 15 40 L 30 30 L 25 40 L 30 50 Z" fill="#cc44ff" opacity="0.7"/>
-  <path d="M 65 40 L 50 30 L 55 40 L 50 50 Z" fill="#cc44ff" opacity="0.7"/>
-  
-  <!-- ハイライト -->
-  <circle cx="30" cy="30" r="10" fill="#fff" opacity="0.5"/>
-  <circle cx="45" cy="42" r="6" fill="#fff" opacity="0.3"/>
-  
-  <!-- パルスリング -->
-  <circle cx="40" cy="40" r="30" fill="none" stroke="#ff44ff" stroke-width="3" opacity="0.6"/>
-  <circle cx="40" cy="40" r="25" fill="none" stroke="#ff88ff" stroke-width="2" opacity="0.8"/>
-</svg>`;
-
-function preload() {
-    // SVGをdata URIに変換してロード
-    const picoDataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(PICO_SVG)));
-    const bulletDataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(BULLET_SVG)));
-    const bulletFastDataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(BULLET_FAST_SVG)));
-    const bulletBigDataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(BULLET_BIG_SVG)));
-    
-    this.load.image('pico', picoDataUri);
-    this.load.image('bullet', bulletDataUri);
-    this.load.image('bullet_fast', bulletFastDataUri);
-    this.load.image('bullet_big', bulletBigDataUri);
-}
+function sndParry(){snd(800,'square',0.04,0.2);setTimeout(()=>snd(1200,'sine',0.06,0.15),30);}
+function sndPerfect(){snd(1000,'sine',0.05,0.2);setTimeout(()=>snd(1400,'sine',0.05,0.2),40);setTimeout(()=>snd(1800,'sine',0.08,0.15),80);}
+function sndHit(){snd(100,'sawtooth',0.2,0.2);snd(80,'square',0.15,0.1);}
+function sndBossDie(){for(let i=0;i<5;i++)setTimeout(()=>snd(200+i*100,'square',0.08,0.15),i*60);}
+function sndUpg(){snd(880,'square',0.05);setTimeout(()=>snd(1100,'square',0.05),50);setTimeout(()=>snd(1320,'square',0.1),100);}
 
 function create() {
     sceneRef = this;
     gfx = this.add.graphics();
 
-    // 背景（グリッド強化 + パルスアニメーション）
+    // 背景
     const bg = this.add.graphics();
-    bg.lineStyle(1, 0x1a2332, 0.6);
-    for (let y = 0; y < H; y += 40) {
-        bg.lineBetween(0, y, W, y);
-    }
-    for (let x = 0; x < W; x += 40) {
-        bg.lineBetween(x, 0, x, H);
-    }
-    // 十字線強調
-    bg.lineStyle(2, C.purple, 0.15);
-    bg.lineBetween(W/2, 0, W/2, H);
-
-    // 背景パルスアニメーション
-    const pulse = this.add.circle(W/2, H/2, 150, C.purple, 0.03);
-    this.tweens.add({ targets: pulse, scale: 2, alpha: 0, duration: 2000, repeat: -1 });
+    bg.lineStyle(1, 0x111825, 0.5);
+    for (let y = 0; y < H; y += 40) bg.lineBetween(0, y, W, y);
+    for (let x = 0; x < W; x += 40) bg.lineBetween(x, 0, x, H);
 
     // === ゲームUI ===
-    ui.hpText = this.add.text(15, 12, '❤❤❤❤❤', { fontSize: '22px' });
-    ui.scoreText = this.add.text(W-15, 12, '0', { fontSize: '20px', fill: '#fff', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(1, 0);
-    ui.comboText = this.add.text(W/2, 45, '', { fontSize: '18px', fill: '#ff6b9d', fontStyle: 'bold', stroke: '#000', strokeThickness: 2 }).setOrigin(0.5);
-    ui.waveText = this.add.text(W/2, 12, 'WAVE 1', { fontSize: '14px', fill: '#9b6dff', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(0.5);
-    ui.coinText = this.add.text(15, 42, '💰 0', { fontSize: '13px', fill: '#ffe66b', fontFamily: 'monospace' });
+    ui.hpText = this.add.text(15, 12, '❤❤❤❤❤', { fontSize: '20px' });
+    ui.scoreText = this.add.text(W-15, 12, '0', { fontSize: '18px', fill: '#fff', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(1, 0);
+    ui.comboText = this.add.text(W/2, 40, '', { fontSize: '16px', fill: '#ff6b9d', fontStyle: 'bold' }).setOrigin(0.5);
+    ui.waveText = this.add.text(W/2, 12, 'WAVE 1', { fontSize: '13px', fill: '#9b6dff', fontFamily: 'monospace' }).setOrigin(0.5);
+    ui.coinText = this.add.text(15, 38, '💰 0', { fontSize: '12px', fill: '#ffe66b', fontFamily: 'monospace' });
 
     // ボスHP
-    ui.bossBar = this.add.rectangle(W/2, 75, 300, 14, 0x1a1a2e);
-    ui.bossBar.setStrokeStyle(2, C.purple, 0.6);
-    ui.bossBarFill = this.add.rectangle(W/2, 75, 300, 14, C.red);
-    ui.bossName = this.add.text(W/2, 62, '', { fontSize: '12px', fill: '#ff6b9d', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(0.5, 1);
+    ui.bossBar = this.add.rectangle(W/2, 70, 300, 12, 0x333);
+    ui.bossBarFill = this.add.rectangle(W/2, 70, 300, 12, C.red);
+    ui.bossName = this.add.text(W/2, 58, '', { fontSize: '11px', fill: '#ff6b9d', fontFamily: 'monospace' }).setOrigin(0.5, 1);
 
     // 操作ヒント
-    ui.hint = this.add.text(W/2, PY + 85, '⬇ タップでパリィ ⬇', { fontSize: '15px', fill: '#666', fontFamily: 'monospace' }).setOrigin(0.5);
+    ui.hint = this.add.text(W/2, PY + 80, '⬇ タップでパリィ ⬇', { fontSize: '14px', fill: '#555', fontFamily: 'monospace' }).setOrigin(0.5);
 
     // 育成ボタン
     const upY = 650;
     ui.upBtns = {};
     ['shield','counter','aura'].forEach((key, i) => {
         const x = 70 + i * 130;
-        const bg = this.add.rectangle(x, upY, 115, 45, 0x0a0e1a, 0.95);
-        bg.setStrokeStyle(2, C.purple, 0.5);
+        const bg = this.add.rectangle(x, upY, 115, 42, 0x0a0e1a, 0.9);
+        bg.setStrokeStyle(1, C.purple, 0.4);
         bg.setInteractive(); bg.on('pointerdown', () => buyUpg(key));
-        const icon = this.add.text(x, upY-10, `${UPG[key].icon}${UPG[key].name}`, { fontSize: '11px', fill: '#ccc', fontStyle: 'bold' }).setOrigin(0.5);
-        const cost = this.add.text(x, upY+12, `${UPG[key].costs[0]}c`, { fontSize: '11px', fill: '#ffe66b', fontFamily: 'monospace' }).setOrigin(0.5);
-        const lv = this.add.text(x+52, upY-20, 'Lv0', { fontSize: '10px', fill: '#9b6dff', fontFamily: 'monospace' }).setOrigin(1,0);
+        const icon = this.add.text(x, upY-8, `${UPG[key].icon}${UPG[key].name}`, { fontSize: '11px', fill: '#bbb', fontStyle: 'bold' }).setOrigin(0.5);
+        const cost = this.add.text(x, upY+10, `${UPG[key].costs[0]}c`, { fontSize: '10px', fill: '#ffe66b', fontFamily: 'monospace' }).setOrigin(0.5);
+        const lv = this.add.text(x+52, upY-18, 'Lv0', { fontSize: '9px', fill: '#9b6dff', fontFamily: 'monospace' }).setOrigin(1,0);
         ui.upBtns[key] = { bg, icon, cost, lv };
     });
 
     setGameUIVisible(false);
 
     // === タイトル ===
-    ui.startBg = this.add.rectangle(W/2, H/2, W, H, 0x0a0e1a, 0.98);
+    ui.startBg = this.add.rectangle(W/2, H/2, W, H, 0x0a0e1a);
 
-    // ピコキャラクター（SVG画像使用、浮遊アニメーション）
-    ui.picoChar = this.add.image(W/2, 140, 'pico').setScale(2);
-    this.tweens.add({ targets: ui.picoChar, y: 133, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: ui.picoChar, angle: -3, duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    // ピコ剣士
+    const pc = this.add.container(W/2, 140);
+    pc.add(this.add.ellipse(0, 15, 50, 60, 0x88ccff));
+    pc.add(this.add.circle(0, -20, 25, 0xffddbb));
+    pc.add(this.add.circle(-25, -15, 12, 0x9b6dff));
+    pc.add(this.add.circle(25, -15, 12, 0x9b6dff));
+    pc.add(this.add.circle(-8, -22, 3, 0x333));
+    pc.add(this.add.circle(8, -22, 3, 0x333));
+    pc.add(this.add.text(0, -15, '‿', { fontSize: '10px', fill: '#cc8877' }).setOrigin(0.5));
+    // 剣
+    pc.add(this.add.rectangle(35, -5, 6, 45, 0xcccccc).setAngle(-30));
+    pc.add(this.add.rectangle(35, -25, 14, 4, 0xffe66b).setAngle(-30));
+    ui.picoChar = pc;
+    this.tweens.add({ targets: pc, y: 135, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    ui.titleText = this.add.text(W/2, 260, 'ジャストパリィ', {
-        fontSize: '38px', fill: '#fff', fontStyle: 'bold', stroke: '#0a0a1a', strokeThickness: 6
+    ui.titleText = this.add.text(W/2, 230, 'ジャストパリィ', {
+        fontSize: '30px', fill: '#fff', fontStyle: 'bold', stroke: '#0a0a1a', strokeThickness: 4
     }).setOrigin(0.5);
-    
-    ui.titleSub = this.add.text(W/2, 305, 'JUST PARRY', { fontSize: '13px', fill: '#9b6dff', fontFamily: 'monospace', letterSpacing: 3 }).setOrigin(0.5);
+    ui.titleSub = this.add.text(W/2, 265, 'JUST PARRY', { fontSize: '11px', fill: '#9b6dff', fontFamily: 'monospace' }).setOrigin(0.5);
 
-    // キラキラエフェクト
-    ui.titleDeco = this.add.text(W/2, 360, '⚔️✨🛡️✨⚔️', { fontSize: '30px' }).setOrigin(0.5);
-    this.tweens.add({ targets: ui.titleDeco, angle: -5, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.tweens.add({ targets: ui.titleDeco, scale: 1.05, duration: 800, yoyo: true, repeat: -1 });
+    // 剣エフェクト
+    ui.titleDeco = this.add.text(W/2, 330, '⚔️✨🛡️', { fontSize: '30px' }).setOrigin(0.5);
 
-    ui.titleDesc = this.add.text(W/2, 450,
+    ui.titleDesc = this.add.text(W/2, 420,
         '敵の攻撃が来たらタップ！\n\n⚔ ジャストタイミングで弾け\n✨ パーフェクトで大ダメージ\n🛡 HPが0になったら終了\n💰 コインでスキル強化', {
-        fontSize: '15px', fill: '#bdc3c7', align: 'center', lineSpacing: 6
+        fontSize: '14px', fill: '#bdc3c7', align: 'center', lineSpacing: 5
     }).setOrigin(0.5);
 
     let bs='';try{const b=localStorage.getItem('parry_best');if(b)bs=`BEST: ${b}点`;}catch(e){}
-    ui.titleBest = this.add.text(W/2, 545, bs, { fontSize: '18px', fill: '#ffe66b', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(0.5);
+    ui.titleBest = this.add.text(W/2, 510, bs, { fontSize: '16px', fill: '#ffe66b', fontFamily: 'monospace', fontStyle: 'bold' }).setOrigin(0.5);
 
-    ui.titleStart = this.add.text(W/2, 600, '▶ TAP TO START', {
-        fontSize: '24px', fill: '#88ccff', fontStyle: 'bold', fontFamily: 'monospace'
+    ui.titleStart = this.add.text(W/2, 560, '▶ TAP TO START', {
+        fontSize: '22px', fill: '#88ccff', fontStyle: 'bold', fontFamily: 'monospace'
     }).setOrigin(0.5);
     this.tweens.add({ targets: ui.titleStart, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
-    this.tweens.add({ targets: ui.titleStart, scale: 1.05, duration: 600, yoyo: true, repeat: -1 });
 
-    this.add.text(W/2, H-12, 'Powered by Phaser', { fontSize: '10px', fill: '#fff' }).setOrigin(0.5).setAlpha(0.25);
+    this.add.text(W/2, H-10, 'Powered by Phaser', { fontSize: '10px', fill: '#fff' }).setOrigin(0.5).setAlpha(0.2);
 
     // パリィ入力
     this.input.on('pointerdown', () => {
@@ -291,9 +158,6 @@ function create() {
             parryActive = true;
             parryTimer = PARRY_WINDOW + auraLv * 2;
             parryCD = PARRY_CD;
-            
-            // パリィ発動エフェクト
-            spawnRingEffect(W/2, PY, 40, C.yellow);
         }
     });
 }
@@ -315,7 +179,7 @@ function startGame(scene) {
     bossMode = false; bossHp = 0;
     shieldLv = 0; counterLv = 0; auraLv = 0;
     parryActive = false; parryTimer = 0; parryCD = 0;
-    particles = []; trails = []; screenShake = 0; ringEffects = [];
+    particles = []; screenShake = 0;
 
     ui.bossBar.setVisible(false);
     ui.bossBarFill.setVisible(false);
@@ -348,10 +212,8 @@ function spawnAttack() {
 
     attacks.push({
         x, y: 90, speed, size, type,
-        warningY: PY - 60,
+        warningY: PY - 60, // 警告ライン
         warned: false,
-        rotation: 0,
-        pulse: 0, // パルスアニメーション用
     });
 }
 
@@ -375,12 +237,9 @@ function checkWave() {
             attackInterval = 45;
 
             const fx = sceneRef.add.text(W/2, H/2, boss.name, {
-                fontSize: '36px', fill: '#fff', fontStyle: 'bold', stroke: '#000', strokeThickness: 5
+                fontSize: '28px', fill: '#fff', fontStyle: 'bold', stroke: '#000', strokeThickness: 3
             }).setOrigin(0.5);
-            sceneRef.tweens.add({ targets: fx, scale: 1.8, alpha: 0, duration: 1400, onComplete: () => fx.destroy() });
-            
-            screenShake = 12;
-            spawnParticles(W/2, H/2, boss.color, 30);
+            sceneRef.tweens.add({ targets: fx, scale: 1.5, alpha: 0, duration: 1000, onComplete: () => fx.destroy() });
         }
     }
 }
@@ -400,8 +259,8 @@ function update() {
         attackTimer = attackInterval;
         if (bossMode) {
             // ボスは複数弾
-            if (Math.random() < 0.35) {
-                setTimeout(() => { if (state === 'playing') spawnAttack(); }, 180);
+            if (Math.random() < 0.3) {
+                setTimeout(() => { if (state === 'playing') spawnAttack(); }, 200);
             }
         }
     }
@@ -410,13 +269,6 @@ function update() {
     for (let i = attacks.length - 1; i >= 0; i--) {
         const a = attacks[i];
         a.y += a.speed;
-        a.rotation += 0.06;
-        a.pulse += 0.1;
-
-        // トレイル追加（改善）
-        if (Math.random() < 0.4) {
-            trails.push({ x: a.x, y: a.y, size: a.size * 0.7, life: 12, maxLife: 12, type: a.type });
-        }
 
         // 警告
         if (!a.warned && a.y > a.warningY) {
@@ -438,21 +290,13 @@ function update() {
                 score += pts;
                 coins += Math.floor(pts * 0.5);
                 sndPerfect();
-                spawnParticles(a.x, a.y, C.yellow, 25);
-                spawnParticles(a.x, a.y, C.orange, 15);
-                spawnParticles(a.x, a.y, C.white, 10);
-                spawnRingEffect(a.x, a.y, 50, C.yellow);
-                spawnRingEffect(a.x, a.y, 35, C.orange);
-                screenShake = 10;
-
-                // パーフェクトフラッシュ
-                const flash = sceneRef.add.rectangle(W/2, H/2, W, H, 0xffff00, 0.25);
-                sceneRef.tweens.add({ targets: flash, alpha: 0, duration: 150, onComplete: () => flash.destroy() });
+                spawnParticles(a.x, a.y, C.yellow, 15);
+                screenShake = 6;
 
                 const fx = sceneRef.add.text(a.x, a.y, `✨PERFECT +${pts}`, {
-                    fontSize: '20px', fill: '#ffe66b', fontStyle: 'bold', stroke: '#000', strokeThickness: 3
+                    fontSize: '16px', fill: '#ffe66b', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
                 }).setOrigin(0.5);
-                sceneRef.tweens.add({ targets: fx, y: a.y - 70, alpha: 0, scale: 1.4, duration: 800, onComplete: () => fx.destroy() });
+                sceneRef.tweens.add({ targets: fx, y: a.y - 50, alpha: 0, duration: 600, onComplete: () => fx.destroy() });
 
                 if (bossMode) {
                     bossHp -= 2 + counterLv;
@@ -464,15 +308,13 @@ function update() {
                 score += pts;
                 coins += Math.floor(pts * 0.4);
                 sndParry();
-                spawnParticles(a.x, a.y, C.blue, 15);
-                spawnParticles(a.x, a.y, C.white, 8);
-                spawnRingEffect(a.x, a.y, 40, C.blue);
-                screenShake = 5;
+                spawnParticles(a.x, a.y, C.blue, 8);
+                screenShake = 3;
 
                 const fx = sceneRef.add.text(a.x, a.y, `⚔ PARRY +${pts}`, {
-                    fontSize: '17px', fill: '#88ccff', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
+                    fontSize: '14px', fill: '#88ccff', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
                 }).setOrigin(0.5);
-                sceneRef.tweens.add({ targets: fx, y: a.y - 50, alpha: 0, scale: 1.1, duration: 650, onComplete: () => fx.destroy() });
+                sceneRef.tweens.add({ targets: fx, y: a.y - 40, alpha: 0, duration: 500, onComplete: () => fx.destroy() });
 
                 if (bossMode) {
                     bossHp -= 1 + Math.floor(counterLv * 0.5);
@@ -493,17 +335,13 @@ function update() {
                 score += 50;
                 coins += 30;
                 sndBossDie();
-                screenShake = 18;
-                spawnParticles(W/2, 100, C.pink, 50);
-                spawnParticles(W/2, 100, C.purple, 25);
-                spawnParticles(W/2, 100, C.white, 15);
-                spawnRingEffect(W/2, 100, 100, C.pink);
-                spawnRingEffect(W/2, 100, 80, C.purple);
+                screenShake = 12;
+                spawnParticles(W/2, 100, C.pink, 30);
 
                 const fx = sceneRef.add.text(W/2, 200, '💥 BOSS撃破! +50', {
-                    fontSize: '30px', fill: '#ff6b9d', fontStyle: 'bold', stroke: '#000', strokeThickness: 5
+                    fontSize: '22px', fill: '#ff6b9d', fontStyle: 'bold', stroke: '#000', strokeThickness: 3
                 }).setOrigin(0.5);
-                sceneRef.tweens.add({ targets: fx, y: 150, alpha: 0, scale: 1.6, duration: 1200, onComplete: () => fx.destroy() });
+                sceneRef.tweens.add({ targets: fx, y: 160, alpha: 0, scale: 1.3, duration: 800, onComplete: () => fx.destroy() });
             }
 
             continue;
@@ -514,15 +352,9 @@ function update() {
             hp--;
             combo = 0;
             sndHit();
-            screenShake = 12;
-            spawnParticles(a.x, PY, C.red, 20);
-            spawnParticles(a.x, PY, 0x444, 12);
-            spawnRingEffect(a.x, PY, 45, C.red);
+            screenShake = 8;
+            spawnParticles(a.x, PY, C.red, 10);
             attacks.splice(i, 1);
-
-            // ダメージフラッシュ（強化）
-            const flash = sceneRef.add.rectangle(W/2, H/2, W, H, 0xff0000, 0.4);
-            sceneRef.tweens.add({ targets: flash, alpha: 0, duration: 250, onComplete: () => flash.destroy() });
 
             if (hp <= 0) {
                 endGame(sceneRef);
@@ -531,32 +363,17 @@ function update() {
         }
     }
 
-    // トレイル更新
-    for (let i = trails.length - 1; i >= 0; i--) {
-        const t = trails[i];
-        t.life--;
-        if (t.life <= 0) trails.splice(i, 1);
-    }
-
-    // リングエフェクト更新
-    for (let i = ringEffects.length - 1; i >= 0; i--) {
-        const r = ringEffects[i];
-        r.radius += r.speed;
-        r.alpha -= 0.03;
-        if (r.alpha <= 0) ringEffects.splice(i, 1);
-    }
-
     // ボスHPバー
     if (bossMode) {
         const ratio = Math.max(0, bossHp / bossMaxHp);
-        ui.bossBarFill.setDisplaySize(300 * ratio, 14);
+        ui.bossBarFill.setDisplaySize(300 * ratio, 12);
     }
 
     // パーティクル更新
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         p.x += p.vx; p.y += p.vy;
-        p.vy += 0.25; p.life--;
+        p.vy += 0.15; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
     }
 
@@ -571,129 +388,71 @@ function update() {
 
 function draw() {
     gfx.clear();
-    const sx = screenShake > 0 ? Phaser.Math.Between(-screenShake/2, screenShake/2) : 0;
-    const sy = screenShake > 0 ? Phaser.Math.Between(-screenShake/2, screenShake/2) : 0;
+    const sx = screenShake > 0 ? Phaser.Math.Between(-3, 3) : 0;
+    const sy = screenShake > 0 ? Phaser.Math.Between(-3, 3) : 0;
 
-    // パリィゾーン表示（強化）
-    const zoneAlpha = parryCD <= 0 ? 0.25 : 0.08;
-    const zoneColor = parryActive ? C.yellow : C.blue;
-    gfx.fillStyle(zoneColor, zoneAlpha);
-    gfx.fillRect(sx, PY - 30 + sy, W, 50);
-    gfx.lineStyle(3, zoneColor, parryCD <= 0 ? 0.5 : 0.15);
-    gfx.lineBetween(sx, PY - 30 + sy, W + sx, PY - 30 + sy);
-    gfx.lineBetween(sx, PY + 20 + sy, W + sx, PY + 20 + sy);
+    // パリィゾーン表示
+    const zoneAlpha = parryCD <= 0 ? 0.15 : 0.05;
+    gfx.fillStyle(C.blue, zoneAlpha);
+    gfx.fillRect(sx, PY - 25 + sy, W, 40);
+    gfx.lineStyle(1, C.blue, parryCD <= 0 ? 0.3 : 0.1);
+    gfx.lineBetween(sx, PY - 25 + sy, W + sx, PY - 25 + sy);
 
-    // パリィアクティブなら盾エフェクト（超強化）
+    // プレイヤー（ピコ）
+    const px = W / 2 + sx, py = PY + sy;
+    // 体
+    gfx.fillStyle(0x88ccff, 1);
+    gfx.fillEllipse(px, py + 5, 35, 42);
+    // 顔
+    gfx.fillStyle(0xffddbb, 1);
+    gfx.fillCircle(px, py - 15, 18);
+    // ツインテ
+    gfx.fillStyle(0x9b6dff, 1);
+    gfx.fillCircle(px - 18, py - 10, 9);
+    gfx.fillCircle(px + 18, py - 10, 9);
+    // 目
+    gfx.fillStyle(0x333333, 1);
+    gfx.fillCircle(px - 6, py - 17, 2);
+    gfx.fillCircle(px + 6, py - 17, 2);
+
+    // パリィアクティブなら盾エフェクト
     if (parryActive) {
-        const radius = 38 + auraLv * 5;
-        
-        // 多重リング
-        gfx.lineStyle(5, C.yellow, 0.95);
-        gfx.strokeCircle(W/2 + sx, PY + sy, radius);
-        gfx.lineStyle(3, C.orange, 0.85);
-        gfx.strokeCircle(W/2 + sx, PY + sy, radius - 5);
-        gfx.lineStyle(2, C.white, 0.7);
-        gfx.strokeCircle(W/2 + sx, PY + sy, radius - 9);
-        
-        // グローエフェクト
-        gfx.fillStyle(C.yellow, 0.2);
-        gfx.fillCircle(W/2 + sx, PY + sy, radius);
-        gfx.fillStyle(C.orange, 0.1);
-        gfx.fillCircle(W/2 + sx, PY + sy, radius + 8);
-
-        // 回転エフェクト（増量）
-        const angle = Date.now() * 0.006;
-        for (let i = 0; i < 6; i++) {
-            const a = angle + (Math.PI / 3) * i;
-            const ex = W/2 + Math.cos(a) * (radius + 10);
-            const ey = PY + Math.sin(a) * (radius + 10);
-            gfx.fillStyle(C.orange, 0.8);
-            gfx.fillCircle(ex + sx, ey + sy, 5);
-            gfx.fillStyle(C.yellow, 0.6);
-            gfx.fillCircle(ex + sx, ey + sy, 3);
-        }
+        gfx.lineStyle(3, C.yellow, 0.8);
+        gfx.strokeCircle(px, py - 5, 30 + auraLv * 3);
+        gfx.fillStyle(C.yellow, 0.1);
+        gfx.fillCircle(px, py - 5, 30 + auraLv * 3);
     }
 
-    // リングエフェクト描画
-    ringEffects.forEach(r => {
-        gfx.lineStyle(3, r.color, r.alpha);
-        gfx.strokeCircle(r.x + sx, r.y + sy, r.radius);
-        gfx.lineStyle(1.5, C.white, r.alpha * 0.6);
-        gfx.strokeCircle(r.x + sx, r.y + sy, r.radius - 3);
-    });
-
-    // トレイル描画（改善）
-    trails.forEach(t => {
-        const alpha = (t.life / t.maxLife) * 0.25;
-        let color = C.red;
-        if (t.type === 'fast') color = C.pink;
-        if (t.type === 'big') color = 0xcc44cc;
-        gfx.fillStyle(color, alpha);
-        gfx.fillCircle(t.x + sx, t.y + sy, t.size);
-        // グローレイヤー
-        gfx.fillStyle(color, alpha * 0.3);
-        gfx.fillCircle(t.x + sx, t.y + sy, t.size + 4);
-    });
-
-    // 攻撃弾（画像 + エフェクト強化）
+    // 攻撃弾
     attacks.forEach(a => {
         const ax = a.x + sx, ay = a.y + sy;
-        
-        // 警告線（改善）
-        if (a.warned && a.y < PY - 35) {
-            let color = C.red;
-            if (a.type === 'fast') color = C.pink;
-            if (a.type === 'big') color = 0xcc44cc;
-            gfx.lineStyle(2, color, 0.3);
+        let color = C.red;
+        if (a.type === 'fast') color = C.pink;
+        if (a.type === 'big') color = 0xcc44cc;
+
+        // 警告線
+        if (a.warned && a.y < PY - 30) {
+            gfx.lineStyle(1, color, 0.2);
             gfx.lineBetween(ax, ay, ax, PY + sy);
-            // パルス矢印
-            const arrowSize = 6 + Math.sin(a.pulse) * 2;
-            gfx.fillStyle(color, 0.5);
-            gfx.fillTriangle(ax, PY - 35 + sy, ax - arrowSize, PY - 45 + sy, ax + arrowSize, PY - 45 + sy);
         }
 
-        // グローエフェクト
-        let glowColor = C.red;
-        if (a.type === 'fast') glowColor = C.pink;
-        if (a.type === 'big') glowColor = 0xcc44cc;
-        const glowSize = a.size * (1.3 + Math.sin(a.pulse) * 0.15);
-        gfx.fillStyle(glowColor, 0.15);
-        gfx.fillCircle(ax, ay, glowSize);
+        // 弾本体
+        gfx.fillStyle(color, 0.9);
+        gfx.fillCircle(ax, ay, a.size);
+        gfx.fillStyle(C.white, 0.3);
+        gfx.fillCircle(ax - a.size * 0.2, ay - a.size * 0.2, a.size * 0.3);
 
-        // 画像選択
-        let imgKey = 'bullet';
-        if (a.type === 'fast') imgKey = 'bullet_fast';
-        if (a.type === 'big') imgKey = 'bullet_big';
-        
-        // 弾の画像を描画（回転 + パルスアニメーション）
-        const bullet = sceneRef.add.image(ax, ay, imgKey);
-        bullet.setRotation(a.rotation);
-        const pulseScale = 1 + Math.sin(a.pulse) * 0.08;
-        bullet.setScale(pulseScale);
-        bullet.setDepth(100);
+        // 軌跡
+        gfx.fillStyle(color, 0.15);
+        gfx.fillCircle(ax, ay - a.speed * 2, a.size * 0.7);
+        gfx.fillStyle(color, 0.08);
+        gfx.fillCircle(ax, ay - a.speed * 4, a.size * 0.5);
     });
-
-    // プレイヤー（ピコ画像 + オーラ）
-    const px = W / 2 + sx, py = PY + sy;
-    
-    // オーラエフェクト
-    if (hp > 0) {
-        const auraPhase = Date.now() * 0.003;
-        gfx.fillStyle(C.blue, 0.08);
-        gfx.fillCircle(px, py, 45 + Math.sin(auraPhase) * 3);
-    }
-    
-    const pico = sceneRef.add.image(px, py, 'pico').setScale(1.3);
-    pico.setDepth(200);
 
     // パーティクル
     particles.forEach(p => {
-        const alpha = (p.life / p.maxLife) * 0.9;
-        gfx.fillStyle(p.color, alpha);
+        gfx.fillStyle(p.color, p.life / p.maxLife);
         gfx.fillCircle(p.x + sx, p.y + sy, p.size);
-        // グロー
-        gfx.fillStyle(p.color, alpha * 0.4);
-        gfx.fillCircle(p.x + sx, p.y + sy, p.size + 2);
     });
 }
 
@@ -701,20 +460,13 @@ function spawnParticles(x, y, color, count) {
     for (let i = 0; i < count; i++) {
         particles.push({
             x, y,
-            vx: Phaser.Math.FloatBetween(-6, 6),
-            vy: Phaser.Math.FloatBetween(-8, 1),
-            size: Phaser.Math.Between(2, 7),
-            color, life: Phaser.Math.Between(25, 45),
-            maxLife: 45,
+            vx: Phaser.Math.FloatBetween(-4, 4),
+            vy: Phaser.Math.FloatBetween(-6, 1),
+            size: Phaser.Math.Between(2, 5),
+            color, life: Phaser.Math.Between(15, 30),
+            maxLife: 30,
         });
     }
-}
-
-function spawnRingEffect(x, y, radius, color) {
-    ringEffects.push({
-        x, y, radius, color,
-        speed: 4, alpha: 0.9
-    });
 }
 
 function updateHUD() {
@@ -725,7 +477,7 @@ function updateHUD() {
     ui.coinText.setText(`💰 ${coins}`);
     ui.waveText.setText(`WAVE ${wave}`);
     if (combo > 1) ui.comboText.setText(`🔥 ${combo}コンボ`); else ui.comboText.setText('');
-    ui.hint.setAlpha(parryCD <= 0 ? 0.7 : 0.25);
+    ui.hint.setAlpha(parryCD <= 0 ? 0.5 : 0.15);
 }
 
 function buyUpg(key) {
@@ -742,11 +494,9 @@ function buyUpg(key) {
 
     const lvNow = key === 'shield' ? shieldLv : key === 'counter' ? counterLv : auraLv;
     const fx = sceneRef.add.text(W/2, 620, `${UPG[key].icon} Lv${lvNow}!`, {
-        fontSize: '22px', fill: '#9b6dff', fontStyle: 'bold', stroke: '#000', strokeThickness: 4
+        fontSize: '18px', fill: '#9b6dff', fontStyle: 'bold', stroke: '#000', strokeThickness: 2
     }).setOrigin(0.5);
-    sceneRef.tweens.add({ targets: fx, y: 590, alpha: 0, scale: 1.4, duration: 800, onComplete: () => fx.destroy() });
-    
-    spawnParticles(W/2, 620, C.purple, 15);
+    sceneRef.tweens.add({ targets: fx, y: 600, alpha: 0, scale: 1.2, duration: 600, onComplete: () => fx.destroy() });
 }
 
 function updateUpgUI() {
@@ -754,12 +504,12 @@ function updateUpgUI() {
     for (const [key, b] of Object.entries(ui.upBtns)) {
         const lv = lvs[key]; const u = UPG[key];
         b.lv.setText(`Lv${lv}`);
-        if (lv >= u.costs.length) { b.cost.setText('MAX'); b.bg.setAlpha(0.5); }
+        if (lv >= u.costs.length) { b.cost.setText('MAX'); b.bg.setAlpha(0.4); }
         else {
             b.cost.setText(`${u.costs[lv]}c`);
             const can = coins >= u.costs[lv];
-            b.bg.setAlpha(can ? 0.95 : 0.5);
-            [b.icon, b.cost].forEach(e => e.setAlpha(can ? 1 : 0.5));
+            b.bg.setAlpha(can ? 0.9 : 0.4);
+            [b.icon, b.cost].forEach(e => e.setAlpha(can ? 1 : 0.4));
         }
     }
 }
@@ -782,34 +532,34 @@ function endGame(scene) {
     const rc = { D: '#ff6b9d', C: '#ffe66b', B: '#88ccff', A: '#6bff8e', S: '#9b6dff' };
 
     endObjs = [];
-    endObjs.push(scene.add.rectangle(W/2, H/2, W, H, 0x000000, 0.92));
-    const card = scene.add.rectangle(W/2, H/2, 360, 470, 0x0a0e1a, 0.98);
-    card.setStrokeStyle(4, C.purple, 0.7);
+    endObjs.push(scene.add.rectangle(W/2, H/2, W, H, 0x000000, 0.85));
+    const card = scene.add.rectangle(W/2, H/2, 350, 450, 0x0a0e1a, 0.95);
+    card.setStrokeStyle(2, C.purple, 0.5);
     endObjs.push(card);
 
-    endObjs.push(scene.add.text(W/2, 170, '⚔ GAME OVER', { fontSize: '32px', fill: '#fff', fontStyle: 'bold', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5));
-    endObjs.push(scene.add.text(W/2, 210, 'スコア', { fontSize: '15px', fill: '#999', fontFamily: 'monospace' }).setOrigin(0.5));
-    endObjs.push(scene.add.text(W/2, 250, `${score}`, {
-        fontSize: '50px', fill: '#ffe66b', fontStyle: 'bold', fontFamily: 'monospace'
+    endObjs.push(scene.add.text(W/2, 165, '⚔ GAME OVER', { fontSize: '26px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 205, 'スコア', { fontSize: '13px', fill: '#888', fontFamily: 'monospace' }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 240, `${score}`, {
+        fontSize: '42px', fill: '#ffe66b', fontStyle: 'bold', fontFamily: 'monospace'
     }).setOrigin(0.5));
-    endObjs.push(scene.add.text(W/2, 295, 'RANK', { fontSize: '15px', fill: '#999', fontFamily: 'monospace' }).setOrigin(0.5));
-    endObjs.push(scene.add.text(W/2, 335, rank, { fontSize: '58px', fill: rc[rank], fontStyle: 'bold', fontFamily: 'monospace' }).setOrigin(0.5));
-    endObjs.push(scene.add.text(W/2, 390,
+    endObjs.push(scene.add.text(W/2, 280, 'RANK', { fontSize: '13px', fill: '#888', fontFamily: 'monospace' }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 315, rank, { fontSize: '48px', fill: rc[rank], fontStyle: 'bold', fontFamily: 'monospace' }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 370,
         `⚔ パリィ: ${parries}回  ✨ PERFECT: ${perfects}\n🔥 最大コンボ: ${maxCombo}  🌊 WAVE: ${wave}\n🛡 Lv${shieldLv}  ⚔ Lv${counterLv}  ✨ Lv${auraLv}`, {
-        fontSize: '13px', fill: '#bbb', fontFamily: 'monospace', align: 'center', lineSpacing: 7
+        fontSize: '12px', fill: '#bbb', fontFamily: 'monospace', align: 'center', lineSpacing: 5
     }).setOrigin(0.5));
 
     if (isNew) {
-        const nb = scene.add.text(W/2, 435, '🎉 NEW BEST!', { fontSize: '19px', fill: '#ffe66b', fontStyle: 'bold' }).setOrigin(0.5);
-        scene.tweens.add({ targets: nb, scale: 1.3, duration: 500, yoyo: true, repeat: -1 });
+        const nb = scene.add.text(W/2, 415, '🎉 NEW BEST!', { fontSize: '16px', fill: '#ffe66b', fontStyle: 'bold' }).setOrigin(0.5);
+        scene.tweens.add({ targets: nb, scale: 1.2, duration: 500, yoyo: true, repeat: -1 });
         endObjs.push(nb);
     }
 
-    const btn = scene.add.rectangle(W/2, 485, 180, 54, C.purple);
-    btn.setStrokeStyle(4, 0xffffff, 0.6);
+    const btn = scene.add.rectangle(W/2, 465, 170, 48, C.purple);
+    btn.setStrokeStyle(2, 0xffffff, 0.4);
     btn.setInteractive(); btn.on('pointerdown', () => resetGame(scene));
     endObjs.push(btn);
-    endObjs.push(scene.add.text(W/2, 485, '▶ RETRY', { fontSize: '22px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace' }).setOrigin(0.5));
+    endObjs.push(scene.add.text(W/2, 465, '▶ RETRY', { fontSize: '18px', fill: '#fff', fontStyle: 'bold', fontFamily: 'monospace' }).setOrigin(0.5));
 }
 
 function resetGame(scene) {
@@ -820,11 +570,7 @@ function resetGame(scene) {
     ui.titleBest.setText(b ? `BEST: ${b}点` : '');
     [ui.startBg, ui.picoChar, ui.titleText, ui.titleSub, ui.titleDeco, ui.titleDesc, ui.titleBest, ui.titleStart].forEach(o => o.setVisible(true));
     scene.tweens.add({ targets: ui.titleStart, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
-    scene.tweens.add({ targets: ui.titleStart, scale: 1.05, duration: 600, yoyo: true, repeat: -1 });
-    scene.tweens.add({ targets: ui.picoChar, y: 133, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    scene.tweens.add({ targets: ui.picoChar, angle: -3, duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    scene.tweens.add({ targets: ui.titleDeco, angle: -5, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    scene.tweens.add({ targets: ui.titleDeco, scale: 1.05, duration: 800, yoyo: true, repeat: -1 });
+    scene.tweens.add({ targets: ui.picoChar, y: 135, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 }
 </script>
 </body>
