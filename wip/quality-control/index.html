@@ -199,14 +199,24 @@
             });
             ui.topPanel = topPanel;
 
-            // === 良品サンプル（常時表示） ===
-            const sampleBg = this.add.rectangle(W/2, 170, 200, 80, 0x0d1117, 0.6);
+            // === 良品サンプル（ゲーム中のみ表示） ===
+            ui.sampleObjs = [];
+            const sampleBg = this.add.rectangle(W/2, 150, 200, 65, 0x0d1117, 0.6);
             sampleBg.setStrokeStyle(2, 0x3498db, 0.4);
-            this.add.text(W/2, 142, '良品 ✓', { fontSize: '16px', fill: '#3498db', fontStyle: 'bold' }).setOrigin(0.5);
-            this.add.circle(W/2, 180, 20, GOOD.color).setStrokeStyle(2, 0x6bb5e0);
-            this.add.text(W/2, 210, 'それ以外は不良品！タップで排除', {
-                fontSize: '12px', fill: '#7f8c8d'
-            }).setOrigin(0.5);
+            ui.sampleObjs.push(sampleBg);
+            const sampleLabel = this.add.text(W/2, 125, '良品 ✓', { fontSize: '14px', fill: '#3498db', fontStyle: 'bold' }).setOrigin(0.5);
+            ui.sampleObjs.push(sampleLabel);
+            const sampleCircle = this.add.circle(W/2 - 30, 155, 16, GOOD.color).setStrokeStyle(2, 0x6bb5e0);
+            ui.sampleObjs.push(sampleCircle);
+            const sampleHint = this.add.text(W/2 + 15, 155, '← これ以外をタップ', {
+                fontSize: '11px', fill: '#7f8c8d'
+            }).setOrigin(0, 0.5);
+            ui.sampleObjs.push(sampleHint);
+            ui.sampleObjs.forEach(o => o.setVisible(false));
+
+            // === 検査ゾーン スキャンライン ===
+            ui.scanLine = this.add.rectangle(W/2, BELT_Y - 45, W - 64, 2, 0x3498db, 0.6);
+            ui.scanLine.setVisible(false);
 
             // === コイン表示（中段） ===
             ui.bigCoin = this.add.text(W/2, 510, '🪙 0', {
@@ -293,6 +303,10 @@
                 if (o._isTopPanel) o.setVisible(visible);
             });
             ui.bigCoin.setVisible(visible);
+            // 良品サンプル
+            ui.sampleObjs.forEach(o => o.setVisible(visible));
+            // スキャンライン
+            ui.scanLine.setVisible(visible);
             // ボタン
             Object.values(ui.btns).forEach(b => {
                 Object.values(b).forEach(o => o.setVisible(visible));
@@ -319,6 +333,16 @@
             defectRate = 0.80; totalEarned = 0;
 
             updateAllUI();
+
+            // スキャンラインアニメーション
+            scene.tweens.add({
+                targets: ui.scanLine,
+                y: { from: 340, to: 440 },
+                duration: 1200,
+                repeat: -1,
+                yoyo: true,
+                ease: 'Sine.easeInOut'
+            });
 
             spawnTimer = scene.time.addEvent({
                 delay: spawnDelay,
@@ -357,7 +381,8 @@
             }
 
             // コンテナ方式（影 + 本体 + グロー）
-            const container = scene.add.container(W + 40, 390);
+            const yOff = Phaser.Math.Between(-15, 15);
+            const container = scene.add.container(W + 40, 390 + yOff);
 
             // 影
             const shadow = scene.add.ellipse(3, 8, 50, 20, 0x000000, 0.3);
@@ -383,7 +408,7 @@
                 container.add(hl);
             }
 
-            const prod = { container, body, isDefect, tapped: false, shape };
+            const prod = { container, body, isDefect, tapped: false, shape, baseY: 390 + yOff };
             products.push(prod);
         }
 
@@ -499,7 +524,7 @@
                 const p = products[i];
                 p.container.x -= beltSpeed;
                 // ベルト振動（微揺れ）
-                p.container.y = 390 + Math.sin(time * 0.006 + i * 1.7) * 1.5;
+                p.container.y = p.baseY + Math.sin(time * 0.006 + i * 1.7) * 1.5;
 
                 if (p.container.x < -50) {
                     if (p.isDefect && !p.tapped) {
@@ -679,7 +704,7 @@
             endObjs.push(overlay);
 
             // 結果カード
-            const card = scene.add.rectangle(W/2, H/2, 340, 440, 0x16213e, 0.95);
+            const card = scene.add.rectangle(W/2, H/2 + 10, 340, 460, 0x16213e, 0.95);
             card.setStrokeStyle(2, 0x3498db, 0.6);
             endObjs.push(card);
 
@@ -727,14 +752,16 @@
             }).setOrigin(0.5);
             endObjs.push(t4);
 
-            const t5 = scene.add.text(W/2, 380,
-                `正解 ${correctTaps}　ミス ${wrongTaps}　見逃し ${missedDefects}\n正確率 ${accuracy}%　最大コンボ ${maxCombo}`, {
+            const totalProcessed = correctTaps + wrongTaps + missedDefects;
+            // 良品通過数 = 総獲得コイン中の良品分を推定（概算）
+            const t5 = scene.add.text(W/2, 375,
+                `📊 処理数 ${totalProcessed}　正解 ${correctTaps}\nミス ${wrongTaps}　見逃し ${missedDefects}\n正確率 ${accuracy}%　最大コンボ ${maxCombo}`, {
                 fontSize: '13px', fill: '#95a5a6', fontStyle: 'bold',
                 align: 'center', lineSpacing: 6
             }).setOrigin(0.5);
             endObjs.push(t5);
 
-            const t6 = scene.add.text(W/2, 420,
+            const t6 = scene.add.text(W/2, 430,
                 `不良率 ${finalPct}%　⚡Lv${speedLv}　⏩Lv${spawnLv}　🔧Lv${qualityLv}`, {
                 fontSize: '13px', fill: '#7f8c8d',
                 align: 'center'
@@ -742,13 +769,13 @@
             endObjs.push(t6);
 
             // 再プレイボタン
-            const btn = scene.add.rectangle(W/2, 475, 180, 55, 0x2ecc71);
+            const btn = scene.add.rectangle(W/2, 485, 180, 55, 0x2ecc71);
             btn.setStrokeStyle(2, 0xffffff, 0.5);
             btn.setInteractive();
             btn.on('pointerdown', () => resetGame(scene));
             endObjs.push(btn);
 
-            const btnTxt = scene.add.text(W/2, 475, '▶ RETRY', {
+            const btnTxt = scene.add.text(W/2, 485, '▶ RETRY', {
                 fontSize: '22px', fill: '#ffffff', fontStyle: 'bold', fontFamily: 'monospace'
             }).setOrigin(0.5);
             endObjs.push(btnTxt);
