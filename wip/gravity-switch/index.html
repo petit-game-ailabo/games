@@ -41,9 +41,11 @@ function sfxCombo() { snd(700,'square',0.06,0.1); snd(1050,'square',0.08,0.08); 
 function sfxDie() { snd(200,'sawtooth',0.25,0.15); }
 function sfxBuy() { snd(660,'sine',0.08,0.1); snd(880,'sine',0.1,0.08); }
 function sfxZone() { snd(440,'sine',0.15,0.08); snd(660,'sine',0.2,0.06); }
+function sfxPlasma() { snd(1100,'square',0.12,0.1); snd(1320,'sine',0.15,0.08); }
+function sfxEnemyHit() { snd(350,'sawtooth',0.15,0.12); }
 
 // === State ===
-const ST = { TITLE:0, PLAY:1, DEAD:2, SHOP:3 };
+const ST = { TITLE:0, PLAY:1, DEAD:2, SHOP:3, CONFIRM_RESET:4 };
 let state = ST.TITLE;
 
 // === Zones (100mごとに変化) ===
@@ -58,10 +60,11 @@ function getZone() { return ZONES[Math.floor(distance / 100) % ZONES.length]; }
 
 // === Game vars ===
 let player = {};
-let obstacles = [], coins = [], pads = [], particles = [], trails = [];
+let obstacles = [], coins = [], enemies = [], plasmas = [], particles = [], trails = [];
 let distance = 0, bestDistance = 0, totalCoins = 0, sessionCoins = 0;
-let combo = 0, maxCombo = 0, nearMissCount = 0;
+let combo = 0, maxCombo = 0, nearMissCount = 0, enemiesKilled = 0;
 let invincibleTimer = 0, barrierCount = 0;
+let plasmaCharge = 0, plasmaMaxCharge = 100;
 let nextObstX = 0;
 let lastZoneIdx = -1;
 let zoneFlash = 0;
@@ -76,15 +79,18 @@ const D = {
     startSpacing: 280, minSpacing: 150, spacePerM: 0.1,
     floatStart: 350, floatChance: 0.2,
     nearMissDist: 18, // ニアミス判定の距離
+    enemyStart: 300, // 敵が出始める距離
+    enemyMoveStart: 500, // 敵が動き始める距離
 };
 
-// === Upgrades (安く！) ===
+// === Upgrades ===
 let ups = {
     ghost:   { lv:0, max:5, cost:15,  name:'💫 ゴースト',   desc:'障害物すり抜け確率UP（最大50%）' },
     barrier: { lv:0, max:3, cost:30,  name:'🛡️ バリア',    desc:'1回だけ壁セーフ' },
     predict: { lv:0, max:3, cost:40,  name:'🔮 予測線',     desc:'反転先の軌道表示' },
     magnet:  { lv:0, max:3, cost:25,  name:'🧲 マグネット', desc:'コイン引き寄せ' },
     coin2x:  { lv:0, max:3, cost:35,  name:'💰 コインUP',   desc:'コイン獲得量+50%' },
+    plasma:  { lv:0, max:3, cost:50,  name:'⚡ プラズマ',   desc:'敵を倒せるプラズマボール' },
 };
 
 function upCost(u) { return u.lv >= u.max ? null : Math.floor(u.cost * Math.pow(1.4, u.lv)); }
@@ -123,9 +129,10 @@ function coinMult() { return 1 + ups.coin2x.lv * 0.5; }
 // === Reset ===
 function reset() {
     player = { x:W*0.18, y:H*0.5, w:22, h:22, vy:0, grav:1, alive:true, ang:0, tAng:0, deadT:0, tutorialTime:0 };
-    obstacles=[]; coins=[]; pads=[]; particles=[]; trails=[];
-    distance=0; sessionCoins=0; combo=0; maxCombo=0; nearMissCount=0;
-    invincibleTimer=0; barrierCount=ups.barrier.lv; lastZoneIdx=-1; zoneFlash=0; screenShake=0;
+    obstacles=[]; coins=[]; enemies=[]; plasmas=[]; particles=[]; trails=[];
+    distance=0; sessionCoins=0; combo=0; maxCombo=0; nearMissCount=0; enemiesKilled=0;
+    invincibleTimer=0; barrierCount=ups.barrier.lv; plasmaCharge=0;
+    lastZoneIdx=-1; zoneFlash=0; screenShake=0;
     nextObstX = W + 80;
     for(let i=0;i<6;i++) spawnObs();
 }
@@ -136,39 +143,65 @@ function spawnObs() {
     const margin = 45;
     const area = H - g - margin*2;
     if(area<0){ nextObstX+=spacing(); return; }
-    const topH = margin + Math.random()*area;
-    const botH = H - topH - g;
-    const w = 26 + Math.random()*14;
-    const zone = ZONES[Math.floor((distance + (nextObstX - W)*0.1) / 100) % ZONES.length];
     
-    obstacles.push({ x:nextObstX, y:0, w, h:topH, color:zone.wall });
-    obstacles.push({ x:nextObstX, y:H-botH, w, h:botH, color:zone.wall });
+    const currentDist = distance + (nextObstX - W)*0.1;
     
-    // コイン（高確率・複数配置）
-    const coinCount = Math.random() < 0.3 ? 2 : 1;
-    for(let i=0; i<coinCount; i++) {
-        if(Math.random() < 0.8) {
-            coins.push({
-                x: nextObstX + w/2 + (i*20 - 10),
-                y: topH + g*(0.25 + Math.random()*0.5),
-                r:10, alive:true, glow:0
+    // 後半は壁を減らして敵を増やす
+    const wallChance = currentDist < D.enemyStart ? 1.0 : 
+                       currentDist < D.enemyMoveStart ? 0.7 : 0.4;
+    
+    if(Math.random() < wallChance) {
+        const topH = margin + Math.random()*area;
+        const botH = H - topH - g;
+        const w = 26 + Math.random()*14;
+        const zone = ZONES[Math.floor(currentDist / 100) % ZONES.length];
+        
+        obstacles.push({ x:nextObstX, y:0, w, h:topH, color:zone.wall });
+        obstacles.push({ x:nextObstX, y:H-botH, w, h:botH, color:zone.wall });
+        
+        // コイン（高確率・複数配置）
+        const coinCount = Math.random() < 0.3 ? 2 : 1;
+        for(let i=0; i<coinCount; i++) {
+            if(Math.random() < 0.8) {
+                coins.push({
+                    x: nextObstX + w/2 + (i*20 - 10),
+                    y: topH + g*(0.25 + Math.random()*0.5),
+                    r:10, alive:true, glow:0
+                });
+            }
+        }
+        
+        // 浮遊障害物（回避可能な位置に配置）
+        if(distance > D.floatStart && Math.random() < D.floatChance) {
+            const safeZone = g * 0.3;
+            const fy = topH + safeZone + Math.random()*(g - safeZone*2);
+            const floatW = 18+Math.random()*14;
+            const floatH = 10+Math.random()*6;
+            obstacles.push({
+                x: nextObstX + w + 40 + Math.random()*60,
+                y: fy - floatH/2, w: floatW, h: floatH,
+                color: zone.wall, floating:true
             });
         }
     }
     
-    // スピードパッドは削除（テンポを乱すため）
-    
-    // 浮遊障害物（回避可能な位置に配置）
-    if(distance > D.floatStart && Math.random() < D.floatChance) {
-        // ギャップの上下30%の範囲を避ける（プレイヤーが確実に避けられるように）
-        const safeZone = g * 0.3;
-        const fy = topH + safeZone + Math.random()*(g - safeZone*2);
-        const floatW = 18+Math.random()*14; // 幅を少し小さく
-        const floatH = 10+Math.random()*6;
-        obstacles.push({
-            x: nextObstX + w + 40 + Math.random()*60, // 横距離に余裕
-            y: fy - floatH/2, w: floatW, h: floatH,
-            color: zone.wall, floating:true
+    // 敵の出現（300m以降）
+    if(currentDist >= D.enemyStart && Math.random() < 0.5) {
+        const enemyY = margin + Math.random() * (H - margin*2);
+        const movePattern = currentDist >= D.enemyMoveStart ? 
+            (Math.random() < 0.5 ? 'vertical' : 'horizontal') : 'static';
+        
+        enemies.push({
+            x: nextObstX + Math.random()*100,
+            y: enemyY,
+            r: 14 + Math.random()*6,
+            alive: true,
+            movePattern: movePattern,
+            moveSpeed: 50 + Math.random()*50,
+            movePhase: Math.random() * Math.PI * 2,
+            baseY: enemyY,
+            baseX: nextObstX + Math.random()*100,
+            color: '#ff4444'
         });
     }
     
@@ -181,6 +214,28 @@ function flip() {
     player.grav *= -1;
     player.tAng += Math.PI;
     sfxFlip();
+    
+    // プラズマチャージ
+    if(ups.plasma.lv > 0) {
+        const chargeAmount = 15 + ups.plasma.lv * 5;
+        plasmaCharge = Math.min(plasmaMaxCharge, plasmaCharge + chargeAmount);
+        
+        // フルチャージでプラズマ発射
+        if(plasmaCharge >= plasmaMaxCharge) {
+            plasmaCharge = 0;
+            plasmas.push({
+                x: player.x + player.w/2,
+                y: player.y,
+                vx: 350 + ups.plasma.lv * 50,
+                r: 8 + ups.plasma.lv * 2,
+                alive: true,
+                trail: []
+            });
+            sfxPlasma();
+            showFloatText(player.x, player.y - 35, '⚡プラズマ発射！', '#ffff00');
+        }
+    }
+    
     for(let i=0;i<5;i++) {
         particles.push({ x:player.x, y:player.y, vx:(Math.random()-0.5)*120, vy:(Math.random()-0.5)*120,
             life:0.25, ml:0.25, r:2+Math.random()*3, color: player.grav>0?'#64dfdf':'#ff6b9d' });
@@ -188,15 +243,18 @@ function flip() {
 }
 
 // === Buttons ===
-let titlePlayBtn, titleShopBtn, deadShopBtn, deadRetryBtn;
+let titlePlayBtn, titleShopBtn, titleResetBtn, deadShopBtn, deadRetryBtn, confirmYesBtn, confirmNoBtn;
 function makeBtn(x,y,w,h) { return {x,y,w,h, hit(cx,cy){ return cx>=x&&cx<=x+w&&cy>=y&&cy<=y+h; }}; }
 function updateButtons() {
     if(!W) return;
     const bw = Math.min(220, W-60);
     titlePlayBtn = makeBtn(W/2-bw/2, H*0.52, bw, 50);
     titleShopBtn = makeBtn(W/2-bw/2, H*0.52+62, bw, 45);
+    titleResetBtn = makeBtn(W-70, 10, 60, 35); // 右上
     deadShopBtn  = makeBtn(W/2-bw/2, H*0.58, bw, 44);
     deadRetryBtn = makeBtn(W/2-bw/2, H*0.58+56, bw, 44);
+    confirmYesBtn = makeBtn(W/2-120, H*0.55, 100, 45);
+    confirmNoBtn = makeBtn(W/2+20, H*0.55, 100, 45);
 }
 updateButtons();
 buttonsReady = true;
@@ -230,9 +288,30 @@ function shopClick(cx,cy) {
 canvas.addEventListener('pointerdown', e => {
     e.preventDefault(); ensureAudio();
     const cx=e.clientX, cy=e.clientY;
+    
+    if(state===ST.CONFIRM_RESET) {
+        if(confirmYesBtn.hit(cx,cy)) {
+            // データリセット実行
+            localStorage.removeItem('gs_v3');
+            totalCoins = 0;
+            bestDistance = 0;
+            for(let k in ups) ups[k].lv = 0;
+            state = ST.TITLE;
+            sfxBuy();
+        } else if(confirmNoBtn.hit(cx,cy)) {
+            state = ST.TITLE;
+        }
+        return;
+    }
+    
     if(state===ST.TITLE) {
-        if(titleShopBtn.hit(cx,cy)) state=ST.SHOP;
-        else if(titlePlayBtn.hit(cx,cy)) { state=ST.PLAY; reset(); }
+        if(titleResetBtn.hit(cx,cy)) {
+            state = ST.CONFIRM_RESET;
+        } else if(titleShopBtn.hit(cx,cy)) {
+            state=ST.SHOP;
+        } else if(titlePlayBtn.hit(cx,cy)) {
+            state=ST.PLAY; reset();
+        }
         return;
     }
     if(state===ST.PLAY) { flip(); return; }
@@ -272,9 +351,28 @@ function update(ts) {
         // Scroll
         for(const o of obstacles) o.x -= ss;
         for(const c of coins) c.x -= ss;
-        for(const p of pads) p.x -= ss;
+        for(const e of enemies) { e.x -= ss; e.baseX -= ss; }
         nextObstX -= ss;
         distance += ss * 0.1;
+        
+        // 敵の移動
+        for(const e of enemies) {
+            if(!e.alive) continue;
+            e.movePhase += dt * 2;
+            if(e.movePattern === 'vertical') {
+                e.y = e.baseY + Math.sin(e.movePhase) * e.moveSpeed;
+            } else if(e.movePattern === 'horizontal') {
+                e.x = e.baseX + Math.sin(e.movePhase) * e.moveSpeed;
+            }
+        }
+        
+        // プラズマ移動
+        for(const p of plasmas) {
+            if(!p.alive) continue;
+            p.x += p.vx * dt;
+            p.trail.push({ x: p.x, y: p.y, life: 0.15 });
+            p.trail = p.trail.filter(t => { t.life -= dt; return t.life > 0; });
+        }
         
         // Zone change detection
         const zi = Math.floor(distance/100) % ZONES.length;
@@ -288,7 +386,8 @@ function update(ts) {
         // Cleanup & spawn
         obstacles = obstacles.filter(o => o.x+o.w > -50);
         coins = coins.filter(c => c.x > -50 && c.alive);
-        pads = pads.filter(p => p.x > -50 && p.alive);
+        enemies = enemies.filter(e => e.x+e.r > -50 && e.alive);
+        plasmas = plasmas.filter(p => p.x < W+100 && p.alive);
         while(nextObstX < W+400) spawnObs();
         
         // Collision
@@ -300,6 +399,7 @@ function update(ts) {
         let nearMiss = false;
         let ghostTriggered = false;
         
+        // 壁との衝突
         for(const o of obstacles) {
             if(px+pw > o.x && px < o.x+o.w && py+ph > o.y && py < o.y+o.h) {
                 // 無敵中はスキップ
@@ -312,31 +412,34 @@ function update(ts) {
                     const ghostChance = 0.10 + ups.ghost.lv * 0.08;
                     if(Math.random() < ghostChance) {
                         ghostTriggered = true;
+                        invincibleTimer = 1.5; // 1.5秒無敵（壁をすり抜ける）
                         showFloatText(player.x, player.y - 30, '👻ゴースト！', '#bb88ff');
                         for(let i=0;i<6;i++) particles.push({ x:player.x, y:player.y, vx:(Math.random()-0.5)*150, vy:(Math.random()-0.5)*150, life:0.3, ml:0.3, r:2, color:'#bb88ff' });
                         snd(880,'sine',0.06,0.08);
                     }
                 }
                 
-                if(ghostTriggered) {
-                    continue; // ゴースト発動中はすり抜ける
+                if(ghostTriggered || invincibleTimer > 0) {
+                    continue; // ゴースト/無敵発動中はすり抜ける
                 }
                 
+                // バリア発動（座標は変えず、無敵状態を付与）
                 if(barrierCount>0) {
                     barrierCount--;
                     invincibleTimer = 1.5; // 1.5秒無敵
-                    player.y = player.grav>0 ? o.y-player.h/2 : o.y+o.h+player.h/2;
-                    player.vy = 0;
                     screenShake = 0.2;
                     for(let i=0;i<8;i++) particles.push({ x:player.x, y:player.y, vx:(Math.random()-0.5)*200, vy:(Math.random()-0.5)*200, life:0.35, ml:0.35, r:3, color:'#00ffaa' });
                     snd(440,'sine',0.1,0.1);
-                } else { die(); }
+                    showFloatText(player.x, player.y - 30, '🛡️バリア！', '#00ffaa');
+                    continue; // 衝突後も続行
+                }
+                
+                die();
                 break;
             }
             
             // ニアミス判定
             if(!o.floating && o.x+o.w > player.x-5 && o.x+o.w < player.x+5) {
-                // 通過した瞬間
                 passedWall = true;
                 const distToWall = Math.min(
                     Math.abs(player.y - player.h/2 - (o.y + o.h)),
@@ -344,6 +447,76 @@ function update(ts) {
                 );
                 if(distToWall < D.nearMissDist && distToWall > 0) {
                     nearMiss = true;
+                }
+            }
+        }
+        
+        // 敵との衝突
+        for(const e of enemies) {
+            if(!e.alive) continue;
+            const dx = player.x - e.x;
+            const dy = player.y - e.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            if(dist < player.w/2 + e.r) {
+                if(invincibleTimer > 0) continue; // 無敵中はスキップ
+                
+                if(barrierCount > 0) {
+                    barrierCount--;
+                    invincibleTimer = 1.5;
+                    screenShake = 0.2;
+                    for(let i=0;i<8;i++) particles.push({ x:player.x, y:player.y, vx:(Math.random()-0.5)*200, vy:(Math.random()-0.5)*200, life:0.35, ml:0.35, r:3, color:'#00ffaa' });
+                    snd(440,'sine',0.1,0.1);
+                    showFloatText(player.x, player.y - 30, '🛡️バリア！', '#00ffaa');
+                    continue;
+                }
+                
+                die();
+                break;
+            }
+        }
+        
+        // プラズマと敵の衝突
+        for(const p of plasmas) {
+            if(!p.alive) continue;
+            for(const e of enemies) {
+                if(!e.alive) continue;
+                const dx = p.x - e.x;
+                const dy = p.y - e.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                if(dist < p.r + e.r) {
+                    e.alive = false;
+                    p.alive = false;
+                    enemiesKilled++;
+                    
+                    // コインドロップ
+                    const dropCoins = 3 + Math.floor(Math.random()*3);
+                    for(let i=0; i<dropCoins; i++) {
+                        coins.push({
+                            x: e.x + (Math.random()-0.5)*20,
+                            y: e.y + (Math.random()-0.5)*20,
+                            r: 10,
+                            alive: true,
+                            glow: 0
+                        });
+                    }
+                    
+                    sfxEnemyHit();
+                    screenShake = 0.15;
+                    showFloatText(e.x, e.y - 25, '💥+' + dropCoins, '#ffaa00');
+                    
+                    for(let i=0;i<10;i++) {
+                        particles.push({
+                            x: e.x, y: e.y,
+                            vx: (Math.random()-0.5)*200,
+                            vy: (Math.random()-0.5)*200,
+                            life: 0.4, ml: 0.4,
+                            r: 3 + Math.random()*3,
+                            color: '#ff4444'
+                        });
+                    }
+                    break;
                 }
             }
         }
@@ -359,11 +532,9 @@ function update(ts) {
                 sessionCoins += bonus;
                 totalCoins += bonus;
                 sfxNearMiss();
-                // ニアミスエフェクト
                 showFloatText(player.x, player.y - 30, '✨NEAR! +' + bonus, '#ff44ff');
                 screenShake = 0.1;
                 
-                // ニアミスした壁を光らせる
                 for(const o of obstacles) {
                     if(!o.floating && o.x+o.w > player.x-10 && o.x+o.w < player.x+10) {
                         nearMissGlowWalls.push({ obj: o, glow: 0.6 });
@@ -396,8 +567,6 @@ function update(ts) {
                 for(let i=0;i<4;i++) particles.push({ x:c.x, y:c.y, vx:(Math.random()-0.5)*100, vy:(Math.random()-0.5)*100, life:0.2, ml:0.2, r:3, color:'#ffd700' });
             }
         }
-        
-        // Pad pickup（パッドシステム削除により無効化）
         
         // Trail
         if(Math.random()<0.4) trails.push({ x:player.x-player.w/2, y:player.y+(Math.random()-0.5)*player.h*0.4, life:0.2, ml:0.2, r:1.5+Math.random()*2, color:player.grav>0?'#4a6fa5':'#a54a6f' });
@@ -464,6 +633,7 @@ function draw() {
     
     if(state===ST.TITLE){ drawTitle(); ctx.restore(); return; }
     if(state===ST.SHOP){ drawShop(); ctx.restore(); return; }
+    if(state===ST.CONFIRM_RESET){ drawConfirmReset(); ctx.restore(); return; }
     
     // Prediction
     if(state===ST.PLAY && ups.predict.lv>0 && player.alive) drawPredict();
@@ -474,13 +644,11 @@ function draw() {
     
     // Obstacles
     for(const o of obstacles){
-        // ニアミスグロー効果チェック
         const nmw = nearMissGlowWalls.find(g => g.obj === o);
         const glowAmount = nmw ? nmw.glow : 0;
         
         ctx.shadowColor=o.floating?'#8844aa':'#4444aa'; ctx.shadowBlur=5;
         
-        // ニアミス時は明るく光る
         if(glowAmount > 0) {
             ctx.shadowColor='#ff44ff'; ctx.shadowBlur=15 * glowAmount;
             ctx.fillStyle=`rgba(255, 68, 255, ${0.3 + glowAmount*0.4})`;
@@ -493,7 +661,42 @@ function draw() {
         ctx.strokeRect(o.x,o.y,o.w,o.h);
     }
     
-    // Pads（削除済み）
+    // 敵
+    for(const e of enemies) {
+        if(!e.alive) continue;
+        ctx.shadowColor='#ff4444'; ctx.shadowBlur=8;
+        ctx.fillStyle=e.color;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur=0;
+        ctx.strokeStyle='rgba(255,100,100,0.6)'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.stroke();
+        // 敵の中心に×マーク
+        ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.moveTo(e.x-e.r*0.3, e.y-e.r*0.3); ctx.lineTo(e.x+e.r*0.3, e.y+e.r*0.3);
+        ctx.moveTo(e.x+e.r*0.3, e.y-e.r*0.3); ctx.lineTo(e.x-e.r*0.3, e.y+e.r*0.3);
+        ctx.stroke();
+    }
+    
+    // プラズマ
+    for(const p of plasmas) {
+        if(!p.alive) continue;
+        // トレイル
+        for(let i=0; i<p.trail.length; i++) {
+            const t = p.trail[i];
+            ctx.globalAlpha = t.life / 0.15 * 0.4;
+            ctx.fillStyle='#ffff00';
+            ctx.beginPath(); ctx.arc(t.x, t.y, p.r * (t.life/0.15), 0, Math.PI*2); ctx.fill();
+        }
+        ctx.globalAlpha=1;
+        // プラズマ本体
+        ctx.shadowColor='#ffff00'; ctx.shadowBlur=12;
+        ctx.fillStyle='#ffff00';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur=0;
+        ctx.strokeStyle='rgba(255,255,255,0.8)'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.stroke();
+    }
     
     // Coins
     for(const c of coins){
@@ -520,7 +723,6 @@ function draw() {
     // Player（無敵中は点滅）
     if(player.alive||(state===ST.DEAD&&player.deadT<0.12)) {
         if(invincibleTimer > 0) {
-            // 点滅効果（0.1秒ごとに表示/非表示）
             if(Math.floor(invincibleTimer * 10) % 2 === 0) {
                 ctx.globalAlpha = 0.5;
                 drawPlayer();
@@ -536,7 +738,6 @@ function draw() {
     // Barrier & Invincible
     if(state===ST.PLAY){
         if(invincibleTimer > 0) {
-            // 無敵中はオーラ表示
             ctx.strokeStyle=`rgba(0,255,255,${0.3 + Math.sin(Date.now()/100)*0.2})`;
             ctx.lineWidth=3;
             ctx.beginPath(); ctx.arc(player.x,player.y,player.w+8,0,Math.PI*2); ctx.stroke();
@@ -613,6 +814,23 @@ function drawHUD(){
     ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.font='12px sans-serif'; ctx.textAlign='left';
     ctx.fillText('BEST:'+Math.floor(bestDistance)+'m', 15, 62);
     
+    // プラズマチャージゲージ
+    if(ups.plasma.lv > 0) {
+        const barW = 80, barH = 8;
+        const barX = W - barW - 15, barY = 45;
+        ctx.fillStyle='rgba(255,255,255,0.1)';
+        ctx.fillRect(barX, barY, barW, barH);
+        const chargePercent = plasmaCharge / plasmaMaxCharge;
+        ctx.fillStyle=chargePercent >= 1 ? '#ffff00' : '#88aaff';
+        ctx.fillRect(barX, barY, barW * chargePercent, barH);
+        ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1;
+        ctx.strokeRect(barX, barY, barW, barH);
+        if(chargePercent >= 1) {
+            ctx.fillStyle='#ffff00'; ctx.font='10px sans-serif'; ctx.textAlign='right';
+            ctx.fillText('⚡READY', W-15, barY-2);
+        }
+    }
+    
     // チュートリアルヘルプ（最初の3秒）
     if(state===ST.PLAY && player.tutorialTime < 3 && player.alive) {
         const alpha = player.tutorialTime < 2 ? 0.9 : (3 - player.tutorialTime);
@@ -645,11 +863,32 @@ function drawTitle(){
     drawBtn(titlePlayBtn, '▶ スタート', '#64dfdf', '#2a5a6e', true);
     drawBtn(titleShopBtn, '🛒 ショップ', '#aaa', '#2a2a4e', false);
     
+    // リセットボタン（右上）
+    ctx.fillStyle='#3a1a1a'; rr(titleResetBtn.x, titleResetBtn.y, titleResetBtn.w, titleResetBtn.h, 6); ctx.fill();
+    ctx.strokeStyle='#6a3a3a'; ctx.lineWidth=1; rr(titleResetBtn.x, titleResetBtn.y, titleResetBtn.w, titleResetBtn.h, 6); ctx.stroke();
+    ctx.fillStyle='#ff6666'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('リセット', titleResetBtn.x + titleResetBtn.w/2, titleResetBtn.y + 23);
+    
     // Demo
     const dy=H*0.82+Math.sin(Date.now()/500)*12;
     ctx.save(); ctx.translate(W/2,dy); ctx.rotate(Date.now()/1200);
     ctx.fillStyle='#64dfdf'; ctx.shadowColor='#64dfdf'; ctx.shadowBlur=6;
     ctx.fillRect(-9,-9,18,18); ctx.shadowBlur=0; ctx.restore();
+}
+
+function drawConfirmReset(){
+    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
+    
+    ctx.textAlign='center';
+    ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif';
+    ctx.fillText('⚠️ データをリセットしますか？', W/2, H*0.35);
+    
+    ctx.font='14px sans-serif'; ctx.fillStyle='rgba(255,255,255,0.7)';
+    ctx.fillText('すべての進行状況とコインが削除されます', W/2, H*0.42);
+    
+    // ボタン
+    drawBtn(confirmYesBtn, 'リセットする', '#ff4444', '#3a1a1a', false);
+    drawBtn(confirmNoBtn, 'キャンセル', '#64dfdf', '#1a3a3a', true);
 }
 
 function drawBtn(b,text,tc,bg,pulse){
@@ -671,9 +910,10 @@ function drawDead(){
     ctx.fillText('コイン: +'+sessionCoins+'枚', W/2, H*0.40);
     if(maxCombo>=3){ ctx.fillStyle='#ff8800'; ctx.fillText('最大コンボ: '+maxCombo, W/2, H*0.45); }
     if(nearMissCount>0){ ctx.fillStyle='#ff44ff'; ctx.fillText('ニアミス: '+nearMissCount+'回', W/2, H*0.50); }
+    if(enemiesKilled>0){ ctx.fillStyle='#ffaa00'; ctx.fillText('敵撃破: '+enemiesKilled+'体', W/2, H*0.52); }
     ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='14px sans-serif';
-    ctx.fillText('合計: 🪙'+totalCoins, W/2, H*0.55);
-    if(distance>=bestDistance&&distance>0){ ctx.fillStyle='#ffd700'; ctx.font='bold 17px sans-serif'; ctx.fillText('🏆 NEW RECORD!', W/2, H*0.59); }
+    ctx.fillText('合計: 🪙'+totalCoins, W/2, H*0.56);
+    if(distance>=bestDistance&&distance>0){ ctx.fillStyle='#ffd700'; ctx.font='bold 17px sans-serif'; ctx.fillText('🏆 NEW RECORD!', W/2, H*0.60); }
     if(player.deadT>0.6){
         drawBtn(deadShopBtn, '🛒 ショップ', '#aaa', '#2a2a4e', false);
         drawBtn(deadRetryBtn, '▶ リトライ', '#64dfdf', '#2a5a6e', true);
