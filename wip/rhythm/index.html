@@ -116,16 +116,24 @@ function playNote(lane, type) {
     const harmonic = type === 'perfect' || type === 'great';
     playTone(freqs[lane], type === 'perfect' ? 0.4 : 0.25, vol, t, harmonic);
     
-    // PERFECT時は追加のキラキラ音を重ねる（2段階で豊かに）
+    // PERFECT時は追加のキラキラ音を重ねる（3段階で豊かに + 和音）
     if (type === 'perfect') {
+        // 第1段階: オクターブ上 + 5度上の和音
         setTimeout(() => {
-            playTone(freqs[lane] * 2, 0.18, 0.18, 'sine');
-            playTone(freqs[lane] * 3, 0.12, 0.12, 'sine');
+            playTone(freqs[lane] * 2, 0.2, 0.2, 'sine');      // オクターブ上
+            playTone(freqs[lane] * 1.5, 0.18, 0.15, 'sine');   // 5度上（和音）
+            playTone(freqs[lane] * 3, 0.14, 0.13, 'sine');     // さらに上
         }, 50);
-        // さらに遅延で高音のキラキラを追加
+        // 第2段階: 高音のキラキラ + 3度の和音
         setTimeout(() => {
-            playTone(freqs[lane] * 4, 0.1, 0.08, 'sine');
-        }, 100);
+            playTone(freqs[lane] * 4, 0.12, 0.1, 'sine');
+            playTone(freqs[lane] * 5, 0.1, 0.08, 'sine');     // さらに高音
+            playTone(freqs[lane] * 3.25, 0.11, 0.09, 'sine'); // 3度（和音）
+        }, 120);
+        // 第3段階: 余韻の高音
+        setTimeout(() => {
+            playTone(freqs[lane] * 6, 0.15, 0.07, 'sine');
+        }, 200);
     }
 }
 
@@ -284,25 +292,25 @@ function generateSongPattern() {
         [{ b:0, l:2 }, { b:1, l:0 }, { b:1.5, l:3 }, { b:2, l:1 }, { b:3, l:2 }, { b:3.5, l:0 }],
         // 6: 交互タップ
         [{ b:0, l:0 }, { b:0.5, l:3 }, { b:1, l:1 }, { b:1.5, l:2 }, { b:2, l:3 }, { b:2.5, l:0 }, { b:3, l:2 }, { b:3.5, l:1 }],
-        // 7: 休符多め
-        [{ b:0, l:2 }, { b:2, l:1 }, { b:3, l:3 }],
+        // 7: 休符多め（イントロ用、ゆったり）
+        [{ b:0, l:2 }, { b:3, l:1 }],
         // 8: 波打ち
         [{ b:0, l:0 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3.5, l:1 }],
     ];
 
-    // 曲構成（最初の8ビート = 2小節は完全に空白）
+    // 曲構成（最初の16ビート = 4小節は完全に空白）
     const structure = [
-        // イントロ: beat 12から開始（最初の8ビート = 2小節は完全に空白にしてプレイヤーが準備できるように）
-        { p:6, s:12 },  // beat 12~15: 休符多めでゆったり開始
-        { p:0, s:16 },  // beat 16~19: シンプルなパターン
+        // イントロ: beat 16から開始（最初の4小節は完全に空白、ノーツの落下を見てから押せる）
+        { p:6, s:16 },  // beat 16~19: 休符多めでゆったり開始
+        { p:0, s:20 },  // beat 20~23: シンプルなパターン
         // Aメロ
-        { p:0, s:20 }, { p:1, s:24 }, { p:0, s:28 }, { p:4, s:32 },
+        { p:0, s:24 }, { p:1, s:28 }, { p:0, s:32 }, { p:4, s:36 },
         // Bメロ
-        { p:2, s:36 }, { p:5, s:40 }, { p:7, s:44 }, { p:1, s:48 },
+        { p:2, s:40 }, { p:5, s:44 }, { p:7, s:48 }, { p:1, s:52 },
         // サビ
-        { p:3, s:52 }, { p:5, s:56 }, { p:7, s:60 }, { p:4, s:64 },
+        { p:3, s:56 }, { p:5, s:60 }, { p:7, s:64 }, { p:4, s:68 },
         // アウトロ
-        { p:6, s:68 }, { p:0, s:72 },
+        { p:6, s:72 }, { p:0, s:76 },
     ];
 
     for (const sec of structure) {
@@ -589,10 +597,21 @@ function activateFever() {
             size: 7 + Math.random() * 5,
         });
     }
-    // 発動音（3段階で盛り上げる）
-    playTone(523.3, 0.35, 0.45, 'sine', true);
-    setTimeout(() => playTone(659.3, 0.35, 0.45, 'sine', true), 100);
-    setTimeout(() => playTone(783.9, 0.3, 0.4, 'sine', true), 200);
+    // 発動音（4段階 + 和音で盛大に盛り上げる）
+    playTone(523.3, 0.4, 0.5, 'sine', true);
+    playTone(659.3, 0.4, 0.45, 'sine', true);  // 同時に和音
+    setTimeout(() => {
+        playTone(783.9, 0.38, 0.48, 'sine', true);
+        playTone(987.8, 0.35, 0.42, 'sine', true);  // 和音
+    }, 100);
+    setTimeout(() => {
+        playTone(1046.5, 0.35, 0.45, 'sine', true);
+        playTone(1318.5, 0.32, 0.4, 'sine', true);  // 和音
+    }, 200);
+    setTimeout(() => {
+        playTone(1568, 0.3, 0.38, 'sine', true);     // 最高音
+        playTone(1976, 0.28, 0.35, 'sine', true);    // さらに高音
+    }, 300);
 }
 
 // ── タップ判定 ──
@@ -726,12 +745,15 @@ function drawTitle() {
 function drawGame() {
     // 背景
     if (feverActive) {
-        // フィーバー中: 背景が脈動（より強く）
-        const fp = (feverTimer % 400) / 400;
-        const pulse = Math.sin(fp * Math.PI * 2) * 0.5 + 0.5;
-        const r = Math.floor(12 + pulse * 22);
-        const g = Math.floor(r * 0.4);
-        const b = Math.floor(r * 1.8);
+        // フィーバー中: 背景が激しく脈動（2つの波を重ねて複雑に）
+        const fp1 = (feverTimer % 400) / 400;
+        const fp2 = (feverTimer % 600) / 600;
+        const pulse1 = Math.sin(fp1 * Math.PI * 2) * 0.5 + 0.5;
+        const pulse2 = Math.sin(fp2 * Math.PI * 3) * 0.3 + 0.5;
+        const pulse = (pulse1 + pulse2) / 2;
+        const r = Math.floor(15 + pulse * 30);
+        const g = Math.floor(r * 0.35 + pulse * 8);
+        const b = Math.floor(r * 2 + pulse * 15);
         ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
     } else {
         ctx.fillStyle = '#0a0a1a';
@@ -860,19 +882,23 @@ function drawGame() {
         ctx.globalAlpha = 1 - prog * 0.5;
         ctx.fillStyle = jt.color;
         ctx.shadowColor = jt.color;
-        ctx.shadowBlur = isPerfectText ? 25 : 15;
-        const fontSize = isPerfectText ? 32 + prog * 6 : 26 + prog * 4;
+        ctx.shadowBlur = isPerfectText ? 30 : 15;
+        const fontSize = isPerfectText ? 34 + prog * 8 : 26 + prog * 4;
+        const bounce = isPerfectText && prog < 0.3 ? Math.sin(prog * 10) * 4 : 0; // バウンス効果
         ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.fillText(jt.text, W/2, JUDGE_Y - 55 - prog * (isPerfectText ? 18 : 12));
+        ctx.fillText(jt.text, W/2, JUDGE_Y - 55 - prog * (isPerfectText ? 22 : 12) + bounce);
         
-        // PERFECT時は追加の光輪
-        if (isPerfectText && prog < 0.5) {
-            ctx.strokeStyle = jt.color;
-            ctx.lineWidth = 2;
-            ctx.globalAlpha = (0.5 - prog) * 0.6;
-            ctx.beginPath();
-            ctx.arc(W/2, JUDGE_Y - 55 - prog * 18, 45 + prog * 30, 0, Math.PI * 2);
-            ctx.stroke();
+        // PERFECT時は多重の光輪
+        if (isPerfectText && prog < 0.6) {
+            const rings = 3;
+            for (let r = 0; r < rings; r++) {
+                ctx.strokeStyle = jt.color;
+                ctx.lineWidth = 2.5 - r * 0.5;
+                ctx.globalAlpha = (0.6 - prog) * (0.7 - r * 0.2);
+                ctx.beginPath();
+                ctx.arc(W/2, JUDGE_Y - 55 - prog * 22 + bounce, 50 + r * 18 + prog * 35, 0, Math.PI * 2);
+                ctx.stroke();
+            }
             ctx.globalAlpha = 1 - prog * 0.5;
         }
         
@@ -900,7 +926,24 @@ function drawGame() {
         ctx.fillText(`${combo} COMBO`, W/2, 75);
         ctx.shadowBlur = 0;
         
-        // 50コンボ以上で追加の光輪
+        // 10コンボごとに特別演出（花火のような光の輪）
+        if (combo % 10 === 0) {
+            const burstPhase = (performance.now() % 800) / 800;
+            if (burstPhase < 0.5) { // 0.4秒間だけ表示
+                const rings = 3;
+                for (let r = 0; r < rings; r++) {
+                    ctx.strokeStyle = comboColor;
+                    ctx.lineWidth = 2.5 - r * 0.5;
+                    ctx.globalAlpha = (0.5 - burstPhase) * (1 - r * 0.25);
+                    ctx.beginPath();
+                    ctx.arc(W/2, 75, 60 + r * 20 + burstPhase * 40, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1;
+            }
+        }
+        
+        // 50コンボ以上で常時光輪
         if (combo >= 50 && Math.floor(performance.now() / 200) % 2 === 0) {
             ctx.strokeStyle = comboColor;
             ctx.lineWidth = 2;
