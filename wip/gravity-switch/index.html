@@ -90,10 +90,18 @@ let ups = {
     predict: { lv:0, max:3, cost:40,  name:'🔮 予測線',     desc:'反転先の軌道表示' },
     magnet:  { lv:0, max:3, cost:25,  name:'🧲 マグネット', desc:'コイン引き寄せ' },
     coin2x:  { lv:0, max:3, cost:35,  name:'💰 コインUP',   desc:'コイン獲得量+50%' },
-    plasma:  { lv:0, max:3, cost:50,  name:'⚡ プラズマ',   desc:'敵を倒せるプラズマボール' },
+    plasma:  { lv:0, max:3, cost:100, name:'⚡ プラズマ',   desc:'敵を倒せるプラズマボール' },
+    startdash: { lv:0, max:999, cost:250, name:'🚀 スタートダッシュ', desc:'開始位置を前進' },
 };
 
-function upCost(u) { return u.lv >= u.max ? null : Math.floor(u.cost * Math.pow(1.4, u.lv)); }
+function upCost(u) { 
+    if(u.lv >= u.max) return null;
+    // スタートダッシュは指数的に高くなる
+    if(u === ups.startdash) {
+        return Math.floor(u.cost * Math.pow(2.5, u.lv));
+    }
+    return Math.floor(u.cost * Math.pow(1.4, u.lv));
+}
 
 // Load
 let isFirstPlay = false;
@@ -130,10 +138,23 @@ function coinMult() { return 1 + ups.coin2x.lv * 0.5; }
 function reset() {
     player = { x:W*0.18, y:H*0.5, w:22, h:22, vy:0, grav:1, alive:true, ang:0, tAng:0, deadT:0, tutorialTime:0 };
     obstacles=[]; coins=[]; enemies=[]; plasmas=[]; particles=[]; trails=[];
-    distance=0; sessionCoins=0; combo=0; maxCombo=0; nearMissCount=0; enemiesKilled=0;
+    
+    // スタートダッシュ適用
+    const startDist = ups.startdash.lv * 100;
+    distance = startDist;
+    
+    sessionCoins=0; combo=0; maxCombo=0; nearMissCount=0; enemiesKilled=0;
     invincibleTimer=0; barrierCount=ups.barrier.lv; plasmaCharge=0;
     lastZoneIdx=-1; zoneFlash=0; screenShake=0;
     nextObstX = W + 80;
+    
+    // チュートリアルはスタートダッシュ無しの時だけ
+    if(startDist === 0) {
+        player.tutorialTime = 0;
+    } else {
+        player.tutorialTime = 3; // チュートリアル省略
+    }
+    
     for(let i=0;i<6;i++) spawnObs();
 }
 
@@ -223,16 +244,55 @@ function flip() {
         // フルチャージでプラズマ発射
         if(plasmaCharge >= plasmaMaxCharge) {
             plasmaCharge = 0;
-            plasmas.push({
-                x: player.x + player.w/2,
-                y: player.y,
-                vx: 350 + ups.plasma.lv * 50,
-                r: 8 + ups.plasma.lv * 2,
-                alive: true,
-                trail: []
-            });
+            const baseSpeed = 350 + ups.plasma.lv * 50;
+            const baseR = 8 + ups.plasma.lv * 2;
+            
+            // レベルに応じて発射方向を増やす
+            if(ups.plasma.lv === 1) {
+                // Lv1: 右1発
+                plasmas.push({
+                    x: player.x + player.w/2, y: player.y,
+                    vx: baseSpeed, vy: 0,
+                    r: baseR, alive: true, trail: []
+                });
+            } else if(ups.plasma.lv === 2) {
+                // Lv2: 右+斜め上下の3発
+                for(let angle of [0, -0.3, 0.3]) {
+                    plasmas.push({
+                        x: player.x + player.w/2, y: player.y,
+                        vx: baseSpeed * Math.cos(angle),
+                        vy: baseSpeed * Math.sin(angle),
+                        r: baseR, alive: true, trail: []
+                    });
+                }
+            } else {
+                // Lv3: さらに広角（5方向）
+                for(let angle of [0, -0.25, 0.25, -0.5, 0.5]) {
+                    plasmas.push({
+                        x: player.x + player.w/2, y: player.y,
+                        vx: baseSpeed * Math.cos(angle),
+                        vy: baseSpeed * Math.sin(angle),
+                        r: baseR, alive: true, trail: []
+                    });
+                }
+            }
+            
             sfxPlasma();
             showFloatText(player.x, player.y - 35, '⚡プラズマ発射！', '#ffff00');
+            screenShake = 0.12;
+            
+            // プラズマ発射エフェクト
+            for(let i=0; i<15; i++) {
+                particles.push({
+                    x: player.x + player.w/2,
+                    y: player.y,
+                    vx: Math.random() * 200 + 100,
+                    vy: (Math.random()-0.5) * 150,
+                    life: 0.3, ml: 0.3,
+                    r: 2 + Math.random()*3,
+                    color: '#ffff00'
+                });
+            }
         }
     }
     
@@ -287,7 +347,12 @@ function shopClick(cx,cy) {
 // === Input ===
 canvas.addEventListener('pointerdown', e => {
     e.preventDefault(); ensureAudio();
-    const cx=e.clientX, cy=e.clientY;
+    // Canvas座標に変換（確実な座標取得）
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cx = (e.clientX - rect.left) * scaleX;
+    const cy = (e.clientY - rect.top) * scaleY;
     
     if(state===ST.CONFIRM_RESET) {
         if(confirmYesBtn.hit(cx,cy)) {
@@ -370,6 +435,9 @@ function update(ts) {
         for(const p of plasmas) {
             if(!p.alive) continue;
             p.x += p.vx * dt;
+            p.y += (p.vy || 0) * dt;
+            // 画面外に出たら削除
+            if(p.y < -50 || p.y > H + 50) p.alive = false;
             p.trail.push({ x: p.x, y: p.y, life: 0.15 });
             p.trail = p.trail.filter(t => { t.life -= dt; return t.life > 0; });
         }
@@ -526,6 +594,11 @@ function update(ts) {
             combo++;
             if(combo > maxCombo) maxCombo = combo;
             
+            // コンボ継続のポジティブフィードバック
+            if(combo === 3) {
+                showFloatText(player.x, player.y - 40, '👍いい感じ！', '#88ff88');
+            }
+            
             if(nearMiss) {
                 nearMissCount++;
                 const bonus = Math.ceil(2 * coinMult());
@@ -534,6 +607,18 @@ function update(ts) {
                 sfxNearMiss();
                 showFloatText(player.x, player.y - 30, '✨NEAR! +' + bonus, '#ff44ff');
                 screenShake = 0.1;
+                
+                // ニアミスエフェクト強化
+                for(let i=0; i<8; i++) {
+                    particles.push({
+                        x: player.x, y: player.y,
+                        vx: (Math.random()-0.5)*150,
+                        vy: (Math.random()-0.5)*150,
+                        life: 0.4, ml: 0.4,
+                        r: 2 + Math.random()*3,
+                        color: '#ff44ff'
+                    });
+                }
                 
                 for(const o of obstacles) {
                     if(!o.floating && o.x+o.w > player.x-10 && o.x+o.w < player.x+10) {
@@ -548,6 +633,19 @@ function update(ts) {
                 totalCoins += comboBonus;
                 sfxCombo();
                 showFloatText(player.x, player.y - 50, '🔥' + combo + 'COMBO! +' + comboBonus, '#ff8800');
+                screenShake = 0.15;
+                
+                // コンボボーナスエフェクト強化
+                for(let i=0; i<12; i++) {
+                    particles.push({
+                        x: player.x, y: player.y,
+                        vx: (Math.random()-0.5)*200,
+                        vy: (Math.random()-0.5)*200,
+                        life: 0.5, ml: 0.5,
+                        r: 3 + Math.random()*4,
+                        color: '#ff8800'
+                    });
+                }
             }
         }
         
@@ -564,7 +662,17 @@ function update(ts) {
                 sessionCoins += amt;
                 totalCoins += amt;
                 sfxCoin();
-                for(let i=0;i<4;i++) particles.push({ x:c.x, y:c.y, vx:(Math.random()-0.5)*100, vy:(Math.random()-0.5)*100, life:0.2, ml:0.2, r:3, color:'#ffd700' });
+                // コイン取得エフェクト強化
+                for(let i=0;i<8;i++) {
+                    particles.push({
+                        x: c.x, y: c.y,
+                        vx: (Math.random()-0.5)*120,
+                        vy: (Math.random()-0.5)*120,
+                        life: 0.3, ml: 0.3,
+                        r: 2 + Math.random()*3,
+                        color: '#ffd700'
+                    });
+                }
             }
         }
         
@@ -802,6 +910,11 @@ function drawHUD(){
     // Zone name
     ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.font='12px sans-serif';
     ctx.fillText(zone.name, 15, 46);
+    // スタートダッシュ表示
+    if(ups.startdash.lv > 0) {
+        ctx.fillStyle='rgba(255,200,100,0.4)'; ctx.font='11px sans-serif';
+        ctx.fillText('🚀開始:' + (ups.startdash.lv * 100) + 'm', 15, 60);
+    }
     // Coins
     ctx.fillStyle='#ffd700'; ctx.font='bold 18px sans-serif'; ctx.textAlign='right';
     ctx.fillText('🪙'+sessionCoins, W-15, 28);
@@ -905,8 +1018,15 @@ function drawDead(){
     ctx.textAlign='center';
     ctx.fillStyle='#ff4444'; ctx.font='bold 30px sans-serif';
     ctx.fillText('💥 ゲームオーバー', W/2, H*0.25);
+    
     ctx.fillStyle='#fff'; ctx.font='18px sans-serif';
-    ctx.fillText('距離: '+Math.floor(distance)+'m', W/2, H*0.35);
+    const startDist = ups.startdash.lv * 100;
+    if(startDist > 0) {
+        ctx.fillText('距離: '+Math.floor(distance)+'m (開始:'+startDist+'m)', W/2, H*0.35);
+    } else {
+        ctx.fillText('距離: '+Math.floor(distance)+'m', W/2, H*0.35);
+    }
+    
     ctx.fillText('コイン: +'+sessionCoins+'枚', W/2, H*0.40);
     if(maxCombo>=3){ ctx.fillStyle='#ff8800'; ctx.fillText('最大コンボ: '+maxCombo, W/2, H*0.45); }
     if(nearMissCount>0){ ctx.fillStyle='#ff44ff'; ctx.fillText('ニアミス: '+nearMissCount+'回', W/2, H*0.50); }
@@ -940,12 +1060,23 @@ function drawShop(){
         ctx.strokeStyle=mx?'#3a7a3a':b.can?'#6a6abe':'#2a2a4e'; ctx.lineWidth=1.5;
         rr(b.x,b.y,b.w,b.h,8); ctx.stroke();
         ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='left';
-        ctx.fillText(u.name+' Lv.'+u.lv+'/'+u.max, b.x+10, b.y+22);
+        
+        // スタートダッシュは特別表示
+        if(b.key === 'startdash') {
+            ctx.fillText(u.name+' Lv.'+u.lv+' → 開始 '+(u.lv*100)+'m', b.x+10, b.y+22);
+        } else {
+            ctx.fillText(u.name+' Lv.'+u.lv+'/'+u.max, b.x+10, b.y+22);
+        }
+        
         ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font='11px sans-serif';
         ctx.fillText(u.desc, b.x+10, b.y+40);
-        // Bar
-        ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(b.x+10,b.y+50,b.w*0.35,5);
-        ctx.fillStyle=mx?'#3a7a3a':'#6a6abe'; ctx.fillRect(b.x+10,b.y+50,b.w*0.35*(u.lv/u.max),5);
+        
+        // Bar（スタートダッシュは無限なのでバーなし）
+        if(b.key !== 'startdash') {
+            ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(b.x+10,b.y+50,b.w*0.35,5);
+            ctx.fillStyle=mx?'#3a7a3a':'#6a6abe'; ctx.fillRect(b.x+10,b.y+50,b.w*0.35*(u.lv/u.max),5);
+        }
+        
         ctx.textAlign='right';
         if(mx){ ctx.fillStyle='#3a8a3a'; ctx.font='bold 14px sans-serif'; ctx.fillText('MAX',b.x+b.w-10,b.y+38); }
         else{ ctx.fillStyle=b.can?'#ffd700':'#555'; ctx.font='bold 14px sans-serif'; ctx.fillText('🪙'+b.cost,b.x+b.w-10,b.y+38); }
