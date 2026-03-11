@@ -66,6 +66,7 @@ let nextObstX = 0;
 let lastZoneIdx = -1;
 let zoneFlash = 0;
 let screenShake = 0;
+let nearMissGlowWalls = []; // ニアミス時に光る壁のリスト
 
 // === Difficulty ===
 const D = {
@@ -100,14 +101,26 @@ function save() {
 }
 
 // === Helpers ===
-function spd() { return Math.min(D.startSpeed + distance*D.speedPerM, D.maxSpeed); }
-function gap() { return Math.max(D.startGap - distance*D.gapPerM, D.minGap); }
-function spacing() { return Math.max(D.startSpacing - distance*D.spacePerM, D.minSpacing); }
+function spd() { 
+    // 最初の3秒はゆっくりスタート
+    if(player.tutorialTime < 3) return D.startSpeed * 0.6;
+    return Math.min(D.startSpeed + distance*D.speedPerM, D.maxSpeed); 
+}
+function gap() { 
+    // 最初の3秒は広い隙間
+    if(player.tutorialTime < 3) return D.startGap * 1.4;
+    return Math.max(D.startGap - distance*D.gapPerM, D.minGap); 
+}
+function spacing() { 
+    // 最初の3秒は余裕のある間隔
+    if(player.tutorialTime < 3) return D.startSpacing * 1.3;
+    return Math.max(D.startSpacing - distance*D.spacePerM, D.minSpacing); 
+}
 function coinMult() { return 1 + ups.coin2x.lv * 0.5; }
 
 // === Reset ===
 function reset() {
-    player = { x:W*0.18, y:H*0.5, w:22, h:22, vy:0, grav:1, alive:true, ang:0, tAng:0, deadT:0 };
+    player = { x:W*0.18, y:H*0.5, w:22, h:22, vy:0, grav:1, alive:true, ang:0, tAng:0, deadT:0, tutorialTime:0 };
     obstacles=[]; coins=[]; pads=[]; particles=[]; trails=[];
     distance=0; sessionCoins=0; combo=0; maxCombo=0; nearMissCount=0;
     slowTimer=0; barrierCount=ups.barrier.lv; lastZoneIdx=-1; zoneFlash=0; screenShake=0;
@@ -153,12 +166,16 @@ function spawnObs() {
         });
     }
     
-    // 浮遊障害物
+    // 浮遊障害物（回避可能な位置に配置）
     if(distance > D.floatStart && Math.random() < D.floatChance) {
-        const fy = topH + g*(0.2 + Math.random()*0.6);
+        // ギャップの上下30%の範囲を避ける（プレイヤーが確実に避けられるように）
+        const safeZone = g * 0.3;
+        const fy = topH + safeZone + Math.random()*(g - safeZone*2);
+        const floatW = 18+Math.random()*14; // 幅を少し小さく
+        const floatH = 10+Math.random()*6;
         obstacles.push({
-            x: nextObstX + w + 30 + Math.random()*50,
-            y: fy - 6, w: 18+Math.random()*22, h: 10+Math.random()*8,
+            x: nextObstX + w + 40 + Math.random()*60, // 横距離に余裕
+            y: fy - floatH/2, w: floatW, h: floatH,
             color: zone.wall, floating:true
         });
     }
@@ -244,6 +261,9 @@ function update(ts) {
     lt = ts;
     
     if(state===ST.PLAY && player.alive) {
+        // チュートリアルタイマー更新
+        if(player.tutorialTime < 3) player.tutorialTime += dt;
+        
         let sm = 1;
         if(slowTimer>0){ slowTimer-=dt; sm=0.4; }
         
@@ -329,6 +349,13 @@ function update(ts) {
                 // ニアミスエフェクト
                 showFloatText(player.x, player.y - 30, '✨NEAR! +' + bonus, '#ff44ff');
                 screenShake = 0.1;
+                
+                // ニアミスした壁を光らせる
+                for(const o of obstacles) {
+                    if(!o.floating && o.x+o.w > player.x-10 && o.x+o.w < player.x+10) {
+                        nearMissGlowWalls.push({ obj: o, glow: 0.6 });
+                    }
+                }
             }
             
             if(combo > 0 && combo % 5 === 0) {
@@ -394,6 +421,9 @@ function update(ts) {
     floatTexts = floatTexts.filter(f=>f.life>0);
     // Coin glow
     for(const c of coins) c.glow=(c.glow||0)+dt*3;
+    // Near miss wall glow
+    for(const nmw of nearMissGlowWalls) nmw.glow = Math.max(0, nmw.glow - dt*2);
+    nearMissGlowWalls = nearMissGlowWalls.filter(nmw => nmw.glow > 0);
     
     draw();
     requestAnimationFrame(update);
@@ -449,7 +479,19 @@ function draw() {
     
     // Obstacles
     for(const o of obstacles){
+        // ニアミスグロー効果チェック
+        const nmw = nearMissGlowWalls.find(g => g.obj === o);
+        const glowAmount = nmw ? nmw.glow : 0;
+        
         ctx.shadowColor=o.floating?'#8844aa':'#4444aa'; ctx.shadowBlur=5;
+        
+        // ニアミス時は明るく光る
+        if(glowAmount > 0) {
+            ctx.shadowColor='#ff44ff'; ctx.shadowBlur=15 * glowAmount;
+            ctx.fillStyle=`rgba(255, 68, 255, ${0.3 + glowAmount*0.4})`;
+            ctx.fillRect(o.x-2, o.y-2, o.w+4, o.h+4);
+        }
+        
         ctx.fillStyle=o.color; ctx.fillRect(o.x,o.y,o.w,o.h);
         ctx.shadowBlur=0;
         ctx.strokeStyle=o.floating?'rgba(170,80,220,0.35)':'rgba(100,120,200,0.2)'; ctx.lineWidth=1.5;
@@ -565,6 +607,15 @@ function drawHUD(){
     // Best
     ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.font='12px sans-serif'; ctx.textAlign='left';
     ctx.fillText('BEST:'+Math.floor(bestDistance)+'m', 15, 62);
+    
+    // チュートリアルヘルプ（最初の3秒）
+    if(state===ST.PLAY && player.tutorialTime < 3 && player.alive) {
+        const alpha = player.tutorialTime < 2 ? 0.9 : (3 - player.tutorialTime);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('👆 タップで重力反転！', W/2, H*0.25);
+        ctx.globalAlpha=1;
+    }
 }
 
 function drawTitle(){
