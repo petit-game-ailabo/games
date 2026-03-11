@@ -36,9 +36,21 @@ const SPEED = 4.5;
 const BPM = 120;
 const BEAT_MS = 60000 / BPM;
 const HALF_BEAT_MS = BEAT_MS / 2; // 8分音符 = 最小単位
-const PERFECT_MS = 50;
-const GREAT_MS = 100;
-const GOOD_MS = 150;
+
+// 判定窓（難易度によって変わる）
+let PERFECT_MS = 50;
+let GREAT_MS = 100;
+let GOOD_MS = 150;
+
+function setJudgmentWindow(difficulty) {
+    if (difficulty === 'EASY') {
+        PERFECT_MS = 60; GREAT_MS = 120; GOOD_MS = 180;
+    } else if (difficulty === 'NORMAL') {
+        PERFECT_MS = 50; GREAT_MS = 100; GOOD_MS = 150;
+    } else { // HARD
+        PERFECT_MS = 35; GREAT_MS = 70; GOOD_MS = 110;
+    }
+}
 
 const LANE_COLORS = ['#ff6b9d', '#9b6dff', '#6bddff', '#6bff8e'];
 const LANE_COLORS_DIM = ['#4a2030', '#2d2050', '#1a3040', '#1a4028'];
@@ -55,6 +67,7 @@ let songStartTime = 0;
 let noteIndex = 0;
 let songPattern = [];
 let audioCtx = null;
+let selectedDifficulty = 'NORMAL'; // EASY, NORMAL, HARD
 
 // カウントダウン
 let countdownState = null; // { startTime, beatCount }
@@ -275,47 +288,90 @@ function scheduleMelody() {
 // ════════════════════════════════
 // 🎵 譜面生成（最小単位: 8分音符）
 // ════════════════════════════════
-function generateSongPattern() {
+function generateSongPattern(difficulty) {
     const pattern = [];
 
-    // 全フレーズは0.5刻み（8分音符）が最小
-    const phrases = [
-        // 1: 4分音符（左→右）
-        [{ b:0, l:0 }, { b:1, l:1 }, { b:2, l:2 }, { b:3, l:3 }],
-        // 2: 8分の裏拍
-        [{ b:0, l:1 }, { b:0.5, l:2 }, { b:1.5, l:3 }, { b:2, l:0 }, { b:2.5, l:1 }, { b:3.5, l:2 }],
-        // 3: 階段降り（8分）
-        [{ b:0, l:3 }, { b:0.5, l:2 }, { b:1, l:1 }, { b:1.5, l:0 }, { b:2.5, l:2 }, { b:3, l:3 }],
-        // 4: ダブルタップ（4分）
-        [{ b:0, l:0 }, { b:0, l:3 }, { b:1, l:1 }, { b:1, l:2 }, { b:2, l:0 }, { b:2, l:3 }, { b:3, l:1 }],
-        // 5: シンコペ（8分刻み）
-        [{ b:0, l:2 }, { b:1, l:0 }, { b:1.5, l:3 }, { b:2, l:1 }, { b:3, l:2 }, { b:3.5, l:0 }],
-        // 6: 交互タップ
-        [{ b:0, l:0 }, { b:0.5, l:3 }, { b:1, l:1 }, { b:1.5, l:2 }, { b:2, l:3 }, { b:2.5, l:0 }, { b:3, l:2 }, { b:3.5, l:1 }],
-        // 7: 休符多め（イントロ用、ゆったり）
-        [{ b:0, l:2 }, { b:3, l:1 }],
-        // 8: 波打ち
-        [{ b:0, l:0 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3.5, l:1 }],
-    ];
-
-    // 曲構成（最初の16ビート = 4小節は完全に空白）
-    const structure = [
-        // イントロ: beat 16から開始（最初の4小節は完全に空白、ノーツの落下を見てから押せる）
-        { p:6, s:16 },  // beat 16~19: 休符多めでゆったり開始
-        { p:0, s:20 },  // beat 20~23: シンプルなパターン
-        // Aメロ
-        { p:0, s:24 }, { p:1, s:28 }, { p:0, s:32 }, { p:4, s:36 },
-        // Bメロ
-        { p:2, s:40 }, { p:5, s:44 }, { p:7, s:48 }, { p:1, s:52 },
-        // サビ
-        { p:3, s:56 }, { p:5, s:60 }, { p:7, s:64 }, { p:4, s:68 },
-        // アウトロ
-        { p:6, s:72 }, { p:0, s:76 },
-    ];
-
-    for (const sec of structure) {
-        for (const n of phrases[sec.p]) {
-            pattern.push({ time: (sec.s + n.b) * BEAT_MS, lane: n.l });
+    if (difficulty === 'EASY') {
+        // EASY: 同時押しなし、4分音符中心、ノーツ半分
+        const phrasesEasy = [
+            // シンプルな4分音符パターン
+            [{ b:0, l:0 }, { b:1, l:1 }, { b:2, l:2 }, { b:3, l:3 }],
+            [{ b:0, l:1 }, { b:1, l:2 }, { b:2, l:0 }, { b:3, l:3 }],
+            [{ b:0, l:3 }, { b:1, l:2 }, { b:2, l:1 }, { b:3, l:0 }],
+            [{ b:0, l:2 }, { b:2, l:1 }, { b:3, l:0 }],
+            [{ b:0, l:0 }, { b:1, l:3 }, { b:3, l:1 }],
+        ];
+        // 最初の待ち時間を半分に（beat 8から開始）
+        const structureEasy = [
+            { p:3, s:8 },   // beat 8~11
+            { p:0, s:12 },  { p:1, s:16 },
+            { p:0, s:20 },  { p:2, s:24 },
+            { p:1, s:28 },  { p:4, s:32 },
+            { p:0, s:36 },  { p:3, s:40 },
+        ];
+        for (const sec of structureEasy) {
+            for (const n of phrasesEasy[sec.p]) {
+                pattern.push({ time: (sec.s + n.b) * BEAT_MS, lane: n.l });
+            }
+        }
+    } else if (difficulty === 'NORMAL') {
+        // NORMAL: 現在の譜面そのまま（同時押しあり、8分音符あり）
+        const phrases = [
+            [{ b:0, l:0 }, { b:1, l:1 }, { b:2, l:2 }, { b:3, l:3 }],
+            [{ b:0, l:1 }, { b:0.5, l:2 }, { b:1.5, l:3 }, { b:2, l:0 }, { b:2.5, l:1 }, { b:3.5, l:2 }],
+            [{ b:0, l:3 }, { b:0.5, l:2 }, { b:1, l:1 }, { b:1.5, l:0 }, { b:2.5, l:2 }, { b:3, l:3 }],
+            [{ b:0, l:0 }, { b:0, l:3 }, { b:1, l:1 }, { b:1, l:2 }, { b:2, l:0 }, { b:2, l:3 }, { b:3, l:1 }],
+            [{ b:0, l:2 }, { b:1, l:0 }, { b:1.5, l:3 }, { b:2, l:1 }, { b:3, l:2 }, { b:3.5, l:0 }],
+            [{ b:0, l:0 }, { b:0.5, l:3 }, { b:1, l:1 }, { b:1.5, l:2 }, { b:2, l:3 }, { b:2.5, l:0 }, { b:3, l:2 }, { b:3.5, l:1 }],
+            [{ b:0, l:2 }, { b:3, l:1 }],
+            [{ b:0, l:0 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3.5, l:1 }],
+        ];
+        // 最初の待ち時間を半分に（beat 8から開始）
+        const structure = [
+            { p:6, s:8 },   { p:0, s:12 },
+            { p:0, s:16 },  { p:1, s:20 }, { p:0, s:24 }, { p:3, s:28 },
+            { p:2, s:32 },  { p:4, s:36 }, { p:7, s:40 }, { p:1, s:44 },
+            { p:2, s:48 },  { p:4, s:52 }, { p:7, s:56 }, { p:3, s:60 },
+            { p:6, s:64 },  { p:0, s:68 },
+        ];
+        for (const sec of structure) {
+            for (const n of phrases[sec.p]) {
+                pattern.push({ time: (sec.s + n.b) * BEAT_MS, lane: n.l });
+            }
+        }
+    } else { // HARD
+        // HARD: 同時押し多め、8分音符の連打増、ノーツ1.5倍
+        const phrasesHard = [
+            // 同時押し多め
+            [{ b:0, l:0 }, { b:0, l:3 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:0 }, { b:1.5, l:3 }, { b:2, l:1 }, { b:2, l:2 }, { b:3, l:0 }, { b:3.5, l:3 }],
+            // 8分連打
+            [{ b:0, l:0 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3.5, l:1 }],
+            // 同時押し交互
+            [{ b:0, l:0 }, { b:0, l:2 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1, l:3 }, { b:1.5, l:0 }, { b:2, l:1 }, { b:2, l:3 }, { b:2.5, l:2 }, { b:3, l:0 }, { b:3, l:3 }],
+            // 階段+同時押し
+            [{ b:0, l:0 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2, l:3 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3, l:1 }],
+            // ダブル連打
+            [{ b:0, l:1 }, { b:0, l:2 }, { b:0.5, l:0 }, { b:0.5, l:3 }, { b:1, l:1 }, { b:1, l:2 }, { b:1.5, l:0 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3.5, l:3 }],
+            // ジグザグ+同時
+            [{ b:0, l:0 }, { b:0.5, l:3 }, { b:1, l:1 }, { b:1, l:2 }, { b:1.5, l:0 }, { b:2, l:3 }, { b:2.5, l:1 }, { b:2.5, l:2 }, { b:3, l:0 }, { b:3.5, l:3 }],
+            // 休符少なめ
+            [{ b:0, l:2 }, { b:0.5, l:1 }, { b:1, l:3 }, { b:2, l:0 }, { b:2.5, l:2 }, { b:3, l:1 }],
+            // 波+同時押し
+            [{ b:0, l:0 }, { b:0, l:1 }, { b:0.5, l:2 }, { b:1, l:3 }, { b:1.5, l:2 }, { b:2, l:1 }, { b:2, l:2 }, { b:2.5, l:0 }, { b:3, l:1 }, { b:3, l:3 }, { b:3.5, l:2 }],
+        ];
+        // 最初の待ち時間を半分に（beat 8から開始）
+        const structureHard = [
+            { p:6, s:8 },   { p:0, s:12 },
+            { p:1, s:16 },  { p:2, s:20 }, { p:3, s:24 }, { p:4, s:28 },
+            { p:5, s:32 },  { p:1, s:36 }, { p:7, s:40 }, { p:2, s:44 },
+            { p:3, s:48 },  { p:4, s:52 }, { p:5, s:56 }, { p:0, s:60 },
+            { p:1, s:64 },  { p:2, s:68 }, { p:3, s:72 }, { p:4, s:76 },
+            { p:6, s:80 },  { p:0, s:84 },
+        ];
+        for (const sec of structureHard) {
+            for (const n of phrasesHard[sec.p]) {
+                pattern.push({ time: (sec.s + n.b) * BEAT_MS, lane: n.l });
+            }
         }
     }
 
@@ -413,7 +469,8 @@ function startPlaying() {
     feverParticles = [];
     hitParticles = [];
     nextDrumStep = 0; nextMelodyBeat = 0;
-    songPattern = generateSongPattern();
+    setJudgmentWindow(selectedDifficulty);
+    songPattern = generateSongPattern(selectedDifficulty);
     melodyPattern = generateMelody();
     songStartTime = performance.now();
 }
@@ -616,7 +673,23 @@ function activateFever() {
 
 // ── タップ判定 ──
 function handleTap(tx, ty) {
-    if (state === 'title') { startCountdown(); return; }
+    if (state === 'title') {
+        // 難易度ボタンの判定
+        const btnW = 280, btnH = 55, btnX = (W - btnW) / 2;
+        const difficulties = [
+            { name: 'EASY', y: 360 },
+            { name: 'NORMAL', y: 425 },
+            { name: 'HARD', y: 490 }
+        ];
+        for (const diff of difficulties) {
+            if (tx >= btnX && tx <= btnX + btnW && ty >= diff.y && ty <= diff.y + btnH) {
+                selectedDifficulty = diff.name;
+                startCountdown();
+                return;
+            }
+        }
+        return;
+    }
     if (state === 'result') { startCountdown(); return; }
     if (state !== 'playing') return;
 
@@ -719,27 +792,72 @@ function drawTitle() {
     ctx.textAlign = 'center';
     ctx.shadowColor = '#9b6dff'; ctx.shadowBlur = 30;
     ctx.fillStyle = '#fff'; ctx.font = 'bold 48px sans-serif';
-    ctx.fillText('RHYTHM', W/2, 220);
+    ctx.fillText('RHYTHM', W/2, 180);
     ctx.shadowColor = '#ff6b9d';
     ctx.font = 'bold 56px sans-serif';
-    ctx.fillText('TAP', W/2, 280);
+    ctx.fillText('TAP', W/2, 240);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = '#9b6dff'; ctx.font = '20px sans-serif';
-    ctx.fillText(`♪ ${BPM} BPM`, W/2, 330);
+    ctx.fillText(`♪ ${BPM} BPM`, W/2, 280);
 
-    // フィーバー説明
-    ctx.fillStyle = '#ffe66b'; ctx.font = '16px sans-serif';
-    ctx.fillText('🔥 コンボでFEVER発動！スコア2倍！', W/2, 380);
+    // 難易度選択ボタン
+    ctx.fillStyle = '#fff'; ctx.font = '18px sans-serif';
+    ctx.fillText('難易度を選択:', W/2, 330);
 
-    const pulse = Math.sin(performance.now() / 500) * 0.2 + 0.8;
-    ctx.globalAlpha = pulse;
-    ctx.fillStyle = '#fff'; ctx.font = '24px sans-serif';
-    ctx.fillText('TAP TO START', W/2, 490);
-    ctx.globalAlpha = 1;
+    const btnW = 280, btnH = 55, btnX = (W - btnW) / 2;
+    const difficulties = [
+        { name: 'EASY', y: 360, color: '#6bff8e', desc: '初級 - 単押しのみ' },
+        { name: 'NORMAL', y: 425, color: '#6bddff', desc: '中級 - 標準' },
+        { name: 'HARD', y: 490, color: '#ff6b9d', desc: '上級 - 高難度' }
+    ];
+
+    for (const diff of difficulties) {
+        const isSelected = selectedDifficulty === diff.name;
+        const pulse = isSelected ? Math.sin(performance.now() / 300) * 0.15 + 0.85 : 1;
+        
+        // ボタン背景
+        ctx.fillStyle = isSelected ? diff.color + '44' : '#222';
+        ctx.strokeStyle = diff.color;
+        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.globalAlpha = pulse;
+        roundRect(ctx, btnX, diff.y, btnW, btnH, 8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // ボタンテキスト
+        ctx.fillStyle = isSelected ? '#fff' : diff.color;
+        ctx.font = `bold ${isSelected ? 26 : 24}px sans-serif`;
+        ctx.shadowColor = diff.color;
+        ctx.shadowBlur = isSelected ? 15 : 5;
+        ctx.fillText(diff.name, W/2, diff.y + 22);
+        
+        ctx.shadowBlur = 0;
+        ctx.font = '14px sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText(diff.desc, W/2, diff.y + 42);
+    }
 
     ctx.fillStyle = '#666'; ctx.font = '16px sans-serif';
-    ctx.fillText('ラインに合わせてタップ！', W/2, 550);
+    ctx.fillText('ラインに合わせてタップ！', W/2, 590);
+    
+    ctx.fillStyle = '#ffe66b'; ctx.font = '14px sans-serif';
+    ctx.fillText('🔥 コンボでFEVER発動！', W/2, 620);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
 }
 
 function drawGame() {
