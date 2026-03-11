@@ -111,16 +111,21 @@ function playTone(freq, dur, vol, type, harmonic = false) {
 
 function playNote(lane, type) {
     const freqs = [261.6, 329.6, 392.0, 523.3];
-    const vol = type === 'perfect' ? 0.4 : type === 'great' ? 0.28 : 0.16;
+    const vol = type === 'perfect' ? 0.42 : type === 'great' ? 0.28 : 0.16;
     const t = type === 'perfect' ? 'sine' : 'triangle';
     const harmonic = type === 'perfect' || type === 'great';
-    playTone(freqs[lane], type === 'perfect' ? 0.35 : 0.25, vol, t, harmonic);
+    playTone(freqs[lane], type === 'perfect' ? 0.4 : 0.25, vol, t, harmonic);
     
-    // PERFECT時は追加のキラキラ音を重ねる
+    // PERFECT時は追加のキラキラ音を重ねる（2段階で豊かに）
     if (type === 'perfect') {
         setTimeout(() => {
-            playTone(freqs[lane] * 2, 0.15, 0.15, 'sine');
+            playTone(freqs[lane] * 2, 0.18, 0.18, 'sine');
+            playTone(freqs[lane] * 3, 0.12, 0.12, 'sine');
         }, 50);
+        // さらに遅延で高音のキラキラを追加
+        setTimeout(() => {
+            playTone(freqs[lane] * 4, 0.1, 0.08, 'sine');
+        }, 100);
     }
 }
 
@@ -285,19 +290,19 @@ function generateSongPattern() {
         [{ b:0, l:0 }, { b:0.5, l:1 }, { b:1, l:2 }, { b:1.5, l:3 }, { b:2, l:2 }, { b:2.5, l:1 }, { b:3, l:0 }, { b:3.5, l:1 }],
     ];
 
-    // 曲構成（72ビート - 最初の8ビート = 4拍/2小節は完全に空白）
+    // 曲構成（最初の8ビート = 2小節は完全に空白）
     const structure = [
-        // イントロ: beat 8から開始（最初の4拍/2小節は完全に空白にしてプレイヤーが準備できるように）
-        { p:6, s:8 },   // beat 8~11: 休符多めでゆったり開始
-        { p:0, s:12 },  // beat 12~15: シンプルなパターン
+        // イントロ: beat 12から開始（最初の8ビート = 2小節は完全に空白にしてプレイヤーが準備できるように）
+        { p:6, s:12 },  // beat 12~15: 休符多めでゆったり開始
+        { p:0, s:16 },  // beat 16~19: シンプルなパターン
         // Aメロ
-        { p:0, s:16 }, { p:1, s:20 }, { p:0, s:24 }, { p:4, s:28 },
+        { p:0, s:20 }, { p:1, s:24 }, { p:0, s:28 }, { p:4, s:32 },
         // Bメロ
-        { p:2, s:32 }, { p:5, s:36 }, { p:7, s:40 }, { p:1, s:44 },
+        { p:2, s:36 }, { p:5, s:40 }, { p:7, s:44 }, { p:1, s:48 },
         // サビ
-        { p:3, s:48 }, { p:5, s:52 }, { p:7, s:56 }, { p:4, s:60 },
+        { p:3, s:52 }, { p:5, s:56 }, { p:7, s:60 }, { p:4, s:64 },
         // アウトロ
-        { p:6, s:64 }, { p:0, s:68 },
+        { p:6, s:68 }, { p:0, s:72 },
     ];
 
     for (const sec of structure) {
@@ -487,35 +492,51 @@ function updateHitParticles() {
 
 function addHitParticles(lane, color, isPerfect) {
     const cx = lane * LANE_W + LANE_W / 2;
-    const count = isPerfect ? 25 : 12; // パーティクル数を増やして派手に
+    const count = isPerfect ? 35 : 12; // PERFECT時はさらに派手に
     for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
-        const speed = isPerfect ? 4 + Math.random() * 4 : 2.5 + Math.random() * 2.5;
+        const speed = isPerfect ? 4.5 + Math.random() * 5 : 2.5 + Math.random() * 2.5;
         hitParticles.push({
             x: cx,
             y: JUDGE_Y,
             vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed - (isPerfect ? 4 : 2),
-            life: isPerfect ? 45 : 30, // 寿命を伸ばして余韻を
-            maxLife: isPerfect ? 45 : 30,
+            vy: Math.sin(angle) * speed - (isPerfect ? 5 : 2),
+            life: isPerfect ? 50 : 30, // 寿命を伸ばして余韻を
+            maxLife: isPerfect ? 50 : 30,
             color: color,
-            size: isPerfect ? 4 + Math.random() * 3 : 2.5 + Math.random() * 2,
+            size: isPerfect ? 4.5 + Math.random() * 3.5 : 2.5 + Math.random() * 2,
         });
     }
-    // PERFECT時は追加で星形パーティクルを生成
+    // PERFECT時は追加で星形パーティクルを生成（2段階）
     if (isPerfect) {
-        for (let i = 0; i < 8; i++) {
-            const angle = (Math.PI * 2 * i) / 8;
-            const speed = 5 + Math.random() * 3;
+        // 第1層：白い星
+        for (let i = 0; i < 12; i++) {
+            const angle = (Math.PI * 2 * i) / 12;
+            const speed = 6 + Math.random() * 4;
             hitParticles.push({
                 x: cx,
                 y: JUDGE_Y,
                 vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed - 3,
-                life: 50,
-                maxLife: 50,
+                vy: Math.sin(angle) * speed - 4,
+                life: 55,
+                maxLife: 55,
                 color: '#fff',
-                size: 2 + Math.random() * 1.5,
+                size: 2.5 + Math.random() * 2,
+            });
+        }
+        // 第2層：黄色い輝き
+        for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI * 2 * i) / 8 + Math.PI / 16;
+            const speed = 3.5 + Math.random() * 2.5;
+            hitParticles.push({
+                x: cx,
+                y: JUDGE_Y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 2.5,
+                life: 48,
+                maxLife: 48,
+                color: '#ffe66b',
+                size: 3 + Math.random() * 2,
             });
         }
     }
@@ -525,37 +546,53 @@ function activateFever() {
     if (feverActive) return;
     feverActive = true;
     feverTimer = FEVER_DURATION;
-    // フィーバー開始の爆発的なエフェクト
-    for (let i = 0; i < 60; i++) {
-        const angle = (Math.PI * 2 * i) / 60;
-        const speed = 8 + Math.random() * 6;
+    // フィーバー開始の爆発的なエフェクト（さらに派手に）
+    for (let i = 0; i < 80; i++) {
+        const angle = (Math.PI * 2 * i) / 80;
+        const speed = 9 + Math.random() * 8;
         feverParticles.push({
             x: W / 2,
             y: H / 2,
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
-            life: 60 + Math.random() * 40,
-            maxLife: 100,
+            life: 65 + Math.random() * 45,
+            maxLife: 110,
             color: LANE_COLORS[Math.floor(Math.random() * 4)],
-            size: 5 + Math.random() * 7,
+            size: 6 + Math.random() * 8,
         });
     }
-    // 追加の星形エフェクト
-    for (let i = 0; i < 20; i++) {
+    // 第2波：白い輝き
+    for (let i = 0; i < 40; i++) {
+        const angle = (Math.PI * 2 * i) / 40 + Math.PI / 40;
+        const speed = 5 + Math.random() * 5;
         feverParticles.push({
-            x: W / 2 + (Math.random() - 0.5) * 100,
-            y: H / 2 + (Math.random() - 0.5) * 100,
-            vx: (Math.random() - 0.5) * 10,
-            vy: (Math.random() - 0.5) * 10,
-            life: 50 + Math.random() * 30,
-            maxLife: 80,
-            color: '#ffe66b',
-            size: 6 + Math.random() * 4,
+            x: W / 2,
+            y: H / 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 55 + Math.random() * 35,
+            maxLife: 90,
+            color: '#fff',
+            size: 4 + Math.random() * 5,
         });
     }
-    // 発動音
-    playTone(523.3, 0.3, 0.4, 'sine', true);
-    setTimeout(() => playTone(659.3, 0.3, 0.4, 'sine', true), 100);
+    // 追加の星形エフェクト（増量）
+    for (let i = 0; i < 35; i++) {
+        feverParticles.push({
+            x: W / 2 + (Math.random() - 0.5) * 120,
+            y: H / 2 + (Math.random() - 0.5) * 120,
+            vx: (Math.random() - 0.5) * 12,
+            vy: (Math.random() - 0.5) * 12,
+            life: 55 + Math.random() * 35,
+            maxLife: 90,
+            color: '#ffe66b',
+            size: 7 + Math.random() * 5,
+        });
+    }
+    // 発動音（3段階で盛り上げる）
+    playTone(523.3, 0.35, 0.45, 'sine', true);
+    setTimeout(() => playTone(659.3, 0.35, 0.45, 'sine', true), 100);
+    setTimeout(() => playTone(783.9, 0.3, 0.4, 'sine', true), 200);
 }
 
 // ── タップ判定 ──
@@ -689,10 +726,13 @@ function drawTitle() {
 function drawGame() {
     // 背景
     if (feverActive) {
-        // フィーバー中: 背景が脈動
-        const fp = (feverTimer % 500) / 500;
-        const r = Math.floor(10 + fp * 15);
-        ctx.fillStyle = `rgb(${r}, ${Math.floor(r*0.5)}, ${Math.floor(r*1.5)})`;
+        // フィーバー中: 背景が脈動（より強く）
+        const fp = (feverTimer % 400) / 400;
+        const pulse = Math.sin(fp * Math.PI * 2) * 0.5 + 0.5;
+        const r = Math.floor(12 + pulse * 22);
+        const g = Math.floor(r * 0.4);
+        const b = Math.floor(r * 1.8);
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
     } else {
         ctx.fillStyle = '#0a0a1a';
     }
@@ -811,16 +851,31 @@ function drawGame() {
         if (--e.timer <= 0) effects.splice(i, 1);
     }
 
-    // 判定テキスト
+    // 判定テキスト（PERFECT時はより派手に）
     if (judgmentText) {
         const jt = judgmentText;
         const prog = 1 - jt.timer / 25;
+        const isPerfectText = jt.text.includes('PERFECT');
         ctx.textAlign = 'center';
         ctx.globalAlpha = 1 - prog * 0.5;
         ctx.fillStyle = jt.color;
-        ctx.shadowColor = jt.color; ctx.shadowBlur = 15;
-        ctx.font = `bold ${26 + prog * 4}px sans-serif`;
-        ctx.fillText(jt.text, W/2, JUDGE_Y - 55 - prog * 12);
+        ctx.shadowColor = jt.color;
+        ctx.shadowBlur = isPerfectText ? 25 : 15;
+        const fontSize = isPerfectText ? 32 + prog * 6 : 26 + prog * 4;
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillText(jt.text, W/2, JUDGE_Y - 55 - prog * (isPerfectText ? 18 : 12));
+        
+        // PERFECT時は追加の光輪
+        if (isPerfectText && prog < 0.5) {
+            ctx.strokeStyle = jt.color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = (0.5 - prog) * 0.6;
+            ctx.beginPath();
+            ctx.arc(W/2, JUDGE_Y - 55 - prog * 18, 45 + prog * 30, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1 - prog * 0.5;
+        }
+        
         ctx.shadowBlur = 0; ctx.globalAlpha = 1;
         if (--jt.timer <= 0) judgmentText = null;
     }
