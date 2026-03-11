@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>グラビティスイッチ - 今日のミニゲーム</title>
+    <meta name="description" content="重力を操れ！タップで重力反転、障害物を避けてどこまで行ける？">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #0a0a1a;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+// ===== GRAVITY SWITCH =====
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// --- Screen Setup ---
+let W, H;
+function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W;
+    canvas.height = H;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Audio ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(freq, type, dur, vol) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = freq;
+    o.type = type || 'sine';
+    g.gain.setValueAtTime(vol || 0.15, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (dur || 0.1));
+    o.start(); o.stop(audioCtx.currentTime + (dur || 0.1));
+}
+function sfxFlip() { playSound(520, 'sine', 0.08, 0.2); playSound(780, 'sine', 0.06, 0.12); }
+function sfxCoin() { playSound(880, 'square', 0.05, 0.1); playSound(1320, 'square', 0.08, 0.08); }
+function sfxDie() { playSound(200, 'sawtooth', 0.3, 0.2); playSound(100, 'sawtooth', 0.4, 0.15); }
+function sfxBuy() { playSound(660, 'sine', 0.1, 0.15); playSound(880, 'sine', 0.1, 0.12); playSound(1100, 'sine', 0.15, 0.1); }
+
+// --- Game State ---
+const STATE = { TITLE: 0, PLAYING: 1, DEAD: 2, SHOP: 3 };
+let state = STATE.TITLE;
+
+// Player
+let player = {};
+// World
+let obstacles = [];
+let coins = [];
+let particles = [];
+let trailParticles = [];
+let scrollSpeed = 3;
+let baseScrollSpeed = 3;
+let distance = 0;
+let bestDistance = 0;
+let totalCoins = 0;
+let sessionCoins = 0;
+
+// Upgrades
+let upgrades = {
+    slow:    { level: 0, maxLevel: 5, baseCost: 40, name: '⏳ スロー',   desc: '反転後0.3秒減速' },
+    barrier: { level: 0, maxLevel: 3, baseCost: 80, name: '🛡️ バリア',  desc: '壁に1回ぶつかってもセーフ' },
+    predict: { level: 0, maxLevel: 3, baseCost: 100, name: '🔮 予測線', desc: '軌道をうっすら表示' },
+    magnet:  { level: 0, maxLevel: 3, baseCost: 60, name: '🧲 マグネット', desc: 'コインを引き寄せる' }
+};
+
+// Slow effect
+let slowTimer = 0;
+let barrierCount = 0;
+
+// Load saved data
+try {
+    const saved = JSON.parse(localStorage.getItem('gravitySwitch'));
+    if (saved) {
+        totalCoins = saved.totalCoins || 0;
+        bestDistance = saved.bestDistance || 0;
+        if (saved.upgrades) {
+            for (let k in saved.upgrades) {
+                if (upgrades[k]) upgrades[k].level = saved.upgrades[k];
+            }
+        }
+    }
+} catch(e) {}
+
+function saveData() {
+    const data = { totalCoins, bestDistance, upgrades: {} };
+    for (let k in upgrades) data.upgrades[k] = upgrades[k].level;
+    localStorage.setItem('gravitySwitch', JSON.stringify(data));
+}
+
+// --- Player Init ---
+function resetPlayer() {
+    player = {
+        x: W * 0.2,
+        y: H * 0.5,
+        w: 24,
+        h: 24,
+        vy: 0,
+        gravity: 1, // 1 = down, -1 = up
+        speed: 600, // gravity acceleration (px/s²)
+        maxVy: 500,
+        alive: true,
+        angle: 0,
+        targetAngle: 0
+    };
+    obstacles = [];
+    coins = [];
+    particles = [];
+    trailParticles = [];
+    distance = 0;
+    sessionCoins = 0;
+    scrollSpeed = baseScrollSpeed;
+    slowTimer = 0;
+    barrierCount = upgrades.barrier.level;
+    generateInitialObstacles();
+}
+
+// --- Obstacle Generation ---
+let nextObstacleX = 0;
+
+function generateInitialObstacles() {
+    nextObstacleX = W + 200;
+    for (let i = 0; i < 8; i++) {
+        spawnObstacle();
+    }
+}
+
+function spawnObstacle() {
+    const gapH = Math.max(140, 220 - distance * 0.15); // gap shrinks with distance
+    const minWall = 40;
+    const wallArea = H - gapH - minWall * 2;
+    const topH = minWall + Math.random() * wallArea;
+    const botH = H - topH - gapH;
+    
+    const obstW = 30 + Math.random() * 20;
+    
+    // Top wall
+    obstacles.push({
+        x: nextObstacleX, y: 0, w: obstW, h: topH,
+        color: '#3a3a6e'
+    });
+    // Bottom wall
+    obstacles.push({
+        x: nextObstacleX, y: H - botH, w: obstW, h: botH,
+        color: '#3a3a6e'
+    });
+    
+    // Coin in the gap
+    if (Math.random() < 0.6) {
+        const coinY = topH + gapH * (0.3 + Math.random() * 0.4);
+        coins.push({
+            x: nextObstacleX + obstW / 2,
+            y: coinY,
+            r: 10,
+            alive: true,
+            glow: 0
+        });
+    }
+
+    // Sometimes add a floating obstacle in the gap
+    if (distance > 200 && Math.random() < 0.3) {
+        const floatY = topH + gapH * (0.2 + Math.random() * 0.6);
+        const floatW = 20 + Math.random() * 30;
+        const floatH = 12 + Math.random() * 12;
+        obstacles.push({
+            x: nextObstacleX + obstW + 30 + Math.random() * 60,
+            y: floatY - floatH / 2,
+            w: floatW, h: floatH,
+            color: '#5a2a6e',
+            floating: true
+        });
+    }
+    
+    nextObstacleX += 180 + Math.random() * 120;
+}
+
+// --- Gravity Flip ---
+function flipGravity() {
+    if (!player.alive) return;
+    player.gravity *= -1;
+    player.targetAngle += Math.PI;
+    sfxFlip();
+    
+    // Slow effect
+    if (upgrades.slow.level > 0) {
+        slowTimer = 0.3 + upgrades.slow.level * 0.06;
+    }
+    
+    // Flip particles
+    for (let i = 0; i < 8; i++) {
+        particles.push({
+            x: player.x, y: player.y,
+            vx: (Math.random() - 0.5) * 200,
+            vy: (Math.random() - 0.5) * 200,
+            life: 0.4 + Math.random() * 0.3,
+            maxLife: 0.4 + Math.random() * 0.3,
+            r: 3 + Math.random() * 4,
+            color: player.gravity > 0 ? '#64dfdf' : '#ff6b9d'
+        });
+    }
+}
+
+// --- Input ---
+canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    if (state === STATE.TITLE) {
+        // Check shop button
+        if (e.clientY > H - 80 && e.clientX > W / 2 - 80 && e.clientX < W / 2 + 80) {
+            state = STATE.SHOP;
+            return;
+        }
+        state = STATE.PLAYING;
+        resetPlayer();
+        return;
+    }
+    if (state === STATE.PLAYING) {
+        flipGravity();
+        return;
+    }
+    if (state === STATE.DEAD) {
+        // Delay to prevent accidental tap
+        if (player.deadTimer > 0.5) {
+            // Check shop button
+            if (e.clientY > H * 0.65 && e.clientY < H * 0.65 + 55) {
+                state = STATE.SHOP;
+                return;
+            }
+            // Retry
+            if (e.clientY > H * 0.65 + 65) {
+                state = STATE.PLAYING;
+                resetPlayer();
+                return;
+            }
+        }
+        return;
+    }
+    if (state === STATE.SHOP) {
+        handleShopClick(e.clientX, e.clientY);
+        return;
+    }
+});
+
+// --- Shop ---
+let shopButtons = [];
+
+function buildShopButtons() {
+    shopButtons = [];
+    const keys = Object.keys(upgrades);
+    const btnW = Math.min(300, W - 40);
+    const btnH = 70;
+    const startY = H * 0.22;
+    const gap = 12;
+    
+    keys.forEach((k, i) => {
+        const u = upgrades[k];
+        const cost = u.level >= u.maxLevel ? null : Math.floor(u.baseCost * Math.pow(1.5, u.level));
+        shopButtons.push({
+            key: k,
+            x: W / 2 - btnW / 2,
+            y: startY + i * (btnH + gap),
+            w: btnW,
+            h: btnH,
+            cost: cost,
+            canBuy: cost !== null && totalCoins >= cost
+        });
+    });
+    
+    // Back button
+    shopButtons.push({
+        key: 'back',
+        x: W / 2 - 80,
+        y: startY + keys.length * (btnH + gap) + 20,
+        w: 160,
+        h: 50,
+        cost: null,
+        canBuy: true
+    });
+}
+
+function handleShopClick(cx, cy) {
+    for (const btn of shopButtons) {
+        if (cx >= btn.x && cx <= btn.x + btn.w && cy >= btn.y && cy <= btn.y + btn.h) {
+            if (btn.key === 'back') {
+                state = STATE.TITLE;
+                return;
+            }
+            if (btn.canBuy && btn.cost !== null) {
+                totalCoins -= btn.cost;
+                upgrades[btn.key].level++;
+                sfxBuy();
+                saveData();
+                buildShopButtons();
+            }
+            return;
+        }
+    }
+}
+
+// --- Update ---
+let lastTime = 0;
+
+function update(timestamp) {
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+    lastTime = timestamp;
+    
+    if (state === STATE.PLAYING && player.alive) {
+        // Slow effect
+        let speedMult = 1;
+        if (slowTimer > 0) {
+            slowTimer -= dt;
+            speedMult = 0.4;
+        }
+        
+        // Increase difficulty
+        scrollSpeed = baseScrollSpeed + distance * 0.003;
+        const actualSpeed = scrollSpeed * speedMult;
+        
+        // Player physics
+        player.vy += player.gravity * player.speed * dt;
+        player.vy = Math.max(-player.maxVy, Math.min(player.maxVy, player.vy));
+        player.y += player.vy * dt;
+        
+        // Rotation
+        player.angle += (player.targetAngle - player.angle) * 0.15;
+        
+        // Ceiling / floor
+        if (player.y < player.h / 2) {
+            player.y = player.h / 2;
+            player.vy = 0;
+        }
+        if (player.y > H - player.h / 2) {
+            player.y = H - player.h / 2;
+            player.vy = 0;
+        }
+        
+        // Scroll obstacles
+        for (const o of obstacles) {
+            o.x -= actualSpeed;
+        }
+        for (const c of coins) {
+            c.x -= actualSpeed;
+        }
+        
+        distance += actualSpeed * 0.1;
+        
+        // Remove off-screen, spawn new
+        obstacles = obstacles.filter(o => o.x + o.w > -50);
+        coins = coins.filter(c => c.x > -50 && c.alive);
+        
+        while (nextObstacleX - (W + 200) < W * 2) {
+            // Need to calculate how far we've scrolled total
+            spawnObstacle();
+        }
+        // Adjust nextObstacleX relative to scroll
+        nextObstacleX -= actualSpeed;
+        
+        // Collision detection
+        const px = player.x - player.w / 2;
+        const py = player.y - player.h / 2;
+        const pw = player.w;
+        const ph = player.h;
+        
+        for (const o of obstacles) {
+            if (px + pw > o.x && px < o.x + o.w && py + ph > o.y && py < o.y + o.h) {
+                if (barrierCount > 0) {
+                    barrierCount--;
+                    // Push player out
+                    if (player.gravity > 0) {
+                        player.y = o.y - player.h / 2;
+                    } else {
+                        player.y = o.y + o.h + player.h / 2;
+                    }
+                    player.vy = 0;
+                    // Barrier effect
+                    for (let i = 0; i < 12; i++) {
+                        particles.push({
+                            x: player.x, y: player.y,
+                            vx: (Math.random() - 0.5) * 300,
+                            vy: (Math.random() - 0.5) * 300,
+                            life: 0.5, maxLife: 0.5,
+                            r: 4, color: '#00ffaa'
+                        });
+                    }
+                    playSound(440, 'sine', 0.15, 0.15);
+                } else {
+                    die();
+                }
+                break;
+            }
+        }
+        
+        // Coin collection
+        const magnetRange = upgrades.magnet.level * 60;
+        for (const c of coins) {
+            if (!c.alive) continue;
+            const dx = player.x - c.x;
+            const dy = player.y - c.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            // Magnet pull
+            if (magnetRange > 0 && dist < magnetRange) {
+                c.x += dx * 0.08;
+                c.y += dy * 0.08;
+            }
+            
+            if (dist < player.w / 2 + c.r) {
+                c.alive = false;
+                sessionCoins++;
+                totalCoins++;
+                sfxCoin();
+                // Coin particles
+                for (let i = 0; i < 6; i++) {
+                    particles.push({
+                        x: c.x, y: c.y,
+                        vx: (Math.random() - 0.5) * 150,
+                        vy: (Math.random() - 0.5) * 150,
+                        life: 0.3, maxLife: 0.3,
+                        r: 3, color: '#ffd700'
+                    });
+                }
+            }
+        }
+        
+        // Trail particles
+        if (Math.random() < 0.6) {
+            trailParticles.push({
+                x: player.x - player.w / 2,
+                y: player.y + (Math.random() - 0.5) * player.h * 0.6,
+                life: 0.3 + Math.random() * 0.2,
+                maxLife: 0.3 + Math.random() * 0.2,
+                r: 2 + Math.random() * 3,
+                color: player.gravity > 0 ? '#4a6fa5' : '#a54a6f'
+            });
+        }
+    }
+    
+    if (state === STATE.DEAD) {
+        player.deadTimer = (player.deadTimer || 0) + dt;
+    }
+    
+    // Update particles
+    for (const p of particles) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+    }
+    particles = particles.filter(p => p.life > 0);
+    
+    for (const p of trailParticles) {
+        p.life -= dt;
+    }
+    trailParticles = trailParticles.filter(p => p.life > 0);
+    
+    // Coin glow
+    for (const c of coins) {
+        c.glow = (c.glow + dt * 3) % (Math.PI * 2);
+    }
+    
+    draw();
+    requestAnimationFrame(update);
+}
+
+function die() {
+    player.alive = false;
+    state = STATE.DEAD;
+    player.deadTimer = 0;
+    sfxDie();
+    
+    if (distance > bestDistance) bestDistance = distance;
+    saveData();
+    
+    // Death particles
+    for (let i = 0; i < 20; i++) {
+        particles.push({
+            x: player.x, y: player.y,
+            vx: (Math.random() - 0.5) * 400,
+            vy: (Math.random() - 0.5) * 400,
+            life: 0.6 + Math.random() * 0.4,
+            maxLife: 0.6 + Math.random() * 0.4,
+            r: 3 + Math.random() * 6,
+            color: Math.random() > 0.5 ? '#ff4444' : '#ff8844'
+        });
+    }
+}
+
+// --- Draw ---
+function draw() {
+    // Background gradient
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0a0a2e');
+    bg.addColorStop(1, '#1a0a3e');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    
+    // Grid lines (parallax)
+    ctx.strokeStyle = 'rgba(100, 100, 200, 0.08)';
+    ctx.lineWidth = 1;
+    const gridSize = 60;
+    const gridOffset = (distance * 2) % gridSize;
+    for (let x = -gridOffset; x < W; x += gridSize) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let y = 0; y < H; y += gridSize) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+    
+    if (state === STATE.TITLE) {
+        drawTitle();
+        return;
+    }
+    if (state === STATE.SHOP) {
+        drawShop();
+        return;
+    }
+    
+    // --- Game / Dead ---
+    
+    // Prediction line
+    if (state === STATE.PLAYING && upgrades.predict.level > 0 && player.alive) {
+        drawPredictionLine();
+    }
+    
+    // Trail particles
+    for (const p of trailParticles) {
+        const a = p.life / p.maxLife * 0.4;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (p.life / p.maxLife), 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    
+    // Obstacles
+    for (const o of obstacles) {
+        // Glow
+        ctx.shadowColor = o.floating ? '#8844aa' : '#4444aa';
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = o.color;
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+        
+        // Edge highlight
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = o.floating ? 'rgba(170,80,220,0.5)' : 'rgba(100,120,200,0.3)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(o.x, o.y, o.w, o.h);
+    }
+    ctx.shadowBlur = 0;
+    
+    // Coins
+    for (const c of coins) {
+        if (!c.alive) continue;
+        const glow = 0.6 + Math.sin(c.glow) * 0.3;
+        ctx.globalAlpha = glow;
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        // Inner circle
+        ctx.fillStyle = '#ffea00';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+    
+    // Particles
+    for (const p of particles) {
+        const a = p.life / p.maxLife;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * a, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    
+    // Player
+    if (player.alive || state === STATE.DEAD) {
+        drawPlayer();
+    }
+    
+    // Barrier indicator
+    if (barrierCount > 0 && state === STATE.PLAYING) {
+        ctx.strokeStyle = 'rgba(0, 255, 170, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.w * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#00ffaa';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🛡️×' + barrierCount, player.x, player.y - player.h);
+    }
+    
+    // HUD
+    drawHUD();
+    
+    // Slow effect overlay
+    if (slowTimer > 0) {
+        ctx.fillStyle = `rgba(100, 200, 255, ${slowTimer * 0.15})`;
+        ctx.fillRect(0, 0, W, H);
+    }
+    
+    // Dead screen
+    if (state === STATE.DEAD) {
+        drawDeadScreen();
+    }
+}
+
+function drawPlayer() {
+    if (state === STATE.DEAD && player.deadTimer > 0.1) return; // hide after explosion
+    
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+    
+    // Glow
+    ctx.shadowColor = player.gravity > 0 ? '#64dfdf' : '#ff6b9d';
+    ctx.shadowBlur = 15;
+    
+    // Body
+    const grad = ctx.createLinearGradient(-player.w/2, -player.h/2, player.w/2, player.h/2);
+    grad.addColorStop(0, player.gravity > 0 ? '#64dfdf' : '#ff6b9d');
+    grad.addColorStop(1, player.gravity > 0 ? '#4a90d9' : '#d94a7a');
+    ctx.fillStyle = grad;
+    
+    // Rounded rect
+    const r = 6;
+    const x = -player.w / 2, y = -player.h / 2, w = player.w, h = player.h;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.fill();
+    
+    ctx.shadowBlur = 0;
+    
+    // Arrow indicator
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath();
+    if (player.gravity > 0) {
+        ctx.moveTo(0, 5); ctx.lineTo(-5, -2); ctx.lineTo(5, -2);
+    } else {
+        ctx.moveTo(0, -5); ctx.lineTo(-5, 2); ctx.lineTo(5, 2);
+    }
+    ctx.fill();
+    
+    ctx.restore();
+}
+
+function drawPredictionLine() {
+    const steps = 20 + upgrades.predict.level * 15;
+    const simDt = 0.016;
+    let sy = player.y;
+    let svy = player.vy;
+    const sgrav = player.gravity * -1; // show FLIPPED prediction
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y);
+    
+    for (let i = 0; i < steps; i++) {
+        svy += sgrav * player.speed * simDt;
+        svy = Math.max(-player.maxVy, Math.min(player.maxVy, svy));
+        sy += svy * simDt;
+        sy = Math.max(player.h / 2, Math.min(H - player.h / 2, sy));
+        ctx.lineTo(player.x + (i + 1) * 6, sy);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawHUD() {
+    // Distance
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(Math.floor(distance) + 'm', 15, 30);
+    
+    // Coins
+    ctx.fillStyle = '#ffd700';
+    ctx.textAlign = 'right';
+    ctx.fillText('🪙 ' + sessionCoins, W - 15, 30);
+    
+    // Best
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('BEST: ' + Math.floor(bestDistance) + 'm', 15, 52);
+}
+
+function drawTitle() {
+    // Title
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🧲 グラビティスイッチ', W / 2, H * 0.25);
+    
+    // Subtitle
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('タップで重力反転！障害物を避けて進め', W / 2, H * 0.32);
+    
+    // Best record
+    if (bestDistance > 0) {
+        ctx.fillStyle = '#64dfdf';
+        ctx.font = '18px sans-serif';
+        ctx.fillText('🏆 ベスト: ' + Math.floor(bestDistance) + 'm', W / 2, H * 0.40);
+    }
+    
+    // Coins
+    ctx.fillStyle = '#ffd700';
+    ctx.font = '18px sans-serif';
+    ctx.fillText('🪙 ' + totalCoins, W / 2, H * 0.47);
+    
+    // Start button
+    ctx.fillStyle = '#64dfdf';
+    ctx.font = 'bold 28px sans-serif';
+    
+    const pulse = 0.8 + Math.sin(Date.now() / 500) * 0.2;
+    ctx.globalAlpha = pulse;
+    ctx.fillText('▶ タップでスタート', W / 2, H * 0.6);
+    ctx.globalAlpha = 1;
+    
+    // Shop button
+    const shopBtnW = 160, shopBtnH = 50;
+    const shopBtnX = W / 2 - shopBtnW / 2;
+    const shopBtnY = H - 80;
+    ctx.fillStyle = '#3a3a6e';
+    roundRect(shopBtnX, shopBtnY, shopBtnW, shopBtnH, 10);
+    ctx.fill();
+    ctx.strokeStyle = '#6a6abe';
+    ctx.lineWidth = 2;
+    roundRect(shopBtnX, shopBtnY, shopBtnW, shopBtnH, 10);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('🛒 ショップ', W / 2, shopBtnY + 32);
+    
+    // Animated demo block
+    const demoY = H * 0.7 + Math.sin(Date.now() / 400) * 20;
+    ctx.save();
+    ctx.translate(W / 2, demoY);
+    ctx.rotate(Date.now() / 1000);
+    ctx.fillStyle = '#64dfdf';
+    ctx.fillRect(-12, -12, 24, 24);
+    ctx.restore();
+}
+
+function drawShop() {
+    buildShopButtons();
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🛒 ショップ', W / 2, H * 0.12);
+    
+    ctx.fillStyle = '#ffd700';
+    ctx.font = '18px sans-serif';
+    ctx.fillText('🪙 ' + totalCoins, W / 2, H * 0.18);
+    
+    for (const btn of shopButtons) {
+        if (btn.key === 'back') {
+            // Back button
+            ctx.fillStyle = '#555';
+            roundRect(btn.x, btn.y, btn.w, btn.h, 8);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 18px sans-serif';
+            ctx.fillText('← 戻る', W / 2, btn.y + 32);
+            continue;
+        }
+        
+        const u = upgrades[btn.key];
+        const maxed = u.level >= u.maxLevel;
+        
+        // Button bg
+        ctx.fillStyle = maxed ? '#2a4a2a' : btn.canBuy ? '#2a2a5e' : '#1a1a3e';
+        roundRect(btn.x, btn.y, btn.w, btn.h, 10);
+        ctx.fill();
+        ctx.strokeStyle = maxed ? '#4a8a4a' : btn.canBuy ? '#6a6abe' : '#3a3a5e';
+        ctx.lineWidth = 2;
+        roundRect(btn.x, btn.y, btn.w, btn.h, 10);
+        ctx.stroke();
+        
+        // Name & level
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(u.name + ' Lv.' + u.level + '/' + u.maxLevel, btn.x + 12, btn.y + 25);
+        
+        // Description
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(u.desc, btn.x + 12, btn.y + 45);
+        
+        // Cost
+        ctx.textAlign = 'right';
+        if (maxed) {
+            ctx.fillStyle = '#4a8a4a';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('MAX', btn.x + btn.w - 12, btn.y + 35);
+        } else {
+            ctx.fillStyle = btn.canBuy ? '#ffd700' : '#666';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('🪙' + btn.cost, btn.x + btn.w - 12, btn.y + 35);
+        }
+    }
+    ctx.textAlign = 'center';
+}
+
+function drawDeadScreen() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, W, H);
+    
+    ctx.fillStyle = '#ff4444';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💥 ゲームオーバー', W / 2, H * 0.3);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '22px sans-serif';
+    ctx.fillText('距離: ' + Math.floor(distance) + 'm', W / 2, H * 0.42);
+    ctx.fillText('コイン: ' + sessionCoins + '枚', W / 2, H * 0.48);
+    
+    if (distance >= bestDistance) {
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('🏆 NEW RECORD!', W / 2, H * 0.55);
+    }
+    
+    if (player.deadTimer > 0.5) {
+        // Shop button
+        ctx.fillStyle = '#3a3a6e';
+        const bw = 160, bh = 45;
+        roundRect(W / 2 - bw / 2, H * 0.65, bw, bh, 8);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('🛒 ショップ', W / 2, H * 0.65 + 30);
+        
+        // Retry
+        const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#64dfdf';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText('▶ タップでリトライ', W / 2, H * 0.65 + 90);
+        ctx.globalAlpha = 1;
+    }
+}
+
+function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// --- Start ---
+requestAnimationFrame(update);
+</script>
+</body>
+</html>
