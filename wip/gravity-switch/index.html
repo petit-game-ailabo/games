@@ -80,7 +80,7 @@ const D = {
 
 // === Upgrades (安く！) ===
 let ups = {
-    ghost:   { lv:0, max:5, cost:15,  name:'💫 ゴースト',   desc:'障害物すり抜け確率UP' },
+    ghost:   { lv:0, max:5, cost:15,  name:'💫 ゴースト',   desc:'障害物すり抜け確率UP（最大50%）' },
     barrier: { lv:0, max:3, cost:30,  name:'🛡️ バリア',    desc:'1回だけ壁セーフ' },
     predict: { lv:0, max:3, cost:40,  name:'🔮 予測線',     desc:'反転先の軌道表示' },
     magnet:  { lv:0, max:3, cost:25,  name:'🧲 マグネット', desc:'コイン引き寄せ' },
@@ -90,10 +90,12 @@ let ups = {
 function upCost(u) { return u.lv >= u.max ? null : Math.floor(u.cost * Math.pow(1.4, u.lv)); }
 
 // Load
+let isFirstPlay = false;
 try {
     const s = JSON.parse(localStorage.getItem('gs_v3'));
     if (s) { totalCoins=s.tc||0; bestDistance=s.bd||0; if(s.u) for(let k in s.u) if(ups[k]) ups[k].lv=s.u[k]; }
-} catch(e){}
+    else { isFirstPlay = true; }
+} catch(e){ isFirstPlay = true; }
 function save() {
     const d={tc:totalCoins,bd:bestDistance,u:{}};
     for(let k in ups) d.u[k]=ups[k].lv;
@@ -154,17 +156,7 @@ function spawnObs() {
         }
     }
     
-    // スピードパッド or スローパッド（ランダム出現）
-    if(distance > 80 && Math.random() < 0.2) {
-        const isSpeed = Math.random() < 0.6;
-        pads.push({
-            x: nextObstX + w + 20,
-            y: topH + g * (0.3 + Math.random()*0.4),
-            w: 30, h: 14,
-            type: isSpeed ? 'speed' : 'slow',
-            alive: true
-        });
-    }
+    // スピードパッドは削除（テンポを乱すため）
     
     // 浮遊障害物（回避可能な位置に配置）
     if(distance > D.floatStart && Math.random() < D.floatChance) {
@@ -317,7 +309,7 @@ function update(ts) {
                 
                 // ゴーストですり抜け（1回だけエフェクト）
                 if(!ghostTriggered && ups.ghost.lv > 0) {
-                    const ghostChance = 0.05 + ups.ghost.lv * 0.04;
+                    const ghostChance = 0.10 + ups.ghost.lv * 0.08;
                     if(Math.random() < ghostChance) {
                         ghostTriggered = true;
                         showFloatText(player.x, player.y - 30, '👻ゴースト！', '#bb88ff');
@@ -405,25 +397,7 @@ function update(ts) {
             }
         }
         
-        // Pad pickup
-        for(const p of pads) {
-            if(!p.alive) continue;
-            const dx=player.x-p.x-p.w/2, dy=player.y-p.y-p.h/2;
-            if(Math.abs(dx)<player.w/2+p.w/2 && Math.abs(dy)<player.h/2+p.h/2) {
-                p.alive = false;
-                if(p.type==='speed') {
-                    // 一瞬加速（スリル）
-                    player.vy *= 1.5;
-                    showFloatText(p.x, p.y-20, '⚡BOOST!', '#ffaa00');
-                    snd(600,'square',0.08,0.1);
-                } else {
-                    // スローパッドは削除されたので何もしない（このブロックは将来削除可能）
-                    showFloatText(p.x, p.y-20, '❄️SLOW', '#00ddff');
-                    snd(300,'sine',0.1,0.08);
-                }
-                for(let i=0;i<5;i++) particles.push({ x:p.x, y:p.y, vx:(Math.random()-0.5)*100, vy:(Math.random()-0.5)*100, life:0.2, ml:0.2, r:2, color:p.type==='speed'?'#ffaa00':'#00ddff' });
-            }
-        }
+        // Pad pickup（パッドシステム削除により無効化）
         
         // Trail
         if(Math.random()<0.4) trails.push({ x:player.x-player.w/2, y:player.y+(Math.random()-0.5)*player.h*0.4, life:0.2, ml:0.2, r:1.5+Math.random()*2, color:player.grav>0?'#4a6fa5':'#a54a6f' });
@@ -519,17 +493,7 @@ function draw() {
         ctx.strokeRect(o.x,o.y,o.w,o.h);
     }
     
-    // Pads
-    for(const p of pads){
-        if(!p.alive) continue;
-        const c = p.type==='speed'?'#ffaa00':'#00ddff';
-        ctx.fillStyle=c; ctx.globalAlpha=0.7;
-        ctx.fillRect(p.x,p.y,p.w,p.h);
-        ctx.strokeStyle='#fff'; ctx.lineWidth=1; ctx.strokeRect(p.x,p.y,p.w,p.h);
-        ctx.globalAlpha=1;
-        ctx.fillStyle='#fff'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
-        ctx.fillText(p.type==='speed'?'⚡':'❄️', p.x+p.w/2, p.y+p.h/2+4);
-    }
+    // Pads（削除済み）
     
     // Coins
     for(const c of coins){
@@ -654,7 +618,11 @@ function drawHUD(){
         const alpha = player.tutorialTime < 2 ? 0.9 : (3 - player.tutorialTime);
         ctx.globalAlpha = alpha;
         ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.textAlign='center';
-        ctx.fillText('👆 タップで重力反転！', W/2, H*0.25);
+        ctx.fillText('👆 タップで重力反転！', W/2, H*0.23);
+        if(isFirstPlay) {
+            ctx.font='13px sans-serif'; ctx.fillStyle='rgba(255,255,255,0.8)';
+            ctx.fillText('🪙 コインを集めてショップでパワーアップ！', W/2, H*0.29);
+        }
         ctx.globalAlpha=1;
     }
 }
