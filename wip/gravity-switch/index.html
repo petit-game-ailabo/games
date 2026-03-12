@@ -116,10 +116,10 @@ let startDashMessage = 0; // スタートダッシュメッセージ表示タイ
 
 // === Difficulty ===
 const D = {
-    startSpeed: 2.8, maxSpeed: 6, speedPerM: 0.003,
-    startGap: 300, minGap: 125, gapPerM: 0.15,
+    startSpeed: 2.8, maxSpeed: 4.5, speedPerM: 0.002,
+    startGap: 300, minGap: 160, gapPerM: 0.1,
     gravity: 400, maxVy: 340,
-    startSpacing: 280, minSpacing: 150, spacePerM: 0.1,
+    startSpacing: 280, minSpacing: 180, spacePerM: 0.06,
     floatStart: 350, floatChance: 0.2,
     nearMissDist: 18, // ニアミス判定の距離
     enemyStart: 300, // 敵が出始める距離
@@ -233,7 +233,19 @@ function spawnObs() {
                        currentDist < D.enemyMoveStart ? 0.7 : 0.4;
     
     if(Math.random() < wallChance) {
-        const topH = margin + Math.random()*area;
+        // 前の隙間位置から大きく離れないようにする（高速時に間に合うように）
+        let topH;
+        if(typeof spawnObs.lastGapCenter === 'number') {
+            // 前の隙間中心からの最大移動量（速度が上がるほど制限）
+            const maxShift = Math.max(60, 200 - distance * 0.15);
+            const lastCenter = spawnObs.lastGapCenter;
+            const minTop = Math.max(margin, lastCenter - g/2 - maxShift);
+            const maxTop = Math.min(margin + area, lastCenter - g/2 + maxShift);
+            topH = minTop + Math.random() * Math.max(0, maxTop - minTop);
+        } else {
+            topH = margin + Math.random()*area;
+        }
+        spawnObs.lastGapCenter = topH + g/2;
         const botH = H - topH - g;
         const w = 26 + Math.random()*14;
         const zone = ZONES[Math.floor(currentDist / 100) % ZONES.length];
