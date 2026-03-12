@@ -35,7 +35,7 @@ function ensureAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         bgmGain = audioCtx.createGain();
-        bgmGain.gain.value = 0.5;
+        bgmGain.gain.value = 0.8;
         bgmGain.connect(audioCtx.destination);
     }
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -47,7 +47,7 @@ function snd(f,t,d,v) {
         const o=audioCtx.createOscillator(),g=audioCtx.createGain();
         o.connect(g); g.connect(audioCtx.destination);
         o.frequency.value=f; o.type=t||'sine';
-        g.gain.setValueAtTime(v||0.3,audioCtx.currentTime);
+        g.gain.setValueAtTime(v||0.5,audioCtx.currentTime);
         g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+(d||0.1));
         o.start(); o.stop(audioCtx.currentTime+(d||0.1));
     } catch(e){}
@@ -150,11 +150,11 @@ function stopBGM() {
     if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
 }
 
-function sfxJump() { snd(320,'sine',0.1,0.5); snd(480,'sine',0.07,0.35); }
-function sfxLand() { snd(120,'square',0.06,0.4); snd(80,'square',0.05,0.25); }
-function sfxDie() { snd(200,'sawtooth',0.35,0.4); snd(80,'sawtooth',0.5,0.25); stopBGM(); }
-function sfxRecord() { snd(523,'sine',0.12,0.35); snd(659,'sine',0.14,0.3); snd(784,'sine',0.18,0.25); }
-function sfxNearLand() { snd(600,'sine',0.1,0.35); snd(800,'sine',0.12,0.3); }
+function sfxJump() { snd(320,'sine',0.12,0.7); snd(480,'sine',0.08,0.5); }
+function sfxLand() { snd(120,'square',0.07,0.6); snd(80,'square',0.06,0.4); }
+function sfxDie() { snd(200,'sawtooth',0.4,0.6); snd(80,'sawtooth',0.5,0.4); stopBGM(); }
+function sfxRecord() { snd(523,'sine',0.14,0.5); snd(659,'sine',0.16,0.45); snd(784,'sine',0.2,0.4); }
+function sfxNearLand() { snd(600,'sine',0.12,0.5); snd(800,'sine',0.14,0.45); }
 
 // ============================================
 // STATE
@@ -398,10 +398,11 @@ function update(ts) {
         
         for (const b of buildings) {
             const bTop = H - b.h;
-            if (px >= b.x + 5 && px <= b.x + b.w - 5) {
-                // 段差ビル：上に歩いて乗れる（高さ差30px以内なら自動スナップ）
+            if (px >= b.x + 3 && px <= b.x + b.w - 3) {
+                // 段差：足がビル上端より下にあり、差が50px以内なら自動で乗る
                 const heightDiff = player.y - bTop;
-                const canStep = b.step && player.onGround && heightDiff > 0 && heightDiff < 50;
+                const canStep = heightDiff > 0 && heightDiff < 50 && player.vy >= -50;
+                // 通常着地 or 段差登り
                 if ((player.y >= bTop - 3 && player.y <= bTop + 18 && player.vy >= 0) || canStep) {
                     // Check if near edge (for near-miss)
                     const edgeDist = Math.min(px - b.x, b.x + b.w - px);
