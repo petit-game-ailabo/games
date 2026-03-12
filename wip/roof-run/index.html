@@ -23,130 +23,255 @@ function resize() { W = window.innerWidth; H = window.innerHeight; canvas.width 
 resize();
 window.addEventListener('resize', resize);
 
-// === Audio ===
+// ============================================
+// AUDIO — SFX + Procedural BGM
+// ============================================
 let audioCtx = null;
+let bgmPlaying = false;
+let bgmGain = null;
+let bgmInterval = null;
+
 function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        bgmGain = audioCtx.createGain();
+        bgmGain.gain.value = 0.07;
+        bgmGain.connect(audioCtx.destination);
+    }
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
+
 function snd(f,t,d,v) {
     if (!audioCtx) return;
-    try { const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); o.frequency.value=f; o.type=t||'sine'; g.gain.setValueAtTime(v||0.1,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+(d||0.1)); o.start(); o.stop(audioCtx.currentTime+(d||0.1)); } catch(e){}
+    try {
+        const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination);
+        o.frequency.value=f; o.type=t||'sine';
+        g.gain.setValueAtTime(v||0.1,audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+(d||0.1));
+        o.start(); o.stop(audioCtx.currentTime+(d||0.1));
+    } catch(e){}
 }
-function sfxJump() { snd(300,'sine',0.08,0.15); snd(450,'sine',0.06,0.1); }
-function sfxLand() { snd(150,'square',0.05,0.08); }
-function sfxDie() { snd(200,'sawtooth',0.3,0.12); snd(80,'sawtooth',0.5,0.08); }
-function sfxRecord() { snd(523,'sine',0.1,0.1); snd(659,'sine',0.1,0.08); snd(784,'sine',0.15,0.08); }
 
-// === State ===
+// BGM: lofi-ish drum & bass loop
+function startBGM() {
+    if (bgmPlaying || !audioCtx) return;
+    bgmPlaying = true;
+    let beat = 0;
+    const bpm = 140;
+    const interval = (60 / bpm / 2) * 1000; // 8th notes
+
+    // Drum pattern (kick, hi-hat, snare)
+    function playBeat() {
+        if (!bgmPlaying) return;
+        const t = audioCtx.currentTime;
+        const bar = beat % 16;
+
+        // Kick: 0, 4, 8, 10
+        if (bar === 0 || bar === 4 || bar === 8 || bar === 10) {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.connect(g); g.connect(bgmGain);
+            o.frequency.setValueAtTime(150, t);
+            o.frequency.exponentialRampToValueAtTime(30, t + 0.12);
+            o.type = 'sine';
+            g.gain.setValueAtTime(0.4, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+            o.start(t); o.stop(t + 0.15);
+        }
+
+        // Hi-hat: every beat
+        {
+            const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.03, audioCtx.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
+            const src = audioCtx.createBufferSource();
+            const g = audioCtx.createGain();
+            src.buffer = buf;
+            src.connect(g); g.connect(bgmGain);
+            const vol = (bar % 2 === 0) ? 0.15 : 0.08;
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+            src.start(t);
+        }
+
+        // Snare: 4, 12
+        if (bar === 4 || bar === 12) {
+            const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.4 * (1 - i/data.length);
+            const src = audioCtx.createBufferSource();
+            const g = audioCtx.createGain();
+            src.buffer = buf;
+            src.connect(g); g.connect(bgmGain);
+            g.gain.setValueAtTime(0.25, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+            src.start(t);
+        }
+
+        // Bass line (changes with distance for progression)
+        if (bar === 0 || bar === 6 || bar === 10) {
+            const bassNotes = [55, 65, 73, 82]; // A1, C2, D2, E2
+            const layer = Math.min(Math.floor(distance / 100), 3);
+            const note = bassNotes[layer % bassNotes.length];
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.connect(g); g.connect(bgmGain);
+            o.frequency.value = note;
+            o.type = 'square';
+            g.gain.setValueAtTime(0.12, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            o.start(t); o.stop(t + 0.2);
+        }
+
+        // Melody layer (appears after 200m)
+        if (distance > 200 && (bar === 0 || bar === 3 || bar === 7 || bar === 11)) {
+            const melodyNotes = [440, 523, 587, 659, 523, 440, 392, 349];
+            const noteIdx = (beat / 2) % melodyNotes.length;
+            const note = melodyNotes[Math.floor(noteIdx)];
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.connect(g); g.connect(bgmGain);
+            o.frequency.value = note;
+            o.type = 'sine';
+            g.gain.setValueAtTime(0.06, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+            o.start(t); o.stop(t + 0.15);
+        }
+
+        beat++;
+    }
+
+    bgmInterval = setInterval(playBeat, interval);
+}
+
+function stopBGM() {
+    bgmPlaying = false;
+    if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
+}
+
+function sfxJump() { snd(320,'sine',0.06,0.12); snd(480,'sine',0.05,0.08); }
+function sfxLand() { snd(120,'square',0.04,0.1); snd(80,'square',0.03,0.06); }
+function sfxDie() { snd(200,'sawtooth',0.3,0.1); snd(80,'sawtooth',0.5,0.06); stopBGM(); }
+function sfxRecord() { snd(523,'sine',0.1,0.08); snd(659,'sine',0.12,0.07); snd(784,'sine',0.15,0.06); }
+function sfxNearLand() { snd(600,'sine',0.06,0.08); snd(800,'sine',0.08,0.06); }
+
+// ============================================
+// STATE
+// ============================================
 const ST = { TITLE: 0, PLAY: 1, DEAD: 2 };
 let state = ST.TITLE;
 
-// === Game vars ===
 let player = {};
 let buildings = [];
 let particles = [];
+let speedLines = [];
 let distance = 0;
 let bestDistance = 0;
 let scrollX = 0;
 let gameSpeed = 3;
 let deadTimer = 0;
+let screenShake = 0;
+let slowMo = 0; // slow motion timer
+let slowMoScale = 1;
+let landSquash = 0; // landing squash animation
 
-// Load best
-try { bestDistance = parseFloat(localStorage.getItem('roofrun_best')) || 0; } catch(e){}
-function saveBest() { try { localStorage.setItem('roofrun_best', bestDistance.toString()); } catch(e){} }
+try { bestDistance = parseFloat(localStorage.getItem('roofrun_best2')) || 0; } catch(e){}
+function saveBest() { try { localStorage.setItem('roofrun_best2', bestDistance.toString()); } catch(e){} }
 
-// === Constants ===
-const GROUND_Y = 0.75; // ビルの上面のY位置（画面比率）
+// ============================================
+// CONSTANTS
+// ============================================
 const GRAVITY = 1800;
 const JUMP_POWER = -620;
 const HIGH_JUMP = -780;
-const MAX_HOLD = 0.15; // 長押し判定の秒数
-const RUN_ANIM_SPEED = 12;
+const MAX_HOLD = 0.18;
+const RUN_ANIM_SPEED = 14;
 
-// === Buildings ===
+// ============================================
+// BUILDINGS
+// ============================================
 function initBuildings() {
     buildings = [];
-    let x = 0;
-    // 最初のビルは広い（足場）
-    buildings.push({ x: 0, w: W * 0.5, h: H * 0.3, color: randomBuildingColor() });
-    x = W * 0.5;
-    for (let i = 0; i < 8; i++) {
-        x += spawnBuilding(x);
-    }
+    buildings.push({ x: 0, w: W * 0.5, h: H * 0.3, color: randomBldColor(), windows: makeWindows(W*0.5, H*0.3) });
+    let x = W * 0.5;
+    for (let i = 0; i < 8; i++) x += spawnBuilding(x);
 }
 
-function randomBuildingColor() {
-    const colors = ['#2d3436', '#2c3e50', '#34495e', '#1e272e', '#2f3542', '#3d3d3d'];
-    return colors[Math.floor(Math.random() * colors.length)];
+function randomBldColor() {
+    const c = ['#2d3436','#2c3e50','#34495e','#1e272e','#2f3542','#3d3d3d','#1a1a2e','#2b2b3d'];
+    return c[Math.floor(Math.random()*c.length)];
+}
+
+function makeWindows(bw, bh) {
+    // Pre-generate window lit/unlit pattern (avoid flickering)
+    const wins = [];
+    const winSize = 8, winGap = 16;
+    for (let wy = 15; wy < bh - 10; wy += winGap) {
+        for (let wx = 10; wx < bw - 10; wx += winGap) {
+            wins.push({ rx: wx, ry: wy, lit: Math.random() > 0.35 });
+        }
+    }
+    return wins;
 }
 
 function spawnBuilding(x) {
-    const gap = 40 + Math.random() * 60 + Math.min(distance * 0.05, 80); // 距離で広がる
-    const w = 80 + Math.random() * 120 - Math.min(distance * 0.08, 50); // 距離で狭くなる
-    const minW = 50;
-    const finalW = Math.max(minW, w);
-    const hVar = 30 + Math.random() * 60; // 高さのばらつき
+    const gap = 35 + Math.random() * 55 + Math.min(distance * 0.04, 70);
+    const w = Math.max(55, 85 + Math.random() * 120 - Math.min(distance * 0.06, 45));
     const baseH = H * 0.3;
     const h = baseH - 30 + Math.random() * 60;
-    
-    buildings.push({
-        x: x + gap,
-        w: finalW,
-        h: h,
-        color: randomBuildingColor()
-    });
-    return gap + finalW;
+    buildings.push({ x: x + gap, w, h, color: randomBldColor(), windows: makeWindows(w, h) });
+    return gap + w;
 }
 
-// === Stickman ===
+// ============================================
+// PLAYER
+// ============================================
 function resetPlayer() {
     player = {
-        x: W * 0.25,
-        y: 0, // set on first building
-        vy: 0,
-        onGround: true,
-        jumping: false,
-        alive: true,
-        runFrame: 0,
-        holdTime: 0,
-        holding: false,
+        x: W * 0.25, y: 0, vy: 0,
+        onGround: true, jumping: false, alive: true,
+        runFrame: 0, holding: false,
+        // Animation states
+        bodyTilt: 0,    // forward lean
+        headBob: 0,     // head bounce
+        squash: 1,      // vertical squash/stretch
+        stretch: 1,
+        landBounce: 0,  // landing recovery
+        airPose: 0,     // 0=neutral, <0=rising, >0=falling
     };
-    // Place on first building
     const b = buildings[0];
     player.y = H - b.h;
+    landSquash = 0;
 }
 
-// === Input ===
-let pressing = false;
+// ============================================
+// INPUT
+// ============================================
 let pressStart = 0;
 
 canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     ensureAudio();
-    
     if (state === ST.TITLE) {
         state = ST.PLAY;
-        distance = 0;
-        scrollX = 0;
-        gameSpeed = 3;
-        initBuildings();
-        resetPlayer();
+        distance = 0; scrollX = 0; gameSpeed = 3;
+        particles = []; speedLines = [];
+        initBuildings(); resetPlayer();
+        startBGM();
         return;
     }
     if (state === ST.DEAD) {
         if (deadTimer > 0.8) {
             state = ST.PLAY;
-            distance = 0;
-            scrollX = 0;
-            gameSpeed = 3;
-            initBuildings();
-            resetPlayer();
+            distance = 0; scrollX = 0; gameSpeed = 3;
+            particles = []; speedLines = [];
+            initBuildings(); resetPlayer();
+            startBGM();
         }
         return;
     }
     if (state === ST.PLAY && player.onGround && player.alive) {
-        pressing = true;
         pressStart = performance.now() / 1000;
         player.holding = true;
     }
@@ -155,61 +280,107 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointerup', (e) => {
     e.preventDefault();
     if (state === ST.PLAY && player.holding && player.onGround && player.alive) {
-        // Jump!
-        const holdDuration = performance.now() / 1000 - pressStart;
-        const t = Math.min(holdDuration / MAX_HOLD, 1);
-        player.vy = JUMP_POWER + (HIGH_JUMP - JUMP_POWER) * t;
+        const hold = Math.min((performance.now() / 1000 - pressStart) / MAX_HOLD, 1);
+        player.vy = JUMP_POWER + (HIGH_JUMP - JUMP_POWER) * hold;
         player.onGround = false;
         player.jumping = true;
         player.holding = false;
-        pressing = false;
+        player.squash = 1.3; // stretch on jump
+        player.stretch = 0.7;
         sfxJump();
         
-        // Jump particles
-        for (let i = 0; i < 5; i++) {
+        const px = player.x + scrollX;
+        for (let i = 0; i < 6; i++) {
             particles.push({
-                x: player.x + scrollX, y: player.y,
-                vx: (Math.random() - 0.5) * 80,
-                vy: -Math.random() * 100,
-                life: 0.3, ml: 0.3, r: 2 + Math.random() * 2,
-                color: '#aaa'
+                x: px, y: player.y,
+                vx: (Math.random()-0.5)*100 - 30, vy: -Math.random()*120,
+                life: 0.35, ml: 0.35, r: 2+Math.random()*2, color: 'rgba(255,255,255,0.6)'
             });
         }
     }
-    pressing = false;
     player.holding = false;
 });
 
-// === Update ===
+// ============================================
+// UPDATE
+// ============================================
 let lt = 0;
 
 function update(ts) {
-    const dt = Math.min((ts - lt) / 1000, 0.05);
+    let dt = Math.min((ts - lt) / 1000, 0.05);
     lt = ts;
     
+    // Slow motion
+    if (slowMo > 0) {
+        slowMo -= dt;
+        slowMoScale = 0.3;
+        dt *= slowMoScale;
+    } else {
+        slowMoScale = 1;
+    }
+    
     if (state === ST.PLAY && player.alive) {
-        // Speed increases over distance
-        gameSpeed = 3 + distance * 0.003;
-        const speed = Math.min(gameSpeed, 7);
+        gameSpeed = 3 + distance * 0.0025;
+        const speed = Math.min(gameSpeed, 6);
         
-        // Scroll
         scrollX += speed;
         distance += speed * 0.05;
         
-        // Player physics
+        // Speed lines (more at higher speed)
+        if (speed > 4 && Math.random() < (speed - 4) * 0.15) {
+            speedLines.push({
+                x: W + 10,
+                y: Math.random() * H * 0.7,
+                len: 30 + Math.random() * 50,
+                speed: speed * 15 + Math.random() * 30,
+                life: 0.4, ml: 0.4
+            });
+        }
+        
+        // Physics
         if (!player.onGround) {
             player.vy += GRAVITY * dt;
             player.y += player.vy * dt;
+            player.airPose = player.vy; // track for pose
         }
         
         // Run animation
         if (player.onGround) {
-            player.runFrame += RUN_ANIM_SPEED * dt;
+            player.runFrame += RUN_ANIM_SPEED * speed / 3 * dt; // sync to speed
+            player.bodyTilt = 0.15 + speed * 0.02; // lean forward more at speed
+            player.headBob = Math.sin(player.runFrame * 2) * 1.5;
+            player.airPose = 0;
+            
+            // Recover from landing
+            if (player.landBounce > 0) {
+                player.landBounce -= dt * 8;
+                player.squash = 1 + player.landBounce * 0.15;
+                player.stretch = 1 - player.landBounce * 0.1;
+            } else {
+                player.squash = 1;
+                player.stretch = 1;
+            }
+        } else {
+            // Air animation
+            if (player.vy < 0) {
+                // Rising: stretch tall
+                player.squash = 1.15;
+                player.stretch = 0.85;
+                player.bodyTilt = -0.1;
+            } else {
+                // Falling: curl up
+                player.squash = 0.85;
+                player.stretch = 1.1;
+                player.bodyTilt = 0.05;
+            }
+            player.headBob = 0;
         }
         
-        // Charge visual
+        // Charge crouch
         if (player.holding) {
-            player.holdTime = performance.now() / 1000 - pressStart;
+            const charge = Math.min((performance.now()/1000 - pressStart) / MAX_HOLD, 1);
+            player.squash = 0.7 + (1 - charge) * 0.3;
+            player.stretch = 1.2 - (1 - charge) * 0.2;
         }
         
         // Building collision
@@ -218,90 +389,120 @@ function update(ts) {
         
         for (const b of buildings) {
             const bTop = H - b.h;
-            const bLeft = b.x;
-            const bRight = b.x + b.w;
-            
-            // On top of building
-            if (px >= bLeft + 5 && px <= bRight - 5) {
-                if (player.y >= bTop - 2 && player.y <= bTop + 15 && player.vy >= 0) {
+            if (px >= b.x + 5 && px <= b.x + b.w - 5) {
+                if (player.y >= bTop - 3 && player.y <= bTop + 18 && player.vy >= 0) {
+                    // Check if near edge (for near-miss)
+                    const edgeDist = Math.min(px - b.x, b.x + b.w - px);
+                    const wasJumping = player.jumping;
+                    
                     player.y = bTop;
                     player.vy = 0;
-                    if (player.jumping) {
+                    player.onGround = true;
+                    
+                    if (wasJumping) {
+                        player.jumping = false;
+                        player.landBounce = 1;
+                        player.squash = 0.7;
+                        player.stretch = 1.2;
+                        screenShake = 0.08;
                         sfxLand();
-                        // Land particles
-                        for (let i = 0; i < 4; i++) {
+                        
+                        // Land dust
+                        for (let i = 0; i < 6; i++) {
                             particles.push({
-                                x: px, y: player.y,
-                                vx: (Math.random() - 0.5) * 60,
-                                vy: -Math.random() * 40,
-                                life: 0.2, ml: 0.2, r: 2, color: '#888'
+                                x: px + (Math.random()-0.5)*10, y: player.y,
+                                vx: (Math.random()-0.5)*80, vy: -Math.random()*50 - 10,
+                                life: 0.3, ml: 0.3, r: 2+Math.random()*2,
+                                color: 'rgba(200,200,200,0.5)'
                             });
                         }
+                        
+                        // Near edge landing = slow-mo + bonus effect
+                        if (edgeDist < 20) {
+                            slowMo = 0.25;
+                            screenShake = 0.15;
+                            sfxNearLand();
+                            showFloatText(px, player.y - 50, 'CLOSE!', '#ff44ff');
+                            // Spark particles
+                            for (let i = 0; i < 8; i++) {
+                                particles.push({
+                                    x: px, y: player.y,
+                                    vx: (Math.random()-0.5)*150, vy: -Math.random()*100 - 30,
+                                    life: 0.4, ml: 0.4, r: 1.5+Math.random()*2,
+                                    color: '#ff44ff'
+                                });
+                            }
+                        }
                     }
-                    player.onGround = true;
-                    player.jumping = false;
                 }
             }
         }
         
         // Fall death
-        if (player.y > H + 50) {
-            die();
-        }
+        if (player.y > H + 50) die();
         
-        // Spawn new buildings, remove old
-        const rightEdge = scrollX + W + 200;
+        // Spawn / remove buildings
         let lastB = buildings[buildings.length - 1];
-        while (lastB.x + lastB.w < rightEdge) {
-            const added = spawnBuilding(lastB.x + lastB.w);
+        while (lastB.x + lastB.w < scrollX + W + 200) {
+            spawnBuilding(lastB.x + lastB.w);
             lastB = buildings[buildings.length - 1];
         }
         buildings = buildings.filter(b => b.x + b.w > scrollX - 100);
     }
     
-    if (state === ST.DEAD) {
-        deadTimer += dt;
-    }
+    if (state === ST.DEAD) deadTimer += dt;
+    if (screenShake > 0) screenShake = Math.max(0, screenShake - dt * 2);
     
     // Particles
     for (const p of particles) {
-        p.x += (p.vx || 0) * dt;
-        p.y += (p.vy || 0) * dt;
-        if (p.vy !== undefined) p.vy += 300 * dt;
+        p.x += (p.vx||0)*dt; p.y += (p.vy||0)*dt;
+        if (p.vy !== undefined) p.vy += 400*dt;
         p.life -= dt;
     }
     particles = particles.filter(p => p.life > 0);
     
+    // Speed lines
+    for (const s of speedLines) {
+        s.x -= s.speed * dt;
+        s.life -= dt;
+    }
+    speedLines = speedLines.filter(s => s.life > 0 && s.x + s.len > 0);
+    
+    // Float texts
+    for (const f of floatTexts) { f.y -= 35*dt; f.life -= dt; }
+    floatTexts = floatTexts.filter(f => f.life > 0);
+    
     draw();
     requestAnimationFrame(update);
+}
+
+let floatTexts = [];
+function showFloatText(x, y, text, color) {
+    floatTexts.push({ x, y, text, color, life: 1, ml: 1 });
 }
 
 function die() {
     player.alive = false;
     state = ST.DEAD;
     deadTimer = 0;
+    screenShake = 0.3;
     sfxDie();
-    if (distance > bestDistance) {
-        bestDistance = distance;
-        saveBest();
-        sfxRecord();
-    }
-    // Death particles
+    if (distance > bestDistance) { bestDistance = distance; saveBest(); sfxRecord(); }
     const px = player.x + scrollX;
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 15; i++) {
         particles.push({
             x: px, y: player.y,
-            vx: (Math.random() - 0.5) * 200,
-            vy: -100 - Math.random() * 200,
-            life: 0.6 + Math.random() * 0.3, ml: 0.6, r: 2 + Math.random() * 3,
-            color: '#fff'
+            vx: (Math.random()-0.5)*250, vy: -80-Math.random()*250,
+            life: 0.7+Math.random()*0.3, ml: 0.7, r: 2+Math.random()*4, color: '#fff'
         });
     }
 }
 
-// === Draw ===
+// ============================================
+// DRAW
+// ============================================
 function draw() {
-    // Sky gradient
+    // Sky
     const sky = ctx.createLinearGradient(0, 0, 0, H);
     sky.addColorStop(0, '#0f0c29');
     sky.addColorStop(0.5, '#302b63');
@@ -309,60 +510,86 @@ function draw() {
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
     
-    // Stars
-    if (state !== ST.TITLE) {
-        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-        for (let i = 0; i < 30; i++) {
-            const sx = ((i * 137 + 50) % W + scrollX * 0.1 * ((i % 3) + 1)) % (W + 100) - 50;
-            const sy = (i * 97 + 30) % (H * 0.5);
-            ctx.fillRect(sx, sy, 1.5, 1.5);
-        }
+    // Stars (fixed)
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    for (let i = 0; i < 40; i++) {
+        const sx = (i * 137 + 50) % W;
+        const sy = (i * 97 + 30) % (H * 0.45);
+        const twinkle = 0.3 + Math.sin(lt / 1000 + i) * 0.2;
+        ctx.globalAlpha = twinkle;
+        ctx.fillRect(sx, sy, 1.5, 1.5);
     }
+    ctx.globalAlpha = 1;
     
-    // Moon
-    ctx.fillStyle = 'rgba(255,255,200,0.15)';
-    ctx.beginPath();
-    ctx.arc(W * 0.8, H * 0.15, 30, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,200,0.08)';
-    ctx.beginPath();
-    ctx.arc(W * 0.8, H * 0.15, 45, 0, Math.PI * 2);
-    ctx.fill();
+    // Moon with glow
+    ctx.fillStyle = 'rgba(255,255,200,0.06)';
+    ctx.beginPath(); ctx.arc(W*0.8, H*0.12, 60, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,200,0.12)';
+    ctx.beginPath(); ctx.arc(W*0.8, H*0.12, 35, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,230,0.2)';
+    ctx.beginPath(); ctx.arc(W*0.8, H*0.12, 22, 0, Math.PI*2); ctx.fill();
     
     if (state === ST.TITLE) { drawTitle(); return; }
     
-    // === Game / Dead ===
+    // Screen shake
+    ctx.save();
+    if (screenShake > 0) {
+        ctx.translate((Math.random()-0.5)*screenShake*15, (Math.random()-0.5)*screenShake*10);
+    }
+    
+    // Slow-mo tint
+    if (slowMo > 0) {
+        ctx.fillStyle = 'rgba(100, 0, 150, 0.06)';
+        ctx.fillRect(0, 0, W, H);
+    }
+    
     ctx.save();
     ctx.translate(-scrollX, 0);
     
-    // Far buildings (parallax)
+    // Far buildings (parallax layer 1)
+    ctx.fillStyle = '#0d1b2a';
+    for (let i = 0; i < 20; i++) {
+        const bx = ((i * 100) % (W*3)) + scrollX * 0.15;
+        const bh = 40 + (i*37)%60;
+        ctx.fillRect(bx, H - bh, 50 + (i*17)%30, bh);
+    }
+    // Parallax layer 2
     ctx.fillStyle = '#16213e';
     for (let i = 0; i < 15; i++) {
-        const bx = (i * 120 + scrollX * 0.3) % (W * 2) - 200 + scrollX * 0.7;
-        const bh = 60 + (i * 37) % 80;
-        ctx.fillRect(bx, H - bh - 20, 60 + (i * 17) % 40, bh + 20);
+        const bx = ((i * 130) % (W*2.5)) + scrollX * 0.4;
+        const bh = 50 + (i*43)%80;
+        ctx.fillRect(bx, H - bh - 10, 55 + (i*23)%35, bh + 10);
     }
     
     // Buildings
     for (const b of buildings) {
-        // Building body
+        const bTop = H - b.h;
+        
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(b.x + 5, bTop + 5, b.w, b.h);
+        
+        // Body
         ctx.fillStyle = b.color;
-        ctx.fillRect(b.x, H - b.h, b.w, b.h);
+        ctx.fillRect(b.x, bTop, b.w, b.h);
         
-        // Roof line
-        ctx.fillStyle = 'rgba(255,255,255,0.08)';
-        ctx.fillRect(b.x, H - b.h, b.w, 3);
+        // Roof highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.fillRect(b.x, bTop, b.w, 3);
         
-        // Windows
-        ctx.fillStyle = 'rgba(255,200,50,0.15)';
-        const winSize = 8;
-        const winGap = 16;
-        for (let wy = H - b.h + 15; wy < H - 10; wy += winGap) {
-            for (let wx = b.x + 10; wx < b.x + b.w - 10; wx += winGap) {
-                if (Math.random() > 0.3) { // some windows dark
-                    ctx.fillRect(wx, wy, winSize, winSize);
-                }
+        // Side edge
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(b.x, bTop, 2, b.h);
+        
+        // Windows (pre-generated)
+        for (const win of b.windows) {
+            if (win.lit) {
+                const warmth = 0.15 + Math.sin(lt/2000 + win.rx) * 0.03;
+                ctx.fillStyle = `rgba(255,200,50,${warmth})`;
+            } else {
+                ctx.fillStyle = 'rgba(50,50,80,0.15)';
             }
+            ctx.fillRect(b.x + win.rx, bTop + win.ry, 8, 8);
         }
     }
     
@@ -371,109 +598,196 @@ function draw() {
         ctx.globalAlpha = Math.max(0, p.life / p.ml);
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r * (p.life / p.ml), 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.r * (p.life / p.ml), 0, Math.PI*2);
         ctx.fill();
     }
     ctx.globalAlpha = 1;
     
-    // Player (stickman)
-    if (player.alive) {
-        drawStickman(player.x + scrollX, player.y);
+    // Float texts (world space)
+    for (const f of floatTexts) {
+        ctx.globalAlpha = Math.min(1, f.life / f.ml * 2);
+        ctx.fillStyle = f.color;
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(f.text, f.x, f.y);
     }
+    ctx.globalAlpha = 1;
     
-    ctx.restore();
+    // Player
+    if (player.alive) drawStickman(player.x + scrollX, player.y);
     
-    // Charge bar
+    ctx.restore(); // end world transform
+    
+    // Speed lines (screen space)
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    for (const s of speedLines) {
+        ctx.globalAlpha = s.life / s.ml;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x + s.len, s.y);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    
+    // Charge bar (screen space)
     if (player.holding && player.alive) {
-        const charge = Math.min((performance.now() / 1000 - pressStart) / MAX_HOLD, 1);
-        const barW = 60;
-        const barH = 6;
-        const barX = W * 0.25 - barW / 2;
-        const barY = player.y - 45 + (H - buildings[0]?.h || 0) - player.y + player.y - 45; // above stickman in screen space
-        // Simpler: draw above player in screen coords
-        const screenY = player.y - 50;
+        const charge = Math.min((performance.now()/1000 - pressStart) / MAX_HOLD, 1);
+        const barW = 50, barH = 5;
+        const bx = player.x - barW/2;
+        const by = player.y - 55;
         ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.fillRect(W * 0.25 - barW/2 - 2, screenY - 2, barW + 4, barH + 4);
-        const grad = ctx.createLinearGradient(W*0.25 - barW/2, 0, W*0.25 + barW/2, 0);
-        grad.addColorStop(0, '#44ff44');
-        grad.addColorStop(1, '#ffff00');
-        ctx.fillStyle = grad;
-        ctx.fillRect(W * 0.25 - barW/2, screenY, barW * charge, barH);
+        ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
+        const g = ctx.createLinearGradient(bx, 0, bx + barW, 0);
+        g.addColorStop(0, '#44ff44');
+        g.addColorStop(0.7, '#ffff00');
+        g.addColorStop(1, '#ff4444');
+        ctx.fillStyle = g;
+        ctx.fillRect(bx, by, barW * charge, barH);
     }
     
     // HUD
     drawHUD();
     
+    ctx.restore(); // end shake
+    
     if (state === ST.DEAD) drawDeadScreen();
 }
 
+// ============================================
+// STICKMAN — Rich animation
+// ============================================
 function drawStickman(wx, wy) {
-    // wx, wy = world coords (head position area)
     const headR = 7;
     const bodyLen = 18;
     const legLen = 16;
-    const armLen = 14;
+    const armLen = 13;
     
-    // Animation
-    const frame = player.onGround ? player.runFrame : 0;
-    const legSwing = player.onGround ? Math.sin(frame) * 0.6 : -0.3;
-    const armSwing = player.onGround ? Math.sin(frame + Math.PI) * 0.4 : -0.5;
+    ctx.save();
+    ctx.translate(wx, wy);
     
-    const headY = wy - bodyLen - legLen - headR;
-    const bodyTop = wy - bodyLen - legLen;
-    const bodyBot = wy - legLen;
-    const hipY = bodyBot;
+    // Apply squash/stretch
+    ctx.scale(player.stretch, player.squash);
+    
+    // Body tilt
+    ctx.rotate(player.bodyTilt);
+    
+    const headY = -bodyLen - legLen - headR + player.headBob;
+    const bodyTopY = -bodyLen - legLen;
+    const hipY = -legLen;
+    const shoulderY = bodyTopY + headR + 3;
     
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     
-    // Head
-    ctx.beginPath();
-    ctx.arc(wx, headY, headR, 0, Math.PI * 2);
-    ctx.stroke();
+    // === LEGS ===
+    const frame = player.runFrame;
+    let lLeg, rLeg, lKnee, rKnee;
     
-    // Body
-    ctx.beginPath();
-    ctx.moveTo(wx, bodyTop + headR);
-    ctx.lineTo(wx, hipY);
-    ctx.stroke();
-    
-    // Legs
-    ctx.beginPath();
-    ctx.moveTo(wx, hipY);
-    ctx.lineTo(wx + Math.sin(legSwing) * legLen, hipY + Math.cos(legSwing) * legLen);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(wx, hipY);
-    ctx.lineTo(wx + Math.sin(-legSwing) * legLen, hipY + Math.cos(-legSwing) * legLen);
-    ctx.stroke();
-    
-    // Arms
-    const shoulderY = bodyTop + headR + 4;
-    ctx.beginPath();
-    ctx.moveTo(wx, shoulderY);
-    ctx.lineTo(wx + Math.sin(armSwing) * armLen, shoulderY + Math.cos(armSwing) * armLen);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(wx, shoulderY);
-    ctx.lineTo(wx + Math.sin(-armSwing) * armLen, shoulderY + Math.cos(-armSwing) * armLen);
-    ctx.stroke();
-    
-    // Jump squash/stretch
-    if (player.jumping && player.vy < 0) {
-        // Trail effect
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(wx - 3, wy + 5);
-        ctx.lineTo(wx - 3, wy + 15);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(wx + 3, wy + 5);
-        ctx.lineTo(wx + 3, wy + 15);
-        ctx.stroke();
+    if (player.onGround && !player.holding) {
+        // Running: multi-joint legs
+        const legPhase = Math.sin(frame);
+        const legPhase2 = Math.cos(frame);
+        
+        // Left leg: thigh angle, calf angle
+        const lThighAng = legPhase * 0.7;
+        const lCalfAng = Math.max(0, -legPhase2) * 0.8 + 0.2;
+        lKnee = { x: Math.sin(lThighAng) * legLen * 0.5, y: hipY + Math.cos(lThighAng) * legLen * 0.5 };
+        lLeg = { x: lKnee.x + Math.sin(lThighAng + lCalfAng) * legLen * 0.5, y: lKnee.y + Math.cos(lThighAng + lCalfAng) * legLen * 0.5 };
+        
+        // Right leg (opposite phase)
+        const rThighAng = -legPhase * 0.7;
+        const rCalfAng = Math.max(0, legPhase2) * 0.8 + 0.2;
+        rKnee = { x: Math.sin(rThighAng) * legLen * 0.5, y: hipY + Math.cos(rThighAng) * legLen * 0.5 };
+        rLeg = { x: rKnee.x + Math.sin(rThighAng + rCalfAng) * legLen * 0.5, y: rKnee.y + Math.cos(rThighAng + rCalfAng) * legLen * 0.5 };
+    } else if (player.holding) {
+        // Crouch pose
+        lKnee = { x: -6, y: hipY + 6 };
+        lLeg = { x: -8, y: hipY + legLen * 0.7 };
+        rKnee = { x: 6, y: hipY + 6 };
+        rLeg = { x: 8, y: hipY + legLen * 0.7 };
+    } else if (player.vy < -50) {
+        // Rising: legs tucked back
+        lKnee = { x: -4, y: hipY + 8 };
+        lLeg = { x: -8, y: hipY + 4 };
+        rKnee = { x: 2, y: hipY + 10 };
+        rLeg = { x: -2, y: hipY + 6 };
+    } else {
+        // Falling: legs spread for landing
+        lKnee = { x: -5, y: hipY + 10 };
+        lLeg = { x: -8, y: hipY + legLen };
+        rKnee = { x: 5, y: hipY + 10 };
+        rLeg = { x: 8, y: hipY + legLen };
     }
+    
+    // Draw legs
+    ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(lKnee.x, lKnee.y); ctx.lineTo(lLeg.x, lLeg.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(rKnee.x, rKnee.y); ctx.lineTo(rLeg.x, rLeg.y); ctx.stroke();
+    
+    // === BODY ===
+    ctx.beginPath();
+    ctx.moveTo(0, bodyTopY + headR);
+    ctx.lineTo(0, hipY);
+    ctx.stroke();
+    
+    // === ARMS ===
+    let lArm, rArm, lElbow, rElbow;
+    
+    if (player.onGround && !player.holding) {
+        // Running arms (opposite to legs)
+        const armPhase = Math.sin(frame + Math.PI);
+        lElbow = { x: Math.sin(armPhase * 0.5) * 6 + 4, y: shoulderY + 7 };
+        lArm = { x: Math.sin(armPhase * 0.7) * 8 + 2, y: shoulderY + 13 };
+        rElbow = { x: Math.sin(-armPhase * 0.5) * 6 + 4, y: shoulderY + 7 };
+        rArm = { x: Math.sin(-armPhase * 0.7) * 8 + 2, y: shoulderY + 13 };
+    } else if (player.holding) {
+        // Crouch: arms back
+        lElbow = { x: -8, y: shoulderY + 4 };
+        lArm = { x: -12, y: shoulderY };
+        rElbow = { x: -6, y: shoulderY + 6 };
+        rArm = { x: -10, y: shoulderY + 2 };
+    } else if (player.vy < -50) {
+        // Rising: arms up and back
+        lElbow = { x: -6, y: shoulderY - 4 };
+        lArm = { x: -10, y: shoulderY - 8 };
+        rElbow = { x: 6, y: shoulderY - 2 };
+        rArm = { x: 10, y: shoulderY - 6 };
+    } else {
+        // Falling: arms wide
+        lElbow = { x: -8, y: shoulderY + 2 };
+        lArm = { x: -12, y: shoulderY + 6 };
+        rElbow = { x: 8, y: shoulderY + 2 };
+        rArm = { x: 12, y: shoulderY + 6 };
+    }
+    
+    ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(lElbow.x, lElbow.y); ctx.lineTo(lArm.x, lArm.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(rElbow.x, rElbow.y); ctx.lineTo(rArm.x, rArm.y); ctx.stroke();
+    
+    // === HEAD ===
+    ctx.beginPath();
+    ctx.arc(0, headY, headR, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // === MOTION TRAIL (when fast or jumping) ===
+    if (gameSpeed > 4 || player.vy < -200) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i <= 3; i++) {
+            ctx.globalAlpha = 0.1 / i;
+            ctx.beginPath();
+            ctx.arc(-i * 6, headY, headR, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-i * 6, bodyTopY + headR);
+            ctx.lineTo(-i * 6, hipY);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+    
+    ctx.restore();
 }
 
 function drawHUD() {
@@ -482,73 +796,97 @@ function drawHUD() {
     ctx.textAlign = 'left';
     ctx.fillText(Math.floor(distance) + 'm', 15, 30);
     
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '13px sans-serif';
     ctx.fillText('BEST: ' + Math.floor(bestDistance) + 'm', 15, 50);
 }
 
+// ============================================
+// TITLE
+// ============================================
 function drawTitle() {
     ctx.textAlign = 'center';
     
-    // Title
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 34px sans-serif';
-    ctx.fillText('🏃 屋根ラン', W / 2, H * 0.25);
+    ctx.fillText('🏃 屋根ラン', W/2, H*0.22);
     
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '15px sans-serif';
-    ctx.fillText('ビルからビルへ飛び移れ！', W / 2, H * 0.32);
+    ctx.fillText('ビルからビルへ飛び移れ！', W/2, H*0.29);
     
-    // Controls
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.font = '13px sans-serif';
-    ctx.fillText('タップ → ジャンプ', W / 2, H * 0.40);
-    ctx.fillText('長押し → 高くジャンプ', W / 2, H * 0.44);
+    ctx.fillText('タップ → ジャンプ', W/2, H*0.37);
+    ctx.fillText('長押し → 高くジャンプ', W/2, H*0.41);
+    ctx.fillText('ギリギリ着地でスローモーション！', W/2, H*0.45);
     
     if (bestDistance > 0) {
         ctx.fillStyle = '#ffd700';
         ctx.font = '16px sans-serif';
-        ctx.fillText('🏆 ベスト: ' + Math.floor(bestDistance) + 'm', W / 2, H * 0.52);
+        ctx.fillText('🏆 ベスト: ' + Math.floor(bestDistance) + 'm', W/2, H*0.53);
     }
     
-    // Demo stickman
-    const demoY = H * 0.68;
-    const bounce = Math.abs(Math.sin(Date.now() / 300)) * 10;
+    // Demo scene: stickman running on buildings
+    const demoBaseY = H * 0.72;
     
-    // Ground
+    // Buildings
     ctx.fillStyle = '#2d3436';
-    ctx.fillRect(W * 0.2, demoY, W * 0.6, 4);
+    ctx.fillRect(W*0.1, demoBaseY, W*0.3, H*0.15);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(W*0.1, demoBaseY, W*0.3, 3);
     
-    drawStickmanStatic(W / 2, demoY - bounce);
+    ctx.fillStyle = '#34495e';
+    ctx.fillRect(W*0.55, demoBaseY + 10, W*0.35, H*0.15);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(W*0.55, demoBaseY + 10, W*0.35, 3);
     
-    // Start
-    const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+    // Animated stickman
+    const demoTime = Date.now() / 1000;
+    const jumpCycle = demoTime % 2;
+    let demoX, demoY;
+    
+    if (jumpCycle < 0.8) {
+        // Running on first building
+        demoX = W*0.15 + jumpCycle * W * 0.2;
+        demoY = demoBaseY;
+    } else if (jumpCycle < 1.3) {
+        // Jumping
+        const t = (jumpCycle - 0.8) / 0.5;
+        demoX = W*0.35 + t * W * 0.25;
+        demoY = demoBaseY - Math.sin(t * Math.PI) * 60 + (t > 0.5 ? 10 : 0);
+    } else {
+        // Landing on second building
+        demoX = W*0.6 + (jumpCycle - 1.3) * W * 0.15;
+        demoY = demoBaseY + 10;
+    }
+    
+    // Simple demo stickman
+    ctx.save();
+    ctx.translate(demoX, demoY);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    const dh = 7, db = 16, dl = 14;
+    const runAnim = Math.sin(demoTime * 10) * 0.5;
+    ctx.beginPath(); ctx.arc(0, -db-dl-dh, dh, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -db-dl+dh-2); ctx.lineTo(0, -dl); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -dl); ctx.lineTo(Math.sin(runAnim)*dl*0.5, -dl + Math.cos(runAnim)*dl*0.5 + dl*0.5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -dl); ctx.lineTo(Math.sin(-runAnim)*dl*0.5, -dl + Math.cos(-runAnim)*dl*0.5 + dl*0.5); ctx.stroke();
+    ctx.restore();
+    
+    // Start prompt
+    const pulse = 0.6 + Math.sin(Date.now()/400) * 0.4;
     ctx.globalAlpha = pulse;
     ctx.fillStyle = '#64dfdf';
     ctx.font = 'bold 22px sans-serif';
-    ctx.fillText('▶ タップでスタート', W / 2, H * 0.85);
+    ctx.fillText('▶ タップでスタート', W/2, H*0.88);
     ctx.globalAlpha = 1;
 }
 
-function drawStickmanStatic(x, footY) {
-    const headR = 7, bodyLen = 18, legLen = 16;
-    const headY = footY - bodyLen - legLen - headR;
-    const bodyTop = footY - bodyLen - legLen;
-    const hipY = footY - legLen;
-    
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    
-    ctx.beginPath(); ctx.arc(x, headY, headR, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, bodyTop + headR); ctx.lineTo(x, hipY); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, hipY); ctx.lineTo(x - 8, footY); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, hipY); ctx.lineTo(x + 8, footY); ctx.stroke();
-    const shoulderY = bodyTop + headR + 4;
-    ctx.beginPath(); ctx.moveTo(x, shoulderY); ctx.lineTo(x - 10, shoulderY + 10); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, shoulderY); ctx.lineTo(x + 10, shoulderY + 10); ctx.stroke();
-}
-
+// ============================================
+// DEAD SCREEN
+// ============================================
 function drawDeadScreen() {
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(0, 0, W, H);
@@ -556,24 +894,24 @@ function drawDeadScreen() {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ff4444';
     ctx.font = 'bold 30px sans-serif';
-    ctx.fillText('💀 落下！', W / 2, H * 0.3);
+    ctx.fillText('💀 落下！', W/2, H*0.3);
     
     ctx.fillStyle = '#fff';
     ctx.font = '20px sans-serif';
-    ctx.fillText('距離: ' + Math.floor(distance) + 'm', W / 2, H * 0.42);
+    ctx.fillText('距離: ' + Math.floor(distance) + 'm', W/2, H*0.42);
     
     if (distance >= bestDistance && distance > 0) {
         ctx.fillStyle = '#ffd700';
         ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('🏆 NEW RECORD!', W / 2, H * 0.50);
+        ctx.fillText('🏆 NEW RECORD!', W/2, H*0.50);
     }
     
     if (deadTimer > 0.8) {
-        const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+        const pulse = 0.6 + Math.sin(Date.now()/400) * 0.4;
         ctx.globalAlpha = pulse;
         ctx.fillStyle = '#64dfdf';
         ctx.font = 'bold 22px sans-serif';
-        ctx.fillText('▶ タップでリトライ', W / 2, H * 0.65);
+        ctx.fillText('▶ タップでリトライ', W/2, H*0.65);
         ctx.globalAlpha = 1;
     }
 }
