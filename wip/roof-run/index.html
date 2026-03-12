@@ -580,6 +580,9 @@ function draw() {
         ctx.fillRect(0, 0, W, H);
     }
     
+    // === LANDMARKS (behind everything, slow parallax) ===
+    drawLandmarks();
+    
     ctx.save();
     ctx.translate(-scrollX, 0);
     
@@ -689,6 +692,311 @@ function draw() {
     ctx.restore(); // end shake
     
     if (state === ST.DEAD) drawDeadScreen();
+}
+
+// ============================================
+// LANDMARKS — World Tour Background
+// ============================================
+const STAGES = [
+    { name: '🗼 東京', from: 0,   sky: ['#0f0c29','#302b63','#24243e'] },
+    { name: '🗽 ニューヨーク', from: 200, sky: ['#0a0a1a','#1a1a3e','#2a2a4e'] },
+    { name: '🗼 パリ', from: 400,  sky: ['#120a20','#2d1b4e','#1a1a3e'] },
+    { name: '🏛️ ローマ', from: 600, sky: ['#0d1520','#1e2d40','#2a3a4e'] },
+    { name: '🕌 ドバイ', from: 800, sky: ['#1a0a05','#3a2010','#1a1020'] },
+    { name: '🎆 上海', from: 1000, sky: ['#0a0515','#200a30','#100520'] },
+    { name: '🌉 サンフランシスコ', from: 1200, sky: ['#0f1525','#1a2540','#25354e'] },
+    { name: '🏔️ リオ', from: 1500, sky: ['#051015','#0a2030','#152535'] },
+];
+
+function getStage() {
+    let s = STAGES[0];
+    for (const st of STAGES) { if (distance >= st.from) s = st; }
+    return s;
+}
+
+// Landmark draw functions (all Canvas2D, no images)
+function drawLandmarks() {
+    const d = distance;
+    const t = lt / 1000; // time for blinking lights
+    
+    // Parallax: landmarks move very slowly (0.03x scroll speed)
+    const lx = -scrollX * 0.03;
+    
+    ctx.save();
+    
+    // === TOKYO (0-200m): Tokyo Tower + Skytree ===
+    if (d < 250) {
+        const alpha = d < 200 ? 1 : 1 - (d - 200) / 50;
+        ctx.globalAlpha = alpha * 0.3;
+        
+        // Skytree (left side)
+        const sx = W * 0.15 + lx % 40;
+        const sBase = H * 0.52;
+        ctx.strokeStyle = '#8af';
+        ctx.lineWidth = 3;
+        // Main shaft
+        ctx.beginPath(); ctx.moveTo(sx, sBase); ctx.lineTo(sx, sBase - 140); ctx.stroke();
+        // Observation deck
+        ctx.fillStyle = '#8af';
+        ctx.fillRect(sx - 8, sBase - 100, 16, 6);
+        // Top antenna
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(sx, sBase - 140); ctx.lineTo(sx, sBase - 165); ctx.stroke();
+        // Blinking light
+        ctx.fillStyle = `rgba(255,100,100,${0.5 + Math.sin(t*3)*0.5})`;
+        ctx.beginPath(); ctx.arc(sx, sBase - 165, 2, 0, Math.PI*2); ctx.fill();
+        
+        // Tokyo Tower (right side)
+        const tx = W * 0.75 + lx % 30;
+        const tBase = H * 0.55;
+        ctx.strokeStyle = '#f84';
+        ctx.lineWidth = 2.5;
+        // Legs
+        ctx.beginPath(); ctx.moveTo(tx - 15, tBase); ctx.lineTo(tx, tBase - 120); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(tx + 15, tBase); ctx.lineTo(tx, tBase - 120); ctx.stroke();
+        // Cross beams
+        for (let i = 0; i < 5; i++) {
+            const y = tBase - 20 - i * 20;
+            const w = 15 * (1 - i/6);
+            ctx.beginPath(); ctx.moveTo(tx - w, y); ctx.lineTo(tx + w, y); ctx.stroke();
+        }
+        // Antenna
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(tx, tBase - 120); ctx.lineTo(tx, tBase - 145); ctx.stroke();
+        // Blinking
+        ctx.fillStyle = `rgba(255,50,50,${0.5 + Math.sin(t*2.5)*0.5})`;
+        ctx.beginPath(); ctx.arc(tx, tBase - 145, 2, 0, Math.PI*2); ctx.fill();
+    }
+    
+    // === NEW YORK (200-400m): Statue of Liberty + Empire State ===
+    if (d >= 150 && d < 450) {
+        const alpha = d < 200 ? (d-150)/50 : d > 400 ? 1-(d-400)/50 : 1;
+        ctx.globalAlpha = alpha * 0.25;
+        
+        // Statue of Liberty
+        const sx = W * 0.2 + lx % 35;
+        const sBase = H * 0.56;
+        ctx.strokeStyle = '#6cb';
+        ctx.lineWidth = 2;
+        // Body
+        ctx.beginPath(); ctx.moveTo(sx, sBase); ctx.lineTo(sx, sBase - 60); ctx.stroke();
+        // Robe base
+        ctx.beginPath(); ctx.moveTo(sx - 12, sBase); ctx.lineTo(sx, sBase - 30); ctx.lineTo(sx + 12, sBase); ctx.stroke();
+        // Torch arm (right, raised)
+        ctx.beginPath(); ctx.moveTo(sx + 3, sBase - 55); ctx.lineTo(sx + 10, sBase - 80); ctx.stroke();
+        // Torch flame
+        ctx.fillStyle = `rgba(255,200,50,${0.4+Math.sin(t*4)*0.3})`;
+        ctx.beginPath(); ctx.arc(sx + 10, sBase - 83, 4, 0, Math.PI*2); ctx.fill();
+        // Crown
+        ctx.strokeStyle = '#6cb';
+        for (let i = -2; i <= 2; i++) {
+            ctx.beginPath(); ctx.moveTo(sx + i*3, sBase - 65); ctx.lineTo(sx + i*4, sBase - 72); ctx.stroke();
+        }
+        // Head
+        ctx.beginPath(); ctx.arc(sx, sBase - 62, 5, 0, Math.PI*2); ctx.stroke();
+        
+        // Empire State Building
+        const ex = W * 0.8 + lx % 25;
+        const eBase = H * 0.5;
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 2;
+        ctx.fillStyle = '#555';
+        ctx.fillRect(ex - 10, eBase - 110, 20, 110);
+        // Setbacks
+        ctx.fillRect(ex - 14, eBase - 70, 28, 70);
+        ctx.fillRect(ex - 18, eBase - 35, 36, 35);
+        // Antenna
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#ccc';
+        ctx.beginPath(); ctx.moveTo(ex, eBase - 110); ctx.lineTo(ex, eBase - 135); ctx.stroke();
+        // Light
+        ctx.fillStyle = `rgba(255,255,255,${0.4+Math.sin(t*2)*0.3})`;
+        ctx.beginPath(); ctx.arc(ex, eBase - 135, 2, 0, Math.PI*2); ctx.fill();
+        // Window lights
+        for (let wy = eBase - 100; wy < eBase; wy += 8) {
+            for (let wx = -6; wx <= 6; wx += 6) {
+                ctx.fillStyle = `rgba(255,200,100,${Math.random()>0.5?0.15:0.05})`;
+                ctx.fillRect(ex + wx - 2, wy, 4, 3);
+            }
+        }
+    }
+    
+    // === PARIS (400-600m): Eiffel Tower ===
+    if (d >= 350 && d < 650) {
+        const alpha = d < 400 ? (d-350)/50 : d > 600 ? 1-(d-600)/50 : 1;
+        ctx.globalAlpha = alpha * 0.3;
+        
+        const ex = W * 0.5 + lx % 30;
+        const eBase = H * 0.55;
+        ctx.strokeStyle = '#c9a';
+        ctx.lineWidth = 2;
+        // Left leg
+        ctx.beginPath(); ctx.moveTo(ex - 25, eBase); ctx.quadraticCurveTo(ex - 12, eBase - 60, ex, eBase - 130); ctx.stroke();
+        // Right leg
+        ctx.beginPath(); ctx.moveTo(ex + 25, eBase); ctx.quadraticCurveTo(ex + 12, eBase - 60, ex, eBase - 130); ctx.stroke();
+        // Decks
+        const decks = [0.3, 0.55, 0.8];
+        for (const dy of decks) {
+            const y = eBase - 130 * dy;
+            const w = 25 * (1 - dy * 0.7);
+            ctx.beginPath(); ctx.moveTo(ex - w, y); ctx.lineTo(ex + w, y); ctx.stroke();
+        }
+        // Antenna
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(ex, eBase - 130); ctx.lineTo(ex, eBase - 155); ctx.stroke();
+        // Sparkling lights
+        for (let i = 0; i < 12; i++) {
+            const ly = eBase - 10 - Math.random() * 120;
+            const lxp = ex + (Math.random() - 0.5) * (20 * (1 - (eBase - ly) / 130));
+            ctx.fillStyle = `rgba(255,220,100,${Math.sin(t*5+i)*0.4+0.3})`;
+            ctx.fillRect(lxp, ly, 1.5, 1.5);
+        }
+    }
+    
+    // === ROME (600-800m): Colosseum ===
+    if (d >= 550 && d < 850) {
+        const alpha = d < 600 ? (d-550)/50 : d > 800 ? 1-(d-800)/50 : 1;
+        ctx.globalAlpha = alpha * 0.25;
+        
+        const cx = W * 0.5 + lx % 25;
+        const cBase = H * 0.58;
+        ctx.strokeStyle = '#ca8';
+        ctx.lineWidth = 2;
+        // Elliptical shape
+        ctx.beginPath();
+        ctx.ellipse(cx, cBase - 25, 50, 30, 0, Math.PI, 0);
+        ctx.stroke();
+        // Arches (3 rows)
+        for (let row = 0; row < 3; row++) {
+            const y = cBase - 10 - row * 15;
+            const w = 45 - row * 5;
+            for (let a = -3; a <= 3; a++) {
+                const ax = cx + a * (w / 4);
+                ctx.beginPath();
+                ctx.arc(ax, y, 4, Math.PI, 0);
+                ctx.stroke();
+            }
+        }
+        // Base
+        ctx.beginPath(); ctx.moveTo(cx - 50, cBase); ctx.lineTo(cx + 50, cBase); ctx.stroke();
+    }
+    
+    // === DUBAI (800-1000m): Burj Khalifa ===
+    if (d >= 750 && d < 1050) {
+        const alpha = d < 800 ? (d-750)/50 : d > 1000 ? 1-(d-1000)/50 : 1;
+        ctx.globalAlpha = alpha * 0.25;
+        
+        const bx = W * 0.6 + lx % 20;
+        const bBase = H * 0.55;
+        ctx.strokeStyle = '#adf';
+        ctx.lineWidth = 2;
+        // Main tower (very tall, narrow)
+        ctx.beginPath(); ctx.moveTo(bx - 4, bBase); ctx.lineTo(bx, bBase - 180); ctx.lineTo(bx + 4, bBase); ctx.stroke();
+        // Setbacks
+        ctx.beginPath(); ctx.moveTo(bx - 8, bBase); ctx.lineTo(bx - 2, bBase - 120); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx + 8, bBase); ctx.lineTo(bx + 2, bBase - 120); ctx.stroke();
+        // Spire light
+        ctx.fillStyle = `rgba(100,200,255,${0.5+Math.sin(t*3)*0.5})`;
+        ctx.beginPath(); ctx.arc(bx, bBase - 180, 2.5, 0, Math.PI*2); ctx.fill();
+        // Window strips
+        for (let i = 0; i < 15; i++) {
+            const y = bBase - 10 - i * 11;
+            const w = 3 * (1 - i/18);
+            ctx.fillStyle = `rgba(100,200,255,${0.1+Math.sin(t*2+i)*0.05})`;
+            ctx.fillRect(bx - w, y, w * 2, 2);
+        }
+    }
+    
+    // === SHANGHAI (1000-1200m): Oriental Pearl Tower ===
+    if (d >= 950 && d < 1250) {
+        const alpha = d < 1000 ? (d-950)/50 : d > 1200 ? 1-(d-1200)/50 : 1;
+        ctx.globalAlpha = alpha * 0.3;
+        
+        const sx = W * 0.4 + lx % 25;
+        const sBase = H * 0.55;
+        ctx.strokeStyle = '#f6a';
+        ctx.lineWidth = 2;
+        // Main shaft
+        ctx.beginPath(); ctx.moveTo(sx, sBase); ctx.lineTo(sx, sBase - 140); ctx.stroke();
+        // Big sphere
+        ctx.beginPath(); ctx.arc(sx, sBase - 90, 12, 0, Math.PI*2); ctx.stroke();
+        ctx.fillStyle = `rgba(255,100,170,${0.15+Math.sin(t*3)*0.1})`;
+        ctx.beginPath(); ctx.arc(sx, sBase - 90, 12, 0, Math.PI*2); ctx.fill();
+        // Small sphere
+        ctx.strokeStyle = '#f6a';
+        ctx.beginPath(); ctx.arc(sx, sBase - 50, 8, 0, Math.PI*2); ctx.stroke();
+        ctx.fillStyle = `rgba(255,100,170,${0.1+Math.sin(t*4)*0.08})`;
+        ctx.beginPath(); ctx.arc(sx, sBase - 50, 8, 0, Math.PI*2); ctx.fill();
+        // Top antenna
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#f6a';
+        ctx.beginPath(); ctx.moveTo(sx, sBase - 140); ctx.lineTo(sx, sBase - 160); ctx.stroke();
+        // Legs
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(sx - 15, sBase); ctx.lineTo(sx - 4, sBase - 40); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx + 15, sBase); ctx.lineTo(sx + 4, sBase - 40); ctx.stroke();
+    }
+    
+    // === SAN FRANCISCO (1200-1500m): Golden Gate Bridge ===
+    if (d >= 1150 && d < 1550) {
+        const alpha = d < 1200 ? (d-1150)/50 : d > 1500 ? 1-(d-1500)/50 : 1;
+        ctx.globalAlpha = alpha * 0.25;
+        
+        const gx = W * 0.5 + lx % 20;
+        const gBase = H * 0.6;
+        ctx.strokeStyle = '#e44';
+        ctx.lineWidth = 2.5;
+        // Towers
+        ctx.beginPath(); ctx.moveTo(gx - 40, gBase); ctx.lineTo(gx - 40, gBase - 80); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx + 40, gBase); ctx.lineTo(gx + 40, gBase - 80); ctx.stroke();
+        // Main cables
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(gx - 70, gBase - 40);
+        ctx.quadraticCurveTo(gx - 40, gBase - 80, gx, gBase - 55);
+        ctx.quadraticCurveTo(gx + 40, gBase - 80, gx + 70, gBase - 40);
+        ctx.stroke();
+        // Deck
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(gx - 70, gBase - 15); ctx.lineTo(gx + 70, gBase - 15); ctx.stroke();
+        // Suspension cables
+        ctx.lineWidth = 0.8;
+        for (let i = -3; i <= 3; i++) {
+            const cx2 = gx + i * 18;
+            const cableTop = gBase - 55 - Math.abs(i) * 5 + (Math.abs(i) > 2 ? 15 : 0);
+            ctx.beginPath(); ctx.moveTo(cx2, cableTop); ctx.lineTo(cx2, gBase - 15); ctx.stroke();
+        }
+    }
+    
+    // === RIO (1500m+): Christ the Redeemer ===
+    if (d >= 1450) {
+        const alpha = d < 1500 ? (d-1450)/50 : 1;
+        ctx.globalAlpha = alpha * 0.3;
+        
+        const rx = W * 0.5 + lx % 20;
+        const rBase = H * 0.45;
+        ctx.strokeStyle = '#eee';
+        ctx.lineWidth = 2.5;
+        // Body
+        ctx.beginPath(); ctx.moveTo(rx, rBase); ctx.lineTo(rx, rBase - 50); ctx.stroke();
+        // Arms (wide open)
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(rx - 40, rBase - 42); ctx.lineTo(rx, rBase - 45); ctx.lineTo(rx + 40, rBase - 42); ctx.stroke();
+        // Head
+        ctx.beginPath(); ctx.arc(rx, rBase - 55, 6, 0, Math.PI*2); ctx.stroke();
+        // Pedestal / mountain
+        ctx.fillStyle = 'rgba(100,150,100,0.15)';
+        ctx.beginPath();
+        ctx.moveTo(rx - 60, rBase + 30);
+        ctx.quadraticCurveTo(rx, rBase - 10, rx + 60, rBase + 30);
+        ctx.fill();
+        // Glow
+        ctx.fillStyle = `rgba(255,255,200,${0.05+Math.sin(t)*0.03})`;
+        ctx.beginPath(); ctx.arc(rx, rBase - 35, 50, 0, Math.PI*2); ctx.fill();
+    }
+    
+    ctx.globalAlpha = 1;
+    ctx.restore();
 }
 
 // ============================================
@@ -878,6 +1186,14 @@ function drawHUD() {
     ctx.fillStyle = 'rgba(255,255,255,0.3)';
     ctx.font = '13px sans-serif';
     ctx.fillText('BEST: ' + Math.floor(bestDistance) + 'm', 15, 50);
+    
+    // Stage name (top right)
+    const stage = getStage();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(stage.name, W - 15, 30);
+    ctx.textAlign = 'left';
 }
 
 // ============================================
