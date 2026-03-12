@@ -35,7 +35,7 @@ function ensureAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         bgmGain = audioCtx.createGain();
-        bgmGain.gain.value = 0.18;
+        bgmGain.gain.value = 0.5;
         bgmGain.connect(audioCtx.destination);
     }
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -47,7 +47,7 @@ function snd(f,t,d,v) {
         const o=audioCtx.createOscillator(),g=audioCtx.createGain();
         o.connect(g); g.connect(audioCtx.destination);
         o.frequency.value=f; o.type=t||'sine';
-        g.gain.setValueAtTime(v||0.1,audioCtx.currentTime);
+        g.gain.setValueAtTime(v||0.3,audioCtx.currentTime);
         g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+(d||0.1));
         o.start(); o.stop(audioCtx.currentTime+(d||0.1));
     } catch(e){}
@@ -75,7 +75,7 @@ function startBGM() {
             o.frequency.setValueAtTime(150, t);
             o.frequency.exponentialRampToValueAtTime(30, t + 0.12);
             o.type = 'sine';
-            g.gain.setValueAtTime(0.4, t);
+            g.gain.setValueAtTime(0.7, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
             o.start(t); o.stop(t + 0.15);
         }
@@ -89,7 +89,7 @@ function startBGM() {
             const g = audioCtx.createGain();
             src.buffer = buf;
             src.connect(g); g.connect(bgmGain);
-            const vol = (bar % 2 === 0) ? 0.15 : 0.08;
+            const vol = (bar % 2 === 0) ? 0.35 : 0.18;
             g.gain.setValueAtTime(vol, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
             src.start(t);
@@ -104,7 +104,7 @@ function startBGM() {
             const g = audioCtx.createGain();
             src.buffer = buf;
             src.connect(g); g.connect(bgmGain);
-            g.gain.setValueAtTime(0.25, t);
+            g.gain.setValueAtTime(0.5, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
             src.start(t);
         }
@@ -119,7 +119,7 @@ function startBGM() {
             o.connect(g); g.connect(bgmGain);
             o.frequency.value = note;
             o.type = 'square';
-            g.gain.setValueAtTime(0.12, t);
+            g.gain.setValueAtTime(0.3, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
             o.start(t); o.stop(t + 0.2);
         }
@@ -134,7 +134,7 @@ function startBGM() {
             o.connect(g); g.connect(bgmGain);
             o.frequency.value = note;
             o.type = 'sine';
-            g.gain.setValueAtTime(0.06, t);
+            g.gain.setValueAtTime(0.15, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
             o.start(t); o.stop(t + 0.15);
         }
@@ -150,11 +150,11 @@ function stopBGM() {
     if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
 }
 
-function sfxJump() { snd(320,'sine',0.08,0.25); snd(480,'sine',0.06,0.18); }
-function sfxLand() { snd(120,'square',0.05,0.2); snd(80,'square',0.04,0.12); }
-function sfxDie() { snd(200,'sawtooth',0.3,0.2); snd(80,'sawtooth',0.5,0.12); stopBGM(); }
-function sfxRecord() { snd(523,'sine',0.1,0.15); snd(659,'sine',0.12,0.12); snd(784,'sine',0.15,0.1); }
-function sfxNearLand() { snd(600,'sine',0.08,0.15); snd(800,'sine',0.1,0.12); }
+function sfxJump() { snd(320,'sine',0.1,0.5); snd(480,'sine',0.07,0.35); }
+function sfxLand() { snd(120,'square',0.06,0.4); snd(80,'square',0.05,0.25); }
+function sfxDie() { snd(200,'sawtooth',0.35,0.4); snd(80,'sawtooth',0.5,0.25); stopBGM(); }
+function sfxRecord() { snd(523,'sine',0.12,0.35); snd(659,'sine',0.14,0.3); snd(784,'sine',0.18,0.25); }
+function sfxNearLand() { snd(600,'sine',0.1,0.35); snd(800,'sine',0.12,0.3); }
 
 // ============================================
 // STATE
@@ -219,8 +219,9 @@ function spawnBuilding(x) {
     // 30%の確率で段差ビル（隙間なし、ジャンプ不要）
     if (Math.random() < 0.3) {
         const w = Math.max(55, 70 + Math.random() * 100);
-        const baseH = H * 0.3;
-        const h = baseH - 40 + Math.random() * 80; // 高さ違いで段差
+        // 前のビルの高さに近い範囲で段差をつける（最大45px差、棒人間が登れる範囲）
+        const prevH = buildings.length > 0 ? buildings[buildings.length-1].h : H * 0.3;
+        const h = prevH + (Math.random() - 0.4) * 45; // 少し上が多め
         buildings.push({ x: x, w, h, color: randomBldColor(), windows: makeWindows(w, h), step: true });
         return w; // 隙間なし
     }
@@ -400,7 +401,7 @@ function update(ts) {
             if (px >= b.x + 5 && px <= b.x + b.w - 5) {
                 // 段差ビル：上に歩いて乗れる（高さ差30px以内なら自動スナップ）
                 const heightDiff = player.y - bTop;
-                const canStep = b.step && player.onGround && heightDiff > 0 && heightDiff < 35;
+                const canStep = b.step && player.onGround && heightDiff > 0 && heightDiff < 50;
                 if ((player.y >= bTop - 3 && player.y <= bTop + 18 && player.vy >= 0) || canStep) {
                     // Check if near edge (for near-miss)
                     const edgeDist = Math.min(px - b.x, b.x + b.w - px);
