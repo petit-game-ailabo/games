@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>屋根ラン - 今日のミニゲーム</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+        body { margin:0; padding:0; display:flex; justify-content:center; align-items:center; min-height:100vh; background:#1a1a2e; overflow:hidden; touch-action:none; }
+        canvas { display:block; }
+    </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() { W = window.innerWidth; H = window.innerHeight; canvas.width = W; canvas.height = H; }
+resize();
+window.addEventListener('resize', resize);
+
+// === Audio ===
+let audioCtx = null;
+function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function snd(f,t,d,v) {
+    if (!audioCtx) return;
+    try { const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); o.frequency.value=f; o.type=t||'sine'; g.gain.setValueAtTime(v||0.1,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+(d||0.1)); o.start(); o.stop(audioCtx.currentTime+(d||0.1)); } catch(e){}
+}
+function sfxJump() { snd(300,'sine',0.08,0.15); snd(450,'sine',0.06,0.1); }
+function sfxLand() { snd(150,'square',0.05,0.08); }
+function sfxDie() { snd(200,'sawtooth',0.3,0.12); snd(80,'sawtooth',0.5,0.08); }
+function sfxRecord() { snd(523,'sine',0.1,0.1); snd(659,'sine',0.1,0.08); snd(784,'sine',0.15,0.08); }
+
+// === State ===
+const ST = { TITLE: 0, PLAY: 1, DEAD: 2 };
+let state = ST.TITLE;
+
+// === Game vars ===
+let player = {};
+let buildings = [];
+let particles = [];
+let distance = 0;
+let bestDistance = 0;
+let scrollX = 0;
+let gameSpeed = 3;
+let deadTimer = 0;
+
+// Load best
+try { bestDistance = parseFloat(localStorage.getItem('roofrun_best')) || 0; } catch(e){}
+function saveBest() { try { localStorage.setItem('roofrun_best', bestDistance.toString()); } catch(e){} }
+
+// === Constants ===
+const GROUND_Y = 0.75; // ビルの上面のY位置（画面比率）
+const GRAVITY = 1800;
+const JUMP_POWER = -620;
+const HIGH_JUMP = -780;
+const MAX_HOLD = 0.15; // 長押し判定の秒数
+const RUN_ANIM_SPEED = 12;
+
+// === Buildings ===
+function initBuildings() {
+    buildings = [];
+    let x = 0;
+    // 最初のビルは広い（足場）
+    buildings.push({ x: 0, w: W * 0.5, h: H * 0.3, color: randomBuildingColor() });
+    x = W * 0.5;
+    for (let i = 0; i < 8; i++) {
+        x += spawnBuilding(x);
+    }
+}
+
+function randomBuildingColor() {
+    const colors = ['#2d3436', '#2c3e50', '#34495e', '#1e272e', '#2f3542', '#3d3d3d'];
+    return colors[Math.floor(Math.random() * colors.length)];
+}
+
+function spawnBuilding(x) {
+    const gap = 40 + Math.random() * 60 + Math.min(distance * 0.05, 80); // 距離で広がる
+    const w = 80 + Math.random() * 120 - Math.min(distance * 0.08, 50); // 距離で狭くなる
+    const minW = 50;
+    const finalW = Math.max(minW, w);
+    const hVar = 30 + Math.random() * 60; // 高さのばらつき
+    const baseH = H * 0.3;
+    const h = baseH - 30 + Math.random() * 60;
+    
+    buildings.push({
+        x: x + gap,
+        w: finalW,
+        h: h,
+        color: randomBuildingColor()
+    });
+    return gap + finalW;
+}
+
+// === Stickman ===
+function resetPlayer() {
+    player = {
+        x: W * 0.25,
+        y: 0, // set on first building
+        vy: 0,
+        onGround: true,
+        jumping: false,
+        alive: true,
+        runFrame: 0,
+        holdTime: 0,
+        holding: false,
+    };
+    // Place on first building
+    const b = buildings[0];
+    player.y = H - b.h;
+}
+
+// === Input ===
+let pressing = false;
+let pressStart = 0;
+
+canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    ensureAudio();
+    
+    if (state === ST.TITLE) {
+        state = ST.PLAY;
+        distance = 0;
+        scrollX = 0;
+        gameSpeed = 3;
+        initBuildings();
+        resetPlayer();
+        return;
+    }
+    if (state === ST.DEAD) {
+        if (deadTimer > 0.8) {
+            state = ST.PLAY;
+            distance = 0;
+            scrollX = 0;
+            gameSpeed = 3;
+            initBuildings();
+            resetPlayer();
+        }
+        return;
+    }
+    if (state === ST.PLAY && player.onGround && player.alive) {
+        pressing = true;
+        pressStart = performance.now() / 1000;
+        player.holding = true;
+    }
+});
+
+canvas.addEventListener('pointerup', (e) => {
+    e.preventDefault();
+    if (state === ST.PLAY && player.holding && player.onGround && player.alive) {
+        // Jump!
+        const holdDuration = performance.now() / 1000 - pressStart;
+        const t = Math.min(holdDuration / MAX_HOLD, 1);
+        player.vy = JUMP_POWER + (HIGH_JUMP - JUMP_POWER) * t;
+        player.onGround = false;
+        player.jumping = true;
+        player.holding = false;
+        pressing = false;
+        sfxJump();
+        
+        // Jump particles
+        for (let i = 0; i < 5; i++) {
+            particles.push({
+                x: player.x + scrollX, y: player.y,
+                vx: (Math.random() - 0.5) * 80,
+                vy: -Math.random() * 100,
+                life: 0.3, ml: 0.3, r: 2 + Math.random() * 2,
+                color: '#aaa'
+            });
+        }
+    }
+    pressing = false;
+    player.holding = false;
+});
+
+// === Update ===
+let lt = 0;
+
+function update(ts) {
+    const dt = Math.min((ts - lt) / 1000, 0.05);
+    lt = ts;
+    
+    if (state === ST.PLAY && player.alive) {
+        // Speed increases over distance
+        gameSpeed = 3 + distance * 0.003;
+        const speed = Math.min(gameSpeed, 7);
+        
+        // Scroll
+        scrollX += speed;
+        distance += speed * 0.05;
+        
+        // Player physics
+        if (!player.onGround) {
+            player.vy += GRAVITY * dt;
+            player.y += player.vy * dt;
+        }
+        
+        // Run animation
+        if (player.onGround) {
+            player.runFrame += RUN_ANIM_SPEED * dt;
+        }
+        
+        // Charge visual
+        if (player.holding) {
+            player.holdTime = performance.now() / 1000 - pressStart;
+        }
+        
+        // Building collision
+        player.onGround = false;
+        const px = player.x + scrollX;
+        
+        for (const b of buildings) {
+            const bTop = H - b.h;
+            const bLeft = b.x;
+            const bRight = b.x + b.w;
+            
+            // On top of building
+            if (px >= bLeft + 5 && px <= bRight - 5) {
+                if (player.y >= bTop - 2 && player.y <= bTop + 15 && player.vy >= 0) {
+                    player.y = bTop;
+                    player.vy = 0;
+                    if (player.jumping) {
+                        sfxLand();
+                        // Land particles
+                        for (let i = 0; i < 4; i++) {
+                            particles.push({
+                                x: px, y: player.y,
+                                vx: (Math.random() - 0.5) * 60,
+                                vy: -Math.random() * 40,
+                                life: 0.2, ml: 0.2, r: 2, color: '#888'
+                            });
+                        }
+                    }
+                    player.onGround = true;
+                    player.jumping = false;
+                }
+            }
+        }
+        
+        // Fall death
+        if (player.y > H + 50) {
+            die();
+        }
+        
+        // Spawn new buildings, remove old
+        const rightEdge = scrollX + W + 200;
+        let lastB = buildings[buildings.length - 1];
+        while (lastB.x + lastB.w < rightEdge) {
+            const added = spawnBuilding(lastB.x + lastB.w);
+            lastB = buildings[buildings.length - 1];
+        }
+        buildings = buildings.filter(b => b.x + b.w > scrollX - 100);
+    }
+    
+    if (state === ST.DEAD) {
+        deadTimer += dt;
+    }
+    
+    // Particles
+    for (const p of particles) {
+        p.x += (p.vx || 0) * dt;
+        p.y += (p.vy || 0) * dt;
+        if (p.vy !== undefined) p.vy += 300 * dt;
+        p.life -= dt;
+    }
+    particles = particles.filter(p => p.life > 0);
+    
+    draw();
+    requestAnimationFrame(update);
+}
+
+function die() {
+    player.alive = false;
+    state = ST.DEAD;
+    deadTimer = 0;
+    sfxDie();
+    if (distance > bestDistance) {
+        bestDistance = distance;
+        saveBest();
+        sfxRecord();
+    }
+    // Death particles
+    const px = player.x + scrollX;
+    for (let i = 0; i < 12; i++) {
+        particles.push({
+            x: px, y: player.y,
+            vx: (Math.random() - 0.5) * 200,
+            vy: -100 - Math.random() * 200,
+            life: 0.6 + Math.random() * 0.3, ml: 0.6, r: 2 + Math.random() * 3,
+            color: '#fff'
+        });
+    }
+}
+
+// === Draw ===
+function draw() {
+    // Sky gradient
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#0f0c29');
+    sky.addColorStop(0.5, '#302b63');
+    sky.addColorStop(1, '#24243e');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    
+    // Stars
+    if (state !== ST.TITLE) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        for (let i = 0; i < 30; i++) {
+            const sx = ((i * 137 + 50) % W + scrollX * 0.1 * ((i % 3) + 1)) % (W + 100) - 50;
+            const sy = (i * 97 + 30) % (H * 0.5);
+            ctx.fillRect(sx, sy, 1.5, 1.5);
+        }
+    }
+    
+    // Moon
+    ctx.fillStyle = 'rgba(255,255,200,0.15)';
+    ctx.beginPath();
+    ctx.arc(W * 0.8, H * 0.15, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,200,0.08)';
+    ctx.beginPath();
+    ctx.arc(W * 0.8, H * 0.15, 45, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (state === ST.TITLE) { drawTitle(); return; }
+    
+    // === Game / Dead ===
+    ctx.save();
+    ctx.translate(-scrollX, 0);
+    
+    // Far buildings (parallax)
+    ctx.fillStyle = '#16213e';
+    for (let i = 0; i < 15; i++) {
+        const bx = (i * 120 + scrollX * 0.3) % (W * 2) - 200 + scrollX * 0.7;
+        const bh = 60 + (i * 37) % 80;
+        ctx.fillRect(bx, H - bh - 20, 60 + (i * 17) % 40, bh + 20);
+    }
+    
+    // Buildings
+    for (const b of buildings) {
+        // Building body
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x, H - b.h, b.w, b.h);
+        
+        // Roof line
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(b.x, H - b.h, b.w, 3);
+        
+        // Windows
+        ctx.fillStyle = 'rgba(255,200,50,0.15)';
+        const winSize = 8;
+        const winGap = 16;
+        for (let wy = H - b.h + 15; wy < H - 10; wy += winGap) {
+            for (let wx = b.x + 10; wx < b.x + b.w - 10; wx += winGap) {
+                if (Math.random() > 0.3) { // some windows dark
+                    ctx.fillRect(wx, wy, winSize, winSize);
+                }
+            }
+        }
+    }
+    
+    // Particles (world space)
+    for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, p.life / p.ml);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * (p.life / p.ml), 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    
+    // Player (stickman)
+    if (player.alive) {
+        drawStickman(player.x + scrollX, player.y);
+    }
+    
+    ctx.restore();
+    
+    // Charge bar
+    if (player.holding && player.alive) {
+        const charge = Math.min((performance.now() / 1000 - pressStart) / MAX_HOLD, 1);
+        const barW = 60;
+        const barH = 6;
+        const barX = W * 0.25 - barW / 2;
+        const barY = player.y - 45 + (H - buildings[0]?.h || 0) - player.y + player.y - 45; // above stickman in screen space
+        // Simpler: draw above player in screen coords
+        const screenY = player.y - 50;
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(W * 0.25 - barW/2 - 2, screenY - 2, barW + 4, barH + 4);
+        const grad = ctx.createLinearGradient(W*0.25 - barW/2, 0, W*0.25 + barW/2, 0);
+        grad.addColorStop(0, '#44ff44');
+        grad.addColorStop(1, '#ffff00');
+        ctx.fillStyle = grad;
+        ctx.fillRect(W * 0.25 - barW/2, screenY, barW * charge, barH);
+    }
+    
+    // HUD
+    drawHUD();
+    
+    if (state === ST.DEAD) drawDeadScreen();
+}
+
+function drawStickman(wx, wy) {
+    // wx, wy = world coords (head position area)
+    const headR = 7;
+    const bodyLen = 18;
+    const legLen = 16;
+    const armLen = 14;
+    
+    // Animation
+    const frame = player.onGround ? player.runFrame : 0;
+    const legSwing = player.onGround ? Math.sin(frame) * 0.6 : -0.3;
+    const armSwing = player.onGround ? Math.sin(frame + Math.PI) * 0.4 : -0.5;
+    
+    const headY = wy - bodyLen - legLen - headR;
+    const bodyTop = wy - bodyLen - legLen;
+    const bodyBot = wy - legLen;
+    const hipY = bodyBot;
+    
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    
+    // Head
+    ctx.beginPath();
+    ctx.arc(wx, headY, headR, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Body
+    ctx.beginPath();
+    ctx.moveTo(wx, bodyTop + headR);
+    ctx.lineTo(wx, hipY);
+    ctx.stroke();
+    
+    // Legs
+    ctx.beginPath();
+    ctx.moveTo(wx, hipY);
+    ctx.lineTo(wx + Math.sin(legSwing) * legLen, hipY + Math.cos(legSwing) * legLen);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(wx, hipY);
+    ctx.lineTo(wx + Math.sin(-legSwing) * legLen, hipY + Math.cos(-legSwing) * legLen);
+    ctx.stroke();
+    
+    // Arms
+    const shoulderY = bodyTop + headR + 4;
+    ctx.beginPath();
+    ctx.moveTo(wx, shoulderY);
+    ctx.lineTo(wx + Math.sin(armSwing) * armLen, shoulderY + Math.cos(armSwing) * armLen);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(wx, shoulderY);
+    ctx.lineTo(wx + Math.sin(-armSwing) * armLen, shoulderY + Math.cos(-armSwing) * armLen);
+    ctx.stroke();
+    
+    // Jump squash/stretch
+    if (player.jumping && player.vy < 0) {
+        // Trail effect
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(wx - 3, wy + 5);
+        ctx.lineTo(wx - 3, wy + 15);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(wx + 3, wy + 5);
+        ctx.lineTo(wx + 3, wy + 15);
+        ctx.stroke();
+    }
+}
+
+function drawHUD() {
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(Math.floor(distance) + 'm', 15, 30);
+    
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('BEST: ' + Math.floor(bestDistance) + 'm', 15, 50);
+}
+
+function drawTitle() {
+    ctx.textAlign = 'center';
+    
+    // Title
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 34px sans-serif';
+    ctx.fillText('🏃 屋根ラン', W / 2, H * 0.25);
+    
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '15px sans-serif';
+    ctx.fillText('ビルからビルへ飛び移れ！', W / 2, H * 0.32);
+    
+    // Controls
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('タップ → ジャンプ', W / 2, H * 0.40);
+    ctx.fillText('長押し → 高くジャンプ', W / 2, H * 0.44);
+    
+    if (bestDistance > 0) {
+        ctx.fillStyle = '#ffd700';
+        ctx.font = '16px sans-serif';
+        ctx.fillText('🏆 ベスト: ' + Math.floor(bestDistance) + 'm', W / 2, H * 0.52);
+    }
+    
+    // Demo stickman
+    const demoY = H * 0.68;
+    const bounce = Math.abs(Math.sin(Date.now() / 300)) * 10;
+    
+    // Ground
+    ctx.fillStyle = '#2d3436';
+    ctx.fillRect(W * 0.2, demoY, W * 0.6, 4);
+    
+    drawStickmanStatic(W / 2, demoY - bounce);
+    
+    // Start
+    const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = '#64dfdf';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('▶ タップでスタート', W / 2, H * 0.85);
+    ctx.globalAlpha = 1;
+}
+
+function drawStickmanStatic(x, footY) {
+    const headR = 7, bodyLen = 18, legLen = 16;
+    const headY = footY - bodyLen - legLen - headR;
+    const bodyTop = footY - bodyLen - legLen;
+    const hipY = footY - legLen;
+    
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    
+    ctx.beginPath(); ctx.arc(x, headY, headR, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, bodyTop + headR); ctx.lineTo(x, hipY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, hipY); ctx.lineTo(x - 8, footY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, hipY); ctx.lineTo(x + 8, footY); ctx.stroke();
+    const shoulderY = bodyTop + headR + 4;
+    ctx.beginPath(); ctx.moveTo(x, shoulderY); ctx.lineTo(x - 10, shoulderY + 10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, shoulderY); ctx.lineTo(x + 10, shoulderY + 10); ctx.stroke();
+}
+
+function drawDeadScreen() {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, W, H);
+    
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff4444';
+    ctx.font = 'bold 30px sans-serif';
+    ctx.fillText('💀 落下！', W / 2, H * 0.3);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px sans-serif';
+    ctx.fillText('距離: ' + Math.floor(distance) + 'm', W / 2, H * 0.42);
+    
+    if (distance >= bestDistance && distance > 0) {
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('🏆 NEW RECORD!', W / 2, H * 0.50);
+    }
+    
+    if (deadTimer > 0.8) {
+        const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#64dfdf';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.fillText('▶ タップでリトライ', W / 2, H * 0.65);
+        ctx.globalAlpha = 1;
+    }
+}
+
+// === Start ===
+requestAnimationFrame(update);
+</script>
+</body>
+</html>
