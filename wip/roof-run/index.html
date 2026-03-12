@@ -904,18 +904,24 @@ function stageAlpha(d, from, range) {
 function drawLandmarks() {
     const d = distance;
     const t = lt / 1000;
-    const lx = -scrollX * 0.025;
+    // Very slow continuous parallax (no modulo — no jitter)
+    // Landmarks are far away, so they move barely at all
+    const lx = scrollX * 0.012; // positive = moves left as player goes right
     ctx.save();
+    
+    // Real-world scale: 1m real = this many px
+    // Burj Khalifa (828m) fills ~55% of screen height
+    const M = H * 0.00066;
 
     // === TOKYO (0-200m): Tokyo Tower + Skytree ===
     { const a = stageAlpha(d, 0, 220);
     if (a > 0) {
         ctx.globalAlpha = a * 0.55;
 
-        // ── Tokyo Skytree (634m real, tallest tower) ──
-        const sx = W * 0.2 + lx % 40;
-        const sB = H * 0.58;
-        const sH = H * 0.42; // fills upper portion of screen
+        // ── Tokyo Skytree (634m real) ──
+        const sx = W * 0.2 - lx;
+        const sB = H * 0.62;
+        const sH = 634 * M;
         
         // Tripod base → cylindrical top. Width narrows from base to top
         ctx.fillStyle = '#4a6a8a';
@@ -982,9 +988,9 @@ function drawLandmarks() {
         }
 
         // ── Tokyo Tower (333m, red-white lattice) ──
-        const tx = W * 0.78 + lx % 30;
-        const tB = H * 0.58;
-        const tH = H * 0.38;
+        const tx = W * 0.78 - lx;
+        const tB = H * 0.62;
+        const tH = 333 * M;
         
         // Main tapered body (red-white striped)
         for (let i = 0; i < 14; i++) {
@@ -1048,110 +1054,99 @@ function drawLandmarks() {
     if (a > 0) {
         ctx.globalAlpha = a * 0.55;
 
-        // ── Statue of Liberty ──
-        const sx = W * 0.22 + lx % 35;
-        const sB = H * 0.58;
+        // ── Statue of Liberty (93m with pedestal) ──
+        const sx = W * 0.22 - lx;
+        const sB = H * 0.62;
         
-        // Pedestal (trapezoidal stone base)
+        // Scale: 93m total (47m pedestal + 46m statue)
+        const sScale = 93 * M; // total height in px
+        const s = sScale / 93; // px per meter of statue
+        
+        // Pedestal (47m)
         ctx.fillStyle = '#6a7a6a';
         ctx.beginPath();
-        ctx.moveTo(sx - 18, sB); ctx.lineTo(sx - 12, sB - 30);
-        ctx.lineTo(sx + 12, sB - 30); ctx.lineTo(sx + 18, sB);
+        ctx.moveTo(sx - 18*s, sB); ctx.lineTo(sx - 12*s, sB - 47*s);
+        ctx.lineTo(sx + 12*s, sB - 47*s); ctx.lineTo(sx + 18*s, sB);
         ctx.closePath(); ctx.fill();
         ctx.strokeStyle = '#8a9a8a';
         ctx.lineWidth = 0.5;
-        // Pedestal horizontal lines
-        for (let i = 1; i < 4; i++) {
-            const py = sB - i * 7;
-            const pw = 18 - i * 1.5;
+        for (let i = 1; i < 5; i++) {
+            const py = sB - i * 10 * s;
+            const pw = (18 - i * 1.5) * s;
             ctx.beginPath(); ctx.moveTo(sx - pw, py); ctx.lineTo(sx + pw, py); ctx.stroke();
         }
         
-        // Body / robe (patina green)
+        // Body / robe (patina green, 46m statue)
+        const statueBase = sB - 47 * s;
         ctx.fillStyle = '#5a9a7a';
         ctx.beginPath();
-        ctx.moveTo(sx - 10, sB - 30);  // robe base left
-        ctx.lineTo(sx - 7, sB - 55);   // waist left
-        ctx.lineTo(sx - 4, sB - 70);   // shoulder left
-        ctx.lineTo(sx - 2, sB - 78);   // neck left
-        ctx.lineTo(sx + 2, sB - 78);   // neck right
-        ctx.lineTo(sx + 4, sB - 70);
-        ctx.lineTo(sx + 7, sB - 55);
-        ctx.lineTo(sx + 10, sB - 30);
+        ctx.moveTo(sx - 10*s, statueBase);
+        ctx.lineTo(sx - 7*s, statueBase - 25*s);
+        ctx.lineTo(sx - 4*s, statueBase - 38*s);
+        ctx.lineTo(sx - 2*s, statueBase - 42*s);
+        ctx.lineTo(sx + 2*s, statueBase - 42*s);
+        ctx.lineTo(sx + 4*s, statueBase - 38*s);
+        ctx.lineTo(sx + 7*s, statueBase - 25*s);
+        ctx.lineTo(sx + 10*s, statueBase);
         ctx.closePath(); ctx.fill();
         
-        // Robe draping lines
+        // Robe draping
         ctx.strokeStyle = 'rgba(70,130,100,0.4)';
         ctx.lineWidth = 0.5;
         for (let i = -2; i <= 2; i++) {
             ctx.beginPath();
-            ctx.moveTo(sx + i * 3, sB - 65);
-            ctx.quadraticCurveTo(sx + i * 3.5, sB - 45, sx + i * 4, sB - 30);
+            ctx.moveTo(sx + i*3*s, statueBase - 35*s);
+            ctx.quadraticCurveTo(sx + i*3.5*s, statueBase - 18*s, sx + i*4*s, statueBase);
             ctx.stroke();
         }
         
         // Head
         ctx.fillStyle = '#5a9a7a';
-        ctx.beginPath(); ctx.arc(sx, sB - 82, 5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, statueBase - 44*s, 4*s, 0, Math.PI*2); ctx.fill();
         
         // Crown (7 rays)
         ctx.strokeStyle = '#6aaa8a';
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = Math.max(0.8, 1.2*s);
         for (let i = 0; i < 7; i++) {
             const ang = -Math.PI * 0.8 + i * (Math.PI * 0.6 / 6);
             ctx.beginPath();
-            ctx.moveTo(sx + Math.cos(ang) * 5, sB - 82 + Math.sin(ang) * 5);
-            ctx.lineTo(sx + Math.cos(ang) * 12, sB - 82 + Math.sin(ang) * 12);
+            ctx.moveTo(sx + Math.cos(ang)*4*s, statueBase - 44*s + Math.sin(ang)*4*s);
+            ctx.lineTo(sx + Math.cos(ang)*10*s, statueBase - 44*s + Math.sin(ang)*10*s);
             ctx.stroke();
         }
         
-        // Right arm raised with torch
+        // Torch arm
         ctx.strokeStyle = '#5a9a7a';
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = Math.max(1, 2.5*s);
         ctx.beginPath();
-        ctx.moveTo(sx + 4, sB - 72);
-        ctx.lineTo(sx + 8, sB - 90);
-        ctx.lineTo(sx + 9, sB - 100);
+        ctx.moveTo(sx + 4*s, statueBase - 38*s);
+        ctx.lineTo(sx + 8*s, statueBase - 52*s);
+        ctx.lineTo(sx + 9*s, statueBase - 58*s);
         ctx.stroke();
         
-        // Torch
-        ctx.fillStyle = '#8a7a50';
-        ctx.fillRect(sx + 7, sB - 105, 4, 8);
-        // Flame (animated)
-        const fFlicker = Math.sin(t * 6) * 2;
+        // Torch flame
+        const fFlicker = Math.sin(t * 6) * 2 * s;
         ctx.fillStyle = `rgba(255,200,50,${0.6+Math.sin(t*4)*0.3})`;
         ctx.beginPath();
-        ctx.moveTo(sx + 5, sB - 105);
-        ctx.quadraticCurveTo(sx + 9 + fFlicker, sB - 115, sx + 13, sB - 105);
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,150,30,${0.4+Math.sin(t*5)*0.3})`;
-        ctx.beginPath();
-        ctx.moveTo(sx + 7, sB - 105);
-        ctx.quadraticCurveTo(sx + 9 + fFlicker * 0.5, sB - 112, sx + 11, sB - 105);
+        ctx.moveTo(sx + 5*s, statueBase - 58*s);
+        ctx.quadraticCurveTo(sx + 9*s + fFlicker, statueBase - 65*s, sx + 13*s, statueBase - 58*s);
         ctx.fill();
         // Torch glow
         ctx.fillStyle = `rgba(255,200,80,${0.06+Math.sin(t*3)*0.03})`;
-        ctx.beginPath(); ctx.arc(sx + 9, sB - 108, 20, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx + 9*s, statueBase - 60*s, 18*s, 0, Math.PI*2); ctx.fill();
         
-        // Left arm (holding tablet)
+        // Left arm (tablet)
         ctx.strokeStyle = '#5a9a7a';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = Math.max(1, 2*s);
         ctx.beginPath();
-        ctx.moveTo(sx - 4, sB - 70);
-        ctx.lineTo(sx - 8, sB - 60);
+        ctx.moveTo(sx - 4*s, statueBase - 36*s);
+        ctx.lineTo(sx - 8*s, statueBase - 28*s);
         ctx.stroke();
-        // Tablet
-        ctx.fillStyle = '#4a8a6a';
-        ctx.save();
-        ctx.translate(sx - 9, sB - 62);
-        ctx.rotate(-0.3);
-        ctx.fillRect(-2, -6, 4, 12);
-        ctx.restore();
 
-        // ── Empire State Building ──
-        const ex = W * 0.8 + lx % 25;
-        const eB = H * 0.55;
-        const eH = H * 0.42;
+        // ── Empire State Building (443m with antenna) ──
+        const ex = W * 0.8 - lx;
+        const eB = H * 0.62;
+        const eH = 443 * M;
         
         // Base (widest)
         ctx.fillStyle = '#4a4a55';
@@ -1207,9 +1202,10 @@ function drawLandmarks() {
     if (a > 0) {
         ctx.globalAlpha = a * 0.55;
         
-        const ex = W * 0.5 + lx % 30;
-        const eB = H * 0.58;
-        const eH = H * 0.45;
+        // Eiffel Tower: 330m
+        const ex = W * 0.5 - lx;
+        const eB = H * 0.62;
+        const eH = 330 * M;
         
         // Four curved legs meeting at top
         ctx.strokeStyle = '#8a7060';
@@ -1308,9 +1304,10 @@ function drawLandmarks() {
     if (a > 0) {
         ctx.globalAlpha = a * 0.5;
         
-        const cx = W * 0.5 + lx % 25;
-        const cB = H * 0.6;
-        const cW = W * 0.25, cH = H * 0.12;
+        // Colosseum: 48m tall, 188m wide
+        const cx = W * 0.5 - lx;
+        const cB = H * 0.62;
+        const cW = 188 * M * 0.5, cH = 48 * M; // half-width, height
         
         // Outer wall (elliptical, partially ruined on right)
         ctx.fillStyle = '#8a7a60';
@@ -1379,9 +1376,10 @@ function drawLandmarks() {
     if (a > 0) {
         ctx.globalAlpha = a * 0.5;
         
-        const bx = W * 0.6 + lx % 20;
-        const bB = H * 0.58;
-        const bH = H * 0.5; // tallest structure — dominates screen
+        // Burj Khalifa: 828m — the tallest, dominates everything
+        const bx = W * 0.6 - lx;
+        const bB = H * 0.62;
+        const bH = 828 * M;
         
         // Y-shaped cross section: 3 wings that setback progressively
         // Central spine
@@ -1454,9 +1452,10 @@ function drawLandmarks() {
     if (a > 0) {
         ctx.globalAlpha = a * 0.55;
         
-        const sx = W * 0.4 + lx % 25;
-        const sB = H * 0.58;
-        const sH = H * 0.45;
+        // Oriental Pearl Tower: 468m
+        const sx = W * 0.4 - lx;
+        const sB = H * 0.62;
+        const sH = 468 * M;
         
         // Three legs (tripod base)
         ctx.strokeStyle = '#c06a8a';
@@ -1513,22 +1512,24 @@ function drawLandmarks() {
         ctx.fillStyle = `rgba(255,80,150,${0.5+Math.sin(t*2.5)*0.5})`;
         ctx.beginPath(); ctx.arc(sx, sB - sH - 5, 2, 0, Math.PI*2); ctx.fill();
         
-        // Shanghai skyline behind (Shanghai Tower, SWFC)
-        const stx = W * 0.7 + lx % 20;
+        // Shanghai skyline behind (Shanghai Tower 632m, SWFC 492m)
+        const stx = W * 0.72 - lx;
         ctx.fillStyle = 'rgba(60,80,120,0.2)';
-        // Shanghai Tower (twisted)
+        // Shanghai Tower (632m, twisted)
+        const stH = 632 * M;
         ctx.beginPath();
-        ctx.moveTo(stx - 6, sB); ctx.lineTo(stx - 3, sB - 140);
-        ctx.lineTo(stx + 3, sB - 140); ctx.lineTo(stx + 6, sB);
+        ctx.moveTo(stx - 6, sB); ctx.lineTo(stx - 3, sB - stH);
+        ctx.lineTo(stx + 3, sB - stH); ctx.lineTo(stx + 6, sB);
         ctx.closePath(); ctx.fill();
-        // SWFC (bottle opener)
+        // SWFC (492m, bottle opener)
+        const swH = 492 * M;
         ctx.fillStyle = 'rgba(50,70,110,0.2)';
-        ctx.fillRect(stx + 20, sB - 120, 10, 120);
+        ctx.fillRect(stx + 20, sB - swH, 10, swH);
         // Trapezoid opening at top
         ctx.fillStyle = 'rgba(10,15,30,0.3)';
         ctx.beginPath();
-        ctx.moveTo(stx + 22, sB - 115); ctx.lineTo(stx + 24, sB - 105);
-        ctx.lineTo(stx + 28, sB - 105); ctx.lineTo(stx + 26, sB - 115);
+        ctx.moveTo(stx + 22, sB - swH + 5); ctx.lineTo(stx + 24, sB - swH + 15);
+        ctx.lineTo(stx + 28, sB - swH + 15); ctx.lineTo(stx + 26, sB - swH + 5);
         ctx.closePath(); ctx.fill();
     }}
 
@@ -1537,10 +1538,11 @@ function drawLandmarks() {
     if (a > 0) {
         ctx.globalAlpha = a * 0.5;
         
-        const gx = W * 0.5 + lx % 20;
-        const gB = H * 0.6;
-        const gW = W * 0.35; // half-width — spans most of screen
-        const tH = H * 0.18; // tower height
+        // Golden Gate: towers 227m, main span 1280m
+        const gx = W * 0.5 - lx;
+        const gB = H * 0.62;
+        const gW = Math.min(1280 * M * 0.5, W * 0.4); // half-span, capped
+        const tH = 227 * M; // tower height
         
         // Fog at water level
         ctx.fillStyle = 'rgba(180,190,200,0.06)';
@@ -1616,91 +1618,92 @@ function drawLandmarks() {
     if (a > 0) {
         ctx.globalAlpha = a * 0.55;
         
-        const rx = W * 0.5 + lx % 20;
-        const rB = H * 0.38;
+        // Christ the Redeemer: 38m statue on Corcovado (710m mountain)
+        const rx = W * 0.5 - lx;
+        const rB = H * 0.62;
         
-        // Corcovado mountain
+        // Corcovado mountain (710m)
+        const mtH = 710 * M;
         ctx.fillStyle = 'rgba(30,80,50,0.2)';
         ctx.beginPath();
-        ctx.moveTo(rx - 80, rB + 60);
-        ctx.quadraticCurveTo(rx - 30, rB - 10, rx, rB - 20);
-        ctx.quadraticCurveTo(rx + 30, rB - 10, rx + 80, rB + 60);
+        ctx.moveTo(rx - mtH * 0.5, rB);
+        ctx.quadraticCurveTo(rx - mtH * 0.15, rB - mtH + 20, rx, rB - mtH);
+        ctx.quadraticCurveTo(rx + mtH * 0.15, rB - mtH + 20, rx + mtH * 0.5, rB);
         ctx.closePath(); ctx.fill();
-        // Mountain texture (ridge lines)
+        // Mountain ridges
         ctx.strokeStyle = 'rgba(40,100,60,0.1)';
         ctx.lineWidth = 0.5;
         for (let i = -3; i <= 3; i++) {
             ctx.beginPath();
-            ctx.moveTo(rx + i * 15, rB + 50);
-            ctx.quadraticCurveTo(rx + i * 5, rB + 10, rx, rB - 15);
+            ctx.moveTo(rx + i * mtH * 0.08, rB);
+            ctx.quadraticCurveTo(rx + i * mtH * 0.03, rB - mtH * 0.5, rx, rB - mtH + 5);
             ctx.stroke();
         }
         
+        // Christ statue (38m on top of mountain)
+        const csH = 38 * M;
         // Pedestal
         ctx.fillStyle = 'rgba(180,180,170,0.3)';
-        ctx.fillRect(rx - 6, rB - 20, 12, 12);
+        ctx.fillRect(rx - csH * 0.2, rB - mtH - csH * 0.3, csH * 0.4, csH * 0.3);
         
-        // Christ statue
-        const stY = rB - 32; // chest level
+        const stY = rB - mtH - csH * 0.5; // chest level
         ctx.strokeStyle = '#ddd';
         ctx.lineWidth = 3;
         
-        // Body/robe
+        // Body/robe (scaled to csH)
+        const cs = csH / 38; // px per meter of statue
         ctx.fillStyle = 'rgba(220,220,210,0.3)';
         ctx.beginPath();
-        ctx.moveTo(rx - 5, rB - 20);  // base left
-        ctx.lineTo(rx - 4, stY);       // torso left
-        ctx.lineTo(rx - 3, stY - 12);  // shoulder left
-        ctx.lineTo(rx, stY - 18);      // top of head
-        ctx.lineTo(rx + 3, stY - 12);
-        ctx.lineTo(rx + 4, stY);
-        ctx.lineTo(rx + 5, rB - 20);
+        ctx.moveTo(rx - 5*cs, rB - mtH);
+        ctx.lineTo(rx - 4*cs, stY);
+        ctx.lineTo(rx - 3*cs, stY - 12*cs);
+        ctx.lineTo(rx, stY - 18*cs);
+        ctx.lineTo(rx + 3*cs, stY - 12*cs);
+        ctx.lineTo(rx + 4*cs, stY);
+        ctx.lineTo(rx + 5*cs, rB - mtH);
         ctx.closePath(); ctx.fill();
         
-        // Arms (wide open, the iconic pose)
+        // Arms (wide open — 28m span)
         ctx.strokeStyle = 'rgba(220,220,210,0.5)';
-        ctx.lineWidth = 2.5;
-        // Left arm
+        ctx.lineWidth = Math.max(1.5, 2.5*cs);
         ctx.beginPath();
-        ctx.moveTo(rx - 3, stY - 8);
-        ctx.lineTo(rx - 20, stY - 5);
-        ctx.lineTo(rx - 38, stY - 2);
+        ctx.moveTo(rx - 3*cs, stY - 8*cs);
+        ctx.lineTo(rx - 14*cs, stY - 5*cs);
+        ctx.lineTo(rx - 28*cs, stY - 2*cs);
         ctx.stroke();
-        // Right arm
         ctx.beginPath();
-        ctx.moveTo(rx + 3, stY - 8);
-        ctx.lineTo(rx + 20, stY - 5);
-        ctx.lineTo(rx + 38, stY - 2);
+        ctx.moveTo(rx + 3*cs, stY - 8*cs);
+        ctx.lineTo(rx + 14*cs, stY - 5*cs);
+        ctx.lineTo(rx + 28*cs, stY - 2*cs);
         ctx.stroke();
         
-        // Robe draping from arms
+        // Robe draping
         ctx.strokeStyle = 'rgba(200,200,190,0.2)';
         ctx.lineWidth = 0.5;
         ctx.beginPath();
-        ctx.moveTo(rx - 35, stY - 2);
-        ctx.quadraticCurveTo(rx - 15, stY + 10, rx - 5, rB - 20);
+        ctx.moveTo(rx - 26*cs, stY - 2*cs);
+        ctx.quadraticCurveTo(rx - 12*cs, stY + 8*cs, rx - 5*cs, rB - mtH);
         ctx.stroke();
         ctx.beginPath();
-        ctx.moveTo(rx + 35, stY - 2);
-        ctx.quadraticCurveTo(rx + 15, stY + 10, rx + 5, rB - 20);
+        ctx.moveTo(rx + 26*cs, stY - 2*cs);
+        ctx.quadraticCurveTo(rx + 12*cs, stY + 8*cs, rx + 5*cs, rB - mtH);
         ctx.stroke();
         
         // Head
         ctx.fillStyle = 'rgba(220,220,210,0.4)';
-        ctx.beginPath(); ctx.arc(rx, stY - 14, 4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(rx, stY - 14*cs, 4*cs, 0, Math.PI*2); ctx.fill();
         
-        // Halo / backlight glow (iconic illumination)
+        // Halo glow
         ctx.fillStyle = `rgba(255,255,220,${0.04+Math.sin(t*0.8)*0.02})`;
-        ctx.beginPath(); ctx.arc(rx, stY - 10, 45, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = `rgba(255,255,200,${0.06+Math.sin(t*1.2)*0.03})`;
-        ctx.beginPath(); ctx.arc(rx, stY - 10, 25, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(rx, stY - 10*cs, 35*cs, 0, Math.PI*2); ctx.fill();
         
-        // Sugarloaf Mountain (in background)
+        // Sugarloaf Mountain (396m)
+        const sgH = 396 * M;
         ctx.fillStyle = 'rgba(25,60,40,0.12)';
         ctx.beginPath();
-        ctx.moveTo(rx + 70, rB + 60);
-        ctx.quadraticCurveTo(rx + 90, rB + 10, rx + 100, rB + 5);
-        ctx.quadraticCurveTo(rx + 110, rB + 10, rx + 130, rB + 60);
+        ctx.moveTo(rx + sgH * 0.4, rB);
+        ctx.quadraticCurveTo(rx + sgH * 0.55, rB - sgH + 10, rx + sgH * 0.6, rB - sgH);
+        ctx.quadraticCurveTo(rx + sgH * 0.65, rB - sgH + 10, rx + sgH * 0.8, rB);
         ctx.closePath(); ctx.fill();
     }}
 
