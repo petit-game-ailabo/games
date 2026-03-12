@@ -258,10 +258,35 @@ function resetPlayer() {
 // INPUT
 // ============================================
 let pressStart = 0;
+let jumpBuffer = 0; // 空中でタップした時のバッファ（秒）
+const JUMP_BUFFER_TIME = 0.2; // 着地前0.2秒以内のタップを受け付ける
+let pointerDown = false;
+
+function doJump(holdTime) {
+    const hold = Math.min(holdTime / MAX_HOLD, 1);
+    player.vy = JUMP_POWER + (HIGH_JUMP - JUMP_POWER) * hold;
+    player.onGround = false;
+    player.jumping = true;
+    player.holding = false;
+    player.squash = 1.3;
+    player.stretch = 0.7;
+    sfxJump();
+    jumpBuffer = 0;
+    
+    const px = player.x + scrollX;
+    for (let i = 0; i < 6; i++) {
+        particles.push({
+            x: px, y: player.y,
+            vx: (Math.random()-0.5)*100 - 30, vy: -Math.random()*120,
+            life: 0.35, ml: 0.35, r: 2+Math.random()*2, color: 'rgba(255,255,255,0.6)'
+        });
+    }
+}
 
 canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     ensureAudio();
+    pointerDown = true;
     if (state === ST.TITLE) {
         state = ST.PLAY;
         distance = 0; scrollX = 0; gameSpeed = 3;
@@ -280,32 +305,22 @@ canvas.addEventListener('pointerdown', (e) => {
         }
         return;
     }
-    if (state === ST.PLAY && player.onGround && player.alive) {
+    if (state === ST.PLAY && player.alive) {
         pressStart = performance.now() / 1000;
-        player.holding = true;
+        if (player.onGround) {
+            player.holding = true;
+        } else {
+            // 空中タップ → バッファに溜める
+            jumpBuffer = JUMP_BUFFER_TIME;
+        }
     }
 });
 
 canvas.addEventListener('pointerup', (e) => {
     e.preventDefault();
+    pointerDown = false;
     if (state === ST.PLAY && player.holding && player.onGround && player.alive) {
-        const hold = Math.min((performance.now() / 1000 - pressStart) / MAX_HOLD, 1);
-        player.vy = JUMP_POWER + (HIGH_JUMP - JUMP_POWER) * hold;
-        player.onGround = false;
-        player.jumping = true;
-        player.holding = false;
-        player.squash = 1.3; // stretch on jump
-        player.stretch = 0.7;
-        sfxJump();
-        
-        const px = player.x + scrollX;
-        for (let i = 0; i < 6; i++) {
-            particles.push({
-                x: px, y: player.y,
-                vx: (Math.random()-0.5)*100 - 30, vy: -Math.random()*120,
-                life: 0.35, ml: 0.35, r: 2+Math.random()*2, color: 'rgba(255,255,255,0.6)'
-            });
-        }
+        doJump(performance.now() / 1000 - pressStart);
     }
     player.holding = false;
 });
@@ -327,6 +342,8 @@ function update(ts) {
     } else {
         slowMoScale = 1;
     }
+    
+    if (jumpBuffer > 0) jumpBuffer -= dt;
     
     if (state === ST.PLAY && player.alive) {
         gameSpeed = 3 + distance * 0.0025;
@@ -414,6 +431,13 @@ function update(ts) {
                     
                     if (wasJumping) {
                         player.jumping = false;
+                        
+                        // ジャンプバッファ：空中でタップしてたら即ジャンプ
+                        if (jumpBuffer > 0) {
+                            doJump(0.05); // 短いチャージで即発動
+                            break;
+                        }
+                        
                         player.landBounce = 1;
                         player.squash = 0.7;
                         player.stretch = 1.2;
