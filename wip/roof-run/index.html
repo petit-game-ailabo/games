@@ -35,7 +35,7 @@ function ensureAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         bgmGain = audioCtx.createGain();
-        bgmGain.gain.value = 0.07;
+        bgmGain.gain.value = 0.18;
         bgmGain.connect(audioCtx.destination);
     }
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -150,11 +150,11 @@ function stopBGM() {
     if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
 }
 
-function sfxJump() { snd(320,'sine',0.06,0.12); snd(480,'sine',0.05,0.08); }
-function sfxLand() { snd(120,'square',0.04,0.1); snd(80,'square',0.03,0.06); }
-function sfxDie() { snd(200,'sawtooth',0.3,0.1); snd(80,'sawtooth',0.5,0.06); stopBGM(); }
-function sfxRecord() { snd(523,'sine',0.1,0.08); snd(659,'sine',0.12,0.07); snd(784,'sine',0.15,0.06); }
-function sfxNearLand() { snd(600,'sine',0.06,0.08); snd(800,'sine',0.08,0.06); }
+function sfxJump() { snd(320,'sine',0.08,0.25); snd(480,'sine',0.06,0.18); }
+function sfxLand() { snd(120,'square',0.05,0.2); snd(80,'square',0.04,0.12); }
+function sfxDie() { snd(200,'sawtooth',0.3,0.2); snd(80,'sawtooth',0.5,0.12); stopBGM(); }
+function sfxRecord() { snd(523,'sine',0.1,0.15); snd(659,'sine',0.12,0.12); snd(784,'sine',0.15,0.1); }
+function sfxNearLand() { snd(600,'sine',0.08,0.15); snd(800,'sine',0.1,0.12); }
 
 // ============================================
 // STATE
@@ -216,6 +216,14 @@ function makeWindows(bw, bh) {
 }
 
 function spawnBuilding(x) {
+    // 30%の確率で段差ビル（隙間なし、ジャンプ不要）
+    if (Math.random() < 0.3) {
+        const w = Math.max(55, 70 + Math.random() * 100);
+        const baseH = H * 0.3;
+        const h = baseH - 40 + Math.random() * 80; // 高さ違いで段差
+        buildings.push({ x: x, w, h, color: randomBldColor(), windows: makeWindows(w, h), step: true });
+        return w; // 隙間なし
+    }
     const gap = 35 + Math.random() * 55 + Math.min(distance * 0.04, 70);
     const w = Math.max(55, 85 + Math.random() * 120 - Math.min(distance * 0.06, 45));
     const baseH = H * 0.3;
@@ -390,7 +398,10 @@ function update(ts) {
         for (const b of buildings) {
             const bTop = H - b.h;
             if (px >= b.x + 5 && px <= b.x + b.w - 5) {
-                if (player.y >= bTop - 3 && player.y <= bTop + 18 && player.vy >= 0) {
+                // 段差ビル：上に歩いて乗れる（高さ差30px以内なら自動スナップ）
+                const heightDiff = player.y - bTop;
+                const canStep = b.step && player.onGround && heightDiff > 0 && heightDiff < 35;
+                if ((player.y >= bTop - 3 && player.y <= bTop + 18 && player.vy >= 0) || canStep) {
                     // Check if near edge (for near-miss)
                     const edgeDist = Math.min(px - b.x, b.x + b.w - px);
                     const wasJumping = player.jumping;
@@ -658,131 +669,173 @@ function draw() {
 // STICKMAN — Rich animation
 // ============================================
 function drawStickman(wx, wy) {
+    // === Natural Running Animation ===
+    // Based on real run cycle: Contact → Down → Passing → Up
+    // Key: arms swing OPPOSITE to legs, body bobs up at push-off, down at contact
+    
     const headR = 7;
-    const bodyLen = 18;
-    const legLen = 16;
-    const armLen = 13;
+    const thighLen = 9;  // upper leg
+    const shinLen = 9;   // lower leg
+    const upperArm = 7;
+    const foreArm = 7;
+    const torsoLen = 17;
     
     ctx.save();
     ctx.translate(wx, wy);
-    
-    // Apply squash/stretch
     ctx.scale(player.stretch, player.squash);
     
-    // Body tilt
-    ctx.rotate(player.bodyTilt);
+    // Forward lean
+    const lean = player.onGround && !player.holding ? 0.12 : player.bodyTilt;
+    ctx.rotate(lean);
     
-    const headY = -bodyLen - legLen - headR + player.headBob;
-    const bodyTopY = -bodyLen - legLen;
-    const hipY = -legLen;
-    const shoulderY = bodyTopY + headR + 3;
+    const hipY = -shinLen - 2; // hip joint
+    const shoulderY = hipY - torsoLen;
+    const headY = shoulderY - headR - 1 + (player.onGround ? player.headBob : 0);
     
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
-    // === LEGS ===
-    const frame = player.runFrame;
-    let lLeg, rLeg, lKnee, rKnee;
+    // Run cycle phase (0 to 2*PI)
+    const phase = player.runFrame;
+    // Smooth interpolation helper
+    function lerp(a, b, t) { return a + (b - a) * t; }
     
-    if (player.onGround && !player.holding) {
-        // Running: multi-joint legs
-        const legPhase = Math.sin(frame);
-        const legPhase2 = Math.cos(frame);
+    // === RUNNING LEGS (keyframe-based) ===
+    // The cycle has 4 key poses per leg, offset by PI for left/right
+    function getLegPose(ph) {
+        // ph: 0-2PI cycle
+        // Returns { thighAngle, kneeAngle } in radians
+        // Contact: leg reaches forward (thigh forward, knee slightly bent)
+        // Down: absorb impact (thigh vertical, knee bent more)
+        // Passing: leg swings back/under (thigh back, knee bent high behind)
+        // Up: push off (thigh back far, knee extending)
         
-        // Left leg: thigh angle, calf angle
-        const lThighAng = legPhase * 0.7;
-        const lCalfAng = Math.max(0, -legPhase2) * 0.8 + 0.2;
-        lKnee = { x: Math.sin(lThighAng) * legLen * 0.5, y: hipY + Math.cos(lThighAng) * legLen * 0.5 };
-        lLeg = { x: lKnee.x + Math.sin(lThighAng + lCalfAng) * legLen * 0.5, y: lKnee.y + Math.cos(lThighAng + lCalfAng) * legLen * 0.5 };
+        const p = ((ph % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+        const norm = p / (Math.PI * 2); // 0 to 1
         
-        // Right leg (opposite phase)
-        const rThighAng = -legPhase * 0.7;
-        const rCalfAng = Math.max(0, legPhase2) * 0.8 + 0.2;
-        rKnee = { x: Math.sin(rThighAng) * legLen * 0.5, y: hipY + Math.cos(rThighAng) * legLen * 0.5 };
-        rLeg = { x: rKnee.x + Math.sin(rThighAng + rCalfAng) * legLen * 0.5, y: rKnee.y + Math.cos(rThighAng + rCalfAng) * legLen * 0.5 };
-    } else if (player.holding) {
-        // Crouch pose
-        lKnee = { x: -6, y: hipY + 6 };
-        lLeg = { x: -8, y: hipY + legLen * 0.7 };
-        rKnee = { x: 6, y: hipY + 6 };
-        rLeg = { x: 8, y: hipY + legLen * 0.7 };
-    } else if (player.vy < -50) {
-        // Rising: legs tucked back
-        lKnee = { x: -4, y: hipY + 8 };
-        lLeg = { x: -8, y: hipY + 4 };
-        rKnee = { x: 2, y: hipY + 10 };
-        rLeg = { x: -2, y: hipY + 6 };
-    } else {
-        // Falling: legs spread for landing
-        lKnee = { x: -5, y: hipY + 10 };
-        lLeg = { x: -8, y: hipY + legLen };
-        rKnee = { x: 5, y: hipY + 10 };
-        rLeg = { x: 8, y: hipY + legLen };
+        let thigh, knee;
+        if (norm < 0.25) {
+            // Contact → Down (front leg absorbs)
+            const t = norm / 0.25;
+            thigh = lerp(0.6, 0.15, t);   // forward → vertical
+            knee = lerp(-0.3, -0.8, t);    // slight bend → deep bend
+        } else if (norm < 0.5) {
+            // Down → Passing (leg swings back)
+            const t = (norm - 0.25) / 0.25;
+            thigh = lerp(0.15, -0.5, t);   // vertical → behind
+            knee = lerp(-0.8, -1.2, t);    // deep bend → fold up behind
+        } else if (norm < 0.75) {
+            // Passing → Up (leg swings forward, knee lifts)
+            const t = (norm - 0.5) / 0.25;
+            thigh = lerp(-0.5, 0.3, t);    // behind → coming forward
+            knee = lerp(-1.2, -0.6, t);    // folded → opening
+        } else {
+            // Up → Contact (leg extends forward)
+            const t = (norm - 0.75) / 0.25;
+            thigh = lerp(0.3, 0.6, t);     // forward → full reach
+            knee = lerp(-0.6, -0.3, t);    // opening → almost straight
+        }
+        return { thigh, knee };
     }
     
-    // Draw legs
-    ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(lKnee.x, lKnee.y); ctx.lineTo(lLeg.x, lLeg.y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(rKnee.x, rKnee.y); ctx.lineTo(rLeg.x, rLeg.y); ctx.stroke();
-    
-    // === BODY ===
-    ctx.beginPath();
-    ctx.moveTo(0, bodyTopY + headR);
-    ctx.lineTo(0, hipY);
-    ctx.stroke();
-    
-    // === ARMS ===
-    let lArm, rArm, lElbow, rElbow;
-    
-    if (player.onGround && !player.holding) {
-        // Running arms (opposite to legs)
-        const armPhase = Math.sin(frame + Math.PI);
-        lElbow = { x: Math.sin(armPhase * 0.5) * 6 + 4, y: shoulderY + 7 };
-        lArm = { x: Math.sin(armPhase * 0.7) * 8 + 2, y: shoulderY + 13 };
-        rElbow = { x: Math.sin(-armPhase * 0.5) * 6 + 4, y: shoulderY + 7 };
-        rArm = { x: Math.sin(-armPhase * 0.7) * 8 + 2, y: shoulderY + 13 };
-    } else if (player.holding) {
-        // Crouch: arms back
-        lElbow = { x: -8, y: shoulderY + 4 };
-        lArm = { x: -12, y: shoulderY };
-        rElbow = { x: -6, y: shoulderY + 6 };
-        rArm = { x: -10, y: shoulderY + 2 };
-    } else if (player.vy < -50) {
-        // Rising: arms up and back
-        lElbow = { x: -6, y: shoulderY - 4 };
-        lArm = { x: -10, y: shoulderY - 8 };
-        rElbow = { x: 6, y: shoulderY - 2 };
-        rArm = { x: 10, y: shoulderY - 6 };
-    } else {
-        // Falling: arms wide
-        lElbow = { x: -8, y: shoulderY + 2 };
-        lArm = { x: -12, y: shoulderY + 6 };
-        rElbow = { x: 8, y: shoulderY + 2 };
-        rArm = { x: 12, y: shoulderY + 6 };
+    function drawLeg(ph) {
+        const pose = getLegPose(ph);
+        const kneeX = Math.sin(pose.thigh) * thighLen;
+        const kneeY = hipY + Math.cos(pose.thigh) * thighLen;
+        const footX = kneeX + Math.sin(pose.thigh + pose.knee) * shinLen;
+        const footY = kneeY + Math.cos(pose.thigh + pose.knee) * shinLen;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, hipY);
+        ctx.lineTo(kneeX, kneeY);
+        ctx.lineTo(footX, footY);
+        ctx.stroke();
     }
     
-    ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(lElbow.x, lElbow.y); ctx.lineTo(lArm.x, lArm.y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(rElbow.x, rElbow.y); ctx.lineTo(rArm.x, rArm.y); ctx.stroke();
+    // Arms swing opposite to legs
+    function drawArm(ph) {
+        // Opposite phase: when leg goes forward, arm goes back
+        const armPh = ph + Math.PI;
+        const swing = Math.sin(armPh) * 0.5;
+        const elbowX = Math.sin(swing) * upperArm + 2;
+        const elbowY = shoulderY + Math.cos(swing) * upperArm;
+        
+        // Forearm bends based on position
+        const foldAngle = 0.8 + Math.sin(armPh) * 0.3;
+        const handX = elbowX + Math.sin(swing + foldAngle) * foreArm;
+        const handY = elbowY + Math.cos(swing + foldAngle) * foreArm;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, shoulderY);
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(handX, handY);
+        ctx.stroke();
+    }
+    
+    if (player.onGround && !player.holding) {
+        // === RUNNING ===
+        // Body bob: slightly up during push-off phase
+        const bob = Math.sin(phase * 2) * 1.5;
+        ctx.translate(0, -bob);
+        
+        drawLeg(phase);           // Left leg
+        drawLeg(phase + Math.PI); // Right leg (opposite)
+        
+        // Torso
+        ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(0, hipY); ctx.stroke();
+        
+        drawArm(phase);           // Left arm (opposite to left leg)
+        drawArm(phase + Math.PI); // Right arm
+        
+    } else if (player.holding) {
+        // === CROUCH / CHARGE ===
+        // Legs bent, low stance
+        ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(-7, hipY+6); ctx.lineTo(-9, hipY+shinLen+thighLen-4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(5, hipY+6); ctx.lineTo(7, hipY+shinLen+thighLen-4); ctx.stroke();
+        // Torso
+        ctx.beginPath(); ctx.moveTo(0, shoulderY+3); ctx.lineTo(0, hipY); ctx.stroke();
+        // Arms pulled back
+        ctx.beginPath(); ctx.moveTo(0, shoulderY+3); ctx.lineTo(-8, shoulderY+1); ctx.lineTo(-12, shoulderY-3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, shoulderY+3); ctx.lineTo(-6, shoulderY+4); ctx.lineTo(-10, shoulderY); ctx.stroke();
+        
+    } else if (player.vy < -100) {
+        // === RISING (jump) ===
+        // Body stretched, one knee up, arms back
+        ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(3, hipY+5); ctx.lineTo(-2, hipY+3); ctx.stroke(); // tucked leg
+        ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(-3, hipY+thighLen+2); ctx.lineTo(-5, hipY+thighLen+shinLen-2); ctx.stroke(); // trailing leg
+        // Torso
+        ctx.beginPath(); ctx.moveTo(0, shoulderY-2); ctx.lineTo(0, hipY); ctx.stroke();
+        // Arms up/back
+        ctx.beginPath(); ctx.moveTo(0, shoulderY-2); ctx.lineTo(-7, shoulderY-8); ctx.lineTo(-11, shoulderY-4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, shoulderY-2); ctx.lineTo(5, shoulderY-6); ctx.lineTo(9, shoulderY-2); ctx.stroke();
+        
+    } else {
+        // === FALLING ===
+        // Legs spread forward for landing, arms out for balance
+        ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(-5, hipY+8); ctx.lineTo(-8, hipY+thighLen+shinLen); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, hipY); ctx.lineTo(5, hipY+8); ctx.lineTo(8, hipY+thighLen+shinLen); ctx.stroke();
+        // Torso
+        ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(0, hipY); ctx.stroke();
+        // Arms wide
+        ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(-10, shoulderY+3); ctx.lineTo(-13, shoulderY+8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, shoulderY); ctx.lineTo(10, shoulderY+3); ctx.lineTo(13, shoulderY+8); ctx.stroke();
+    }
     
     // === HEAD ===
     ctx.beginPath();
     ctx.arc(0, headY, headR, 0, Math.PI * 2);
     ctx.stroke();
     
-    // === MOTION TRAIL (when fast or jumping) ===
-    if (gameSpeed > 4 || player.vy < -200) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    // === MOTION TRAIL ===
+    if (gameSpeed > 4.5 || player.vy < -200) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
         ctx.lineWidth = 1;
-        for (let i = 1; i <= 3; i++) {
-            ctx.globalAlpha = 0.1 / i;
-            ctx.beginPath();
-            ctx.arc(-i * 6, headY, headR, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(-i * 6, bodyTopY + headR);
-            ctx.lineTo(-i * 6, hipY);
-            ctx.stroke();
+        for (let i = 1; i <= 2; i++) {
+            ctx.globalAlpha = 0.06 / i;
+            ctx.beginPath(); ctx.arc(-i*7, headY, headR, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-i*7, shoulderY); ctx.lineTo(-i*7, hipY); ctx.stroke();
         }
         ctx.globalAlpha = 1;
     }
