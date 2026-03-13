@@ -193,9 +193,13 @@ const RUN_ANIM_SPEED = 14;
 // ============================================
 function initBuildings() {
     buildings = [];
+    patternQueue = [];
     buildings.push({ x: 0, w: W * 0.5, h: H * 0.3, color: randomBldColor(), windows: makeWindows(W*0.5, H*0.3) });
     let x = W * 0.5;
-    for (let i = 0; i < 8; i++) x += spawnBuilding(x);
+    // Start with an easy intro pattern
+    x += spawnPattern(x, 'intro');
+    // Fill screen
+    while (x < scrollX + W + 400) x += spawnNextPattern(x);
 }
 
 function randomBldColor() {
@@ -204,9 +208,8 @@ function randomBldColor() {
 }
 
 function makeWindows(bw, bh) {
-    // Pre-generate window lit/unlit pattern (avoid flickering)
     const wins = [];
-    const winSize = 8, winGap = 16;
+    const winGap = 16;
     for (let wy = 15; wy < bh - 10; wy += winGap) {
         for (let wx = 10; wx < bw - 10; wx += winGap) {
             wins.push({ rx: wx, ry: wy, lit: Math.random() > 0.35 });
@@ -215,22 +218,172 @@ function makeWindows(bw, bh) {
     return wins;
 }
 
-function spawnBuilding(x) {
-    // 30%の確率で段差ビル（隙間なし、ジャンプ不要）
-    if (Math.random() < 0.3) {
-        const w = Math.max(55, 70 + Math.random() * 100);
-        // 前のビルの高さに近い範囲で段差をつける（最大45px差、棒人間が登れる範囲）
-        const prevH = buildings.length > 0 ? buildings[buildings.length-1].h : H * 0.3;
-        const h = prevH + (Math.random() - 0.4) * 45; // 少し上が多め
-        buildings.push({ x: x, w, h, color: randomBldColor(), windows: makeWindows(w, h), step: true });
-        return w; // 隙間なし
-    }
-    const gap = 35 + Math.random() * 55 + Math.min(distance * 0.04, 70);
-    const w = Math.max(55, 85 + Math.random() * 120 - Math.min(distance * 0.06, 45));
-    const baseH = H * 0.3;
-    const h = baseH - 30 + Math.random() * 60;
-    buildings.push({ x: x + gap, w, h, color: randomBldColor(), windows: makeWindows(w, h) });
+// === PATTERN-BASED BUILDING GENERATION ===
+// Each pattern is an array of { w, h, gap } objects
+// h is relative to baseH (H*0.3), gap is distance before this building (0 = connected/step)
+// Patterns designed for specific gameplay moments
+
+let patternQueue = [];
+let lastPatternIdx = -1;
+
+function bld(x, w, h, gap, step) {
+    const absH = H * 0.3 + h;
+    buildings.push({
+        x: x + gap, w, h: absH,
+        color: randomBldColor(),
+        windows: makeWindows(w, absH),
+        step: !!step
+    });
     return gap + w;
+}
+
+// Pattern definitions
+// w=width, h=height offset from base, g=gap before, s=step(connected)
+const PATTERNS = {
+    // === BASIC: タップジャンプで越えられる ===
+    
+    // 1. 等間隔リズム: 同じ高さのビルを軽いジャンプで
+    easyRhythm: [
+        {w:80,h:0,g:45}, {w:80,h:0,g:45}, {w:80,h:0,g:45}, {w:80,h:0,g:45}
+    ],
+    // 2. 段差降り: だんだん低くなる（ジャンプ不要～軽いジャンプ）
+    stepsDown: [
+        {w:100,h:30,g:0,s:1}, {w:90,h:10,g:0,s:1}, {w:80,h:-10,g:0,s:1}, {w:70,h:-30,g:40}
+    ],
+    // 3. 段差登り: だんだん高くなる（自動登り）
+    stepsUp: [
+        {w:80,h:-20,g:0,s:1}, {w:80,h:0,g:0,s:1}, {w:80,h:20,g:0,s:1}, {w:90,h:40,g:0,s:1}
+    ],
+    // 4. ワイドビル: 広い屋上で一息（助走区間にもなる）
+    wideRest: [
+        {w:200,h:0,g:40}, {w:70,h:10,g:50}
+    ],
+    // 5. 小刻みリズム: 狭いビルを連続タップ
+    quickHops: [
+        {w:50,h:0,g:35}, {w:45,h:10,g:35}, {w:50,h:-10,g:35}, {w:45,h:0,g:35}, {w:50,h:10,g:35}
+    ],
+    // 6. ジグザグ高低差
+    zigzag: [
+        {w:70,h:30,g:45}, {w:70,h:-20,g:45}, {w:70,h:25,g:45}, {w:70,h:-15,g:45}
+    ],
+    
+    // === MEDIUM: 少し溜めが必要 ===
+    
+    // 7. 中ジャンプ: 助走→中くらいの隙間
+    mediumGap: [
+        {w:140,h:0,g:40}, {w:80,h:0,g:75}
+    ],
+    // 8. 高台へ: 助走→高い位置のビルへ溜めジャンプ
+    climbUp: [
+        {w:150,h:-10,g:40}, {w:80,h:60,g:60}
+    ],
+    // 9. 段差→ジャンプ: 段差で登ってから飛ぶ
+    stepThenJump: [
+        {w:80,h:0,g:0,s:1}, {w:80,h:30,g:0,s:1}, {w:120,h:30,g:0,s:1}, {w:70,h:0,g:65}
+    ],
+    // 10. 二段階: タップ→少し走る→タップ
+    doubleHop: [
+        {w:60,h:0,g:50}, {w:55,h:20,g:50}, {w:80,h:-10,g:45}
+    ],
+    // 11. 下り坂ジャンプ: 高い→低いへ飛ぶ（飛距離長い）
+    downhillLeap: [
+        {w:100,h:50,g:40}, {w:80,h:-30,g:80}
+    ],
+    
+    // === HARD: フルチャージ必須 ===
+    
+    // 12. 大ジャンプ: 長い助走→大きな隙間（フルチャージ）
+    bigLeap: [
+        {w:200,h:0,g:40}, {w:80,h:0,g:110}
+    ],
+    // 13. 高台大ジャンプ: 助走→高い位置の遠いビル
+    highBigLeap: [
+        {w:180,h:-10,g:40}, {w:70,h:50,g:100}
+    ],
+    // 14. 超高台: 助走→すごく高いビルへ
+    skyReach: [
+        {w:200,h:-20,g:35}, {w:80,h:80,g:70}
+    ],
+    // 15. 助走→大ジャンプ→着地が狭い（プレッシャー）
+    precisionLanding: [
+        {w:180,h:0,g:40}, {w:45,h:0,g:105}
+    ],
+    // 16. 段差登り→フルチャージ大ジャンプ
+    stairsToBigLeap: [
+        {w:70,h:-10,g:0,s:1}, {w:70,h:10,g:0,s:1}, {w:70,h:30,g:0,s:1}, {w:150,h:30,g:0,s:1}, {w:70,h:-10,g:110}
+    ],
+    
+    // === EXPERT: 組み合わせ ===
+    
+    // 17. リズム→大ジャンプ（テンポ変化）
+    rhythmToBig: [
+        {w:60,h:0,g:40}, {w:60,h:0,g:40}, {w:60,h:0,g:40}, {w:180,h:0,g:40}, {w:70,h:10,g:105}
+    ],
+    // 18. 高低差連続: 高い→低い→高い（溜め使い分け）
+    rollercoaster: [
+        {w:80,h:50,g:50}, {w:80,h:-30,g:60}, {w:80,h:40,g:55}, {w:80,h:-20,g:50}
+    ],
+    // 19. 助走なし連続ジャンプ: 狭い着地→すぐ次
+    chainJumps: [
+        {w:50,h:0,g:55}, {w:45,h:10,g:55}, {w:50,h:-10,g:55}
+    ],
+    // 20. 段差台地→大ジャンプ→段差降り
+    plateauLeap: [
+        {w:60,h:0,g:0,s:1}, {w:60,h:20,g:0,s:1}, {w:140,h:20,g:0,s:1}, {w:80,h:-10,g:100},
+        {w:70,h:-10,g:0,s:1}, {w:70,h:-30,g:0,s:1}
+    ],
+    
+    // === INTRO (special) ===
+    intro: [
+        {w:120,h:0,g:35}, {w:100,h:0,g:40}, {w:110,h:10,g:45}, {w:90,h:0,g:40}
+    ],
+};
+
+// Difficulty pools
+const EASY_PATTERNS = ['easyRhythm','stepsDown','stepsUp','wideRest','quickHops','zigzag'];
+const MED_PATTERNS = ['mediumGap','climbUp','stepThenJump','doubleHop','downhillLeap'];
+const HARD_PATTERNS = ['bigLeap','highBigLeap','skyReach','precisionLanding','stairsToBigLeap'];
+const EXPERT_PATTERNS = ['rhythmToBig','rollercoaster','chainJumps','plateauLeap'];
+
+function pickPattern() {
+    // Difficulty ramp based on distance
+    let pool;
+    const r = Math.random();
+    if (distance < 80) {
+        pool = EASY_PATTERNS;
+    } else if (distance < 200) {
+        pool = r < 0.6 ? EASY_PATTERNS : MED_PATTERNS;
+    } else if (distance < 400) {
+        pool = r < 0.3 ? EASY_PATTERNS : r < 0.7 ? MED_PATTERNS : HARD_PATTERNS;
+    } else if (distance < 700) {
+        pool = r < 0.15 ? EASY_PATTERNS : r < 0.45 ? MED_PATTERNS : r < 0.8 ? HARD_PATTERNS : EXPERT_PATTERNS;
+    } else {
+        pool = r < 0.1 ? EASY_PATTERNS : r < 0.3 ? MED_PATTERNS : r < 0.65 ? HARD_PATTERNS : EXPERT_PATTERNS;
+    }
+    // Avoid repeating same pattern
+    let name;
+    let tries = 0;
+    do {
+        name = pool[Math.floor(Math.random() * pool.length)];
+        tries++;
+    } while (name === lastPatternIdx && tries < 5);
+    lastPatternIdx = name;
+    return name;
+}
+
+function spawnPattern(x, name) {
+    const pattern = PATTERNS[name];
+    if (!pattern) return 0;
+    let offset = 0;
+    for (const b of pattern) {
+        offset += bld(x + offset, b.w, b.h, b.g, b.s);
+    }
+    return offset;
+}
+
+function spawnNextPattern(x) {
+    const name = pickPattern();
+    return spawnPattern(x, name);
 }
 
 // ============================================
@@ -478,10 +631,10 @@ function update(ts) {
         // Fall death
         if (player.y > H + 50) die();
         
-        // Spawn / remove buildings
+        // Spawn / remove buildings (pattern-based)
         let lastB = buildings[buildings.length - 1];
-        while (lastB.x + lastB.w < scrollX + W + 200) {
-            spawnBuilding(lastB.x + lastB.w);
+        while (lastB.x + lastB.w < scrollX + W + 300) {
+            spawnNextPattern(lastB.x + lastB.w);
             lastB = buildings[buildings.length - 1];
         }
         buildings = buildings.filter(b => b.x + b.w > scrollX - 100);
