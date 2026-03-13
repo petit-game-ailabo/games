@@ -172,7 +172,7 @@ if (!hasSave) { stage=1; score=0; sp=0; unlockedSkills={}; }
 // HEX MATH
 // ============================================
 const HUD_H = 50;
-const PANEL_H = 175;
+const PANEL_H = 160;
 
 function stageCols() {
     return 9; // Always 3 lanes
@@ -201,13 +201,17 @@ function p2h(px, py) {
     return best;
 }
 
+// Lane system: 3 lanes separated by impassable terrain
+function laneOf(c) { return Math.floor(c / 3); }
+function isWallBorder(c1, c2) { return laneOf(c1) !== laneOf(c2); }
+
 function neighbors(r, c) {
     const ns = [];
     const even = r % 2 === 0;
     const dirs = even ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]] : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
     for (const [dr,dc] of dirs) {
         const nr=r+dr, nc=c+dc;
-        if (nr>=0 && nr<rows && nc>=0 && nc<cols) ns.push({r:nr,c:nc});
+        if (nr>=0 && nr<rows && nc>=0 && nc<cols && !isWallBorder(c, nc)) ns.push({r:nr,c:nc});
     }
     return ns;
 }
@@ -297,34 +301,29 @@ function initStage() {
     // Player castle
     grid[playerCastle.r][playerCastle.c] = { owner:1, unit: makeCastle(1) };
     for (const n of neighbors(playerCastle.r, playerCastle.c)) grid[n.r][n.c].owner = 1;
+    // Own bottom row of all lanes (spawn zone)
+    for (let c = 0; c < cols; c++) {
+        if (!grid[rows-1][c].unit) grid[rows-1][c].owner = 1;
+    }
 
-    // Enemy castle
+    // Enemy castle (center lane)
     grid[enemyCastle.r][enemyCastle.c] = { owner:2, unit: makeCastle(2) };
     for (const n of neighbors(enemyCastle.r, enemyCastle.c)) grid[n.r][n.c].owner = 2;
 
-    // Enemy units
+    // Enemy units — spread across all 3 lanes
     const enemyTypes = ['sword','sword','archer','shield','scout'];
-    const numEnemies = Math.min(3 + stage * 2, 14);
+    const perLane = Math.min(1 + stage, 5); // enemies per lane
     let placed = 0;
-    const ecN = neighbors(enemyCastle.r, enemyCastle.c);
-    for (const n of ecN) {
-        if (placed >= numEnemies) break;
-        if (!grid[n.r][n.c].unit) {
-            grid[n.r][n.c].unit = makeUnit(2, enemyTypes[placed % enemyTypes.length]);
-            placed++;
-        }
-    }
-    if (stage > 2) {
-        for (const n of ecN) {
-            for (const nn of neighbors(n.r, n.c)) {
-                if (placed >= numEnemies) break;
-                if (!grid[nn.r][nn.c].unit && grid[nn.r][nn.c].owner !== 1) {
-                    grid[nn.r][nn.c].owner = 2;
-                    grid[nn.r][nn.c].unit = makeUnit(2, enemyTypes[placed % enemyTypes.length]);
-                    placed++;
-                }
+    for (let lane = 0; lane < 3; lane++) {
+        const laneStart = lane * 3;
+        let lp = 0;
+        for (let r = 0; r <= 2 && lp < perLane; r++) {
+            for (let c = laneStart; c < laneStart + 3 && lp < perLane; c++) {
+                if (grid[r][c].unit) continue;
+                grid[r][c].unit = makeUnit(2, enemyTypes[placed % enemyTypes.length]);
+                grid[r][c].owner = 2;
+                placed++; lp++;
             }
-            if (placed >= numEnemies) break;
         }
     }
 
@@ -369,7 +368,8 @@ function canPlace(r, c) {
     if (grid[r][c].owner === 2) return false;
     const b = bonus();
     const range = 2 + b.placeRange;
-    return hexDist(playerCastle.r, playerCastle.c, r, c) <= range;
+    // Allow placement in bottom rows of any lane (spawn zone)
+    return r >= rows - 1 - range;
 }
 
 // ============================================
@@ -450,10 +450,10 @@ function processNextUnit() {
         }
 
         if (nr !== cr || nc !== cc) {
-            // Reserve destination so other units don't walk there, but keep unit at origin for anim
             grid[cr][cc].unit = null;
             grid[nr][nc].unit = u;
             grid[nr][nc].owner = u.owner;
+            u._animating = true; // Hide from normal draw during move anim
             animQueue.push({type:'move', fromR:cr, fromC:cc, toR:nr, toC:nc, unit:u});
         }
 
@@ -510,17 +510,22 @@ function processNextUnit() {
 }
 
 function doEndOfRound() {
-    // Enemy spawns
+    // Enemy spawns — spread across lanes
     const spawnInterval = Math.max(1, 3 - Math.floor(stage / 2));
     if (turn % spawnInterval === 0) {
-        const spawns = neighbors(enemyCastle.r, enemyCastle.c).filter(n => !grid[n.r][n.c].unit);
-        const numSpawns = Math.min(spawns.length, 1 + Math.floor(stage / 3));
         const types = ['sword','sword','archer','shield','scout'];
-        for (let i = 0; i < numSpawns && i < spawns.length; i++) {
-            const s = spawns[i];
-            const t = types[Math.floor(Math.random()*types.length)];
-            grid[s.r][s.c].unit = makeUnit(2, t);
-            grid[s.r][s.c].owner = 2;
+        const numSpawns = 1 + Math.floor(stage / 3);
+        let spawned = 0;
+        for (let lane = 0; lane < 3 && spawned < numSpawns; lane++) {
+            const lc = lane * 3;
+            for (let c = lc; c < lc + 3 && spawned < numSpawns; c++) {
+                if (!grid[0][c].unit) {
+                    grid[0][c].unit = makeUnit(2, types[Math.floor(Math.random()*types.length)]);
+                    grid[0][c].owner = 2;
+                    spawned++;
+                    break; // one per lane max
+                }
+            }
         }
     }
 
@@ -557,6 +562,9 @@ function processAnims(dt) {
 
     if (animIdx < animQueue.length) {
         const a = animQueue[animIdx];
+        if (a.type === 'move' && a.unit) {
+            a.unit._animating = false; // Show unit at destination
+        }
         if (a.type === 'die') {
             if (grid[a.r] && grid[a.r][a.c]) {
                 grid[a.r][a.c].unit = null;
@@ -764,15 +772,32 @@ function draw() {
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         const {x,y} = h2p(r,c);
         const cell = grid[r][c];
-        let fill = '#0a0a12', stroke = '#181825'; // Neutral = dark gray
+        let fill = '#0a0a12', stroke = '#181825';
         if (cell.owner === 1) { fill = '#0f1f35'; stroke = '#2060a0'; }
         if (cell.owner === 2) { fill = '#250f0f'; stroke = '#a02020'; }
-        if (state === ST.PLACE && placesLeft > 0 && canPlace(r,c)) {
+        if (state === ST.PLACE && placesLeft > 0 && canPlace(r,c) && !cell.unit) {
             const p = 0.2 + Math.sin(Date.now()/600 + r+c) * 0.08;
             fill = `rgba(50,200,100,${p})`; stroke = '#5f5';
         }
         drawHex(x, y, hexSize*0.88, fill, stroke, 1.5);
         if (cell.unit) drawUnit(x, y, cell.unit);
+    }
+    // Lane dividers (mountains/rivers between lanes)
+    for (let r = 0; r < rows; r++) {
+        for (const bc of [2, 5]) { // Between col 2-3 and 5-6
+            const p1 = h2p(r, bc), p2 = h2p(r, bc+1);
+            const wx = (p1.x + p2.x) / 2;
+            const wy = p1.y;
+            // Draw mountain/wall indicator
+            ctx.fillStyle = '#1a1520';
+            ctx.beginPath();
+            ctx.moveTo(wx - 4, wy + hexSize * 0.6);
+            ctx.lineTo(wx, wy - hexSize * 0.4);
+            ctx.lineTo(wx + 4, wy + hexSize * 0.6);
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#2a2535'; ctx.lineWidth = 1;
+            ctx.stroke();
+        }
     }
 
     drawAnims();
@@ -824,6 +849,7 @@ function draw() {
 }
 
 function drawUnit(x, y, unit) {
+    if (unit._animating) return; // Being animated, drawn by drawAnims instead
     const t = TYPES[unit.type];
     const r = hexSize * (unit.type === 'castle' ? 0.45 : 0.35);
 
@@ -857,9 +883,10 @@ function drawUnit(x, y, unit) {
 }
 
 function drawAnims() {
-    if (animIdx >= animQueue.length || animIdx === 0) return;
+    if (animIdx >= animQueue.length || animIdx === 0 || animTimer <= 0) return;
     const a = animQueue[animIdx - 1];
-    const prog = Math.max(0, 1 - animTimer / animSpeed());
+    if (!a) return;
+    const prog = Math.max(0, Math.min(1, 1 - animTimer / animSpeed()));
 
     if (a.type === 'attack') {
         const from = h2p(a.fromR, a.fromC), to = h2p(a.toR, a.toC);
@@ -888,22 +915,26 @@ function drawAnims() {
     if (a.type === 'move') {
         const from = h2p(a.fromR, a.fromC), to = h2p(a.toR, a.toC);
         const t = Math.min(prog * 1.5, 1);
-        // Draw sliding unit icon
         const mx = from.x + (to.x - from.x) * t;
         const my = from.y + (to.y - from.y) * t;
-        const icon = TYPES[a.unit.type].icon;
         // Trail
-        ctx.strokeStyle = a.unit.owner === 1 ? 'rgba(100,200,255,0.3)' : 'rgba(255,100,100,0.3)';
+        ctx.strokeStyle = a.unit.owner === 1 ? 'rgba(100,200,255,0.4)' : 'rgba(255,100,100,0.4)';
         ctx.lineWidth = 2; ctx.setLineDash([4,4]);
-        ctx.beginPath(); ctx.moveTo(from.x,from.y); ctx.lineTo(mx,my); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(from.x,from.y); ctx.lineTo(to.x,to.y); ctx.stroke();
         ctx.setLineDash([]);
-        // Moving unit circle
+        // Draw full unit at interpolated position
+        const ut = TYPES[a.unit.type];
         const ur = hexSize * 0.35;
-        ctx.fillStyle = a.unit.owner === 1 ? 'rgba(68,136,204,0.7)' : 'rgba(170,50,50,0.7)';
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath(); ctx.ellipse(mx, my+ur+2, ur*0.8, ur*0.3, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = a.unit.owner === 1 ? ut.color : '#aa3333';
         ctx.beginPath(); ctx.arc(mx, my, ur, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = a.unit.owner === 1 ? '#88ccff' : '#ff6666';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(mx, my, ur, 0, Math.PI*2); ctx.stroke();
         ctx.font = `${Math.max(16, hexSize*0.5)}px sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(icon, mx, my);
+        ctx.fillText(ut.icon, mx, my);
         ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
     }
 }
