@@ -55,7 +55,7 @@ const ST = { TITLE:0, PLACE:1, BATTLE:2, STAGE_CLEAR:3, GAME_OVER:4, SKILL_TREE:
 let state = ST.TITLE;
 
 // Dynamic grid size per stage
-let cols = 5, rows = 9;
+let cols = 5, rows = 7;
 let hexSize = 0;
 let grid = [];
 
@@ -66,7 +66,7 @@ const TYPES = {
     castle: { name:'城',   icon:'🏰', atk:0, hp:20, move:0, range:0, desc:'守れ！', color:'#888' },
     scout:  { name:'斥候', icon:'🐎', atk:2, hp:3,  move:3, range:1, desc:'移動3', color:'#8b5cf6' },
     sword:  { name:'剣士', icon:'⚔️', atk:4, hp:6,  move:2, range:1, desc:'移動2', color:'#4488cc' },
-    archer: { name:'弓兵', icon:'🏹', atk:3, hp:3,  move:1, range:2, desc:'射程2', color:'#44cc88' },
+    archer: { name:'弓兵', icon:'🏹', atk:3, hp:3,  move:2, range:3, desc:'射程3', color:'#44cc88' },
     shield: { name:'盾兵', icon:'🛡️', atk:2, hp:10, move:1, range:1, desc:'反撃',  color:'#cc8844' },
 };
 
@@ -175,9 +175,7 @@ const HUD_H = 50;
 const PANEL_H = 175;
 
 function stageCols() {
-    if (stage <= 2) return 5;
-    if (stage <= 4) return 7;
-    return 9;
+    return 9; // Always 3 lanes
 }
 
 function calcGrid() {
@@ -412,27 +410,47 @@ function processNextUnit() {
         const enemyOwner = isPlayer ? 2 : 1;
         const targetCastle = isPlayer ? enemyCastle : playerCastle;
 
-        // Find target
-        let target = null, minDist = Infinity;
-        const nearby = hexInRange(cr, cc, 3);
-        for (const n of nearby) {
-            if (grid[n.r][n.c].unit && grid[n.r][n.c].unit.owner === enemyOwner) {
-                const d = hexDist(cr, cc, n.r, n.c);
-                if (d < minDist) { minDist = d; target = {r:n.r, c:n.c}; }
+        // Find nearest enemy
+        let nearestEnemy = null, nearestDist = Infinity;
+        for (let er = 0; er < rows; er++) for (let ec = 0; ec < cols; ec++) {
+            if (grid[er][ec].unit && grid[er][ec].unit.owner === enemyOwner && grid[er][ec].unit.hp > 0) {
+                const d = hexDist(cr, cc, er, ec);
+                if (d < nearestDist) { nearestDist = d; nearestEnemy = {r:er, c:ec}; }
             }
         }
-        if (!target) target = {r: targetCastle.r, c: targetCastle.c};
+        const target = nearestEnemy || {r: targetCastle.r, c: targetCastle.c};
 
-        // Move
+        // Move — archers try to maintain max range distance
         let nr = cr, nc = cc;
-        for (let m = 0; m < u.move; m++) {
-            if (nr === target.r && nc === target.c) break;
-            const next = pathNext(nr, nc, target.r, target.c);
-            if (!next || grid[next.r][next.c].unit) break;
-            nr = next.r; nc = next.c;
+        if (u.type === 'archer' && nearestEnemy && nearestDist <= u.range) {
+            // Already in range — don't move closer, try to keep distance
+            // Only move if can improve position (retreat to range edge)
+            if (nearestDist < u.range) {
+                // Try to move away while staying in range
+                for (let m = 0; m < u.move; m++) {
+                    let bestPos = null, bestDist = nearestDist;
+                    for (const n of neighbors(nr, nc)) {
+                        if (grid[n.r][n.c].unit) continue;
+                        const nd = hexDist(n.r, n.c, nearestEnemy.r, nearestEnemy.c);
+                        if (nd <= u.range && nd > bestDist) { bestDist = nd; bestPos = n; }
+                    }
+                    if (bestPos) { nr = bestPos.r; nc = bestPos.c; nearestDist = bestDist; }
+                    else break;
+                }
+            }
+            // else already at perfect range, don't move
+        } else {
+            // All other units (and archers not in range): march toward target
+            for (let m = 0; m < u.move; m++) {
+                if (nr === target.r && nc === target.c) break;
+                const next = pathNext(nr, nc, target.r, target.c);
+                if (!next || grid[next.r][next.c].unit) break;
+                nr = next.r; nc = next.c;
+            }
         }
 
         if (nr !== cr || nc !== cc) {
+            // Reserve destination so other units don't walk there, but keep unit at origin for anim
             grid[cr][cc].unit = null;
             grid[nr][nc].unit = u;
             grid[nr][nc].owner = u.owner;
@@ -454,8 +472,8 @@ function processNextUnit() {
             const atkIcon = TYPES[u.type].icon, defIcon = TYPES[defender.type].icon;
             animQueue.push({type:'attack', fromR:nr, fromC:nc, toR:at.r, toC:at.c, dmg, crit:isCrit, side:battlePhase, atkIcon, defIcon});
 
-            // Counter
-            if (defender.type === 'shield' && defender.hp > 0) {
+            // Counter (shield, adjacent only — 1 hex)
+            if (defender.type === 'shield' && defender.hp > 0 && hexDist(nr,nc,at.r,at.c) <= 1) {
                 const cDmg = Math.ceil(defender.atk * (defender.ctrUp ? 1.0 : 0.5));
                 u.hp -= cDmg;
                 animQueue.push({type:'attack', fromR:at.r, fromC:at.c, toR:nr, toC:nc, dmg:cDmg, side:'counter', atkIcon:defIcon, defIcon:atkIcon});
@@ -746,7 +764,7 @@ function draw() {
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         const {x,y} = h2p(r,c);
         const cell = grid[r][c];
-        let fill = '#111120', stroke = '#222235';
+        let fill = '#0a0a12', stroke = '#181825'; // Neutral = dark gray
         if (cell.owner === 1) { fill = '#0f1f35'; stroke = '#2060a0'; }
         if (cell.owner === 2) { fill = '#250f0f'; stroke = '#a02020'; }
         if (state === ST.PLACE && placesLeft > 0 && canPlace(r,c)) {
