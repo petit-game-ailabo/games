@@ -105,8 +105,10 @@ let battleTimer = 0;
 // HEX MATH
 // ============================================
 function hexToPixel(row, col) {
-    const offsetX = (W - (COLS * hexSize * 1.75)) / 2 + hexSize;
-    const offsetY = H * 0.15 + hexSize;
+    const gridW = COLS * hexSize * 1.75;
+    const gridH = ROWS * hexSize * 1.52;
+    const offsetX = (W - gridW) / 2 + hexSize * 0.9;
+    const offsetY = 65 + hexSize; // below HUD
     const x = offsetX + col * hexSize * 1.75 + (row % 2) * hexSize * 0.875;
     const y = offsetY + row * hexSize * 1.52;
     return { x, y };
@@ -426,17 +428,19 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     
     if (state === ST.PLAY) {
-        // Check "End Turn" button
-        const btnX = W / 2, btnY = H - 50;
-        if (Math.abs(px - btnX) < 70 && Math.abs(py - btnY) < 25) {
+        // Check "End Turn" button (large touch area)
+        const btnX = W / 2, btnY = H - 65;
+        if (py > H - 110 && Math.abs(px - btnX) < 100) {
             endTurn();
             return;
         }
         
         // Place unit on hex
         const hex = pixelToHex(px, py);
-        if (hex && canPlace(hex.r, hex.c)) {
-            placeUnit(hex.r, hex.c);
+        if (hex) {
+            if (canPlace(hex.r, hex.c)) {
+                placeUnit(hex.r, hex.c);
+            }
         }
     }
 });
@@ -497,7 +501,9 @@ function update(ts) {
 }
 
 function draw() {
-    hexSize = Math.min(W / (COLS * 2 + 1), (H * 0.6) / (ROWS * 1.6)) * 0.95;
+    // hexSize: fit grid between HUD (top 65px) and bottom panel (120px)
+    const availH = H - 65 - 130;
+    hexSize = Math.min(W / (COLS * 2 + 1), availH / (ROWS * 1.55)) * 0.95;
     
     // Background
     const bg = ctx.createLinearGradient(0, 0, 0, H);
@@ -517,17 +523,16 @@ function draw() {
             const cell = hexGrid[r][c];
             
             let fill = '#1a1a30';
-            if (cell.owner === 1) fill = '#1a2a4a';
-            if (cell.owner === 2) fill = '#3a1a1a';
-            
-            // Highlight placeable
-            if (state === ST.PLAY && playerUnits > 0 && canPlace(r, c)) {
-                fill = '#1a3a2a';
-            }
-            
             let stroke = '#333';
-            if (cell.owner === 1) stroke = '#4488cc';
-            if (cell.owner === 2) stroke = '#cc4444';
+            if (cell.owner === 1) { fill = '#1a2a4a'; stroke = '#4488cc'; }
+            if (cell.owner === 2) { fill = '#3a1a1a'; stroke = '#cc4444'; }
+            
+            // Highlight placeable (pulsing green)
+            if (state === ST.PLAY && playerUnits > 0 && canPlace(r, c)) {
+                const pulse = 0.3 + Math.sin(Date.now()/400 + r + c) * 0.1;
+                fill = `rgba(40,180,80,${pulse})`;
+                stroke = '#4c4';
+            }
             
             drawHex(x, y, hexSize * 0.92, fill, stroke, 1.5);
             
@@ -638,20 +643,36 @@ function drawHUD() {
     ctx.fillText('SP: ' + sp, W - 12, 25);
     
     if (state === ST.PLAY) {
+        // Bottom panel background
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, H - 120, W, 120);
+        
         // Units remaining
         ctx.textAlign = 'center';
         ctx.fillStyle = '#8cf';
-        ctx.font = '14px sans-serif';
-        ctx.fillText('配置可能: ' + playerUnits + '/' + maxUnits, W/2, H - 85);
-        
-        // End turn button
-        const btnX = W/2, btnY = H - 50;
-        ctx.fillStyle = playerUnits === 0 ? '#4488cc' : '#336699';
-        roundRect(btnX - 65, btnY - 20, 130, 40, 8);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
         ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('⚔️ ターン終了', btnX, btnY + 5);
+        ctx.fillText('🟢 配置可能: ' + playerUnits + '/' + maxUnits, W/2, H - 95);
+        
+        // Instructions
+        if (playerUnits > 0) {
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.font = '12px sans-serif';
+            ctx.fillText('緑のマスをタップしてユニット配置', W/2, H - 78);
+        }
+        
+        // End turn button (BIG)
+        const btnX = W/2, btnY = H - 45;
+        const btnGlow = 0.8 + Math.sin(Date.now()/500) * 0.2;
+        ctx.fillStyle = playerUnits === 0 ? `rgba(68,136,204,${btnGlow})` : '#336699';
+        roundRect(btnX - 90, btnY - 25, 180, 50, 10);
+        ctx.fill();
+        ctx.strokeStyle = '#6ab';
+        ctx.lineWidth = 2;
+        roundRect(btnX - 90, btnY - 25, 180, 50, 10);
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('⚔️ ターン終了', btnX, btnY + 6);
     }
     ctx.textAlign = 'left';
 }
