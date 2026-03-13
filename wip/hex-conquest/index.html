@@ -16,12 +16,18 @@ canvas{display:block;width:100%;height:100%;}
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W, H;
-function resize() { W = window.innerWidth; H = window.innerHeight; canvas.width = W; canvas.height = H; }
+const DPR = window.devicePixelRatio || 1;
+function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
 resize(); window.addEventListener('resize', resize);
 
 function getXY(e) {
     const r = canvas.getBoundingClientRect();
-    return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
 }
 
 // Audio
@@ -74,20 +80,29 @@ let animQueue = []; // [{type:'move'|'attack'|'die', unit, from, to, dmg, ...}]
 let animTimer = 0;
 let animIdx = 0;
 
-// Skill tree (simple 6 nodes)
+// Skill tree — 4 tiers × 3 branches = 12 nodes
 const SKILLS = {
-    atk1: { name:'攻撃+1',  cost:1, effect:{atk:1},    req:null,   x:0.2, y:0.3 },
-    atk2: { name:'必殺30%', cost:2, effect:{crit:0.3},  req:'atk1', x:0.2, y:0.6 },
-    def1: { name:'HP+3',    cost:1, effect:{hp:3},      req:null,   x:0.5, y:0.3 },
-    def2: { name:'反撃強化',cost:2, effect:{ctrUp:true}, req:'def1', x:0.5, y:0.6 },
-    rng1: { name:'配置+1',  cost:1, effect:{units:1},   req:null,   x:0.8, y:0.3 },
-    rng2: { name:'移動+1',  cost:2, effect:{moveUp:1},  req:'rng1', x:0.8, y:0.6 },
+    // Attack branch
+    atk1: { name:'攻撃+1',   cost:1, effect:{atk:1},     req:null,   x:0.18, y:0.2 },
+    atk2: { name:'必殺20%',  cost:2, effect:{crit:0.2},  req:'atk1', x:0.18, y:0.35 },
+    atk3: { name:'攻撃+2',   cost:2, effect:{atk:2},     req:'atk2', x:0.18, y:0.5 },
+    atk4: { name:'必殺50%',  cost:3, effect:{crit:0.3},  req:'atk3', x:0.18, y:0.65 },
+    // Defense branch
+    def1: { name:'HP+2',     cost:1, effect:{hp:2},      req:null,   x:0.5, y:0.2 },
+    def2: { name:'反撃強化', cost:2, effect:{ctrUp:true}, req:'def1', x:0.5, y:0.35 },
+    def3: { name:'HP+4',     cost:2, effect:{hp:4},      req:'def2', x:0.5, y:0.5 },
+    def4: { name:'城HP+10',  cost:3, effect:{castleHp:10},req:'def3', x:0.5, y:0.65 },
+    // Expansion branch
+    rng1: { name:'配置+1',   cost:1, effect:{units:1},   req:null,   x:0.82, y:0.2 },
+    rng2: { name:'移動+1',   cost:2, effect:{moveUp:1},  req:'rng1', x:0.82, y:0.35 },
+    rng3: { name:'弓射程+1', cost:2, effect:{bowRange:1}, req:'rng2', x:0.82, y:0.5 },
+    rng4: { name:'配置+2',   cost:3, effect:{units:2},   req:'rng3', x:0.82, y:0.65 },
 };
 let unlockedSkills = {};
 let selectedSkillId = null;
 
 function bonus() {
-    let b = {atk:0,hp:0,crit:0,ctrUp:false,units:0,moveUp:0};
+    let b = {atk:0,hp:0,crit:0,ctrUp:false,units:0,moveUp:0,bowRange:0,castleHp:0};
     for (const id in unlockedSkills) {
         if (!unlockedSkills[id]) continue;
         const e = SKILLS[id].effect;
@@ -97,6 +112,8 @@ function bonus() {
         if (e.ctrUp) b.ctrUp = true;
         if (e.units) b.units += e.units;
         if (e.moveUp) b.moveUp += e.moveUp;
+        if (e.bowRange) b.bowRange += e.bowRange;
+        if (e.castleHp) b.castleHp += e.castleHp;
     }
     return b;
 }
@@ -236,7 +253,7 @@ function initStage() {
 
     // Enemy units (scale with stage)
     const enemyTypes = ['sword','sword','archer','shield','scout'];
-    const numEnemies = Math.min(2 + stage, 8);
+    const numEnemies = Math.min(3 + stage * 2, 12);
     let placed = 0;
     for (const n of neighbors(ec.r, ec.c)) {
         if (placed >= numEnemies) break;
@@ -267,28 +284,30 @@ function initStage() {
     turn = 0;
     selectedType = 'sword';
     animQueue = [];
+    ANIM_STEP_TIME = fastMode ? 0.06 : 0.35;
     state = ST.PLACE;
 }
 
 function makeCastle(owner) {
-    const hp = 20 + (owner === 2 ? stage * 5 : 0);
+    const b = bonus();
+    const hp = 20 + (owner === 2 ? stage * 8 : b.castleHp);
     return { owner, type:'castle', hp, maxHp:hp, atk:0, move:0, range:0, crit:0, ctrUp:false };
 }
 
 function makeUnit(owner, type) {
     const t = TYPES[type];
     const b = owner === 1 ? bonus() : {atk:0,hp:0,crit:0,ctrUp:false,moveUp:0};
-    const mult = owner === 2 ? (0.8 + stage * 0.25) : 1;
+    const mult = owner === 2 ? (0.9 + stage * 0.35) : 1;
     return {
         owner, type,
         hp: Math.ceil((t.hp + b.hp) * (owner===2 ? mult : 1)),
         maxHp: Math.ceil((t.hp + b.hp) * (owner===2 ? mult : 1)),
         atk: Math.ceil((t.atk + b.atk) * (owner===2 ? mult : 1)),
         move: t.move + (owner===1 ? b.moveUp : 0),
-        range: t.range,
+        range: t.range + (type === 'archer' && owner === 1 ? b.bowRange : 0),
         crit: b.crit,
         ctrUp: b.ctrUp,
-        moved: false, // has this unit already moved this turn?
+        moved: false,
     };
 }
 
@@ -372,7 +391,8 @@ function doPlayerTurn() {
             if (u.unit.crit > 0 && Math.random() < u.unit.crit) { dmg *= 2; isCrit = true; }
             const defender = grid[at.r][at.c].unit;
             defender.hp -= dmg;
-            animQueue.push({type:'attack', fromR:cr, fromC:cc, toR:at.r, toC:at.c, dmg, crit:isCrit, side:'player'});
+            const atkIcon = TYPES[u.unit.type].icon, defIcon = TYPES[defender.type].icon;
+            animQueue.push({type:'attack', fromR:cr, fromC:cc, toR:at.r, toC:at.c, dmg, crit:isCrit, side:'player', atkIcon, defIcon});
 
             // Counter (shield)
             if (defender.type === 'shield' && defender.hp > 0) {
@@ -440,7 +460,7 @@ function doEnemyTurn() {
             let dmg = u.unit.atk;
             const defender = grid[at.r][at.c].unit;
             defender.hp -= dmg;
-            animQueue.push({type:'attack', fromR:cr, fromC:cc, toR:at.r, toC:at.c, dmg, side:'enemy'});
+            animQueue.push({type:'attack', fromR:cr, fromC:cc, toR:at.r, toC:at.c, dmg, side:'enemy', atkIcon: TYPES[u.unit.type].icon, defIcon: TYPES[defender.type].icon});
 
             if (defender.type === 'shield' && defender.hp > 0) {
                 const cDmg = Math.ceil(defender.atk * (defender.ctrUp ? 1.0 : 0.5));
@@ -458,13 +478,15 @@ function doEnemyTurn() {
         }
     }
 
-    // Enemy spawns (every 3 turns)
-    if (turn % 3 === 0 && stage > 1) {
+    // Enemy spawns — every 2 turns, more at higher stages
+    const spawnInterval = Math.max(1, 3 - Math.floor(stage / 2)); // stage1=2turns, stage3+=1turn
+    if (turn % spawnInterval === 0) {
         const ec = enemyCastle;
         const spawns = neighbors(ec.r, ec.c).filter(n => !grid[n.r][n.c].unit);
-        if (spawns.length > 0) {
-            const types = ['sword','scout','archer','shield'];
-            const s = spawns[Math.floor(Math.random()*spawns.length)];
+        const numSpawns = Math.min(spawns.length, 1 + Math.floor(stage / 3)); // 1-3 per spawn
+        const types = ['sword','sword','archer','shield','scout'];
+        for (let i = 0; i < numSpawns && i < spawns.length; i++) {
+            const s = spawns[i];
             const t = types[Math.floor(Math.random()*types.length)];
             grid[s.r][s.c].unit = makeUnit(2, t);
             grid[s.r][s.c].owner = 2;
@@ -477,7 +499,8 @@ function doEnemyTurn() {
 // ANIMATION PROCESSOR
 // ============================================
 let ANIM_STEP_TIME = 0.35;
-let animSkip = false; // #8 skip animation
+let fastMode = false; // speed toggle (persistent)
+let battleLog = []; // [{text, color, timer}] — shows what happened
 
 function processAnims(dt) {
     animTimer -= dt;
@@ -528,7 +551,7 @@ function processAnims(dt) {
             animQueue = [];
             animIdx = 0;
             placedThisTurn = [];
-            ANIM_STEP_TIME = 0.35; // #8 reset speed
+            ANIM_STEP_TIME = fastMode ? 0.06 : 0.35;
             state = ST.PLACE;
         }
     }
@@ -621,10 +644,14 @@ canvas.addEventListener('pointerdown', (e) => {
         }
     }
 
-    // #8 Skip animation on tap during battle
+    // Speed toggle during battle
     if (state === ST.MOVING || state === ST.ENEMY_TURN) {
-        ANIM_STEP_TIME = 0.05; // speed up remaining anims
-        animTimer = 0;
+        // Check if tap is on speed toggle button (bottom right)
+        if (px > W - 80 && py > H - 50) {
+            fastMode = !fastMode;
+            ANIM_STEP_TIME = fastMode ? 0.06 : 0.35;
+            sfxSelect();
+        }
     }
 });
 
@@ -692,12 +719,15 @@ function draw() {
     if (state === ST.PLACE) drawPanel();
     if (state === ST.STAGE_CLEAR) drawStageClear();
     if (state === ST.MOVING || state === ST.ENEMY_TURN) {
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(0, H - 50, W, 50);
         ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
         ctx.fillText(state === ST.MOVING ? '⚔️ 味方行動中...' : '💀 敵行動中...', W/2, H - 28);
-        ctx.fillStyle = '#888'; ctx.font = '12px sans-serif';
-        ctx.fillText('タップでスキップ', W/2, H - 10); // #8
+        // Speed toggle button
+        ctx.fillStyle = fastMode ? 'rgba(200,150,50,0.8)' : 'rgba(80,80,80,0.6)';
+        roundRect(W - 75, H - 45, 65, 35, 6); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+        ctx.fillText(fastMode ? '⏩速' : '▶普通', W - 42, H - 22);
         ctx.textAlign = 'left';
     }
 
@@ -794,14 +824,19 @@ function drawAnims() {
         ctx.beginPath(); ctx.moveTo(from.x,from.y);
         ctx.lineTo(from.x+(to.x-from.x)*t, from.y+(to.y-from.y)*t);
         ctx.stroke();
-        // Damage text
         ctx.globalAlpha = 1;
+        // Attack icon label: "⚔️ → 🏰 -5"
+        const midX = (from.x + to.x) / 2, midY = Math.min(from.y, to.y) - 30;
+        ctx.fillStyle = a.side === 'player' ? 'rgba(20,40,80,0.85)' : 'rgba(80,20,20,0.85)';
+        roundRect(midX - 55, midY - 14, 110, 26, 6); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+        const critTxt = a.crit ? '💥' : '';
+        ctx.fillText(`${a.atkIcon||'?'}→${a.defIcon||'?'} -${a.dmg}${critTxt}`, midX, midY + 5);
+        // Damage number at target
         ctx.fillStyle = a.crit ? '#ff0' : (a.side==='player' ? '#8cf' : '#f88');
         ctx.font = `bold ${a.crit ? 22 : 16}px sans-serif`;
-        ctx.textAlign = 'center';
         ctx.fillText('-'+a.dmg, to.x, to.y - 20 - prog*25);
         ctx.textAlign = 'left';
-        ctx.globalAlpha = 1;
     }
 
     if (a.type === 'move') {
