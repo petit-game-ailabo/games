@@ -26,11 +26,12 @@ function getXY(e) {
 
 // Audio
 let audioCtx = null;
+let soundOn = true; // #10 Sound toggle
 function ensureAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
-function snd(f,t,d,v){if(!audioCtx)return;try{const n=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.frequency.value=f;o.type=t||'sine';g.gain.setValueAtTime(v||0.3,n);g.gain.exponentialRampToValueAtTime(0.001,n+(d||0.1));o.start(n);o.stop(n+(d||0.1));}catch(e){}}
+function snd(f,t,d,v){if(!audioCtx||!soundOn)return;try{const n=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.frequency.value=f;o.type=t||'sine';g.gain.setValueAtTime(v||0.3,n);g.gain.exponentialRampToValueAtTime(0.001,n+(d||0.1));o.start(n);o.stop(n+(d||0.1));}catch(e){}}
 function sfxPlace(){snd(440,'sine',0.06,0.4);snd(660,'sine',0.05,0.3);}
 function sfxBattle(){snd(200,'sawtooth',0.12,0.3);setTimeout(()=>snd(300,'square',0.08,0.2),50);}
 function sfxWin(){snd(523,'sine',0.1,0.4);setTimeout(()=>snd(659,'sine',0.12,0.35),100);setTimeout(()=>snd(784,'sine',0.15,0.3),200);}
@@ -104,7 +105,10 @@ function bonus() {
 // HEX MATH
 // ============================================
 const HUD_H = 50;
-const PANEL_H = 145;
+const PANEL_H = 175; // #1 taller panel for bigger buttons
+let showTutorial = true; // #3 first-turn tutorial
+let selectedHex = null; // #4 tap hex for unit detail
+let placedThisTurn = []; // #7 undo support
 let gox = 0, goy = 0; // grid offset
 
 function calcGrid() {
@@ -472,7 +476,8 @@ function doEnemyTurn() {
 // ============================================
 // ANIMATION PROCESSOR
 // ============================================
-const ANIM_STEP_TIME = 0.35;
+let ANIM_STEP_TIME = 0.35;
+let animSkip = false; // #8 skip animation
 
 function processAnims(dt) {
     animTimer -= dt;
@@ -522,6 +527,8 @@ function processAnims(dt) {
             placesLeft = maxPlaces;
             animQueue = [];
             animIdx = 0;
+            placedThisTurn = [];
+            ANIM_STEP_TIME = 0.35; // #8 reset speed
             state = ST.PLACE;
         }
     }
@@ -544,42 +551,80 @@ canvas.addEventListener('pointerdown', (e) => {
     if (state === ST.SKILL_TREE) { handleSkillInput(px,py); return; }
 
     if (state === ST.PLACE) {
+        showTutorial = false; // #3 dismiss tutorial on any tap
+        selectedHex = null; // clear detail popup
+
+        // #10 Sound toggle (top-right corner)
+        if (px > W - 50 && py < HUD_H) {
+            soundOn = !soundOn;
+            sfxSelect();
+            return;
+        }
+
         const panelY = H - PANEL_H;
 
         if (py > panelY) {
-            // Unit type buttons
+            // #7 Undo button
+            if (px < 60 && py > panelY && py < panelY + 30) {
+                if (placedThisTurn.length > 0) {
+                    const last = placedThisTurn.pop();
+                    grid[last.r][last.c].unit = null;
+                    if (!neighbors(last.r, last.c).some(n => grid[n.r][n.c].owner === 1 && grid[n.r][n.c].unit))
+                        grid[last.r][last.c].owner = 0;
+                    placesLeft++;
+                    sfxSelect();
+                }
+                return;
+            }
+
+            // Unit type buttons — #1 bigger buttons (65px high)
             const types = ['scout','sword','archer','shield'];
-            const btnW = Math.min(82, (W - 30) / 4);
-            const startX = (W - btnW * 4 - 15) / 4;
+            const btnW = Math.min(82, (W - 40) / 4);
+            const gap = (W - btnW * 4) / 5;
             for (let i = 0; i < 4; i++) {
-                const bx = startX + i * (btnW + 5) + 8;
-                if (px > bx && px < bx + btnW && py > panelY + 5 && py < panelY + 58) {
+                const bx = gap + i * (btnW + gap);
+                if (px > bx && px < bx + btnW && py > panelY + 32 && py < panelY + 97) {
                     selectedType = types[i];
                     sfxSelect();
                     return;
                 }
             }
-            // End turn
-            if (py > panelY + 65) {
-                // Start resolution
+            // End turn button
+            if (py > panelY + 105) {
                 state = ST.MOVING;
                 animQueue = [];
                 animIdx = 0;
                 animTimer = 0.2;
+                placedThisTurn = [];
                 doPlayerTurn();
                 return;
             }
             return;
         }
 
-        // Grid tap
+        // Grid tap — #4 tap for detail, or place
         const hex = p2h(px, py);
-        if (hex && placesLeft > 0 && canPlace(hex.r, hex.c)) {
-            grid[hex.r][hex.c].unit = makeUnit(1, selectedType);
-            grid[hex.r][hex.c].owner = 1;
-            placesLeft--;
-            sfxPlace();
+        if (hex) {
+            const cell = grid[hex.r][hex.c];
+            if (cell.unit) {
+                // Show unit detail popup
+                selectedHex = { r: hex.r, c: hex.c };
+                return;
+            }
+            if (placesLeft > 0 && canPlace(hex.r, hex.c)) {
+                grid[hex.r][hex.c].unit = makeUnit(1, selectedType);
+                grid[hex.r][hex.c].owner = 1;
+                placesLeft--;
+                placedThisTurn.push({ r: hex.r, c: hex.c }); // #7
+                sfxPlace();
+            }
         }
+    }
+
+    // #8 Skip animation on tap during battle
+    if (state === ST.MOVING || state === ST.ENEMY_TURN) {
+        ANIM_STEP_TIME = 0.05; // speed up remaining anims
+        animTimer = 0;
     }
 });
 
@@ -633,7 +678,7 @@ function draw() {
         if (cell.owner === 1) { fill = '#0f1f35'; stroke = '#2060a0'; }
         if (cell.owner === 2) { fill = '#250f0f'; stroke = '#a02020'; }
         if (state === ST.PLACE && placesLeft > 0 && canPlace(r,c)) {
-            const p = 0.3 + Math.sin(Date.now()/300 + r*2+c) * 0.15;
+            const p = 0.2 + Math.sin(Date.now()/600 + r+c) * 0.08; // #5 gentler pulse
             fill = `rgba(50,200,100,${p})`; stroke = '#5f5';
         }
         drawHex(x, y, hexSize*0.88, fill, stroke, 1.5);
@@ -647,43 +692,90 @@ function draw() {
     if (state === ST.PLACE) drawPanel();
     if (state === ST.STAGE_CLEAR) drawStageClear();
     if (state === ST.MOVING || state === ST.ENEMY_TURN) {
-        ctx.fillStyle = 'rgba(0,0,0,0.3)';
-        ctx.fillRect(0, H - 40, W, 40);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(0, H - 50, W, 50);
         ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(state === ST.MOVING ? '⚔️ 味方行動中...' : '💀 敵行動中...', W/2, H - 15);
+        ctx.fillText(state === ST.MOVING ? '⚔️ 味方行動中...' : '💀 敵行動中...', W/2, H - 28);
+        ctx.fillStyle = '#888'; ctx.font = '12px sans-serif';
+        ctx.fillText('タップでスキップ', W/2, H - 10); // #8
         ctx.textAlign = 'left';
     }
+
+    // #3 Tutorial overlay (first turn only)
+    if (state === ST.PLACE && showTutorial && turn === 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, H*0.35, W, 90);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#5f5'; ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('① 🟢 緑マスをタップして配置', W/2, H*0.35 + 25);
+        ctx.fillText('② 下のボタンでユニット切替', W/2, H*0.35 + 50);
+        ctx.fillText('③ 🔴「出撃！」で戦闘開始', W/2, H*0.35 + 75);
+        ctx.textAlign = 'left';
+    }
+
+    // #4 Unit detail popup
+    if (selectedHex && state === ST.PLACE) {
+        const cell = grid[selectedHex.r][selectedHex.c];
+        if (cell.unit) {
+            const u = cell.unit;
+            const t = TYPES[u.type];
+            const {x:hx, y:hy} = h2p(selectedHex.r, selectedHex.c);
+            const popY = hy < H/2 ? hy + hexSize + 10 : hy - hexSize - 55;
+            ctx.fillStyle = 'rgba(0,0,20,0.9)';
+            roundRect(hx - 65, popY, 130, 50, 8); ctx.fill();
+            ctx.strokeStyle = u.owner === 1 ? '#48c' : '#c44'; ctx.lineWidth = 1.5;
+            roundRect(hx - 65, popY, 130, 50, 8); ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+            ctx.fillText(`${t.icon} ${t.name}`, hx, popY + 17);
+            ctx.fillStyle = '#aaa'; ctx.font = '12px sans-serif';
+            ctx.fillText(`ATK:${u.atk}  HP:${u.hp}/${u.maxHp}  移動:${u.move}`, hx, popY + 37);
+            ctx.textAlign = 'left';
+        }
+    }
+
+    // #10 Sound toggle icon
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#666'; ctx.font = '14px sans-serif';
+    ctx.fillText(soundOn ? '🔊' : '🔇', W - 8, HUD_H - 32);
+    ctx.textAlign = 'left';
 }
 
 function drawUnit(x, y, unit) {
     const t = TYPES[unit.type];
-    const r = hexSize * (unit.type === 'castle' ? 0.4 : 0.3);
+    const r = hexSize * (unit.type === 'castle' ? 0.42 : 0.35); // #2 bigger
 
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath(); ctx.ellipse(x, y+r+2, r*0.8, r*0.3, 0, 0, Math.PI*2); ctx.fill();
 
-    // Circle
+    // Circle — #2 stronger owner distinction
     ctx.fillStyle = unit.owner === 1 ? t.color : '#aa3333';
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = unit.owner === 1 ? 'rgba(255,255,255,0.3)' : 'rgba(255,200,200,0.3)';
-    ctx.lineWidth = 1.5;
+    // Thick border for owner
+    ctx.strokeStyle = unit.owner === 1 ? '#88ccff' : '#ff6666';
+    ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
 
-    // Icon
-    ctx.font = `${Math.max(14, hexSize*0.4)}px sans-serif`;
+    // Icon — #2 bigger
+    ctx.font = `${Math.max(16, hexSize*0.5)}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(t.icon, x, y);
     ctx.textBaseline = 'alphabetic';
 
     // HP bar
-    const bw = hexSize * 0.6, bh = 4;
+    const bw = hexSize * 0.65, bh = 5;
     const bx = x - bw/2, by = y + r + 5;
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(bx-1, by-1, bw+2, bh+2);
     const ratio = Math.max(0, unit.hp / unit.maxHp);
     ctx.fillStyle = ratio > 0.5 ? '#4c4' : ratio > 0.25 ? '#cc4' : '#c44';
     ctx.fillRect(bx, by, bw * ratio, bh);
+
+    // #4 HP number under bar
+    ctx.fillStyle = '#bbb'; ctx.font = `${Math.max(9, hexSize*0.22)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${unit.hp}/${unit.maxHp}`, x, by + bh + 10);
 }
 
 function drawAnims() {
@@ -734,58 +826,68 @@ function drawHUD() {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px sans-serif';
     ctx.fillText(`SP:${sp}`, W-10, 20);
-    if (state === ST.PLACE) {
-        ctx.fillStyle = '#8cf'; ctx.font = 'bold 13px sans-serif';
-        ctx.fillText(`配置:${placesLeft}/${maxPlaces}`, W-10, 38);
-    }
+    // Sound icon area reserved at top-right
     ctx.textAlign = 'left';
 }
 
 function drawPanel() {
     const panelY = H - PANEL_H;
-    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
     ctx.fillRect(0, panelY, W, PANEL_H);
     ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0,panelY); ctx.lineTo(W,panelY); ctx.stroke();
 
-    // Unit buttons (4 types)
-    const types = ['scout','sword','archer','shield'];
-    const btnW = Math.min(82, (W - 30) / 4);
-    const gap = (W - btnW * 4) / 5;
-    for (let i = 0; i < 4; i++) {
-        const t = TYPES[types[i]];
-        const bx = gap + i * (btnW + gap);
-        const by = panelY + 5;
-        const sel = selectedType === types[i];
+    // #9 Placement count (prominent)
+    ctx.textAlign = 'center';
+    ctx.fillStyle = placesLeft > 0 ? '#5f5' : '#f88';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText(`残り ${placesLeft}体 配置可能`, W/2, panelY + 18);
 
-        ctx.fillStyle = sel ? 'rgba(68,136,204,0.35)' : 'rgba(255,255,255,0.04)';
-        roundRect(bx, by, btnW, 52, 8); ctx.fill();
-        ctx.strokeStyle = sel ? '#4488cc' : 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = sel ? 2.5 : 1;
-        roundRect(bx, by, btnW, 52, 8); ctx.stroke();
-
-        ctx.textAlign = 'center';
-        ctx.font = '18px sans-serif';
-        ctx.fillText(t.icon, bx + btnW/2, by + 20);
-        ctx.fillStyle = sel ? '#fff' : '#777';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText(t.desc, bx + btnW/2, by + 40);
+    // #7 Undo button
+    if (placedThisTurn.length > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        roundRect(5, panelY + 4, 52, 22, 5); ctx.fill();
+        ctx.fillStyle = '#aaa'; ctx.font = '12px sans-serif';
+        ctx.fillText('↩戻す', 31, panelY + 19);
     }
 
-    // End turn button
-    const btnY = panelY + 65;
+    // #1 Unit buttons — bigger (65px high)
+    const types = ['scout','sword','archer','shield'];
+    const btnW = Math.min(82, (W - 40) / 4);
+    const gap2 = (W - btnW * 4) / 5;
+    for (let i = 0; i < 4; i++) {
+        const t = TYPES[types[i]];
+        const bx = gap2 + i * (btnW + gap2);
+        const by = panelY + 30;
+        const bh = 65;
+        const sel = selectedType === types[i];
+
+        ctx.fillStyle = sel ? 'rgba(68,136,204,0.4)' : 'rgba(255,255,255,0.05)';
+        roundRect(bx, by, btnW, bh, 8); ctx.fill();
+        ctx.strokeStyle = sel ? '#4488cc' : 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = sel ? 2.5 : 1;
+        roundRect(bx, by, btnW, bh, 8); ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.font = '22px sans-serif';
+        ctx.fillText(t.icon, bx + btnW/2, by + 25);
+        ctx.fillStyle = sel ? '#fff' : '#777';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(t.desc, bx + btnW/2, by + 45);
+        ctx.fillStyle = '#555'; ctx.font = '10px sans-serif';
+        ctx.fillText(`ATK${t.atk} HP${t.hp}`, bx + btnW/2, by + 58);
+    }
+
+    // #6 End turn button — gentler glow
+    const btnY = panelY + 105;
     const btnH = 48;
-    const glow = 0.65 + Math.sin(Date.now()/350) * 0.35;
+    const glow = 0.8 + Math.sin(Date.now()/800) * 0.12;
     ctx.fillStyle = `rgba(200,50,50,${glow})`;
     roundRect(15, btnY, W-30, btnH, 10); ctx.fill();
     ctx.strokeStyle = '#f66'; ctx.lineWidth = 2;
     roundRect(15, btnY, W-30, btnH, 10); ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('⚔️ 出撃！', W/2, btnY + btnH/2 + 7);
-
-    // Hint
-    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '11px sans-serif';
-    ctx.fillText('緑マスに配置 → 赤ボタンで出撃', W/2, H - 5);
     ctx.textAlign = 'left';
 }
 
