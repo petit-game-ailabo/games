@@ -54,95 +54,207 @@ function snd(f,t,d,v) {
 }
 
 // BGM: lofi-ish drum & bass loop
+// === BGM: Night City Run — progressive layers ===
+// Key: Am (A minor) — moody, urban, cinematic
+// BPM 130, 16th note resolution for detail
+// Layers: drums → bass → chords → melody → arp (unlock with distance)
+
 function startBGM() {
     if (bgmPlaying || !audioCtx) return;
     bgmPlaying = true;
-    let beat = 0;
-    const bpm = 140;
-    const interval = (60 / bpm / 2) * 1000; // 8th notes
-
-    // Drum pattern (kick, hi-hat, snare)
-    function playBeat() {
-        if (!bgmPlaying) return;
+    let step = 0; // 16th note counter
+    const bpm = 130;
+    const stepMs = (60 / bpm / 4) * 1000; // 16th note interval
+    const stepSec = 60 / bpm / 4;
+    
+    // Note frequencies (A minor scale)
+    const NOTE = {
+        A2:110, B2:123.5, C3:130.8, D3:146.8, E3:164.8, F3:174.6, G3:196,
+        A3:220, B3:246.9, C4:261.6, D4:293.7, E4:329.6, F4:349.2, G4:392,
+        A4:440, B4:493.9, C5:523.3, D5:587.3, E5:659.3, F5:698.5, G5:784,
+        A5:880,
+    };
+    
+    // Helper: play a note with envelope
+    function note(freq, type, vol, attack, decay, sustain, release) {
         const t = audioCtx.currentTime;
-        const bar = beat % 16;
-
-        // Kick: 0, 4, 8, 10
-        if (bar === 0 || bar === 4 || bar === 8 || bar === 10) {
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.connect(g); g.connect(bgmGain);
-            o.frequency.setValueAtTime(150, t);
-            o.frequency.exponentialRampToValueAtTime(30, t + 0.12);
-            o.type = 'sine';
-            g.gain.setValueAtTime(0.7, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-            o.start(t); o.stop(t + 0.15);
-        }
-
-        // Hi-hat: every beat
-        {
-            const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.03, audioCtx.sampleRate);
-            const data = buf.getChannelData(0);
-            for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
-            const src = audioCtx.createBufferSource();
-            const g = audioCtx.createGain();
-            src.buffer = buf;
-            src.connect(g); g.connect(bgmGain);
-            const vol = (bar % 2 === 0) ? 0.35 : 0.18;
-            g.gain.setValueAtTime(vol, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
-            src.start(t);
-        }
-
-        // Snare: 4, 12
-        if (bar === 4 || bar === 12) {
-            const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
-            const data = buf.getChannelData(0);
-            for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.4 * (1 - i/data.length);
-            const src = audioCtx.createBufferSource();
-            const g = audioCtx.createGain();
-            src.buffer = buf;
-            src.connect(g); g.connect(bgmGain);
-            g.gain.setValueAtTime(0.5, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-            src.start(t);
-        }
-
-        // Bass line (changes with distance for progression)
-        if (bar === 0 || bar === 6 || bar === 10) {
-            const bassNotes = [55, 65, 73, 82]; // A1, C2, D2, E2
-            const layer = Math.min(Math.floor(distance / 100), 3);
-            const note = bassNotes[layer % bassNotes.length];
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.connect(g); g.connect(bgmGain);
-            o.frequency.value = note;
-            o.type = 'square';
-            g.gain.setValueAtTime(0.3, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-            o.start(t); o.stop(t + 0.2);
-        }
-
-        // Melody layer (appears after 200m)
-        if (distance > 200 && (bar === 0 || bar === 3 || bar === 7 || bar === 11)) {
-            const melodyNotes = [440, 523, 587, 659, 523, 440, 392, 349];
-            const noteIdx = (beat / 2) % melodyNotes.length;
-            const note = melodyNotes[Math.floor(noteIdx)];
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.connect(g); g.connect(bgmGain);
-            o.frequency.value = note;
-            o.type = 'sine';
-            g.gain.setValueAtTime(0.15, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-            o.start(t); o.stop(t + 0.15);
-        }
-
-        beat++;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g); g.connect(bgmGain);
+        o.frequency.value = freq;
+        o.type = type;
+        const total = attack + decay + sustain + release;
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(vol, t + attack);
+        g.gain.linearRampToValueAtTime(vol * 0.6, t + attack + decay);
+        g.gain.setValueAtTime(vol * 0.6, t + attack + decay + sustain);
+        g.gain.exponentialRampToValueAtTime(0.001, t + total);
+        o.start(t); o.stop(t + total + 0.01);
     }
-
-    bgmInterval = setInterval(playBeat, interval);
+    
+    // Helper: noise hit
+    function noise(vol, dur) {
+        const t = audioCtx.currentTime;
+        const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random()*2-1) * (1 - i/data.length);
+        const src = audioCtx.createBufferSource();
+        const g = audioCtx.createGain();
+        src.buffer = buf;
+        // Highpass for hat sound
+        const hp = audioCtx.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = 8000;
+        src.connect(hp); hp.connect(g); g.connect(bgmGain);
+        g.gain.setValueAtTime(vol, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        src.start(t);
+    }
+    
+    // Kick with pitch sweep
+    function kick(vol) {
+        const t = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g); g.connect(bgmGain);
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(35, t + 0.1);
+        o.type = 'sine';
+        g.gain.setValueAtTime(vol, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        o.start(t); o.stop(t + 0.18);
+        // Click layer
+        const o2 = audioCtx.createOscillator();
+        const g2 = audioCtx.createGain();
+        o2.connect(g2); g2.connect(bgmGain);
+        o2.frequency.value = 1000;
+        o2.type = 'square';
+        g2.gain.setValueAtTime(vol * 0.3, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.015);
+        o2.start(t); o2.stop(t + 0.02);
+    }
+    
+    // Snare with body + noise
+    function snare(vol) {
+        const t = audioCtx.currentTime;
+        // Body
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.connect(g); g.connect(bgmGain);
+        o.frequency.value = 200;
+        o.type = 'triangle';
+        g.gain.setValueAtTime(vol * 0.5, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        o.start(t); o.stop(t + 0.08);
+        // Noise
+        noise(vol * 0.7, 0.1);
+    }
+    
+    // ==== PATTERNS (64-step = 4 bars) ====
+    // s = step within 64
+    
+    // Drum pattern (always playing)
+    const kickPattern =  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0, 0,0,1,0, 1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1, 0,0,0,0, 1,0,0,0, 0,0,1,0, 0,0,1,0];
+    const snarePattern = [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,1];
+    const hatPattern =   [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0, 1,1,1,1];
+    const ohatPattern =  [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,0,0];
+    
+    // Bass (Am → Dm → F → E progression, 1 bar each)
+    //                     | Am                    | Dm                    | F                     | E                     |
+    const bassNotes =    [110,0,0,0, 0,0,110,0, 110,0,0,0, 0,0,0,0,   146.8,0,0,0, 0,0,146.8,0, 146.8,0,0,0, 0,0,0,0,  174.6,0,0,0, 0,0,174.6,0, 174.6,0,0,0, 0,0,0,0,  164.8,0,0,0, 0,0,164.8,0, 164.8,0,0,164.8, 0,0,0,0];
+    
+    // Chord pads (layer 2: 100m+) — Am, Dm, F, E as triads
+    const chordData = [
+        // Am: A3, C4, E4
+        {notes: [NOTE.A3, NOTE.C4, NOTE.E4], bars: [0]},
+        // Dm: D4, F4, A4
+        {notes: [NOTE.D4, NOTE.F4, NOTE.A4], bars: [1]},
+        // F: F3, A3, C4
+        {notes: [NOTE.F3, NOTE.A3, NOTE.C4], bars: [2]},
+        // E: E3, G4, B4 (E major for tension)
+        {notes: [NOTE.E3, 415.3, NOTE.B4], bars: [3]},
+    ];
+    
+    // Melody (layer 3: 200m+) — 8-bar phrase
+    // Using Am pentatonic + chromatic passing tones
+    const melodyA = [
+        NOTE.E5,0,NOTE.D5,0, NOTE.C5,0,NOTE.A4,0, 0,0,NOTE.G4,0, NOTE.A4,0,0,0,
+        NOTE.C5,0,NOTE.D5,0, NOTE.E5,0,NOTE.C5,0, NOTE.D5,0,0,0, 0,0,0,0,
+        NOTE.A4,0,NOTE.C5,0, NOTE.E5,0,NOTE.F5,0, NOTE.E5,0,NOTE.D5,0, NOTE.C5,0,0,0,
+        NOTE.B4,0,NOTE.C5,0, NOTE.A4,0,0,0, NOTE.G4,0,NOTE.A4,0, 0,0,0,0,
+    ];
+    const melodyB = [
+        NOTE.A5,0,NOTE.G5,0, NOTE.E5,0,NOTE.D5,0, NOTE.C5,0,NOTE.D5,0, NOTE.E5,0,0,0,
+        NOTE.F5,0,NOTE.E5,0, NOTE.D5,0,NOTE.C5,0, NOTE.D5,0,0,0, 0,0,NOTE.E5,0,
+        NOTE.C5,0,0,NOTE.A4, 0,0,NOTE.G4,0, NOTE.A4,0,NOTE.C5,0, NOTE.E5,0,0,0,
+        NOTE.D5,0,NOTE.C5,0, NOTE.A4,0,NOTE.G4,0, NOTE.A4,0,0,0, 0,0,0,0,
+    ];
+    
+    // Arp (layer 4: 400m+) — fast arpeggiated notes
+    const arpNotes = [
+        NOTE.A4,NOTE.C5,NOTE.E5,NOTE.A5, NOTE.E5,NOTE.C5,NOTE.A4,NOTE.E4,
+        NOTE.D4,NOTE.F4,NOTE.A4,NOTE.D5, NOTE.A4,NOTE.F4,NOTE.D4,NOTE.A3,
+        NOTE.F4,NOTE.A4,NOTE.C5,NOTE.F5, NOTE.C5,NOTE.A4,NOTE.F4,NOTE.C4,
+        NOTE.E4,415.3,NOTE.B4,NOTE.E5, NOTE.B4,415.3,NOTE.E4,NOTE.B3,
+    ];
+    
+    let currentMelody = melodyA;
+    
+    function playStep() {
+        if (!bgmPlaying) return;
+        const s = step % 64;
+        const bar = Math.floor(s / 16);
+        
+        // Switch melody phrase every 8 bars
+        if (step % 128 === 0) currentMelody = melodyA;
+        if (step % 128 === 64) currentMelody = melodyB;
+        
+        // --- LAYER 1: Drums (always) ---
+        if (kickPattern[s]) kick(0.6);
+        if (snarePattern[s]) snare(0.45);
+        if (hatPattern[s]) noise(s % 4 === 0 ? 0.2 : 0.1, 0.025);
+        if (ohatPattern[s]) noise(0.15, 0.06); // open hat
+        
+        // --- LAYER 2: Bass (always, progression changes feel) ---
+        const bassFreq = bassNotes[s];
+        if (bassFreq) {
+            note(bassFreq, 'sawtooth', 0.25, 0.01, 0.05, 0.08, 0.06);
+            // Sub bass
+            note(bassFreq / 2, 'sine', 0.2, 0.01, 0.04, 0.1, 0.05);
+        }
+        
+        // --- LAYER 3: Chord pads (100m+) ---
+        if (distance > 100 && s % 16 === 0) {
+            const chord = chordData[bar];
+            if (chord) {
+                const padVol = Math.min(0.08, (distance - 100) / 500 * 0.08);
+                for (const f of chord.notes) {
+                    note(f, 'sine', padVol, 0.1, 0.1, 0.2, 0.2);
+                }
+            }
+        }
+        
+        // --- LAYER 4: Melody (200m+) ---
+        if (distance > 200) {
+            const melFreq = currentMelody[s];
+            if (melFreq) {
+                const melVol = Math.min(0.14, (distance - 200) / 300 * 0.14);
+                note(melFreq, 'triangle', melVol, 0.01, 0.05, stepSec * 1.5, 0.08);
+            }
+        }
+        
+        // --- LAYER 5: Arpeggio (400m+) ---
+        if (distance > 400) {
+            const arpIdx = step % 32;
+            if (arpIdx < arpNotes.length) {
+                const arpVol = Math.min(0.06, (distance - 400) / 400 * 0.06);
+                note(arpNotes[arpIdx], 'sine', arpVol, 0.005, 0.02, stepSec * 0.3, 0.04);
+            }
+        }
+        
+        step++;
+    }
+    
+    bgmInterval = setInterval(playStep, stepMs);
 }
 
 function stopBGM() {
