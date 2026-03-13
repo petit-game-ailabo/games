@@ -6,153 +6,213 @@
 <title>ヘックス制圧 - 今日のミニゲーム</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;}
-body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#1a1a2e;overflow:hidden;touch-action:none;}
-canvas{display:block;}
+html,body{width:100%;height:100%;overflow:hidden;touch-action:none;background:#0a0a1e;}
+canvas{display:block;width:100%;height:100%;}
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <script>
+// ============================================
+// SETUP — canvas fills viewport exactly
+// ============================================
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W, H;
-function resize() { W = window.innerWidth; H = window.innerHeight; canvas.width = W; canvas.height = H; }
-resize(); window.addEventListener('resize', resize);
+function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W;
+    canvas.height = H;
+}
+resize();
+window.addEventListener('resize', resize);
 
-// Audio
+// Correct touch → canvas coords (fixes mobile offset!)
+function getCanvasXY(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+// ============================================
+// AUDIO
+// ============================================
 let audioCtx = null;
 function ensureAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
-function snd(f,type,dur,vol) {
+function snd(f, type, dur, vol) {
     if (!audioCtx) return;
     try {
-        const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-        o.connect(g);g.connect(audioCtx.destination);
-        o.frequency.value=f;o.type=type||'sine';
-        g.gain.setValueAtTime(vol||0.3,audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+(dur||0.1));
-        o.start();o.stop(audioCtx.currentTime+(dur||0.1));
-    }catch(e){}
+        const t = audioCtx.currentTime;
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination);
+        o.frequency.value = f; o.type = type || 'sine';
+        g.gain.setValueAtTime(vol || 0.3, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + (dur || 0.1));
+        o.start(t); o.stop(t + (dur || 0.1));
+    } catch(e) {}
 }
-function sfxPlace(){snd(440,'sine',0.08,0.3);snd(660,'sine',0.06,0.2);}
-function sfxBattle(){snd(200,'sawtooth',0.15,0.25);snd(300,'square',0.1,0.15);}
-function sfxWin(){snd(523,'sine',0.1,0.3);snd(659,'sine',0.12,0.25);snd(784,'sine',0.15,0.2);}
-function sfxCapture(){snd(350,'triangle',0.1,0.25);snd(440,'sine',0.08,0.2);}
-function sfxSkill(){snd(600,'sine',0.12,0.3);snd(800,'sine',0.1,0.25);snd(1000,'sine',0.08,0.2);}
-function sfxLose(){snd(200,'sawtooth',0.3,0.3);snd(100,'sawtooth',0.4,0.2);}
+function sfxPlace()   { snd(440,'sine',0.08,0.3); snd(660,'sine',0.06,0.2); }
+function sfxBattle()  { snd(200,'sawtooth',0.15,0.25); snd(300,'square',0.1,0.15); }
+function sfxWin()     { snd(523,'sine',0.12,0.3); snd(659,'sine',0.15,0.25); snd(784,'sine',0.18,0.2); }
+function sfxCapture() { snd(350,'triangle',0.1,0.25); }
+function sfxSkill()   { snd(600,'sine',0.12,0.3); snd(800,'sine',0.1,0.25); }
+function sfxLose()    { snd(200,'sawtooth',0.3,0.3); snd(100,'sawtooth',0.4,0.2); }
+function sfxSelect()  { snd(500,'sine',0.05,0.2); }
 
 // ============================================
 // GAME STATE
 // ============================================
-const ST = { TITLE: 0, PLAY: 1, BATTLE_ANIM: 2, SKILL_TREE: 3, STAGE_CLEAR: 4, GAME_OVER: 5 };
+const ST = { TITLE:0, PLAY:1, BATTLE_ANIM:2, SKILL_TREE:3, STAGE_CLEAR:4, GAME_OVER:5 };
 let state = ST.TITLE;
 
-// Hex grid
+// Grid
 const COLS = 7, ROWS = 7;
-let hexSize = 0; // calculated on draw
-let hexGrid = []; // [row][col] = { owner: 0=empty, 1=player, 2=enemy, unit: null }
-let playerUnits = 3; // units available to place this turn
-let maxUnits = 3;
-let turn = 0;
-let stage = 1;
-let score = 0;
-let sp = 0; // skill points
+let hexSize = 0;
+let hexGrid = [];    // [r][c] = { owner:0|1|2, unit:null|{...} }
+let turn = 0, stage = 1, score = 0, sp = 0;
 
-// Skill tree
-const SKILLS = {
-    // Attack tree
-    atk1: { name: '攻撃+1', desc: 'ユニット攻撃力+1', cost: 1, effect: {atk:1}, req: null, tree: 'atk', x: 0.25, y: 0.2 },
-    atk2: { name: '攻撃+2', desc: 'ユニット攻撃力+2', cost: 2, effect: {atk:2}, req: 'atk1', tree: 'atk', x: 0.25, y: 0.4 },
-    atk3: { name: '必殺', desc: '30%の確率で2倍ダメージ', cost: 3, effect: {crit:0.3}, req: 'atk2', tree: 'atk', x: 0.25, y: 0.6 },
-    atk4: { name: '攻撃+3', desc: 'ユニット攻撃力+3', cost: 3, effect: {atk:3}, req: 'atk3', tree: 'atk', x: 0.25, y: 0.8 },
-    // Defense tree
-    def1: { name: 'HP+2', desc: 'ユニットHP+2', cost: 1, effect: {hp:2}, req: null, tree: 'def', x: 0.5, y: 0.2 },
-    def2: { name: 'HP+3', desc: 'ユニットHP+3', cost: 2, effect: {hp:3}, req: 'def1', tree: 'def', x: 0.5, y: 0.4 },
-    def3: { name: '反撃', desc: '攻撃されたら反撃', cost: 3, effect: {counter:true}, req: 'def2', tree: 'def', x: 0.5, y: 0.6 },
-    def4: { name: 'HP+5', desc: 'ユニットHP+5', cost: 3, effect: {hp:5}, req: 'def3', tree: 'def', x: 0.5, y: 0.8 },
-    // Range tree
-    rng1: { name: '配置+1', desc: '1ターンの配置数+1', cost: 1, effect: {units:1}, req: null, tree: 'rng', x: 0.75, y: 0.2 },
-    rng2: { name: '範囲攻撃', desc: '隣接2マスに攻撃', cost: 2, effect: {aoe:true}, req: 'rng1', tree: 'rng', x: 0.75, y: 0.4 },
-    rng3: { name: '配置+2', desc: '1ターンの配置数+2', cost: 3, effect: {units:2}, req: 'rng2', tree: 'rng', x: 0.75, y: 0.6 },
-    rng4: { name: '制圧波', desc: '空きマスも制圧', cost: 4, effect: {conquer:true}, req: 'rng3', tree: 'rng', x: 0.75, y: 0.8 },
+// === UNIT TYPES (the strategic choice!) ===
+const UNIT_TYPES = {
+    sword: {
+        name: '⚔️剣士', desc: 'バランス型',
+        atk: 4, hp: 6, range: 1,
+        color: '#4488cc', icon: '⚔️',
+        special: null,
+    },
+    archer: {
+        name: '🏹弓兵', desc: '2マス攻撃',
+        atk: 3, hp: 3, range: 2,
+        color: '#44cc88', icon: '🏹',
+        special: 'ranged',
+    },
+    shield: {
+        name: '🛡️盾兵', desc: '高HP＋反撃',
+        atk: 2, hp: 10, range: 1,
+        color: '#cc8844', icon: '🛡️',
+        special: 'counter',
+    },
 };
-let unlockedSkills = {};
+let selectedType = 'sword';  // which unit type to place
+let playerUnits = 3;  // how many can place this turn
+let maxUnits = 3;
 
-// Computed stats from skills
-function getStats() {
-    let stats = { atk: 3, hp: 5, crit: 0, counter: false, aoe: false, conquer: false, extraUnits: 0 };
-    for (const id in unlockedSkills) {
-        if (!unlockedSkills[id]) continue;
-        const sk = SKILLS[id];
-        if (sk.effect.atk) stats.atk += sk.effect.atk;
-        if (sk.effect.hp) stats.hp += sk.effect.hp;
-        if (sk.effect.crit) stats.crit += sk.effect.crit;
-        if (sk.effect.counter) stats.counter = true;
-        if (sk.effect.aoe) stats.aoe = true;
-        if (sk.effect.conquer) stats.conquer = true;
-        if (sk.effect.units) stats.extraUnits += sk.effect.units;
-    }
-    return stats;
-}
+// UI layout
+const HUD_TOP = 55;         // top HUD height
+const PANEL_BOTTOM = 160;   // bottom panel height (unit selector + button)
 
 // Battle animation
 let battleAnims = [];
 let battleTimer = 0;
 
+// Skill tree (simplified: 6 impactful upgrades)
+const SKILLS = {
+    atk1:  { name: '攻撃+1',   cost:1, effect:{atk:1},     req:null,   x:0.2, y:0.25 },
+    atk2:  { name: '必殺30%',  cost:2, effect:{crit:0.3},  req:'atk1', x:0.2, y:0.5 },
+    def1:  { name: 'HP+3',     cost:1, effect:{hp:3},      req:null,   x:0.5, y:0.25 },
+    def2:  { name: '反撃強化', cost:2, effect:{counterUp:true}, req:'def1', x:0.5, y:0.5 },
+    rng1:  { name: '配置+1',   cost:1, effect:{units:1},   req:null,   x:0.8, y:0.25 },
+    rng2:  { name: '弓射程+1', cost:2, effect:{bowRange:1}, req:'rng1', x:0.8, y:0.5 },
+};
+let unlockedSkills = {};
+
+function getSkillBonus() {
+    let b = { atk:0, hp:0, crit:0, counterUp:false, extraUnits:0, bowRange:0 };
+    for (const id in unlockedSkills) {
+        if (!unlockedSkills[id]) continue;
+        const e = SKILLS[id].effect;
+        if (e.atk) b.atk += e.atk;
+        if (e.hp) b.hp += e.hp;
+        if (e.crit) b.crit += e.crit;
+        if (e.counterUp) b.counterUp = true;
+        if (e.units) b.extraUnits += e.units;
+        if (e.bowRange) b.bowRange += e.bowRange;
+    }
+    return b;
+}
+
 // ============================================
 // HEX MATH
 // ============================================
-function hexToPixel(row, col) {
+let gridOffsetX = 0, gridOffsetY = 0;
+
+function calcGrid() {
+    const availH = H - HUD_TOP - PANEL_BOTTOM;
+    hexSize = Math.min(W / (COLS * 2 + 1), availH / (ROWS * 1.55)) * 0.92;
     const gridW = COLS * hexSize * 1.75;
     const gridH = ROWS * hexSize * 1.52;
-    const offsetX = (W - gridW) / 2 + hexSize * 0.9;
-    const offsetY = 65 + hexSize; // below HUD
-    const x = offsetX + col * hexSize * 1.75 + (row % 2) * hexSize * 0.875;
-    const y = offsetY + row * hexSize * 1.52;
-    return { x, y };
+    gridOffsetX = (W - gridW) / 2 + hexSize * 0.9;
+    gridOffsetY = HUD_TOP + (availH - gridH) / 2 + hexSize * 0.5;
+}
+
+function hexToPixel(r, c) {
+    return {
+        x: gridOffsetX + c * hexSize * 1.75 + (r % 2) * hexSize * 0.875,
+        y: gridOffsetY + r * hexSize * 1.52
+    };
 }
 
 function pixelToHex(px, py) {
-    let best = null, bestDist = Infinity;
+    let best = null, bestD = Infinity;
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             const { x, y } = hexToPixel(r, c);
             const d = Math.hypot(px - x, py - y);
-            if (d < bestDist && d < hexSize * 1.1) {
-                bestDist = d;
-                best = { r, c };
-            }
+            if (d < bestD && d < hexSize * 1.1) { bestD = d; best = { r, c }; }
         }
     }
     return best;
 }
 
 function hexNeighbors(r, c) {
-    const neighbors = [];
+    const ns = [];
     const even = r % 2 === 0;
-    const dirs = even ?
-        [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]] :
-        [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+    const dirs = even
+        ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]]
+        : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
     for (const [dr, dc] of dirs) {
-        const nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) neighbors.push({r:nr,c:nc});
+        const nr = r+dr, nc = c+dc;
+        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) ns.push({r:nr,c:nc});
     }
-    return neighbors;
+    return ns;
 }
 
-function drawHex(x, y, size, fill, stroke, lineW) {
+// Get hexes within range (BFS)
+function hexInRange(r, c, range) {
+    const visited = new Set();
+    const queue = [{r,c,d:0}];
+    visited.add(r*100+c);
+    const result = [];
+    while (queue.length) {
+        const cur = queue.shift();
+        if (cur.d > 0) result.push({r:cur.r, c:cur.c});
+        if (cur.d < range) {
+            for (const n of hexNeighbors(cur.r, cur.c)) {
+                const key = n.r*100+n.c;
+                if (!visited.has(key)) { visited.add(key); queue.push({r:n.r,c:n.c,d:cur.d+1}); }
+            }
+        }
+    }
+    return result;
+}
+
+function drawHex(x, y, size, fill, stroke, lw) {
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
-        const angle = Math.PI / 3 * i - Math.PI / 6;
-        const hx = x + size * Math.cos(angle);
-        const hy = y + size * Math.sin(angle);
+        const a = Math.PI/3*i - Math.PI/6;
+        const hx = x + size * Math.cos(a), hy = y + size * Math.sin(a);
         if (i === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
     }
     ctx.closePath();
     if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineW || 1; ctx.stroke(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw||1; ctx.stroke(); }
 }
 
 // ============================================
@@ -162,70 +222,86 @@ function initStage() {
     hexGrid = [];
     for (let r = 0; r < ROWS; r++) {
         hexGrid[r] = [];
-        for (let c = 0; c < COLS; c++) {
-            hexGrid[r][c] = { owner: 0, unit: null };
-        }
+        for (let c = 0; c < COLS; c++) hexGrid[r][c] = { owner:0, unit:null };
     }
-    
-    // Player starts bottom-center
-    const pr = ROWS - 1, pc = Math.floor(COLS / 2);
+
+    // Player start: bottom center + a few neighbors
+    const pr = ROWS-1, pc = Math.floor(COLS/2);
     hexGrid[pr][pc].owner = 1;
-    hexGrid[pr][pc].unit = makeUnit(1);
-    // Give neighbors
+    hexGrid[pr][pc].unit = makeUnit(1, 'sword');
     for (const n of hexNeighbors(pr, pc)) {
-        if (Math.random() < 0.5) hexGrid[n.r][n.c].owner = 1;
+        hexGrid[n.r][n.c].owner = 1;
     }
-    
-    // Enemy bases (top area, scales with stage)
-    const enemyCount = Math.min(3 + stage, 10);
+
+    // Enemies: scale with stage
+    const enemyCount = Math.min(2 + stage * 2, 14);
     let placed = 0;
-    for (let r = 0; r < 3 && placed < enemyCount; r++) {
+    // Place from top, spread down as stage increases
+    const maxRow = Math.min(2 + Math.floor(stage / 2), ROWS - 3);
+    for (let r = 0; r <= maxRow && placed < enemyCount; r++) {
         for (let c = 0; c < COLS && placed < enemyCount; c++) {
-            if (Math.random() < 0.3 + stage * 0.05) {
+            if (Math.random() < 0.25 + stage * 0.03) {
                 hexGrid[r][c].owner = 2;
                 hexGrid[r][c].unit = makeEnemyUnit();
                 placed++;
             }
         }
     }
-    // Ensure at least some enemies
     if (placed < 2) {
-        hexGrid[0][3].owner = 2;
-        hexGrid[0][3].unit = makeEnemyUnit();
-        hexGrid[1][2].owner = 2;
-        hexGrid[1][2].unit = makeEnemyUnit();
+        hexGrid[0][2].owner = 2; hexGrid[0][2].unit = makeEnemyUnit();
+        hexGrid[0][4].owner = 2; hexGrid[0][4].unit = makeEnemyUnit();
     }
-    
-    const stats = getStats();
-    maxUnits = 3 + stats.extraUnits;
+
+    const b = getSkillBonus();
+    maxUnits = 3 + b.extraUnits;
     playerUnits = maxUnits;
     turn = 0;
+    selectedType = 'sword';
 }
 
-function makeUnit(owner) {
-    const s = getStats();
-    return { owner, hp: s.hp, maxHp: s.hp, atk: s.atk };
+function makeUnit(owner, type) {
+    const t = UNIT_TYPES[type];
+    const b = getSkillBonus();
+    return {
+        owner, type,
+        hp: t.hp + b.hp,
+        maxHp: t.hp + b.hp,
+        atk: t.atk + b.atk,
+        range: t.range + (type === 'archer' ? b.bowRange : 0),
+        special: t.special,
+        crit: b.crit,
+        counterUp: b.counterUp,
+    };
 }
 
 function makeEnemyUnit() {
-    const base = 3 + stage;
-    const hp = 4 + stage * 2 + Math.floor(Math.random() * stage);
-    const atk = base + Math.floor(Math.random() * 2);
-    return { owner: 2, hp, maxHp: hp, atk };
+    const types = ['sword','sword','sword','archer','shield'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const t = UNIT_TYPES[type];
+    const mult = 0.8 + stage * 0.2;
+    return {
+        owner: 2, type,
+        hp: Math.ceil(t.hp * mult),
+        maxHp: Math.ceil(t.hp * mult),
+        atk: Math.ceil(t.atk * mult),
+        range: t.range,
+        special: t.special,
+        crit: 0, counterUp: false,
+    };
 }
 
 function canPlace(r, c) {
-    if (hexGrid[r][c].owner !== 0 && hexGrid[r][c].owner !== 1) return false;
     if (hexGrid[r][c].unit) return false;
-    // Must be adjacent to owned hex
-    const neighbors = hexNeighbors(r, c);
-    return neighbors.some(n => hexGrid[n.r][n.c].owner === 1);
+    // Must be on owned hex or adjacent to owned
+    if (hexGrid[r][c].owner === 1) return true;
+    if (hexGrid[r][c].owner === 2) return false;
+    return hexNeighbors(r, c).some(n => hexGrid[n.r][n.c].owner === 1);
 }
 
 function placeUnit(r, c) {
     if (playerUnits <= 0 || !canPlace(r, c)) return false;
     hexGrid[r][c].owner = 1;
-    hexGrid[r][c].unit = makeUnit(1);
+    hexGrid[r][c].unit = makeUnit(1, selectedType);
     playerUnits--;
     sfxPlace();
     return true;
@@ -233,93 +309,61 @@ function placeUnit(r, c) {
 
 function endTurn() {
     turn++;
-    // Battle phase: resolve all combats
     battleAnims = [];
-    const stats = getStats();
-    
-    // Player units attack adjacent enemies
+
+    // --- Player attacks ---
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             const cell = hexGrid[r][c];
             if (cell.owner !== 1 || !cell.unit) continue;
-            
-            const neighbors = hexNeighbors(r, c);
-            const targets = stats.aoe ? neighbors : [neighbors.find(n => hexGrid[n.r][n.c].owner === 2 && hexGrid[n.r][n.c].unit)].filter(Boolean);
-            
-            if (!stats.aoe) {
-                // Single target: find first enemy neighbor
-                const target = neighbors.find(n => hexGrid[n.r][n.c].owner === 2 && hexGrid[n.r][n.c].unit);
-                if (target) {
-                    let dmg = cell.unit.atk;
-                    if (stats.crit > 0 && Math.random() < stats.crit) dmg *= 2;
-                    hexGrid[target.r][target.c].unit.hp -= dmg;
-                    battleAnims.push({
-                        from: hexToPixel(r, c), to: hexToPixel(target.r, target.c),
-                        dmg, crit: dmg > cell.unit.atk, type: 'player'
-                    });
-                }
-            } else {
-                // AOE: hit all enemy neighbors
-                for (const n of neighbors) {
-                    if (hexGrid[n.r][n.c].owner === 2 && hexGrid[n.r][n.c].unit) {
-                        let dmg = Math.ceil(cell.unit.atk * 0.7);
-                        if (stats.crit > 0 && Math.random() < stats.crit) dmg *= 2;
-                        hexGrid[n.r][n.c].unit.hp -= dmg;
-                        battleAnims.push({
-                            from: hexToPixel(r, c), to: hexToPixel(n.r, n.c),
-                            dmg, crit: false, type: 'player'
-                        });
-                    }
-                }
-            }
-            
-            // Conquer empty adjacent
-            if (stats.conquer) {
-                for (const n of neighbors) {
-                    if (hexGrid[n.r][n.c].owner === 0) hexGrid[n.r][n.c].owner = 1;
-                }
-            }
+            const u = cell.unit;
+            const targets = hexInRange(r, c, u.range).filter(n =>
+                hexGrid[n.r][n.c].owner === 2 && hexGrid[n.r][n.c].unit
+            );
+            if (targets.length === 0) continue;
+            // Attack closest (first found)
+            const t = targets[0];
+            let dmg = u.atk;
+            let isCrit = false;
+            if (u.crit > 0 && Math.random() < u.crit) { dmg *= 2; isCrit = true; }
+            hexGrid[t.r][t.c].unit.hp -= dmg;
+            battleAnims.push({ from:hexToPixel(r,c), to:hexToPixel(t.r,t.c), dmg, crit:isCrit, type:'player' });
         }
     }
-    
-    // Enemy attacks
+
+    // --- Enemy attacks ---
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             const cell = hexGrid[r][c];
             if (cell.owner !== 2 || !cell.unit) continue;
-            
-            const neighbors = hexNeighbors(r, c);
-            const target = neighbors.find(n => hexGrid[n.r][n.c].owner === 1 && hexGrid[n.r][n.c].unit);
-            if (target) {
-                let dmg = cell.unit.atk;
-                hexGrid[target.r][target.c].unit.hp -= dmg;
-                battleAnims.push({
-                    from: hexToPixel(r, c), to: hexToPixel(target.r, target.c),
-                    dmg, type: 'enemy'
-                });
-                
-                // Counter
-                if (stats.counter && hexGrid[target.r][target.c].unit.hp > 0) {
-                    const counterDmg = Math.ceil(hexGrid[target.r][target.c].unit.atk * 0.5);
-                    cell.unit.hp -= counterDmg;
-                    battleAnims.push({
-                        from: hexToPixel(target.r, target.c), to: hexToPixel(r, c),
-                        dmg: counterDmg, type: 'counter'
-                    });
-                }
+            const u = cell.unit;
+            const targets = hexInRange(r, c, u.range).filter(n =>
+                hexGrid[n.r][n.c].owner === 1 && hexGrid[n.r][n.c].unit
+            );
+            if (targets.length === 0) continue;
+            const t = targets[0];
+            const defender = hexGrid[t.r][t.c].unit;
+            let dmg = u.atk;
+            defender.hp -= dmg;
+            battleAnims.push({ from:hexToPixel(r,c), to:hexToPixel(t.r,t.c), dmg, type:'enemy' });
+
+            // Counter-attack (shield units)
+            if (defender.special === 'counter' && defender.hp > 0) {
+                let counterDmg = Math.ceil(defender.atk * (defender.counterUp ? 1.0 : 0.5));
+                u.hp -= counterDmg;
+                battleAnims.push({ from:hexToPixel(t.r,t.c), to:hexToPixel(r,c), dmg:counterDmg, type:'counter' });
             }
         }
     }
-    
-    // Enemy expansion: try to place new units
+
+    // Enemy expansion (every 2 turns)
     if (turn % 2 === 0) {
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 if (hexGrid[r][c].owner === 2 && hexGrid[r][c].unit) {
-                    const neighbors = hexNeighbors(r, c);
-                    const empty = neighbors.filter(n => hexGrid[n.r][n.c].owner === 0 && !hexGrid[n.r][n.c].unit);
-                    if (empty.length > 0 && Math.random() < 0.3) {
-                        const t = empty[Math.floor(Math.random() * empty.length)];
+                    const empty = hexNeighbors(r,c).filter(n => hexGrid[n.r][n.c].owner === 0 && !hexGrid[n.r][n.c].unit);
+                    if (empty.length > 0 && Math.random() < 0.25) {
+                        const t = empty[Math.floor(Math.random()*empty.length)];
                         hexGrid[t.r][t.c].owner = 2;
                         hexGrid[t.r][t.c].unit = makeEnemyUnit();
                     }
@@ -327,67 +371,49 @@ function endTurn() {
             }
         }
     }
-    
+
     state = ST.BATTLE_ANIM;
-    battleTimer = 1.2;
+    battleTimer = 1.0;
     sfxBattle();
 }
 
 function resolveBattle() {
-    // Remove dead units
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             const cell = hexGrid[r][c];
             if (cell.unit && cell.unit.hp <= 0) {
-                if (cell.owner === 2) {
-                    score += 10;
-                    // Player captures the hex
-                    cell.owner = 1;
-                }
+                if (cell.owner === 2) { score += 10; cell.owner = 1; sfxCapture(); }
                 cell.unit = null;
             }
         }
     }
-    
-    // Check win/lose
-    let playerExists = false, enemyExists = false;
-    for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-            if (hexGrid[r][c].owner === 1 && hexGrid[r][c].unit) playerExists = true;
-            if (hexGrid[r][c].owner === 2 && hexGrid[r][c].unit) enemyExists = true;
+
+    let hasEnemy = false, hasPlayer = false;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        if (hexGrid[r][c].unit) {
+            if (hexGrid[r][c].owner === 1) hasPlayer = true;
+            if (hexGrid[r][c].owner === 2) hasEnemy = true;
         }
     }
-    
-    if (!enemyExists) {
-        // Stage clear!
+
+    if (!hasEnemy) {
         sp += 1 + Math.floor(stage / 2);
         score += stage * 50;
         state = ST.STAGE_CLEAR;
         sfxWin();
         return;
     }
-    
-    if (!playerExists) {
-        // Check if player has any owned hexes to place from
-        let canStillPlace = false;
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                if (hexGrid[r][c].owner === 1) {
-                    const ns = hexNeighbors(r, c);
-                    if (ns.some(n => !hexGrid[n.r][n.c].unit && hexGrid[n.r][n.c].owner !== 2)) canStillPlace = true;
-                }
-            }
-        }
-        if (!canStillPlace) {
-            state = ST.GAME_OVER;
-            sfxLose();
-            return;
-        }
+
+    if (!hasPlayer) {
+        let canStill = false;
+        for (let r = 0; r < ROWS && !canStill; r++)
+            for (let c = 0; c < COLS && !canStill; c++)
+                if (hexGrid[r][c].owner === 1 && hexNeighbors(r,c).some(n => !hexGrid[n.r][n.c].unit && hexGrid[n.r][n.c].owner !== 2))
+                    canStill = true;
+        if (!canStill) { state = ST.GAME_OVER; sfxLose(); return; }
     }
-    
-    // Next turn
-    const stats = getStats();
-    maxUnits = 3 + stats.extraUnits;
+
+    maxUnits = 3 + getSkillBonus().extraUnits;
     playerUnits = maxUnits;
     state = ST.PLAY;
 }
@@ -395,417 +421,358 @@ function resolveBattle() {
 // ============================================
 // INPUT
 // ============================================
-let selectedSkill = null;
+let selectedSkillId = null;
 
 canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     ensureAudio();
-    const px = e.clientX, py = e.clientY;
-    
+    const { x: px, y: py } = getCanvasXY(e);
+
     if (state === ST.TITLE) {
-        state = ST.PLAY;
-        stage = 1; score = 0; sp = 0;
-        unlockedSkills = {};
-        initStage();
-        return;
+        state = ST.PLAY; stage = 1; score = 0; sp = 0;
+        unlockedSkills = {}; initStage(); return;
     }
-    
-    if (state === ST.GAME_OVER) {
-        state = ST.TITLE;
-        return;
-    }
-    
-    if (state === ST.STAGE_CLEAR) {
-        stage++;
-        state = ST.SKILL_TREE;
-        selectedSkill = null;
-        return;
-    }
-    
-    if (state === ST.SKILL_TREE) {
-        handleSkillTreeInput(px, py);
-        return;
-    }
-    
+    if (state === ST.GAME_OVER) { state = ST.TITLE; return; }
+    if (state === ST.STAGE_CLEAR) { stage++; state = ST.SKILL_TREE; selectedSkillId = null; return; }
+    if (state === ST.SKILL_TREE) { handleSkillInput(px, py); return; }
+
     if (state === ST.PLAY) {
-        // Check "End Turn" button (large touch area)
-        const btnX = W / 2, btnY = H - 65;
-        if (py > H - 110 && Math.abs(px - btnX) < 100) {
-            endTurn();
+        // --- Bottom panel: unit type selector ---
+        const panelY = H - PANEL_BOTTOM;
+        if (py > panelY) {
+            // Unit type buttons
+            const types = ['sword', 'archer', 'shield'];
+            const btnW = Math.min(100, (W - 40) / 3);
+            const startX = (W - btnW * 3 - 20) / 2;
+            for (let i = 0; i < 3; i++) {
+                const bx = startX + i * (btnW + 10);
+                const by = panelY + 10;
+                if (px > bx && px < bx + btnW && py > by && py < by + 55) {
+                    selectedType = types[i];
+                    sfxSelect();
+                    return;
+                }
+            }
+            // End turn button
+            const btnEndY = panelY + 75;
+            if (py > btnEndY && py < btnEndY + 60) {
+                endTurn();
+                return;
+            }
             return;
         }
-        
-        // Place unit on hex
+
+        // --- Hex grid tap ---
         const hex = pixelToHex(px, py);
-        if (hex) {
-            if (canPlace(hex.r, hex.c)) {
-                placeUnit(hex.r, hex.c);
-            }
+        if (hex && canPlace(hex.r, hex.c)) {
+            placeUnit(hex.r, hex.c);
         }
     }
 });
 
-function handleSkillTreeInput(px, py) {
-    // Check skill nodes
+function handleSkillInput(px, py) {
     for (const id in SKILLS) {
         const sk = SKILLS[id];
-        const nx = W * sk.x;
-        const ny = H * sk.y + 60;
-        if (Math.hypot(px - nx, py - ny) < 25) {
-            selectedSkill = id;
+        if (Math.hypot(px - W * sk.x, py - (H * sk.y + 80)) < 30) {
+            selectedSkillId = id;
+            sfxSelect();
             return;
         }
     }
-    
-    // "Learn" button
-    if (selectedSkill) {
-        const btnX = W / 2, btnY = H * 0.88;
-        if (Math.abs(px - btnX) < 60 && Math.abs(py - btnY) < 22) {
-            const sk = SKILLS[selectedSkill];
-            if (sp >= sk.cost && !unlockedSkills[selectedSkill]) {
-                if (!sk.req || unlockedSkills[sk.req]) {
-                    sp -= sk.cost;
-                    unlockedSkills[selectedSkill] = true;
-                    sfxSkill();
-                    selectedSkill = null;
-                }
-            }
+    // Learn button
+    if (selectedSkillId) {
+        const sk = SKILLS[selectedSkillId];
+        const canLearn = !unlockedSkills[selectedSkillId] && sp >= sk.cost && (!sk.req || unlockedSkills[sk.req]);
+        if (canLearn && py > H * 0.72 && py < H * 0.72 + 45 && Math.abs(px - W/2) < 70) {
+            sp -= sk.cost; unlockedSkills[selectedSkillId] = true; sfxSkill(); selectedSkillId = null;
             return;
         }
     }
-    
-    // "Next Stage" button
-    const nextBtnX = W / 2, nextBtnY = H * 0.95;
-    if (Math.abs(px - nextBtnX) < 60 && Math.abs(py - nextBtnY) < 22) {
-        initStage();
-        state = ST.PLAY;
+    // Next stage
+    if (py > H * 0.85 && Math.abs(px - W/2) < 70) {
+        initStage(); state = ST.PLAY;
     }
 }
 
 // ============================================
-// UPDATE & DRAW
+// DRAWING
 // ============================================
 let lt = 0;
-
 function update(ts) {
     const dt = Math.min((ts - lt) / 1000, 0.05);
     lt = ts;
-    
-    if (state === ST.BATTLE_ANIM) {
-        battleTimer -= dt;
-        if (battleTimer <= 0) resolveBattle();
-    }
-    
+    if (state === ST.BATTLE_ANIM) { battleTimer -= dt; if (battleTimer <= 0) resolveBattle(); }
     draw();
     requestAnimationFrame(update);
 }
 
 function draw() {
-    // hexSize: fit grid between HUD (top 65px) and bottom panel (120px)
-    const availH = H - 65 - 130;
-    hexSize = Math.min(W / (COLS * 2 + 1), availH / (ROWS * 1.55)) * 0.95;
-    
-    // Background
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#0a0a1e');
-    bg.addColorStop(1, '#1a1a3e');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
-    
+    calcGrid();
+
+    // BG
+    const bg = ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#080818'); bg.addColorStop(1,'#12122e');
+    ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
     if (state === ST.TITLE) { drawTitle(); return; }
     if (state === ST.SKILL_TREE) { drawSkillTree(); return; }
     if (state === ST.GAME_OVER) { drawGameOver(); return; }
-    
-    // Draw hex grid
+
+    // === HEX GRID ===
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             const { x, y } = hexToPixel(r, c);
             const cell = hexGrid[r][c];
-            
-            let fill = '#1a1a30';
-            let stroke = '#333';
-            if (cell.owner === 1) { fill = '#1a2a4a'; stroke = '#4488cc'; }
-            if (cell.owner === 2) { fill = '#3a1a1a'; stroke = '#cc4444'; }
-            
-            // Highlight placeable (pulsing green)
+            let fill = '#151525';
+            let stroke = '#2a2a3a';
+            if (cell.owner === 1) { fill = '#162640'; stroke = '#3070aa'; }
+            if (cell.owner === 2) { fill = '#301515'; stroke = '#aa3030'; }
+
+            // Placeable pulse
             if (state === ST.PLAY && playerUnits > 0 && canPlace(r, c)) {
-                const pulse = 0.3 + Math.sin(Date.now()/400 + r + c) * 0.1;
-                fill = `rgba(40,180,80,${pulse})`;
-                stroke = '#4c4';
+                const p = 0.35 + Math.sin(Date.now()/350 + r*2 + c) * 0.15;
+                fill = `rgba(50,200,100,${p})`;
+                stroke = '#5f5';
             }
-            
-            drawHex(x, y, hexSize * 0.92, fill, stroke, 1.5);
-            
-            // Draw unit
-            if (cell.unit) {
-                drawUnit(x, y, cell.unit, cell.owner);
-            }
+
+            drawHex(x, y, hexSize * 0.9, fill, stroke, 1.5);
+
+            // Unit icon + bars
+            if (cell.unit) drawUnit(x, y, cell.unit);
         }
     }
-    
-    // Battle animations
+
+    // Battle anims
     if (state === ST.BATTLE_ANIM) {
-        const progress = 1 - battleTimer / 1.2;
-        for (const anim of battleAnims) {
-            const t = Math.min(progress * 3, 1);
-            const ax = anim.from.x + (anim.to.x - anim.from.x) * t;
-            const ay = anim.from.y + (anim.to.y - anim.from.y) * t;
-            
-            // Flash line
-            ctx.strokeStyle = anim.type === 'player' ? 'rgba(100,200,255,0.6)' :
-                              anim.type === 'counter' ? 'rgba(255,255,100,0.6)' : 'rgba(255,100,100,0.6)';
-            ctx.lineWidth = 2;
-            ctx.globalAlpha = 1 - t;
-            ctx.beginPath();
-            ctx.moveTo(anim.from.x, anim.from.y);
-            ctx.lineTo(ax, ay);
+        const prog = 1 - battleTimer / 1.0;
+        for (const a of battleAnims) {
+            const t = Math.min(prog * 3, 1);
+            ctx.strokeStyle = a.type === 'player' ? 'rgba(100,200,255,0.7)' :
+                              a.type === 'counter' ? 'rgba(255,255,100,0.7)' : 'rgba(255,100,100,0.7)';
+            ctx.lineWidth = 2.5; ctx.globalAlpha = 1-t;
+            ctx.beginPath(); ctx.moveTo(a.from.x,a.from.y); ctx.lineTo(
+                a.from.x+(a.to.x-a.from.x)*t, a.from.y+(a.to.y-a.from.y)*t);
             ctx.stroke();
-            
-            // Damage number
             if (t > 0.3) {
-                ctx.globalAlpha = 1 - (t - 0.3) / 0.7;
-                ctx.fillStyle = anim.crit ? '#ff0' : (anim.type === 'player' ? '#8cf' : '#f88');
-                ctx.font = `bold ${anim.crit ? 18 : 14}px sans-serif`;
+                ctx.globalAlpha = 1-(t-0.3)/0.7;
+                ctx.fillStyle = a.crit ? '#ff0' : (a.type==='player' ? '#8cf' : '#f88');
+                ctx.font = `bold ${a.crit ? 18 : 14}px sans-serif`;
                 ctx.textAlign = 'center';
-                ctx.fillText('-' + anim.dmg, anim.to.x, anim.to.y - 20 - t * 20);
+                ctx.fillText('-'+a.dmg, a.to.x, a.to.y - 25 - t*20);
             }
             ctx.globalAlpha = 1;
         }
     }
-    
-    // HUD
+
     drawHUD();
-    
-    // Stage clear overlay
-    if (state === ST.STAGE_CLEAR) {
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(0, 0, W, H);
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 28px sans-serif';
-        ctx.fillText('⚔️ STAGE ' + stage + ' CLEAR!', W/2, H*0.35);
-        ctx.fillStyle = '#fff';
-        ctx.font = '18px sans-serif';
-        ctx.fillText('SP +' + (1 + Math.floor(stage/2)), W/2, H*0.43);
-        ctx.fillText('スコア: ' + score, W/2, H*0.50);
-        
-        const pulse = 0.6 + Math.sin(Date.now()/400)*0.4;
-        ctx.globalAlpha = pulse;
-        ctx.fillStyle = '#64dfdf';
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillText('▶ タップで次へ', W/2, H*0.63);
-        ctx.globalAlpha = 1;
-    }
+    drawBottomPanel();
+
+    if (state === ST.STAGE_CLEAR) drawStageClear();
 }
 
-function drawUnit(x, y, unit, owner) {
-    const r = hexSize * 0.35;
-    // Body
-    ctx.fillStyle = owner === 1 ? '#4488cc' : '#cc4444';
-    ctx.beginPath(); ctx.arc(x, y - r * 0.3, r, 0, Math.PI * 2); ctx.fill();
-    
+function drawUnit(x, y, unit) {
+    const t = UNIT_TYPES[unit.type];
+    const r = hexSize * 0.32;
+
+    // Circle bg
+    ctx.fillStyle = unit.owner === 1 ? t.color : '#aa3333';
+    ctx.beginPath(); ctx.arc(x, y - 2, r, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(x, y - 2, r, 0, Math.PI*2); ctx.stroke();
+
+    // Icon
+    ctx.font = `${Math.max(12, hexSize * 0.35)}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(t.icon, x, y - 2);
+    ctx.textBaseline = 'alphabetic';
+
     // HP bar
-    const barW = hexSize * 0.7;
-    const barH = 4;
-    const barX = x - barW / 2;
-    const barY = y + r * 0.8;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
-    const hpRatio = Math.max(0, unit.hp / unit.maxHp);
-    ctx.fillStyle = hpRatio > 0.5 ? '#4c4' : hpRatio > 0.25 ? '#cc4' : '#c44';
-    ctx.fillRect(barX, barY, barW * hpRatio, barH);
-    
-    // ATK number
+    const bw = hexSize * 0.65, bh = 4;
+    const bx = x - bw/2, by = y + r + 3;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(bx-1, by-1, bw+2, bh+2);
+    const ratio = Math.max(0, unit.hp / unit.maxHp);
+    ctx.fillStyle = ratio > 0.5 ? '#4c4' : ratio > 0.25 ? '#cc4' : '#c44';
+    ctx.fillRect(bx, by, bw * ratio, bh);
+
+    // ATK / HP text (small)
     ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.max(10, hexSize * 0.3)}px sans-serif`;
+    ctx.font = `${Math.max(8, hexSize*0.2)}px sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(unit.atk, x, y - r * 0.1);
-    
-    // HP number
-    ctx.font = `${Math.max(8, hexSize * 0.22)}px sans-serif`;
-    ctx.fillText(unit.hp, x, y + r * 0.5);
+    ctx.fillText(`${unit.atk}⚔ ${unit.hp}♥`, x, by + bh + 11);
 }
 
 function drawHUD() {
+    // Top bar background
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, W, HUD_TOP);
+
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.fillText('STAGE ' + stage, 12, 25);
-    
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '13px sans-serif';
-    ctx.fillText('ターン ' + turn + ' | スコア ' + score, 12, 45);
-    
-    // SP
-    ctx.fillStyle = '#ffd700';
-    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(`STAGE ${stage}`, 12, 22);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '12px sans-serif';
+    ctx.fillText(`ターン ${turn}`, 12, 40);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(`スコア ${score}`, W/2, 22);
+
     ctx.textAlign = 'right';
-    ctx.fillText('SP: ' + sp, W - 12, 25);
-    
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px sans-serif';
+    ctx.fillText(`SP: ${sp}`, W-12, 22);
+
     if (state === ST.PLAY) {
-        // Bottom panel background
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(0, H - 120, W, 120);
-        
-        // Units remaining
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#8cf';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('🟢 配置可能: ' + playerUnits + '/' + maxUnits, W/2, H - 95);
-        
-        // Instructions
-        if (playerUnits > 0) {
-            ctx.fillStyle = 'rgba(255,255,255,0.4)';
-            ctx.font = '12px sans-serif';
-            ctx.fillText('緑のマスをタップしてユニット配置', W/2, H - 78);
-        }
-        
-        // End turn button (BIG)
-        const btnX = W/2, btnY = H - 45;
-        const btnGlow = 0.8 + Math.sin(Date.now()/500) * 0.2;
-        ctx.fillStyle = playerUnits === 0 ? `rgba(68,136,204,${btnGlow})` : '#336699';
-        roundRect(btnX - 90, btnY - 25, 180, 50, 10);
-        ctx.fill();
-        ctx.strokeStyle = '#6ab';
-        ctx.lineWidth = 2;
-        roundRect(btnX - 90, btnY - 25, 180, 50, 10);
-        ctx.stroke();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('⚔️ ターン終了', btnX, btnY + 6);
+        ctx.fillStyle = '#8cf'; ctx.font = '12px sans-serif';
+        ctx.fillText(`配置: ${playerUnits}/${maxUnits}`, W-12, 40);
     }
     ctx.textAlign = 'left';
 }
 
-function roundRect(x, y, w, h, r) {
+function drawBottomPanel() {
+    if (state !== ST.PLAY) return;
+
+    const panelY = H - PANEL_BOTTOM;
+
+    // Panel background
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, panelY, W, PANEL_BOTTOM);
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, panelY); ctx.lineTo(W, panelY); ctx.stroke();
+
+    // Unit type selector (3 buttons)
+    const types = ['sword', 'archer', 'shield'];
+    const btnW = Math.min(100, (W - 40) / 3);
+    const startX = (W - btnW * 3 - 20) / 2;
+
+    for (let i = 0; i < 3; i++) {
+        const t = UNIT_TYPES[types[i]];
+        const bx = startX + i * (btnW + 10);
+        const by = panelY + 10;
+
+        // Button bg
+        const isSelected = selectedType === types[i];
+        ctx.fillStyle = isSelected ? 'rgba(68,136,204,0.4)' : 'rgba(255,255,255,0.05)';
+        roundRect(bx, by, btnW, 52, 8); ctx.fill();
+        ctx.strokeStyle = isSelected ? '#4488cc' : 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = isSelected ? 2 : 1;
+        roundRect(bx, by, btnW, 52, 8); ctx.stroke();
+
+        // Icon & name
+        ctx.textAlign = 'center';
+        ctx.font = '20px sans-serif';
+        ctx.fillText(t.icon, bx + btnW/2, by + 22);
+        ctx.fillStyle = isSelected ? '#fff' : '#888';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(t.desc, bx + btnW/2, by + 42);
+    }
+
+    // End Turn button (big & obvious)
+    const btnEndY = panelY + 72;
+    const btnEndH = 50;
+    const glow = 0.7 + Math.sin(Date.now()/400) * 0.3;
+    ctx.fillStyle = `rgba(200,60,60,${glow})`;
+    roundRect(20, btnEndY, W - 40, btnEndH, 10); ctx.fill();
+    ctx.strokeStyle = '#f66'; ctx.lineWidth = 2;
+    roundRect(20, btnEndY, W - 40, btnEndH, 10); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('⚔️ ターン終了', W/2, btnEndY + btnEndH/2 + 7);
+
+    // Hint
+    if (playerUnits > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '11px sans-serif';
+        ctx.fillText('🟢緑マスをタップして配置 → 赤ボタンで戦闘開始', W/2, H - 8);
+    }
+    ctx.textAlign = 'left';
+}
+
+function roundRect(x,y,w,h,r) {
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r); ctx.lineTo(x+w,y+h-r);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r);
+    ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
 }
 
 // ============================================
-// SKILL TREE
+// SKILL TREE SCREEN
 // ============================================
 function drawSkillTree() {
-    ctx.fillStyle = '#0a0a1e';
-    ctx.fillRect(0, 0, W, H);
-    
+    ctx.fillStyle = '#080818'; ctx.fillRect(0,0,W,H);
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 22px sans-serif';
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif';
     ctx.fillText('⚡ スキルツリー', W/2, 35);
-    
-    ctx.fillStyle = '#ffd700';
-    ctx.font = '15px sans-serif';
-    ctx.fillText('SP: ' + sp, W/2, 58);
-    
-    // Tree labels
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.font = '12px sans-serif';
-    ctx.fillText('⚔️ 攻撃', W * 0.25, 80);
-    ctx.fillText('🛡️ 防御', W * 0.5, 80);
-    ctx.fillText('📡 範囲', W * 0.75, 80);
-    
-    // Draw connections
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-    ctx.lineWidth = 2;
+    ctx.fillStyle = '#ffd700'; ctx.font = '14px sans-serif';
+    ctx.fillText(`SP: ${sp}`, W/2, 55);
+
+    // Labels
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '11px sans-serif';
+    ctx.fillText('⚔️攻撃', W*0.2, 78); ctx.fillText('🛡️防御', W*0.5, 78); ctx.fillText('📡範囲', W*0.8, 78);
+
+    // Connections
     for (const id in SKILLS) {
         const sk = SKILLS[id];
         if (sk.req) {
-            const parent = SKILLS[sk.req];
-            ctx.beginPath();
-            ctx.moveTo(W * parent.x, H * parent.y + 60);
-            ctx.lineTo(W * sk.x, H * sk.y + 60);
-            if (unlockedSkills[id] && unlockedSkills[sk.req]) ctx.strokeStyle = '#4488cc';
-            else ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-            ctx.stroke();
+            const p = SKILLS[sk.req];
+            ctx.strokeStyle = (unlockedSkills[id] && unlockedSkills[sk.req]) ? '#4488cc' : 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(W*p.x, H*p.y+80); ctx.lineTo(W*sk.x, H*sk.y+80); ctx.stroke();
         }
     }
-    
-    // Draw nodes
+
+    // Nodes
     for (const id in SKILLS) {
         const sk = SKILLS[id];
-        const nx = W * sk.x;
-        const ny = H * sk.y + 60;
+        const nx = W*sk.x, ny = H*sk.y + 80;
         const unlocked = !!unlockedSkills[id];
         const canLearn = !unlocked && sp >= sk.cost && (!sk.req || unlockedSkills[sk.req]);
-        
-        // Node circle
-        let fill = '#222';
-        if (unlocked) fill = '#2a4a6a';
-        else if (canLearn) fill = '#2a3a2a';
-        else fill = '#1a1a1a';
-        
-        ctx.beginPath();
-        ctx.arc(nx, ny, 22, 0, Math.PI * 2);
-        ctx.fillStyle = fill;
+
+        ctx.beginPath(); ctx.arc(nx, ny, 26, 0, Math.PI*2);
+        ctx.fillStyle = unlocked ? '#1a3a5a' : canLearn ? '#1a3a1a' : '#1a1a1a';
         ctx.fill();
-        ctx.strokeStyle = unlocked ? '#4488cc' : canLearn ? '#44cc44' : '#444';
-        ctx.lineWidth = selectedSkill === id ? 3 : 1.5;
+        ctx.strokeStyle = selectedSkillId === id ? '#fff' : unlocked ? '#4488cc' : canLearn ? '#4c4' : '#333';
+        ctx.lineWidth = selectedSkillId === id ? 3 : 1.5;
         ctx.stroke();
-        
-        // Icon/label
+
         ctx.fillStyle = unlocked ? '#8cf' : '#888';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText(sk.name, nx, ny + 4);
-        
-        // Cost
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(sk.name, nx, ny + 3);
         if (!unlocked) {
             ctx.fillStyle = canLearn ? '#ffd700' : '#555';
-            ctx.font = '9px sans-serif';
-            ctx.fillText(sk.cost + 'SP', nx, ny + 16);
+            ctx.font = '10px sans-serif';
+            ctx.fillText(sk.cost+'SP', nx, ny + 17);
         } else {
-            ctx.fillStyle = '#4c4';
-            ctx.font = '9px sans-serif';
-            ctx.fillText('✓', nx, ny + 15);
+            ctx.fillStyle = '#4c4'; ctx.font = '10px sans-serif';
+            ctx.fillText('✓', nx, ny + 17);
         }
     }
-    
-    // Selected skill detail
-    if (selectedSkill) {
-        const sk = SKILLS[selectedSkill];
-        const unlocked = !!unlockedSkills[selectedSkill];
+
+    // Selected detail + learn button
+    if (selectedSkillId) {
+        const sk = SKILLS[selectedSkillId];
+        const unlocked = !!unlockedSkills[selectedSkillId];
         const canLearn = !unlocked && sp >= sk.cost && (!sk.req || unlockedSkills[sk.req]);
-        
         ctx.fillStyle = 'rgba(255,255,255,0.06)';
-        roundRect(W * 0.1, H * 0.82, W * 0.8, 50, 8);
-        ctx.fill();
-        
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(sk.name, W/2, H * 0.85);
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.font = '12px sans-serif';
-        ctx.fillText(sk.desc, W/2, H * 0.855 + 15);
-        
-        // Learn button
+        roundRect(W*0.1, H*0.62, W*0.8, 40, 8); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(sk.name, W/2, H*0.65);
+        ctx.fillStyle = '#aaa'; ctx.font = '12px sans-serif';
+        ctx.fillText(sk.cost+'SP必要', W/2, H*0.65 + 18);
         if (canLearn) {
-            const btnX = W/2, btnY = H * 0.92;
             ctx.fillStyle = '#338833';
-            roundRect(btnX - 55, btnY - 18, 110, 36, 6);
-            ctx.fill();
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 14px sans-serif';
-            ctx.fillText('習得 (' + sk.cost + 'SP)', btnX, btnY + 5);
+            roundRect(W/2-60, H*0.72, 120, 40, 8); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 15px sans-serif';
+            ctx.fillText('習得する', W/2, H*0.72 + 25);
         }
     }
-    
+
     // Next stage button
     ctx.fillStyle = '#336699';
-    roundRect(W/2 - 55, H * 0.96 - 18, 110, 36, 6);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('▶ 次のステージ', W/2, H * 0.96 + 5);
+    roundRect(W/2-65, H*0.85, 130, 45, 8); ctx.fill();
+    ctx.strokeStyle = '#6ab'; ctx.lineWidth = 1.5;
+    roundRect(W/2-65, H*0.85, 130, 45, 8); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('▶ 次のステージ', W/2, H*0.85 + 28);
 }
 
 // ============================================
@@ -813,62 +780,84 @@ function drawSkillTree() {
 // ============================================
 function drawTitle() {
     ctx.textAlign = 'center';
-    
-    // Draw some hex decorations
-    for (let i = 0; i < 12; i++) {
-        const hx = (i * 67 + 30) % W;
-        const hy = (i * 89 + 50) % (H * 0.6) + H * 0.3;
-        drawHex(hx, hy, 20, null, `rgba(68,136,204,${0.05 + Math.sin(Date.now()/1000 + i)*0.03})`, 1);
+
+    // Decorative hexes
+    for (let i = 0; i < 15; i++) {
+        const hx = (i*73+20)%W, hy = (i*97+60)%(H*0.5)+H*0.35;
+        const a = 0.04 + Math.sin(Date.now()/800+i)*0.03;
+        drawHex(hx, hy, 18, null, `rgba(68,136,204,${a})`, 1);
     }
-    
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 32px sans-serif';
-    ctx.fillText('⚔️ ヘックス制圧', W/2, H * 0.22);
-    
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '14px sans-serif';
-    ctx.fillText('六角形の陣地を制圧せよ', W/2, H * 0.30);
-    
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.font = '13px sans-serif';
-    ctx.fillText('🟢 緑マスにユニットを配置', W/2, H * 0.40);
-    ctx.fillText('⚔️ ターン終了で戦闘', W/2, H * 0.44);
-    ctx.fillText('⚡ SPでスキルを習得', W/2, H * 0.48);
-    ctx.fillText('🏴 全敵ユニット撃破でクリア', W/2, H * 0.52);
-    
+
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 30px sans-serif';
+    ctx.fillText('⚔️ ヘックス制圧', W/2, H*0.18);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '14px sans-serif';
+    ctx.fillText('六角形の陣地を制圧せよ', W/2, H*0.26);
+
+    // Instructions with icons
+    const ins = [
+        '🟢 緑マスをタップ → ユニット配置',
+        '⚔️🏹🛡️ 3種のユニットを使い分け',
+        '🔴 ターン終了で自動戦闘',
+        '⚡ クリアでSP → スキル習得',
+        '🏴 全敵ユニット撃破 = ステージクリア',
+    ];
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '13px sans-serif';
+    for (let i = 0; i < ins.length; i++) {
+        ctx.fillText(ins[i], W/2, H*0.36 + i * 26);
+    }
+
+    // Unit type preview
+    const types = ['sword','archer','shield'];
+    const previewY = H * 0.63;
+    ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.font = '12px sans-serif';
+    ctx.fillText('ユニット紹介', W/2, previewY - 15);
+    for (let i = 0; i < 3; i++) {
+        const t = UNIT_TYPES[types[i]];
+        const px = W * (0.2 + i * 0.3);
+        ctx.font = '24px sans-serif';
+        ctx.fillText(t.icon, px, previewY + 12);
+        ctx.fillStyle = '#ccc'; ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(t.name, px, previewY + 30);
+        ctx.fillStyle = '#888'; ctx.font = '10px sans-serif';
+        ctx.fillText(`ATK:${t.atk} HP:${t.hp}`, px, previewY + 44);
+        ctx.fillText(t.desc, px, previewY + 57);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    }
+
     const pulse = 0.6 + Math.sin(Date.now()/400) * 0.4;
     ctx.globalAlpha = pulse;
-    ctx.fillStyle = '#64dfdf';
-    ctx.font = 'bold 22px sans-serif';
-    ctx.fillText('▶ タップでスタート', W/2, H * 0.68);
+    ctx.fillStyle = '#64dfdf'; ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('▶ タップでスタート', W/2, H*0.85);
     ctx.globalAlpha = 1;
 }
 
 function drawGameOver() {
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#ff4444';
-    ctx.font = 'bold 30px sans-serif';
-    ctx.fillText('💀 制圧失敗', W/2, H * 0.3);
-    
-    ctx.fillStyle = '#fff';
-    ctx.font = '18px sans-serif';
-    ctx.fillText('ステージ ' + stage + ' | スコア ' + score, W/2, H * 0.42);
-    
-    const pulse = 0.6 + Math.sin(Date.now()/400) * 0.4;
-    ctx.globalAlpha = pulse;
-    ctx.fillStyle = '#64dfdf';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('▶ タップでタイトルへ', W/2, H * 0.58);
+    ctx.fillStyle = '#ff4444'; ctx.font = 'bold 30px sans-serif';
+    ctx.fillText('💀 制圧失敗', W/2, H*0.3);
+    ctx.fillStyle = '#fff'; ctx.font = '18px sans-serif';
+    ctx.fillText(`ステージ ${stage} | スコア ${score}`, W/2, H*0.42);
+    const pulse = 0.6 + Math.sin(Date.now()/400)*0.4;
+    ctx.globalAlpha = pulse; ctx.fillStyle = '#64dfdf'; ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('▶ タップでタイトルへ', W/2, H*0.58);
     ctx.globalAlpha = 1;
 }
 
-// Save/Load
-try {
-    const save = JSON.parse(localStorage.getItem('hexconquest_v1'));
-    if (save) { /* future: load high score */ }
-} catch(e) {}
+function drawStageClear() {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 28px sans-serif';
+    ctx.fillText(`⚔️ STAGE ${stage} CLEAR!`, W/2, H*0.3);
+    ctx.fillStyle = '#fff'; ctx.font = '16px sans-serif';
+    ctx.fillText(`SP +${1 + Math.floor(stage/2)}`, W/2, H*0.39);
+    ctx.fillText(`スコア: ${score}`, W/2, H*0.45);
+    const pulse = 0.6 + Math.sin(Date.now()/400)*0.4;
+    ctx.globalAlpha = pulse; ctx.fillStyle = '#64dfdf'; ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('▶ タップで次へ', W/2, H*0.58);
+    ctx.globalAlpha = 1;
+}
 
 requestAnimationFrame(update);
 </script>
