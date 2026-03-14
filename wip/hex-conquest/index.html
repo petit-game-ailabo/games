@@ -349,6 +349,8 @@ function startBattle(side){
         const u=grid[r][c].unit;
         if(u&&u.owner===owner&&u.type!=='castle')battleUnits.push({r,c,unit:u});
     }
+    // Sort: front-line units move first (player: low row first, enemy: high row first)
+    battleUnits.sort((a,b)=> owner===1 ? (a.r-b.r) : (b.r-a.r));
     battleUnitIdx=0; processNextUnit();
 }
 
@@ -401,10 +403,30 @@ function processNextUnit(){
                     if(bestPos&&bestDist>hexDist(nr,nc,nearestEnemy.r,nearestEnemy.c)){nr=bestPos.r;nc=bestPos.c;}else break;
                 }
             } else {
-                for(let m=0;m<u.move;m++){const next=pathNext(nr,nc,target.r,target.c);if(!next||grid[next.r][next.c].unit)break;nr=next.r;nc=next.c;}
+                for(let m=0;m<u.move;m++){
+                    const next=pathNext(nr,nc,target.r,target.c);
+                    if(next&&!grid[next.r][next.c].unit){nr=next.r;nc=next.c;continue;}
+                    let bestN=null,bestD=Infinity;
+                    for(const n of neighbors(nr,nc)){if(!grid[n.r][n.c].unit){const d=hexDist(n.r,n.c,target.r,target.c);if(d<bestD){bestD=d;bestN=n;}}}
+                    if(bestN&&bestD<hexDist(nr,nc,target.r,target.c)){nr=bestN.r;nc=bestN.c;}else break;
+                }
             }
         } else {
-            for(let m=0;m<u.move;m++){if(nr===target.r&&nc===target.c)break;const next=pathNext(nr,nc,target.r,target.c);if(!next||grid[next.r][next.c].unit)break;nr=next.r;nc=next.c;}
+            for(let m=0;m<u.move;m++){
+                if(nr===target.r&&nc===target.c)break;
+                const next=pathNext(nr,nc,target.r,target.c);
+                if(next&&!grid[next.r][next.c].unit){nr=next.r;nc=next.c;continue;}
+                // Path blocked — find best open neighbor closer to target
+                let bestN=null,bestD=Infinity;
+                for(const n of neighbors(nr,nc)){
+                    if(grid[n.r][n.c].unit)continue;
+                    const d=hexDist(n.r,n.c,target.r,target.c);
+                    if(d<bestD){bestD=d;bestN=n;}
+                }
+                const curD=hexDist(nr,nc,target.r,target.c);
+                if(bestN&&bestD<curD){nr=bestN.r;nc=bestN.c;}
+                else break; // truly stuck
+            }
         }
 
         if(nr!==cr||nc!==cc){
