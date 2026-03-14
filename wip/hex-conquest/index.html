@@ -50,15 +50,15 @@ function sfxMove(){snd(330,'triangle',0.05,0.15);}
 // Jungle row (5): col 3 becomes passable bridge
 const COLS = 7, ROWS = 11;
 const GAP_COL = 3;
-const JUNGLE_ROW = 5; // single bridge row
+const BRIDGE_ROWS = new Set([5, 6]); // 2-hex bridge
 
 function isGap(r, c) {
     if (c !== GAP_COL) return false;
-    return r !== JUNGLE_ROW; // gap everywhere except jungle bridge
+    return !BRIDGE_ROWS.has(r);
 }
 
-function isJungle(r, c) {
-    return c === GAP_COL && r === JUNGLE_ROW;
+function isBridge(r, c) {
+    return c === GAP_COL && BRIDGE_ROWS.has(r);
 }
 
 function laneOf(c) {
@@ -190,7 +190,7 @@ function neighbors(r, c) {
         const nr = r+dr, nc = c+dc;
         if (nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
         if (isGap(nr, nc)) continue; // can't move into gap
-        if (isGap(r, c) && !isJungle(r, c)) continue; // can't move from gap
+        if (isGap(r, c) && !isBridge(r, c)) continue; // can't move from gap
         ns.push({r:nr,c:nc});
     }
     return ns;
@@ -416,16 +416,19 @@ function processNextUnit(){
                 if(nr===target.r&&nc===target.c)break;
                 const next=pathNext(nr,nc,target.r,target.c);
                 if(next&&!grid[next.r][next.c].unit){nr=next.r;nc=next.c;continue;}
-                // Path blocked — find best open neighbor closer to target
-                let bestN=null,bestD=Infinity;
+                // Path blocked — find any open neighbor closer or equal + more forward
+                const curD=hexDist(nr,nc,target.r,target.c);
+                let bestN=null,bestScore=Infinity;
                 for(const n of neighbors(nr,nc)){
                     if(grid[n.r][n.c].unit)continue;
                     const d=hexDist(n.r,n.c,target.r,target.c);
-                    if(d<bestD){bestD=d;bestN=n;}
+                    // Score: prefer closer to target, break ties by row (forward)
+                    const rowBonus = isPlayer ? (nr-n.r)*0.1 : (n.r-nr)*0.1; // forward = good
+                    const sc = d - rowBonus;
+                    if(sc<bestScore){bestScore=sc;bestN=n;}
                 }
-                const curD=hexDist(nr,nc,target.r,target.c);
-                if(bestN&&bestD<curD){nr=bestN.r;nc=bestN.c;}
-                else break; // truly stuck
+                if(bestN&&bestScore<=curD){nr=bestN.r;nc=bestN.c;}
+                else break;
             }
         }
 
@@ -594,8 +597,8 @@ function draw(){
         const cell=grid[r][c];
         let fill='#0c0c18',stroke='#1a1a2a';
 
-        if(isJungle(r,c)){
-            fill='#0a1f0a'; stroke='#2a5a2a';
+        if(isBridge(r,c)){
+            fill='#1a1510'; stroke='#6a5030';
         } else {
             if(cell.owner===1){fill='#0f1f35';stroke='#2060a0';}
             if(cell.owner===2){fill='#250f0f';stroke='#a02020';}
@@ -606,11 +609,15 @@ function draw(){
         }
         drawHex(x,y,hexSize*0.88,fill,stroke,1.5);
 
-        // Jungle bridge decoration
-        if(isJungle(r,c)){
+        // Bridge decoration
+        if(isBridge(r,c)){
+            ctx.strokeStyle='#8a7050'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.moveTo(x-hexSize*0.5,y); ctx.lineTo(x+hexSize*0.5,y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x-hexSize*0.3,y-hexSize*0.3); ctx.lineTo(x-hexSize*0.3,y+hexSize*0.3); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x+hexSize*0.3,y-hexSize*0.3); ctx.lineTo(x+hexSize*0.3,y+hexSize*0.3); ctx.stroke();
             ctx.textAlign='center';ctx.textBaseline='middle';
-            ctx.font=`${Math.max(10,hexSize*0.35)}px sans-serif`;
-            ctx.fillText('🌿',x,y);
+            ctx.font=`${Math.max(9,hexSize*0.28)}px sans-serif`;
+            ctx.fillText('🌉',x,y);
             ctx.textBaseline='alphabetic';ctx.textAlign='left';
         }
 
@@ -741,7 +748,7 @@ function drawPanel(){
 function drawTitle(){
     ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='bold 26px sans-serif';ctx.fillText('⚔️ ヘックス制圧',W/2,H*0.09);
     ctx.fillStyle='#aaa';ctx.font='14px sans-serif';ctx.fillText('2レーン MOBA風 戦略バトル',W/2,H*0.14);
-    const ins=[['🏰','各レーンの城を守りつつ攻めろ'],['🐎⚔️🏹🛡️','4種のユニットを配置'],['🌿','ジャングルでレーン間移動'],['⚡','ステージクリアでスキル習得']];
+    const ins=[['🏰','各レーンの城を守りつつ攻めろ'],['🐎⚔️🏹🛡️','4種のユニットを配置'],['🌉','橋でレーン間移動'],['⚡','ステージクリアでスキル習得']];
     for(let i=0;i<ins.length;i++){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.fillText(`${ins[i][0]} ${ins[i][1]}`,W/2,H*0.22+i*26);}
     const types=['scout','sword','archer','shield'];
     ctx.fillStyle='#555';ctx.font='11px sans-serif';ctx.fillText('── ユニット紹介 ──',W/2,H*0.45);
