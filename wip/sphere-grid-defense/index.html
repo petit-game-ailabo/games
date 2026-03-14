@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>スフィアグリッド・ディフェンス</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+const C=document.getElementById('c');
+const ctx=C.getContext('2d');
+let W,H,dpr;
+
+function resize(){
+  dpr=Math.min(window.devicePixelRatio||1,3);
+  W=window.innerWidth;H=window.innerHeight;
+  C.width=W*dpr;C.height=H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+resize();
+window.addEventListener('resize',resize);
+
+// ===== AUDIO =====
+const actx=new (window.AudioContext||window.webkitAudioContext)();
+function playTone(freq,dur,vol=0.3,type='sine'){
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type=type;o.frequency.value=freq;
+  g.gain.setValueAtTime(vol,actx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+dur);
+  o.connect(g);g.connect(actx.destination);
+  o.start();o.stop(actx.currentTime+dur);
+}
+function sfxPlace(){playTone(523,0.15,0.4,'triangle');}
+function sfxUnlock(){playTone(659,0.2,0.4,'sine');setTimeout(()=>playTone(784,0.15,0.4,'sine'),100);}
+function sfxHit(){playTone(200,0.1,0.3,'square');}
+function sfxWave(){playTone(440,0.3,0.5,'sine');setTimeout(()=>playTone(554,0.25,0.4,'sine'),150);setTimeout(()=>playTone(659,0.2,0.3,'sine'),300);}
+function sfxGameOver(){playTone(330,0.4,0.5,'sawtooth');setTimeout(()=>playTone(220,0.5,0.5,'sawtooth'),300);}
+
+// ===== GAME STATE =====
+const STATE={TITLE:0,PLAY:1,WAVE_CLEAR:2,GRID:3,GAMEOVER:4};
+let state=STATE.TITLE;
+let wave=0, sp=0, lives=20, score=0;
+let enemies=[], bullets=[], particles=[];
+let spawnTimer=0, enemiesLeft=0, waveActive=false;
+let selectedNode=null, selectedTower=null;
+let camX=0, camY=0, targetCamX=0, targetCamY=0;
+let showingGrid=false;
+
+// ===== SPHERE GRID =====
+// Node types: empty, tower_slot, locked, crystal(goal enemies try to reach)
+// Tower types: shoot, ice, fire, thunder
+const TOWER_TYPES={
+  shoot:{name:'射撃',color:'#4fc3f7',cost:0,range:80,rate:60,dmg:10,desc:'基本射撃塔'},
+  ice:{name:'氷結',color:'#80deea',cost:2,range:70,rate:90,dmg:5,slow:0.4,desc:'敵を減速'},
+  fire:{name:'炎熱',color:'#ff7043',cost:3,range:60,rate:80,dmg:8,splash:30,desc:'範囲ダメージ'},
+  thunder:{name:'雷撃',color:'#fff176',cost:3,range:90,rate:100,dmg:15,chain:2,desc:'連鎖攻撃'},
+};
+
+// Grid layout - FF10 inspired branching paths
+let nodes=[], edges=[];
+function buildGrid(){
+  nodes=[];edges=[];
+  // Center crystal
+  const cx=W/2, cy=H/2;
+  
+  // Generate sphere grid nodes in a radial pattern with branches
+  const rings=[
+    // ring 0: center crystal
+    [{x:0,y:0,type:'crystal',unlocked:true}],
+    // ring 1: inner slots
+    [{x:0,y:-70,type:'tower_slot',unlocked:true,towerType:'shoot'},
+     {x:61,y:35,type:'tower_slot',unlocked:true,towerType:'shoot'},
+     {x:-61,y:35,type:'tower_slot',unlocked:true,towerType:'shoot'}],
+    // ring 2: branch points
+    [{x:0,y:-140,type:'locked',unlocked:false,unlockCost:2,towerType:'ice'},
+     {x:121,y:70,type:'locked',unlocked:false,unlockCost:2,towerType:'fire'},
+     {x:-121,y:70,type:'locked',unlocked:false,unlockCost:2,towerType:'thunder'},
+     {x:70,y:-105,type:'locked',unlocked:false,unlockCost:1,towerType:'shoot'},
+     {x:-70,y:-105,type:'locked',unlocked:false,unlockCost:1,towerType:'shoot'},
+     {x:100,y:-20,type:'locked',unlocked:false,unlockCost:1,towerType:'shoot'},
+     {x:-100,y:-20,type:'locked',unlocked:false,unlockCost:1,towerType:'shoot'}],
+    // ring 3: outer ring
+    [{x:0,y:-210,type:'locked',unlocked:false,unlockCost:3,towerType:'ice'},
+     {x:75,y:-175,type:'locked',unlocked:false,unlockCost:2,towerType:'ice'},
+     {x:-75,y:-175,type:'locked',unlocked:false,unlockCost:2,towerType:'shoot'},
+     {x:170,y:20,type:'locked',unlocked:false,unlockCost:2,towerType:'fire'},
+     {x:150,y:110,type:'locked',unlocked:false,unlockCost:3,towerType:'fire'},
+     {x:-170,y:20,type:'locked',unlocked:false,unlockCost:2,towerType:'thunder'},
+     {x:-150,y:110,type:'locked',unlocked:false,unlockCost:3,towerType:'thunder'},
+     {x:50,y:140,type:'locked',unlocked:false,unlockCost:2,towerType:'shoot'},
+     {x:-50,y:140,type:'locked',unlocked:false,unlockCost:2,towerType:'shoot'}],
+  ];
+  
+  let id=0;
+  for(let r=0;r<rings.length;r++){
+    for(let n of rings[r]){
+      nodes.push({id:id++,x:cx+n.x,y:cy+n.y,type:n.type,unlocked:n.unlocked,
+        unlockCost:n.unlockCost||0,towerType:n.towerType||null,
+        tower:null,cooldown:0,ring:r});
+    }
+  }
+  
+  // Edges: connect rings
+  // ring0(0) to ring1(1,2,3)
+  addEdge(0,1);addEdge(0,2);addEdge(0,3);
+  // ring1 to ring2
+  addEdge(1,4);addEdge(1,7);addEdge(1,8); // top
+  addEdge(2,5);addEdge(2,9);              // right
+  addEdge(3,6);addEdge(3,10);             // left
+  // ring2 to ring3
+  addEdge(4,11);addEdge(4,12);
+  addEdge(7,12);addEdge(8,13);
+  addEdge(5,14);addEdge(5,15);
+  addEdge(9,14);
+  addEdge(6,16);addEdge(6,17);
+  addEdge(10,16);
+  addEdge(2,18);addEdge(3,19);
+  addEdge(9,18);addEdge(10,19);
+  // cross connections
+  addEdge(7,8);
+}
+
+function addEdge(a,b){
+  edges.push([a,b]);
+}
+
+// ===== ENEMY PATHS =====
+// Enemies enter from outer nodes and follow edges toward crystal (node 0)
+function getPathToCrystal(startNode){
+  // BFS shortest path
+  const visited=new Set();
+  const queue=[[startNode,[startNode]]];
+  visited.add(startNode);
+  while(queue.length){
+    const [cur,path]=queue.shift();
+    if(cur===0) return path;
+    const neighbors=getNeighbors(cur);
+    for(const n of neighbors){
+      if(!visited.has(n)){
+        visited.add(n);
+        queue.push([n,[...path,n]]);
+      }
+    }
+  }
+  return [startNode,0]; // fallback
+}
+
+function getNeighbors(nodeId){
+  const result=[];
+  for(const [a,b] of edges){
+    if(a===nodeId) result.push(b);
+    if(b===nodeId) result.push(a);
+  }
+  return result;
+}
+
+// Outer nodes = entry points for enemies
+function getOuterNodes(){
+  return nodes.filter(n=>n.ring===3).map(n=>n.id);
+}
+
+// ===== ENEMY =====
+function spawnEnemy(){
+  const outers=getOuterNodes();
+  const startId=outers[Math.floor(Math.random()*outers.length)];
+  const path=getPathToCrystal(startId);
+  const startNode=nodes[startId];
+  const hpBase=20+wave*12;
+  const spdBase=0.6+wave*0.05;
+  // Variety
+  const types=['normal','fast','tank'];
+  const type=types[Math.floor(Math.random()*types.length)];
+  let hp=hpBase,spd=spdBase,size=8,color='#e53935';
+  if(type==='fast'){hp=hpBase*0.5;spd=spdBase*1.8;size=6;color='#ffeb3b';}
+  if(type==='tank'){hp=hpBase*2.5;spd=spdBase*0.5;size=12;color='#7e57c2';}
+  
+  enemies.push({
+    x:startNode.x,y:startNode.y,
+    path:path,pathIdx:0,progress:0,
+    hp:hp,maxHp:hp,spd:spd,size:size,color:color,type:type,
+    slow:0,slowTimer:0,dead:false
+  });
+}
+
+// ===== WAVES =====
+function startWave(){
+  wave++;
+  enemiesLeft=5+wave*3;
+  spawnTimer=0;
+  waveActive=true;
+  sfxWave();
+}
+
+// ===== TOWERS =====
+function towerShoot(node){
+  const t=TOWER_TYPES[node.tower];
+  if(!t||node.cooldown>0) return;
+  // Find closest enemy in range
+  let closest=null, minDist=Infinity;
+  for(const e of enemies){
+    if(e.dead) continue;
+    const d=Math.hypot(e.x-node.x,e.y-node.y);
+    if(d<=t.range && d<minDist){minDist=d;closest=e;}
+  }
+  if(!closest) return;
+  node.cooldown=t.rate;
+  const angle=Math.atan2(closest.y-node.y,closest.x-node.x);
+  bullets.push({
+    x:node.x,y:node.y,
+    vx:Math.cos(angle)*4,vy:Math.sin(angle)*4,
+    dmg:t.dmg,type:node.tower,
+    slow:t.slow||0,splash:t.splash||0,chain:t.chain||0,
+    target:closest,life:60
+  });
+}
+
+// ===== UPDATE =====
+function update(){
+  if(state!==STATE.PLAY) return;
+  
+  // Spawn enemies
+  if(waveActive && enemiesLeft>0){
+    spawnTimer--;
+    if(spawnTimer<=0){
+      spawnEnemy();
+      enemiesLeft--;
+      spawnTimer=40-Math.min(wave*2,25);
+    }
+  }
+  
+  // Move enemies along path
+  for(const e of enemies){
+    if(e.dead) continue;
+    let spd=e.spd;
+    if(e.slowTimer>0){spd*=(1-e.slow);e.slowTimer--;}
+    
+    if(e.pathIdx<e.path.length-1){
+      const from=nodes[e.path[e.pathIdx]];
+      const to=nodes[e.path[e.pathIdx+1]];
+      const dx=to.x-from.x, dy=to.y-from.y;
+      const dist=Math.hypot(dx,dy);
+      e.progress+=spd/dist;
+      if(e.progress>=1){
+        e.pathIdx++;
+        e.progress=0;
+        e.x=to.x;e.y=to.y;
+      } else {
+        e.x=from.x+dx*e.progress;
+        e.y=from.y+dy*e.progress;
+      }
+    }
+    
+    // Reached crystal
+    if(e.pathIdx>=e.path.length-1 && !e.dead){
+      e.dead=true;
+      lives--;
+      addParticles(e.x,e.y,'#e53935',8);
+      sfxHit();
+      if(lives<=0){
+        state=STATE.GAMEOVER;
+        sfxGameOver();
+      }
+    }
+  }
+  
+  // Tower shooting
+  for(const n of nodes){
+    if(n.tower && n.unlocked){
+      if(n.cooldown>0) n.cooldown--;
+      towerShoot(n);
+    }
+  }
+  
+  // Move bullets
+  for(const b of bullets){
+    b.x+=b.vx;b.y+=b.vy;b.life--;
+    // Hit check
+    for(const e of enemies){
+      if(e.dead) continue;
+      if(Math.hypot(e.x-b.x,e.y-b.y)<e.size+4){
+        e.hp-=b.dmg;
+        if(b.slow>0){e.slow=b.slow;e.slowTimer=120;}
+        if(b.splash>0){
+          for(const e2 of enemies){
+            if(e2.dead||e2===e) continue;
+            if(Math.hypot(e2.x-b.x,e2.y-b.y)<b.splash){
+              e2.hp-=b.dmg*0.5;
+              addParticles(e2.x,e2.y,'#ff7043',3);
+            }
+          }
+        }
+        if(b.chain>0 && enemies.filter(x=>!x.dead&&x!==e).length>0){
+          const others=enemies.filter(x=>!x.dead&&x!==e).sort((a,c)=>Math.hypot(a.x-b.x,a.y-b.y)-Math.hypot(c.x-b.x,c.y-b.y));
+          if(others[0]){
+            others[0].hp-=b.dmg*0.7;
+            addParticles(others[0].x,others[0].y,'#fff176',3);
+          }
+        }
+        addParticles(b.x,b.y,TOWER_TYPES[b.type]?.color||'#fff',5);
+        sfxHit();
+        b.life=0;
+        break;
+      }
+    }
+  }
+  
+  // Check dead enemies
+  for(const e of enemies){
+    if(!e.dead && e.hp<=0){
+      e.dead=true;
+      score+=e.type==='tank'?30:e.type==='fast'?15:20;
+      sp++;
+      addParticles(e.x,e.y,e.color,10);
+    }
+  }
+  
+  // Cleanup
+  enemies=enemies.filter(e=>!e.dead||e.hp>0);
+  bullets=bullets.filter(b=>b.life>0);
+  
+  // Update particles
+  for(const p of particles){
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.05;p.life--;p.alpha=p.life/p.maxLife;
+  }
+  particles=particles.filter(p=>p.life>0);
+  
+  // Wave clear check
+  if(waveActive && enemiesLeft<=0 && enemies.filter(e=>!e.dead).length===0){
+    waveActive=false;
+    state=STATE.WAVE_CLEAR;
+    sp+=2+wave; // bonus SP
+  }
+}
+
+function addParticles(x,y,color,count){
+  for(let i=0;i<count;i++){
+    const angle=Math.random()*Math.PI*2;
+    const spd=1+Math.random()*2;
+    particles.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,
+      color,life:20+Math.random()*20,maxLife:40,alpha:1,size:2+Math.random()*3});
+  }
+}
+
+// ===== DRAW =====
+function drawTitle(){
+  ctx.fillStyle='#0a0a1a';
+  ctx.fillRect(0,0,W,H);
+  
+  // Background glow
+  const grd=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,200);
+  grd.addColorStop(0,'rgba(63,81,181,0.15)');
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grd;
+  ctx.fillRect(0,0,W,H);
+  
+  // Floating nodes animation
+  const t=Date.now()*0.001;
+  for(let i=0;i<12;i++){
+    const a=i/12*Math.PI*2+t*0.3;
+    const r=80+Math.sin(t+i)*20;
+    const nx=W/2+Math.cos(a)*r;
+    const ny=H/2-40+Math.sin(a)*r*0.6;
+    ctx.beginPath();ctx.arc(nx,ny,6,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${i*30+t*20},70%,60%,0.6)`;ctx.fill();
+    // Connect to center
+    ctx.beginPath();ctx.moveTo(W/2,H/2-40);ctx.lineTo(nx,ny);
+    ctx.strokeStyle=`hsla(${i*30+t*20},70%,60%,0.15)`;ctx.lineWidth=1;ctx.stroke();
+  }
+  
+  // Title
+  ctx.fillStyle='#e0e0e0';
+  ctx.font='bold 28px sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('スフィアグリッド',W/2,H/2-50);
+  ctx.fillText('ディフェンス',W/2,H/2-15);
+  
+  // Subtitle
+  ctx.font='14px sans-serif';
+  ctx.fillStyle='#9e9e9e';
+  ctx.fillText('ノードを解放してタワーを配置',W/2,H/2+20);
+  ctx.fillText('クリスタルを守れ',W/2,H/2+40);
+  
+  // Start button
+  const btnY=H/2+90;
+  ctx.fillStyle='rgba(63,81,181,0.8)';
+  roundRect(ctx,W/2-80,btnY-22,160,44,8);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.font='bold 18px sans-serif';
+  ctx.fillText('TAP TO START',W/2,btnY+6);
+}
+
+function drawPlay(){
+  ctx.fillStyle='#0a0a1a';
+  ctx.fillRect(0,0,W,H);
+  
+  // Background grid glow
+  const grd=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,250);
+  grd.addColorStop(0,'rgba(26,35,126,0.1)');
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grd;
+  ctx.fillRect(0,0,W,H);
+  
+  // Draw edges
+  for(const [a,b] of edges){
+    const na=nodes[a],nb=nodes[b];
+    ctx.beginPath();ctx.moveTo(na.x,na.y);ctx.lineTo(nb.x,nb.y);
+    const unlocked=na.unlocked&&nb.unlocked;
+    ctx.strokeStyle=unlocked?'rgba(100,181,246,0.3)':'rgba(100,100,100,0.15)';
+    ctx.lineWidth=unlocked?2:1;
+    ctx.stroke();
+  }
+  
+  // Draw nodes
+  for(const n of nodes){
+    const r=n.type==='crystal'?16:12;
+    
+    // Tower range indicator for selected
+    if(selectedNode===n.id && n.tower){
+      const t=TOWER_TYPES[n.tower];
+      ctx.beginPath();ctx.arc(n.x,n.y,t.range,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,0.05)';ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.1)';ctx.lineWidth=1;ctx.stroke();
+    }
+    
+    // Node body
+    ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    if(n.type==='crystal'){
+      const t=Date.now()*0.003;
+      ctx.fillStyle=`hsl(${200+Math.sin(t)*30},80%,60%)`;
+      ctx.shadowColor='#42a5f5';ctx.shadowBlur=20;
+      ctx.fill();
+      ctx.shadowBlur=0;
+      // HP ring
+      const pct=lives/20;
+      ctx.beginPath();ctx.arc(n.x,n.y,r+4,-Math.PI/2,-Math.PI/2+Math.PI*2*pct);
+      ctx.strokeStyle=pct>0.5?'#4caf50':pct>0.25?'#ff9800':'#e53935';
+      ctx.lineWidth=3;ctx.stroke();
+    } else if(!n.unlocked){
+      ctx.fillStyle='rgba(60,60,80,0.6)';ctx.fill();
+      ctx.strokeStyle='rgba(100,100,120,0.4)';ctx.lineWidth=1;ctx.stroke();
+      // Lock icon
+      ctx.fillStyle='rgba(200,200,200,0.4)';
+      ctx.font='10px sans-serif';ctx.textAlign='center';
+      ctx.fillText('🔒',n.x,n.y+4);
+      // Cost
+      ctx.font='9px sans-serif';
+      ctx.fillStyle='rgba(200,200,200,0.5)';
+      ctx.fillText(n.unlockCost+'SP',n.x,n.y+r+12);
+    } else if(n.tower){
+      const tc=TOWER_TYPES[n.tower];
+      ctx.fillStyle=tc.color;ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;ctx.stroke();
+      // Tower icon
+      ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+      const icons={shoot:'⬆',ice:'❄',fire:'🔥',thunder:'⚡'};
+      ctx.fillText(icons[n.tower]||'●',n.x,n.y+4);
+    } else {
+      // Empty unlocked slot
+      ctx.fillStyle='rgba(40,60,90,0.5)';ctx.fill();
+      ctx.strokeStyle='rgba(100,181,246,0.3)';ctx.lineWidth=1;ctx.stroke();
+      // Tower type hint
+      if(n.towerType){
+        const tc=TOWER_TYPES[n.towerType];
+        ctx.fillStyle=tc.color+'66';
+        ctx.font='8px sans-serif';ctx.textAlign='center';
+        ctx.fillText(tc.name,n.x,n.y+4);
+      }
+    }
+  }
+  
+  // Draw enemies
+  for(const e of enemies){
+    if(e.dead) continue;
+    ctx.beginPath();ctx.arc(e.x,e.y,e.size,0,Math.PI*2);
+    ctx.fillStyle=e.color;ctx.fill();
+    if(e.slowTimer>0){
+      ctx.strokeStyle='#80deea';ctx.lineWidth=2;ctx.stroke();
+    }
+    // HP bar
+    const bw=e.size*2.5;
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(e.x-bw/2,e.y-e.size-8,bw,4);
+    ctx.fillStyle=e.hp/e.maxHp>0.5?'#4caf50':'#e53935';
+    ctx.fillRect(e.x-bw/2,e.y-e.size-8,bw*(e.hp/e.maxHp),4);
+  }
+  
+  // Draw bullets
+  for(const b of bullets){
+    ctx.beginPath();ctx.arc(b.x,b.y,3,0,Math.PI*2);
+    ctx.fillStyle=TOWER_TYPES[b.type]?.color||'#fff';ctx.fill();
+  }
+  
+  // Draw particles
+  for(const p of particles){
+    ctx.globalAlpha=p.alpha;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+    ctx.fillStyle=p.color;ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  
+  // HUD
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillRect(0,0,W,36);
+  ctx.font='bold 14px sans-serif';ctx.textAlign='left';
+  ctx.fillStyle='#4fc3f7';ctx.fillText(`Wave ${wave}`,8,24);
+  ctx.fillStyle='#e53935';ctx.fillText(`❤️${lives}`,90,24);
+  ctx.fillStyle='#fff176';ctx.fillText(`SP:${sp}`,155,24);
+  ctx.textAlign='right';
+  ctx.fillStyle='#e0e0e0';ctx.fillText(`Score:${score}`,W-8,24);
+  
+  // Grid button
+  if(!waveActive){
+    ctx.fillStyle='rgba(63,81,181,0.8)';
+    roundRect(ctx,W/2-50,H-60,100,40,8);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+    ctx.fillText('GRID',W/2,H-34);
+  }
+}
+
+function drawWaveClear(){
+  drawPlay(); // draw the field behind
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillRect(0,0,W,H);
+  
+  ctx.fillStyle='#fff';ctx.font='bold 24px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`Wave ${wave} クリア！`,W/2,H/2-60);
+  ctx.font='16px sans-serif';
+  ctx.fillStyle='#fff176';
+  ctx.fillText(`+${2+wave} SP ボーナス！`,W/2,H/2-25);
+  ctx.fillStyle='#e0e0e0';
+  ctx.fillText(`所持SP: ${sp}`,W/2,H/2+5);
+  
+  // Next wave button
+  ctx.fillStyle='rgba(76,175,80,0.8)';
+  roundRect(ctx,W/2-90,H/2+30,180,44,8);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 16px sans-serif';
+  ctx.fillText('次のWaveへ',W/2,H/2+58);
+  
+  // Grid button
+  ctx.fillStyle='rgba(63,81,181,0.8)';
+  roundRect(ctx,W/2-90,H/2+90,180,44,8);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.fillText('グリッド確認',W/2,H/2+118);
+}
+
+function drawGrid(){
+  ctx.fillStyle='#0a0a1a';
+  ctx.fillRect(0,0,W,H);
+  
+  // Title
+  ctx.fillStyle='#e0e0e0';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+  ctx.fillText('スフィアグリッド',W/2,30);
+  ctx.font='14px sans-serif';ctx.fillStyle='#fff176';
+  ctx.fillText(`SP: ${sp}`,W/2,52);
+  
+  // Draw edges
+  for(const [a,b] of edges){
+    const na=nodes[a],nb=nodes[b];
+    ctx.beginPath();ctx.moveTo(na.x,na.y);ctx.lineTo(nb.x,nb.y);
+    ctx.strokeStyle=na.unlocked&&nb.unlocked?'rgba(100,181,246,0.4)':'rgba(80,80,100,0.2)';
+    ctx.lineWidth=na.unlocked&&nb.unlocked?2.5:1;
+    ctx.stroke();
+  }
+  
+  // Draw nodes (larger for touch)
+  for(const n of nodes){
+    const r=n.type==='crystal'?20:18;
+    const selected=selectedNode===n.id;
+    
+    ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    if(n.type==='crystal'){
+      ctx.fillStyle='#42a5f5';ctx.fill();
+      ctx.fillStyle='#fff';ctx.font='12px sans-serif';ctx.textAlign='center';
+      ctx.fillText('💎',n.x,n.y+5);
+    } else if(!n.unlocked){
+      // Can unlock? (adjacent to unlocked node)
+      const canUnlock=canUnlockNode(n.id);
+      ctx.fillStyle=canUnlock?'rgba(80,80,120,0.7)':'rgba(40,40,60,0.5)';
+      ctx.fill();
+      ctx.strokeStyle=canUnlock?(selected?'#fff176':'rgba(200,200,100,0.5)'):'rgba(80,80,80,0.3)';
+      ctx.lineWidth=selected?3:1;ctx.stroke();
+      // Info
+      ctx.fillStyle=canUnlock?'rgba(255,255,255,0.7)':'rgba(200,200,200,0.3)';
+      ctx.font='10px sans-serif';ctx.textAlign='center';
+      ctx.fillText('🔒'+n.unlockCost+'SP',n.x,n.y+4);
+      if(n.towerType){
+        ctx.fillStyle=TOWER_TYPES[n.towerType].color+'88';
+        ctx.fillText(TOWER_TYPES[n.towerType].name,n.x,n.y+r+14);
+      }
+    } else if(n.tower){
+      const tc=TOWER_TYPES[n.tower];
+      ctx.fillStyle=tc.color;ctx.fill();
+      ctx.strokeStyle=selected?'#fff':'rgba(255,255,255,0.3)';
+      ctx.lineWidth=selected?3:1.5;ctx.stroke();
+      ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+      const icons={shoot:'⬆',ice:'❄',fire:'🔥',thunder:'⚡'};
+      ctx.fillText(icons[n.tower],n.x,n.y+5);
+      ctx.font='9px sans-serif';ctx.fillText(tc.name,n.x,n.y+r+13);
+    } else {
+      // Empty unlocked - can place tower
+      ctx.fillStyle=selected?'rgba(60,90,140,0.8)':'rgba(40,60,100,0.5)';
+      ctx.fill();
+      ctx.strokeStyle=selected?'#64b5f6':'rgba(100,181,246,0.3)';
+      ctx.lineWidth=selected?3:1;ctx.stroke();
+      if(n.towerType){
+        const tc=TOWER_TYPES[n.towerType];
+        ctx.fillStyle=tc.color+'99';ctx.font='10px sans-serif';ctx.textAlign='center';
+        ctx.fillText(tc.name,n.x,n.y+4);
+        ctx.fillStyle='rgba(255,255,255,0.5)';
+        ctx.fillText('TAP設置',n.x,n.y+r+13);
+      }
+    }
+  }
+  
+  // Selected node info panel
+  if(selectedNode!==null){
+    const n=nodes[selectedNode];
+    drawNodePanel(n);
+  }
+  
+  // Back button
+  ctx.fillStyle='rgba(100,100,100,0.7)';
+  roundRect(ctx,10,H-55,80,40,8);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+  ctx.fillText('戻る',50,H-29);
+}
+
+function drawNodePanel(n){
+  const py=H-160;
+  ctx.fillStyle='rgba(20,20,40,0.9)';
+  roundRect(ctx,10,py,W-20,100,10);ctx.fill();
+  ctx.strokeStyle='rgba(100,181,246,0.3)';ctx.lineWidth=1;
+  roundRect(ctx,10,py,W-20,100,10);ctx.stroke();
+  
+  ctx.textAlign='left';ctx.font='bold 14px sans-serif';
+  
+  if(!n.unlocked){
+    const canDo=canUnlockNode(n.id);
+    ctx.fillStyle='#e0e0e0';
+    ctx.fillText(`${TOWER_TYPES[n.towerType]?.name||'???'} ノード（ロック中）`,20,py+22);
+    ctx.font='12px sans-serif';ctx.fillStyle='#9e9e9e';
+    ctx.fillText(TOWER_TYPES[n.towerType]?.desc||'',20,py+42);
+    ctx.fillText(`解放コスト: ${n.unlockCost} SP`,20,py+60);
+    if(canDo && sp>=n.unlockCost){
+      ctx.fillStyle='rgba(76,175,80,0.8)';
+      roundRect(ctx,W-130,py+65,110,28,6);ctx.fill();
+      ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+      ctx.fillText('解放する',W-75,py+84);
+    }
+  } else if(!n.tower && n.towerType){
+    const tc=TOWER_TYPES[n.towerType];
+    ctx.fillStyle=tc.color;
+    ctx.fillText(`${tc.name}タワー（未設置）`,20,py+22);
+    ctx.font='12px sans-serif';ctx.fillStyle='#9e9e9e';
+    ctx.fillText(tc.desc,20,py+42);
+    ctx.fillText(`射程:${tc.range} 攻撃力:${tc.dmg} 速度:${tc.rate}`,20,py+60);
+    ctx.fillStyle='rgba(63,81,181,0.8)';
+    roundRect(ctx,W-130,py+65,110,28,6);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+    ctx.fillText('設置する',W-75,py+84);
+  } else if(n.tower){
+    const tc=TOWER_TYPES[n.tower];
+    ctx.fillStyle=tc.color;
+    ctx.fillText(`${tc.name}タワー`,20,py+22);
+    ctx.font='12px sans-serif';ctx.fillStyle='#9e9e9e';
+    ctx.fillText(tc.desc,20,py+42);
+    ctx.fillText(`射程:${tc.range} 攻撃力:${tc.dmg} 速度:${tc.rate}`,20,py+60);
+  }
+}
+
+function drawGameOver(){
+  ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(229,57,53,0.1)';ctx.fillRect(0,0,W,H);
+  
+  ctx.fillStyle='#e53935';ctx.font='bold 28px sans-serif';ctx.textAlign='center';
+  ctx.fillText('GAME OVER',W/2,H/2-50);
+  ctx.fillStyle='#e0e0e0';ctx.font='18px sans-serif';
+  ctx.fillText(`Wave ${wave} | Score ${score}`,W/2,H/2-10);
+  
+  ctx.fillStyle='rgba(63,81,181,0.8)';
+  roundRect(ctx,W/2-80,H/2+30,160,44,8);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 16px sans-serif';
+  ctx.fillText('リトライ',W/2,H/2+58);
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function canUnlockNode(nodeId){
+  const neighbors=getNeighbors(nodeId);
+  return neighbors.some(nid=>nodes[nid].unlocked);
+}
+
+// ===== INPUT =====
+function getXY(e){
+  const rect=C.getBoundingClientRect();
+  const touch=e.touches?e.touches[0]:e;
+  return {x:touch.clientX-rect.left, y:touch.clientY-rect.top};
+}
+
+function handleTap(pos){
+  if(actx.state==='suspended') actx.resume();
+  
+  if(state===STATE.TITLE){
+    resetGame();
+    state=STATE.PLAY;
+    startWave();
+    return;
+  }
+  
+  if(state===STATE.GAMEOVER){
+    if(pos.y>H/2+30 && pos.y<H/2+74){
+      resetGame();
+      state=STATE.PLAY;
+      startWave();
+    }
+    return;
+  }
+  
+  if(state===STATE.WAVE_CLEAR){
+    // Next wave button
+    if(pos.y>H/2+30 && pos.y<H/2+74){
+      state=STATE.PLAY;
+      startWave();
+      return;
+    }
+    // Grid button
+    if(pos.y>H/2+90 && pos.y<H/2+134){
+      state=STATE.GRID;
+      selectedNode=null;
+      return;
+    }
+    return;
+  }
+  
+  if(state===STATE.GRID){
+    // Back button
+    if(pos.x<90 && pos.y>H-55){
+      state=waveActive?STATE.PLAY:STATE.WAVE_CLEAR;
+      selectedNode=null;
+      return;
+    }
+    
+    // Check node taps
+    for(const n of nodes){
+      if(Math.hypot(pos.x-n.x,pos.y-n.y)<22){
+        if(selectedNode===n.id){
+          // Double tap = action
+          if(!n.unlocked && canUnlockNode(n.id) && sp>=n.unlockCost){
+            n.unlocked=true;
+            sp-=n.unlockCost;
+            sfxUnlock();
+          } else if(n.unlocked && !n.tower && n.towerType){
+            n.tower=n.towerType;
+            sfxPlace();
+          }
+        } else {
+          selectedNode=n.id;
+        }
+        return;
+      }
+    }
+    
+    // Action buttons in panel
+    if(selectedNode!==null){
+      const n=nodes[selectedNode];
+      const py=H-160;
+      if(pos.x>W-130 && pos.x<W-20 && pos.y>py+65 && pos.y<py+93){
+        if(!n.unlocked && canUnlockNode(n.id) && sp>=n.unlockCost){
+          n.unlocked=true;
+          sp-=n.unlockCost;
+          sfxUnlock();
+        } else if(n.unlocked && !n.tower && n.towerType){
+          n.tower=n.towerType;
+          sfxPlace();
+        }
+        return;
+      }
+    }
+    
+    selectedNode=null;
+    return;
+  }
+  
+  if(state===STATE.PLAY){
+    // Grid button (between waves)
+    if(!waveActive && pos.y>H-60 && pos.x>W/2-50 && pos.x<W/2+50){
+      state=STATE.GRID;
+      selectedNode=null;
+      return;
+    }
+    
+    // Tap nodes to place tower during play
+    for(const n of nodes){
+      if(Math.hypot(pos.x-n.x,pos.y-n.y)<18){
+        if(n.unlocked && !n.tower && n.towerType){
+          n.tower=n.towerType;
+          sfxPlace();
+        }
+        selectedNode=n.id;
+        return;
+      }
+    }
+    selectedNode=null;
+  }
+}
+
+C.addEventListener('touchstart',e=>{e.preventDefault();handleTap(getXY(e));},{passive:false});
+C.addEventListener('click',e=>handleTap(getXY(e)));
+
+// ===== GAME LOOP =====
+function resetGame(){
+  wave=0;sp=0;lives=20;score=0;
+  enemies=[];bullets=[];particles=[];
+  selectedNode=null;
+  buildGrid();
+  // Place initial towers on ring 1
+  for(const n of nodes){
+    if(n.ring===1 && n.unlocked && n.towerType){
+      n.tower=n.towerType;
+    }
+  }
+}
+
+function loop(){
+  update();
+  if(state===STATE.TITLE) drawTitle();
+  else if(state===STATE.PLAY) drawPlay();
+  else if(state===STATE.WAVE_CLEAR) drawWaveClear();
+  else if(state===STATE.GRID) drawGrid();
+  else if(state===STATE.GAMEOVER) drawGameOver();
+  requestAnimationFrame(loop);
+}
+
+buildGrid();
+loop();
+</script>
+</body>
+</html>
