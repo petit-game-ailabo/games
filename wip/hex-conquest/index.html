@@ -201,9 +201,19 @@ function p2h(px, py) {
     return best;
 }
 
-// Lane system: 3 lanes separated by impassable terrain
+// Lane system: 3 lanes with jungle passages
 function laneOf(c) { return Math.floor(c / 3); }
-function isWallBorder(c1, c2) { return laneOf(c1) !== laneOf(c2); }
+// Jungle passages — rows where cross-lane movement is allowed
+const JUNGLE_ROWS = [3]; // mid-map jungle crossing
+function isJungle(r, c) {
+    // Cells adjacent to lane borders at jungle rows
+    return JUNGLE_ROWS.includes(r) && (c === 2 || c === 3 || c === 5 || c === 6);
+}
+function isWallBorder(r, c1, c2) {
+    if (laneOf(c1) === laneOf(c2)) return false;
+    // Jungle rows allow cross-lane movement
+    return !JUNGLE_ROWS.includes(r);
+}
 
 function neighbors(r, c) {
     const ns = [];
@@ -211,7 +221,7 @@ function neighbors(r, c) {
     const dirs = even ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]] : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
     for (const [dr,dc] of dirs) {
         const nr=r+dr, nc=c+dc;
-        if (nr>=0 && nr<rows && nc>=0 && nc<cols && !isWallBorder(c, nc)) ns.push({r:nr,c:nc});
+        if (nr>=0 && nr<rows && nc>=0 && nc<cols && !isWallBorder(r, c, nc) && !isWallBorder(nr, c, nc)) ns.push({r:nr,c:nc});
     }
     return ns;
 }
@@ -829,49 +839,49 @@ function draw() {
         drawHex(x, y, hexSize*0.88, fill, stroke, 1.5);
         if (cell.unit) drawUnit(x, y, cell.unit);
     }
-    // Lane dividers — thick wall + mountain icons
+    // Lane dividers — walls with jungle gap
     for (const bc of [2, 5]) {
-        // Draw continuous wall line from top to bottom
-        const topP = h2p(0, bc), topP2 = h2p(0, bc+1);
-        const botP = h2p(rows-1, bc), botP2 = h2p(rows-1, bc+1);
-        const wallX1 = (topP.x + topP2.x) / 2;
-        const wallX2 = (botP.x + botP2.x) / 2;
-        const wallTop = topP.y - hexSize;
-        const wallBot = botP.y + hexSize;
-
-        // Thick wall background
-        ctx.fillStyle = '#12101a';
-        ctx.fillRect(wallX1 - 6, wallTop, 12, wallBot - wallTop);
-
-        // Wall border lines
-        ctx.strokeStyle = '#3a2a40'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(wallX1 - 6, wallTop); ctx.lineTo(wallX2 - 6, wallBot); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(wallX1 + 6, wallTop); ctx.lineTo(wallX2 + 6, wallBot); ctx.stroke();
-
-        // Mountain icons along the wall
         for (let r = 0; r < rows; r++) {
             const p1 = h2p(r, bc), p2 = h2p(r, bc+1);
             const wx = (p1.x + p2.x) / 2;
             const wy = p1.y;
-            const ms = hexSize * 0.35;
-            // Mountain triangle
-            ctx.fillStyle = '#2a2040';
-            ctx.beginPath();
-            ctx.moveTo(wx - ms, wy + ms * 0.7);
-            ctx.lineTo(wx, wy - ms);
-            ctx.lineTo(wx + ms, wy + ms * 0.7);
-            ctx.closePath(); ctx.fill();
-            // Snow cap
-            ctx.fillStyle = '#4a3a55';
-            ctx.beginPath();
-            ctx.moveTo(wx - ms*0.3, wy - ms*0.2);
-            ctx.lineTo(wx, wy - ms);
-            ctx.lineTo(wx + ms*0.3, wy - ms*0.2);
-            ctx.closePath(); ctx.fill();
-            // Mountain emoji
+
+            if (JUNGLE_ROWS.includes(r)) {
+                // Jungle passage — draw grass/trees instead of wall
+                ctx.fillStyle = '#0a2a0a';
+                ctx.fillRect(wx - 8, wy - hexSize*0.7, 16, hexSize*1.4);
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = `${Math.max(12, hexSize*0.35)}px sans-serif`;
+                ctx.fillText('🌿', wx, wy - hexSize*0.25);
+                ctx.fillText('🌿', wx, wy + hexSize*0.25);
+                ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+            } else {
+                // Wall segment
+                const segTop = wy - hexSize * 0.76;
+                const segBot = wy + hexSize * 0.76;
+                ctx.fillStyle = '#12101a';
+                ctx.fillRect(wx - 5, segTop, 10, segBot - segTop);
+                ctx.strokeStyle = '#3a2a40'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(wx - 5, segTop); ctx.lineTo(wx - 5, segBot); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(wx + 5, segTop); ctx.lineTo(wx + 5, segBot); ctx.stroke();
+                // Mountain icon
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = `${Math.max(10, hexSize*0.28)}px sans-serif`;
+                ctx.fillText('⛰️', wx, wy);
+                ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+            }
+        }
+    }
+
+    // Highlight jungle hexes
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        if (isJungle(r, c)) {
+            const {x,y} = h2p(r,c);
+            ctx.fillStyle = 'rgba(30,80,30,0.3)';
+            drawHex(x, y, hexSize*0.88, 'rgba(20,60,20,0.4)', '#2a5a2a', 1);
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.font = `${Math.max(10, hexSize*0.28)}px sans-serif`;
-            ctx.fillText('⛰️', wx, wy);
+            ctx.font = `${Math.max(8, hexSize*0.2)}px sans-serif`;
+            ctx.fillText('🌳', x, y);
             ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
         }
     }
