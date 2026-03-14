@@ -57,7 +57,7 @@ let castQ=[],castTxts=[],castT=0;
 
 // Grid
 let gN=[],gE=[];
-let gs={x:0,y:0,drag:false,sx:0,sy:0,ox:0,oy:0};
+let gs={x:0,y:0,drag:false,sx:0,sy:0,ox:0,oy:0,zoom:1,zoomStart:1,pinchDist:0};
 let selN=null,gcx=0,gcy=0;
 
 // ===== SPHERE GRID - FF10 style with circular clusters =====
@@ -276,19 +276,49 @@ function buildGrid(){
   const b7=N(0,-12,'stat',{cost:3,stat:'mhp',val:15,label:'HP+15',cat:'guard'});
   E(g13,b7);E(b7,a13);
 
-  // ===== ULTIMATE (4 nodes, deep end) =====
-  const u0=N(0,21,'stat',{cost:4,stat:'atk',val:5,label:'ATK+5',cat:'ultimate'});
-  const u1=N(-1,22.5,'stat',{cost:4,stat:'mhp',val:25,label:'HP+25',cat:'ultimate'});
-  const u2=N(1,22.5,'stat',{cost:4,stat:'spd',val:0.5,label:'SPD+',cat:'ultimate'});
-  const uS=N(0,24,'skill',{cost:15,skill:'transcend',label:'Transcendence',cat:'ultimate',desc:'全ステ2倍 20秒',icon:'🌟',tier:3});
-  E(wS3,u0);E(dS3,u0);E(u0,u1);E(u0,u2);E(u1,uS);E(u2,uS);
+  // ===== OUTER RING: Connect Tier3 skills to form a loop =====
+  // Guard T3 → Arcane T3 (top arc)
+  const r0=N(0,-20,'stat',{cost:3,stat:'mhp',val:20,label:'HP+20',cat:'guard'});
+  const r1=N(1,-20.5,'stat',{cost:3,stat:'cr',val:0.1,label:'CRT+10%',cat:'arcane'});
+  E(gS3,r0);E(r0,r1);E(r1,aS3);
+  // Arcane T3 → Might T3 (right arc)
+  const r2=N(8,-14,'stat',{cost:3,stat:'cd',val:0.4,label:'CRD+40%',cat:'arcane'});
+  const r3=N(12,-8,'stat',{cost:3,stat:'atk',val:5,label:'ATK+5',cat:'might'});
+  const r4=N(16,-4,'stat',{cost:3,stat:'atk',val:5,label:'ATK+5',cat:'might'});
+  E(aS3,r2);E(r2,r3);E(r3,r4);E(r4,mS3);
+  // Might T3 → Dark T3 (right-bottom arc)
+  const r5=N(16,5,'stat',{cost:3,stat:'mh',val:1,label:'連撃+1',cat:'might'});
+  const r6=N(12,12,'stat',{cost:3,stat:'ls',val:0.1,label:'吸血+10%',cat:'dark'});
+  const r7=N(7,16,'stat',{cost:3,stat:'reg',val:1,label:'再生+1',cat:'dark'});
+  E(mS3,r5);E(r5,r6);E(r6,r7);E(r7,dS3);
+  // Dark T3 → Swift T3 (bottom arc)
+  const r8=N(0,20,'stat',{cost:3,stat:'ls',val:0.12,label:'吸血+12%',cat:'dark'});
+  const r9=N(-1,20,'stat',{cost:3,stat:'spd',val:0.3,label:'SPD+',cat:'swift'});
+  E(dS3,r8);E(r8,r9);E(r9,wS3);
+  // Swift T3 → Guard T3 (left arc)
+  const r10=N(-7,16,'stat',{cost:3,stat:'dg',val:0.1,label:'回避+10%',cat:'swift'});
+  const r11=N(-8,10,'stat',{cost:3,stat:'def',val:3,label:'DEF+3',cat:'guard'});
+  const r12=N(-7,-5,'stat',{cost:3,stat:'def',val:3,label:'DEF+3',cat:'guard'});
+  E(wS3,r10);E(r10,r11);E(r11,r12);E(r12,gS3);
+
+  // ===== ULTIMATE (center of outer ring) =====
+  // Ultimate: center of outer ring, accessible from 4 directions
+  const u1=N(6,-10,'stat',{cost:4,stat:'atk',val:6,label:'ATK+6',cat:'ultimate'});
+  const u2=N(-5,-14,'stat',{cost:4,stat:'mhp',val:30,label:'HP+30',cat:'ultimate'});
+  const u3=N(-5,14,'stat',{cost:4,stat:'spd',val:0.5,label:'SPD+',cat:'ultimate'});
+  const u4=N(6,10,'stat',{cost:4,stat:'ls',val:0.15,label:'吸血+15%',cat:'ultimate'});
+  const uS=N(5,3.5,'skill',{cost:15,skill:'transcend',label:'Transcendence',cat:'ultimate',desc:'全ステ2倍 20秒',icon:'🌟',tier:3});
+  E(r3,u1);E(u1,uS);
+  E(r12,u2);E(u2,uS);
+  E(r10,u3);E(u3,uS);
+  E(r6,u4);E(u4,uS);
 
   gN=nodes;gE=edges;posGrid();
 }
 
 function posGrid(){
-  const S=Math.min(W*0.038,16);
-  gcx=W/2;gcy=GRID_Y+GRID_H*0.22;
+  const S=Math.min(W*0.038,16)*gs.zoom;
+  gcx=W/2;gcy=GRID_Y+GRID_H*0.35;
   for(const n of gN){n.x=gcx+n.gx*S;n.y=gcy+n.gy*S;}
 }
 
@@ -636,9 +666,34 @@ function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadr
 // Input
 function getP(e){const r=C.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top};}
 let ts=0,tm_=false;
-C.addEventListener('touchstart',e=>{e.preventDefault();if(ac.state==='suspended')ac.resume();const p=getP(e);ts=Date.now();tm_=false;if(state===ST.TITLE)return;if(p.y>GRID_Y){gs.drag=true;gs.sx=p.x;gs.sy=p.y;gs.ox=gs.x;gs.oy=gs.y;}},{passive:false});
-C.addEventListener('touchmove',e=>{e.preventDefault();const p=getP(e);if(gs.drag){const dx=p.x-gs.sx,dy=p.y-gs.sy;if(Math.abs(dx)>5||Math.abs(dy)>5)tm_=true;gs.x=gs.ox+dx;gs.y=gs.oy+dy;}},{passive:false});
-C.addEventListener('touchend',e=>{e.preventDefault();gs.drag=false;if(state===ST.TITLE){startG();return;}if(!tm_&&Date.now()-ts<300){const r=C.getBoundingClientRect();if(e.changedTouches&&e.changedTouches[0]){const p={x:e.changedTouches[0].clientX-r.left,y:e.changedTouches[0].clientY-r.top};if(p.y>GRID_Y)gridTap(p);}}},{passive:false});
+function pinchDist(e){const t=e.touches;if(t.length<2)return 0;return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
+function pinchCenter(e){const t=e.touches;const r=C.getBoundingClientRect();return{x:(t[0].clientX+t[1].clientX)/2-r.left,y:(t[0].clientY+t[1].clientY)/2-r.top};}
+let pinching=false;
+C.addEventListener('touchstart',e=>{e.preventDefault();if(ac.state==='suspended')ac.resume();
+  if(e.touches.length===2&&state!==ST.TITLE){
+    pinching=true;gs.pinchDist=pinchDist(e);gs.zoomStart=gs.zoom;tm_=true;return;
+  }
+  const p=getP(e);ts=Date.now();tm_=false;if(state===ST.TITLE)return;
+  if(p.y>GRID_Y){gs.drag=true;gs.sx=p.x;gs.sy=p.y;gs.ox=gs.x;gs.oy=gs.y;}
+},{passive:false});
+C.addEventListener('touchmove',e=>{e.preventDefault();
+  if(pinching&&e.touches.length===2){
+    const d=pinchDist(e);if(gs.pinchDist>0){
+      gs.zoom=Math.max(0.3,Math.min(3,gs.zoomStart*(d/gs.pinchDist)));
+      posGrid();
+    }
+    return;
+  }
+  const p=getP(e);if(gs.drag){const dx=p.x-gs.sx,dy=p.y-gs.sy;if(Math.abs(dx)>5||Math.abs(dy)>5)tm_=true;gs.x=gs.ox+dx;gs.y=gs.oy+dy;}
+},{passive:false});
+C.addEventListener('touchend',e=>{e.preventDefault();
+  if(pinching){if(e.touches.length<2)pinching=false;return;}
+  gs.drag=false;if(state===ST.TITLE){startG();return;}
+  if(!tm_&&Date.now()-ts<300){const r=C.getBoundingClientRect();if(e.changedTouches&&e.changedTouches[0]){const p={x:e.changedTouches[0].clientX-r.left,y:e.changedTouches[0].clientY-r.top};if(p.y>GRID_Y)gridTap(p);}}
+},{passive:false});
+C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
+  gs.zoom=Math.max(0.3,Math.min(3,gs.zoom*(e.deltaY>0?0.9:1.1)));posGrid();
+},{passive:false});
 C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();return;}if(p.y>GRID_Y)gridTap(p);});
 
 function startG(){state=ST.PLAY;buildGrid();resize();initRun();}
