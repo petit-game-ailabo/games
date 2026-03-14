@@ -149,7 +149,7 @@ if(!hasSave){stage=1;score=0;sp=0;unlockedSkills={};}
 // HEX MATH — with physical gap
 // ============================================
 const HUD_H = 48, PANEL_H = 155;
-const GAP_WIDTH_MULT = 1.8; // narrower gap so bridge tiles connect visually
+const GAP_WIDTH_MULT = 1.0; // no extra gap — col 3 simply not drawn except bridge rows
 
 function calcGrid() {
     const availH = H - HUD_H - PANEL_H;
@@ -165,9 +165,9 @@ function calcGrid() {
 }
 
 function h2p(r, c) {
-    // Add extra gap for columns > GAP_COL
     let xOff = 0;
     if (c > GAP_COL) xOff = (GAP_WIDTH_MULT - 1) * hexSize * 1.75;
+    else if (c === GAP_COL && isBridge(r, c)) xOff = (GAP_WIDTH_MULT - 1) * hexSize * 1.75 * 0.5;
     return { x: gox + c * hexSize * 1.75 + (r % 2) * hexSize * 0.875 + xOff, y: goy + r * hexSize * 1.52 };
 }
 
@@ -604,7 +604,7 @@ function draw(){
 
     // Grid
     for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-        if(isGap(r,c))continue; // Physical gap — no hex drawn
+        if(isGap(r,c))continue;
         const{x,y}=h2p(r,c);
         const cell=grid[r][c];
         let fill='#12122a',stroke='#2a2a42';
@@ -621,7 +621,7 @@ function draw(){
         }
         drawHex(x,y,hexSize*0.88,fill,stroke,1.5);
 
-        // Bridge tiles — just normal hex, no icon
+        // nothing extra for bridge
 
         if(cell.unit)drawUnit(x,y,cell.unit);
     }
