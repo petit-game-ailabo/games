@@ -43,27 +43,28 @@ function sfxSelect(){snd(500,'sine',0.04,0.25);}
 function sfxMove(){snd(330,'triangle',0.05,0.15);}
 
 // ============================================
-// MAP DESIGN — MOBA style
+// MAP — 2 lanes with physical gap + jungle bridge
 // ============================================
-// 9 cols × 11 rows. Lanes: left(0-2), mid(3-5), right(6-8)
-// Walls between lanes except at jungle rows (rows 4,5,6 = jungle zone)
-const COLS = 9, ROWS = 11;
-const JUNGLE_ROWS = new Set([4, 5, 6]); // 3-row jungle zone in middle
+// 7 cols × 11 rows
+// Col 0-2: LEFT lane, Col 3: GAP (no hex), Col 4-6: RIGHT lane
+// Jungle row (5): col 3 becomes passable bridge
+const COLS = 7, ROWS = 11;
+const GAP_COL = 3;
+const JUNGLE_ROW = 5; // single bridge row
 
-function laneOf(c) { return Math.floor(c / 3); }
-function isLaneBorder(c1, c2) { return laneOf(c1) !== laneOf(c2); }
-
-// TERRAIN: 'lane' | 'wall' | 'jungle'
-function terrain(r, c) {
-    // Border columns (2→3 or 5→6) at non-jungle rows are adjacent to wall
-    // But we don't have wall cells — walls are between lanes
-    if (JUNGLE_ROWS.has(r) && (c === 2 || c === 3 || c === 5 || c === 6)) return 'jungle';
-    return 'lane';
+function isGap(r, c) {
+    if (c !== GAP_COL) return false;
+    return r !== JUNGLE_ROW; // gap everywhere except jungle bridge
 }
 
-function canCross(r, c1, c2) {
-    if (!isLaneBorder(c1, c2)) return true;
-    return JUNGLE_ROWS.has(r); // Can only cross lanes in jungle zone
+function isJungle(r, c) {
+    return c === GAP_COL && r === JUNGLE_ROW;
+}
+
+function laneOf(c) {
+    if (c < GAP_COL) return 0; // left
+    if (c > GAP_COL) return 1; // right
+    return -1; // gap/jungle
 }
 
 // ============================================
@@ -74,8 +75,8 @@ let state = ST.TITLE;
 let hexSize = 0, gox = 0, goy = 0;
 let grid = [];
 
-let playerCastle = { r:0, c:0 };
-let enemyCastle = { r:0, c:0 };
+let playerCastleL = {r:0,c:0}, playerCastleR = {r:0,c:0};
+let enemyCastleL = {r:0,c:0}, enemyCastleR = {r:0,c:0};
 
 const TYPES = {
     castle: { name:'城',   icon:'🏰', atk:0, hp:20, move:0, range:0, desc:'守れ！', color:'#888' },
@@ -95,7 +96,7 @@ let animQueue = [], animTimer = 0, animIdx = 0;
 let showTutorial = true, selectedHex = null, placedThisTurn = [];
 
 // ============================================
-// SKILLS — 5 branches × 4 tiers = 20 nodes
+// SKILLS
 // ============================================
 const SKILLS = {
     atk1:{name:'ATK+1',cost:1,effect:{atk:1},req:null,branch:0,tier:0},
@@ -122,14 +123,11 @@ const SKILLS = {
 let unlockedSkills = {}, selectedSkillId = null;
 
 function bonus() {
-    let b = {atk:0,hp:0,crit:0,ctrUp:false,units:0,moveUp:0,bowRange:0,castleHp:0,bowAtk:0,allAtk:0,regen:0,allHp:0,castleRegen:0,placeRange:0};
+    let b={atk:0,hp:0,crit:0,ctrUp:false,units:0,moveUp:0,bowRange:0,castleHp:0,bowAtk:0,allAtk:0,regen:0,allHp:0,castleRegen:0,placeRange:0};
     for (const id in unlockedSkills) {
-        if (!unlockedSkills[id]) continue;
-        const e = SKILLS[id].effect;
-        for (const k in e) {
-            if (typeof e[k]==='boolean') b[k]=b[k]||e[k];
-            else if (typeof e[k]==='number') b[k]=(b[k]||0)+e[k];
-        }
+        if(!unlockedSkills[id])continue;
+        const e=SKILLS[id].effect;
+        for(const k in e){if(typeof e[k]==='boolean')b[k]=b[k]||e[k];else if(typeof e[k]==='number')b[k]=(b[k]||0)+e[k];}
     }
     return b;
 }
@@ -137,45 +135,47 @@ function bonus() {
 // ============================================
 // SAVE / LOAD
 // ============================================
-const SAVE_KEY = 'hexconquest_save';
-function saveGame() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({stage,score,sp,unlockedSkills,fastMode,soundOn,v:2})); } catch(e){} }
-function loadGame() {
-    try {
-        const d = JSON.parse(localStorage.getItem(SAVE_KEY));
-        if (!d) return false;
-        stage=d.stage||1; score=d.score||0; sp=d.sp||0;
-        unlockedSkills=d.unlockedSkills||{}; fastMode=d.fastMode||false;
-        soundOn=d.soundOn!==undefined?d.soundOn:true;
-        return true;
-    } catch(e) { return false; }
+const SAVE_KEY='hexconquest_save';
+function saveGame(){try{localStorage.setItem(SAVE_KEY,JSON.stringify({stage,score,sp,unlockedSkills,fastMode,soundOn,v:3}));}catch(e){}}
+function loadGame(){
+    try{const d=JSON.parse(localStorage.getItem(SAVE_KEY));if(!d)return false;
+    stage=d.stage||1;score=d.score||0;sp=d.sp||0;unlockedSkills=d.unlockedSkills||{};fastMode=d.fastMode||false;soundOn=d.soundOn!==undefined?d.soundOn:true;return true;}catch(e){return false;}
 }
-function resetSave() { try{localStorage.removeItem(SAVE_KEY);}catch(e){} stage=1;score=0;sp=0;unlockedSkills={};fastMode=false;soundOn=true; }
-const hasSave = loadGame();
-if (!hasSave) { stage=1;score=0;sp=0;unlockedSkills={}; }
+function resetSave(){try{localStorage.removeItem(SAVE_KEY);}catch(e){}stage=1;score=0;sp=0;unlockedSkills={};fastMode=false;soundOn=true;}
+const hasSave=loadGame();
+if(!hasSave){stage=1;score=0;sp=0;unlockedSkills={};}
 
 // ============================================
-// HEX MATH
+// HEX MATH — with physical gap
 // ============================================
-const HUD_H = 48;
-const PANEL_H = 155;
+const HUD_H = 48, PANEL_H = 155;
+const GAP_WIDTH_MULT = 2.5; // gap is 2.5x hex spacing wide
 
 function calcGrid() {
     const availH = H - HUD_H - PANEL_H;
-    hexSize = Math.min((W - 10) / (COLS * 1.75 + 1), availH / (ROWS * 1.52 + 1)) * 0.92;
-    const gw = (COLS - 1) * hexSize * 1.75 + hexSize * 2;
+    // Account for gap: effective width = (COLS-1)*spacing + gap_extra + 2*hexSize
+    // Normal spacing = hexSize * 1.75
+    // Gap adds extra: (GAP_WIDTH_MULT - 1) * hexSize * 1.75
+    const extraGap = (GAP_WIDTH_MULT - 1) * 1.75;
+    hexSize = Math.min((W - 10) / ((COLS - 1) * 1.75 + extraGap + 2), availH / (ROWS * 1.52 + 1)) * 0.92;
+    const gw = (COLS - 1) * hexSize * 1.75 + extraGap * hexSize + hexSize * 2;
     const gh = (ROWS - 1) * hexSize * 1.52 + hexSize * 2;
     gox = (W - gw) / 2 + hexSize;
     goy = HUD_H + (availH - gh) / 2 + hexSize;
 }
 
 function h2p(r, c) {
-    return { x: gox + c * hexSize * 1.75 + (r % 2) * hexSize * 0.875, y: goy + r * hexSize * 1.52 };
+    // Add extra gap for columns > GAP_COL
+    let xOff = 0;
+    if (c > GAP_COL) xOff = (GAP_WIDTH_MULT - 1) * hexSize * 1.75;
+    return { x: gox + c * hexSize * 1.75 + (r % 2) * hexSize * 0.875 + xOff, y: goy + r * hexSize * 1.52 };
 }
 
 function p2h(px, py) {
     let best = null, bd = Infinity;
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-        const {x,y} = h2p(r,c);
+        if (isGap(r, c)) continue;
+        const {x,y} = h2p(r, c);
         const d = Math.hypot(px-x, py-y);
         if (d < bd && d < hexSize * 1.0) { bd = d; best = {r,c}; }
     }
@@ -189,14 +189,13 @@ function neighbors(r, c) {
     for (const [dr,dc] of dirs) {
         const nr = r+dr, nc = c+dc;
         if (nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
-        // Check lane crossing
-        if (!canCross(r, c, nc) && !canCross(nr, c, nc)) continue;
+        if (isGap(nr, nc)) continue; // can't move into gap
+        if (isGap(r, c) && !isJungle(r, c)) continue; // can't move from gap
         ns.push({r:nr,c:nc});
     }
     return ns;
 }
 
-// BFS-based range that respects walls (no attacking through walls)
 function reachableInRange(r, c, range) {
     const visited = new Map();
     const queue = [{r,c,d:0}];
@@ -204,14 +203,11 @@ function reachableInRange(r, c, range) {
     const result = [];
     while (queue.length) {
         const cur = queue.shift();
-        if (cur.d > 0) result.push({r:cur.r, c:cur.c, d:cur.d});
+        if (cur.d > 0) result.push({r:cur.r,c:cur.c,d:cur.d});
         if (cur.d < range) {
             for (const n of neighbors(cur.r, cur.c)) {
                 const key = n.r*100+n.c;
-                if (!visited.has(key)) {
-                    visited.set(key, cur.d+1);
-                    queue.push({r:n.r, c:n.c, d:cur.d+1});
-                }
+                if (!visited.has(key)) { visited.set(key,cur.d+1); queue.push({r:n.r,c:n.c,d:cur.d+1}); }
             }
         }
     }
@@ -219,28 +215,26 @@ function reachableInRange(r, c, range) {
 }
 
 function hexDist(r1,c1,r2,c2) {
-    const ax1=c1-(r1-(r1&1))/2, az1=r1;
-    const ax2=c2-(r2-(r2&1))/2, az2=r2;
-    const dx=ax2-ax1, dz=az2-az1;
+    const ax1=c1-(r1-(r1&1))/2,az1=r1,ax2=c2-(r2-(r2&1))/2,az2=r2;
+    const dx=ax2-ax1,dz=az2-az1;
     return Math.max(Math.abs(dx),Math.abs(dz),Math.abs(dx+dz));
 }
 
 function pathNext(r1,c1,r2,c2) {
-    if (r1===r2&&c1===c2) return null;
-    const visited = new Map();
-    const queue = [{r:r1,c:c1,path:[]}];
-    visited.set(r1*100+c1, true);
-    while (queue.length) {
-        const cur = queue.shift();
-        for (const n of neighbors(cur.r, cur.c)) {
-            const key = n.r*100+n.c;
-            if (visited.has(key)) continue;
-            const cell = grid[n.r][n.c];
-            const isTarget = (n.r===r2&&n.c===c2);
-            if (!isTarget && cell.unit) { visited.set(key,true); continue; }
-            const newPath = [...cur.path, {r:n.r,c:n.c}];
-            if (isTarget) return newPath[0];
-            visited.set(key, true);
+    if(r1===r2&&c1===c2)return null;
+    const visited=new Map(),queue=[{r:r1,c:c1,path:[]}];
+    visited.set(r1*100+c1,true);
+    while(queue.length){
+        const cur=queue.shift();
+        for(const n of neighbors(cur.r,cur.c)){
+            const key=n.r*100+n.c;
+            if(visited.has(key))continue;
+            const cell=grid[n.r][n.c];
+            const isTarget=(n.r===r2&&n.c===c2);
+            if(!isTarget&&cell.unit){visited.set(key,true);continue;}
+            const newPath=[...cur.path,{r:n.r,c:n.c}];
+            if(isTarget)return newPath[0];
+            visited.set(key,true);
             queue.push({r:n.r,c:n.c,path:newPath});
         }
     }
@@ -249,733 +243,538 @@ function pathNext(r1,c1,r2,c2) {
 
 function drawHex(x,y,size,fill,stroke,lw) {
     ctx.beginPath();
-    for (let i=0;i<6;i++) { const a=Math.PI/3*i-Math.PI/6; const hx=x+size*Math.cos(a),hy=y+size*Math.sin(a); if(i===0)ctx.moveTo(hx,hy);else ctx.lineTo(hx,hy); }
+    for(let i=0;i<6;i++){const a=Math.PI/3*i-Math.PI/6;const hx=x+size*Math.cos(a),hy=y+size*Math.sin(a);if(i===0)ctx.moveTo(hx,hy);else ctx.lineTo(hx,hy);}
     ctx.closePath();
-    if (fill) { ctx.fillStyle=fill; ctx.fill(); }
-    if (stroke) { ctx.strokeStyle=stroke; ctx.lineWidth=lw||1; ctx.stroke(); }
+    if(fill){ctx.fillStyle=fill;ctx.fill();}
+    if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||1;ctx.stroke();}
 }
-function roundRect(x,y,w,h,r) {
-    ctx.beginPath(); ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
-}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
 
 // ============================================
 // INIT STAGE
 // ============================================
 function initStage() {
     grid = [];
-    for (let r = 0; r < ROWS; r++) {
+    for (let r=0;r<ROWS;r++) {
         grid[r] = [];
-        for (let c = 0; c < COLS; c++) grid[r][c] = { owner: 0, unit: null };
+        for (let c=0;c<COLS;c++) grid[r][c] = { owner:0, unit:null };
     }
 
-    // Castles at center of mid lane
-    const midC = 4; // center of middle lane (cols 3-5)
-    playerCastle = { r: ROWS-1, c: midC };
-    enemyCastle = { r: 0, c: midC };
+    // Castles — one per lane
+    playerCastleL = {r:ROWS-1, c:1};
+    playerCastleR = {r:ROWS-1, c:5};
+    enemyCastleL = {r:0, c:1};
+    enemyCastleR = {r:0, c:5};
 
-    grid[playerCastle.r][playerCastle.c] = { owner:1, unit: makeCastle(1) };
-    grid[enemyCastle.r][enemyCastle.c] = { owner:2, unit: makeCastle(2) };
+    grid[playerCastleL.r][playerCastleL.c] = {owner:1, unit:makeCastle(1)};
+    grid[playerCastleR.r][playerCastleR.c] = {owner:1, unit:makeCastle(1)};
+    grid[enemyCastleL.r][enemyCastleL.c] = {owner:2, unit:makeCastle(2)};
+    grid[enemyCastleR.r][enemyCastleR.c] = {owner:2, unit:makeCastle(2)};
 
-    // Own territory
-    for (const n of neighbors(playerCastle.r, playerCastle.c)) grid[n.r][n.c].owner = 1;
-    for (const n of neighbors(enemyCastle.r, enemyCastle.c)) grid[n.r][n.c].owner = 2;
-    // Spawn zone: bottom 2 rows of all lanes
-    for (let r = ROWS-2; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-        if (!grid[r][c].unit) grid[r][c].owner = 1;
+    // Territory
+    for (const cas of [playerCastleL,playerCastleR]) {
+        for (const n of neighbors(cas.r,cas.c)) if(!grid[n.r][n.c].unit) grid[n.r][n.c].owner=1;
     }
-    for (let r = 0; r < 2; r++) for (let c = 0; c < COLS; c++) {
-        if (!grid[r][c].unit) grid[r][c].owner = 2;
+    for (const cas of [enemyCastleL,enemyCastleR]) {
+        for (const n of neighbors(cas.r,cas.c)) if(!grid[n.r][n.c].unit) grid[n.r][n.c].owner=2;
     }
-
-    // Enemy units — strategic per-lane placement
-    const perLane = Math.min(1 + stage, 5);
-    function laneComp(lane, stg) {
-        if (stg <= 2) return ['sword','archer'];
-        if (stg <= 4) {
-            if (lane===0) return ['scout','scout','sword'];
-            if (lane===1) return ['shield','archer','archer'];
-            return ['sword','sword','shield'];
-        }
-        if (lane===0) return ['shield','archer','archer','sword'];
-        if (lane===1) return ['sword','sword','scout','shield'];
-        return ['scout','scout','scout','archer'];
+    // Spawn zones
+    for (let r=ROWS-2;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+        if(!isGap(r,c)&&!grid[r][c].unit) grid[r][c].owner=1;
+    }
+    for (let r=0;r<2;r++) for (let c=0;c<COLS;c++) {
+        if(!isGap(r,c)&&!grid[r][c].unit) grid[r][c].owner=2;
     }
 
-    for (let lane = 0; lane < 3; lane++) {
-        const lc = lane * 3;
-        const comp = laneComp(lane, stage);
-        let placed = 0;
-        for (let r = 1; r >= 0 && placed < perLane; r--) {
-            for (let c = lc; c < lc + 3 && placed < perLane; c++) {
-                if (grid[r][c].unit) continue;
-                grid[r][c].unit = makeUnit(2, comp[placed % comp.length]);
-                grid[r][c].owner = 2;
-                placed++;
+    // Enemy units per lane
+    const perLane = Math.min(1+stage, 4);
+    function laneComp(lane,stg){
+        if(stg<=2) return ['sword','archer'];
+        if(stg<=4) return lane===0?['scout','sword','archer']:['shield','archer','sword'];
+        return lane===0?['shield','archer','archer','sword']:['scout','scout','sword','archer'];
+    }
+    for (let lane=0;lane<2;lane++) {
+        const lc=lane===0?0:4;
+        const comp=laneComp(lane,stage);
+        let placed=0;
+        for(let r=1;r>=0&&placed<perLane;r--){
+            for(let c=lc;c<lc+3&&placed<perLane;c++){
+                if(isGap(r,c)||grid[r][c].unit)continue;
+                grid[r][c].unit=makeUnit(2,comp[placed%comp.length]);
+                grid[r][c].owner=2; placed++;
             }
         }
     }
 
-    const b = bonus();
-    maxPlaces = 3 + b.units;
-    placesLeft = maxPlaces;
-    turn = 0; selectedType = 'sword';
-    animQueue=[]; animIdx=0; animTimer=0;
-    battleUnits=[]; battleUnitIdx=0; battlePhase='';
-    placedThisTurn=[]; showTutorial = (stage === 1);
-    state = ST.PLACE;
+    const b=bonus();
+    maxPlaces=3+b.units; placesLeft=maxPlaces;
+    turn=0; selectedType='sword';
+    animQueue=[];animIdx=0;animTimer=0;
+    battleUnits=[];battleUnitIdx=0;battlePhase='';
+    placedThisTurn=[];showTutorial=(stage===1);
+    state=ST.PLACE;
 }
 
-function makeCastle(owner) {
-    const b = bonus();
-    const hp = 20 + (owner === 2 ? stage * 8 : b.castleHp);
-    return { owner, type:'castle', hp, maxHp:hp, atk:0, move:0, range:0, crit:0, ctrUp:false };
+function makeCastle(owner){
+    const b=bonus();
+    const hp=20+(owner===2?stage*8:b.castleHp);
+    return {owner,type:'castle',hp,maxHp:hp,atk:0,move:0,range:0,crit:0,ctrUp:false};
 }
 
-function makeUnit(owner, type) {
-    const t = TYPES[type];
-    const b = owner===1 ? bonus() : {atk:0,hp:0,crit:0,ctrUp:false,moveUp:0,bowAtk:0,allAtk:0,allHp:0,bowRange:0};
-    const mult = owner===2 ? (0.9+stage*0.3) : 1;
-    let atk = t.atk + b.atk + b.allAtk + (type==='archer'&&owner===1?b.bowAtk:0);
-    let hp = t.hp + b.hp + b.allHp;
-    return {
-        owner, type,
-        hp: Math.ceil(hp*mult), maxHp: Math.ceil(hp*mult),
-        atk: Math.ceil(atk*mult),
-        move: t.move + (owner===1?b.moveUp:0),
-        range: t.range + (type==='archer'&&owner===1?b.bowRange:0),
-        crit: owner===1?b.crit:0,
-        ctrUp: owner===1?b.ctrUp:false,
-    };
+function makeUnit(owner,type){
+    const t=TYPES[type];
+    const b=owner===1?bonus():{atk:0,hp:0,crit:0,ctrUp:false,moveUp:0,bowAtk:0,allAtk:0,allHp:0,bowRange:0};
+    const mult=owner===2?(0.9+stage*0.3):1;
+    let atk=t.atk+b.atk+b.allAtk+(type==='archer'&&owner===1?b.bowAtk:0);
+    let hp=t.hp+b.hp+b.allHp;
+    return {owner,type,hp:Math.ceil(hp*mult),maxHp:Math.ceil(hp*mult),atk:Math.ceil(atk*mult),
+        move:t.move+(owner===1?b.moveUp:0),range:t.range+(type==='archer'&&owner===1?b.bowRange:0),
+        crit:owner===1?b.crit:0,ctrUp:owner===1?b.ctrUp:false};
 }
 
-function canPlace(r, c) {
-    if (grid[r][c].unit) return false;
-    const b = bonus();
-    return r >= ROWS - 2 - b.placeRange;
+function canPlace(r,c){
+    if(isGap(r,c))return false;
+    if(grid[r][c].unit)return false;
+    const b=bonus();
+    return r>=ROWS-2-b.placeRange;
 }
 
 // ============================================
-// BATTLE — sequential per-unit
+// BATTLE
 // ============================================
-function startBattle(side) {
-    battlePhase = side;
-    battleUnits = [];
-    const owner = side==='player'?1:2;
-    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
-        const u = grid[r][c].unit;
-        if (u && u.owner===owner && u.type!=='castle') battleUnits.push({r,c,unit:u});
+function startBattle(side){
+    battlePhase=side; battleUnits=[];
+    const owner=side==='player'?1:2;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+        const u=grid[r][c].unit;
+        if(u&&u.owner===owner&&u.type!=='castle')battleUnits.push({r,c,unit:u});
     }
-    battleUnitIdx = 0;
-    processNextUnit();
+    battleUnitIdx=0; processNextUnit();
 }
 
-function processNextUnit() {
-    animQueue=[]; animIdx=0; animTimer=0;
-
-    while (battleUnitIdx < battleUnits.length) {
-        const entry = battleUnits[battleUnitIdx];
+function processNextUnit(){
+    animQueue=[];animIdx=0;animTimer=0;
+    while(battleUnitIdx<battleUnits.length){
+        const entry=battleUnits[battleUnitIdx];
         let cr=-1,cc=-1;
-        for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
-            if (grid[r][c].unit===entry.unit) { cr=r;cc=c; }
-        }
-        if (cr===-1||entry.unit.hp<=0) { battleUnitIdx++; continue; }
+        for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){if(grid[r][c].unit===entry.unit){cr=r;cc=c;}}
+        if(cr===-1||entry.unit.hp<=0){battleUnitIdx++;continue;}
 
-        const u = entry.unit;
-        const isPlayer = u.owner===1;
-        const enemyOwner = isPlayer?2:1;
-        const targetCastle = isPlayer?enemyCastle:playerCastle;
+        const u=entry.unit;
+        const isPlayer=u.owner===1;
+        const enemyOwner=isPlayer?2:1;
 
-        // Find nearest enemy (full map scan, path-aware)
-        let nearestEnemy=null, nearestDist=Infinity;
-        for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
-            if (grid[r][c].unit && grid[r][c].unit.owner===enemyOwner && grid[r][c].unit.hp>0) {
-                const d = hexDist(cr,cc,r,c);
-                if (d<nearestDist) { nearestDist=d; nearestEnemy={r,c}; }
+        // Find nearest enemy
+        let nearestEnemy=null,nearestDist=Infinity;
+        for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+            if(grid[r][c].unit&&grid[r][c].unit.owner===enemyOwner&&grid[r][c].unit.hp>0){
+                const d=hexDist(cr,cc,r,c);
+                if(d<nearestDist){nearestDist=d;nearestEnemy={r,c};}
             }
         }
-        const target = nearestEnemy || {r:targetCastle.r,c:targetCastle.c};
+        // Find nearest enemy castle
+        let targetCastle = null;
+        if (isPlayer) {
+            const dL = hexDist(cr,cc,enemyCastleL.r,enemyCastleL.c);
+            const dR = hexDist(cr,cc,enemyCastleR.r,enemyCastleR.c);
+            targetCastle = dL<=dR ? enemyCastleL : enemyCastleR;
+        } else {
+            const dL = hexDist(cr,cc,playerCastleL.r,playerCastleL.c);
+            const dR = hexDist(cr,cc,playerCastleR.r,playerCastleR.c);
+            targetCastle = dL<=dR ? playerCastleL : playerCastleR;
+        }
+        const target=nearestEnemy||{r:targetCastle.r,c:targetCastle.c};
 
-        // Move — archers try to keep at max range
-        let nr=cr, nc=cc;
-        if (u.type==='archer' && nearestEnemy) {
-            // Check if already in attack range via BFS
-            const inRange = reachableInRange(cr,cc,u.range).some(h=>h.r===nearestEnemy.r&&h.c===nearestEnemy.c);
-            if (inRange && nearestDist >= 2) {
-                // Already can attack, don't move closer
-            } else if (inRange && nearestDist < 2) {
-                // Too close, retreat
-                for (let m=0;m<u.move;m++) {
-                    let bestPos=null, bestDist=0;
-                    for (const n of neighbors(nr,nc)) {
-                        if (grid[n.r][n.c].unit) continue;
-                        const nd = hexDist(n.r,n.c,nearestEnemy.r,nearestEnemy.c);
-                        if (nd>bestDist) { bestDist=nd; bestPos=n; }
+        // Move
+        let nr=cr,nc=cc;
+        if(u.type==='archer'&&nearestEnemy){
+            const inRange=reachableInRange(cr,cc,u.range).some(h=>h.r===nearestEnemy.r&&h.c===nearestEnemy.c);
+            if(inRange&&nearestDist>=2){/*stay*/}
+            else if(inRange&&nearestDist<2){
+                for(let m=0;m<u.move;m++){
+                    let bestPos=null,bestDist=0;
+                    for(const n of neighbors(nr,nc)){
+                        if(grid[n.r][n.c].unit)continue;
+                        const nd=hexDist(n.r,n.c,nearestEnemy.r,nearestEnemy.c);
+                        if(nd>bestDist){bestDist=nd;bestPos=n;}
                     }
-                    if (bestPos && bestDist > hexDist(nr,nc,nearestEnemy.r,nearestEnemy.c)) {
-                        nr=bestPos.r; nc=bestPos.c;
-                    } else break;
+                    if(bestPos&&bestDist>hexDist(nr,nc,nearestEnemy.r,nearestEnemy.c)){nr=bestPos.r;nc=bestPos.c;}else break;
                 }
             } else {
-                // Not in range, move toward
-                for (let m=0;m<u.move;m++) {
-                    const next = pathNext(nr,nc,target.r,target.c);
-                    if (!next||grid[next.r][next.c].unit) break;
-                    nr=next.r; nc=next.c;
-                }
+                for(let m=0;m<u.move;m++){const next=pathNext(nr,nc,target.r,target.c);if(!next||grid[next.r][next.c].unit)break;nr=next.r;nc=next.c;}
             }
         } else {
-            for (let m=0;m<u.move;m++) {
-                if (nr===target.r&&nc===target.c) break;
-                const next = pathNext(nr,nc,target.r,target.c);
-                if (!next||grid[next.r][next.c].unit) break;
-                nr=next.r; nc=next.c;
-            }
+            for(let m=0;m<u.move;m++){if(nr===target.r&&nc===target.c)break;const next=pathNext(nr,nc,target.r,target.c);if(!next||grid[next.r][next.c].unit)break;nr=next.r;nc=next.c;}
         }
 
-        if (nr!==cr||nc!==cc) {
-            grid[cr][cc].unit=null;
-            grid[nr][nc].unit=u;
-            grid[nr][nc].owner=u.owner;
+        if(nr!==cr||nc!==cc){
+            grid[cr][cc].unit=null;grid[nr][nc].unit=u;grid[nr][nc].owner=u.owner;
             u._animating=true;
             animQueue.push({type:'move',fromR:cr,fromC:cc,toR:nr,toC:nc,unit:u});
         }
 
-        // Attack — BFS range respects walls
-        const atkTargets = reachableInRange(nr,nc,u.range).filter(n =>
-            grid[n.r][n.c].unit && grid[n.r][n.c].unit.owner===enemyOwner && grid[n.r][n.c].unit.hp>0
-        );
-        if (atkTargets.length > 0) {
+        // Attack
+        const atkTargets=reachableInRange(nr,nc,u.range).filter(n=>grid[n.r][n.c].unit&&grid[n.r][n.c].unit.owner===enemyOwner&&grid[n.r][n.c].unit.hp>0);
+        if(atkTargets.length>0){
             atkTargets.sort((a,b)=>a.d-b.d);
-            const at = atkTargets[0];
-            let dmg = u.atk, isCrit = false;
-            if (u.crit>0 && Math.random()<u.crit) { dmg*=2; isCrit=true; }
-            const defender = grid[at.r][at.c].unit;
-            defender.hp -= dmg;
-            animQueue.push({type:'attack',fromR:nr,fromC:nc,toR:at.r,toC:at.c,dmg,crit:isCrit,side:battlePhase,
-                atkIcon:TYPES[u.type].icon, defIcon:TYPES[defender.type].icon});
-
-            // Counter (shield, adjacent only)
-            if (defender.type==='shield' && defender.hp>0 && hexDist(nr,nc,at.r,at.c)<=1) {
-                const cDmg = Math.ceil(defender.atk*(defender.ctrUp?1.0:0.5));
-                u.hp -= cDmg;
-                animQueue.push({type:'attack',fromR:at.r,fromC:at.c,toR:nr,toC:nc,dmg:cDmg,side:'counter',
-                    atkIcon:TYPES[defender.type].icon,defIcon:TYPES[u.type].icon});
+            const at=atkTargets[0];
+            let dmg=u.atk,isCrit=false;
+            if(u.crit>0&&Math.random()<u.crit){dmg*=2;isCrit=true;}
+            const defender=grid[at.r][at.c].unit;
+            defender.hp-=dmg;
+            animQueue.push({type:'attack',fromR:nr,fromC:nc,toR:at.r,toC:at.c,dmg,crit:isCrit,side:battlePhase,atkIcon:TYPES[u.type].icon,defIcon:TYPES[defender.type].icon});
+            if(defender.type==='shield'&&defender.hp>0&&hexDist(nr,nc,at.r,at.c)<=1){
+                const cDmg=Math.ceil(defender.atk*(defender.ctrUp?1.0:0.5));
+                u.hp-=cDmg;
+                animQueue.push({type:'attack',fromR:at.r,fromC:at.c,toR:nr,toC:nc,dmg:cDmg,side:'counter',atkIcon:TYPES[defender.type].icon,defIcon:TYPES[u.type].icon});
             }
-            if (defender.hp<=0) {
+            if(defender.hp<=0){
                 animQueue.push({type:'die',r:at.r,c:at.c,side:isPlayer?'enemy':'player'});
-                if (defender.type==='castle') animQueue.push({type:isPlayer?'win':'lose'});
+                if(defender.type==='castle')animQueue.push({type:isPlayer?'win':'lose'});
             }
-            if (u.hp<=0) animQueue.push({type:'die',r:nr,c:nc,side:battlePhase});
+            if(u.hp<=0)animQueue.push({type:'die',r:nr,c:nc,side:battlePhase});
         }
 
         battleUnitIdx++;
-        if (animQueue.length>0) { animTimer=animSpeed(); return; }
+        if(animQueue.length>0){animTimer=animSpeed();return;}
     }
-
-    if (battlePhase==='player') startBattle('enemy');
+    if(battlePhase==='player')startBattle('enemy');
     else doEndOfRound();
 }
 
-function doEndOfRound() {
-    // Smart enemy spawns
-    const spawnInterval = Math.max(1, 3-Math.floor(stage/2));
-    if (turn%spawnInterval===0) {
-        const laneStr=[0,0,0], lanePlayerStr=[0,0,0];
-        for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
-            const u=grid[r][c].unit; if(!u||u.type==='castle') continue;
-            const lane=laneOf(c);
-            if (u.owner===2) laneStr[lane]+=u.hp;
-            if (u.owner===1) lanePlayerStr[lane]+=u.hp;
+function doEndOfRound(){
+    // Spawns
+    const spawnInterval=Math.max(1,3-Math.floor(stage/2));
+    if(turn%spawnInterval===0){
+        const laneStr=[0,0],lanePlayerStr=[0,0];
+        for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+            const u=grid[r][c].unit;if(!u||u.type==='castle'||isGap(r,c))continue;
+            const lane=c<GAP_COL?0:1;
+            if(u.owner===2)laneStr[lane]+=u.hp;
+            if(u.owner===1)lanePlayerStr[lane]+=u.hp;
         }
-        const lanePri=[0,1,2].sort((a,b)=>(laneStr[a]-lanePlayerStr[a])-(laneStr[b]-lanePlayerStr[b]));
-        const numSpawns=Math.min(3, 1+Math.floor(stage/3));
+        const lanePri=[0,1].sort((a,b)=>(laneStr[a]-lanePlayerStr[a])-(laneStr[b]-lanePlayerStr[b]));
+        const numSpawns=Math.min(2,1+Math.floor(stage/3));
         const types=['sword','archer','shield','scout'];
         let spawned=0;
-        for (const lane of lanePri) {
-            if (spawned>=numSpawns) break;
-            const lc=lane*3;
-            for (let c=lc;c<lc+3;c++) {
-                if (!grid[0][c].unit) {
+        for(const lane of lanePri){
+            if(spawned>=numSpawns)break;
+            const lc=lane===0?0:4;
+            for(let c=lc;c<lc+3;c++){
+                if(!grid[0][c].unit&&!isGap(0,c)){
                     let type=types[Math.floor(Math.random()*types.length)];
-                    if (stage>=3&&lanePlayerStr[lane]>10) type='archer';
-                    if (stage>=5&&lanePlayerStr[lane]>20) type='shield';
-                    grid[0][c].unit=makeUnit(2,type); grid[0][c].owner=2;
-                    spawned++; break;
+                    grid[0][c].unit=makeUnit(2,type);grid[0][c].owner=2;
+                    spawned++;break;
                 }
             }
         }
     }
 
     const b=bonus();
-    if (b.regen>0) {
-        for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
-            const u=grid[r][c].unit;
-            if (u&&u.owner===1&&u.type!=='castle') u.hp=Math.min(u.maxHp,u.hp+b.regen);
-        }
-    }
-    if (b.castleRegen>0) {
-        const pc=grid[playerCastle.r][playerCastle.c].unit;
-        if (pc) pc.hp=Math.min(pc.maxHp,pc.hp+b.castleRegen);
+    if(b.regen>0){for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const u=grid[r][c].unit;if(u&&u.owner===1&&u.type!=='castle')u.hp=Math.min(u.maxHp,u.hp+b.regen);}}
+    if(b.castleRegen>0){
+        for(const cas of[playerCastleL,playerCastleR]){const pc=grid[cas.r][cas.c].unit;if(pc)pc.hp=Math.min(pc.maxHp,pc.hp+b.castleRegen);}
     }
 
-    turn++;
-    maxPlaces=3+b.units; placesLeft=maxPlaces;
-    animQueue=[]; animIdx=0; placedThisTurn=[];
-    battlePhase=''; state=ST.PLACE;
+    turn++; maxPlaces=3+b.units; placesLeft=maxPlaces;
+    animQueue=[];animIdx=0;placedThisTurn=[];battlePhase='';state=ST.PLACE;
 }
+
+// Win condition: ALL enemy castles destroyed
+// (checked in processNextUnit via 'win' anim)
 
 // ============================================
 // ANIMATION
 // ============================================
-function processAnims(dt) {
-    animTimer-=dt;
-    if (animTimer>0) return;
-    if (animIdx<animQueue.length) {
+function processAnims(dt){
+    animTimer-=dt;if(animTimer>0)return;
+    if(animIdx<animQueue.length){
         const a=animQueue[animIdx];
-        if (a.type==='move'&&a.unit) a.unit._animating=false;
-        if (a.type==='die') {
-            if (grid[a.r]&&grid[a.r][a.c]) {
-                grid[a.r][a.c].unit=null;
-                if (a.side==='enemy') { score+=10; grid[a.r][a.c].owner=1; }
-            }
-        }
-        if (a.type==='win') { sp+=1+Math.floor(stage/2); score+=stage*100; saveGame(); state=ST.STAGE_CLEAR; sfxWin(); return; }
-        if (a.type==='lose') { state=ST.GAME_OVER; sfxLose(); return; }
-        animIdx++; animTimer=animSpeed();
-        if (a.type==='attack') sfxBattle();
-        if (a.type==='move') sfxMove();
+        if(a.type==='move'&&a.unit)a.unit._animating=false;
+        if(a.type==='die'){if(grid[a.r]&&grid[a.r][a.c]){grid[a.r][a.c].unit=null;if(a.side==='enemy'){score+=10;grid[a.r][a.c].owner=1;}}}
+        if(a.type==='win'){sp+=1+Math.floor(stage/2);score+=stage*100;saveGame();state=ST.STAGE_CLEAR;sfxWin();return;}
+        if(a.type==='lose'){state=ST.GAME_OVER;sfxLose();return;}
+        animIdx++;animTimer=animSpeed();
+        if(a.type==='attack')sfxBattle();if(a.type==='move')sfxMove();
     }
-    if (animIdx>=animQueue.length) processNextUnit();
+    if(animIdx>=animQueue.length)processNextUnit();
 }
 
 // ============================================
 // INPUT
 // ============================================
-canvas.addEventListener('pointerdown', (e) => {
-    e.preventDefault(); ensureAudio();
-    const {x:px,y:py}=getXY(e);
-
-    if (state===ST.TITLE) {
-        if (hasSave && px>W/2-80&&px<W/2+80&&py>H*0.78&&py<H*0.78+44) { loadGame(); initStage(); return; }
-        if (px>W/2-80&&px<W/2+80&&py>H*0.85&&py<H*0.85+44) { resetSave(); initStage(); return; }
-        if (hasSave&&px>W-80&&py>H-40) { resetSave(); sfxSelect(); return; }
-        if (py>H*0.7) { if(hasSave)loadGame();else resetSave(); initStage(); return; }
+canvas.addEventListener('pointerdown',(e)=>{
+    e.preventDefault();ensureAudio();
+    const{x:px,y:py}=getXY(e);
+    if(state===ST.TITLE){
+        if(hasSave&&px>W/2-75&&px<W/2+75&&py>H*0.78&&py<H*0.78+42){loadGame();initStage();return;}
+        if(px>W/2-75&&px<W/2+75&&py>H*0.85&&py<H*0.85+42){resetSave();initStage();return;}
+        if(hasSave&&px>W-80&&py>H-40){resetSave();sfxSelect();return;}
+        if(py>H*0.7){if(hasSave)loadGame();else resetSave();initStage();return;}
         return;
     }
-    if (state===ST.GAME_OVER) { state=ST.TITLE; return; }
-    if (state===ST.STAGE_CLEAR) { stage++; state=ST.SKILL_TREE; selectedSkillId=null; return; }
-    if (state===ST.SKILL_TREE) { handleSkillInput(px,py); return; }
+    if(state===ST.GAME_OVER){state=ST.TITLE;return;}
+    if(state===ST.STAGE_CLEAR){stage++;state=ST.SKILL_TREE;selectedSkillId=null;return;}
+    if(state===ST.SKILL_TREE){handleSkillInput(px,py);return;}
+    if(py<HUD_H&&px>W/2-35&&px<W/2+35){fastMode=!fastMode;sfxSelect();return;}
+    if(px>W-42&&py<HUD_H){soundOn=!soundOn;sfxSelect();return;}
 
-    // Speed toggle
-    if (py<HUD_H && px>W/2-35&&px<W/2+35) { fastMode=!fastMode; sfxSelect(); return; }
-    // Sound
-    if (px>W-42&&py<HUD_H) { soundOn=!soundOn; sfxSelect(); return; }
-
-    if (state===ST.PLACE) {
-        showTutorial=false; selectedHex=null;
+    if(state===ST.PLACE){
+        showTutorial=false;selectedHex=null;
         const panelY=H-PANEL_H;
-        if (py>panelY) {
-            if (px<55&&py<panelY+28) { if(placedThisTurn.length>0){const l=placedThisTurn.pop();grid[l.r][l.c].unit=null;placesLeft++;sfxSelect();}return; }
+        if(py>panelY){
+            if(px<55&&py<panelY+28){if(placedThisTurn.length>0){const l=placedThisTurn.pop();grid[l.r][l.c].unit=null;placesLeft++;sfxSelect();}return;}
             const types=['scout','sword','archer','shield'];
-            const btnW=Math.min(80,(W-40)/4), gap=(W-btnW*4)/5;
-            for (let i=0;i<4;i++) {
-                const bx=gap+i*(btnW+gap);
-                if (px>bx&&px<bx+btnW&&py>panelY+28&&py<panelY+88) { selectedType=types[i]; sfxSelect(); return; }
-            }
-            if (py>panelY+95) { state=ST.BATTLE; startBattle('player'); return; }
+            const btnW=Math.min(78,(W-36)/4),gap=(W-btnW*4)/5;
+            for(let i=0;i<4;i++){const bx=gap+i*(btnW+gap);if(px>bx&&px<bx+btnW&&py>panelY+28&&py<panelY+88){selectedType=types[i];sfxSelect();return;}}
+            if(py>panelY+95){state=ST.BATTLE;startBattle('player');return;}
             return;
         }
         const hex=p2h(px,py);
-        if (hex) {
-            if (grid[hex.r][hex.c].unit) { selectedHex={r:hex.r,c:hex.c}; return; }
-            if (placesLeft>0&&canPlace(hex.r,hex.c)) {
+        if(hex){
+            if(grid[hex.r][hex.c].unit){selectedHex={r:hex.r,c:hex.c};return;}
+            if(placesLeft>0&&canPlace(hex.r,hex.c)){
                 grid[hex.r][hex.c].unit=makeUnit(1,selectedType);
-                grid[hex.r][hex.c].owner=1;
-                placesLeft--; placedThisTurn.push({r:hex.r,c:hex.c}); sfxPlace();
+                grid[hex.r][hex.c].owner=1;placesLeft--;placedThisTurn.push({r:hex.r,c:hex.c});sfxPlace();
             }
         }
     }
 });
 
-function handleSkillInput(px,py) {
+function handleSkillInput(px,py){
     const bw=W/5;
-    for (const id in SKILLS) {
-        const sk=SKILLS[id];
-        const nx=bw*sk.branch+bw/2, ny=100+sk.tier*70;
-        if (Math.hypot(px-nx,py-ny)<26) { selectedSkillId=id; sfxSelect(); return; }
-    }
-    if (selectedSkillId) {
-        const sk=SKILLS[selectedSkillId];
-        const got=!!unlockedSkills[selectedSkillId];
+    for(const id in SKILLS){const sk=SKILLS[id];const nx=bw*sk.branch+bw/2,ny=100+sk.tier*70;if(Math.hypot(px-nx,py-ny)<26){selectedSkillId=id;sfxSelect();return;}}
+    if(selectedSkillId){
+        const sk=SKILLS[selectedSkillId];const got=!!unlockedSkills[selectedSkillId];
         const can=!got&&sp>=sk.cost&&(!sk.req||unlockedSkills[sk.req]);
-        if (can&&py>H*0.52&&py<H*0.52+46&&Math.abs(px-W/2)<75) {
-            sp-=sk.cost; unlockedSkills[selectedSkillId]=true; saveGame(); sfxSelect(); selectedSkillId=null; return;
-        }
+        if(can&&py>H*0.52&&py<H*0.52+46&&Math.abs(px-W/2)<75){sp-=sk.cost;unlockedSkills[selectedSkillId]=true;saveGame();sfxSelect();selectedSkillId=null;return;}
     }
-    if (py>H*0.65&&py<H*0.65+48&&Math.abs(px-W/2)<75) { saveGame(); initStage(); }
+    if(py>H*0.65&&py<H*0.65+48&&Math.abs(px-W/2)<75){saveGame();initStage();}
 }
 
 // ============================================
 // DRAW
 // ============================================
 let lt=0;
-function update(ts) {
-    const dt=Math.min((ts-lt)/1000,0.05); lt=ts;
-    if (state===ST.BATTLE) processAnims(dt);
-    draw();
-    requestAnimationFrame(update);
-}
+function update(ts){const dt=Math.min((ts-lt)/1000,0.05);lt=ts;if(state===ST.BATTLE)processAnims(dt);draw();requestAnimationFrame(update);}
 
-function draw() {
+function draw(){
     calcGrid();
-    ctx.fillStyle='#080818'; ctx.fillRect(0,0,W,H);
-
-    if (state===ST.TITLE) { drawTitle(); return; }
-    if (state===ST.SKILL_TREE) { drawSkillTree(); return; }
-    if (state===ST.GAME_OVER) { drawGameOver(); return; }
-
-    // Draw lane walls FIRST (behind hexes)
-    drawLaneWalls();
+    ctx.fillStyle='#080818';ctx.fillRect(0,0,W,H);
+    if(state===ST.TITLE){drawTitle();return;}
+    if(state===ST.SKILL_TREE){drawSkillTree();return;}
+    if(state===ST.GAME_OVER){drawGameOver();return;}
 
     // Grid
-    for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
-        const {x,y}=h2p(r,c);
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+        if(isGap(r,c))continue; // Physical gap — no hex drawn
+        const{x,y}=h2p(r,c);
         const cell=grid[r][c];
-        const t = terrain(r,c);
-        let fill, stroke;
+        let fill='#0c0c18',stroke='#1a1a2a';
 
-        if (t==='jungle') {
-            fill='#0a1f0a'; stroke='#1a4a1a';
+        if(isJungle(r,c)){
+            fill='#0a1f0a'; stroke='#2a5a2a';
         } else {
-            fill='#0c0c18'; stroke='#1a1a2a';
-            if (cell.owner===1) { fill='#0f1f35'; stroke='#2060a0'; }
-            if (cell.owner===2) { fill='#250f0f'; stroke='#a02020'; }
+            if(cell.owner===1){fill='#0f1f35';stroke='#2060a0';}
+            if(cell.owner===2){fill='#250f0f';stroke='#a02020';}
         }
-        if (state===ST.PLACE&&placesLeft>0&&canPlace(r,c)&&!cell.unit) {
+        if(state===ST.PLACE&&placesLeft>0&&canPlace(r,c)&&!cell.unit){
             const p=0.2+Math.sin(Date.now()/600+r+c)*0.08;
-            fill=`rgba(50,200,100,${p})`; stroke='#5f5';
+            fill=`rgba(50,200,100,${p})`;stroke='#5f5';
         }
         drawHex(x,y,hexSize*0.88,fill,stroke,1.5);
 
-        // Jungle decoration
-        if (t==='jungle') {
-            ctx.textAlign='center'; ctx.textBaseline='middle';
-            ctx.font=`${Math.max(8,hexSize*0.3)}px sans-serif`;
-            ctx.globalAlpha=0.6;
+        // Jungle bridge decoration
+        if(isJungle(r,c)){
+            ctx.textAlign='center';ctx.textBaseline='middle';
+            ctx.font=`${Math.max(10,hexSize*0.35)}px sans-serif`;
             ctx.fillText('🌿',x,y);
-            ctx.globalAlpha=1;
-            ctx.textBaseline='alphabetic'; ctx.textAlign='left';
+            ctx.textBaseline='alphabetic';ctx.textAlign='left';
         }
 
-        if (cell.unit) drawUnit(x,y,cell.unit);
+        if(cell.unit)drawUnit(x,y,cell.unit);
     }
 
     drawAnims();
     drawHUD();
+    if(state===ST.PLACE)drawPanel();
+    if(state===ST.STAGE_CLEAR)drawStageClear();
 
-    if (state===ST.PLACE) drawPanel();
-    if (state===ST.STAGE_CLEAR) drawStageClear();
+    if(state===ST.BATTLE){
+        ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,H-38,W,38);
+        ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+        ctx.fillText(battlePhase==='player'?'⚔️ 味方行動中...':'💀 敵行動中...',W/2,H-16);ctx.textAlign='left';
+    }
 
-    if (state===ST.BATTLE) {
-        ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,H-38,W,38);
-        ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
-        ctx.fillText(battlePhase==='player'?'⚔️ 味方行動中...':'💀 敵行動中...',W/2,H-16);
+    if(state===ST.PLACE&&showTutorial&&turn===0){
+        ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,H*0.28,W,75);
+        ctx.textAlign='center';ctx.fillStyle='#5f5';ctx.font='bold 14px sans-serif';
+        ctx.fillText('① 🟢緑マスをタップして配置',W/2,H*0.28+20);
+        ctx.fillText('② 下のボタンでユニット切替',W/2,H*0.28+42);
+        ctx.fillText('③ 🔴「出撃！」で戦闘開始',W/2,H*0.28+62);
         ctx.textAlign='left';
     }
 
-    // Tutorial
-    if (state===ST.PLACE&&showTutorial&&turn===0) {
-        ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,H*0.3,W,80);
-        ctx.textAlign='center'; ctx.fillStyle='#5f5'; ctx.font='bold 14px sans-serif';
-        ctx.fillText('① 🟢緑マスをタップして配置',W/2,H*0.3+22);
-        ctx.fillText('② 下のボタンでユニット切替',W/2,H*0.3+44);
-        ctx.fillText('③ 🔴「出撃！」で戦闘開始',W/2,H*0.3+66);
-        ctx.textAlign='left';
-    }
-
-    // Detail popup
-    if (selectedHex&&state===ST.PLACE) {
+    if(selectedHex&&state===ST.PLACE){
         const cell=grid[selectedHex.r][selectedHex.c];
-        if (cell.unit) {
-            const u=cell.unit, t=TYPES[u.type];
-            const {x:hx,y:hy}=h2p(selectedHex.r,selectedHex.c);
-            const popY=hy<H/2?hy+hexSize+8:hy-hexSize-50;
-            ctx.fillStyle='rgba(0,0,20,0.9)';
-            roundRect(hx-60,popY,120,45,7); ctx.fill();
-            ctx.strokeStyle=u.owner===1?'#48c':'#c44'; ctx.lineWidth=1.5;
-            roundRect(hx-60,popY,120,45,7); ctx.stroke();
-            ctx.textAlign='center';
-            ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif';
-            ctx.fillText(`${t.icon} ${t.name}`,hx,popY+15);
-            ctx.fillStyle='#aaa'; ctx.font='11px sans-serif';
-            ctx.fillText(`ATK:${u.atk} HP:${u.hp}/${u.maxHp} 移動:${u.move}`,hx,popY+33);
+        if(cell.unit){
+            const u=cell.unit,t=TYPES[u.type];
+            const{x:hx,y:hy}=h2p(selectedHex.r,selectedHex.c);
+            const popY=hy<H/2?hy+hexSize+8:hy-hexSize-45;
+            ctx.fillStyle='rgba(0,0,20,0.9)';roundRect(hx-55,popY,110,40,6);ctx.fill();
+            ctx.strokeStyle=u.owner===1?'#48c':'#c44';ctx.lineWidth=1.5;roundRect(hx-55,popY,110,40,6);ctx.stroke();
+            ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.fillText(`${t.icon} ${t.name}`,hx,popY+14);
+            ctx.fillStyle='#aaa';ctx.font='10px sans-serif';ctx.fillText(`ATK:${u.atk} HP:${u.hp}/${u.maxHp} 移:${u.move}`,hx,popY+30);
             ctx.textAlign='left';
         }
     }
 }
 
-function drawLaneWalls() {
-    // Draw walls between lanes (behind hexes)
-    for (const bc of [2, 5]) {
-        for (let r = 0; r < ROWS; r++) {
-            const p1=h2p(r,bc), p2=h2p(r,bc+1);
-            const wx=(p1.x+p2.x)/2, wy=p1.y;
-
-            if (JUNGLE_ROWS.has(r)) {
-                // Jungle gap — draw path through
-                ctx.fillStyle='rgba(15,40,15,0.5)';
-                ctx.fillRect(wx-7,wy-hexSize*0.76,14,hexSize*1.52);
-                // Vine decorations
-                ctx.strokeStyle='#1a4a1a'; ctx.lineWidth=1;
-                ctx.setLineDash([3,3]);
-                ctx.beginPath(); ctx.moveTo(wx,wy-hexSize*0.7); ctx.lineTo(wx,wy+hexSize*0.7); ctx.stroke();
-                ctx.setLineDash([]);
-            } else {
-                // Solid wall
-                ctx.fillStyle='#1a1525';
-                ctx.fillRect(wx-5,wy-hexSize*0.76,10,hexSize*1.52);
-                // Wall texture
-                ctx.strokeStyle='#2a2040'; ctx.lineWidth=1;
-                ctx.beginPath(); ctx.moveTo(wx-5,wy-hexSize*0.76); ctx.lineTo(wx-5,wy+hexSize*0.76); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(wx+5,wy-hexSize*0.76); ctx.lineTo(wx+5,wy+hexSize*0.76); ctx.stroke();
-                // Mountain emoji
-                ctx.textAlign='center'; ctx.textBaseline='middle';
-                ctx.font=`${Math.max(9,hexSize*0.3)}px sans-serif`;
-                ctx.fillText('⛰️',wx,wy);
-                ctx.textBaseline='alphabetic'; ctx.textAlign='left';
-            }
-        }
-    }
-}
-
-function drawUnit(x,y,unit) {
-    if (unit._animating) return;
-    const t=TYPES[unit.type];
-    const r=hexSize*(unit.type==='castle'?0.42:0.32);
-    ctx.fillStyle='rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(x,y+r+2,r*0.8,r*0.3,0,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=unit.owner===1?t.color:'#aa3333';
-    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle=unit.owner===1?'#88ccff':'#ff6666'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke();
-    ctx.font=`${Math.max(14,hexSize*0.5)}px sans-serif`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(t.icon,x,y); ctx.textBaseline='alphabetic';
-    // HP bar
-    const bw=hexSize*0.6, bh=3;
-    const bx=x-bw/2, by=y+r+4;
-    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(bx-1,by-1,bw+2,bh+2);
+function drawUnit(x,y,unit){
+    if(unit._animating)return;
+    const t=TYPES[unit.type],r=hexSize*(unit.type==='castle'?0.42:0.34);
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.beginPath();ctx.ellipse(x,y+r+2,r*0.8,r*0.3,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=unit.owner===1?t.color:'#aa3333';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=unit.owner===1?'#88ccff':'#ff6666';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();
+    ctx.font=`${Math.max(14,hexSize*0.5)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t.icon,x,y);ctx.textBaseline='alphabetic';
+    const bw=hexSize*0.6,bh=3,bx=x-bw/2,by=y+r+4;
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(bx-1,by-1,bw+2,bh+2);
     const ratio=Math.max(0,unit.hp/unit.maxHp);
-    ctx.fillStyle=ratio>0.5?'#4c4':ratio>0.25?'#cc4':'#c44';
-    ctx.fillRect(bx,by,bw*ratio,bh);
-    // HP text
-    const hs=unit.type==='castle'?Math.max(11,hexSize*0.28):Math.max(8,hexSize*0.2);
-    ctx.fillStyle=unit.type==='castle'?'#fff':'#bbb';
-    ctx.font=`${unit.type==='castle'?'bold ':''}${hs}px sans-serif`;
-    ctx.textAlign='center';
-    ctx.fillText(`${unit.hp}/${unit.maxHp}`,x,by+bh+9);
-    ctx.textAlign='left';
+    ctx.fillStyle=ratio>0.5?'#4c4':ratio>0.25?'#cc4':'#c44';ctx.fillRect(bx,by,bw*ratio,bh);
+    const hs=unit.type==='castle'?Math.max(11,hexSize*0.3):Math.max(8,hexSize*0.22);
+    ctx.fillStyle=unit.type==='castle'?'#fff':'#bbb';ctx.font=`${unit.type==='castle'?'bold ':''}${hs}px sans-serif`;
+    ctx.textAlign='center';ctx.fillText(`${unit.hp}/${unit.maxHp}`,x,by+bh+9);ctx.textAlign='left';
 }
 
-function drawAnims() {
-    if (animIdx>=animQueue.length||animIdx===0||animTimer<=0) return;
-    const a=animQueue[animIdx-1];
-    if (!a) return;
+function drawAnims(){
+    if(animIdx>=animQueue.length||animIdx===0||animTimer<=0)return;
+    const a=animQueue[animIdx-1];if(!a)return;
     const prog=Math.max(0,Math.min(1,1-animTimer/animSpeed()));
 
-    if (a.type==='attack') {
-        const from=h2p(a.fromR,a.fromC), to=h2p(a.toR,a.toC);
+    if(a.type==='attack'){
+        const from=h2p(a.fromR,a.fromC),to=h2p(a.toR,a.toC);
         const t=Math.min(prog*2,1);
         ctx.strokeStyle=a.side==='player'?'rgba(100,200,255,0.8)':a.side==='counter'?'rgba(255,255,100,0.8)':'rgba(255,100,100,0.8)';
-        ctx.lineWidth=3; ctx.globalAlpha=1-t*0.5;
-        ctx.beginPath(); ctx.moveTo(from.x,from.y);
-        ctx.lineTo(from.x+(to.x-from.x)*t,from.y+(to.y-from.y)*t); ctx.stroke();
+        ctx.lineWidth=3;ctx.globalAlpha=1-t*0.5;
+        ctx.beginPath();ctx.moveTo(from.x,from.y);ctx.lineTo(from.x+(to.x-from.x)*t,from.y+(to.y-from.y)*t);ctx.stroke();
         ctx.globalAlpha=1;
-        // Label
-        const midX=(from.x+to.x)/2, midY=Math.min(from.y,to.y)-25;
+        const midX=(from.x+to.x)/2,midY=Math.min(from.y,to.y)-22;
         ctx.fillStyle=a.side==='player'?'rgba(20,40,80,0.85)':'rgba(80,20,20,0.85)';
-        roundRect(midX-50,midY-12,100,23,5); ctx.fill();
-        ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
-        ctx.fillText(`${a.atkIcon}→${a.defIcon} -${a.dmg}${a.crit?'💥':''}`,midX,midY+4);
-        // Floating dmg
+        roundRect(midX-48,midY-11,96,21,5);ctx.fill();
+        ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+        ctx.fillText(`${a.atkIcon}→${a.defIcon} -${a.dmg}${a.crit?'💥':''}`,midX,midY+3);
         ctx.fillStyle=a.crit?'#ff0':(a.side==='player'?'#8cf':'#f88');
-        ctx.font=`bold ${a.crit?20:14}px sans-serif`;
-        ctx.fillText('-'+a.dmg,to.x,to.y-18-prog*20);
+        ctx.font=`bold ${a.crit?18:13}px sans-serif`;ctx.fillText('-'+a.dmg,to.x,to.y-16-prog*18);
         ctx.textAlign='left';
     }
-
-    if (a.type==='move') {
-        const from=h2p(a.fromR,a.fromC), to=h2p(a.toR,a.toC);
+    if(a.type==='move'){
+        const from=h2p(a.fromR,a.fromC),to=h2p(a.toR,a.toC);
         const t=Math.min(prog*1.5,1);
-        const mx=from.x+(to.x-from.x)*t, my=from.y+(to.y-from.y)*t;
-        // Trail
+        const mx=from.x+(to.x-from.x)*t,my=from.y+(to.y-from.y)*t;
         ctx.strokeStyle=a.unit.owner===1?'rgba(100,200,255,0.4)':'rgba(255,100,100,0.4)';
-        ctx.lineWidth=2; ctx.setLineDash([4,4]);
-        ctx.beginPath(); ctx.moveTo(from.x,from.y); ctx.lineTo(to.x,to.y); ctx.stroke();
-        ctx.setLineDash([]);
-        // Full unit at interpolated pos
-        const ut=TYPES[a.unit.type], ur=hexSize*0.32;
-        ctx.fillStyle=a.unit.owner===1?ut.color:'#aa3333';
-        ctx.beginPath(); ctx.arc(mx,my,ur,0,Math.PI*2); ctx.fill();
-        ctx.strokeStyle=a.unit.owner===1?'#88ccff':'#ff6666'; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.arc(mx,my,ur,0,Math.PI*2); ctx.stroke();
-        ctx.font=`${Math.max(14,hexSize*0.5)}px sans-serif`;
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillText(ut.icon,mx,my);
-        ctx.textBaseline='alphabetic'; ctx.textAlign='left';
+        ctx.lineWidth=2;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(from.x,from.y);ctx.lineTo(to.x,to.y);ctx.stroke();ctx.setLineDash([]);
+        const ut=TYPES[a.unit.type],ur=hexSize*0.34;
+        ctx.fillStyle=a.unit.owner===1?ut.color:'#aa3333';ctx.beginPath();ctx.arc(mx,my,ur,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle=a.unit.owner===1?'#88ccff':'#ff6666';ctx.lineWidth=2;ctx.beginPath();ctx.arc(mx,my,ur,0,Math.PI*2);ctx.stroke();
+        ctx.font=`${Math.max(14,hexSize*0.5)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(ut.icon,mx,my);
+        ctx.textBaseline='alphabetic';ctx.textAlign='left';
     }
 }
 
-function drawHUD() {
-    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,HUD_H);
-    ctx.textAlign='left'; ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif';
-    ctx.fillText(`STAGE ${stage}`,8,18);
-    ctx.fillStyle='#aaa'; ctx.font='11px sans-serif';
-    ctx.fillText(`T${turn}`,8,35);
-    // Speed toggle
-    ctx.fillStyle=fastMode?'rgba(200,150,50,0.8)':'rgba(60,60,60,0.6)';
-    roundRect(W/2-30,5,60,34,5); ctx.fill();
-    ctx.strokeStyle=fastMode?'#fa3':'#555'; ctx.lineWidth=1;
-    roundRect(W/2-30,5,60,34,5); ctx.stroke();
-    ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center';
-    ctx.fillText(fastMode?'⏩速':'▶普通',W/2,27);
-    // SP
-    ctx.textAlign='right'; ctx.fillStyle='#ffd700'; ctx.font='bold 13px sans-serif';
-    ctx.fillText(`SP:${sp}`,W-8,17);
-    ctx.fillStyle='#888'; ctx.font='14px sans-serif';
-    ctx.fillText(soundOn?'🔊':'🔇',W-8,37);
-    ctx.fillStyle='#666'; ctx.font='11px sans-serif';
-    ctx.fillText(`${score}pt`,W-35,37);
+function drawHUD(){
+    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,W,HUD_H);
+    ctx.textAlign='left';ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.fillText(`STAGE ${stage}`,8,18);
+    ctx.fillStyle='#aaa';ctx.font='11px sans-serif';ctx.fillText(`T${turn}`,8,35);
+    ctx.fillStyle=fastMode?'rgba(200,150,50,0.8)':'rgba(60,60,60,0.6)';roundRect(W/2-30,5,60,34,5);ctx.fill();
+    ctx.strokeStyle=fastMode?'#fa3':'#555';ctx.lineWidth=1;roundRect(W/2-30,5,60,34,5);ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText(fastMode?'⏩速':'▶普通',W/2,27);
+    ctx.textAlign='right';ctx.fillStyle='#ffd700';ctx.font='bold 13px sans-serif';ctx.fillText(`SP:${sp}`,W-8,17);
+    ctx.fillStyle='#888';ctx.font='14px sans-serif';ctx.fillText(soundOn?'🔊':'🔇',W-8,37);
+    ctx.fillStyle='#666';ctx.font='11px sans-serif';ctx.fillText(`${score}pt`,W-35,37);
     ctx.textAlign='left';
 }
 
-function drawPanel() {
+function drawPanel(){
     const panelY=H-PANEL_H;
-    ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fillRect(0,panelY,W,PANEL_H);
-    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(0,panelY); ctx.lineTo(W,panelY); ctx.stroke();
-    ctx.textAlign='center';
-    ctx.fillStyle=placesLeft>0?'#5f5':'#f88'; ctx.font='bold 14px sans-serif';
-    ctx.fillText(`残り ${placesLeft}体`,W/2,panelY+16);
-    if (placedThisTurn.length>0) {
-        ctx.fillStyle='rgba(255,255,255,0.1)'; roundRect(4,panelY+3,48,20,4); ctx.fill();
-        ctx.fillStyle='#aaa'; ctx.font='11px sans-serif'; ctx.textAlign='center';
-        ctx.fillText('↩戻す',28,panelY+17);
-    }
+    ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(0,panelY,W,PANEL_H);
+    ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,panelY);ctx.lineTo(W,panelY);ctx.stroke();
+    ctx.textAlign='center';ctx.fillStyle=placesLeft>0?'#5f5':'#f88';ctx.font='bold 14px sans-serif';ctx.fillText(`残り ${placesLeft}体`,W/2,panelY+16);
+    if(placedThisTurn.length>0){ctx.fillStyle='rgba(255,255,255,0.1)';roundRect(4,panelY+3,48,20,4);ctx.fill();ctx.fillStyle='#aaa';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText('↩戻す',28,panelY+17);}
     const types=['scout','sword','archer','shield'];
-    const btnW=Math.min(78,(W-36)/4), gap=(W-btnW*4)/5;
-    for (let i=0;i<4;i++) {
-        const t=TYPES[types[i]], bx=gap+i*(btnW+gap), by=panelY+26, bh=58;
-        const sel=selectedType===types[i];
-        ctx.fillStyle=sel?'rgba(68,136,204,0.4)':'rgba(255,255,255,0.05)';
-        roundRect(bx,by,btnW,bh,7); ctx.fill();
-        ctx.strokeStyle=sel?'#4488cc':'rgba(255,255,255,0.1)'; ctx.lineWidth=sel?2.5:1;
-        roundRect(bx,by,btnW,bh,7); ctx.stroke();
-        ctx.textAlign='center'; ctx.font='20px sans-serif'; ctx.fillText(t.icon,bx+btnW/2,by+22);
-        ctx.fillStyle=sel?'#fff':'#777'; ctx.font='bold 11px sans-serif'; ctx.fillText(t.desc,bx+btnW/2,by+40);
-        ctx.fillStyle='#555'; ctx.font='9px sans-serif'; ctx.fillText(`ATK${t.atk} HP${t.hp}`,bx+btnW/2,by+52);
+    const btnW=Math.min(78,(W-36)/4),gap=(W-btnW*4)/5;
+    for(let i=0;i<4;i++){
+        const t=TYPES[types[i]],bx=gap+i*(btnW+gap),by=panelY+26,bh=58;const sel=selectedType===types[i];
+        ctx.fillStyle=sel?'rgba(68,136,204,0.4)':'rgba(255,255,255,0.05)';roundRect(bx,by,btnW,bh,7);ctx.fill();
+        ctx.strokeStyle=sel?'#4488cc':'rgba(255,255,255,0.1)';ctx.lineWidth=sel?2.5:1;roundRect(bx,by,btnW,bh,7);ctx.stroke();
+        ctx.textAlign='center';ctx.font='20px sans-serif';ctx.fillText(t.icon,bx+btnW/2,by+22);
+        ctx.fillStyle=sel?'#fff':'#777';ctx.font='bold 11px sans-serif';ctx.fillText(t.desc,bx+btnW/2,by+40);
+        ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.fillText(`ATK${t.atk} HP${t.hp}`,bx+btnW/2,by+52);
     }
-    const btnY=panelY+93, btnH=44;
-    const glow=0.8+Math.sin(Date.now()/800)*0.12;
-    ctx.fillStyle=`rgba(200,50,50,${glow})`; roundRect(12,btnY,W-24,btnH,8); ctx.fill();
-    ctx.strokeStyle='#f66'; ctx.lineWidth=2; roundRect(12,btnY,W-24,btnH,8); ctx.stroke();
-    ctx.fillStyle='#fff'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('⚔️ 出撃！',W/2,btnY+btnH/2+6); ctx.textAlign='left';
+    const btnY=panelY+93,btnH=44;const glow=0.8+Math.sin(Date.now()/800)*0.12;
+    ctx.fillStyle=`rgba(200,50,50,${glow})`;roundRect(12,btnY,W-24,btnH,8);ctx.fill();
+    ctx.strokeStyle='#f66';ctx.lineWidth=2;roundRect(12,btnY,W-24,btnH,8);ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 18px sans-serif';ctx.textAlign='center';ctx.fillText('⚔️ 出撃！',W/2,btnY+btnH/2+6);ctx.textAlign='left';
 }
 
-// ============================================
-// TITLE / SKILL / RESULTS
-// ============================================
-function drawTitle() {
-    ctx.textAlign='center';
-    ctx.fillStyle='#fff'; ctx.font='bold 26px sans-serif';
-    ctx.fillText('⚔️ ヘックス制圧',W/2,H*0.09);
-    ctx.fillStyle='#aaa'; ctx.font='14px sans-serif';
-    ctx.fillText('3レーン MOBA風 戦略バトル',W/2,H*0.14);
-
-    const ins=[['🏰','城を守りながら敵城を落とせ'],['🐎⚔️🏹🛡️','4種のユニットを配置'],['🌿','ジャングルでレーン間移動'],['⚡','ステージクリアでスキル習得']];
-    for (let i=0;i<ins.length;i++) {
-        ctx.fillStyle='#888'; ctx.font='13px sans-serif';
-        ctx.fillText(`${ins[i][0]} ${ins[i][1]}`,W/2,H*0.22+i*26);
-    }
-
+function drawTitle(){
+    ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='bold 26px sans-serif';ctx.fillText('⚔️ ヘックス制圧',W/2,H*0.09);
+    ctx.fillStyle='#aaa';ctx.font='14px sans-serif';ctx.fillText('2レーン MOBA風 戦略バトル',W/2,H*0.14);
+    const ins=[['🏰','各レーンの城を守りつつ攻めろ'],['🐎⚔️🏹🛡️','4種のユニットを配置'],['🌿','ジャングルでレーン間移動'],['⚡','ステージクリアでスキル習得']];
+    for(let i=0;i<ins.length;i++){ctx.fillStyle='#888';ctx.font='13px sans-serif';ctx.fillText(`${ins[i][0]} ${ins[i][1]}`,W/2,H*0.22+i*26);}
     const types=['scout','sword','archer','shield'];
-    ctx.fillStyle='#555'; ctx.font='11px sans-serif';
-    ctx.fillText('── ユニット紹介 ──',W/2,H*0.45);
-    for (let i=0;i<4;i++) {
-        const t=TYPES[types[i]], uy=H*0.49+i*42;
-        ctx.font='20px sans-serif'; ctx.fillText(t.icon,W*0.15,uy+4);
-        ctx.fillStyle='#ccc'; ctx.font='bold 13px sans-serif'; ctx.textAlign='left';
-        ctx.fillText(t.name,W*0.28,uy-2);
-        ctx.fillStyle='#888'; ctx.font='11px sans-serif';
-        ctx.fillText(`ATK:${t.atk} HP:${t.hp} 移動:${t.move} ${t.range>1?'射程:'+t.range:''}`,W*0.28,uy+13);
-        ctx.textAlign='center'; ctx.fillStyle='#888';
+    ctx.fillStyle='#555';ctx.font='11px sans-serif';ctx.fillText('── ユニット紹介 ──',W/2,H*0.45);
+    for(let i=0;i<4;i++){
+        const t=TYPES[types[i]],uy=H*0.49+i*42;
+        ctx.font='20px sans-serif';ctx.fillText(t.icon,W*0.15,uy+4);
+        ctx.fillStyle='#ccc';ctx.font='bold 13px sans-serif';ctx.textAlign='left';ctx.fillText(t.name,W*0.28,uy-2);
+        ctx.fillStyle='#888';ctx.font='11px sans-serif';ctx.fillText(`ATK:${t.atk} HP:${t.hp} 移動:${t.move} ${t.range>1?'射程:'+t.range:''}`,W*0.28,uy+13);
+        ctx.textAlign='center';ctx.fillStyle='#888';
     }
-    if (hasSave) {
-        ctx.fillStyle='rgba(50,120,200,0.8)'; roundRect(W/2-75,H*0.78,150,42,8); ctx.fill();
-        ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.fillText('▶ 続きから',W/2,H*0.78+26);
-    }
-    const newY=hasSave?H*0.85:H*0.80;
-    const pulse=0.5+Math.sin(Date.now()/350)*0.5;
-    ctx.fillStyle=hasSave?'rgba(80,80,80,0.6)':`rgba(100,220,220,${pulse})`;
-    roundRect(W/2-75,newY,150,42,8); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font=`bold ${hasSave?14:18}px sans-serif`;
-    ctx.fillText(hasSave?'🔄 最初から':'▶ スタート',W/2,newY+26);
-    if (hasSave) { ctx.fillStyle='#555'; ctx.font='11px sans-serif'; ctx.fillText('リセット',W-40,H-18); }
+    if(hasSave){ctx.fillStyle='rgba(50,120,200,0.8)';roundRect(W/2-75,H*0.78,150,42,8);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 16px sans-serif';ctx.fillText('▶ 続きから',W/2,H*0.78+26);}
+    const newY=hasSave?H*0.85:H*0.80;const pulse=0.5+Math.sin(Date.now()/350)*0.5;
+    ctx.fillStyle=hasSave?'rgba(80,80,80,0.6)':`rgba(100,220,220,${pulse})`;roundRect(W/2-75,newY,150,42,8);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font=`bold ${hasSave?14:18}px sans-serif`;ctx.fillText(hasSave?'🔄 最初から':'▶ スタート',W/2,newY+26);
+    if(hasSave){ctx.fillStyle='#555';ctx.font='11px sans-serif';ctx.fillText('リセット',W-40,H-18);}
 }
 
-function drawSkillTree() {
-    ctx.fillStyle='#080818'; ctx.fillRect(0,0,W,H);
-    ctx.textAlign='center';
-    ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif'; ctx.fillText('⚡ スキルツリー',W/2,28);
-    ctx.fillStyle='#ffd700'; ctx.font='bold 13px sans-serif'; ctx.fillText(`SP: ${sp}`,W/2,48);
-    const bNames=['⚔️','🛡️','📡','🏹','🧙']; const bw=W/5;
-    for (let i=0;i<5;i++) { ctx.fillStyle='#555'; ctx.font='13px sans-serif'; ctx.fillText(bNames[i],bw*i+bw/2,68); }
-    for (const id in SKILLS) {
-        const sk=SKILLS[id];
-        if (sk.req) {
-            const p=SKILLS[sk.req]; const nx1=bw*p.branch+bw/2,ny1=96+p.tier*70; const nx2=bw*sk.branch+bw/2,ny2=96+sk.tier*70;
-            ctx.strokeStyle=(unlockedSkills[id]&&unlockedSkills[sk.req])?'#48c':'#222'; ctx.lineWidth=2;
-            ctx.beginPath(); ctx.moveTo(nx1,ny1); ctx.lineTo(nx2,ny2); ctx.stroke();
-        }
+function drawSkillTree(){
+    ctx.fillStyle='#080818';ctx.fillRect(0,0,W,H);ctx.textAlign='center';
+    ctx.fillStyle='#fff';ctx.font='bold 20px sans-serif';ctx.fillText('⚡ スキルツリー',W/2,28);
+    ctx.fillStyle='#ffd700';ctx.font='bold 13px sans-serif';ctx.fillText(`SP: ${sp}`,W/2,48);
+    const bNames=['⚔️','🛡️','📡','🏹','🧙'],bw=W/5;
+    for(let i=0;i<5;i++){ctx.fillStyle='#555';ctx.font='13px sans-serif';ctx.fillText(bNames[i],bw*i+bw/2,68);}
+    for(const id in SKILLS){const sk=SKILLS[id];if(sk.req){const p=SKILLS[sk.req];ctx.strokeStyle=(unlockedSkills[id]&&unlockedSkills[sk.req])?'#48c':'#222';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(bw*p.branch+bw/2,96+p.tier*70);ctx.lineTo(bw*sk.branch+bw/2,96+sk.tier*70);ctx.stroke();}}
+    for(const id in SKILLS){
+        const sk=SKILLS[id],nx=bw*sk.branch+bw/2,ny=96+sk.tier*70;
+        const got=!!unlockedSkills[id],can=!got&&sp>=sk.cost&&(!sk.req||unlockedSkills[sk.req]);
+        ctx.beginPath();ctx.arc(nx,ny,24,0,Math.PI*2);ctx.fillStyle=got?'#1a3a5a':can?'#1a3a1a':'#111';ctx.fill();
+        ctx.strokeStyle=selectedSkillId===id?'#fff':got?'#48c':can?'#4c4':'#333';ctx.lineWidth=selectedSkillId===id?3:2;ctx.stroke();
+        ctx.fillStyle=got?'#8cf':'#aaa';ctx.font='bold 10px sans-serif';ctx.fillText(sk.name,nx,ny+2);
+        if(!got){ctx.fillStyle=can?'#ffd700':'#555';ctx.font='9px sans-serif';ctx.fillText(sk.cost+'SP',nx,ny+15);}
+        else{ctx.fillStyle='#4c4';ctx.font='10px sans-serif';ctx.fillText('✓',nx,ny+15);}
     }
-    for (const id in SKILLS) {
-        const sk=SKILLS[id]; const nx=bw*sk.branch+bw/2, ny=96+sk.tier*70;
-        const got=!!unlockedSkills[id], can=!got&&sp>=sk.cost&&(!sk.req||unlockedSkills[sk.req]);
-        ctx.beginPath(); ctx.arc(nx,ny,24,0,Math.PI*2);
-        ctx.fillStyle=got?'#1a3a5a':can?'#1a3a1a':'#111'; ctx.fill();
-        ctx.strokeStyle=selectedSkillId===id?'#fff':got?'#48c':can?'#4c4':'#333'; ctx.lineWidth=selectedSkillId===id?3:2; ctx.stroke();
-        ctx.fillStyle=got?'#8cf':'#aaa'; ctx.font='bold 10px sans-serif'; ctx.fillText(sk.name,nx,ny+2);
-        if (!got) { ctx.fillStyle=can?'#ffd700':'#555'; ctx.font='9px sans-serif'; ctx.fillText(sk.cost+'SP',nx,ny+15); }
-        else { ctx.fillStyle='#4c4'; ctx.font='10px sans-serif'; ctx.fillText('✓',nx,ny+15); }
-    }
-    if (selectedSkillId) {
-        const sk=SKILLS[selectedSkillId]; const got=!!unlockedSkills[selectedSkillId];
+    if(selectedSkillId){
+        const sk=SKILLS[selectedSkillId],got=!!unlockedSkills[selectedSkillId];
         const can=!got&&sp>=sk.cost&&(!sk.req||unlockedSkills[sk.req]);
-        if (!got) { ctx.fillStyle='rgba(0,0,0,0.8)'; roundRect(W/2-90,H*0.46,180,35,7); ctx.fill(); ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.fillText(`${sk.name} (${sk.cost}SP)`,W/2,H*0.46+22); }
-        if (can) { ctx.fillStyle='#2a5a2a'; roundRect(W/2-70,H*0.52,140,46,8); ctx.fill(); ctx.strokeStyle='#4c4'; ctx.lineWidth=2; roundRect(W/2-70,H*0.52,140,46,8); ctx.stroke(); ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.fillText('習得する',W/2,H*0.52+28); }
+        if(!got){ctx.fillStyle='rgba(0,0,0,0.8)';roundRect(W/2-90,H*0.46,180,35,7);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.fillText(`${sk.name} (${sk.cost}SP)`,W/2,H*0.46+22);}
+        if(can){ctx.fillStyle='#2a5a2a';roundRect(W/2-70,H*0.52,140,46,8);ctx.fill();ctx.strokeStyle='#4c4';ctx.lineWidth=2;roundRect(W/2-70,H*0.52,140,46,8);ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 16px sans-serif';ctx.fillText('習得する',W/2,H*0.52+28);}
     }
-    ctx.fillStyle='#336699'; roundRect(W/2-70,H*0.65,140,48,8); ctx.fill();
-    ctx.strokeStyle='#6ab'; ctx.lineWidth=1.5; roundRect(W/2-70,H*0.65,140,48,8); ctx.stroke();
-    ctx.fillStyle='#fff'; ctx.font='bold 16px sans-serif'; ctx.fillText('▶ 次のステージ',W/2,H*0.65+30);
+    ctx.fillStyle='#336699';roundRect(W/2-70,H*0.65,140,48,8);ctx.fill();ctx.strokeStyle='#6ab';ctx.lineWidth=1.5;roundRect(W/2-70,H*0.65,140,48,8);ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 16px sans-serif';ctx.fillText('▶ 次のステージ',W/2,H*0.65+30);
 }
 
-function drawStageClear() {
-    ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(0,0,W,H);
-    ctx.textAlign='center';
-    ctx.fillStyle='#ffd700'; ctx.font='bold 26px sans-serif'; ctx.fillText(`🏆 STAGE ${stage} CLEAR!`,W/2,H*0.3);
-    ctx.fillStyle='#fff'; ctx.font='16px sans-serif'; ctx.fillText(`SP +${1+Math.floor(stage/2)}  スコア:${score}`,W/2,H*0.4);
-    const p=0.5+Math.sin(Date.now()/350)*0.5;
-    ctx.globalAlpha=p; ctx.fillStyle='#64dfdf'; ctx.font='bold 20px sans-serif'; ctx.fillText('▶ タップで次へ',W/2,H*0.55); ctx.globalAlpha=1;
+function drawStageClear(){
+    ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(0,0,W,H);ctx.textAlign='center';
+    ctx.fillStyle='#ffd700';ctx.font='bold 26px sans-serif';ctx.fillText(`🏆 STAGE ${stage} CLEAR!`,W/2,H*0.3);
+    ctx.fillStyle='#fff';ctx.font='16px sans-serif';ctx.fillText(`SP +${1+Math.floor(stage/2)}  スコア:${score}`,W/2,H*0.4);
+    const p=0.5+Math.sin(Date.now()/350)*0.5;ctx.globalAlpha=p;ctx.fillStyle='#64dfdf';ctx.font='bold 20px sans-serif';ctx.fillText('▶ タップで次へ',W/2,H*0.55);ctx.globalAlpha=1;
 }
 
-function drawGameOver() {
-    ctx.fillStyle='rgba(0,0,0,0.8)'; ctx.fillRect(0,0,W,H);
-    ctx.textAlign='center';
-    ctx.fillStyle='#f44'; ctx.font='bold 26px sans-serif'; ctx.fillText('💀 城が陥落！',W/2,H*0.3);
-    ctx.fillStyle='#fff'; ctx.font='16px sans-serif'; ctx.fillText(`ステージ${stage} スコア:${score}`,W/2,H*0.42);
-    const p=0.5+Math.sin(Date.now()/350)*0.5;
-    ctx.globalAlpha=p; ctx.fillStyle='#64dfdf'; ctx.font='bold 20px sans-serif'; ctx.fillText('▶ タップでタイトルへ',W/2,H*0.58); ctx.globalAlpha=1;
+function drawGameOver(){
+    ctx.fillStyle='rgba(0,0,0,0.8)';ctx.fillRect(0,0,W,H);ctx.textAlign='center';
+    ctx.fillStyle='#f44';ctx.font='bold 26px sans-serif';ctx.fillText('💀 城が陥落！',W/2,H*0.3);
+    ctx.fillStyle='#fff';ctx.font='16px sans-serif';ctx.fillText(`ステージ${stage} スコア:${score}`,W/2,H*0.42);
+    const p=0.5+Math.sin(Date.now()/350)*0.5;ctx.globalAlpha=p;ctx.fillStyle='#64dfdf';ctx.font='bold 20px sans-serif';ctx.fillText('▶ タップでタイトルへ',W/2,H*0.58);ctx.globalAlpha=1;
 }
 
 requestAnimationFrame(update);
