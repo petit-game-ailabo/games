@@ -220,7 +220,8 @@ function hexDist(r1,c1,r2,c2) {
     return Math.max(Math.abs(dx),Math.abs(dz),Math.abs(dx+dz));
 }
 
-function pathNext(r1,c1,r2,c2) {
+// pathNext with optional friendly pass-through
+function pathNext(r1,c1,r2,c2,friendlyOwner) {
     if(r1===r2&&c1===c2)return null;
     const visited=new Map(),queue=[{r:r1,c:c1,path:[]}];
     visited.set(r1*100+c1,true);
@@ -231,7 +232,16 @@ function pathNext(r1,c1,r2,c2) {
             if(visited.has(key))continue;
             const cell=grid[n.r][n.c];
             const isTarget=(n.r===r2&&n.c===c2);
-            if(!isTarget&&cell.unit){visited.set(key,true);continue;}
+            if(cell.unit){
+                // Friendly units can be passed through (but not stopped on)
+                if(friendlyOwner && cell.unit.owner===friendlyOwner && !isTarget){
+                    // Allow passing through friendly
+                    visited.set(key,true);
+                    queue.push({r:n.r,c:n.c,path:[...cur.path,{r:n.r,c:n.c}]});
+                    continue;
+                }
+                if(!isTarget){visited.set(key,true);continue;}
+            }
             const newPath=[...cur.path,{r:n.r,c:n.c}];
             if(isTarget)return newPath[0];
             visited.set(key,true);
@@ -403,18 +413,21 @@ function processNextUnit(){
                     if(bestPos&&bestDist>hexDist(nr,nc,nearestEnemy.r,nearestEnemy.c)){nr=bestPos.r;nc=bestPos.c;}else break;
                 }
             } else {
+                const fo = isPlayer ? 1 : null; // friendly pass-through for player only
                 for(let m=0;m<u.move;m++){
-                    const next=pathNext(nr,nc,target.r,target.c);
+                    const next=pathNext(nr,nc,target.r,target.c,fo);
                     if(next&&!grid[next.r][next.c].unit){nr=next.r;nc=next.c;continue;}
+                    // Fallback: find empty neighbor closer
                     let bestN=null,bestD=Infinity;
                     for(const n of neighbors(nr,nc)){if(!grid[n.r][n.c].unit){const d=hexDist(n.r,n.c,target.r,target.c);if(d<bestD){bestD=d;bestN=n;}}}
                     if(bestN&&bestD<hexDist(nr,nc,target.r,target.c)){nr=bestN.r;nc=bestN.c;}else break;
                 }
             }
         } else {
+            const fo = isPlayer ? 1 : null; // friendly pass-through for player only
             for(let m=0;m<u.move;m++){
                 if(nr===target.r&&nc===target.c)break;
-                const next=pathNext(nr,nc,target.r,target.c);
+                const next=pathNext(nr,nc,target.r,target.c,fo);
                 if(next&&!grid[next.r][next.c].unit){nr=next.r;nc=next.c;continue;}
                 // Path blocked — find any open neighbor closer or equal + more forward
                 const curD=hexDist(nr,nc,target.r,target.c);
@@ -422,8 +435,7 @@ function processNextUnit(){
                 for(const n of neighbors(nr,nc)){
                     if(grid[n.r][n.c].unit)continue;
                     const d=hexDist(n.r,n.c,target.r,target.c);
-                    // Score: prefer closer to target, break ties by row (forward)
-                    const rowBonus = isPlayer ? (nr-n.r)*0.1 : (n.r-nr)*0.1; // forward = good
+                    const rowBonus = isPlayer ? (nr-n.r)*0.1 : (n.r-nr)*0.1;
                     const sc = d - rowBonus;
                     if(sc<bestScore){bestScore=sc;bestN=n;}
                 }
@@ -595,10 +607,10 @@ function draw(){
         if(isGap(r,c))continue; // Physical gap — no hex drawn
         const{x,y}=h2p(r,c);
         const cell=grid[r][c];
-        let fill='#0c0c18',stroke='#1a1a2a';
+        let fill='#12122a',stroke='#2a2a42';
 
         if(isBridge(r,c)){
-            fill='#1a1510'; stroke='#6a5030';
+            fill='#12122a'; stroke='#2a2a42'; // Same as normal tile
         } else {
             if(cell.owner===1){fill='#0f1f35';stroke='#2060a0';}
             if(cell.owner===2){fill='#250f0f';stroke='#a02020';}
@@ -609,17 +621,7 @@ function draw(){
         }
         drawHex(x,y,hexSize*0.88,fill,stroke,1.5);
 
-        // Bridge decoration
-        if(isBridge(r,c)){
-            ctx.strokeStyle='#8a7050'; ctx.lineWidth=2;
-            ctx.beginPath(); ctx.moveTo(x-hexSize*0.5,y); ctx.lineTo(x+hexSize*0.5,y); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x-hexSize*0.3,y-hexSize*0.3); ctx.lineTo(x-hexSize*0.3,y+hexSize*0.3); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(x+hexSize*0.3,y-hexSize*0.3); ctx.lineTo(x+hexSize*0.3,y+hexSize*0.3); ctx.stroke();
-            ctx.textAlign='center';ctx.textBaseline='middle';
-            ctx.font=`${Math.max(9,hexSize*0.28)}px sans-serif`;
-            ctx.fillText('🌉',x,y);
-            ctx.textBaseline='alphabetic';ctx.textAlign='left';
-        }
+        // Bridge tiles — just normal hex, no icon
 
         if(cell.unit)drawUnit(x,y,cell.unit);
     }
