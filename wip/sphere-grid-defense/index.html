@@ -692,38 +692,7 @@ function drawRun(){
   for(const d of dnums){ctx.globalAlpha=Math.min(1,d.l/20);ctx.fillStyle=d.c;ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(d.t,d.x,d.y);}ctx.globalAlpha=1;
   ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='12px sans-serif';ctx.textAlign='right';ctx.fillText(`${Math.floor(rd)}m`,W-5,12);
   ctx.restore();
-  
-  // クリア画面
-  if(cleared&&!endless){
-    ctx.fillStyle='rgba(0,0,0,0.8)';ctx.fillRect(0,0,W,H);
-    // Star particles
-    const ct=Date.now()*0.001;
-    for(let i=0;i<30;i++){
-      const a=i*0.21+ct*0.3,r_=50+Math.sin(ct+i*0.5)*30+i*4;
-      ctx.fillStyle=`hsla(${45+i*3},80%,60%,${0.3+Math.sin(ct*2+i)*0.2})`;
-      ctx.beginPath();ctx.arc(W/2+Math.cos(a)*r_,H*0.3+Math.sin(a)*r_*0.6,2+Math.sin(ct+i)*1,0,Math.PI*2);ctx.fill();
-    }
-    ctx.fillStyle='#ffd700';ctx.font='bold 40px sans-serif';ctx.textAlign='center';
-    ctx.fillText('🎉 CLEAR! 🎉',W/2,H*0.25);
-    // Rank
-    let rank='D',rc='#9e9e9e';
-    if(runs<=5){rank='S';rc='#ffd700';}
-    else if(runs<=10){rank='A';rc='#e040fb';}
-    else if(runs<=20){rank='B';rc='#42a5f5';}
-    else if(runs<=50){rank='C';rc='#66bb6a';}
-    ctx.fillStyle=rc;ctx.font='bold 60px sans-serif';
-    ctx.fillText(rank,W/2,H*0.38);
-    ctx.fillStyle='#fff';ctx.font='16px sans-serif';
-    ctx.fillText(`${runs} runs / ${kills} kills`,W/2,H*0.44);
-    ctx.fillText(`Best: ${Math.floor(best)}m`,W/2,H*0.48);
-    // Two buttons
-    ctx.fillStyle='rgba(76,175,80,0.85)';rr(ctx,W/2-120,H*0.55,110,44,8);ctx.fill();
-    ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';
-    ctx.fillText('🔄 Restart',W/2-65,H*0.55+28);
-    ctx.fillStyle='rgba(156,39,176,0.85)';rr(ctx,W/2+10,H*0.55,110,44,8);ctx.fill();
-    ctx.fillStyle='#fff';
-    ctx.fillText('♾️ Endless',W/2+65,H*0.55+28);
-  }
+  // (クリア画面はメインループ側で描画)
 }
 
 function drawHUD(casting){
@@ -855,15 +824,18 @@ C.addEventListener('touchstart',e=>{e.preventDefault();if(ac.state==='suspended'
 },{passive:false});
 C.addEventListener('touchmove',e=>{e.preventDefault();
   if(pinching&&e.touches.length===2){
-    const d=pinchDist(e);if(gs.pinchDist>0){
+    const d=pinchDist(e);if(gs.pinchDist>0&&d>10){
       const oldZoom=gs.zoom;
-      gs.zoom=Math.max(0.08,Math.min(6,gs.zoomStart*(d/gs.pinchDist)));
-      // Adjust scroll to keep pinch center stable
-      const pc=pinchCenter(e);
-      const ratio=gs.zoom/oldZoom;
-      gs.x=(gs.x-pc.x)*ratio+pc.x;
-      gs.y=(gs.y-pc.y)*ratio+pc.y;
-      posGrid();
+      const newZoom=Math.max(0.08,Math.min(6,gs.zoomStart*(d/gs.pinchDist)));
+      if(Math.abs(newZoom-oldZoom)<oldZoom*0.5){ // prevent sudden jumps
+        gs.zoom=newZoom;
+        const pc=pinchCenter(e);
+        const ratio=gs.zoom/oldZoom;
+        gs.x=(gs.x-pc.x)*ratio+pc.x;
+        gs.y=(gs.y-pc.y)*ratio+pc.y;
+        if(isNaN(gs.x))gs.x=0;if(isNaN(gs.y))gs.y=0;
+        posGrid();
+      }
     }
     return;
   }
@@ -905,7 +877,22 @@ C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();ret
   }
   if(p.y>GRID_Y)gridTap(p);});
 
-function startG(){state=ST.PLAY;buildGrid();resize();initRun();}
+let testMode=location.hash==='#test';
+function startG(){
+  state=ST.PLAY;buildGrid();resize();
+  if(testMode){
+    sp=999;
+    for(const n of gN){
+      if(n.type==='start')continue;
+      n.unlocked=true;n.applied=true;
+      if(n.type==='stat'){
+        if(n.stat==='mhp'){const v=Math.round(n.val);base.mhp+=v;st.mhp+=v;st.hp=st.mhp;}
+        else if(base[n.stat]!==undefined){base[n.stat]+=n.val;st[n.stat]+=n.val;}
+      } else if(n.type==='skill'){learned.push({...n,cd:0});}
+    }
+  }
+  initRun();
+}
 
 function gridTap(pos){
   const ox=gs.x,oy=gs.y;
@@ -935,10 +922,39 @@ function gridTap(pos){
 }
 
 // Loop
+function drawClear(){
+  ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(0,0,W,H);
+  const ct=Date.now()*0.001;
+  for(let i=0;i<30;i++){
+    const a=i*0.21+ct*0.3,r_=50+Math.sin(ct+i*0.5)*30+i*4;
+    ctx.fillStyle=`hsla(${45+i*3},80%,60%,${0.3+Math.sin(ct*2+i)*0.2})`;
+    ctx.beginPath();ctx.arc(W/2+Math.cos(a)*r_,H*0.35+Math.sin(a)*r_*0.6,2+Math.sin(ct+i)*1,0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillStyle='#ffd700';ctx.font='bold 40px sans-serif';ctx.textAlign='center';
+  ctx.fillText('🎉 CLEAR! 🎉',W/2,H*0.25);
+  let rank='D',rc='#9e9e9e';
+  if(runs<=5){rank='S';rc='#ffd700';}
+  else if(runs<=10){rank='A';rc='#e040fb';}
+  else if(runs<=20){rank='B';rc='#42a5f5';}
+  else if(runs<=50){rank='C';rc='#66bb6a';}
+  ctx.fillStyle=rc;ctx.font='bold 70px sans-serif';
+  ctx.fillText(rank,W/2,H*0.42);
+  ctx.fillStyle='#fff';ctx.font='16px sans-serif';
+  ctx.fillText(`${runs} runs / ${kills} kills`,W/2,H*0.50);
+  ctx.fillText(`Best: ${Math.floor(best)}m`,W/2,H*0.55);
+  ctx.fillStyle='rgba(76,175,80,0.9)';rr(ctx,W/2-125,H*0.63,115,48,10);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 15px sans-serif';
+  ctx.fillText('🔄 Restart',W/2-68,H*0.63+30);
+  ctx.fillStyle='rgba(156,39,176,0.9)';rr(ctx,W/2+10,H*0.63,115,48,10);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.fillText('♾️ Endless',W/2+68,H*0.63+30);
+}
+
 function loop(){
   if(state===ST.TITLE)drawTitle();
   else if(state===ST.CAST){updCast();drawCast();}
   else{updRun();drawRun();drawHUD(false);drawGrid_();}
+  if(cleared&&!endless)drawClear();
   requestAnimationFrame(loop);
 }
 resize();loop();
