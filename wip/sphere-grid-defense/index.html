@@ -27,6 +27,166 @@ function resize(){
 }
 let RUNNER_H=0;const HUD_H=66;let GRID_Y=0,GRID_H=0;
 
+// ===== PIXEL ART DRAW FUNCTIONS =====
+function drawPlayer(x, y, fighting, frame){
+  const s=2.5; // scale
+  const f=Math.floor(frame/8)%2; // animation frame (0 or 1)
+  const px=(cx,cy,c)=>{ctx.fillStyle=c;ctx.fillRect(x+cx*s,y-cy*s,s,s);};
+  
+  // Hair (水色 #7DD3FC)
+  px(0,19,'#7DD3FC');px(1,19,'#7DD3FC');px(2,19,'#7DD3FC');
+  px(0,18,'#7DD3FC');px(1,18,'#7DD3FC');px(2,18,'#7DD3FC');px(3,18,'#7DD3FC');
+  px(0,17,'#7DD3FC');px(3,17,'#7DD3FC');
+  px(1,17,'#5AB6E6');px(2,17,'#5AB6E6'); // darker shade
+  
+  // Face (肌色 #FFD5B8)
+  px(1,16,'#FFD5B8');px(2,16,'#FFD5B8');
+  px(1,15,'#FFD5B8');px(2,15,'#FFD5B8');
+  
+  // Eyes (黒)
+  px(1,15,'#000');px(2,15,'#000');
+  
+  // Body (ピンク #F472B6)
+  px(0,14,'#F472B6');px(1,14,'#F472B6');px(2,14,'#F472B6');px(3,14,'#F472B6');
+  px(1,13,'#F472B6');px(2,13,'#F472B6');
+  
+  // Arms (fighting pose: 攻撃時は腕を前に)
+  if(fighting){
+    px(3,13,'#FFD5B8');px(4,13,'#FFD5B8'); // 右腕前
+    px(-1,13,'#FFD5B8'); // 左腕
+  } else {
+    px(3,13,'#FFD5B8'); // 右腕
+    px(0,13,'#FFD5B8'); // 左腕
+  }
+  
+  // Skirt (白 #F0F0F0)
+  px(0,12,'#F0F0F0');px(1,12,'#F0F0F0');px(2,12,'#F0F0F0');px(3,12,'#F0F0F0');
+  
+  // Legs (肌色, 走りアニメーション)
+  const legOffset=f===0?0:1;
+  px(0,11-legOffset,'#FFD5B8');px(0,10-legOffset,'#FFD5B8'); // 左脚
+  px(2,11+legOffset,'#FFD5B8');px(2,10+legOffset,'#FFD5B8'); // 右脚
+}
+
+function drawEnemy(x, y, type, flash, size){
+  const s=size/8; // scale based on enemy size
+  const px=(cx,cy,c)=>{ctx.fillStyle=c;ctx.fillRect(x+cx*s,y-cy*s,s,s);};
+  
+  switch(type){
+    case 'slime': // 緑のぷるぷる塊 (8x8)
+      px(2,7,'#4caf50');px(3,7,'#4caf50');px(4,7,'#4caf50');px(5,7,'#4caf50');
+      px(1,6,'#4caf50');px(2,6,'#66bb6a');px(3,6,'#66bb6a');px(4,6,'#66bb6a');px(5,6,'#66bb6a');px(6,6,'#4caf50');
+      px(1,5,'#4caf50');px(2,5,'#66bb6a');px(3,5,'#fff');px(4,5,'#66bb6a');px(5,5,'#66bb6a');px(6,5,'#4caf50');
+      px(0,4,'#4caf50');px(1,4,'#66bb6a');px(2,4,'#66bb6a');px(3,4,'#66bb6a');px(4,4,'#66bb6a');px(5,4,'#66bb6a');px(6,4,'#66bb6a');px(7,4,'#4caf50');
+      px(0,3,'#4caf50');px(1,3,'#66bb6a');px(2,3,'#66bb6a');px(3,3,'#66bb6a');px(4,3,'#66bb6a');px(5,3,'#66bb6a');px(6,3,'#66bb6a');px(7,3,'#4caf50');
+      px(1,2,'#4caf50');px(2,2,'#4caf50');px(3,2,'#4caf50');px(4,2,'#4caf50');px(5,2,'#4caf50');px(6,2,'#4caf50');
+      break;
+    
+    case 'goblin': // オレンジ/茶色の小さい人型 (10x12)
+      px(4,11,'#ff9800');px(5,11,'#ff9800');
+      px(3,10,'#ff9800');px(4,10,'#ff9800');px(5,10,'#ff9800');px(6,10,'#ff9800');
+      px(4,9,'#ffb74d');px(5,9,'#ffb74d');
+      px(3,9,'#000');px(6,9,'#000'); // eyes
+      px(3,8,'#ffb74d');px(4,8,'#ffb74d');px(5,8,'#ffb74d');px(6,8,'#ffb74d');
+      px(2,7,'#8d6e63');px(3,7,'#8d6e63');px(4,7,'#8d6e63');px(5,7,'#8d6e63');px(6,7,'#8d6e63');px(7,7,'#8d6e63');
+      px(3,6,'#8d6e63');px(4,6,'#8d6e63');px(5,6,'#8d6e63');px(6,6,'#8d6e63');
+      px(1,5,'#ffb74d');px(3,5,'#8d6e63');px(4,5,'#8d6e63');px(5,5,'#8d6e63');px(6,5,'#8d6e63');px(8,5,'#ffb74d');
+      px(3,4,'#8d6e63');px(6,4,'#8d6e63');
+      px(3,3,'#8d6e63');px(6,3,'#8d6e63');
+      px(3,2,'#8d6e63');px(6,2,'#8d6e63');
+      break;
+    
+    case 'knight': // 灰色の鎧 (12x14)
+      px(5,13,'#78909c');px(6,13,'#78909c');
+      px(4,12,'#78909c');px(5,12,'#90a4ae');px(6,12,'#90a4ae');px(7,12,'#78909c');
+      px(5,11,'#90a4ae');px(6,11,'#90a4ae');
+      px(4,11,'#000');px(7,11,'#000'); // eyes
+      px(4,10,'#78909c');px(5,10,'#78909c');px(6,10,'#78909c');px(7,10,'#78909c');
+      px(3,9,'#546e7a');px(4,9,'#546e7a');px(5,9,'#546e7a');px(6,9,'#546e7a');px(7,9,'#546e7a');px(8,9,'#546e7a');
+      px(2,8,'#546e7a');px(3,8,'#546e7a');px(4,8,'#546e7a');px(5,8,'#546e7a');px(6,8,'#546e7a');px(7,8,'#546e7a');px(8,8,'#546e7a');px(9,8,'#546e7a');
+      px(3,7,'#546e7a');px(4,7,'#546e7a');px(5,7,'#546e7a');px(6,7,'#546e7a');px(7,7,'#546e7a');px(8,7,'#546e7a');
+      px(1,6,'#546e7a');px(3,6,'#546e7a');px(4,6,'#546e7a');px(5,6,'#546e7a');px(6,6,'#546e7a');px(7,6,'#546e7a');px(8,6,'#546e7a');px(10,6,'#546e7a');
+      px(4,5,'#78909c');px(5,5,'#78909c');px(6,5,'#78909c');px(7,5,'#78909c');
+      px(4,4,'#78909c');px(7,4,'#78909c');
+      px(4,3,'#78909c');px(7,3,'#78909c');
+      px(4,2,'#78909c');px(7,2,'#78909c');
+      break;
+    
+    case 'demon': // 赤い大きな角付き人型 (14x16)
+      px(2,15,'#e53935');px(3,15,'#e53935'); // 左角
+      px(10,15,'#e53935');px(11,15,'#e53935'); // 右角
+      px(2,14,'#e53935');px(11,14,'#e53935');
+      px(5,13,'#c62828');px(6,13,'#c62828');px(7,13,'#c62828');px(8,13,'#c62828');
+      px(4,12,'#c62828');px(5,12,'#e53935');px(6,12,'#e53935');px(7,12,'#e53935');px(8,12,'#e53935');px(9,12,'#c62828');
+      px(5,11,'#e53935');px(8,11,'#e53935');
+      px(4,11,'#ffeb3b');px(9,11,'#ffeb3b'); // 黄色い目
+      px(4,10,'#c62828');px(5,10,'#c62828');px(6,10,'#c62828');px(7,10,'#c62828');px(8,10,'#c62828');px(9,10,'#c62828');
+      px(3,9,'#b71c1c');px(4,9,'#b71c1c');px(5,9,'#b71c1c');px(6,9,'#b71c1c');px(7,9,'#b71c1c');px(8,9,'#b71c1c');px(9,9,'#b71c1c');px(10,9,'#b71c1c');
+      px(2,8,'#b71c1c');px(3,8,'#b71c1c');px(4,8,'#b71c1c');px(5,8,'#b71c1c');px(6,8,'#b71c1c');px(7,8,'#b71c1c');px(8,8,'#b71c1c');px(9,8,'#b71c1c');px(10,8,'#b71c1c');px(11,8,'#b71c1c');
+      px(3,7,'#b71c1c');px(4,7,'#b71c1c');px(5,7,'#b71c1c');px(6,7,'#b71c1c');px(7,7,'#b71c1c');px(8,7,'#b71c1c');px(9,7,'#b71c1c');px(10,7,'#b71c1c');
+      px(1,6,'#b71c1c');px(3,6,'#b71c1c');px(4,6,'#b71c1c');px(5,6,'#b71c1c');px(6,6,'#b71c1c');px(7,6,'#b71c1c');px(8,6,'#b71c1c');px(9,6,'#b71c1c');px(10,6,'#b71c1c');px(12,6,'#b71c1c');
+      px(5,5,'#c62828');px(6,5,'#c62828');px(7,5,'#c62828');px(8,5,'#c62828');
+      px(5,4,'#c62828');px(8,4,'#c62828');
+      px(5,3,'#c62828');px(8,3,'#c62828');
+      px(5,2,'#c62828');px(8,2,'#c62828');
+      break;
+    
+    case 'boss': // 金色の冠付き大型敵 (20x20)
+      // 王冠
+      px(7,19,'#ffd700');px(8,19,'#ffd700');px(9,19,'#ffd700');px(10,19,'#ffd700');px(11,19,'#ffd700');px(12,19,'#ffd700');
+      px(6,18,'#ffd700');px(7,18,'#ffeb3b');px(8,18,'#ffd700');px(9,18,'#ffeb3b');px(10,18,'#ffd700');px(11,18,'#ffeb3b');px(12,18,'#ffd700');px(13,18,'#ffd700');
+      px(7,17,'#ffd700');px(8,17,'#ffd700');px(9,17,'#ffd700');px(10,17,'#ffd700');px(11,17,'#ffd700');px(12,17,'#ffd700');
+      // 頭部
+      px(7,16,'#1a237e');px(8,16,'#1a237e');px(9,16,'#1a237e');px(10,16,'#1a237e');px(11,16,'#1a237e');px(12,16,'#1a237e');
+      px(6,15,'#1a237e');px(7,15,'#283593');px(8,15,'#283593');px(9,15,'#283593');px(10,15,'#283593');px(11,15,'#283593');px(12,15,'#283593');px(13,15,'#1a237e');
+      px(6,14,'#283593');px(7,14,'#283593');px(13,14,'#283593');px(12,14,'#283593');
+      px(7,14,'#ff5252');px(12,14,'#ff5252'); // 目
+      px(6,13,'#1a237e');px(7,13,'#1a237e');px(8,13,'#1a237e');px(9,13,'#1a237e');px(10,13,'#1a237e');px(11,13,'#1a237e');px(12,13,'#1a237e');px(13,13,'#1a237e');
+      // 体
+      px(5,12,'#3f51b5');px(6,12,'#3f51b5');px(7,12,'#3f51b5');px(8,12,'#3f51b5');px(9,12,'#3f51b5');px(10,12,'#3f51b5');px(11,12,'#3f51b5');px(12,12,'#3f51b5');px(13,12,'#3f51b5');px(14,12,'#3f51b5');
+      px(4,11,'#3f51b5');px(5,11,'#5c6bc0');px(6,11,'#5c6bc0');px(7,11,'#5c6bc0');px(8,11,'#5c6bc0');px(9,11,'#5c6bc0');px(10,11,'#5c6bc0');px(11,11,'#5c6bc0');px(12,11,'#5c6bc0');px(13,11,'#5c6bc0');px(14,11,'#5c6bc0');px(15,11,'#3f51b5');
+      px(4,10,'#3f51b5');px(5,10,'#5c6bc0');px(6,10,'#5c6bc0');px(7,10,'#5c6bc0');px(8,10,'#5c6bc0');px(9,10,'#5c6bc0');px(10,10,'#5c6bc0');px(11,10,'#5c6bc0');px(12,10,'#5c6bc0');px(13,10,'#5c6bc0');px(14,10,'#5c6bc0');px(15,10,'#3f51b5');
+      px(5,9,'#3f51b5');px(6,9,'#3f51b5');px(7,9,'#3f51b5');px(8,9,'#3f51b5');px(9,9,'#3f51b5');px(10,9,'#3f51b5');px(11,9,'#3f51b5');px(12,9,'#3f51b5');px(13,9,'#3f51b5');px(14,9,'#3f51b5');
+      // 腕
+      px(2,10,'#5c6bc0');px(3,10,'#5c6bc0');px(16,10,'#5c6bc0');px(17,10,'#5c6bc0');
+      px(2,9,'#5c6bc0');px(3,9,'#5c6bc0');px(16,9,'#5c6bc0');px(17,9,'#5c6bc0');
+      px(2,8,'#5c6bc0');px(16,8,'#5c6bc0');
+      // 脚
+      px(6,8,'#3f51b5');px(7,8,'#3f51b5');px(8,8,'#3f51b5');px(11,8,'#3f51b5');px(12,8,'#3f51b5');px(13,8,'#3f51b5');
+      px(7,7,'#3f51b5');px(8,7,'#3f51b5');px(11,7,'#3f51b5');px(12,7,'#3f51b5');
+      px(7,6,'#3f51b5');px(8,6,'#3f51b5');px(11,6,'#3f51b5');px(12,6,'#3f51b5');
+      px(7,5,'#3f51b5');px(8,5,'#3f51b5');px(11,5,'#3f51b5');px(12,5,'#3f51b5');
+      px(7,4,'#3f51b5');px(8,4,'#3f51b5');px(11,4,'#3f51b5');px(12,4,'#3f51b5');
+      break;
+  }
+  
+  // Flash effect
+  if(flash>0){
+    ctx.globalAlpha=0.4;
+    ctx.fillStyle='#fff';
+    const r=type==='boss'?25:type==='demon'?16:type==='knight'?14:type==='goblin'?12:10;
+    ctx.fillRect(x-r,y-r*2,r*2,r*2);
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawDeadPlayer(x,y,timer){
+  // やられモーション（💀の代わり）
+  const s=2.5;
+  const a=timer/70; // fade alpha
+  ctx.globalAlpha=a;
+  const px=(cx,cy,c)=>{ctx.fillStyle=c;ctx.fillRect(x+cx*s,y-cy*s,s,s);};
+  
+  // 横倒しのピコ（簡略版）
+  px(0,2,'#7DD3FC');px(1,2,'#7DD3FC'); // 髪
+  px(2,2,'#FFD5B8');px(3,2,'#FFD5B8'); // 顔
+  px(2,1,'#000');px(3,1,'#000'); // 目(×)
+  px(4,2,'#F472B6');px(5,2,'#F472B6');px(6,2,'#F472B6'); // 体
+  px(7,2,'#F0F0F0');px(8,2,'#F0F0F0'); // スカート
+  
+  ctx.globalAlpha=1;
+}
+
 // Audio
 const ac=new(window.AudioContext||window.webkitAudioContext)();
 function tone(f,d,v=0.3,t='sine'){const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d);}
@@ -480,7 +640,25 @@ function initRun(){
   for(const s of learned)s.cd=0;
 }
 
-function genBg(){bgs=[];for(let i=0;i<60;i++)bgs.push({x:i*120+Math.random()*60,w:40+Math.random()*50,h:20+Math.random()*60,c:`hsl(${220+Math.random()*30},15%,${10+Math.random()*8}%)`});}
+function genBg(){
+  bgs=[];
+  for(let i=0;i<60;i++){
+    const h=20+Math.random()*60;
+    const w=40+Math.random()*50;
+    bgs.push({
+      x:i*120+Math.random()*60,
+      w,
+      h,
+      c:`hsl(${220+Math.random()*30},15%,${10+Math.random()*8}%)`,
+      // 窓のランダム配置
+      windows:Array.from({length:Math.floor(Math.random()*8+3)},()=>({
+        x:Math.random()*(w-4)+2,
+        y:Math.random()*(h-4)+2,
+        lit:Math.random()>0.5
+      }))
+    });
+  }
+}
 
 function spawnE(x){
   const t=Math.floor(rd/500),tp=['slime','goblin','knight','demon'][Math.min(t,3)];
@@ -657,11 +835,15 @@ function drawCast(){
   ctx.fillStyle='#1a237e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
   const px=W*0.25,t=Date.now()*0.005;
   const ar=12+castTxts.length*1.5;
+  const animFrame=Math.floor(Date.now()/100);
+  
+  // エンチャント中のエフェクト
   ctx.beginPath();ctx.arc(px,groundY-10,ar,0,Math.PI*2);
   ctx.fillStyle=`rgba(100,181,246,${0.05+castTxts.length*0.01})`;ctx.fill();
   ctx.strokeStyle=`rgba(100,181,246,${0.2+Math.sin(t)*0.1})`;ctx.lineWidth=1.5;ctx.stroke();
-  ctx.fillStyle='#64b5f6';ctx.fillRect(px-4,groundY-14,8,12);
-  ctx.fillStyle='#e0e0e0';ctx.beginPath();ctx.arc(px,groundY-18,5,0,Math.PI*2);ctx.fill();
+  
+  // ピコのドット絵描画（キャスティング中）
+  drawPlayer(px-10,groundY,false,animFrame);
   for(const ct of castTxts){
     ctx.globalAlpha=ct.a;ctx.font=ct.sk?'bold 11px sans-serif':'10px sans-serif';
     ctx.textAlign='center';ctx.fillStyle=ct.sk?'#ffd700':ct.color;
@@ -676,13 +858,58 @@ function drawCast(){
 
 function drawRun(){
   ctx.save();ctx.beginPath();ctx.rect(0,0,W,RUNNER_H);ctx.clip();
-  ctx.fillStyle='#0c1024';ctx.fillRect(0,0,W,RUNNER_H);
-  for(const b of bgs){const sx=b.x-camX*0.3;if(sx>-b.w&&sx<W+b.w){ctx.fillStyle=b.c;ctx.fillRect(sx,groundY-b.h,b.w,b.h);}}
+  // 夜空 (グラデーション)
+  const grd=ctx.createLinearGradient(0,0,0,RUNNER_H);
+  grd.addColorStop(0,'#0a0a1a');
+  grd.addColorStop(0.6,'#0c1024');
+  grd.addColorStop(1,'#1a1a2e');
+  ctx.fillStyle=grd;ctx.fillRect(0,0,W,RUNNER_H);
+  
+  // 星と月
+  const t=Date.now()*0.0001;
+  for(let i=0;i<15;i++){
+    const sx=(i*77+camX*0.05)%W;
+    const sy=(i*13)%Math.floor(groundY*0.7);
+    ctx.fillStyle=`rgba(255,255,200,${0.4+Math.sin(t*3+i)*0.3})`;
+    ctx.fillRect(sx,sy,1.5,1.5);
+  }
+  // 月
+  ctx.fillStyle='rgba(255,250,200,0.6)';
+  ctx.beginPath();
+  ctx.arc(W*0.8,groundY*0.25,12,0,Math.PI*2);
+  ctx.fill();
+  
+  // ビル群 (窓の光付き)
+  for(const b of bgs){
+    const sx=b.x-camX*0.3;
+    if(sx>-b.w&&sx<W+b.w){
+      ctx.fillStyle=b.c;
+      ctx.fillRect(sx,groundY-b.h,b.w,b.h);
+      // アンテナ
+      if(Math.random()>0.7){
+        ctx.fillStyle='rgba(200,200,220,0.4)';
+        ctx.fillRect(sx+b.w/2-1,groundY-b.h-8,2,8);
+        ctx.fillRect(sx+b.w/2-3,groundY-b.h-8,6,1);
+      }
+      // 窓
+      for(const win of b.windows){
+        ctx.fillStyle=win.lit?'rgba(255,220,100,0.6)':'rgba(100,100,150,0.2)';
+        ctx.fillRect(sx+win.x,groundY-b.h+win.y,2,2);
+      }
+    }
+  }
+  
+  // 地面 (石畳風)
   ctx.fillStyle='#1a237e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
+  for(let i=0;i<W;i+=8){
+    const gx=(i+camX*0.5)%16;
+    ctx.fillStyle='rgba(100,120,180,0.1)';
+    ctx.fillRect(i,groundY,1,RUNNER_H-groundY);
+  }
   for(const e of enemies){
     if(!e.alive)continue;const ex=e.x-camX;if(ex<-20||ex>W+20)continue;
-    ctx.font=`${e.sz*(e.boss?1.8:1.5)}px sans-serif`;ctx.textAlign='center';ctx.fillText(e.em,ex,e.y);
-    if(e.fl>0){ctx.globalAlpha=0.4;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ex,e.y-e.sz*0.5,e.sz,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;}
+    // ドット絵で敵を描画
+    drawEnemy(ex-e.sz/2,e.y,e.tp,e.fl,e.sz);
     if(e.hp<e.mhp){
       const bw=e.sz*(e.boss?2.5:2);
       const bh=e.boss?5:3;
@@ -693,14 +920,30 @@ function drawRun(){
   const px=W*0.25;
   if(alive){
     const t=Date.now()*0.008,by=fight?0:Math.sin(t*2)*2;
+    const animFrame=Math.floor(Date.now()/100); // animation frame counter
+    
+    // バフエフェクト
     if(buffs.trs){ctx.beginPath();ctx.arc(px,groundY-10+by,16,0,Math.PI*2);ctx.fillStyle='rgba(255,215,0,0.15)';ctx.fill();}
     if(buffs.inv){ctx.beginPath();ctx.arc(px,groundY-10+by,14,0,Math.PI*2);ctx.strokeStyle='rgba(100,181,246,0.6)';ctx.lineWidth=2;ctx.stroke();}
-    if(buffs.phm){ctx.globalAlpha=0.2;ctx.fillStyle='#81d4fa';ctx.fillRect(px-12,groundY-14+by,8,12);ctx.fillRect(px-20,groundY-14+by,8,12);ctx.globalAlpha=1;}
-    ctx.fillStyle=buffs.trs?'#ffd700':buffs.dpk?'#e53935':(buffs.hst||buffs.gal||buffs.phm)?'#81d4fa':'#64b5f6';
-    ctx.fillRect(px-4,groundY-14+by,8,12);ctx.fillStyle='#e0e0e0';ctx.beginPath();ctx.arc(px,groundY-18+by,5,0,Math.PI*2);ctx.fill();
+    if(buffs.phm){
+      ctx.globalAlpha=0.2;
+      drawPlayer(px-30,groundY+by,fight,animFrame);
+      drawPlayer(px-50,groundY+by,fight,animFrame);
+      ctx.globalAlpha=1;
+    }
+    
+    // ピコのドット絵描画
+    drawPlayer(px-10,groundY+by,fight,animFrame);
+    
+    // 攻撃スイングエフェクト
     if(atkCd>atkCdMax-10){const sw=(atkCdMax-atkCd)/10*Math.PI;ctx.strokeStyle='#fff176';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(px+5,groundY-10+by);ctx.lineTo(px+5+Math.cos(sw-0.5)*15,groundY-10+by-Math.sin(sw-0.5)*12);ctx.stroke();}
-    const hp=st.hp/st.mhp;ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(px-15,groundY-28,30,4);ctx.fillStyle=hp>0.5?'#4caf50':hp>0.25?'#ff9800':'#e53935';ctx.fillRect(px-15,groundY-28,30*hp,4);
-  } else {ctx.globalAlpha=dTimer/70;ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText('💀',px,groundY-8);ctx.globalAlpha=1;}
+    
+    // HP バー
+    const hp=st.hp/st.mhp;ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(px-15,groundY-58,30,4);ctx.fillStyle=hp>0.5?'#4caf50':hp>0.25?'#ff9800':'#e53935';ctx.fillRect(px-15,groundY-58,30*hp,4);
+  } else {
+    // やられモーション
+    drawDeadPlayer(px-10,groundY,dTimer);
+  }
   for(const p of parts){ctx.globalAlpha=p.l/30;ctx.fillStyle=p.c;ctx.fillRect(p.x-p.s/2,p.y-p.s/2,p.s,p.s);}ctx.globalAlpha=1;
   for(const d of dnums){ctx.globalAlpha=Math.min(1,d.l/20);ctx.fillStyle=d.c;ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(d.t,d.x,d.y);}ctx.globalAlpha=1;
   ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='12px sans-serif';ctx.textAlign='right';ctx.fillText(`${Math.floor(rd)}m`,W-5,12);
