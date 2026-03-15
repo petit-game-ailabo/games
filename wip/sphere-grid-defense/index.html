@@ -51,7 +51,7 @@ let rx=0,rd=0,best=0,alive=true,dTimer=0;
 let enemies=[],parts=[],dnums=[];
 let sp=0,runs=0,kills=0,atkCd=0,atkCdMax=50,fight=false,camX=0;
 let bgs=[];
-let cleared=false,endless=false,lastBoss=0;
+let cleared=false,endless=false,lastBoss=0,clearTime=0;
 
 // Cast
 let castQ=[],castTxts=[],castT=0;
@@ -540,7 +540,7 @@ function updRun(){
   
   // 10000m到達でクリア
   if(rd>=10000&&!cleared&&!endless&&lastBoss>=10000){
-    if(!enemies.some(e=>e.alive&&e.boss)){cleared=true;alive=false;dTimer=9999;return;}
+    if(!enemies.some(e=>e.alive&&e.boss)){cleared=true;clearTime=Date.now();alive=false;dTimer=9999;return;}
   }
   
   // 敵出現率（エンドレスモードは2倍）
@@ -816,6 +816,7 @@ function pinchDist(e){const t=e.touches;if(t.length<2)return 0;return Math.hypot
 function pinchCenter(e){const t=e.touches;const r=C.getBoundingClientRect();return{x:(t[0].clientX+t[1].clientX)/2-r.left,y:(t[0].clientY+t[1].clientY)/2-r.top};}
 let pinching=false;
 C.addEventListener('touchstart',e=>{e.preventDefault();if(ac.state==='suspended')ac.resume();
+  if(cleared&&!endless)return; // クリア画面中はドラッグ等ブロック
   if(e.touches.length===2&&state!==ST.TITLE){
     pinching=true;gs.pinchDist=pinchDist(e);gs.zoomStart=gs.zoom;tm_=true;return;
   }
@@ -844,18 +845,24 @@ C.addEventListener('touchmove',e=>{e.preventDefault();
 C.addEventListener('touchend',e=>{e.preventDefault();
   if(pinching){if(e.touches.length<2)pinching=false;return;}
   gs.drag=false;if(state===ST.TITLE){startG();return;}
-  // クリア画面: Restart or Endless
+  // クリア画面: 全入力ブロック、3秒後にボタンのみ有効
   if(cleared&&!endless){
+    if(Date.now()-clearTime<3000)return; // 3秒間操作不可
     const r=C.getBoundingClientRect();
     const tp=e.changedTouches?e.changedTouches[0]:e;
     const tx=tp?tp.clientX-r.left:W/2,ty=tp?tp.clientY-r.top:H/2;
-    if(tx<W/2&&ty>H*0.55&&ty<H*0.55+44){
-      // Restart button
-      state=ST.PLAY;buildGrid();resize();
-      sp=0;runs=0;kills=0;best=0;base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
-      learned=[];initRun();cleared=false;return;
+    const btnY=H*0.63,btnH=48;
+    if(ty>btnY&&ty<btnY+btnH){
+      if(tx<W/2){
+        // Restart
+        state=ST.PLAY;buildGrid();resize();
+        sp=0;runs=0;kills=0;best=0;base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+        learned=[];initRun();cleared=false;return;
+      } else {
+        endless=true;cleared=false;return;
+      }
     }
-    endless=true;cleared=false;return;
+    return; // ボタン外タップは無視
   }
   if(!tm_&&Date.now()-ts<300){const r=C.getBoundingClientRect();if(e.changedTouches&&e.changedTouches[0]){const p={x:e.changedTouches[0].clientX-r.left,y:e.changedTouches[0].clientY-r.top};if(p.y>GRID_Y)gridTap(p);}}
 },{passive:false});
@@ -868,12 +875,17 @@ C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
 },{passive:false});
 C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();return;}
   if(cleared&&!endless){
-    if(p.x<W/2&&p.y>H*0.55&&p.y<H*0.55+44){
-      state=ST.PLAY;buildGrid();resize();
-      sp=0;runs=0;kills=0;best=0;base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
-      learned=[];initRun();cleared=false;return;
+    if(Date.now()-clearTime<3000)return;
+    const btnY=H*0.63,btnH=48;
+    if(p.y>btnY&&p.y<btnY+btnH){
+      if(p.x<W/2){
+        state=ST.PLAY;buildGrid();resize();
+        sp=0;runs=0;kills=0;best=0;base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+        learned=[];initRun();cleared=false;return;
+      }
+      endless=true;cleared=false;return;
     }
-    endless=true;cleared=false;return;
+    return;
   }
   if(p.y>GRID_Y)gridTap(p);});
 
