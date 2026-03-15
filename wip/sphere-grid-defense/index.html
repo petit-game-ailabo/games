@@ -292,39 +292,50 @@ function buildGrid(){
     const fb2b=N(Math.cos(b2Ang)*18,Math.sin(b2Ang)*18,'stat',{cost:5,stat:d2.stats[1].s,val:parseFloat((d2.stats[1].base*5).toFixed(2)),label:LB(d2.stats[1].s,d2.stats[1].base*5),cat:h.cat});
     const fb2s=N(Math.cos(b2Ang)*20,Math.sin(b2Ang)*20,'skill',{cost:8,skill:ht3.s2,label:ht3.l2,cat:h.cat,tier:3,icon:ht3.i2,desc:ht3.d2});
     E(hs3,fb2a);E(fb2a,fb2b);E(fb2b,fb2s);
+    // Store hybrid T3 skill IDs for ★4 requirements
+    // fb1s is closer to base1 direction, fb2s is closer to base2 direction
+    if(!paths[h.base1]._hybT3)paths[h.base1]._hybT3=[];
+    paths[h.base1]._hybT3.push(fb1s);
+    if(!paths[h.base2]._hybT3)paths[h.base2]._hybT3=[];
+    paths[h.base2]._hybT3.push(fb2s);
   }
 
-  // ===== 最外周リング (Tier3同士を繋ぐ高コストリング) =====
-  const outerRing=[];
+  // ===== ★4スキルの条件: 近くの★3×2 + ★2 が必要 =====
+  // Connect each ★4 (pure T3→T4) to adjacent hybrid T3 skills
+  // ★4 requires: own ★2 + nearest two ★3 skills from hybrid branches
+  for(let di=0;di<dirs.length;di++){
+    const t4=paths[di]._t3; // this is now tier:4
+    const t2=paths[di]._t2;
+    const hybT3s=paths[di]._hybT3||[];
+    // Requires: own T2 + both nearby hybrid T3 skills
+    const reqs=[t2,...hybT3s];
+    nodes[t4].requires=reqs;
+    nodes[t4].tier=4;
+    nodes[t4].cost=12;
+    const reqNames=reqs.map(r=>nodes[r].label).join('+');
+    nodes[t4].desc=(nodes[t4].desc||'')+`\n🔒要:${reqNames}`;
+    // Connect edges from hybrid T3s to T4
+    for(const ht of hybT3s) E(ht,t4);
+  }
+
+  // ===== ★3スキル周辺に行き止まりノード追加 (後半らしい%アップ系) =====
   for(let di=0;di<dirs.length;di++){
     const d=dirs[di];
-    const nextD=dirs[(di+1)%dirs.length];
-    let ang1=d.ang*Math.PI/180;
-    let ang2=nextD.ang*Math.PI/180;
-    // Fix wrap-around: ensure we interpolate the short way around
-    let diff=ang2-ang1;
-    if(diff>Math.PI)diff-=Math.PI*2;
-    if(diff<-Math.PI)diff+=Math.PI*2;
-    const t3node=paths[di]._t3;
-    const nextT3=paths[(di+1)%dirs.length]._t3;
-    
-    const numNodes=6;
-    const ringNodes=[];
-    for(let i=1;i<=numNodes;i++){
-      const ratio=i/(numNodes+1);
-      const ang=ang1+diff*ratio;
-      const r=25;
-      const gx=Math.cos(ang)*r,gy=Math.sin(ang)*r;
-      const stats=['atk','mhp','spd','cr','def','ls','dg','reg'][i%8];
-      const vals=[1,5,0.05,0.01,1,0.02,0.02,0.1][i%8];
-      const nm=stats==='mhp'?'HP':stats.toUpperCase();
-      ringNodes.push(N(gx,gy,'stat',{cost:6,stat:stats,val:vals,label:`${nm}+${vals}`,cat:'outer'}));
-    }
-    
-    E(t3node,ringNodes[0]);
-    for(let i=0;i<ringNodes.length-1;i++)E(ringNodes[i],ringNodes[i+1]);
-    E(ringNodes[ringNodes.length-1],nextT3);
-    outerRing.push(...ringNodes);
+    const ba=d.ang*Math.PI/180;
+    const cx=Math.cos(ba),cy=Math.sin(ba);
+    const px=-Math.sin(ba),py=Math.cos(ba);
+    // Dead-ends near T2 area (r=18~20, ±perp)
+    const de1=N(cx*19+px*2.5,cy*19+py*2.5,'stat',{cost:5,stat:'cr',val:0.15,label:'CRT+15%',cat:d.cat});
+    const de2=N(cx*20+px*3,cy*20+py*3,'stat',{cost:5,stat:'cd',val:0.5,label:'CRD+50%',cat:d.cat});
+    E(paths[di]._t2,de1);E(de1,de2);
+    const de3=N(cx*19-px*2.5,cy*19-py*2.5,'stat',{cost:5,stat:'ls',val:0.15,label:'吸血+15%',cat:d.cat});
+    const de4=N(cx*20-px*3,cy*20-py*3,'stat',{cost:5,stat:'dg',val:0.15,label:'回避+15%',cat:d.cat});
+    E(paths[di]._t2,de3);E(de3,de4);
+    // Dead-ends near T3/T4 area
+    const de5=N(cx*24+px*1.5,cy*24+py*1.5,'stat',{cost:6,stat:'atk',val:8,label:'ATK+8',cat:d.cat});
+    E(paths[di]._t3,de5);
+    const de6=N(cx*24-px*1.5,cy*24-py*1.5,'stat',{cost:6,stat:'mhp',val:50,label:'HP+50',cat:d.cat});
+    E(paths[di]._t3,de6);
   }
 
   gN=nodes;gE=edges;posGrid();
