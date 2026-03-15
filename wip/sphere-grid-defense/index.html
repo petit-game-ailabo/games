@@ -167,16 +167,13 @@ function buildGrid(){
     E(inner[di],e0);E(e0,e1);
 
     // === SHAPE 1: Octagon (8 nodes) + inner square (4 nodes) ===
-    // Center at r=5.5 along direction
-    // Octagon: 8 nodes at radius 1.5 from center
-    // One-way path around octagon, with 2 connections to inner square
-    const oc=5.5; // center radius
-    const or_=1.5; // octagon node radius from center
-    const ir=0.7; // inner square radius from center
+    // Center at r=5.5 along direction. Node 0 faces back toward entry.
+    const oc=5.5, or_=1.5, ir=0.7;
     const o=[];
     for(let k=0;k<8;k++){
-      const a=k*Math.PI/4;
-      o.push(SN(cx,cy,px,py,oc+Math.cos(a)*or_,Math.sin(a)*or_,1,d,k,1+k*0.2));
+      const a=ba+Math.PI+k*Math.PI/4; // node 0 points back toward START
+      const s=d.stats[k%2]; const v=parseFloat((s.base*(1+k*0.2)).toFixed(2));
+      o.push(N(cx*oc+Math.cos(a)*or_,cy*oc+Math.sin(a)*or_,'stat',{cost:1,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
     }
     // Octagon path: 0→1→2→3→4→5→6→7→(back to 0 optional)
     for(let k=0;k<7;k++)E(o[k],o[k+1]);
@@ -184,11 +181,12 @@ function buildGrid(){
     // Entry connects to octagon top (node 0)
     E(e1,o[0]);
 
-    // Inner square: 4 nodes
+    // Inner square: 4 nodes (rotated to match octagon orientation)
     const sq=[];
     for(let k=0;k<4;k++){
-      const a=k*Math.PI/2+Math.PI/4; // 45,135,225,315 degrees
-      sq.push(SN(cx,cy,px,py,oc+Math.cos(a)*ir,Math.sin(a)*ir,1,d,(k+1),2));
+      const a=ba+Math.PI+k*Math.PI/2+Math.PI/4;
+      const s=d.stats[(k+1)%2]; const v=parseFloat((s.base*2).toFixed(2));
+      sq.push(N(cx*oc+Math.cos(a)*ir,cy*oc+Math.sin(a)*ir,'stat',{cost:1,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
     }
     // Square path
     E(sq[0],sq[1]);E(sq[1],sq[2]);E(sq[2],sq[3]);E(sq[3],sq[0]);
@@ -206,23 +204,23 @@ function buildGrid(){
     E(t1,c1);
 
     // === SHAPE 2: Larger octagon (8 nodes) + inner triangle (3 nodes) ===
-    const oc2=10.5;
-    const or2=1.8;
-    const ir2=0.8;
+    const oc2=10.5, or2=1.8, ir2=0.8;
     const o2=[];
     for(let k=0;k<8;k++){
-      const a=k*Math.PI/4;
-      o2.push(SN(cx,cy,px,py,oc2+Math.cos(a)*or2,Math.sin(a)*or2,2,d,k,2+k*0.3));
+      const a=ba+Math.PI+k*Math.PI/4;
+      const s=d.stats[k%2]; const v=parseFloat((s.base*(2+k*0.3)).toFixed(2));
+      o2.push(N(cx*oc2+Math.cos(a)*or2,cy*oc2+Math.sin(a)*or2,'stat',{cost:2,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
     }
     for(let k=0;k<7;k++)E(o2[k],o2[k+1]);
     E(o2[7],o2[0]);
     E(c1,o2[0]);
 
-    // Inner triangle
+    // Inner triangle (rotated to match)
     const tri=[];
     for(let k=0;k<3;k++){
-      const a=k*Math.PI*2/3-Math.PI/2;
-      tri.push(SN(cx,cy,px,py,oc2+Math.cos(a)*ir2,Math.sin(a)*ir2,2,d,(k+1),3));
+      const a=ba+Math.PI+k*Math.PI*2/3;
+      const s=d.stats[(k+1)%2]; const v=parseFloat((s.base*3).toFixed(2));
+      tri.push(N(cx*oc2+Math.cos(a)*ir2,cy*oc2+Math.sin(a)*ir2,'stat',{cost:2,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
     }
     E(tri[0],tri[1]);E(tri[1],tri[2]);E(tri[2],tri[0]);
     E(o2[1],tri[0]); // entry to triangle
