@@ -772,7 +772,13 @@ C.addEventListener('touchstart',e=>{e.preventDefault();if(ac.state==='suspended'
 C.addEventListener('touchmove',e=>{e.preventDefault();
   if(pinching&&e.touches.length===2){
     const d=pinchDist(e);if(gs.pinchDist>0){
+      const oldZoom=gs.zoom;
       gs.zoom=Math.max(0.08,Math.min(6,gs.zoomStart*(d/gs.pinchDist)));
+      // Adjust scroll to keep pinch center stable
+      const pc=pinchCenter(e);
+      const ratio=gs.zoom/oldZoom;
+      gs.x=(gs.x-pc.x)*ratio+pc.x;
+      gs.y=(gs.y-pc.y)*ratio+pc.y;
       posGrid();
     }
     return;
@@ -785,7 +791,11 @@ C.addEventListener('touchend',e=>{e.preventDefault();
   if(!tm_&&Date.now()-ts<300){const r=C.getBoundingClientRect();if(e.changedTouches&&e.changedTouches[0]){const p={x:e.changedTouches[0].clientX-r.left,y:e.changedTouches[0].clientY-r.top};if(p.y>GRID_Y)gridTap(p);}}
 },{passive:false});
 C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
-  gs.zoom=Math.max(0.08,Math.min(6,gs.zoom*(e.deltaY>0?0.9:1.1)));posGrid();
+  const oldZoom=gs.zoom;
+  gs.zoom=Math.max(0.08,Math.min(6,gs.zoom*(e.deltaY>0?0.9:1.1)));
+  const p=getP(e);const ratio=gs.zoom/oldZoom;
+  gs.x=(gs.x-p.x)*ratio+p.x;gs.y=(gs.y-p.y)*ratio+p.y;
+  posGrid();
 },{passive:false});
 C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();return;}if(p.y>GRID_Y)gridTap(p);});
 
@@ -804,7 +814,8 @@ function gridTap(pos){
   }
   for(const n of gN){
     const nx=n.x+ox,ny=n.y+oy;
-    if(Math.hypot(pos.x-nx,pos.y-ny)<(n.type==='skill'?24:18)){
+    const tapR=Math.max(n.type==='skill'?24:18,12/gs.zoom);
+    if(Math.hypot(pos.x-nx,pos.y-ny)<tapR){
       if(selN===n.id){
         if(!n.unlocked&&canUL(n.id)&&sp>=n.cost)unlockN(n);
         selN=null;
