@@ -39,16 +39,15 @@ imgBg.onload=()=>imagesLoaded++;
 // ===== IMAGE-BASED DRAW FUNCTIONS =====
 function drawPlayer(x, y, fighting, frame){
   if(imgPico.complete&&imgPico.naturalWidth>0){
-    // 画像を3等分: 走り/攻撃/やられ (1024x1024に3ポーズ横並び)
     const srcW=341, srcH=1024;
     let srcX=0;
-    if(!alive)srcX=682; // やられ (3番目)
-    else if(fighting||atkCd>0)srcX=341; // 攻撃 (2番目)
-    else srcX=0; // 走り (1番目)
+    if(!alive)srcX=682;
+    else if(fighting||atkCd>0)srcX=341;
+    else srcX=0;
     
-    const dstH=40; // 描画高さ
-    const dstW=srcW/srcH*dstH; // アスペクト比維持
-    const dstX=x-dstW/2, dstY=y-dstH;
+    const dstH=65; // bigger!
+    const dstW=srcW/srcH*dstH;
+    const dstX=x-dstW/2, dstY=y-dstH+4; // +4 to sit on ground
     
     ctx.imageSmoothingEnabled=false;
     ctx.drawImage(imgPico,srcX,0,srcW,srcH,dstX,dstY,dstW,dstH);
@@ -72,15 +71,15 @@ const ENEMY_RECTS={
 function drawEnemy(x, y, type, flash, size){
   if(imgEnemy.complete&&imgEnemy.naturalWidth>0){
     const r=ENEMY_RECTS[type]||ENEMY_RECTS.slime;
-    let baseH=30;
-    if(type==='boss')baseH=55;
-    else if(type==='demon')baseH=45;
-    else if(type==='knight')baseH=40;
-    else if(type==='goblin')baseH=32;
+    let baseH=45;
+    if(type==='boss')baseH=75;
+    else if(type==='demon')baseH=60;
+    else if(type==='knight')baseH=55;
+    else if(type==='goblin')baseH=48;
     
     const dstH=baseH;
     const dstW=r.sw/r.sh*dstH;
-    const dstX=x-dstW/2, dstY=y-dstH;
+    const dstX=x-dstW/2, dstY=y-dstH+4;
     
     ctx.imageSmoothingEnabled=false;
     ctx.drawImage(imgEnemy,r.sx,r.sy,r.sw,r.sh,dstX,dstY,dstW,dstH);
@@ -98,14 +97,13 @@ function drawEnemy(x, y, type, flash, size){
 }
 
 function drawDeadPlayer(x,y,timer){
-  const a=timer/70; // fade alpha
+  const a=timer/70;
   ctx.globalAlpha=a;
   if(imgPico.complete&&imgPico.naturalWidth>0){
-    // やられポーズ (3番目)
     const srcW=341, srcH=1024, srcX=682;
-    const dstH=40, dstW=srcW/srcH*dstH;
+    const dstH=65, dstW=srcW/srcH*dstH;
     ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(imgPico,srcX,0,srcW,srcH,x-dstW/2,y-dstH,dstW,dstH);
+    ctx.drawImage(imgPico,srcX,0,srcW,srcH,x-dstW/2,y-dstH+4,dstW,dstH);
     ctx.imageSmoothingEnabled=true;
   } else {
     ctx.fillStyle='#e53935';
@@ -786,16 +784,32 @@ function drawCast(){
 function drawRun(){
   ctx.save();ctx.beginPath();ctx.rect(0,0,W,RUNNER_H);ctx.clip();
   
-  // 背景画像を横にタイル表示 (パララックススクロール)
+  // 背景: 3レイヤーパララックス（空=固定 / 建物=遅い / 地面=速い）
   if(imgBg.complete&&imgBg.naturalWidth>0){
     const bgW=imgBg.width, bgH=imgBg.height;
-    const scaleY=RUNNER_H/bgH;
-    const scaledW=bgW*scaleY;
-    const scrollX=(-camX*0.3)%scaledW;
-    
-    ctx.imageSmoothingEnabled=true; // smooth for background
-    for(let i=-1;i<Math.ceil(W/scaledW)+2;i++){
-      ctx.drawImage(imgBg,0,0,bgW,bgH,scrollX+i*scaledW,0,scaledW,RUNNER_H);
+    // Layer 1: Sky (top 40%) - very slow scroll
+    const skyH=Math.floor(bgH*0.4);
+    const skyScaleY=groundY*0.5/skyH;
+    const skyW=bgW*skyScaleY;
+    const skyScroll=((-camX*0.02)%skyW+skyW)%skyW;
+    ctx.imageSmoothingEnabled=true;
+    for(let i=-1;i<Math.ceil(W/skyW)+2;i++){
+      ctx.drawImage(imgBg,0,0,bgW,skyH, skyScroll+i*skyW-skyW,0,skyW,groundY*0.5);
+    }
+    // Layer 2: Buildings (mid 40%) - medium scroll
+    const bldY=Math.floor(bgH*0.3), bldH=Math.floor(bgH*0.45);
+    const bldScaleY=groundY*0.55/bldH;
+    const bldW=bgW*bldScaleY;
+    const bldScroll=((-camX*0.12)%bldW+bldW)%bldW;
+    for(let i=-1;i<Math.ceil(W/bldW)+2;i++){
+      ctx.drawImage(imgBg,0,bldY,bgW,bldH, bldScroll+i*bldW-bldW,groundY*0.25,bldW,groundY*0.55);
+    }
+    // Layer 3: Ground - fast scroll (use simple colored ground)
+    ctx.fillStyle='#1a1a2e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
+    // Ground detail lines
+    ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=1;
+    for(let gx=(-camX*0.8)%20-20;gx<W+20;gx+=20){
+      ctx.beginPath();ctx.moveTo(gx,groundY);ctx.lineTo(gx+10,RUNNER_H);ctx.stroke();
     }
   } else {
     // Fallback: グラデーション背景
