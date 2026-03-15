@@ -215,9 +215,10 @@ function buildGrid(){
     const hAngRad=h.ang*Math.PI/180;
     const b1AngRad=dirs[h.base1].ang*Math.PI/180;
     const b2AngRad=dirs[h.base2].ang*Math.PI/180;
-    // Gate1: midpoint between base1 direction and hybrid direction, at r=6.5
-    const g1a=(b1AngRad+hAngRad)/2;
-    const g2a=(b2AngRad+hAngRad)/2;
+    // Gate angles: midpoint using shortest arc
+    function midAng(a,b){let d=b-a;if(d>Math.PI)d-=Math.PI*2;if(d<-Math.PI)d+=Math.PI*2;return a+d*0.5;}
+    const g1a=midAng(b1AngRad,hAngRad);
+    const g2a=midAng(b2AngRad,hAngRad);
     const gate1=N(Math.cos(g1a)*6.5,Math.sin(g1a)*6.5,'stat',{cost:2,stat:dirs[h.base1].stats[0].s,val:dirs[h.base1].stats[0].base,label:'→'+h.name,cat:h.cat});
     const gate2=N(Math.cos(g2a)*6.5,Math.sin(g2a)*6.5,'stat',{cost:2,stat:dirs[h.base2].stats[0].s,val:dirs[h.base2].stats[0].base,label:'→'+h.name,cat:h.cat});
     // base1's mid-node → gate1 → hpath start
@@ -233,17 +234,20 @@ function buildGrid(){
   for(let di=0;di<dirs.length;di++){
     const d=dirs[di];
     const nextD=dirs[(di+1)%dirs.length];
-    const ang1=d.ang*Math.PI/180;
-    const ang2=nextD.ang*Math.PI/180;
+    let ang1=d.ang*Math.PI/180;
+    let ang2=nextD.ang*Math.PI/180;
+    // Fix wrap-around: ensure we interpolate the short way around
+    let diff=ang2-ang1;
+    if(diff>Math.PI)diff-=Math.PI*2;
+    if(diff<-Math.PI)diff+=Math.PI*2;
     const t3node=paths[di][paths[di].length-1];
     const nextT3=paths[(di+1)%dirs.length][paths[(di+1)%dirs.length].length-1];
     
-    // 各Tier3間に5-7ノードを配置
     const numNodes=6;
     const ringNodes=[];
     for(let i=1;i<=numNodes;i++){
       const ratio=i/(numNodes+1);
-      const ang=ang1+(ang2-ang1)*ratio;
+      const ang=ang1+diff*ratio;
       const r=17;
       const gx=Math.cos(ang)*r,gy=Math.sin(ang)*r;
       const stats=['atk','mhp','spd','cr','def','ls','dg','reg'][i%8];
@@ -251,7 +255,6 @@ function buildGrid(){
       ringNodes.push(N(gx,gy,'stat',{cost:6,stat:stats,val:vals,label:`${stats.toUpperCase()}+${vals}`,cat:'outer'}));
     }
     
-    // Connect ring
     E(t3node,ringNodes[0]);
     for(let i=0;i<ringNodes.length-1;i++)E(ringNodes[i],ringNodes[i+1]);
     E(ringNodes[ringNodes.length-1],nextT3);
