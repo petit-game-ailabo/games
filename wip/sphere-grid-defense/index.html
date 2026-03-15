@@ -132,7 +132,7 @@ let st={...base};
 let learned=[];let buffs={};
 
 // Run
-let rx=0,rd=0,best=0,alive=true,dTimer=0;
+let rx=0,rd=0,best=0,alive=true,dTimer=0,lastSpawnDist=0;
 let enemies=[],parts=[],dnums=[];
 let sp=0,runs=0,kills=0,atkCd=0,atkCdMax=50,fight=false,camX=0;
 let bgs=[];
@@ -143,7 +143,7 @@ let castQ=[],castTxts=[],castT=0;
 
 // Grid
 let gN=[],gE=[];
-let gs={x:0,y:0,drag:false,sx:0,sy:0,ox:0,oy:0,zoom:1,zoomStart:1,pinchDist:0};
+let gs={x:0,y:0,drag:false,sx:0,sy:0,ox:0,oy:0,zoom:3,zoomStart:1,pinchDist:0};
 let selN=null,gcx=0,gcy=0;
 
 // ===== SPHERE GRID - 16方向 (8基本職 + 8組み合わせ職) =====
@@ -561,7 +561,7 @@ function initRun(){
   atkCd=0;fight=false;buffs={};
   atkCdMax=Math.max(15,50-st.spd*8);
   groundY=RUNNER_H*GYR;
-  genBg();runs++;cleared=false;endless=false;lastBoss=0;
+  genBg();runs++;cleared=false;endless=false;lastBoss=0;lastSpawnDist=0;
   for(const s of learned)s.cd=0;
 }
 
@@ -653,12 +653,13 @@ function updRun(){
     if(!enemies.some(e=>e.alive&&e.boss)){cleared=true;clearTime=Date.now();alive=false;dTimer=9999;return;}
   }
   
-  // 敵出現（画面上の敵数を制限、間隔を保証）
-  const maxE=endless?2:4; // エンドレスは少数精鋭
-  const aliveE=enemies.filter(e=>e.alive&&!e.boss).length;
-  const nearE=enemies.some(e=>e.alive&&!e.boss&&e.x-rx<120);
-  if(aliveE<maxE&&!nearE&&Math.random()<(endless?0.003:0.008)){
-    spawnE(rx+W*0.9+Math.random()*200);
+  // 敵出現（固定間隔、距離ベース）
+  // 序盤は200m毎、中盤は150m毎、後半は120m毎、エンドレスは250m毎
+  const spawnInterval=endless?250:rd<2000?200:rd<5000?150:120;
+  if(!lastSpawnDist)lastSpawnDist=0;
+  if(rd-lastSpawnDist>=spawnInterval&&!enemies.some(e=>e.alive&&!e.boss&&e.x-rx<80)){
+    lastSpawnDist=rd;
+    spawnE(rx+W*0.85);
   }
   atkCd--;
   if(atkCd<=0&&fight){
