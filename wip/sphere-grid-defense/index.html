@@ -60,56 +60,40 @@ function drawPlayer(x, y, fighting, frame){
   }
 }
 
+// Enemy sprite regions (manually mapped from generated image)
+const ENEMY_RECTS={
+  slime:{sx:30,sy:60,sw:270,sh:360},    // Green slime (top-left)
+  goblin:{sx:300,sy:40,sw:260,sh:380},   // Orange slime/goblin (top-center)
+  knight:{sx:40,sy:520,sw:300,sh:420},    // Knight with plume (bottom-left)
+  demon:{sx:340,sy:540,sw:260,sh:380},    // Horned knight (bottom-center)
+  boss:{sx:620,sy:520,sw:400,sh:500}      // Dark beast (bottom-right)
+};
+
 function drawEnemy(x, y, type, flash, size){
   if(imgEnemy.complete&&imgEnemy.naturalWidth>0){
-    // 敵画像を5等分 (1024x1024に5キャラ横並び)
-    const srcW=205, srcH=1024;
-    let srcX=0, idx=0;
-    switch(type){
-      case'slime':idx=0;break;
-      case'goblin':idx=1;break;
-      case'knight':idx=2;break;
-      case'demon':idx=3;break;
-      case'boss':idx=4;break;
-    }
-    srcX=idx*srcW;
-    
-    // ピコと同じ計算方法: 基準高さからアスペクト比維持で幅を計算
-    // size は敵の種類ごとに 10-50px 程度
-    // ピコは高さ40px固定だが、敵は size に応じて変動させる
-    let baseH=40; // 基本の表示高さ (ピコと同等)
-    if(type==='boss')baseH=60; // ボスは大きく
-    else if(type==='demon')baseH=50;
-    else if(type==='knight')baseH=45;
-    else if(type==='goblin')baseH=35;
-    else if(type==='slime')baseH=30;
+    const r=ENEMY_RECTS[type]||ENEMY_RECTS.slime;
+    let baseH=30;
+    if(type==='boss')baseH=55;
+    else if(type==='demon')baseH=45;
+    else if(type==='knight')baseH=40;
+    else if(type==='goblin')baseH=32;
     
     const dstH=baseH;
-    const dstW=srcW/srcH*dstH;
+    const dstW=r.sw/r.sh*dstH;
     const dstX=x-dstW/2, dstY=y-dstH;
     
     ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(imgEnemy,srcX,0,srcW,srcH,dstX,dstY,dstW,dstH);
+    ctx.drawImage(imgEnemy,r.sx,r.sy,r.sw,r.sh,dstX,dstY,dstW,dstH);
     ctx.imageSmoothingEnabled=true;
     
-    // Flash effect
     if(flash>0){
-      ctx.globalAlpha=0.4;
-      ctx.fillStyle='#fff';
-      ctx.fillRect(dstX,dstY,dstW,dstH);
-      ctx.globalAlpha=1;
+      ctx.globalAlpha=0.4;ctx.fillStyle='#fff';
+      ctx.fillRect(dstX,dstY,dstW,dstH);ctx.globalAlpha=1;
     }
   } else {
-    // Fallback: 簡易表示
     let c='#4caf50';
-    switch(type){
-      case'goblin':c='#ff9800';break;
-      case'knight':c='#78909c';break;
-      case'demon':c='#e53935';break;
-      case'boss':c='#ffd700';break;
-    }
-    ctx.fillStyle=c;
-    ctx.fillRect(x-size/2,y-size,size,size);
+    switch(type){case'goblin':c='#ff9800';break;case'knight':c='#78909c';break;case'demon':c='#e53935';break;case'boss':c='#ffd700';break;}
+    ctx.fillStyle=c;ctx.fillRect(x-size/2,y-size,size,size);
   }
 }
 
@@ -805,16 +789,14 @@ function drawRun(){
   // 背景画像を横にタイル表示 (パララックススクロール)
   if(imgBg.complete&&imgBg.naturalWidth>0){
     const bgW=imgBg.width, bgH=imgBg.height;
-    const scaleY=RUNNER_H/bgH; // 画面高さに合わせる
+    const scaleY=RUNNER_H/bgH;
     const scaledW=bgW*scaleY;
-    const scrollX=-camX*0.3; // パララックス速度
-    const startX=Math.floor(scrollX/scaledW)*scaledW;
+    const scrollX=(-camX*0.3)%scaledW;
     
-    ctx.imageSmoothingEnabled=false;
+    ctx.imageSmoothingEnabled=true; // smooth for background
     for(let i=-1;i<Math.ceil(W/scaledW)+2;i++){
-      ctx.drawImage(imgBg,startX+i*scaledW,0,scaledW,RUNNER_H);
+      ctx.drawImage(imgBg,0,0,bgW,bgH,scrollX+i*scaledW,0,scaledW,RUNNER_H);
     }
-    ctx.imageSmoothingEnabled=true;
   } else {
     // Fallback: グラデーション背景
     const grd=ctx.createLinearGradient(0,0,0,RUNNER_H);
