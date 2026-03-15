@@ -144,7 +144,7 @@ function buildGrid(){
   const t1Nodes=[]; // Tier1 skill node IDs for hybrid gate check
   
   // Label helper
-  function LB(s,v){const fv=typeof v==='number'&&v%1?parseFloat(v.toFixed(2)):v;return`${s.toUpperCase()}+${fv}`;}
+  function LB(s,v){const fv=typeof v==='number'&&v%1?parseFloat(v.toFixed(2)):v;const nm=s==='mhp'?'HP':s.toUpperCase();return`${nm}+${fv}`;}
 
   // ===== 8方向の基本職パス (幾何学構造: 八角形+内側四角形) =====
   // Helper: place node at center + forward*f + perp*p
@@ -161,14 +161,14 @@ function buildGrid(){
     const cx=Math.cos(ba),cy=Math.sin(ba);
     const px=-Math.sin(ba),py=Math.cos(ba);
 
-    // --- Entry: 2 nodes ---
-    const e0=SN(cx,cy,px,py,2.8,0.2,1,d,0,1);
-    const e1=SN(cx,cy,px,py,3.5,-0.1,1,d,1,1);
+    // --- Entry: 2 nodes (straight from START) ---
+    const e0=SN(cx,cy,px,py,2.8,0,1,d,0,1);
+    const e1=SN(cx,cy,px,py,3.5,0,1,d,1,1);
     E(inner[di],e0);E(e0,e1);
 
     // === SHAPE 1: Octagon (8 nodes) + inner square (4 nodes) ===
-    // Center at r=5.5 along direction. Node 0 faces back toward entry.
-    const oc=5.5, or_=1.5, ir=0.7;
+    // Center at r=5.8 along direction. Node 0 faces back toward entry.
+    const oc=5.8, or_=1.8, ir=0.8;
     const o=[];
     for(let k=0;k<8;k++){
       const a=ba+Math.PI+k*Math.PI/4; // node 0 points back toward START
@@ -204,7 +204,7 @@ function buildGrid(){
     E(t1,c1);
 
     // === SHAPE 2: Larger octagon (8 nodes) + inner triangle (3 nodes) ===
-    const oc2=10.5, or2=1.8, ir2=0.8;
+    const oc2=11, or2=2.2, ir2=1;
     const o2=[];
     for(let k=0;k<8;k++){
       const a=ba+Math.PI+k*Math.PI/4;
@@ -241,56 +241,23 @@ function buildGrid(){
     paths[di]=path;
   }
 
-  // ===== 8方向の組み合わせ職パス =====
-  // Requires BOTH adjacent Tier1 skills to access
+  // ===== 8方向の組み合わせ職 (単一ノード、T1スキル2つが条件) =====
   function midAng(a,b){let d=b-a;if(d>Math.PI)d-=Math.PI*2;if(d<-Math.PI)d+=Math.PI*2;return a+d*0.5;}
 
   for(let hi=0;hi<hybrid.length;hi++){
     const h=hybrid[hi];
     const hAngRad=h.ang*Math.PI/180;
-    const hcx=Math.cos(hAngRad),hcy=Math.sin(hAngRad);
-    const hpx=-Math.sin(hAngRad),hpy=Math.cos(hAngRad); // perpendicular
-    const hpath=[];
-    
     const req1=dirs[h.base1].t1l;
     const req2=dirs[h.base2].t1l;
-    
-    // Winding path (r=7-12)
-    const hLayout=[
-      {r:7.5,z:0.4},{r:8.3,z:-0.3},{r:9,z:0.5},{r:9.8,z:-0.4},{r:10.5,z:0.3}
-    ];
-    for(let k=0;k<hLayout.length;k++){
-      const L=hLayout[k];
-      const gx=hcx*L.r+hpx*L.z;
-      const gy=hcy*L.r+hpy*L.z;
-      const us=k%2===0?dirs[h.base1].stats[0]:dirs[h.base2].stats[0];
-      const val=us.base*2;
-      hpath.push(N(gx,gy,'stat',{cost:3,stat:us.s,val,label:LB(us.s,val),cat:h.cat}));
-    }
-    // Hybrid Tier2 Skill at r=12
-    const ht2=N(hcx*12,hcy*12,'skill',{cost:8,skill:h.t2,label:h.t2l,cat:h.cat,tier:2,icon:h.t2i,
-      desc:h.t2d+`\n要:${req1}+${req2}`});
-    hpath.push(ht2);
-    
-    // Connect: T1 skill of base1 → gate → hpath[0]
-    //          T1 skill of base2 → gate → hpath[2]
-    // This forces having BOTH T1 skills to reach the hybrid T2
-    const p1=paths[h.base1];
-    const p2=paths[h.base2];
-    const t1_1=p1._t1; // Tier1 skill node
-    const t1_2=p2._t1;
-    
-    const b1AngRad=dirs[h.base1].ang*Math.PI/180;
-    const b2AngRad=dirs[h.base2].ang*Math.PI/180;
-    const g1a=midAng(b1AngRad,hAngRad);
-    const g2a=midAng(b2AngRad,hAngRad);
-    const gate1=N(Math.cos(g1a)*7,Math.sin(g1a)*7,'stat',{cost:2,stat:dirs[h.base1].stats[0].s,val:dirs[h.base1].stats[0].base,label:'→'+h.name,cat:h.cat,
-      desc:`要:${req1}`});
-    const gate2=N(Math.cos(g2a)*7,Math.sin(g2a)*7,'stat',{cost:2,stat:dirs[h.base2].stats[0].s,val:dirs[h.base2].stats[0].base,label:'→'+h.name,cat:h.cat,
-      desc:`要:${req2}`});
-    E(t1_1,gate1);E(gate1,hpath[0]);
-    E(t1_2,gate2);E(gate2,hpath[Math.min(2,hpath.length-1)]);
-    for(let i=0;i<hpath.length-1;i++)E(hpath[i],hpath[i+1]);
+    // Place between the two T1 skills, at r=8
+    const hx=Math.cos(hAngRad)*8,hy=Math.sin(hAngRad)*8;
+    // Single locked skill node with requirements
+    const hNode=N(hx,hy,'skill',{cost:8,skill:h.t2,label:h.t2l,cat:h.cat,tier:2,icon:h.t2i,
+      desc:h.t2d+`\n🔒要:${req1}+${req2}`,
+      requires:[paths[h.base1]._t1,paths[h.base2]._t1]});
+    // Connect from both T1 skills
+    E(paths[h.base1]._t1,hNode);
+    E(paths[h.base2]._t1,hNode);
   }
 
   // ===== 最外周リング (Tier3同士を繋ぐ高コストリング) =====
@@ -316,7 +283,8 @@ function buildGrid(){
       const gx=Math.cos(ang)*r,gy=Math.sin(ang)*r;
       const stats=['atk','mhp','spd','cr','def','ls','dg','reg'][i%8];
       const vals=[1,5,0.05,0.01,1,0.02,0.02,0.1][i%8];
-      ringNodes.push(N(gx,gy,'stat',{cost:6,stat:stats,val:vals,label:`${stats.toUpperCase()}+${vals}`,cat:'outer'}));
+      const nm=stats==='mhp'?'HP':stats.toUpperCase();
+      ringNodes.push(N(gx,gy,'stat',{cost:6,stat:stats,val:vals,label:`${nm}+${vals}`,cat:'outer'}));
     }
     
     E(t3node,ringNodes[0]);
@@ -334,7 +302,17 @@ function posGrid(){
   for(const n of gN){n.x=gcx+n.gx*S;n.y=gcy+n.gy*S;}
 }
 
-function canUL(id){for(const[a,b]of gE){if(a===id&&gN[b].unlocked)return true;if(b===id&&gN[a].unlocked)return true;}return false;}
+function canUL(id){
+  const n=gN[id];
+  // If node has requires, ALL required nodes must be unlocked
+  if(n.requires){
+    for(const rid of n.requires) if(!gN[rid].unlocked) return false;
+    return true;
+  }
+  // Normal: any adjacent unlocked node
+  for(const[a,b]of gE){if(a===id&&gN[b].unlocked)return true;if(b===id&&gN[a].unlocked)return true;}
+  return false;
+}
 
 // Skills
 const SK={
@@ -669,7 +647,9 @@ function drawGrid_(){
       ctx.beginPath();ctx.arc(nx,ny,r,0,Math.PI*2);ctx.shadowColor=cc;ctx.shadowBlur=n.unlocked?18:(can?10:4);
       ctx.fillStyle=n.unlocked?cc:`rgba(45,45,70,${0.8*p})`;ctx.fill();ctx.shadowBlur=0;
       ctx.strokeStyle=sel?'#fff':(n.unlocked?'rgba(255,255,255,0.35)':cc+'55');ctx.lineWidth=sel?3:1.5;ctx.stroke();
-      ctx.globalAlpha=n.unlocked?1:(can?0.65:0.35);ctx.font=`${r*0.8}px sans-serif`;ctx.textAlign='center';ctx.fillText(n.icon,nx,ny+r*0.3);ctx.globalAlpha=1;
+      const locked=n.requires&&!n.unlocked&&n.requires.some(rid=>!gN[rid].unlocked);
+      ctx.globalAlpha=n.unlocked?1:(can?0.65:0.35);ctx.font=`${r*0.8}px sans-serif`;ctx.textAlign='center';
+      ctx.fillText(locked?'🔒':n.icon,nx,ny+r*0.3);ctx.globalAlpha=1;
       ctx.font='bold 12px sans-serif';ctx.fillStyle=n.unlocked?'#fff':cc+(can?'bb':'55');ctx.fillText(n.label,nx,ny+r+10);
       if(n.tier>=2){ctx.font='11px sans-serif';ctx.fillStyle=n.unlocked?'#ffd700':cc+'44';ctx.fillText('★'.repeat(n.tier),nx,ny-r-2);}
       if(!n.unlocked&&can){ctx.fillStyle=sp>=n.cost?'#fff176':'#e57373';ctx.font='bold 11px sans-serif';ctx.fillText(`${n.cost}SP`,nx,ny+r+19);}
