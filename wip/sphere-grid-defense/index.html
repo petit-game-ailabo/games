@@ -132,7 +132,7 @@ let st={...base};
 let learned=[];let buffs={};
 
 // Run
-let rx=0,rd=0,best=0,alive=true,dTimer=0,lastSpawnDist=0;
+let rx=0,rd=0,best=0,alive=true,dTimer=0,lastSpawnDist=0,lastSpawnFrame=0,initSlimes=false;
 let enemies=[],parts=[],dnums=[];
 let sp=0,runs=0,kills=0,atkCd=0,atkCdMax=50,fight=false,camX=0;
 let bgs=[];
@@ -230,7 +230,13 @@ function buildGrid(){
   const t1Nodes=[]; // Tier1 skill node IDs for hybrid gate check
   
   // Label helper
-  function LB(s,v){const fv=typeof v==='number'&&v%1?parseFloat(v.toFixed(2)):v;const nm=s==='mhp'?'HP':s.toUpperCase();return`${nm}+${fv}`;}
+  function LB(s,v){
+    const nm=s==='mhp'?'HP':s==='cr'?'CRT':s==='cd'?'CRD':s==='dg'?'回避':s==='ls'?'吸血':s==='reg'?'再生':s==='mh'?'連撃':s.toUpperCase();
+    // %表示: cr,cd,dg,ls は%で表示
+    if(s==='cr'||s==='cd'||s==='dg'||s==='ls')return`${nm}+${Math.round(v*100)}%`;
+    if(s==='reg'||s==='spd'){const fv=typeof v==='number'&&v%1?parseFloat(v.toFixed(1)):v;return`${nm}+${fv}`;}
+    return`${nm}+${typeof v==='number'?Math.round(v):v}`;
+  }
 
   // ===== 8方向の基本職パス (幾何学構造: 八角形+内側四角形) =====
   // Helper: place node at center + forward*f + perp*p
@@ -561,7 +567,7 @@ function initRun(){
   atkCd=0;fight=false;buffs={};
   atkCdMax=Math.max(15,50-st.spd*8);
   groundY=RUNNER_H*GYR;
-  genBg();runs++;cleared=false;endless=false;lastBoss=0;lastSpawnDist=0;
+  genBg();runs++;cleared=false;endless=false;lastBoss=0;lastSpawnDist=0;lastSpawnFrame=0;initSlimes=false;
   for(const s of learned)s.cd=0;
 }
 
@@ -653,12 +659,23 @@ function updRun(){
     if(!enemies.some(e=>e.alive&&e.boss)){cleared=true;clearTime=Date.now();alive=false;dTimer=9999;return;}
   }
   
+  // 序盤固定スライム (50, 100, 150m)
+  if(!initSlimes&&rd>10){
+    initSlimes=true;
+    for(const d of [50,100,150]){
+      const ex=rx+d*1;
+      enemies.push({x:ex,y:groundY,hp:10,mhp:10,ak:3,sz:10,c:'#4caf50',em:'🟢',tp:'slime',alive:true,hcd:0,fl:0,boss:false});
+    }
+  }
   // 敵出現（固定間隔、距離ベース）
-  // 序盤は200m毎、中盤は150m毎、後半は120m毎、エンドレスは250m毎
   const spawnInterval=endless?250:rd<2000?200:rd<5000?150:120;
-  if(!lastSpawnDist)lastSpawnDist=0;
-  if(rd-lastSpawnDist>=spawnInterval&&!enemies.some(e=>e.alive&&!e.boss&&e.x-rx<80)){
-    lastSpawnDist=rd;
+  // ボス戦中も3秒毎に雑魚出す
+  const bossFight=enemies.some(e=>e.alive&&e.boss);
+  if(!lastSpawnFrame)lastSpawnFrame=0;
+  lastSpawnFrame++;
+  const shouldSpawn=(rd-lastSpawnDist>=spawnInterval)||(bossFight&&lastSpawnFrame%180===0);
+  if(shouldSpawn&&!enemies.some(e=>e.alive&&!e.boss&&e.x-rx<80)){
+    lastSpawnDist=rd;lastSpawnFrame=0;
     spawnE(rx+W*0.85);
   }
   atkCd--;
@@ -877,7 +894,7 @@ function drawRun(){
   }
   for(const p of parts){ctx.globalAlpha=p.l/30;ctx.fillStyle=p.c;ctx.fillRect(p.x-p.s/2,p.y-p.s/2,p.s,p.s);}ctx.globalAlpha=1;
   for(const d of dnums){ctx.globalAlpha=Math.min(1,d.l/20);ctx.fillStyle=d.c;ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(d.t,d.x,d.y);}ctx.globalAlpha=1;
-  ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='12px sans-serif';ctx.textAlign='right';ctx.fillText(`${Math.floor(rd)}m`,W-5,12);
+  // distance is now in HUD
   ctx.restore();
   // (クリア画面はメインループ側で描画)
 }
@@ -885,28 +902,38 @@ function drawRun(){
 function drawHUD(casting){
   const y=RUNNER_H;ctx.fillStyle='rgba(10,15,30,0.95)';ctx.fillRect(0,y,W,HUD_H);
   ctx.fillStyle='rgba(100,181,246,0.15)';ctx.fillRect(0,y+HUD_H-1,W,1);
-  // Row 1: SP, Run, Kill, Best
-  ctx.font='bold 11px sans-serif';ctx.textAlign='left';
-  ctx.fillStyle='#fff176';ctx.fillText(`SP:${sp}`,6,y+14);
-  ctx.fillStyle='#9e9e9e';ctx.fillText(`Run#${runs}`,65,y+14);
-  ctx.fillStyle='#64b5f6';ctx.fillText(`Kill:${kills}`,130,y+14);
-  ctx.textAlign='right';ctx.fillStyle='#e0e0e0';ctx.fillText(`Best:${Math.floor(best)}m`,W-6,y+14);
-  // Row 2: Main stats
   const s=casting?castSt:st;
+  // Row 1: Distance (big) + goal + SP + Run
+  ctx.font='bold 16px sans-serif';ctx.textAlign='left';
+  const dist=Math.floor(rd);
+  const goal=endless?'∞':'10000';
+  ctx.fillStyle='#fff';ctx.fillText(`${dist}m`,6,y+17);
+  ctx.fillStyle='#9e9e9e';ctx.font='11px sans-serif';ctx.fillText(`/ ${goal}m`,6+ctx.measureText(`${dist}m`).width+4,y+17);
+  ctx.textAlign='right';
+  ctx.fillStyle='#fff176';ctx.font='bold 11px sans-serif';ctx.fillText(`SP:${sp}`,W-6,y+12);
+  ctx.fillStyle='#9e9e9e';ctx.font='10px sans-serif';ctx.fillText(`Run#${runs}  Kill:${kills}`,W-6,y+24);
+  // Row 2: Stats
   ctx.font='10px sans-serif';ctx.textAlign='left';
-  ctx.fillStyle='#e57373';ctx.fillText(`ATK${Math.floor(casting?s.atk:gAtk())}`,6,y+32);
-  ctx.fillStyle='#64b5f6';ctx.fillText(`DEF${casting?s.def:gDef()}`,52,y+32);
-  ctx.fillStyle='#4caf50';ctx.fillText(`HP${Math.floor(s.hp)}/${s.mhp}`,98,y+32);
-  ctx.fillStyle='#66bb6a';ctx.fillText(`SPD${(casting?s.spd:gSpd()).toFixed(1)}`,178,y+32);
-  // Row 3: Secondary stats
-  ctx.fillStyle='#ffeb3b';ctx.fillText(`CRT${Math.floor(s.cr*100)}%`,6,y+50);
-  ctx.fillStyle='#ffa726';ctx.fillText(`CD${s.cd.toFixed(1)}x`,58,y+50);
-  if(s.ls>0){ctx.fillStyle='#ab47bc';ctx.fillText(`吸${Math.floor(s.ls*100)}%`,110,y+50);}
-  if(s.dg>0){ctx.fillStyle='#81d4fa';ctx.fillText(`避${Math.floor((casting?s.dg:gDdg())*100)}%`,160,y+50);}
-  if(s.reg>0){ctx.fillStyle='#66bb6a';ctx.fillText(`再${s.reg.toFixed(1)}`,210,y+50);}
-  // Skill icons
-  let sx=260;
-  for(const sk of learned){ctx.globalAlpha=sk.cd>0?0.3:1;ctx.font='12px sans-serif';ctx.fillText(sk.icon||'✦',sx,y+50);ctx.globalAlpha=1;sx+=16;}
+  ctx.fillStyle='#e57373';ctx.fillText(`ATK${Math.floor(casting?s.atk:gAtk())}`,6,y+34);
+  ctx.fillStyle='#64b5f6';ctx.fillText(`DEF${casting?s.def:gDef()}`,52,y+34);
+  ctx.fillStyle='#4caf50';ctx.fillText(`HP${Math.floor(s.hp)}/${Math.floor(s.mhp)}`,98,y+34);
+  ctx.fillStyle='#66bb6a';ctx.fillText(`SPD${(casting?s.spd:gSpd()).toFixed(1)}`,175,y+34);
+  // Row 3: Secondary stats + skill icons (2 rows)
+  ctx.fillStyle='#ffeb3b';ctx.fillText(`CRT${Math.floor(s.cr*100)}%`,6,y+48);
+  ctx.fillStyle='#ffa726';ctx.fillText(`CD${Math.floor(s.cd*100)}%`,55,y+48);
+  if(s.ls>0){ctx.fillStyle='#ab47bc';ctx.fillText(`吸${Math.floor(s.ls*100)}%`,108,y+48);}
+  if(s.dg>0){ctx.fillStyle='#81d4fa';ctx.fillText(`避${Math.floor((casting?s.dg:gDdg())*100)}%`,150,y+48);}
+  if(s.reg>0){ctx.fillStyle='#66bb6a';ctx.fillText(`再${s.reg.toFixed(1)}`,192,y+48);}
+  // Skill icons in 2 rows
+  const maxPerRow=Math.floor((W-230)/14);
+  for(let si=0;si<learned.length;si++){
+    const row=si<maxPerRow?0:1;
+    const col=si<maxPerRow?si:si-maxPerRow;
+    ctx.globalAlpha=learned[si].cd>0?0.3:1;
+    ctx.font='11px sans-serif';
+    ctx.fillText(learned[si].icon||'✦',230+col*14,y+36+row*14);
+    ctx.globalAlpha=1;
+  }
 }
 
 const CC={attack:'#e53935',defense:'#42a5f5',heal:'#66bb6a',magic:'#ffeb3b',buffer:'#ab47bc',
