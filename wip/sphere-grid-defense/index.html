@@ -146,70 +146,99 @@ function buildGrid(){
   // Label helper
   function LB(s,v){const fv=typeof v==='number'&&v%1?parseFloat(v.toFixed(2)):v;return`${s.toUpperCase()}+${fv}`;}
 
-  // ===== 8方向の基本職パス (リング+分岐構造) =====
+  // ===== 8方向の基本職パス (幾何学構造: 八角形+内側四角形) =====
+  // Helper: place node at center + forward*f + perp*p
+  function PN(cx,cy,px,py,f,p,type,opts){return N(cx*f+px*p,cy*f+py*p,type,opts);}
+  function SN(cx,cy,px,py,f,p,cost,d,si,mul){
+    const s=d.stats[si%2];const v=parseFloat((s.base*mul).toFixed(2));
+    return PN(cx,cy,px,py,f,p,'stat',{cost,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat});
+  }
+
   for(let di=0;di<dirs.length;di++){
     const d=dirs[di];
-    const path=[]; // flat list for outer ring reference
+    const path=[];
     const ba=d.ang*Math.PI/180;
     const cx=Math.cos(ba),cy=Math.sin(ba);
-    const px=-Math.sin(ba),py=Math.cos(ba); // perpendicular
+    const px=-Math.sin(ba),py=Math.cos(ba);
 
-    // --- Entry: 2 nodes leading to a fork ---
-    const e0=N(cx*2.8+px*0.3,cy*2.8+py*0.3,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base,label:LB(d.stats[0].s,d.stats[0].base),cat:d.cat});
-    const e1=N(cx*3.6-px*0.2,cy*3.6-py*0.2,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base,label:LB(d.stats[1].s,d.stats[1].base),cat:d.cat});
+    // --- Entry: 2 nodes ---
+    const e0=SN(cx,cy,px,py,2.8,0.2,1,d,0,1);
+    const e1=SN(cx,cy,px,py,3.5,-0.1,1,d,1,1);
     E(inner[di],e0);E(e0,e1);
 
-    // --- Ring 1: fork into left/right paths that meet at T1 skill ---
-    const r1L=N(cx*4.5+px*1.2,cy*4.5+py*1.2,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
-    const r1R=N(cx*4.5-px*1.2,cy*4.5-py*1.2,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base*2,label:LB(d.stats[1].s,d.stats[1].base*2),cat:d.cat});
-    const r1L2=N(cx*5.5+px*0.8,cy*5.5+py*0.8,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
-    const r1R2=N(cx*5.5-px*0.8,cy*5.5-py*0.8,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base*2,label:LB(d.stats[1].s,d.stats[1].base*2),cat:d.cat});
-    E(e1,r1L);E(e1,r1R);E(r1L,r1L2);E(r1R,r1R2);
-    // Dead-end branch off left path
-    const de1=N(cx*5+px*2,cy*5+py*2,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
-    E(r1L,de1);
+    // === SHAPE 1: Octagon (8 nodes) + inner square (4 nodes) ===
+    // Center at r=5.5 along direction
+    // Octagon: 8 nodes at radius 1.5 from center
+    // One-way path around octagon, with 2 connections to inner square
+    const oc=5.5; // center radius
+    const or_=1.5; // octagon node radius from center
+    const ir=0.7; // inner square radius from center
+    const o=[];
+    for(let k=0;k<8;k++){
+      const a=k*Math.PI/4;
+      o.push(SN(cx,cy,px,py,oc+Math.cos(a)*or_,Math.sin(a)*or_,1,d,k,1+k*0.2));
+    }
+    // Octagon path: 0→1→2→3→4→5→6→7→(back to 0 optional)
+    for(let k=0;k<7;k++)E(o[k],o[k+1]);
+    E(o[7],o[0]); // close octagon
+    // Entry connects to octagon top (node 0)
+    E(e1,o[0]);
 
-    // T1 Skill (merge point)
-    const t1=N(cx*6.5,cy*6.5,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
-    E(r1L2,t1);E(r1R2,t1);
+    // Inner square: 4 nodes
+    const sq=[];
+    for(let k=0;k<4;k++){
+      const a=k*Math.PI/2+Math.PI/4; // 45,135,225,315 degrees
+      sq.push(SN(cx,cy,px,py,oc+Math.cos(a)*ir,Math.sin(a)*ir,1,d,(k+1),2));
+    }
+    // Square path
+    E(sq[0],sq[1]);E(sq[1],sq[2]);E(sq[2],sq[3]);E(sq[3],sq[0]);
+    // Connect octagon to square at 2 points
+    E(o[1],sq[0]); // octagon node 1 → square node 0 (entry to inner)
+    E(sq[2],o[5]); // square node 2 → octagon node 5 (exit from inner)
+
+    // T1 Skill: exit from octagon bottom
+    const t1=PN(cx,cy,px,py,7.8,0,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
+    E(o[4],t1); // octagon bottom → T1
     t1Nodes.push(t1);
 
-    // --- Connector to Ring 2 ---
-    const c1=N(cx*7.5+px*0.3,cy*7.5+py*0.3,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
+    // --- Connector ---
+    const c1=SN(cx,cy,px,py,8.8,0.2,2,d,0,3);
     E(t1,c1);
 
-    // --- Ring 2: bigger ring with 4 nodes + T2 skill ---
-    const r2A=N(cx*8.5+px*1.3,cy*8.5+py*1.3,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
-    const r2B=N(cx*8.5-px*1.3,cy*8.5-py*1.3,'stat',{cost:2,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
-    const r2C=N(cx*9.8+px*0.8,cy*9.8+py*0.8,'stat',{cost:2,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
-    const r2D=N(cx*9.8-px*0.8,cy*9.8-py*0.8,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
-    E(c1,r2A);E(c1,r2B);E(r2A,r2C);E(r2B,r2D);
-    // Dead-end branch off ring 2
-    const de2=N(cx*9+px*2.2,cy*9+py*2.2,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*4,label:LB(d.stats[0].s,d.stats[0].base*4),cat:d.cat});
-    E(r2A,de2);
+    // === SHAPE 2: Larger octagon (8 nodes) + inner triangle (3 nodes) ===
+    const oc2=10.5;
+    const or2=1.8;
+    const ir2=0.8;
+    const o2=[];
+    for(let k=0;k<8;k++){
+      const a=k*Math.PI/4;
+      o2.push(SN(cx,cy,px,py,oc2+Math.cos(a)*or2,Math.sin(a)*or2,2,d,k,2+k*0.3));
+    }
+    for(let k=0;k<7;k++)E(o2[k],o2[k+1]);
+    E(o2[7],o2[0]);
+    E(c1,o2[0]);
+
+    // Inner triangle
+    const tri=[];
+    for(let k=0;k<3;k++){
+      const a=k*Math.PI*2/3-Math.PI/2;
+      tri.push(SN(cx,cy,px,py,oc2+Math.cos(a)*ir2,Math.sin(a)*ir2,2,d,(k+1),3));
+    }
+    E(tri[0],tri[1]);E(tri[1],tri[2]);E(tri[2],tri[0]);
+    E(o2[1],tri[0]); // entry to triangle
+    E(tri[1],o2[5]); // exit from triangle
 
     // T2 Skill
-    const t2=N(cx*10.8,cy*10.8,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
-    E(r2C,t2);E(r2D,t2);
+    const t2=PN(cx,cy,px,py,13,0,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
+    E(o2[4],t2);
 
-    // --- Connector to Ring 3 ---
-    const c2=N(cx*11.8-px*0.3,cy*11.8-py*0.3,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
-    E(t2,c2);
+    // --- Final stretch to T3 ---
+    const f1=SN(cx,cy,px,py,14,0.3,3,d,0,4);
+    const f2=SN(cx,cy,px,py,14.8,-0.2,3,d,1,4);
+    const t3=PN(cx,cy,px,py,16,0,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
+    E(t2,f1);E(f1,f2);E(f2,t3);
 
-    // --- Ring 3: final ring before T3 ---
-    const r3A=N(cx*12.8+px*1,cy*12.8+py*1,'stat',{cost:3,stat:d.stats[0].s,val:d.stats[0].base*4,label:LB(d.stats[0].s,d.stats[0].base*4),cat:d.cat});
-    const r3B=N(cx*12.8-px*1,cy*12.8-py*1,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*4,label:LB(d.stats[1].s,d.stats[1].base*4),cat:d.cat});
-    const r3C=N(cx*13.8+px*0.5,cy*13.8+py*0.5,'stat',{cost:3,stat:d.stats[0].s,val:d.stats[0].base*5,label:LB(d.stats[0].s,d.stats[0].base*5),cat:d.cat});
-    const r3D=N(cx*13.8-px*0.5,cy*13.8-py*0.5,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*5,label:LB(d.stats[1].s,d.stats[1].base*5),cat:d.cat});
-    E(c2,r3A);E(c2,r3B);E(r3A,r3C);E(r3B,r3D);E(r3C,r3D); // ring closes
-
-    // T3 Skill
-    const t3=N(cx*15,cy*15,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
-    E(r3C,t3);E(r3D,t3);
-
-    // path[] for outer ring reference: store key nodes
-    path.push(e0,e1,r1L,r1R,r1L2,r1R2,t1,c1,r2A,r2B,r2C,r2D,t2,c2,r3A,r3B,r3C,r3D,t3);
-    // Also store dead-ends
+    path.push(e0,e1,...o,...sq,t1,c1,...o2,...tri,t2,f1,f2,t3);
     path._t1=t1;path._t2=t2;path._t3=t3;
     paths[di]=path;
   }
