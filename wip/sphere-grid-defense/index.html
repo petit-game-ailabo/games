@@ -233,7 +233,7 @@ function buildGrid(){
     // --- Final stretch to T3 ---
     const f1=SN(cx,cy,px,py,20,0.3,3,d,0,4);
     const f2=SN(cx,cy,px,py,21.5,-0.2,3,d,1,4);
-    const t3=PN(cx,cy,px,py,23,0,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
+    const t3=PN(cx,cy,px,py,23,0,'skill',{cost:12,skill:d.t3,label:d.t3l,cat:d.cat,tier:4,icon:d.t3i,desc:d.t3d});
     E(t2,f1);E(f1,f2);E(f2,t3);
 
     path.push(e0,e1,...o,...sq,t1,c1,...o2,...tri,t2,f1,f2,t3);
@@ -241,23 +241,57 @@ function buildGrid(){
     paths[di]=path;
   }
 
-  // ===== 8方向の組み合わせ職 (単一ノード、T1スキル2つが条件) =====
+  // ===== 8方向の組み合わせ職 (🔒ノード → 上位職パス → 分岐 → ★3スキル) =====
   function midAng(a,b){let d=b-a;if(d>Math.PI)d-=Math.PI*2;if(d<-Math.PI)d+=Math.PI*2;return a+d*0.5;}
+
+  // Hybrid T3 skill definitions (new ★3 at branch ends)
+  const HT3=[
+    {s1:'jugATK',l1:'Juggernaut Fury',i1:'💥',d1:'ATK×7全体', s2:'jugDEF',l2:'Juggernaut Guard',i2:'🛡️',d2:'DEF3倍+反撃'},
+    {s1:'palHeal',l1:'Holy Knight',i1:'⚜️',d1:'全回復+無敵5秒', s2:'palDEF',l2:'Sacred Wall',i2:'🏛️',d2:'DEF4倍+再生'},
+    {s1:'sageHeal',l1:'Sage Cure',i1:'📖',d1:'全回復+CRT UP', s2:'sageMATK',l2:'Sage Storm',i2:'🌟',d2:'CRT×6全体'},
+    {s1:'wlkMATK',l1:'Dark Meteor',i1:'☄️',d1:'CRT×5全体', s2:'wlkBUF',l2:'Dark Haste',i2:'🦇',d2:'速度3倍+ATK UP'},
+    {s1:'prsBUF',l1:'Divine Blessing',i1:'🙏',d1:'全ステUP', s2:'prsDEB',l2:'Holy Curse',i2:'✨',d2:'吸血+再生MAX'},
+    {s1:'rogDEB',l1:'Shadow Strike',i1:'🎭',d1:'CRT7倍+吸血', s2:'rogEVA',l2:'Vanish',i2:'💨',d2:'回避90%+速度UP'},
+    {s1:'ninEVA',l1:'Ninja Art',i1:'🥷',d1:'5連CRT+回避', s2:'ninATK',l2:'Blade Storm',i2:'⚔️',d2:'ATK×6 4連撃'},
+    {s1:'wrlATK',l1:'Berserker Rage',i1:'🔥',d1:'ATK×8全体', s2:'wrlCNT',l2:'War Cry',i2:'📯',d2:'ATK3倍+反撃'},
+  ];
 
   for(let hi=0;hi<hybrid.length;hi++){
     const h=hybrid[hi];
+    const ht3=HT3[hi];
     const hAngRad=h.ang*Math.PI/180;
+    const hcx=Math.cos(hAngRad),hcy=Math.sin(hAngRad);
+    const hpx=-Math.sin(hAngRad),hpy=Math.cos(hAngRad);
     const req1=dirs[h.base1].t1l;
     const req2=dirs[h.base2].t1l;
-    // Place between the two T1 skills, at r=8
-    const hx=Math.cos(hAngRad)*8,hy=Math.sin(hAngRad)*8;
-    // Single locked skill node with requirements
-    const hNode=N(hx,hy,'skill',{cost:8,skill:h.t2,label:h.t2l,cat:h.cat,tier:2,icon:h.t2i,
+    const d1=dirs[h.base1], d2=dirs[h.base2];
+
+    // 🔒 Locked hybrid skill at r=9
+    const hNode=N(hcx*9,hcy*9,'skill',{cost:8,skill:h.t2,label:h.t2l,cat:h.cat,tier:2,icon:h.t2i,
       desc:h.t2d+`\n🔒要:${req1}+${req2}`,
       requires:[paths[h.base1]._t1,paths[h.base2]._t1]});
-    // Connect from both T1 skills
     E(paths[h.base1]._t1,hNode);
     E(paths[h.base2]._t1,hNode);
+
+    // Upper class stats (3 nodes, r=11~14)
+    const hs1=N(hcx*11+hpx*0.3,hcy*11+hpy*0.3,'stat',{cost:4,stat:d1.stats[0].s,val:parseFloat((d1.stats[0].base*3).toFixed(2)),label:LB(d1.stats[0].s,d1.stats[0].base*3),cat:h.cat});
+    const hs2=N(hcx*12.5-hpx*0.2,hcy*12.5-hpy*0.2,'stat',{cost:4,stat:d2.stats[0].s,val:parseFloat((d2.stats[0].base*3).toFixed(2)),label:LB(d2.stats[0].s,d2.stats[0].base*3),cat:h.cat});
+    const hs3=N(hcx*14,hcy*14,'stat',{cost:4,stat:d1.stats[0].s,val:parseFloat((d1.stats[0].base*4).toFixed(2)),label:LB(d1.stats[0].s,d1.stats[0].base*4),cat:h.cat});
+    E(hNode,hs1);E(hs1,hs2);E(hs2,hs3);
+
+    // Fork: base1 side (2 nodes + ★3 skill)
+    const b1Ang=midAng(hAngRad,dirs[h.base1].ang*Math.PI/180);
+    const fb1a=N(Math.cos(b1Ang)*16,Math.sin(b1Ang)*16,'stat',{cost:5,stat:d1.stats[0].s,val:parseFloat((d1.stats[0].base*5).toFixed(2)),label:LB(d1.stats[0].s,d1.stats[0].base*5),cat:h.cat});
+    const fb1b=N(Math.cos(b1Ang)*18,Math.sin(b1Ang)*18,'stat',{cost:5,stat:d1.stats[1].s,val:parseFloat((d1.stats[1].base*5).toFixed(2)),label:LB(d1.stats[1].s,d1.stats[1].base*5),cat:h.cat});
+    const fb1s=N(Math.cos(b1Ang)*20,Math.sin(b1Ang)*20,'skill',{cost:8,skill:ht3.s1,label:ht3.l1,cat:h.cat,tier:3,icon:ht3.i1,desc:ht3.d1});
+    E(hs3,fb1a);E(fb1a,fb1b);E(fb1b,fb1s);
+
+    // Fork: base2 side (2 nodes + ★3 skill)
+    const b2Ang=midAng(hAngRad,dirs[h.base2].ang*Math.PI/180);
+    const fb2a=N(Math.cos(b2Ang)*16,Math.sin(b2Ang)*16,'stat',{cost:5,stat:d2.stats[0].s,val:parseFloat((d2.stats[0].base*5).toFixed(2)),label:LB(d2.stats[0].s,d2.stats[0].base*5),cat:h.cat});
+    const fb2b=N(Math.cos(b2Ang)*18,Math.sin(b2Ang)*18,'stat',{cost:5,stat:d2.stats[1].s,val:parseFloat((d2.stats[1].base*5).toFixed(2)),label:LB(d2.stats[1].s,d2.stats[1].base*5),cat:h.cat});
+    const fb2s=N(Math.cos(b2Ang)*20,Math.sin(b2Ang)*20,'skill',{cost:8,skill:ht3.s2,label:ht3.l2,cat:h.cat,tier:3,icon:ht3.i2,desc:ht3.d2});
+    E(hs3,fb2a);E(fb2a,fb2b);E(fb2b,fb2s);
   }
 
   // ===== 最外周リング (Tier3同士を繋ぐ高コストリング) =====
@@ -347,7 +381,16 @@ const SK={
   sanctify:{cd:700,bf:'reg',bd:500,heal:0.5},
   assassinate:{cd:700,dm:7,h:1,fc:1},
   ninjaBlade:{cd:700,dm:2,h:5,fc:1},
-  warlord:{cd:800,dm:6,h:1,aoe:1,atkboost:0.5}
+  warlord:{cd:800,dm:6,h:1,aoe:1,atkboost:0.5},
+  // Hybrid T3 skills
+  jugATK:{cd:700,dm:7,h:1,aoe:1},jugDEF:{cd:700,bf:'inv',bd:300,dm:3,h:1},
+  palHeal:{cd:800,heal:1,bf:'inv',bd:300},palDEF:{cd:800,bf:'inv',bd:400,rboost:3},
+  sageHeal:{cd:700,heal:1,dm:2,h:1,fc:1},sageMATK:{cd:700,dm:6,h:1,aoe:1,fc:1},
+  wlkMATK:{cd:700,dm:5,h:1,aoe:1,fc:1},wlkBUF:{cd:700,bf:'hst',bd:500,atkboost:0.5},
+  prsBUF:{cd:800,bf:'trs',bd:600},prsDEB:{cd:800,dm:3,h:1,hp2:0.8,rboost:5},
+  rogDEB:{cd:700,dm:7,h:1,fc:1,hp2:0.3},rogEVA:{cd:700,bf:'phm',bd:500,atkboost:0.3},
+  ninEVA:{cd:700,dm:2,h:5,fc:1,bf:'gal',bd:300},ninATK:{cd:700,dm:6,h:4,fc:1},
+  wrlATK:{cd:800,dm:8,h:1,aoe:1},wrlCNT:{cd:800,dm:4,h:1,atkboost:1,bf:'inv',bd:200}
 };
 
 const PNAMES={atk:'Greater Fortitude',def:'Iron Fortress',mhp:'Life Essence',spd:'Sensory Boost',
@@ -636,7 +679,7 @@ function drawGrid_(){
   for(const n of gN){
     const nx=n.x+ox,ny=n.y+oy;
     if(ny<y-40||ny>y+GRID_H+40||nx<-40||nx>W+40)continue;
-    const isSk=n.type==='skill',r=isSk?(n.tier>=3?20:n.tier>=2?17:15):11;
+    const isSk=n.type==='skill',r=isSk?(n.tier>=4?22:n.tier>=3?20:n.tier>=2?17:15):11;
     const sel=selN===n.id,can=!n.unlocked&&canUL(n.id),cc=CC[n.cat]||'#aaa';
     if(n.type==='start'){
       ctx.beginPath();ctx.arc(nx,ny,14,0,Math.PI*2);ctx.fillStyle='#42a5f5';ctx.shadowColor='#42a5f5';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
