@@ -326,11 +326,11 @@ function buildGrid(){
     const cx=Math.cos(ba),cy=Math.sin(ba);
     const px=-Math.sin(ba),py=Math.cos(ba);
     // Dead-ends near T2 area (r=15付近、★2スキル手前)
-    const de1=N(cx*15+px*2.5,cy*15+py*2.5,'stat',{cost:5,stat:'cr',val:0.15,label:'CRT+15%',cat:d.cat});
-    const de2=N(cx*16+px*3,cy*16+py*3,'stat',{cost:5,stat:'cd',val:0.5,label:'CRD+50%',cat:d.cat});
+    const de1=N(cx*10+px*3,cy*10+py*3,'stat',{cost:5,stat:'cr',val:0.15,label:'CRT+15%',cat:d.cat});
+    const de2=N(cx*10.5+px*4.5,cy*10.5+py*4.5,'stat',{cost:5,stat:'cd',val:0.5,label:'CRD+50%',cat:d.cat});
     E(paths[di]._t1,de1);E(de1,de2);
-    const de3=N(cx*15-px*2.5,cy*15-py*2.5,'stat',{cost:5,stat:'ls',val:0.15,label:'吸血+15%',cat:d.cat});
-    const de4=N(cx*16-px*3,cy*16-py*3,'stat',{cost:5,stat:'dg',val:0.15,label:'回避+15%',cat:d.cat});
+    const de3=N(cx*10-px*3,cy*10-py*3,'stat',{cost:5,stat:'ls',val:0.15,label:'吸血+15%',cat:d.cat});
+    const de4=N(cx*10.5-px*4.5,cy*10.5-py*4.5,'stat',{cost:5,stat:'dg',val:0.15,label:'回避+15%',cat:d.cat});
     E(paths[di]._t1,de3);E(de3,de4);
     // Dead-ends near T3/T4 area
     const de5=N(cx*24+px*1.5,cy*24+py*1.5,'stat',{cost:6,stat:'atk',val:8,label:'ATK+8',cat:d.cat});
@@ -521,15 +521,18 @@ function updRun(){
   }
   if(buffs.rboost)st.hp=Math.min(st.hp+5*0.016,st.mhp);
   
-  const ne=enemies.find(e=>e.alive&&e.x-rx<30&&e.x-rx>-20);
+  const spd=gSpd();
+  // Check for enemies ahead within speed range (prevents skipping at high speed)
+  const checkDist=Math.max(30,spd*2);
+  const ne=enemies.find(e=>e.alive&&e.x-rx<checkDist&&e.x-rx>-20);
   fight=!!ne;
-  if(!fight){const spd=gSpd();rx+=spd;rd+=spd;if(rd>best)best=rd;}
+  if(!fight){rx+=spd;rd+=spd;if(rd>best)best=rd;}
   camX=rx-W*0.25;
   if(st.reg>0)st.hp=Math.min(st.hp+st.reg*0.016,st.mhp);
   
-  // ボス出現チェック (1000m毎)
+  // ボス出現チェック (1000m毎、エンドレスでも継続)
   const bDist=Math.floor(rd/1000)*1000;
-  if(bDist>lastBoss&&bDist>=1000&&bDist<=10000&&!enemies.some(e=>e.boss&&e.alive)){
+  if(bDist>lastBoss&&bDist>=1000&&!enemies.some(e=>e.boss&&e.alive)){
     lastBoss=bDist;spawnBoss(bDist);
   }
   
@@ -538,8 +541,10 @@ function updRun(){
     if(!enemies.some(e=>e.alive&&e.boss)){cleared=true;return;}
   }
   
-  if(Math.random()<1/Math.max(150,400-rd*0.06))spawnE(rx+W*0.9+Math.random()*150);
-  if(rd%350<gSpd()+0.5)spawnE(rx+W*0.8+Math.random()*80);
+  // 敵出現率（エンドレスモードは2倍）
+  const spawnMul=endless?2:1;
+  if(Math.random()<spawnMul/Math.max(80,400-rd*0.08))spawnE(rx+W*0.9+Math.random()*150);
+  if(rd%250<gSpd()+0.5)spawnE(rx+W*0.8+Math.random()*80);
   atkCd--;
   if(atkCd<=0&&fight){
     const tg=enemies.filter(e=>e.alive&&Math.abs(e.x-rx)<50);
@@ -688,25 +693,34 @@ function drawRun(){
   
   // クリア画面
   if(cleared&&!endless){
-    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#ffd700';ctx.font='bold 36px sans-serif';ctx.textAlign='center';
-    ctx.fillText('🎉 CLEAR! 🎉',W/2,H*0.35);
-    
-    // ランク計算
-    let rank='D';
-    if(runs<=5)rank='S';
-    else if(runs<=10)rank='A';
-    else if(runs<=20)rank='B';
-    else if(runs<=50)rank='C';
-    
-    ctx.fillStyle='#fff';ctx.font='bold 24px sans-serif';
-    ctx.fillText(`Rank: ${rank}`,W/2,H*0.45);
-    ctx.font='18px sans-serif';
-    ctx.fillText(`Best: ${Math.floor(best)}m in ${runs} runs`,W/2,H*0.53);
-    
-    ctx.fillStyle='rgba(100,181,246,0.8)';rr(ctx,W/2-90,H*0.62,180,50,8);ctx.fill();
-    ctx.fillStyle='#fff';ctx.font='bold 16px sans-serif';
-    ctx.fillText('Tap for Endless Mode',W/2,H*0.62+32);
+    ctx.fillStyle='rgba(0,0,0,0.8)';ctx.fillRect(0,0,W,H);
+    // Star particles
+    const ct=Date.now()*0.001;
+    for(let i=0;i<30;i++){
+      const a=i*0.21+ct*0.3,r_=50+Math.sin(ct+i*0.5)*30+i*4;
+      ctx.fillStyle=`hsla(${45+i*3},80%,60%,${0.3+Math.sin(ct*2+i)*0.2})`;
+      ctx.beginPath();ctx.arc(W/2+Math.cos(a)*r_,H*0.3+Math.sin(a)*r_*0.6,2+Math.sin(ct+i)*1,0,Math.PI*2);ctx.fill();
+    }
+    ctx.fillStyle='#ffd700';ctx.font='bold 40px sans-serif';ctx.textAlign='center';
+    ctx.fillText('🎉 CLEAR! 🎉',W/2,H*0.25);
+    // Rank
+    let rank='D',rc='#9e9e9e';
+    if(runs<=5){rank='S';rc='#ffd700';}
+    else if(runs<=10){rank='A';rc='#e040fb';}
+    else if(runs<=20){rank='B';rc='#42a5f5';}
+    else if(runs<=50){rank='C';rc='#66bb6a';}
+    ctx.fillStyle=rc;ctx.font='bold 60px sans-serif';
+    ctx.fillText(rank,W/2,H*0.38);
+    ctx.fillStyle='#fff';ctx.font='16px sans-serif';
+    ctx.fillText(`${runs} runs / ${kills} kills`,W/2,H*0.44);
+    ctx.fillText(`Best: ${Math.floor(best)}m`,W/2,H*0.48);
+    // Two buttons
+    ctx.fillStyle='rgba(76,175,80,0.85)';rr(ctx,W/2-120,H*0.55,110,44,8);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';
+    ctx.fillText('🔄 Restart',W/2-65,H*0.55+28);
+    ctx.fillStyle='rgba(156,39,176,0.85)';rr(ctx,W/2+10,H*0.55,110,44,8);ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.fillText('♾️ Endless',W/2+65,H*0.55+28);
   }
 }
 
@@ -856,8 +870,19 @@ C.addEventListener('touchmove',e=>{e.preventDefault();
 C.addEventListener('touchend',e=>{e.preventDefault();
   if(pinching){if(e.touches.length<2)pinching=false;return;}
   gs.drag=false;if(state===ST.TITLE){startG();return;}
-  // クリア画面タップでエンドレスモード移行
-  if(cleared&&!endless){endless=true;cleared=false;return;}
+  // クリア画面: Restart or Endless
+  if(cleared&&!endless){
+    const r=C.getBoundingClientRect();
+    const tp=e.changedTouches?e.changedTouches[0]:e;
+    const tx=tp?tp.clientX-r.left:W/2,ty=tp?tp.clientY-r.top:H/2;
+    if(tx<W/2&&ty>H*0.55&&ty<H*0.55+44){
+      // Restart button
+      state=ST.PLAY;buildGrid();resize();
+      sp=0;runs=0;kills=0;best=0;base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+      learned=[];initRun();cleared=false;return;
+    }
+    endless=true;cleared=false;return;
+  }
   if(!tm_&&Date.now()-ts<300){const r=C.getBoundingClientRect();if(e.changedTouches&&e.changedTouches[0]){const p={x:e.changedTouches[0].clientX-r.left,y:e.changedTouches[0].clientY-r.top};if(p.y>GRID_Y)gridTap(p);}}
 },{passive:false});
 C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
@@ -868,7 +893,14 @@ C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
   posGrid();
 },{passive:false});
 C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();return;}
-  if(cleared&&!endless){endless=true;cleared=false;return;}
+  if(cleared&&!endless){
+    if(p.x<W/2&&p.y>H*0.55&&p.y<H*0.55+44){
+      state=ST.PLAY;buildGrid();resize();
+      sp=0;runs=0;kills=0;best=0;base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+      learned=[];initRun();cleared=false;return;
+    }
+    endless=true;cleared=false;return;
+  }
   if(p.y>GRID_Y)gridTap(p);});
 
 function startG(){state=ST.PLAY;buildGrid();resize();initRun();}
