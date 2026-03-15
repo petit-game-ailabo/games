@@ -552,7 +552,7 @@ function endCast(){
 }
 
 // Runner
-const GYR=0.78;let groundY=0;
+const GYR=0.85;let groundY=0;
 
 function initRun(){
   st={...base};st.hp=st.mhp;
@@ -783,34 +783,33 @@ function drawCast(){
 
 function drawRun(){
   ctx.save();ctx.beginPath();ctx.rect(0,0,W,RUNNER_H);ctx.clip();
+  ctx.clearRect(0,0,W,RUNNER_H); // clear previous frame
   
   // 背景: 3レイヤーパララックス（空=固定 / 建物=遅い / 地面=速い）
   if(imgBg.complete&&imgBg.naturalWidth>0){
     const bgW=imgBg.width, bgH=imgBg.height;
-    // Layer 1: Sky (top 40%) - very slow scroll
-    const skyH=Math.floor(bgH*0.4);
-    const skyScaleY=groundY*0.5/skyH;
+    // Layer 1: Sky (top 60%) - draws once, stretches to fill width, no tiling
+    const skyH=Math.floor(bgH*0.55);
+    const skyDispH=groundY*0.7;
+    const skyScaleY=skyDispH/skyH;
     const skyW=bgW*skyScaleY;
-    const skyScroll=((-camX*0.02)%skyW+skyW)%skyW;
+    // Center sky, slow parallax (single image, no repeat for moon)
+    const skyOff=(-camX*0.02)%(skyW*0.3);
     ctx.imageSmoothingEnabled=true;
-    for(let i=-1;i<Math.ceil(W/skyW)+2;i++){
-      ctx.drawImage(imgBg,0,0,bgW,skyH, skyScroll+i*skyW-skyW,0,skyW,groundY*0.5);
-    }
-    // Layer 2: Buildings (mid 40%) - medium scroll
-    const bldY=Math.floor(bgH*0.3), bldH=Math.floor(bgH*0.45);
-    const bldScaleY=groundY*0.55/bldH;
+    ctx.drawImage(imgBg,0,0,bgW,skyH, skyOff+(W-skyW)/2,0,skyW,skyDispH);
+    
+    // Layer 2: Buildings (bottom 50%) - medium scroll, tiles
+    const bldY=Math.floor(bgH*0.4), bldH=Math.floor(bgH*0.6);
+    const bldScaleY=groundY*0.5/bldH;
     const bldW=bgW*bldScaleY;
-    const bldScroll=((-camX*0.12)%bldW+bldW)%bldW;
+    const bldScroll=((-camX*0.15)%bldW+bldW)%bldW;
     for(let i=-1;i<Math.ceil(W/bldW)+2;i++){
-      ctx.drawImage(imgBg,0,bldY,bgW,bldH, bldScroll+i*bldW-bldW,groundY*0.25,bldW,groundY*0.55);
+      ctx.drawImage(imgBg,0,bldY,bgW,bldH, bldScroll+i*bldW-bldW,groundY*0.35,bldW,groundY*0.5);
     }
-    // Layer 3: Ground - fast scroll (use simple colored ground)
-    ctx.fillStyle='#1a1a2e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
-    // Ground detail lines
-    ctx.strokeStyle='rgba(255,255,255,0.06)';ctx.lineWidth=1;
-    for(let gx=(-camX*0.8)%20-20;gx<W+20;gx+=20){
-      ctx.beginPath();ctx.moveTo(gx,groundY);ctx.lineTo(gx+10,RUNNER_H);ctx.stroke();
-    }
+    // Layer 3: Thin ground strip
+    const gndH=RUNNER_H-groundY;
+    ctx.fillStyle='#1a1a2e';ctx.fillRect(0,groundY,W,gndH);
+    ctx.fillStyle='rgba(255,255,255,0.03)';ctx.fillRect(0,groundY,W,1);
   } else {
     // Fallback: グラデーション背景
     const grd=ctx.createLinearGradient(0,0,0,RUNNER_H);
