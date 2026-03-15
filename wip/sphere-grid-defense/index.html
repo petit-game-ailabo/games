@@ -168,7 +168,7 @@ function buildGrid(){
 
     // === SHAPE 1: Octagon (8 nodes) + inner square (4 nodes) ===
     // Center at r=5.8 along direction. Node 0 faces back toward entry.
-    const oc=5.8, or_=1.8, ir=0.8;
+    const oc=5.8, or_=1.8, ir=1.2;
     const o=[];
     for(let k=0;k<8;k++){
       const a=ba+Math.PI+k*Math.PI/4; // node 0 points back toward START
@@ -193,6 +193,12 @@ function buildGrid(){
     // Connect octagon to square at 2 points
     E(o[1],sq[0]); // octagon node 1 → square node 0 (entry to inner)
     E(sq[2],o[5]); // square node 2 → octagon node 5 (exit from inner)
+
+    // Dead-end spur off octagon sides
+    const ode1=SN(cx,cy,px,py,oc,or_+1.2,1,d,0,3);
+    E(o[2],ode1);
+    const ode2=SN(cx,cy,px,py,oc,-or_-1.2,1,d,1,3);
+    E(o[6],ode2);
 
     // T1 Skill: exit from octagon bottom
     const t1=PN(cx,cy,px,py,7.8,0,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
@@ -227,16 +233,41 @@ function buildGrid(){
     E(tri[1],o2[5]); // exit from triangle
 
     // T2 Skill
-    const t2=PN(cx,cy,px,py,13,0,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
+    const t2=PN(cx,cy,px,py,13.5,0,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
     E(o2[4],t2);
 
-    // --- Final stretch to T3 ---
-    const f1=SN(cx,cy,px,py,14,0.3,3,d,0,4);
-    const f2=SN(cx,cy,px,py,14.8,-0.2,3,d,1,4);
-    const t3=PN(cx,cy,px,py,16,0,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
-    E(t2,f1);E(f1,f2);E(f2,t3);
+    // --- T2→T3 zone: square structure + branches ---
+    const z1=SN(cx,cy,px,py,14.8,0,3,d,0,3);
+    E(t2,z1);
+    // Square (4 nodes) at r=16
+    const zc=16;
+    const zr=1.3;
+    const zs=[];
+    for(let k=0;k<4;k++){
+      const a=ba+Math.PI+k*Math.PI/2+Math.PI/4;
+      const s=d.stats[k%2]; const v=parseFloat((s.base*4).toFixed(2));
+      zs.push(N(cx*zc+Math.cos(a)*zr,cy*zc+Math.sin(a)*zr,'stat',{cost:3,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
+    }
+    E(zs[0],zs[1]);E(zs[1],zs[2]);E(zs[2],zs[3]);E(zs[3],zs[0]);
+    E(z1,zs[0]); // entry
+    // Dead-end branch off square
+    const zde=SN(cx,cy,px,py,16,2,3,d,0,5);
+    E(zs[1],zde);
+    // Another dead-end on other side
+    const zde2=SN(cx,cy,px,py,16,-2,3,d,1,5);
+    E(zs[3],zde2);
+    // Exit from square to connector
+    const z2=SN(cx,cy,px,py,17.5,0,3,d,1,4);
+    E(zs[2],z2);
+    // Short fork before T3
+    const z3L=SN(cx,cy,px,py,18.5,0.8,3,d,0,5);
+    const z3R=SN(cx,cy,px,py,18.5,-0.8,3,d,1,5);
+    E(z2,z3L);E(z2,z3R);
+    // T3 Skill
+    const t3=PN(cx,cy,px,py,19.5,0,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
+    E(z3L,t3);E(z3R,t3);
 
-    path.push(e0,e1,...o,...sq,t1,c1,...o2,...tri,t2,f1,f2,t3);
+    path.push(e0,e1,...o,...sq,t1,c1,...o2,...tri,t2,z1,...zs,z2,z3L,z3R,t3);
     path._t1=t1;path._t2=t2;path._t3=t3;
     paths[di]=path;
   }
@@ -279,7 +310,7 @@ function buildGrid(){
     for(let i=1;i<=numNodes;i++){
       const ratio=i/(numNodes+1);
       const ang=ang1+diff*ratio;
-      const r=17;
+      const r=21;
       const gx=Math.cos(ang)*r,gy=Math.sin(ang)*r;
       const stats=['atk','mhp','spd','cr','def','ls','dg','reg'][i%8];
       const vals=[1,5,0.05,0.01,1,0.02,0.02,0.1][i%8];
@@ -603,7 +634,7 @@ function drawHUD(casting){
   ctx.font='10px sans-serif';ctx.textAlign='left';
   ctx.fillStyle='#e57373';ctx.fillText(`ATK${Math.floor(casting?s.atk:gAtk())}`,6,y+32);
   ctx.fillStyle='#64b5f6';ctx.fillText(`DEF${casting?s.def:gDef()}`,52,y+32);
-  ctx.fillStyle='#4caf50';ctx.fillText(`HP${Math.floor(s.hp)}/${s.mhp}`,98,y+32);
+  ctx.fillStyle='#4caf50';ctx.fillText(`HP${Math.floor(s.hp)}/${Math.floor(s.mhp)}`,98,y+32);
   ctx.fillStyle='#66bb6a';ctx.fillText(`SPD${(casting?s.spd:gSpd()).toFixed(1)}`,178,y+32);
   // Row 3: Secondary stats
   ctx.fillStyle='#ffeb3b';ctx.fillText(`CRT${Math.floor(s.cr*100)}%`,6,y+50);
