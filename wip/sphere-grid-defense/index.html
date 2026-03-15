@@ -154,7 +154,7 @@ function buildGrid(){
       const gx=cx*r,gy=cy*r;
       const st=d.stats[r%2];
       const val=st.base*(1+Math.floor(r/3));
-      path.push(N(gx,gy,'stat',{cost:1,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
+      path.push(N(gx,gy,'stat',{cost:1,stat:st.s,val,label:`${st.s.toUpperCase()}+${typeof val==='number'&&val%1?parseFloat(val.toFixed(2)):val}`,cat:d.cat}));
     }
     // Tier1 Skill at r=6
     const t1n=N(cx*6,cy*6,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
@@ -165,7 +165,7 @@ function buildGrid(){
       const gx=cx*r,gy=cy*r;
       const st=d.stats[r%2];
       const val=st.base*(2+Math.floor(r/4));
-      path.push(N(gx,gy,'stat',{cost:2,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
+      path.push(N(gx,gy,'stat',{cost:2,stat:st.s,val,label:`${st.s.toUpperCase()}+${typeof val==='number'&&val%1?parseFloat(val.toFixed(2)):val}`,cat:d.cat}));
     }
     // Tier2 Skill at r=11
     const t2n=N(cx*11,cy*11,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
@@ -176,7 +176,7 @@ function buildGrid(){
       const gx=cx*r,gy=cy*r;
       const st=d.stats[r%2];
       const val=st.base*(3+Math.floor(r/5));
-      path.push(N(gx,gy,'stat',{cost:3,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
+      path.push(N(gx,gy,'stat',{cost:3,stat:st.s,val,label:`${st.s.toUpperCase()}+${typeof val==='number'&&val%1?parseFloat(val.toFixed(2)):val}`,cat:d.cat}));
     }
     // Tier3 Skill at r=16
     const t3n=N(cx*16,cy*16,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
@@ -201,25 +201,28 @@ function buildGrid(){
       const gx=cx*r,gy=cy*r;
       const useStat=r%2===0?dirs[h.base1].stats[0]:dirs[h.base2].stats[0];
       const val=useStat.base*(1+Math.floor(r/4));
-      hpath.push(N(gx,gy,'stat',{cost:2,stat:useStat.s,val,label:`${useStat.s.toUpperCase()}+${val}`,cat:h.cat}));
+      hpath.push(N(gx,gy,'stat',{cost:2,stat:useStat.s,val,label:`${useStat.s.toUpperCase()}+${typeof val==='number'&&val%1?parseFloat(val.toFixed(2)):val}`,cat:h.cat}));
     }
     // Tier2 Skill at r=12
     const ht2=N(cx*12,cy*12,'skill',{cost:8,skill:h.t2,label:h.t2l,cat:h.cat,tier:2,icon:h.t2i,desc:h.t2d});
     hpath.push(ht2);
     
-    // Connect: base1 mid → gate1 → hpath[0] ← gate2 ← base2 mid
-    // hpath[0] only connects to gate1 and gate2, so BOTH gates must be reached
-    // gate1 requires base1 path, gate2 requires base2 path
-    // But since canUL checks any neighbor, we use a chain:
-    // base1[4] → gate1 → hpath[0] → hpath[1] → ... → ht2
-    // base2[4] → gate2 → hpath[2] (mid-point)
-    // This way you need base1 to start, but base2 to reach the skill
+    // Gate nodes between base paths and hybrid path
+    // gate1 is between base1 and hybrid direction
+    // gate2 is between base2 and hybrid direction
     const p1=paths[h.base1];
     const p2=paths[h.base2];
-    const gAng1=(dirs[h.base1].ang+h.ang)/2*Math.PI/360;
-    const gAng2=(dirs[h.base2].ang+h.ang)/2*Math.PI/360;
-    const gate1=N(Math.cos(gAng1)*6.5,Math.sin(gAng1)*6.5,'stat',{cost:2,stat:dirs[h.base1].stats[0].s,val:dirs[h.base1].stats[0].base,label:'→'+h.name,cat:h.cat});
-    const gate2=N(Math.cos(gAng2)*6.5,Math.sin(gAng2)*6.5,'stat',{cost:2,stat:dirs[h.base2].stats[0].s,val:dirs[h.base2].stats[0].base,label:'→'+h.name,cat:h.cat});
+    const hAngRad=h.ang*Math.PI/180;
+    const b1AngRad=dirs[h.base1].ang*Math.PI/180;
+    const b2AngRad=dirs[h.base2].ang*Math.PI/180;
+    // Gate1: midpoint between base1 direction and hybrid direction, at r=6.5
+    const g1a=(b1AngRad+hAngRad)/2;
+    const g2a=(b2AngRad+hAngRad)/2;
+    const gate1=N(Math.cos(g1a)*6.5,Math.sin(g1a)*6.5,'stat',{cost:2,stat:dirs[h.base1].stats[0].s,val:dirs[h.base1].stats[0].base,label:'→'+h.name,cat:h.cat});
+    const gate2=N(Math.cos(g2a)*6.5,Math.sin(g2a)*6.5,'stat',{cost:2,stat:dirs[h.base2].stats[0].s,val:dirs[h.base2].stats[0].base,label:'→'+h.name,cat:h.cat});
+    // base1's mid-node → gate1 → hpath start
+    // base2's mid-node → gate2 → hpath midpoint
+    // So you need BOTH paths to reach the skill
     E(p1[4],gate1);E(gate1,hpath[0]);
     E(p2[4],gate2);E(gate2,hpath[Math.min(2,hpath.length-1)]);
     for(let i=0;i<hpath.length-1;i++)E(hpath[i],hpath[i+1]);
@@ -664,7 +667,7 @@ C.addEventListener('touchstart',e=>{e.preventDefault();if(ac.state==='suspended'
 C.addEventListener('touchmove',e=>{e.preventDefault();
   if(pinching&&e.touches.length===2){
     const d=pinchDist(e);if(gs.pinchDist>0){
-      gs.zoom=Math.max(0.3,Math.min(3,gs.zoomStart*(d/gs.pinchDist)));
+      gs.zoom=Math.max(0.15,Math.min(4,gs.zoomStart*(d/gs.pinchDist)));
       posGrid();
     }
     return;
@@ -677,7 +680,7 @@ C.addEventListener('touchend',e=>{e.preventDefault();
   if(!tm_&&Date.now()-ts<300){const r=C.getBoundingClientRect();if(e.changedTouches&&e.changedTouches[0]){const p={x:e.changedTouches[0].clientX-r.left,y:e.changedTouches[0].clientY-r.top};if(p.y>GRID_Y)gridTap(p);}}
 },{passive:false});
 C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
-  gs.zoom=Math.max(0.3,Math.min(3,gs.zoom*(e.deltaY>0?0.9:1.1)));posGrid();
+  gs.zoom=Math.max(0.15,Math.min(4,gs.zoom*(e.deltaY>0?0.9:1.1)));posGrid();
 },{passive:false});
 C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();return;}if(p.y>GRID_Y)gridTap(p);});
 
