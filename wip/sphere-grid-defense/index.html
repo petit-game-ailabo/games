@@ -51,6 +51,7 @@ let rx=0,rd=0,best=0,alive=true,dTimer=0;
 let enemies=[],parts=[],dnums=[];
 let sp=0,runs=0,kills=0,atkCd=0,atkCdMax=50,fight=false,camX=0;
 let bgs=[];
+let cleared=false,endless=false,lastBoss=0;
 
 // Cast
 let castQ=[],castTxts=[],castT=0;
@@ -318,19 +319,19 @@ function buildGrid(){
     for(const ht of hybT3s) E(ht,t4);
   }
 
-  // ===== ★3スキル周辺に行き止まりノード追加 (後半らしい%アップ系) =====
+  // ===== ★2スキル付近に行き止まりノード追加 (CRT/CRD/吸血/回避) =====
   for(let di=0;di<dirs.length;di++){
     const d=dirs[di];
     const ba=d.ang*Math.PI/180;
     const cx=Math.cos(ba),cy=Math.sin(ba);
     const px=-Math.sin(ba),py=Math.cos(ba);
-    // Dead-ends near T2 area (r=18~20, ±perp)
-    const de1=N(cx*19+px*2.5,cy*19+py*2.5,'stat',{cost:5,stat:'cr',val:0.15,label:'CRT+15%',cat:d.cat});
-    const de2=N(cx*20+px*3,cy*20+py*3,'stat',{cost:5,stat:'cd',val:0.5,label:'CRD+50%',cat:d.cat});
-    E(paths[di]._t2,de1);E(de1,de2);
-    const de3=N(cx*19-px*2.5,cy*19-py*2.5,'stat',{cost:5,stat:'ls',val:0.15,label:'吸血+15%',cat:d.cat});
-    const de4=N(cx*20-px*3,cy*20-py*3,'stat',{cost:5,stat:'dg',val:0.15,label:'回避+15%',cat:d.cat});
-    E(paths[di]._t2,de3);E(de3,de4);
+    // Dead-ends near T2 area (r=15付近、★2スキル手前)
+    const de1=N(cx*15+px*2.5,cy*15+py*2.5,'stat',{cost:5,stat:'cr',val:0.15,label:'CRT+15%',cat:d.cat});
+    const de2=N(cx*16+px*3,cy*16+py*3,'stat',{cost:5,stat:'cd',val:0.5,label:'CRD+50%',cat:d.cat});
+    E(paths[di]._t1,de1);E(de1,de2);
+    const de3=N(cx*15-px*2.5,cy*15-py*2.5,'stat',{cost:5,stat:'ls',val:0.15,label:'吸血+15%',cat:d.cat});
+    const de4=N(cx*16-px*3,cy*16-py*3,'stat',{cost:5,stat:'dg',val:0.15,label:'回避+15%',cat:d.cat});
+    E(paths[di]._t1,de3);E(de3,de4);
     // Dead-ends near T3/T4 area
     const de5=N(cx*24+px*1.5,cy*24+py*1.5,'stat',{cost:6,stat:'atk',val:8,label:'ATK+8',cat:d.cat});
     E(paths[di]._t3,de5);
@@ -359,7 +360,7 @@ function canUL(id){
   return false;
 }
 
-// Skills
+// Skills (回復系・バッファー系に攻撃手段を追加)
 const SK={
   powerStrike:{cd:300,dm:3,h:1},
   battleMaster:{cd:600,dm:6,h:1,aoe:1},
@@ -367,14 +368,14 @@ const SK={
   ironWall:{cd:500,bf:'inv',bd:180},
   guardian:{cd:700,bf:'inv',bd:300,heal:0.5},
   immortal:{cd:1200,bf:'inv',bd:600,heal:1,rboost:5},
-  blessing:{cd:400,heal:0.3,bf:'reg',bd:200},
-  archbishop:{cd:700,heal:0.6,bf:'reg',bd:400},
-  holyNova:{cd:1000,heal:1,bf:'reg',bd:600,aoe:1},
+  blessing:{cd:400,heal:0.3,bf:'reg',bd:200,dm:2,h:1},
+  archbishop:{cd:700,heal:0.6,bf:'reg',bd:400,dm:3,h:1,aoe:1},
+  holyNova:{cd:1000,heal:1,bf:'reg',bd:600,dm:5,h:1,aoe:1},
   critSlash:{cd:400,dm:1,h:3,fc:1},
   archmage:{cd:700,dm:4,h:1,aoe:1,fc:1},
   eclipse:{cd:1000,dm:3,h:7,fc:1},
   haste:{cd:400,bf:'hst',bd:300},
-  tactician:{cd:700,bf:'hst',bd:500,atkboost:0.3},
+  tactician:{cd:700,bf:'hst',bd:500,atkboost:0.3,dm:2,h:1},
   transcend:{cd:1500,bf:'trs',bd:1200},
   drain:{cd:400,dm:4,h:1,hp2:0.5},
   hexMaster:{cd:700,dm:2,h:3,debuff:1},
@@ -473,14 +474,16 @@ function initRun(){
   atkCd=0;fight=false;buffs={};
   atkCdMax=Math.max(15,50-st.spd*8);
   groundY=RUNNER_H*GYR;
-  genBg();runs++;
+  genBg();runs++;cleared=false;endless=false;lastBoss=0;
   for(const s of learned)s.cd=0;
 }
 
 function genBg(){bgs=[];for(let i=0;i<60;i++)bgs.push({x:i*120+Math.random()*60,w:40+Math.random()*50,h:20+Math.random()*60,c:`hsl(${220+Math.random()*30},15%,${10+Math.random()*8}%)`});}
 
 function spawnE(x){
-  const t=Math.floor(rd/500),tp=['slime','goblin','knight','demon'][Math.min(t,3)],sc=1+t*0.25;
+  const t=Math.floor(rd/500),tp=['slime','goblin','knight','demon'][Math.min(t,3)];
+  // 距離に応じてスケーリング（滑らか）
+  const sc=1+Math.floor(rd/1000)*0.4+Math.min(rd/100,20)*0.05;
   let hp,ak,sz,c,em;
   switch(tp){
     case'slime':hp=10*sc;ak=3*sc;sz=10;c='#4caf50';em='🟢';break;
@@ -488,10 +491,21 @@ function spawnE(x){
     case'knight':hp=45*sc;ak=9*sc;sz=13;c='#78909c';em='🛡';break;
     case'demon':hp=80*sc;ak=14*sc;sz=14;c='#e53935';em='👹';break;
   }
-  enemies.push({x,y:groundY,hp,mhp:hp,ak,sz,c,em,tp,alive:true,hcd:0,fl:0});
+  enemies.push({x,y:groundY,hp,mhp:hp,ak,sz,c,em,tp,alive:true,hcd:0,fl:0,boss:false});
+}
+
+function spawnBoss(dist){
+  const lvl=Math.floor(dist/1000);
+  const specs=[
+    {hp:80,ak:8},{hp:200,ak:15},{hp:500,ak:25},{hp:1000,ak:40},{hp:2000,ak:60},
+    {hp:3500,ak:80},{hp:5000,ak:100},{hp:8000,ak:130},{hp:12000,ak:160},{hp:20000,ak:200}
+  ];
+  const s=specs[Math.min(lvl-1,9)];
+  enemies.push({x:rx+W*0.75,y:groundY,hp:s.hp,mhp:s.hp,ak:s.ak,sz:20,c:'#ffd700',em:'👑',tp:'boss',alive:true,hcd:0,fl:0,boss:true,lvl});
 }
 
 function updRun(){
+  if(cleared&&!endless)return; // クリア画面表示中
   if(!alive){dTimer--;if(dTimer<=0)startCast();return;}
   updBuf();
   for(const s of learned){
@@ -512,6 +526,18 @@ function updRun(){
   if(!fight){const spd=gSpd();rx+=spd;rd+=spd;if(rd>best)best=rd;}
   camX=rx-W*0.25;
   if(st.reg>0)st.hp=Math.min(st.hp+st.reg*0.016,st.mhp);
+  
+  // ボス出現チェック (1000m毎)
+  const bDist=Math.floor(rd/1000)*1000;
+  if(bDist>lastBoss&&bDist>=1000&&bDist<=10000&&!enemies.some(e=>e.boss&&e.alive)){
+    lastBoss=bDist;spawnBoss(bDist);
+  }
+  
+  // 10000m到達でクリア
+  if(rd>=10000&&!cleared&&!endless){
+    if(!enemies.some(e=>e.alive&&e.boss)){cleared=true;return;}
+  }
+  
   if(Math.random()<1/Math.max(150,400-rd*0.06))spawnE(rx+W*0.9+Math.random()*150);
   if(rd%350<gSpd()+0.5)spawnE(rx+W*0.8+Math.random()*80);
   atkCd--;
@@ -551,8 +577,21 @@ function hitE(t,d,cr){
   const ex=t.x-camX;
   dnums.push({x:ex,y:t.y-t.sz-5,t:cr?`💥${d}`:`${d}`,c:cr?'#ffeb3b':'#fff',l:30,vy:-1.2});
   sfxHit();
-  if(t.hp<=0){t.alive=false;sp++;kills++;sfxKill();
-    for(let j=0;j<6;j++)parts.push({x:ex,y:t.y,vx:(Math.random()-0.5)*3,vy:-Math.random()*3,c:t.c,l:20,s:3});}
+  if(t.hp<=0){
+    t.alive=false;
+    // SP獲得量調整（通常敵は距離/500毎に+1、ボスはレベル×3）
+    if(t.boss){
+      const bsp=t.lvl*3;
+      sp+=bsp;
+      dnums.push({x:ex,y:t.y-t.sz-25,t:`👑 +${bsp}SP`,c:'#ffd700',l:60,vy:-2});
+    } else {
+      const gsp=1+Math.floor(rd/500);
+      sp+=gsp;
+    }
+    kills++;sfxKill();
+    const pcnt=t.boss?12:6;
+    for(let j=0;j<pcnt;j++)parts.push({x:ex,y:t.y,vx:(Math.random()-0.5)*(t.boss?5:3),vy:-Math.random()*(t.boss?5:3),c:t.c,l:t.boss?40:20,s:t.boss?5:3});
+  }
 }
 
 function exeSkill(s,k){
@@ -622,9 +661,14 @@ function drawRun(){
   ctx.fillStyle='#1a237e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
   for(const e of enemies){
     if(!e.alive)continue;const ex=e.x-camX;if(ex<-20||ex>W+20)continue;
-    ctx.font=`${e.sz*1.5}px sans-serif`;ctx.textAlign='center';ctx.fillText(e.em,ex,e.y);
+    ctx.font=`${e.sz*(e.boss?1.8:1.5)}px sans-serif`;ctx.textAlign='center';ctx.fillText(e.em,ex,e.y);
     if(e.fl>0){ctx.globalAlpha=0.4;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ex,e.y-e.sz*0.5,e.sz,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;}
-    if(e.hp<e.mhp){const bw=e.sz*2;ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(ex-bw/2,e.y-e.sz*1.8,bw,3);ctx.fillStyle=e.hp/e.mhp>0.5?'#4caf50':'#e53935';ctx.fillRect(ex-bw/2,e.y-e.sz*1.8,bw*(e.hp/e.mhp),3);}
+    if(e.hp<e.mhp){
+      const bw=e.sz*(e.boss?2.5:2);
+      const bh=e.boss?5:3;
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(ex-bw/2,e.y-e.sz*(e.boss?2:1.8),bw,bh);
+      ctx.fillStyle=e.hp/e.mhp>0.5?'#4caf50':'#e53935';ctx.fillRect(ex-bw/2,e.y-e.sz*(e.boss?2:1.8),bw*(e.hp/e.mhp),bh);
+    }
   }
   const px=W*0.25;
   if(alive){
@@ -641,6 +685,29 @@ function drawRun(){
   for(const d of dnums){ctx.globalAlpha=Math.min(1,d.l/20);ctx.fillStyle=d.c;ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(d.t,d.x,d.y);}ctx.globalAlpha=1;
   ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='12px sans-serif';ctx.textAlign='right';ctx.fillText(`${Math.floor(rd)}m`,W-5,12);
   ctx.restore();
+  
+  // クリア画面
+  if(cleared&&!endless){
+    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#ffd700';ctx.font='bold 36px sans-serif';ctx.textAlign='center';
+    ctx.fillText('🎉 CLEAR! 🎉',W/2,H*0.35);
+    
+    // ランク計算
+    let rank='D';
+    if(runs<=5)rank='S';
+    else if(runs<=10)rank='A';
+    else if(runs<=20)rank='B';
+    else if(runs<=50)rank='C';
+    
+    ctx.fillStyle='#fff';ctx.font='bold 24px sans-serif';
+    ctx.fillText(`Rank: ${rank}`,W/2,H*0.45);
+    ctx.font='18px sans-serif';
+    ctx.fillText(`Best: ${Math.floor(best)}m in ${runs} runs`,W/2,H*0.53);
+    
+    ctx.fillStyle='rgba(100,181,246,0.8)';rr(ctx,W/2-90,H*0.62,180,50,8);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 16px sans-serif';
+    ctx.fillText('Tap for Endless Mode',W/2,H*0.62+32);
+  }
 }
 
 function drawHUD(casting){
@@ -788,6 +855,8 @@ C.addEventListener('touchmove',e=>{e.preventDefault();
 C.addEventListener('touchend',e=>{e.preventDefault();
   if(pinching){if(e.touches.length<2)pinching=false;return;}
   gs.drag=false;if(state===ST.TITLE){startG();return;}
+  // クリア画面タップでエンドレスモード移行
+  if(cleared&&!endless){endless=true;cleared=false;return;}
   if(!tm_&&Date.now()-ts<300){const r=C.getBoundingClientRect();if(e.changedTouches&&e.changedTouches[0]){const p={x:e.changedTouches[0].clientX-r.left,y:e.changedTouches[0].clientY-r.top};if(p.y>GRID_Y)gridTap(p);}}
 },{passive:false});
 C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
@@ -797,7 +866,9 @@ C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
   gs.x=(gs.x-p.x)*ratio+p.x;gs.y=(gs.y-p.y)*ratio+p.y;
   posGrid();
 },{passive:false});
-C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();return;}if(p.y>GRID_Y)gridTap(p);});
+C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();return;}
+  if(cleared&&!endless){endless=true;cleared=false;return;}
+  if(p.y>GRID_Y)gridTap(p);});
 
 function startG(){state=ST.PLAY;buildGrid();resize();initRun();}
 
