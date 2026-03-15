@@ -69,51 +69,75 @@ function buildGrid(){
   // ===== CENTER START =====
   const s0=N(0,0,'start',{unlocked:true,label:'START'});
 
-  // Inner ring (8 nodes around start)
+  // Inner ring (8 nodes around start, aligned to dir angles)
+  const dirAngs=[270,315,0,45,90,135,180,225]; // match dirs order
+  const innerStats=[
+    {stat:'atk',val:1,label:'ATK+1',cat:'attack'},
+    {stat:'def',val:1,label:'DEF+1',cat:'defense'},
+    {stat:'mhp',val:5,label:'HP+5',cat:'heal'},
+    {stat:'cr',val:0.03,label:'CRT+3%',cat:'magic'},
+    {stat:'spd',val:0.08,label:'SPD+',cat:'buffer'},
+    {stat:'ls',val:0.03,label:'吸血+3%',cat:'debuffer'},
+    {stat:'dg',val:0.04,label:'回避+4%',cat:'evade'},
+    {stat:'mhp',val:5,label:'HP+5',cat:'counter'}
+  ];
   const inner=[];
   for(let i=0;i<8;i++){
-    const ang=i*Math.PI/4;
+    const ang=dirAngs[i]*Math.PI/180;
     const gx=Math.cos(ang)*1.8,gy=Math.sin(ang)*1.8;
-    const stats=[
-      {stat:'atk',val:1,label:'ATK+1',cat:'attack'},
-      {stat:'def',val:1,label:'DEF+1',cat:'defense'},
-      {stat:'mhp',val:5,label:'HP+5',cat:'heal'},
-      {stat:'cr',val:0.03,label:'CRT+3%',cat:'magic'},
-      {stat:'spd',val:0.08,label:'SPD+',cat:'buffer'},
-      {stat:'ls',val:0.03,label:'吸血+3%',cat:'debuffer'},
-      {stat:'dg',val:0.04,label:'回避+4%',cat:'evade'},
-      {stat:'mhp',val:5,label:'HP+5',cat:'attack'}
-    ][i];
-    const nid=N(gx,gy,'stat',{cost:1,...stats});
+    const nid=N(gx,gy,'stat',{cost:1,...innerStats[i]});
     inner.push(nid);
     E(s0,nid);
   }
-  // Connect inner ring
   for(let i=0;i<8;i++)E(inner[i],inner[(i+1)%8]);
 
   // ===== 16方向の定義 =====
   // 8つの基本職 (0, 45, 90, 135, 180, 225, 270, 315度)
   const dirs=[
-    {name:'攻撃',ang:270,cat:'attack',stats:[{s:'atk',base:1},{s:'mhp',base:8}],t1:'powerStrike',t2:'battleMaster',t3:'ragnarok'},
-    {name:'防御',ang:315,cat:'defense',stats:[{s:'def',base:1},{s:'mhp',base:10}],t1:'ironWall',t2:'guardian',t3:'immortal'},
-    {name:'回復',ang:0,cat:'heal',stats:[{s:'reg',base:0.2},{s:'mhp',base:8}],t1:'blessing',t2:'archbishop',t3:'holyNova'},
-    {name:'攻撃魔法',ang:45,cat:'magic',stats:[{s:'cr',base:0.04},{s:'cd',base:0.15}],t1:'critSlash',t2:'archmage',t3:'eclipse'},
-    {name:'バッファー',ang:90,cat:'buffer',stats:[{s:'spd',base:0.1},{s:'dg',base:0.04}],t1:'haste',t2:'tactician',t3:'transcend'},
-    {name:'デバッファー',ang:135,cat:'debuffer',stats:[{s:'ls',base:0.04},{s:'reg',base:0.2}],t1:'drain',t2:'hexMaster',t3:'soulBurst'},
-    {name:'回避',ang:180,cat:'evade',stats:[{s:'dg',base:0.05},{s:'spd',base:0.12}],t1:'gale',t2:'phantom',t3:'mirageWalk'},
-    {name:'反撃',ang:225,cat:'counter',stats:[{s:'atk',base:1},{s:'cr',base:0.03}],t1:'execute',t2:'counter',t3:'devastate'}
+    {name:'攻撃',ang:270,cat:'attack',stats:[{s:'atk',base:1},{s:'mhp',base:8}],
+      t1:'powerStrike',t1l:'Brave Strike',t1i:'⚔️',t1d:'ATK×3',
+      t2:'battleMaster',t2l:'Battle Master',t2i:'👊',t2d:'ATK×6全体',
+      t3:'ragnarok',t3l:'Ragnarök',t3i:'💀',t3d:'ATK×8殲滅'},
+    {name:'防御',ang:315,cat:'defense',stats:[{s:'def',base:1},{s:'mhp',base:10}],
+      t1:'ironWall',t1l:'Infinity Wall',t1i:'🛡️',t1d:'3秒完全防御',
+      t2:'guardian',t2l:'Guardian',t2i:'🏛️',t2d:'DEF2倍+5秒無敵',
+      t3:'immortal',t3l:'Immortal',t3i:'🏰',t3d:'10秒無敵+再生'},
+    {name:'回復',ang:0,cat:'heal',stats:[{s:'reg',base:0.2},{s:'mhp',base:8}],
+      t1:'blessing',t1l:'Blessing',t1i:'💚',t1d:'HP30%回復',
+      t2:'archbishop',t2l:'Archbishop',t2i:'✝️',t2d:'HP60%回復+再生',
+      t3:'holyNova',t3l:'Holy Nova',t3i:'🌟',t3d:'HP全回復+再生MAX'},
+    {name:'攻撃魔法',ang:45,cat:'magic',stats:[{s:'cr',base:0.04},{s:'cd',base:0.15}],
+      t1:'critSlash',t1l:'Void Slash',t1i:'⚡',t1d:'確定CRT×3連',
+      t2:'archmage',t2l:'Archmage',t2i:'🔮',t2d:'CRT×4全体',
+      t3:'eclipse',t3l:'Eclipse Zero',t3i:'🌑',t3d:'7連CRD×3'},
+    {name:'バッファー',ang:90,cat:'buffer',stats:[{s:'spd',base:0.1},{s:'dg',base:0.04}],
+      t1:'haste',t1l:'Haste',t1i:'💨',t1d:'5秒速度2倍',
+      t2:'tactician',t2l:'Tactician',t2i:'🎯',t2d:'全能力UP',
+      t3:'transcend',t3l:'Transcendence',t3i:'✨',t3d:'全ステ2倍20秒'},
+    {name:'デバッファー',ang:135,cat:'debuffer',stats:[{s:'ls',base:0.04},{s:'reg',base:0.2}],
+      t1:'drain',t1l:'Soul Drain',t1i:'💀',t1d:'大ダメ+HP回復',
+      t2:'hexMaster',t2l:'Hex Master',t2i:'☠️',t2d:'3連呪撃',
+      t3:'soulBurst',t3l:'Abyss Nova',t3i:'💥',t3d:'HP70%消費→超火力'},
+    {name:'回避',ang:180,cat:'evade',stats:[{s:'dg',base:0.05},{s:'spd',base:0.12}],
+      t1:'gale',t1l:'Gale Force',t1i:'🌪️',t1d:'速度3倍+回避UP',
+      t2:'phantom',t2l:'Phantom',t2i:'👻',t2d:'速度5倍+回避80%',
+      t3:'mirageWalk',t3l:'Mirage Walk',t3i:'🌫️',t3d:'超回避+超速度'},
+    {name:'反撃',ang:225,cat:'counter',stats:[{s:'atk',base:1},{s:'cr',base:0.03}],
+      t1:'execute',t1l:'Execute',t1i:'🗡️',t1d:'確定CRT×2',
+      t2:'counter',t2l:'Counter',t2i:'⚡',t2d:'反撃ATK×4',
+      t3:'devastate',t3l:'Devastate',t3i:'💫',t3d:'ATK×10確定CRT'}
   ];
   
   // 8つの組み合わせ職 (中間角度: 22.5, 67.5, 112.5, ...)
   const hybrid=[
-    {name:'重戦士',ang:292.5,cat:'berserker',base1:0,base2:1,t2:'berserker'},
-    {name:'パラディン',ang:337.5,cat:'paladin',base1:1,base2:2,t2:'aegis'},
-    {name:'賢者',ang:22.5,cat:'sage',base1:2,base2:3,t2:'sageBlast'},
-    {name:'黒魔術士',ang:67.5,cat:'darkmage',base1:3,base2:4,t2:'darkPact'},
-    {name:'巫女',ang:112.5,cat:'priestess',base1:4,base2:5,t2:'sanctify'},
-    {name:'盗賊',ang:157.5,cat:'rogue',base1:5,base2:6,t2:'assassinate'},
-    {name:'忍者',ang:202.5,cat:'ninja',base1:6,base2:7,t2:'ninjaBlade'},
-    {name:'狂戦士',ang:247.5,cat:'warlord',base1:7,base2:0,t2:'warlord'}
+    {name:'重戦士',ang:292.5,cat:'berserker',base1:0,base2:1,t2:'berserker',t2l:'Juggernaut',t2i:'⚔️',t2d:'ATK×5全体'},
+    {name:'パラディン',ang:337.5,cat:'paladin',base1:1,base2:2,t2:'aegis',t2l:'Paladin',t2i:'⚜️',t2d:'無敵+全回復'},
+    {name:'賢者',ang:22.5,cat:'sage',base1:2,base2:3,t2:'sageBlast',t2l:'Sage',t2i:'📖',t2d:'魔撃+回復'},
+    {name:'黒魔術士',ang:67.5,cat:'darkmage',base1:3,base2:4,t2:'darkPact',t2l:'Warlock',t2i:'🦇',t2d:'HP半減→ATK3倍'},
+    {name:'巫女',ang:112.5,cat:'priestess',base1:4,base2:5,t2:'sanctify',t2l:'Priestess',t2i:'🙏',t2d:'回復+再生バフ'},
+    {name:'盗賊',ang:157.5,cat:'rogue',base1:5,base2:6,t2:'assassinate',t2l:'Assassin',t2i:'🎭',t2d:'CRT7倍'},
+    {name:'忍者',ang:202.5,cat:'ninja',base1:6,base2:7,t2:'ninjaBlade',t2l:'Ninja',t2i:'🥷',t2d:'5連CRT'},
+    {name:'狂戦士',ang:247.5,cat:'warlord',base1:7,base2:0,t2:'warlord',t2l:'Warlord',t2i:'🔥',t2d:'AOE+ATKバフ'}
   ];
 
   const paths=[];
@@ -133,7 +157,7 @@ function buildGrid(){
       path.push(N(gx,gy,'stat',{cost:1,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
     }
     // Tier1 Skill at r=6
-    const t1n=N(cx*6,cy*6,'skill',{cost:3,skill:d.t1,label:d.t1,cat:d.cat,tier:1,icon:'⚔️',desc:'Tier1'});
+    const t1n=N(cx*6,cy*6,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
     path.push(t1n);
     
     // Tier2: 7-10ユニット
@@ -144,7 +168,7 @@ function buildGrid(){
       path.push(N(gx,gy,'stat',{cost:2,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
     }
     // Tier2 Skill at r=11
-    const t2n=N(cx*11,cy*11,'skill',{cost:6,skill:d.t2,label:d.t2,cat:d.cat,tier:2,icon:'✨',desc:'Tier2'});
+    const t2n=N(cx*11,cy*11,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
     path.push(t2n);
     
     // Tier3: 12-15ユニット
@@ -155,7 +179,7 @@ function buildGrid(){
       path.push(N(gx,gy,'stat',{cost:3,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
     }
     // Tier3 Skill at r=16
-    const t3n=N(cx*16,cy*16,'skill',{cost:9,skill:d.t3,label:d.t3,cat:d.cat,tier:3,icon:'💫',desc:'Tier3'});
+    const t3n=N(cx*16,cy*16,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
     path.push(t3n);
     
     // Connect path
@@ -180,19 +204,25 @@ function buildGrid(){
       hpath.push(N(gx,gy,'stat',{cost:2,stat:useStat.s,val,label:`${useStat.s.toUpperCase()}+${val}`,cat:h.cat}));
     }
     // Tier2 Skill at r=12
-    const ht2=N(cx*12,cy*12,'skill',{cost:6,skill:h.t2,label:h.t2,cat:h.cat,tier:2,icon:'🔥',desc:'Hybrid T2'});
+    const ht2=N(cx*12,cy*12,'skill',{cost:8,skill:h.t2,label:h.t2l,cat:h.cat,tier:2,icon:h.t2i,desc:h.t2d});
     hpath.push(ht2);
     
-    // Connect hybrid path to adjacent base paths
+    // Connect: base1 mid → gate1 → hpath[0] ← gate2 ← base2 mid
+    // hpath[0] only connects to gate1 and gate2, so BOTH gates must be reached
+    // gate1 requires base1 path, gate2 requires base2 path
+    // But since canUL checks any neighbor, we use a chain:
+    // base1[4] → gate1 → hpath[0] → hpath[1] → ... → ht2
+    // base2[4] → gate2 → hpath[2] (mid-point)
+    // This way you need base1 to start, but base2 to reach the skill
     const p1=paths[h.base1];
     const p2=paths[h.base2];
-    // Connect from inner ring midpoint
-    const mid1=inner[h.base1],mid2=inner[h.base2];
-    E(mid1,hpath[0]);E(mid2,hpath[0]);
+    const gAng1=(dirs[h.base1].ang+h.ang)/2*Math.PI/360;
+    const gAng2=(dirs[h.base2].ang+h.ang)/2*Math.PI/360;
+    const gate1=N(Math.cos(gAng1)*6.5,Math.sin(gAng1)*6.5,'stat',{cost:2,stat:dirs[h.base1].stats[0].s,val:dirs[h.base1].stats[0].base,label:'→'+h.name,cat:h.cat});
+    const gate2=N(Math.cos(gAng2)*6.5,Math.sin(gAng2)*6.5,'stat',{cost:2,stat:dirs[h.base2].stats[0].s,val:dirs[h.base2].stats[0].base,label:'→'+h.name,cat:h.cat});
+    E(p1[4],gate1);E(gate1,hpath[0]);
+    E(p2[4],gate2);E(gate2,hpath[Math.min(2,hpath.length-1)]);
     for(let i=0;i<hpath.length-1;i++)E(hpath[i],hpath[i+1]);
-    // Connect to base paths at mid tier
-    if(p1.length>4)E(hpath[2],p1[4]);
-    if(p2.length>4)E(hpath[2],p2[4]);
   }
 
   // ===== 最外周リング (Tier3同士を繋ぐ高コストリング) =====
