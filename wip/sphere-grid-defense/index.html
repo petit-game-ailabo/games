@@ -484,8 +484,9 @@ function genBg(){bgs=[];for(let i=0;i<60;i++)bgs.push({x:i*120+Math.random()*60,
 
 function spawnE(x){
   const t=Math.floor(rd/500),tp=['slime','goblin','knight','demon'][Math.min(t,3)];
-  // 距離に応じてスケーリング（滑らか）
-  const sc=1+Math.floor(rd/1000)*0.4+Math.min(rd/100,20)*0.05;
+  // 距離に応じてスケーリング（エンドレスは指数的に強化）
+  let sc=1+Math.floor(rd/1000)*0.4+Math.min(rd/100,20)*0.05;
+  if(endless)sc*=1+Math.pow((rd-10000)/3000,1.5); // エンドレスは急激に強化
   let hp,ak,sz,c,em;
   switch(tp){
     case'slime':hp=10*sc;ak=3*sc;sz=10;c='#4caf50';em='🟢';break;
@@ -502,7 +503,13 @@ function spawnBoss(dist){
     {hp:80,ak:8},{hp:200,ak:15},{hp:500,ak:25},{hp:1000,ak:40},{hp:2000,ak:60},
     {hp:3500,ak:80},{hp:5000,ak:100},{hp:8000,ak:130},{hp:12000,ak:160},{hp:20000,ak:200}
   ];
-  const s=specs[Math.min(lvl-1,9)];
+  let s;
+  if(lvl<=10)s=specs[Math.min(lvl-1,9)];
+  else{
+    // エンドレスボス: 指数的に強化
+    const m=Math.pow(1.5,lvl-10);
+    s={hp:Math.floor(20000*m),ak:Math.floor(200*m)};
+  }
   enemies.push({x:rx+W*0.75,y:groundY,hp:s.hp,mhp:s.hp,ak:s.ak,sz:20,c:'#ffd700',em:'👑',tp:'boss',alive:true,hcd:0,fl:0,boss:true,lvl});
 }
 
@@ -543,10 +550,10 @@ function updRun(){
     if(!enemies.some(e=>e.alive&&e.boss)){cleared=true;clearTime=Date.now();alive=false;dTimer=9999;return;}
   }
   
-  // 敵出現率（エンドレスモードは2倍）
-  const spawnMul=endless?2:1;
-  if(Math.random()<spawnMul/Math.max(80,400-rd*0.08))spawnE(rx+W*0.9+Math.random()*150);
-  if(rd%250<gSpd()+0.5)spawnE(rx+W*0.8+Math.random()*80);
+  // 敵出現率（エンドレスは少数精鋭）
+  const spawnRate=endless?Math.max(200,600-rd*0.01):Math.max(80,400-rd*0.08);
+  if(Math.random()<1/spawnRate)spawnE(rx+W*0.9+Math.random()*150);
+  if(!endless&&rd%250<gSpd()+0.5)spawnE(rx+W*0.8+Math.random()*80);
   atkCd--;
   if(atkCd<=0&&fight){
     const tg=enemies.filter(e=>e.alive&&Math.abs(e.x-rx)<50);
@@ -613,7 +620,10 @@ function exeSkill(s,k){
       t.hp-=d;t.fl=8;if(st.ls>0)st.hp=Math.min(st.hp+d*st.ls,st.mhp);
       const ex=t.x-camX;
       dnums.push({x:ex+(Math.random()-0.5)*10,y:t.y-t.sz-8-h*10,t:`✦${d}`,c:'#ffeb3b',l:35,vy:-1.5});
-      if(t.hp<=0){t.alive=false;if(rd<10000||!endless||t.boss)sp++;kills++;sfxKill();
+      if(t.hp<=0){t.alive=false;
+        if(t.boss){const bsp=t.lvl*3;sp+=bsp;dnums.push({x:ex,y:t.y-40,t:`👑+${bsp}SP`,c:'#ffd700',l:60,vy:-2});}
+        else if(rd<10000||!endless){sp+=1+Math.floor(rd/500);}
+        kills++;sfxKill();
         for(let j=0;j<8;j++)parts.push({x:ex,y:t.y,vx:(Math.random()-0.5)*4,vy:-Math.random()*4,c:t.c,l:25,s:3});}
     }}
   }
