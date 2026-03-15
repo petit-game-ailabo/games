@@ -146,118 +146,73 @@ function buildGrid(){
   // Label helper
   function LB(s,v){const fv=typeof v==='number'&&v%1?parseFloat(v.toFixed(2)):v;return`${s.toUpperCase()}+${fv}`;}
 
-  // ===== GEOMETRIC LAYOUT =====
-  // Layer 1: Square (4 vertices) at r=4
-  // Layer 2: Octagon (8 vertices) at r=8 
-  // Layer 3: Octagon (8 vertices) at r=12
-  // Outer ring at r=16
-  // Nodes along edges of these shapes, connected as one-way paths
-  
-  const R1=4, R2=8, R3=12, R4=16;
-  
-  // Square vertices (45° offset so sides align between dir pairs)
-  const sqAng=[]; // 4 vertices at 0,90,180,270 → shifted to sit between pairs
-  for(let i=0;i<4;i++) sqAng.push((i*90+45)*Math.PI/180);
-  
-  // Octagon vertices at each dir angle
-  const octAng=[];
-  for(let i=0;i<8;i++) octAng.push(dirs[i].ang*Math.PI/180);
-
-  // --- Layer 1: START → inner ring → square path ---
-  // Square has 4 vertices. Between each pair of vertices, place 2 stat nodes along the edge.
-  // Each dir's inner node connects radially to the nearest square edge.
-  const sqVerts=[];
-  for(let i=0;i<4;i++){
-    sqVerts.push(N(Math.cos(sqAng[i])*R1,Math.sin(sqAng[i])*R1,'stat',{cost:1,stat:dirs[i*2].stats[0].s,val:dirs[i*2].stats[0].base*2,label:LB(dirs[i*2].stats[0].s,dirs[i*2].stats[0].base*2),cat:dirs[i*2].cat}));
-  }
-  // Square edges: between each vertex pair, 2 nodes
-  const sqEdgeNodes=[];
-  for(let i=0;i<4;i++){
-    const j=(i+1)%4;
-    const ax=Math.cos(sqAng[i])*R1,ay=Math.sin(sqAng[i])*R1;
-    const bx=Math.cos(sqAng[j])*R1,by=Math.sin(sqAng[j])*R1;
-    const e1n=N(ax*0.67+bx*0.33,ay*0.67+by*0.33,'stat',{cost:1,stat:dirs[i*2+1].stats[0].s,val:dirs[i*2+1].stats[0].base,label:LB(dirs[i*2+1].stats[0].s,dirs[i*2+1].stats[0].base),cat:dirs[i*2+1].cat});
-    const e2n=N(ax*0.33+bx*0.67,ay*0.33+by*0.67,'stat',{cost:1,stat:dirs[i*2+1].stats[1].s,val:dirs[i*2+1].stats[1].base,label:LB(dirs[i*2+1].stats[1].s,dirs[i*2+1].stats[1].base),cat:dirs[i*2+1].cat});
-    E(sqVerts[i],e1n);E(e1n,e2n);E(e2n,sqVerts[j]);
-    sqEdgeNodes.push(e1n,e2n);
-  }
-  // Connect inner ring to square
-  for(let i=0;i<8;i++){
-    // Even dirs (0,2,4,6) connect to square vertices
-    // Odd dirs (1,3,5,7) connect to square edge midpoints
-    if(i%2===0){
-      E(inner[i],sqVerts[i/2]);
-    } else {
-      E(inner[i],sqEdgeNodes[(i-1)]);
-    }
-  }
-
-  // --- Layer 2: Square → radial spokes → Octagon at R2 ---
-  // Each dir gets a spoke from square to octagon
-  // Spoke has 2 stat nodes + T1 skill
-  const oct1Verts=[];
-  const t1Skills=[];
-  for(let di=0;di<8;di++){
+  // ===== 8方向の基本職パス (リング+分岐構造) =====
+  for(let di=0;di<dirs.length;di++){
     const d=dirs[di];
-    const a=octAng[di];
-    const cx=Math.cos(a),cy=Math.sin(a);
-    // Spoke: 2 nodes between R1 and R2
-    const sp1=N(cx*5.5,cy*5.5,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
-    const t1=N(cx*6.8,cy*6.8,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
-    t1Nodes.push(t1);t1Skills.push(t1);
-    const ov=N(cx*R2,cy*R2,'stat',{cost:2,stat:d.stats[1].s,val:d.stats[1].base*2,label:LB(d.stats[1].s,d.stats[1].base*2),cat:d.cat});
-    oct1Verts.push(ov);
-    // Connect spoke
-    if(di%2===0) E(sqVerts[di/2],sp1);
-    else E(sqEdgeNodes[(di-1)],sp1);
-    E(sp1,t1);E(t1,ov);
-  }
-  // Octagon 1 edges
-  for(let i=0;i<8;i++){
-    const j=(i+1)%8;
-    // 1 node on each octagon edge
-    const ax=Math.cos(octAng[i])*R2,ay=Math.sin(octAng[i])*R2;
-    const bx=Math.cos(octAng[j])*R2,by=Math.sin(octAng[j])*R2;
-    const em=N((ax+bx)/2,(ay+by)/2,'stat',{cost:2,stat:dirs[j].stats[0].s,val:dirs[j].stats[0].base*2,label:LB(dirs[j].stats[0].s,dirs[j].stats[0].base*2),cat:dirs[j].cat});
-    E(oct1Verts[i],em);E(em,oct1Verts[j]);
-  }
+    const path=[]; // flat list for outer ring reference
+    const ba=d.ang*Math.PI/180;
+    const cx=Math.cos(ba),cy=Math.sin(ba);
+    const px=-Math.sin(ba),py=Math.cos(ba); // perpendicular
 
-  // --- Layer 3: Octagon1 → radial spokes → Octagon2 at R3 ---
-  const oct2Verts=[];
-  const t2Skills=[];
-  for(let di=0;di<8;di++){
-    const d=dirs[di];
-    const a=octAng[di];
-    const cx=Math.cos(a),cy=Math.sin(a);
-    const sp1=N(cx*9.5,cy*9.5,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
+    // --- Entry: 2 nodes leading to a fork ---
+    const e0=N(cx*2.8+px*0.3,cy*2.8+py*0.3,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base,label:LB(d.stats[0].s,d.stats[0].base),cat:d.cat});
+    const e1=N(cx*3.6-px*0.2,cy*3.6-py*0.2,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base,label:LB(d.stats[1].s,d.stats[1].base),cat:d.cat});
+    E(inner[di],e0);E(e0,e1);
+
+    // --- Ring 1: fork into left/right paths that meet at T1 skill ---
+    const r1L=N(cx*4.5+px*1.2,cy*4.5+py*1.2,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
+    const r1R=N(cx*4.5-px*1.2,cy*4.5-py*1.2,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base*2,label:LB(d.stats[1].s,d.stats[1].base*2),cat:d.cat});
+    const r1L2=N(cx*5.5+px*0.8,cy*5.5+py*0.8,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
+    const r1R2=N(cx*5.5-px*0.8,cy*5.5-py*0.8,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base*2,label:LB(d.stats[1].s,d.stats[1].base*2),cat:d.cat});
+    E(e1,r1L);E(e1,r1R);E(r1L,r1L2);E(r1R,r1R2);
+    // Dead-end branch off left path
+    const de1=N(cx*5+px*2,cy*5+py*2,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
+    E(r1L,de1);
+
+    // T1 Skill (merge point)
+    const t1=N(cx*6.5,cy*6.5,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
+    E(r1L2,t1);E(r1R2,t1);
+    t1Nodes.push(t1);
+
+    // --- Connector to Ring 2 ---
+    const c1=N(cx*7.5+px*0.3,cy*7.5+py*0.3,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
+    E(t1,c1);
+
+    // --- Ring 2: bigger ring with 4 nodes + T2 skill ---
+    const r2A=N(cx*8.5+px*1.3,cy*8.5+py*1.3,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
+    const r2B=N(cx*8.5-px*1.3,cy*8.5-py*1.3,'stat',{cost:2,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
+    const r2C=N(cx*9.8+px*0.8,cy*9.8+py*0.8,'stat',{cost:2,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
+    const r2D=N(cx*9.8-px*0.8,cy*9.8-py*0.8,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
+    E(c1,r2A);E(c1,r2B);E(r2A,r2C);E(r2B,r2D);
+    // Dead-end branch off ring 2
+    const de2=N(cx*9+px*2.2,cy*9+py*2.2,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*4,label:LB(d.stats[0].s,d.stats[0].base*4),cat:d.cat});
+    E(r2A,de2);
+
+    // T2 Skill
     const t2=N(cx*10.8,cy*10.8,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
-    t2Skills.push(t2);
-    const ov=N(cx*R3,cy*R3,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
-    oct2Verts.push(ov);
-    E(oct1Verts[di],sp1);E(sp1,t2);E(t2,ov);
-  }
-  // Octagon 2 edges
-  for(let i=0;i<8;i++){
-    const j=(i+1)%8;
-    const ax=Math.cos(octAng[i])*R3,ay=Math.sin(octAng[i])*R3;
-    const bx=Math.cos(octAng[j])*R3,by=Math.sin(octAng[j])*R3;
-    const em=N((ax+bx)/2,(ay+by)/2,'stat',{cost:3,stat:dirs[j].stats[0].s,val:dirs[j].stats[0].base*3,label:LB(dirs[j].stats[0].s,dirs[j].stats[0].base*3),cat:dirs[j].cat});
-    E(oct2Verts[i],em);E(em,oct2Verts[j]);
-  }
+    E(r2C,t2);E(r2D,t2);
 
-  // --- Layer 4: Octagon2 → T3 skills at R4-1, outer ring at R4 ---
-  const paths_arr=[];
-  for(let di=0;di<8;di++){
-    const d=dirs[di];
-    const a=octAng[di];
-    const cx=Math.cos(a),cy=Math.sin(a);
-    const sp1=N(cx*13.5,cy*13.5,'stat',{cost:3,stat:d.stats[0].s,val:d.stats[0].base*4,label:LB(d.stats[0].s,d.stats[0].base*4),cat:d.cat});
+    // --- Connector to Ring 3 ---
+    const c2=N(cx*11.8-px*0.3,cy*11.8-py*0.3,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
+    E(t2,c2);
+
+    // --- Ring 3: final ring before T3 ---
+    const r3A=N(cx*12.8+px*1,cy*12.8+py*1,'stat',{cost:3,stat:d.stats[0].s,val:d.stats[0].base*4,label:LB(d.stats[0].s,d.stats[0].base*4),cat:d.cat});
+    const r3B=N(cx*12.8-px*1,cy*12.8-py*1,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*4,label:LB(d.stats[1].s,d.stats[1].base*4),cat:d.cat});
+    const r3C=N(cx*13.8+px*0.5,cy*13.8+py*0.5,'stat',{cost:3,stat:d.stats[0].s,val:d.stats[0].base*5,label:LB(d.stats[0].s,d.stats[0].base*5),cat:d.cat});
+    const r3D=N(cx*13.8-px*0.5,cy*13.8-py*0.5,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*5,label:LB(d.stats[1].s,d.stats[1].base*5),cat:d.cat});
+    E(c2,r3A);E(c2,r3B);E(r3A,r3C);E(r3B,r3D);E(r3C,r3D); // ring closes
+
+    // T3 Skill
     const t3=N(cx*15,cy*15,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
-    E(oct2Verts[di],sp1);E(sp1,t3);
-    paths_arr.push({_t1:t1Skills[di],_t2:t2Skills[di],_t3:t3});
+    E(r3C,t3);E(r3D,t3);
+
+    // path[] for outer ring reference: store key nodes
+    path.push(e0,e1,r1L,r1R,r1L2,r1R2,t1,c1,r2A,r2B,r2C,r2D,t2,c2,r3A,r3B,r3C,r3D,t3);
+    // Also store dead-ends
+    path._t1=t1;path._t2=t2;path._t3=t3;
+    paths[di]=path;
   }
-  // Copy to paths for hybrid/outer ring access
-  for(let i=0;i<8;i++) paths[i]=paths_arr[i];
 
   // ===== 8方向の組み合わせ職パス =====
   // Requires BOTH adjacent Tier1 skills to access
