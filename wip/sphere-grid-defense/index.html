@@ -143,7 +143,7 @@ let castQ=[],castTxts=[],castT=0;
 
 // Grid
 let gN=[],gE=[];
-let gs={x:0,y:0,drag:false,sx:0,sy:0,ox:0,oy:0,zoom:1,zoomStart:1,pinchDist:0};
+let gs={x:0,y:0,drag:false,sx:0,sy:0,ox:0,oy:0,zoom:0.08,zoomStart:1,pinchDist:0};
 let selN=null,gcx=0,gcy=0;
 
 // ===== SPHERE GRID - 16方向 (8基本職 + 8組み合わせ職) =====
@@ -552,7 +552,7 @@ function endCast(){
 }
 
 // Runner
-const GYR=0.85;let groundY=0;
+const GYR=0.92;let groundY=0;
 
 function initRun(){
   st={...base};st.hp=st.mhp;
@@ -788,27 +788,13 @@ function drawRun(){
   // 背景: 3レイヤーパララックス（空=固定 / 建物=遅い / 地面=速い）
   if(imgBg.complete&&imgBg.naturalWidth>0){
     const bgW=imgBg.width, bgH=imgBg.height;
-    // Layer 1: Sky (top 60%) - draws once, stretches to fill width, no tiling
-    const skyH=Math.floor(bgH*0.55);
-    const skyDispH=groundY*0.7;
-    const skyScaleY=skyDispH/skyH;
-    const skyW=bgW*skyScaleY;
-    // Center sky, slow parallax (single image, no repeat for moon)
-    const skyOff=(-camX*0.02)%(skyW*0.3);
+    // Background: single image, scaled to fill, no scroll
+    const scale=Math.max(W/bgW,groundY/bgH);
+    const dw=bgW*scale,dh=bgH*scale;
     ctx.imageSmoothingEnabled=true;
-    ctx.drawImage(imgBg,0,0,bgW,skyH, skyOff+(W-skyW)/2,0,skyW,skyDispH);
-    
-    // Layer 2: Buildings (bottom 50%) - medium scroll, tiles
-    const bldY=Math.floor(bgH*0.4), bldH=Math.floor(bgH*0.6);
-    const bldScaleY=groundY*0.5/bldH;
-    const bldW=bgW*bldScaleY;
-    const bldScroll=((-camX*0.15)%bldW+bldW)%bldW;
-    for(let i=-1;i<Math.ceil(W/bldW)+2;i++){
-      ctx.drawImage(imgBg,0,bldY,bgW,bldH, bldScroll+i*bldW-bldW,groundY*0.35,bldW,groundY*0.5);
-    }
-    // Layer 3: Thin ground strip
-    const gndH=RUNNER_H-groundY;
-    ctx.fillStyle='#1a1a2e';ctx.fillRect(0,groundY,W,gndH);
+    ctx.drawImage(imgBg,0,0,bgW,bgH,(W-dw)/2,0,dw,dh);
+    // Ground strip
+    ctx.fillStyle='#1a1a2e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
     ctx.fillStyle='rgba(255,255,255,0.03)';ctx.fillRect(0,groundY,W,1);
   } else {
     // Fallback: グラデーション背景
