@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Sphere Grid Rogue</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a1a;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+const C=document.getElementById('c'),ctx=C.getContext('2d');
+let W,H,dpr;
+function resize(){
+  dpr=Math.min(window.devicePixelRatio||1,3);
+  W=window.innerWidth;H=window.innerHeight;
+  C.width=W*dpr;C.height=H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  RUNNER_H=Math.floor(H*0.18);
+  GRID_Y=RUNNER_H+HUD_H;GRID_H=H-GRID_Y;
+  if(gN.length) posGrid();
+}
+let RUNNER_H=0;const HUD_H=66;let GRID_Y=0,GRID_H=0;
+
+// ===== IMAGE PRELOADING =====
+const imgPico=new Image(); imgPico.src='assets/pico_sprites.png';
+const imgEnemy=new Image(); imgEnemy.src='assets/enemy_sprites.png';
+const imgBg=new Image(); imgBg.src='assets/background.png';
+let imagesLoaded=0;
+imgPico.onload=()=>imagesLoaded++;
+imgEnemy.onload=()=>imagesLoaded++;
+imgBg.onload=()=>imagesLoaded++;
+
+// ===== IMAGE-BASED DRAW FUNCTIONS =====
+function drawPlayer(x, y, fighting, frame){
+  if(imgPico.complete&&imgPico.naturalWidth>0){
+    const srcW=341, srcH=1024;
+    let srcX=0;
+    if(!alive)srcX=682;
+    else if(fighting||atkCd>0)srcX=341;
+    else srcX=0;
+    
+    const dstH=65;
+    const dstW=srcW/srcH*dstH;
+    const dstX=x-dstW/2, dstY=y-dstH+10; // feet near ground
+    
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(imgPico,srcX,0,srcW,srcH,dstX,dstY,dstW,dstH);
+    ctx.imageSmoothingEnabled=true;
+  } else {
+    // Fallback: 簡易表示
+    ctx.fillStyle='#F472B6';
+    ctx.fillRect(x-5,y-20,10,20);
+  }
+}
+
+// Enemy sprite regions (manually mapped from generated image)
+const ENEMY_RECTS={
+  slime:{sx:30,sy:60,sw:270,sh:360},    // Green slime (top-left)
+  goblin:{sx:300,sy:40,sw:260,sh:380},   // Orange slime/goblin (top-center)
+  knight:{sx:40,sy:520,sw:300,sh:420},    // Knight with plume (bottom-left)
+  demon:{sx:340,sy:540,sw:260,sh:380},    // Horned knight (bottom-center)
+  boss:{sx:620,sy:520,sw:400,sh:500}      // Dark beast (bottom-right)
+};
+
+function drawEnemy(x, y, type, flash, size){
+  if(imgEnemy.complete&&imgEnemy.naturalWidth>0){
+    const r=ENEMY_RECTS[type]||ENEMY_RECTS.slime;
+    let baseH=45;
+    if(type==='boss')baseH=75;
+    else if(type==='demon')baseH=60;
+    else if(type==='knight')baseH=55;
+    else if(type==='goblin')baseH=48;
+    
+    const dstH=baseH;
+    const dstW=r.sw/r.sh*dstH;
+    const dstX=x-dstW/2, dstY=y-dstH+4;
+    
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(imgEnemy,r.sx,r.sy,r.sw,r.sh,dstX,dstY,dstW,dstH);
+    ctx.imageSmoothingEnabled=true;
+    
+    if(flash>0){
+      ctx.globalAlpha=0.4;ctx.fillStyle='#fff';
+      ctx.fillRect(dstX,dstY,dstW,dstH);ctx.globalAlpha=1;
+    }
+  } else {
+    let c='#4caf50';
+    switch(type){case'goblin':c='#ff9800';break;case'knight':c='#78909c';break;case'demon':c='#e53935';break;case'boss':c='#ffd700';break;}
+    ctx.fillStyle=c;ctx.fillRect(x-size/2,y-size,size,size);
+  }
+}
+
+function drawDeadPlayer(x,y,timer){
+  const a=timer/70;
+  ctx.globalAlpha=a;
+  if(imgPico.complete&&imgPico.naturalWidth>0){
+    const srcW=341, srcH=1024, srcX=682;
+    const dstH=65, dstW=srcW/srcH*dstH;
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(imgPico,srcX,0,srcW,srcH,x-dstW/2,y-dstH+10,dstW,dstH);
+    ctx.imageSmoothingEnabled=true;
+  } else {
+    ctx.fillStyle='#e53935';
+    ctx.fillRect(x-5,y-10,10,10);
+  }
+  ctx.globalAlpha=1;
+}
+
+// Audio
+const ac=new(window.AudioContext||window.webkitAudioContext)();
+function tone(f,d,v=0.3,t='sine'){const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d);}
+function sfxHit(){tone(300,0.08,0.2,'square');}
+function sfxDie(){tone(180,0.3,0.3,'sawtooth');setTimeout(()=>tone(120,0.4,0.3,'sawtooth'),200);}
+function sfxUnlock(){tone(523,0.12,0.3,'triangle');setTimeout(()=>tone(659,0.1,0.3,'triangle'),80);}
+function sfxKill(){tone(440,0.1,0.2,'triangle');}
+function sfxCast(){tone(600+Math.random()*300,0.1,0.2,'sine');}
+function sfxSkill(){tone(784,0.15,0.35,'sine');setTimeout(()=>tone(988,0.12,0.3,'sine'),100);}
+
+// State
+const ST={TITLE:0,CAST:1,PLAY:2};
+let state=ST.TITLE;
+
+// Stats
+let base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+let st={...base};
+let learned=[];let buffs={};
+
+// Run
+let rx=0,rd=0,best=0,alive=true,dTimer=0,lastSpawnDist=0,lastSpawnFrame=0,initSlimeFlags={};
+let enemies=[],parts=[],dnums=[];
+let sp=0,runs=0,kills=0,atkCd=0,atkCdMax=50,fight=false,camX=0;
+let bgs=[];
+let cleared=false,endless=false,lastBoss=0,clearTime=0;
+
+// Cast
+let castQ=[],castTxts=[],castT=0;
+
+// Grid
+let gN=[],gE=[];
+let gs={x:0,y:0,drag:false,sx:0,sy:0,ox:0,oy:0,zoom:3,zoomStart:1,pinchDist:0};
+let selN=null,gcx=0,gcy=0;
+
+// ===== SPHERE GRID - 16方向 (8基本職 + 8組み合わせ職) =====
+function buildGrid(){
+  gN=[];gE=[];let id=0;const nodes=[],edges=[];
+  function N(gx,gy,type,opts={}){const n={id:id++,gx,gy,type,unlocked:false,applied:false,...opts};nodes.push(n);return n.id;}
+  function E(a,b){edges.push([a,b]);}
+
+  // ===== CENTER START =====
+  const s0=N(0,0,'start',{unlocked:true,label:'START'});
+
+  // Inner ring (8 nodes around start, aligned to dir angles)
+  const dirAngs=[270,315,0,45,90,135,180,225]; // match dirs order
+  const innerStats=[
+    {stat:'atk',val:1,label:'ATK+1',cat:'attack'},
+    {stat:'def',val:1,label:'DEF+1',cat:'defense'},
+    {stat:'mhp',val:5,label:'HP+5',cat:'heal'},
+    {stat:'cr',val:0.03,label:'CRT+3%',cat:'magic'},
+    {stat:'spd',val:0.08,label:'SPD+',cat:'buffer'},
+    {stat:'ls',val:0.03,label:'吸血+3%',cat:'debuffer'},
+    {stat:'dg',val:0.04,label:'回避+4%',cat:'evade'},
+    {stat:'mhp',val:5,label:'HP+5',cat:'counter'}
+  ];
+  const inner=[];
+  for(let i=0;i<8;i++){
+    const ang=dirAngs[i]*Math.PI/180;
+    const gx=Math.cos(ang)*1.8,gy=Math.sin(ang)*1.8;
+    const nid=N(gx,gy,'stat',{cost:1,...innerStats[i]});
+    inner.push(nid);
+    E(s0,nid);
+  }
+  for(let i=0;i<8;i++)E(inner[i],inner[(i+1)%8]);
+
+  // ===== 16方向の定義 =====
+  // 8つの基本職 (0, 45, 90, 135, 180, 225, 270, 315度)
+  const dirs=[
+    {name:'攻撃',ang:270,cat:'attack',stats:[{s:'atk',base:1},{s:'mhp',base:8}],
+      t1:'powerStrike',t1l:'Brave Strike',t1i:'⚔️',t1d:'ATK×3',
+      t2:'battleMaster',t2l:'Battle Master',t2i:'👊',t2d:'ATK×6全体',
+      t3:'ragnarok',t3l:'Ragnarök',t3i:'💀',t3d:'ATK×8殲滅'},
+    {name:'防御',ang:315,cat:'defense',stats:[{s:'def',base:1},{s:'mhp',base:10}],
+      t1:'ironWall',t1l:'Infinity Wall',t1i:'🛡️',t1d:'3秒完全防御',
+      t2:'guardian',t2l:'Guardian',t2i:'🏛️',t2d:'DEF2倍+5秒無敵',
+      t3:'immortal',t3l:'Immortal',t3i:'🏰',t3d:'10秒無敵+再生'},
+    {name:'回復',ang:0,cat:'heal',stats:[{s:'reg',base:0.2},{s:'mhp',base:8}],
+      t1:'blessing',t1l:'Blessing',t1i:'💚',t1d:'HP30%回復',
+      t2:'archbishop',t2l:'Archbishop',t2i:'✝️',t2d:'HP60%回復+再生',
+      t3:'holyNova',t3l:'Holy Nova',t3i:'🌟',t3d:'HP全回復+再生MAX'},
+    {name:'攻撃魔法',ang:45,cat:'magic',stats:[{s:'cr',base:0.04},{s:'cd',base:0.15}],
+      t1:'critSlash',t1l:'Void Slash',t1i:'⚡',t1d:'確定CRT×3連',
+      t2:'archmage',t2l:'Archmage',t2i:'🔮',t2d:'CRT×4全体',
+      t3:'eclipse',t3l:'Eclipse Zero',t3i:'🌑',t3d:'7連CRD×3'},
+    {name:'バッファー',ang:90,cat:'buffer',stats:[{s:'spd',base:0.1},{s:'dg',base:0.04}],
+      t1:'haste',t1l:'Haste',t1i:'💨',t1d:'5秒速度2倍',
+      t2:'tactician',t2l:'Tactician',t2i:'🎯',t2d:'全能力UP',
+      t3:'transcend',t3l:'Transcendence',t3i:'✨',t3d:'全ステ2倍20秒'},
+    {name:'デバッファー',ang:135,cat:'debuffer',stats:[{s:'ls',base:0.04},{s:'reg',base:0.2}],
+      t1:'drain',t1l:'Soul Drain',t1i:'💀',t1d:'大ダメ+HP回復',
+      t2:'hexMaster',t2l:'Hex Master',t2i:'☠️',t2d:'3連呪撃',
+      t3:'soulBurst',t3l:'Abyss Nova',t3i:'💥',t3d:'HP70%消費→超火力'},
+    {name:'回避',ang:180,cat:'evade',stats:[{s:'dg',base:0.05},{s:'spd',base:0.12}],
+      t1:'gale',t1l:'Gale Force',t1i:'🌪️',t1d:'速度3倍+回避UP',
+      t2:'phantom',t2l:'Phantom',t2i:'👻',t2d:'速度5倍+回避80%',
+      t3:'mirageWalk',t3l:'Mirage Walk',t3i:'🌫️',t3d:'超回避+超速度'},
+    {name:'反撃',ang:225,cat:'counter',stats:[{s:'atk',base:1},{s:'cr',base:0.03}],
+      t1:'execute',t1l:'Execute',t1i:'🗡️',t1d:'確定CRT×2',
+      t2:'counter',t2l:'Counter',t2i:'⚡',t2d:'反撃ATK×4',
+      t3:'devastate',t3l:'Devastate',t3i:'💫',t3d:'ATK×10確定CRT'}
+  ];
+  
+  // 8つの組み合わせ職 (中間角度: 22.5, 67.5, 112.5, ...)
+  const hybrid=[
+    {name:'重戦士',ang:292.5,cat:'berserker',base1:0,base2:1,t2:'berserker',t2l:'Juggernaut',t2i:'⚔️',t2d:'ATK×5全体'},
+    {name:'パラディン',ang:337.5,cat:'paladin',base1:1,base2:2,t2:'aegis',t2l:'Paladin',t2i:'⚜️',t2d:'無敵+全回復'},
+    {name:'賢者',ang:22.5,cat:'sage',base1:2,base2:3,t2:'sageBlast',t2l:'Sage',t2i:'📖',t2d:'魔撃+回復'},
+    {name:'黒魔術士',ang:67.5,cat:'darkmage',base1:3,base2:4,t2:'darkPact',t2l:'Warlock',t2i:'🦇',t2d:'HP半減→ATK3倍'},
+    {name:'巫女',ang:112.5,cat:'priestess',base1:4,base2:5,t2:'sanctify',t2l:'Priestess',t2i:'🙏',t2d:'回復+再生バフ'},
+    {name:'盗賊',ang:157.5,cat:'rogue',base1:5,base2:6,t2:'assassinate',t2l:'Assassin',t2i:'🎭',t2d:'CRT7倍'},
+    {name:'忍者',ang:202.5,cat:'ninja',base1:6,base2:7,t2:'ninjaBlade',t2l:'Ninja',t2i:'🥷',t2d:'5連CRT'},
+    {name:'狂戦士',ang:247.5,cat:'warlord',base1:7,base2:0,t2:'warlord',t2l:'Warlord',t2i:'🔥',t2d:'AOE+ATKバフ'}
+  ];
+
+  const paths=[];
+  const t1Nodes=[]; // Tier1 skill node IDs for hybrid gate check
+  
+  // Label helper
+  function LB(s,v){
+    const nm=s==='mhp'?'HP':s==='cr'?'CRT':s==='cd'?'CRD':s==='dg'?'回避':s==='ls'?'吸血':s==='reg'?'再生':s==='mh'?'連撃':s.toUpperCase();
+    // %表示: cr,cd,dg,ls は%で表示
+    if(s==='cr'||s==='cd'||s==='dg'||s==='ls')return`${nm}+${Math.round(v*100)}%`;
+    if(s==='reg'||s==='spd'){const fv=typeof v==='number'&&v%1?parseFloat(v.toFixed(1)):v;return`${nm}+${fv}`;}
+    return`${nm}+${typeof v==='number'?Math.round(v):v}`;
+  }
+
+  // ===== 8方向の基本職パス (幾何学構造: 八角形+内側四角形) =====
+  // Helper: place node at center + forward*f + perp*p
+  function PN(cx,cy,px,py,f,p,type,opts){return N(cx*f+px*p,cy*f+py*p,type,opts);}
+  function SN(cx,cy,px,py,f,p,cost,d,si,mul){
+    const s=d.stats[si%2];const v=parseFloat((s.base*mul).toFixed(2));
+    return PN(cx,cy,px,py,f,p,'stat',{cost,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat});
+  }
+
+  for(let di=0;di<dirs.length;di++){
+    const d=dirs[di];
+    const path=[];
+    const ba=d.ang*Math.PI/180;
+    const cx=Math.cos(ba),cy=Math.sin(ba);
+    const px=-Math.sin(ba),py=Math.cos(ba);
+
+    // --- Entry: 2 nodes (straight from START) ---
+    const e0=SN(cx,cy,px,py,2.8,0,1,d,0,1);
+    const e1=SN(cx,cy,px,py,3.5,0,1,d,1,1);
+    E(inner[di],e0);E(e0,e1);
+
+    // === SHAPE 1: Octagon (8 nodes) + inner square (4 nodes) ===
+    // Center at r=5.8 along direction. Node 0 faces back toward entry.
+    const oc=5.8, or_=1.8, ir=0.8;
+    const o=[];
+    for(let k=0;k<8;k++){
+      const a=ba+Math.PI+k*Math.PI/4; // node 0 points back toward START
+      const s=d.stats[k%2]; const v=parseFloat((s.base*(1+k*0.2)).toFixed(2));
+      o.push(N(cx*oc+Math.cos(a)*or_,cy*oc+Math.sin(a)*or_,'stat',{cost:1,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
+    }
+    // Octagon path: 0→1→2→3→4→5→6→7→(back to 0 optional)
+    for(let k=0;k<7;k++)E(o[k],o[k+1]);
+    E(o[7],o[0]); // close octagon
+    // Entry connects to octagon top (node 0)
+    E(e1,o[0]);
+
+    // Inner square: 4 nodes (rotated to match octagon orientation)
+    const sq=[];
+    for(let k=0;k<4;k++){
+      const a=ba+Math.PI+k*Math.PI/2+Math.PI/4;
+      const s=d.stats[(k+1)%2]; const v=parseFloat((s.base*2).toFixed(2));
+      sq.push(N(cx*oc+Math.cos(a)*ir,cy*oc+Math.sin(a)*ir,'stat',{cost:1,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
+    }
+    // Square path
+    E(sq[0],sq[1]);E(sq[1],sq[2]);E(sq[2],sq[3]);E(sq[3],sq[0]);
+    // Connect octagon to square at 2 points
+    E(o[1],sq[0]); // octagon node 1 → square node 0 (entry to inner)
+    E(sq[2],o[5]); // square node 2 → octagon node 5 (exit from inner)
+
+    // T1 Skill: exit from octagon bottom (with spacing)
+    const t1=PN(cx,cy,px,py,9.5,0,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
+    E(o[4],t1);
+    t1Nodes.push(t1);
+
+    // --- Connector ---
+    const c1=SN(cx,cy,px,py,11,0,2,d,0,3);
+    E(t1,c1);
+
+    // === SHAPE 2: Larger octagon (8 nodes) + inner triangle (3 nodes) ===
+    const oc2=14, or2=2.2, ir2=1;
+    const o2=[];
+    for(let k=0;k<8;k++){
+      const a=ba+Math.PI+k*Math.PI/4;
+      const s=d.stats[k%2]; const v=parseFloat((s.base*(2+k*0.3)).toFixed(2));
+      o2.push(N(cx*oc2+Math.cos(a)*or2,cy*oc2+Math.sin(a)*or2,'stat',{cost:2,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
+    }
+    for(let k=0;k<7;k++)E(o2[k],o2[k+1]);
+    E(o2[7],o2[0]);
+    E(c1,o2[0]);
+
+    // Inner triangle (rotated to match)
+    const tri=[];
+    for(let k=0;k<3;k++){
+      const a=ba+Math.PI+k*Math.PI*2/3;
+      const s=d.stats[(k+1)%2]; const v=parseFloat((s.base*3).toFixed(2));
+      tri.push(N(cx*oc2+Math.cos(a)*ir2,cy*oc2+Math.sin(a)*ir2,'stat',{cost:2,stat:s.s,val:v,label:LB(s.s,v),cat:d.cat}));
+    }
+    E(tri[0],tri[1]);E(tri[1],tri[2]);E(tri[2],tri[0]);
+    E(o2[1],tri[0]); // entry to triangle
+    E(tri[1],o2[5]); // exit from triangle
+
+    // T2 Skill
+    const t2=PN(cx,cy,px,py,18,0,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
+    E(o2[4],t2);
+
+    // --- Final stretch to T3 ---
+    const f1=SN(cx,cy,px,py,20,0.3,3,d,0,4);
+    const f2=SN(cx,cy,px,py,21.5,-0.2,3,d,1,4);
+    const t3=PN(cx,cy,px,py,23,0,'skill',{cost:12,skill:d.t3,label:d.t3l,cat:d.cat,tier:4,icon:d.t3i,desc:d.t3d});
+    E(t2,f1);E(f1,f2);E(f2,t3);
+
+    path.push(e0,e1,...o,...sq,t1,c1,...o2,...tri,t2,f1,f2,t3);
+    path._t1=t1;path._t2=t2;path._t3=t3;
+    paths[di]=path;
+  }
+
+  // ===== 8方向の組み合わせ職 (🔒ノード → 上位職パス → 分岐 → ★3スキル) =====
+  function midAng(a,b){let d=b-a;if(d>Math.PI)d-=Math.PI*2;if(d<-Math.PI)d+=Math.PI*2;return a+d*0.5;}
+
+  // Hybrid T3 skill definitions (new ★3 at branch ends)
+  const HT3=[
+    {s1:'jugATK',l1:'Juggernaut Fury',i1:'💥',d1:'ATK×7全体', s2:'jugDEF',l2:'Juggernaut Guard',i2:'🛡️',d2:'DEF3倍+反撃'},
+    {s1:'palHeal',l1:'Holy Knight',i1:'⚜️',d1:'全回復+無敵5秒', s2:'palDEF',l2:'Sacred Wall',i2:'🏛️',d2:'DEF4倍+再生'},
+    {s1:'sageHeal',l1:'Sage Cure',i1:'📖',d1:'全回復+CRT UP', s2:'sageMATK',l2:'Sage Storm',i2:'🌟',d2:'CRT×6全体'},
+    {s1:'wlkMATK',l1:'Dark Meteor',i1:'☄️',d1:'CRT×5全体', s2:'wlkBUF',l2:'Dark Haste',i2:'🦇',d2:'速度3倍+ATK UP'},
+    {s1:'prsBUF',l1:'Divine Blessing',i1:'🙏',d1:'全ステUP', s2:'prsDEB',l2:'Holy Curse',i2:'✨',d2:'吸血+再生MAX'},
+    {s1:'rogDEB',l1:'Shadow Strike',i1:'🎭',d1:'CRT7倍+吸血', s2:'rogEVA',l2:'Vanish',i2:'💨',d2:'回避90%+速度UP'},
+    {s1:'ninEVA',l1:'Ninja Art',i1:'🥷',d1:'5連CRT+回避', s2:'ninATK',l2:'Blade Storm',i2:'⚔️',d2:'ATK×6 4連撃'},
+    {s1:'wrlATK',l1:'Berserker Rage',i1:'🔥',d1:'ATK×8全体', s2:'wrlCNT',l2:'War Cry',i2:'📯',d2:'ATK3倍+反撃'},
+  ];
+
+  for(let hi=0;hi<hybrid.length;hi++){
+    const h=hybrid[hi];
+    const ht3=HT3[hi];
+    const hAngRad=h.ang*Math.PI/180;
+    const hcx=Math.cos(hAngRad),hcy=Math.sin(hAngRad);
+    const hpx=-Math.sin(hAngRad),hpy=Math.cos(hAngRad);
+    const req1=dirs[h.base1].t1l;
+    const req2=dirs[h.base2].t1l;
+    const d1=dirs[h.base1], d2=dirs[h.base2];
+
+    // 🔒 Locked hybrid skill at r=9
+    const hNode=N(hcx*9,hcy*9,'skill',{cost:8,skill:h.t2,label:h.t2l,cat:h.cat,tier:2,icon:h.t2i,
+      desc:h.t2d+`\n🔒要:${req1}+${req2}`,
+      requires:[paths[h.base1]._t1,paths[h.base2]._t1]});
+    E(paths[h.base1]._t1,hNode);
+    E(paths[h.base2]._t1,hNode);
+
+    // Upper class stats (3 nodes, r=11~14)
+    const hs1=N(hcx*11+hpx*0.3,hcy*11+hpy*0.3,'stat',{cost:4,stat:d1.stats[0].s,val:parseFloat((d1.stats[0].base*3).toFixed(2)),label:LB(d1.stats[0].s,d1.stats[0].base*3),cat:h.cat});
+    const hs2=N(hcx*12.5-hpx*0.2,hcy*12.5-hpy*0.2,'stat',{cost:4,stat:d2.stats[0].s,val:parseFloat((d2.stats[0].base*3).toFixed(2)),label:LB(d2.stats[0].s,d2.stats[0].base*3),cat:h.cat});
+    const hs3=N(hcx*14,hcy*14,'stat',{cost:4,stat:d1.stats[0].s,val:parseFloat((d1.stats[0].base*4).toFixed(2)),label:LB(d1.stats[0].s,d1.stats[0].base*4),cat:h.cat});
+    E(hNode,hs1);E(hs1,hs2);E(hs2,hs3);
+
+    // Fork: base1 side (2 nodes + ★3 skill)
+    const b1Ang=midAng(hAngRad,dirs[h.base1].ang*Math.PI/180);
+    const fb1a=N(Math.cos(b1Ang)*16,Math.sin(b1Ang)*16,'stat',{cost:5,stat:d1.stats[0].s,val:parseFloat((d1.stats[0].base*5).toFixed(2)),label:LB(d1.stats[0].s,d1.stats[0].base*5),cat:h.cat});
+    const fb1b=N(Math.cos(b1Ang)*18,Math.sin(b1Ang)*18,'stat',{cost:5,stat:d1.stats[1].s,val:parseFloat((d1.stats[1].base*5).toFixed(2)),label:LB(d1.stats[1].s,d1.stats[1].base*5),cat:h.cat});
+    const fb1s=N(Math.cos(b1Ang)*20,Math.sin(b1Ang)*20,'skill',{cost:8,skill:ht3.s1,label:ht3.l1,cat:h.cat,tier:3,icon:ht3.i1,desc:ht3.d1});
+    E(hs3,fb1a);E(fb1a,fb1b);E(fb1b,fb1s);
+
+    // Fork: base2 side (2 nodes + ★3 skill)
+    const b2Ang=midAng(hAngRad,dirs[h.base2].ang*Math.PI/180);
+    const fb2a=N(Math.cos(b2Ang)*16,Math.sin(b2Ang)*16,'stat',{cost:5,stat:d2.stats[0].s,val:parseFloat((d2.stats[0].base*5).toFixed(2)),label:LB(d2.stats[0].s,d2.stats[0].base*5),cat:h.cat});
+    const fb2b=N(Math.cos(b2Ang)*18,Math.sin(b2Ang)*18,'stat',{cost:5,stat:d2.stats[1].s,val:parseFloat((d2.stats[1].base*5).toFixed(2)),label:LB(d2.stats[1].s,d2.stats[1].base*5),cat:h.cat});
+    const fb2s=N(Math.cos(b2Ang)*20,Math.sin(b2Ang)*20,'skill',{cost:8,skill:ht3.s2,label:ht3.l2,cat:h.cat,tier:3,icon:ht3.i2,desc:ht3.d2});
+    E(hs3,fb2a);E(fb2a,fb2b);E(fb2b,fb2s);
+    // Store hybrid T3 skill IDs for ★4 requirements
+    // fb1s is closer to base1 direction, fb2s is closer to base2 direction
+    if(!paths[h.base1]._hybT3)paths[h.base1]._hybT3=[];
+    paths[h.base1]._hybT3.push(fb1s);
+    if(!paths[h.base2]._hybT3)paths[h.base2]._hybT3=[];
+    paths[h.base2]._hybT3.push(fb2s);
+  }
+
+  // ===== ★4スキルの条件: 近くの★3×2 + ★2 が必要 =====
+  // Connect each ★4 (pure T3→T4) to adjacent hybrid T3 skills
+  // ★4 requires: own ★2 + nearest two ★3 skills from hybrid branches
+  for(let di=0;di<dirs.length;di++){
+    const t4=paths[di]._t3; // this is now tier:4
+    const t2=paths[di]._t2;
+    const hybT3s=paths[di]._hybT3||[];
+    // Requires: own T2 + both nearby hybrid T3 skills
+    const reqs=[t2,...hybT3s];
+    nodes[t4].requires=reqs;
+    nodes[t4].tier=4;
+    nodes[t4].cost=12;
+    const reqNames=reqs.map(r=>nodes[r].label).join('+');
+    nodes[t4].desc=(nodes[t4].desc||'')+`\n🔒要:${reqNames}`;
+    // Connect edges from hybrid T3s to T4
+    for(const ht of hybT3s) E(ht,t4);
+  }
+
+  // ===== ★2スキル付近に行き止まりノード追加 (CRT/CRD/吸血/回避) =====
+  for(let di=0;di<dirs.length;di++){
+    const d=dirs[di];
+    const ba=d.ang*Math.PI/180;
+    const cx=Math.cos(ba),cy=Math.sin(ba);
+    const px=-Math.sin(ba),py=Math.cos(ba);
+    // Dead-ends near T2 area (r=15付近、★2スキル手前)
+    // T1から斜め前方に短い行き止まり（被らないよう前方+横方向）
+    const t1r=9.5;
+    const de1=N(cx*(t1r+1.5)+px*1.8,cy*(t1r+1.5)+py*1.8,'stat',{cost:5,stat:'cr',val:0.15,label:'CRT+15%',cat:d.cat});
+    const de2=N(cx*(t1r+2.5)+px*2.5,cy*(t1r+2.5)+py*2.5,'stat',{cost:5,stat:'cd',val:0.5,label:'CRD+50%',cat:d.cat});
+    E(paths[di]._t1,de1);E(de1,de2);
+    const de3=N(cx*(t1r+1.5)-px*1.8,cy*(t1r+1.5)-py*1.8,'stat',{cost:5,stat:'ls',val:0.15,label:'吸血+15%',cat:d.cat});
+    const de4=N(cx*(t1r+2.5)-px*2.5,cy*(t1r+2.5)-py*2.5,'stat',{cost:5,stat:'dg',val:0.15,label:'回避+15%',cat:d.cat});
+    E(paths[di]._t1,de3);E(de3,de4);
+    // Dead-ends near T3/T4 area
+    const de5=N(cx*24+px*1.5,cy*24+py*1.5,'stat',{cost:6,stat:'atk',val:8,label:'ATK+8',cat:d.cat});
+    E(paths[di]._t3,de5);
+    const de6=N(cx*24-px*1.5,cy*24-py*1.5,'stat',{cost:6,stat:'mhp',val:50,label:'HP+50',cat:d.cat});
+    E(paths[di]._t3,de6);
+  }
+
+  gN=nodes;gE=edges;posGrid();
+}
+
+function posGrid(){
+  const S=Math.min(W*0.032,14)*gs.zoom;
+  gcx=W/2;gcy=GRID_Y+GRID_H*0.4;
+  for(const n of gN){n.x=gcx+n.gx*S;n.y=gcy+n.gy*S;}
+}
+
+function canUL(id){
+  const n=gN[id];
+  // If node has requires, ALL required nodes must be unlocked
+  if(n.requires){
+    for(const rid of n.requires) if(!gN[rid].unlocked) return false;
+    return true;
+  }
+  // Normal: any adjacent unlocked node
+  for(const[a,b]of gE){if(a===id&&gN[b].unlocked)return true;if(b===id&&gN[a].unlocked)return true;}
+  return false;
+}
+
+// Skills (回復系・バッファー系に攻撃手段を追加)
+const SK={
+  powerStrike:{cd:300,dm:3,h:1},
+  battleMaster:{cd:600,dm:6,h:1,aoe:1},
+  ragnarok:{cd:900,dm:8,h:1,aoe:1},
+  ironWall:{cd:500,bf:'inv',bd:180},
+  guardian:{cd:700,bf:'inv',bd:300,heal:0.5},
+  immortal:{cd:1200,bf:'inv',bd:600,heal:1,rboost:5},
+  blessing:{cd:400,heal:0.3,bf:'reg',bd:200,dm:2,h:1},
+  archbishop:{cd:700,heal:0.6,bf:'reg',bd:400,dm:3,h:1,aoe:1},
+  holyNova:{cd:1000,heal:1,bf:'reg',bd:600,dm:5,h:1,aoe:1},
+  critSlash:{cd:400,dm:1,h:3,fc:1},
+  archmage:{cd:700,dm:4,h:1,aoe:1,fc:1},
+  eclipse:{cd:1000,dm:3,h:7,fc:1},
+  haste:{cd:400,bf:'hst',bd:300},
+  tactician:{cd:700,bf:'hst',bd:500,atkboost:0.3,dm:2,h:1},
+  transcend:{cd:1500,bf:'trs',bd:1200},
+  drain:{cd:400,dm:4,h:1,hp2:0.5},
+  hexMaster:{cd:700,dm:2,h:3,debuff:1},
+  soulBurst:{cd:800,dm:12,h:1,aoe:1,hpc:0.7},
+  gale:{cd:700,bf:'gal',bd:480},
+  phantom:{cd:900,bf:'phm',bd:600},
+  mirageWalk:{cd:1200,bf:'phm',bd:900,dg:0.5},
+  execute:{cd:500,dm:2,h:1,fc:1},
+  counter:{cd:700,dm:4,h:1,reflect:1},
+  devastate:{cd:1000,dm:10,h:1,fc:1},
+  berserker:{cd:600,dm:5,h:1,aoe:1},
+  aegis:{cd:900,bf:'inv',bd:300,heal:1},
+  sageBlast:{cd:700,dm:4,h:1,heal:0.4,fc:1},
+  darkPact:{cd:600,bf:'dpk',bd:600,hpc:0.5},
+  sanctify:{cd:700,bf:'reg',bd:500,heal:0.5},
+  assassinate:{cd:700,dm:7,h:1,fc:1},
+  ninjaBlade:{cd:700,dm:2,h:5,fc:1},
+  warlord:{cd:800,dm:6,h:1,aoe:1,atkboost:0.5},
+  // Hybrid T3 skills
+  jugATK:{cd:700,dm:7,h:1,aoe:1},jugDEF:{cd:700,bf:'inv',bd:300,dm:3,h:1},
+  palHeal:{cd:800,heal:1,bf:'inv',bd:300},palDEF:{cd:800,bf:'inv',bd:400,rboost:3},
+  sageHeal:{cd:700,heal:1,dm:2,h:1,fc:1},sageMATK:{cd:700,dm:6,h:1,aoe:1,fc:1},
+  wlkMATK:{cd:700,dm:5,h:1,aoe:1,fc:1},wlkBUF:{cd:700,bf:'hst',bd:500,atkboost:0.5},
+  prsBUF:{cd:800,bf:'trs',bd:600},prsDEB:{cd:800,dm:3,h:1,hp2:0.8,rboost:5},
+  rogDEB:{cd:700,dm:7,h:1,fc:1,hp2:0.3},rogEVA:{cd:700,bf:'phm',bd:500,atkboost:0.3},
+  ninEVA:{cd:700,dm:2,h:5,fc:1,bf:'gal',bd:300},ninATK:{cd:700,dm:6,h:4,fc:1},
+  wrlATK:{cd:800,dm:8,h:1,aoe:1},wrlCNT:{cd:800,dm:4,h:1,atkboost:1,bf:'inv',bd:200}
+};
+
+const PNAMES={atk:'Greater Fortitude',def:'Iron Fortress',mhp:'Life Essence',spd:'Sensory Boost',
+  cr:'Hawk Eye',cd:'Penetrate Boost',reg:'Regeneration Field',ls:'Blood Covenant',
+  dg:'Paranormal Intuition',mh:'Twin Blade Mastery'};
+
+function unlockN(n){
+  if(n.unlocked||!canUL(n.id)||sp<n.cost)return false;
+  n.unlocked=true;sp-=n.cost;n.applied=true;
+  if(n.type==='stat'){
+    if(n.stat==='mhp'){base.mhp+=n.val;st.mhp+=n.val;st.hp=Math.min(st.hp+n.val,st.mhp);}
+    else if(base[n.stat]!==undefined){base[n.stat]+=n.val;st[n.stat]+=n.val;}
+  } else if(n.type==='skill'){
+    learned.push({...n,cd:0});sfxSkill();return true;
+  }
+  sfxUnlock();return true;
+}
+
+// Buffs
+function updBuf(){for(const k in buffs){if(buffs[k]>0)buffs[k]--;else delete buffs[k];}}
+function gSpd(){let s=st.spd;if(buffs.hst)s*=2;if(buffs.gal)s*=3;if(buffs.phm)s*=5;if(buffs.trs)s*=2;return s;}
+function gAtk(){let a=st.atk;if(buffs.dpk)a*=3;if(buffs.trs)a*=2;if(buffs.atkboost)a*=(1+buffs.atkboost);return a;}
+function gDef(){let d=st.def;if(buffs.trs)d*=2;return d;}
+function gDdg(){let d=st.dg;if(buffs.gal)d=Math.min(d+0.3,0.85);if(buffs.phm)d=Math.min(d+0.8,0.95);return d;}
+
+// ===== CASTING =====
+let castSt={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+
+function startCast(){
+  state=ST.CAST;castQ=[];castTxts=[];castT=0;
+  castSt={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+  const ul=gN.filter(n=>n.unlocked&&n.type!=='start');
+  const ps=ul.filter(n=>n.type==='stat');
+  const sk=ul.filter(n=>n.type==='skill').sort((a,b)=>(a.tier||1)-(b.tier||1));
+  for(const n of ps)castQ.push({name:PNAMES[n.stat]||n.label,color:CC[n.cat]||'#aaa',sk:false,node:n});
+  for(const s of sk)castQ.push({name:s.label,color:CC[s.cat]||'#ffd700',sk:true,icon:s.icon,node:s});
+  if(castQ.length===0)endCast();
+}
+
+function updCast(){
+  castT++;
+  const iv=castQ.length>15?5:castQ.length>8?7:10;
+  if(castT%iv===0&&castQ.length>0){
+    const s=castQ.shift();sfxCast();
+    castTxts.push({...s,y:groundY-12,a:1,age:0});
+    const n=s.node;
+    if(n&&n.type==='stat'&&n.stat){
+      if(n.stat==='mhp'){castSt.mhp+=n.val;castSt.hp=castSt.mhp;}
+      else if(castSt[n.stat]!==undefined)castSt[n.stat]+=n.val;
+    }
+  }
+  for(const t of castTxts){t.age++;t.y-=0.7;t.a=t.age<12?1:Math.max(0,1-(t.age-12)/20);}
+  castTxts=castTxts.filter(t=>t.a>0);
+  if(castQ.length===0&&castTxts.length===0)endCast();
+}
+
+function endCast(){
+  state=ST.PLAY;
+  initRun();
+}
+
+// Runner
+const GYR=0.92;let groundY=0;
+
+function initRun(){
+  st={...base};st.hp=st.mhp;
+  alive=true;rx=0;rd=0;camX=0;
+  enemies=[];parts=[];dnums=[];
+  atkCd=0;fight=false;buffs={};
+  atkCdMax=Math.max(15,50-st.spd*8);
+  groundY=RUNNER_H*GYR;
+  genBg();runs++;cleared=false;endless=false;lastBoss=0;lastSpawnDist=0;lastSpawnFrame=0;initSlimeFlags={};
+  for(const s of learned)s.cd=0;
+}
+
+function genBg(){
+  bgs=[];
+  for(let i=0;i<60;i++){
+    const h=20+Math.random()*60;
+    const w=40+Math.random()*50;
+    bgs.push({
+      x:i*120+Math.random()*60,
+      w,
+      h,
+      c:`hsl(${220+Math.random()*30},15%,${10+Math.random()*8}%)`,
+      // 窓のランダム配置
+      windows:Array.from({length:Math.floor(Math.random()*8+3)},()=>({
+        x:Math.random()*(w-4)+2,
+        y:Math.random()*(h-4)+2,
+        lit:Math.random()>0.5
+      }))
+    });
+  }
+}
+
+function spawnE(x){
+  const t=Math.floor(rd/500),tp=['slime','goblin','knight','demon'][Math.min(t,3)];
+  // 距離に応じてスケーリング（エンドレスは指数的に強化）
+  let sc=1+Math.floor(rd/1000)*0.4+Math.min(rd/100,20)*0.05;
+  if(endless)sc*=1+Math.pow((rd-10000)/3000,1.5); // エンドレスは急激に強化
+  let hp,ak,sz,c,em;
+  switch(tp){
+    case'slime':hp=10*sc;ak=3*sc;sz=10;c='#4caf50';em='🟢';break;
+    case'goblin':hp=20*sc;ak=6*sc;sz=11;c='#ff9800';em='👺';break;
+    case'knight':hp=45*sc;ak=9*sc;sz=13;c='#78909c';em='🛡';break;
+    case'demon':hp=80*sc;ak=14*sc;sz=14;c='#e53935';em='👹';break;
+  }
+  enemies.push({x,y:groundY,hp,mhp:hp,ak,sz,c,em,tp,alive:true,hcd:0,fl:0,boss:false});
+}
+
+function spawnBoss(dist){
+  const lvl=Math.floor(dist/1000);
+  const specs=[
+    {hp:80,ak:8},{hp:200,ak:15},{hp:500,ak:25},{hp:1000,ak:40},{hp:2000,ak:60},
+    {hp:3500,ak:80},{hp:5000,ak:100},{hp:8000,ak:130},{hp:12000,ak:160},{hp:20000,ak:200}
+  ];
+  let s;
+  if(lvl<=10)s=specs[Math.min(lvl-1,9)];
+  else{
+    // エンドレスボス: 指数的に強化
+    const m=Math.pow(1.5,lvl-10);
+    s={hp:Math.floor(20000*m),ak:Math.floor(200*m)};
+  }
+  enemies.push({x:rx+W*0.75,y:groundY,hp:s.hp,mhp:s.hp,ak:s.ak,sz:20,c:'#ffd700',em:'👑',tp:'boss',alive:true,hcd:0,fl:0,boss:true,lvl});
+}
+
+function updRun(){
+  if(cleared&&!endless)return; // クリア画面表示中
+  if(!alive){dTimer--;if(dTimer<=0)startCast();return;}
+  updBuf();
+  for(const s of learned){
+    if(s.cd>0){s.cd--;continue;}
+    const k=SK[s.skill];if(!k)continue;
+    const use=(k.h>0&&k.dm>0&&fight&&enemies.some(e=>e.alive&&Math.abs(e.x-rx)<80))||
+      (k.bf==='inv'&&st.hp<st.mhp*0.4)||(k.bf==='hst'&&!buffs.hst&&!buffs.gal&&!buffs.phm)||
+      (k.bf==='gal'&&!buffs.gal&&!buffs.phm)||(k.bf==='phm'&&!buffs.phm)||
+      (k.bf==='trs'&&rd>300)||(k.bf==='dpk'&&fight&&st.hp>st.mhp*0.6)||
+      (k.heal&&st.hp<st.mhp*0.5)||(k.hpc&&!k.bf&&st.hp>st.mhp*0.75&&fight)||
+      (k.bf==='reg'&&st.hp<st.mhp*0.7);
+    if(use){s.cd=k.cd;exeSkill(s,k);}
+  }
+  if(buffs.rboost)st.hp=Math.min(st.hp+5*0.016,st.mhp);
+  
+  const spd=gSpd();
+  // Check for enemies ahead within speed range (prevents skipping at high speed)
+  const checkDist=Math.max(30,spd*2);
+  const ne=enemies.find(e=>e.alive&&e.x-rx<checkDist&&e.x-rx>-20);
+  fight=!!ne;
+  if(!fight){rx+=spd;rd+=spd;if(rd>best)best=rd;}
+  camX=rx-W*0.25;
+  if(st.reg>0)st.hp=Math.min(st.hp+st.reg*0.016,st.mhp);
+  
+  // ボス出現チェック (1000m毎、エンドレスでも継続)
+  const bDist=Math.floor(rd/1000)*1000;
+  if(bDist>lastBoss&&bDist>=1000&&!enemies.some(e=>e.boss&&e.alive)){
+    lastBoss=bDist;spawnBoss(bDist);
+  }
+  
+  // 10000m到達でクリア
+  if(rd>=10000&&!cleared&&!endless&&lastBoss>=10000){
+    if(!enemies.some(e=>e.alive&&e.boss)){cleared=true;clearTime=Date.now();alive=false;dTimer=9999;return;}
+  }
+  
+  // 序盤固定スライム (0, 50, 100, 150m) - 到達時に右端から出現
+  const earlySlimes=[0,50,100,150,200,250];
+  for(const d of earlySlimes){
+    if(rd>=d&&!initSlimeFlags[d]){
+      initSlimeFlags[d]=true;
+      enemies.push({x:rx+W*0.85,y:groundY,hp:10,mhp:10,ak:3,sz:10,c:'#4caf50',em:'🟢',tp:'slime',alive:true,hcd:0,fl:0,boss:false});
+    }
+  }
+  // 敵出現（固定間隔、距離ベース）
+  const spawnInterval=endless?250:rd<2000?200:rd<5000?150:120;
+  // ボス戦中も3秒毎に雑魚出す
+  const bossFight=enemies.some(e=>e.alive&&e.boss);
+  if(!lastSpawnFrame)lastSpawnFrame=0;
+  lastSpawnFrame++;
+  const shouldSpawn=(rd-lastSpawnDist>=spawnInterval)||(bossFight&&lastSpawnFrame%180===0);
+  if(shouldSpawn&&!enemies.some(e=>e.alive&&!e.boss&&e.x-rx<80)){
+    lastSpawnDist=rd;lastSpawnFrame=0;
+    spawnE(rx+W*0.85);
+  }
+  atkCd--;
+  if(atkCd<=0&&fight){
+    const tg=enemies.filter(e=>e.alive&&Math.abs(e.x-rx)<50);
+    if(tg.length){
+      atkCd=atkCdMax;
+      for(let i=0;i<Math.min(st.mh,tg.length);i++){
+        const t=tg[i%tg.length];let d=gAtk()-t.ak*0.05;
+        const cr=Math.random()<st.cr;if(cr)d*=st.cd;
+        d=Math.max(1,Math.floor(d));hitE(t,d,cr);
+      }
+    }
+  }
+  for(const e of enemies){
+    if(!e.alive)continue;if(e.x>rx+15)e.x-=0.4;if(e.fl>0)e.fl--;
+    if(Math.abs(e.x-rx)<25){
+      e.hcd--;if(e.hcd<=0){e.hcd=70;
+        if(buffs.inv){dnums.push({x:W*0.25,y:groundY-22,t:'NULLIFIED',c:'#64b5f6',l:25,vy:-1});}
+        else if(Math.random()<gDdg()){dnums.push({x:W*0.25,y:groundY-22,t:'EVADE',c:'#81d4fa',l:25,vy:-1});}
+        else{const d=Math.max(1,Math.floor(e.ak-gDef()));st.hp-=d;dnums.push({x:W*0.25,y:groundY-22,t:`-${d}`,c:'#e53935',l:25,vy:-1});}
+      }
+    }
+  }
+  if(st.hp<=0){alive=false;dTimer=70;sfxDie();
+    for(let i=0;i<15;i++)parts.push({x:W*0.25,y:groundY,vx:(Math.random()-0.5)*4,vy:-Math.random()*4,c:'#e53935',l:30,s:3+Math.random()*3});}
+  enemies=enemies.filter(e=>(e.alive&&e.x>camX-100)||e.boss);
+  for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=0.1;p.l--;}
+  parts=parts.filter(p=>p.l>0);
+  for(const d of dnums){d.y+=d.vy;d.l--;}
+  dnums=dnums.filter(d=>d.l>0);
+}
+
+function hitE(t,d,cr){
+  t.hp-=d;t.fl=8;
+  if(st.ls>0)st.hp=Math.min(st.hp+d*st.ls,st.mhp);
+  const ex=t.x-camX;
+  dnums.push({x:ex,y:t.y-t.sz-5,t:cr?`💥${d}`:`${d}`,c:cr?'#ffeb3b':'#fff',l:30,vy:-1.2});
+  sfxHit();
+  if(t.hp<=0){
+    t.alive=false;
+    // SP獲得量調整（通常敵は距離/500毎に+1、ボスはレベル×3）
+    if(t.boss){
+      const bsp=t.lvl*3;
+      sp+=bsp;
+      dnums.push({x:ex,y:t.y-t.sz-25,t:`👑 +${bsp}SP`,c:'#ffd700',l:60,vy:-2});
+    } else if(rd<10000||!endless){
+      const gsp=1;
+      sp+=gsp;
+    }
+    kills++;sfxKill();
+    const pcnt=t.boss?12:6;
+    for(let j=0;j<pcnt;j++)parts.push({x:ex,y:t.y,vx:(Math.random()-0.5)*(t.boss?5:3),vy:-Math.random()*(t.boss?5:3),c:t.c,l:t.boss?40:20,s:t.boss?5:3});
+  }
+}
+
+function exeSkill(s,k){
+  if(k.hpc)st.hp*=(1-k.hpc);
+  if(k.bf){buffs[k.bf]=k.bd||300;if(k.atkboost)buffs.atkboost=k.atkboost;}
+  if(k.heal)st.hp=Math.min(st.hp+st.mhp*k.heal,st.mhp);
+  if(k.rboost)buffs.rboost=k.bd||600;
+  if(k.h>0&&k.dm>0){
+    const tg=k.aoe?enemies.filter(e=>e.alive&&e.x-rx<150&&e.x>camX):enemies.filter(e=>e.alive&&Math.abs(e.x-rx)<80);
+    for(let h=0;h<k.h;h++){for(const t of tg){
+      let d=gAtk()*k.dm;if(k.fc)d*=st.cd;d=Math.max(1,Math.floor(d));
+      t.hp-=d;t.fl=8;if(st.ls>0)st.hp=Math.min(st.hp+d*st.ls,st.mhp);
+      const ex=t.x-camX;
+      dnums.push({x:ex+(Math.random()-0.5)*10,y:t.y-t.sz-8-h*10,t:`✦${d}`,c:'#ffeb3b',l:35,vy:-1.5});
+      if(t.hp<=0){t.alive=false;
+        if(t.boss){const bsp=t.lvl*3;sp+=bsp;dnums.push({x:ex,y:t.y-40,t:`👑+${bsp}SP`,c:'#ffd700',l:60,vy:-2});}
+        else if(rd<10000||!endless){sp+=1;}
+        kills++;sfxKill();
+        for(let j=0;j<8;j++)parts.push({x:ex,y:t.y,vx:(Math.random()-0.5)*4,vy:-Math.random()*4,c:t.c,l:25,s:3});}
+    }}
+  }
+  if(k.hp2){st.hp=Math.min(st.hp+gAtk()*k.dm*k.hp2,st.mhp);}
+  dnums.push({x:W*0.5,y:groundY-35,t:`${s.icon||'✦'} ${s.label}`,c:'#ffd700',l:40,vy:-0.5});
+  sfxSkill();
+}
+
+// ===== DRAW =====
+function drawTitle(){
+  ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,W,H);
+  const t=Date.now()*0.001;
+  for(let i=0;i<20;i++){
+    const a=i/20*Math.PI*2+t*0.2,r=60+Math.sin(t*0.5+i*0.7)*25;
+    const nx=W/2+Math.cos(a)*r,ny=H*0.38+Math.sin(a)*r*0.7;
+    ctx.beginPath();ctx.arc(nx,ny,5,0,Math.PI*2);
+    ctx.fillStyle=`hsla(${i*18},60%,55%,0.5)`;ctx.fill();
+  }
+  ctx.fillStyle='#e0e0e0';ctx.font='bold 26px sans-serif';ctx.textAlign='center';
+  ctx.fillText('Sphere Grid',W/2,H*0.56);ctx.fillText('Rogue',W/2,H*0.62);
+  ctx.font='13px sans-serif';ctx.fillStyle='#9e9e9e';ctx.fillText('死んで覚えて、盤で育てる',W/2,H*0.68);
+  ctx.fillStyle='rgba(63,81,181,0.8)';rr(ctx,W/2-80,H*0.75,160,44,8);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 18px sans-serif';ctx.fillText('START',W/2,H*0.75+28);
+}
+
+function drawCast(){
+  ctx.fillStyle='#0c1024';ctx.fillRect(0,0,W,RUNNER_H);
+  ctx.fillStyle='#1a237e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
+  const px=W*0.25,t=Date.now()*0.005;
+  const ar=12+castTxts.length*1.5;
+  const animFrame=Math.floor(Date.now()/100);
+  
+  // エンチャント中のエフェクト
+  ctx.beginPath();ctx.arc(px,groundY-10,ar,0,Math.PI*2);
+  ctx.fillStyle=`rgba(100,181,246,${0.05+castTxts.length*0.01})`;ctx.fill();
+  ctx.strokeStyle=`rgba(100,181,246,${0.2+Math.sin(t)*0.1})`;ctx.lineWidth=1.5;ctx.stroke();
+  
+  // ピコのドット絵描画（キャスティング中）
+  drawPlayer(px-10,groundY,false,animFrame);
+  for(const ct of castTxts){
+    ctx.globalAlpha=ct.a;ctx.font=ct.sk?'bold 11px sans-serif':'10px sans-serif';
+    ctx.textAlign='center';ctx.fillStyle=ct.sk?'#ffd700':ct.color;
+    ctx.fillText(`${ct.sk?(ct.icon+' '):''}${ct.name}`,px+45,ct.y);
+    ctx.strokeStyle=ct.color+'44';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(px+10,groundY-10);ctx.lineTo(px+30,ct.y-3);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  if(castQ.length>0){ctx.fillStyle='rgba(200,200,255,0.5)';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText(`Enchanting... (${castQ.length})`,W/2,RUNNER_H-4);}
+  drawHUD(true);drawGrid_();
+}
+
+function drawRun(){
+  ctx.save();ctx.beginPath();ctx.rect(0,0,W,RUNNER_H);ctx.clip();
+  ctx.clearRect(0,0,W,RUNNER_H); // clear previous frame
+  
+  // 背景: 3レイヤーパララックス（空=固定 / 建物=遅い / 地面=速い）
+  if(imgBg.complete&&imgBg.naturalWidth>0){
+    const bgW=imgBg.width, bgH=imgBg.height;
+    // Background: top 70% of image (sky+buildings), fit to area above ground
+    const srcCropH=Math.floor(bgH*0.7);
+    const scale=W/bgW;
+    const dw=W,dh=srcCropH*scale;
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(imgBg,0,0,bgW,srcCropH,0,groundY-dh,dw,dh);
+    // Ground strip
+    ctx.fillStyle='#1a1a2e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
+    ctx.fillStyle='rgba(255,255,255,0.03)';ctx.fillRect(0,groundY,W,1);
+  } else {
+    // Fallback: グラデーション背景
+    const grd=ctx.createLinearGradient(0,0,0,RUNNER_H);
+    grd.addColorStop(0,'#0a0a1a');
+    grd.addColorStop(0.6,'#0c1024');
+    grd.addColorStop(1,'#1a1a2e');
+    ctx.fillStyle=grd;ctx.fillRect(0,0,W,RUNNER_H);
+    
+    // 星と月
+    const t=Date.now()*0.0001;
+    for(let i=0;i<15;i++){
+      const sx=(i*77+camX*0.05)%W;
+      const sy=(i*13)%Math.floor(groundY*0.7);
+      ctx.fillStyle=`rgba(255,255,200,${0.4+Math.sin(t*3+i)*0.3})`;
+      ctx.fillRect(sx,sy,1.5,1.5);
+    }
+    ctx.fillStyle='rgba(255,250,200,0.6)';
+    ctx.beginPath();ctx.arc(W*0.8,groundY*0.25,12,0,Math.PI*2);ctx.fill();
+    
+    // ビル群
+    for(const b of bgs){
+      const sx=b.x-camX*0.3;
+      if(sx>-b.w&&sx<W+b.w){
+        ctx.fillStyle=b.c;
+        ctx.fillRect(sx,groundY-b.h,b.w,b.h);
+        for(const win of b.windows){
+          ctx.fillStyle=win.lit?'rgba(255,220,100,0.6)':'rgba(100,100,150,0.2)';
+          ctx.fillRect(sx+win.x,groundY-b.h+win.y,2,2);
+        }
+      }
+    }
+  }
+  
+  // 地面 (石畳風)
+  ctx.fillStyle='rgba(26,35,126,0.3)';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
+  for(let i=0;i<W;i+=8){
+    ctx.fillStyle='rgba(100,120,180,0.05)';
+    ctx.fillRect(i,groundY,1,RUNNER_H-groundY);
+  }
+  for(const e of enemies){
+    if(!e.alive)continue;const ex=e.x-camX;if(ex<-20||ex>W+20)continue;
+    // ドット絵で敵を描画
+    drawEnemy(ex-e.sz/2,e.y,e.tp,e.fl,e.sz);
+    if(e.hp<e.mhp){
+      const bw=e.sz*(e.boss?2.5:2);
+      const bh=e.boss?5:3;
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(ex-bw/2,e.y-e.sz*(e.boss?2:1.8),bw,bh);
+      ctx.fillStyle=e.hp/e.mhp>0.5?'#4caf50':'#e53935';ctx.fillRect(ex-bw/2,e.y-e.sz*(e.boss?2:1.8),bw*(e.hp/e.mhp),bh);
+    }
+  }
+  const px=W*0.25;
+  if(alive){
+    const t=Date.now()*0.008,by=fight?0:Math.sin(t*2)*2;
+    const animFrame=Math.floor(Date.now()/100); // animation frame counter
+    
+    // バフエフェクト
+    if(buffs.trs){ctx.beginPath();ctx.arc(px,groundY-10+by,16,0,Math.PI*2);ctx.fillStyle='rgba(255,215,0,0.15)';ctx.fill();}
+    if(buffs.inv){ctx.beginPath();ctx.arc(px,groundY-10+by,14,0,Math.PI*2);ctx.strokeStyle='rgba(100,181,246,0.6)';ctx.lineWidth=2;ctx.stroke();}
+    if(buffs.phm){
+      ctx.globalAlpha=0.2;
+      drawPlayer(px-30,groundY+by,fight,animFrame);
+      drawPlayer(px-50,groundY+by,fight,animFrame);
+      ctx.globalAlpha=1;
+    }
+    
+    // ピコのドット絵描画
+    drawPlayer(px-10,groundY+by,fight,animFrame);
+    
+    // 攻撃スイングエフェクト
+    if(atkCd>atkCdMax-10){const sw=(atkCdMax-atkCd)/10*Math.PI;ctx.strokeStyle='#fff176';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(px+5,groundY-10+by);ctx.lineTo(px+5+Math.cos(sw-0.5)*15,groundY-10+by-Math.sin(sw-0.5)*12);ctx.stroke();}
+    
+    // HP バー
+    const hp=st.hp/st.mhp;ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(px-15,groundY-58,30,4);ctx.fillStyle=hp>0.5?'#4caf50':hp>0.25?'#ff9800':'#e53935';ctx.fillRect(px-15,groundY-58,30*hp,4);
+  } else {
+    // やられモーション
+    drawDeadPlayer(px-10,groundY,dTimer);
+  }
+  for(const p of parts){ctx.globalAlpha=p.l/30;ctx.fillStyle=p.c;ctx.fillRect(p.x-p.s/2,p.y-p.s/2,p.s,p.s);}ctx.globalAlpha=1;
+  for(const d of dnums){ctx.globalAlpha=Math.min(1,d.l/20);ctx.fillStyle=d.c;ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(d.t,d.x,d.y);}ctx.globalAlpha=1;
+  // distance is now in HUD
+  ctx.restore();
+  // (クリア画面はメインループ側で描画)
+}
+
+function drawHUD(casting){
+  const y=RUNNER_H;ctx.fillStyle='rgba(10,15,30,0.95)';ctx.fillRect(0,y,W,HUD_H);
+  ctx.fillStyle='rgba(100,181,246,0.15)';ctx.fillRect(0,y+HUD_H-1,W,1);
+  const s=casting?castSt:st;
+  // Row 1: Distance (big) + goal + SP + Run
+  ctx.font='bold 16px sans-serif';ctx.textAlign='left';
+  const dist=Math.floor(rd);
+  const goal=endless?'∞':'10000';
+  ctx.fillStyle='#fff';ctx.fillText(`${dist}m`,6,y+17);
+  const distW=ctx.measureText(`${dist}m`).width;
+  ctx.fillStyle='#9e9e9e';ctx.font='11px sans-serif';ctx.fillText(`/ ${goal}m`,6+distW+12,y+17);
+  ctx.textAlign='right';
+  ctx.fillStyle='#fff176';ctx.font='bold 16px sans-serif';ctx.fillText(`SP:${sp}`,W-6,y+17);
+  ctx.fillStyle='#9e9e9e';ctx.font='10px sans-serif';ctx.fillText(`Run#${runs}  Kill:${kills}`,W-6,y+24);
+  // Row 2: Stats
+  ctx.font='10px sans-serif';ctx.textAlign='left';
+  ctx.fillStyle='#e57373';ctx.fillText(`ATK${Math.floor(casting?s.atk:gAtk())}`,6,y+34);
+  ctx.fillStyle='#64b5f6';ctx.fillText(`DEF${casting?s.def:gDef()}`,52,y+34);
+  ctx.fillStyle='#4caf50';ctx.fillText(`HP${Math.floor(s.hp)}/${Math.floor(s.mhp)}`,98,y+34);
+  ctx.fillStyle='#66bb6a';ctx.fillText(`SPD${(casting?s.spd:gSpd()).toFixed(1)}`,175,y+34);
+  // Row 3: Secondary stats + skill icons (2 rows)
+  ctx.fillStyle='#ffeb3b';ctx.fillText(`CRT${Math.floor(s.cr*100)}%`,6,y+48);
+  ctx.fillStyle='#ffa726';ctx.fillText(`CD${Math.floor(s.cd*100)}%`,55,y+48);
+  if(s.ls>0){ctx.fillStyle='#ab47bc';ctx.fillText(`吸${Math.floor(s.ls*100)}%`,108,y+48);}
+  if(s.dg>0){ctx.fillStyle='#81d4fa';ctx.fillText(`避${Math.floor((casting?s.dg:gDdg())*100)}%`,150,y+48);}
+  if(s.reg>0){ctx.fillStyle='#66bb6a';ctx.fillText(`再${s.reg.toFixed(1)}`,192,y+48);}
+  // Skill icons in 2 rows
+  const maxPerRow=Math.floor((W-230)/14);
+  for(let si=0;si<learned.length;si++){
+    const row=si<maxPerRow?0:1;
+    const col=si<maxPerRow?si:si-maxPerRow;
+    ctx.globalAlpha=learned[si].cd>0?0.3:1;
+    ctx.font='11px sans-serif';
+    ctx.fillText(learned[si].icon||'✦',230+col*14,y+36+row*14);
+    ctx.globalAlpha=1;
+  }
+}
+
+const CC={attack:'#e53935',defense:'#42a5f5',heal:'#66bb6a',magic:'#ffeb3b',buffer:'#ab47bc',
+  debuffer:'#ff7043',evade:'#26c6da',counter:'#ffa726',berserker:'#d32f2f',paladin:'#1976d2',
+  sage:'#43a047',darkmage:'#6a1b9a',priestess:'#f57c00',rogue:'#00695c',ninja:'#00838f',
+  warlord:'#bf360c',outer:'#616161'};
+
+function drawGrid_(){
+  const y=GRID_Y;ctx.save();ctx.beginPath();ctx.rect(0,y,W,GRID_H);ctx.clip();
+  ctx.fillStyle='#080810';ctx.fillRect(0,y,W,GRID_H);
+  const ox=gs.x,oy=gs.y,tm=Date.now()*0.001;
+  // Edges
+  for(const[a,b]of gE){
+    const na=gN[a],nb=gN[b];ctx.beginPath();ctx.moveTo(na.x+ox,na.y+oy);ctx.lineTo(nb.x+ox,nb.y+oy);
+    if(na.unlocked&&nb.unlocked){ctx.strokeStyle='rgba(100,181,246,0.35)';ctx.lineWidth=2.5;ctx.shadowColor='#42a5f5';ctx.shadowBlur=4;}
+    else{ctx.strokeStyle='rgba(100,100,120,0.5)';ctx.lineWidth=1.8;ctx.shadowBlur=0;}
+    ctx.stroke();ctx.shadowBlur=0;
+  }
+  // Nodes
+  for(const n of gN){
+    const nx=n.x+ox,ny=n.y+oy;
+    if(ny<y-40||ny>y+GRID_H+40||nx<-40||nx>W+40)continue;
+    const isSk=n.type==='skill',r=isSk?(n.tier>=4?22:n.tier>=3?20:n.tier>=2?17:15):11;
+    const sel=selN===n.id,can=!n.unlocked&&canUL(n.id),cc=CC[n.cat]||'#aaa';
+    if(n.type==='start'){
+      ctx.beginPath();ctx.arc(nx,ny,14,0,Math.PI*2);ctx.fillStyle='#42a5f5';ctx.shadowColor='#42a5f5';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
+      ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText('START',nx,ny+3);
+    } else if(isSk){
+      const p=Math.sin(tm*2.5+n.id)*0.2+0.8;
+      ctx.beginPath();ctx.arc(nx,ny,r+4,0,Math.PI*2);ctx.strokeStyle=n.unlocked?cc+'88':cc+'44';ctx.lineWidth=1.5;ctx.stroke();
+      ctx.beginPath();ctx.arc(nx,ny,r,0,Math.PI*2);ctx.shadowColor=cc;ctx.shadowBlur=n.unlocked?18:(can?10:4);
+      ctx.fillStyle=n.unlocked?cc:`rgba(45,45,70,${0.8*p})`;ctx.fill();ctx.shadowBlur=0;
+      ctx.strokeStyle=sel?'#fff':(n.unlocked?'rgba(255,255,255,0.35)':cc+'55');ctx.lineWidth=sel?3:1.5;ctx.stroke();
+      const locked=n.requires&&!n.unlocked&&n.requires.some(rid=>!gN[rid].unlocked);
+      ctx.globalAlpha=n.unlocked?1:(can?0.65:0.35);ctx.font=`${r*0.8}px sans-serif`;ctx.textAlign='center';
+      ctx.fillText(locked?'🔒':n.icon,nx,ny+r*0.3);ctx.globalAlpha=1;
+      ctx.font='bold 12px sans-serif';ctx.fillStyle=n.unlocked?'#fff':cc+(can?'bb':'55');ctx.fillText(n.label,nx,ny+r+10);
+      if(n.tier>=2){ctx.font='11px sans-serif';ctx.fillStyle=n.unlocked?'#ffd700':cc+'44';ctx.fillText('★'.repeat(n.tier),nx,ny-r-2);}
+      if(!n.unlocked&&can){ctx.fillStyle=sp>=n.cost?'#fff176':'#e57373';ctx.font='bold 11px sans-serif';ctx.fillText(`${n.cost}SP`,nx,ny+r+19);}
+    } else if(n.unlocked){
+      ctx.beginPath();ctx.arc(nx,ny,r,0,Math.PI*2);ctx.fillStyle=cc;ctx.shadowColor=cc;ctx.shadowBlur=sel?10:4;ctx.fill();ctx.shadowBlur=0;
+      ctx.strokeStyle=sel?'#fff':'rgba(255,255,255,0.2)';ctx.lineWidth=sel?2:0.8;ctx.stroke();
+      ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText(n.label,nx,ny+2);
+    } else {
+      ctx.beginPath();ctx.arc(nx,ny,r,0,Math.PI*2);ctx.fillStyle=can?'rgba(55,55,85,0.7)':'rgba(30,30,50,0.45)';ctx.fill();
+      ctx.strokeStyle=sel?(sp>=n.cost?'#fff176':'#ff9800'):(can?'rgba(140,140,170,0.35)':'rgba(55,55,70,0.2)');ctx.lineWidth=sel?2:0.8;ctx.stroke();
+      ctx.fillStyle=can?'rgba(200,200,220,0.6)':'rgba(110,110,130,0.25)';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText(n.label,nx,ny+2);
+      if(can){ctx.fillStyle=sp>=n.cost?'#fff176':'#e57373';ctx.font='11px sans-serif';ctx.fillText(`${n.cost}SP`,nx,ny+r+9);}
+    }
+  }
+  if(selN!==null){
+    const n=gN[selN];
+    if(n.type!=='start'){
+      const iS=n.type==='skill';
+      const can=!n.unlocked&&canUL(n.id);
+      const pw=iS?190:140,ph=iS?55:40;
+      const px_=Math.max(8,Math.min(W-pw-8,n.x+ox-pw/2));
+      const py_=Math.min(y+GRID_H-ph-8,Math.max(y+4,n.y+oy+(iS?30:20)));
+      const cc=CC[n.cat]||'#64b5f6';
+      ctx.fillStyle='rgba(10,10,28,0.95)';rr(ctx,px_,py_,pw,ph,6);ctx.fill();
+      ctx.strokeStyle=cc+'44';ctx.lineWidth=1;rr(ctx,px_,py_,pw,ph,6);ctx.stroke();
+      ctx.fillStyle=n.unlocked?'#8f8':'#e0e0e0';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+      const prefix=iS?(n.icon+' '):'';
+      const suffix=n.unlocked?' ✓':'';
+      ctx.fillText(`${prefix}${n.label}${suffix}`,px_+6,py_+13);
+      if(n.desc){
+        ctx.font='10px sans-serif';ctx.fillStyle='#ffab40';
+        // Split on newline for multi-line desc
+        const lines=n.desc.split('\n');
+        for(let li=0;li<lines.length;li++)ctx.fillText(lines[li],px_+6,py_+26+li*12);
+      } else if(n.type==='stat'){
+        const sn=PNAMES[n.stat]||'';
+        if(sn){ctx.font='10px sans-serif';ctx.fillStyle='#9e9e9e';ctx.fillText(sn,px_+6,py_+26);}
+      }
+      if(!n.unlocked&&can&&sp>=n.cost){
+        ctx.fillStyle='rgba(76,175,80,0.85)';rr(ctx,px_+pw-52,py_+ph-24,45,20,4);ctx.fill();
+        ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText('解放',px_+pw-30,py_+ph-10);
+      } else if(!n.unlocked&&can){
+        ctx.fillStyle='#e57373';ctx.font='10px sans-serif';ctx.textAlign='right';ctx.fillText(`${n.cost}SP要`,px_+pw-6,py_+ph-10);
+      } else if(!n.unlocked){
+        ctx.fillStyle='#666';ctx.font='10px sans-serif';ctx.textAlign='right';ctx.fillText(`${n.cost}SP`,px_+pw-6,py_+ph-10);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+
+// Input
+function getP(e){const r=C.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top};}
+let ts=0,tm_=false;
+function pinchDist(e){const t=e.touches;if(t.length<2)return 0;return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
+function pinchCenter(e){const t=e.touches;const r=C.getBoundingClientRect();return{x:(t[0].clientX+t[1].clientX)/2-r.left,y:(t[0].clientY+t[1].clientY)/2-r.top};}
+let pinching=false;
+C.addEventListener('touchstart',e=>{e.preventDefault();if(ac.state==='suspended')ac.resume();
+  if(cleared&&!endless)return; // クリア画面中はドラッグ等ブロック
+  if(e.touches.length===2&&state!==ST.TITLE){
+    pinching=true;gs.pinchDist=pinchDist(e);gs.zoomStart=gs.zoom;tm_=true;return;
+  }
+  const p=getP(e);ts=Date.now();tm_=false;if(state===ST.TITLE)return;
+  if(p.y>GRID_Y){gs.drag=true;gs.sx=p.x;gs.sy=p.y;gs.ox=gs.x;gs.oy=gs.y;}
+},{passive:false});
+C.addEventListener('touchmove',e=>{e.preventDefault();
+  if(pinching&&e.touches.length===2){
+    const d=pinchDist(e);if(gs.pinchDist>0&&d>10){
+      const oldZoom=gs.zoom;
+      const newZoom=Math.max(0.08,Math.min(6,gs.zoomStart*(d/gs.pinchDist)));
+      if(Math.abs(newZoom-oldZoom)<oldZoom*0.5){ // prevent sudden jumps
+        gs.zoom=newZoom;
+        const pc=pinchCenter(e);
+        const ratio=gs.zoom/oldZoom;
+        gs.x=(gs.x-pc.x)*ratio+pc.x;
+        gs.y=(gs.y-pc.y)*ratio+pc.y;
+        if(isNaN(gs.x))gs.x=0;if(isNaN(gs.y))gs.y=0;
+        posGrid();
+      }
+    }
+    return;
+  }
+  const p=getP(e);if(gs.drag){const dx=p.x-gs.sx,dy=p.y-gs.sy;if(Math.abs(dx)>5||Math.abs(dy)>5)tm_=true;gs.x=gs.ox+dx;gs.y=gs.oy+dy;}
+},{passive:false});
+C.addEventListener('touchend',e=>{e.preventDefault();
+  if(pinching){if(e.touches.length<2)pinching=false;return;}
+  gs.drag=false;if(state===ST.TITLE){startG();return;}
+  // クリア画面: 全入力ブロック、3秒後にボタンのみ有効
+  if(cleared&&!endless){
+    if(Date.now()-clearTime<3000)return; // 3秒間操作不可
+    const r=C.getBoundingClientRect();
+    const tp=e.changedTouches?e.changedTouches[0]:e;
+    const tx=tp?tp.clientX-r.left:W/2,ty=tp?tp.clientY-r.top:H/2;
+    const btnY=H*0.63,btnH=48;
+    if(ty>btnY&&ty<btnY+btnH){
+      if(tx<W/2){
+        // Restart
+        state=ST.PLAY;buildGrid();resize();
+        sp=0;runs=0;kills=0;best=0;base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+        learned=[];initRun();cleared=false;return;
+      } else {
+        endless=true;cleared=false;alive=true;dTimer=0;st.hp=st.mhp;return;
+      }
+    }
+    return; // ボタン外タップは無視
+  }
+  if(!tm_&&Date.now()-ts<300){const r=C.getBoundingClientRect();if(e.changedTouches&&e.changedTouches[0]){const p={x:e.changedTouches[0].clientX-r.left,y:e.changedTouches[0].clientY-r.top};if(p.y>GRID_Y)gridTap(p);}}
+},{passive:false});
+C.addEventListener('wheel',e=>{if(state===ST.TITLE)return;e.preventDefault();
+  const oldZoom=gs.zoom;
+  gs.zoom=Math.max(0.08,Math.min(6,gs.zoom*(e.deltaY>0?0.9:1.1)));
+  const p=getP(e);const ratio=gs.zoom/oldZoom;
+  gs.x=(gs.x-p.x)*ratio+p.x;gs.y=(gs.y-p.y)*ratio+p.y;
+  posGrid();
+},{passive:false});
+C.addEventListener('click',e=>{const p=getP(e);if(state===ST.TITLE){startG();return;}
+  if(cleared&&!endless){
+    if(Date.now()-clearTime<3000)return;
+    const btnY=H*0.63,btnH=48;
+    if(p.y>btnY&&p.y<btnY+btnH){
+      if(p.x<W/2){
+        state=ST.PLAY;buildGrid();resize();
+        sp=0;runs=0;kills=0;best=0;base={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
+        learned=[];initRun();cleared=false;return;
+      }
+      endless=true;cleared=false;alive=true;dTimer=0;st.hp=st.mhp;return;
+    }
+    return;
+  }
+  if(p.y>GRID_Y)gridTap(p);});
+
+function startG(){state=ST.PLAY;buildGrid();resize();initRun();}
+
+function gridTap(pos){
+  const ox=gs.x,oy=gs.y;
+  if(selN!==null){
+    const n=gN[selN];
+    if(!n.unlocked&&canUL(n.id)&&sp>=n.cost){
+      const iS=n.type==='skill',pw=iS?190:140,ph=iS?55:40;
+      const px_=Math.max(8,Math.min(W-pw-8,n.x+ox-pw/2));
+      const py_=Math.min(GRID_Y+GRID_H-ph-8,Math.max(GRID_Y+4,n.y+oy+(iS?30:20)));
+      if(pos.x>px_+pw-52&&pos.x<px_+pw-7&&pos.y>py_+ph-24&&pos.y<py_+ph-4){unlockN(n);selN=null;return;}
+    }
+  }
+  for(const n of gN){
+    const nx=n.x+ox,ny=n.y+oy;
+    const tapR=Math.max(n.type==='skill'?24:18,12/gs.zoom);
+    if(Math.hypot(pos.x-nx,pos.y-ny)<tapR){
+      if(selN===n.id){
+        if(!n.unlocked&&canUL(n.id)&&sp>=n.cost)unlockN(n);
+        selN=null;
+      } else {
+        selN=n.id;
+      }
+      return;
+    }
+  }
+  selN=null;
+}
+
+// Loop
+function drawClear(){
+  ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(0,0,W,H);
+  const ct=Date.now()*0.001;
+  for(let i=0;i<30;i++){
+    const a=i*0.21+ct*0.3,r_=50+Math.sin(ct+i*0.5)*30+i*4;
+    ctx.fillStyle=`hsla(${45+i*3},80%,60%,${0.3+Math.sin(ct*2+i)*0.2})`;
+    ctx.beginPath();ctx.arc(W/2+Math.cos(a)*r_,H*0.35+Math.sin(a)*r_*0.6,2+Math.sin(ct+i)*1,0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillStyle='#ffd700';ctx.font='bold 40px sans-serif';ctx.textAlign='center';
+  ctx.fillText('🎉 CLEAR! 🎉',W/2,H*0.25);
+  let rank='D',rc='#9e9e9e';
+  if(runs<=5){rank='S';rc='#ffd700';}
+  else if(runs<=10){rank='A';rc='#e040fb';}
+  else if(runs<=20){rank='B';rc='#42a5f5';}
+  else if(runs<=50){rank='C';rc='#66bb6a';}
+  ctx.fillStyle=rc;ctx.font='bold 70px sans-serif';
+  ctx.fillText(rank,W/2,H*0.42);
+  ctx.fillStyle='#fff';ctx.font='16px sans-serif';
+  ctx.fillText(`${runs} runs / ${kills} kills`,W/2,H*0.50);
+  ctx.fillText(`Best: ${Math.floor(best)}m`,W/2,H*0.55);
+  ctx.fillStyle='rgba(76,175,80,0.9)';rr(ctx,W/2-125,H*0.63,115,48,10);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 15px sans-serif';
+  ctx.fillText('🔄 Restart',W/2-68,H*0.63+30);
+  ctx.fillStyle='rgba(156,39,176,0.9)';rr(ctx,W/2+10,H*0.63,115,48,10);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.fillText('♾️ Endless',W/2+68,H*0.63+30);
+}
+
+function loop(){
+  if(state===ST.TITLE)drawTitle();
+  else if(state===ST.CAST){updCast();drawCast();}
+  else{updRun();drawRun();drawHUD(false);drawGrid_();}
+  if(cleared&&!endless)drawClear();
+  requestAnimationFrame(loop);
+}
+resize();loop();
+</script>
+</body>
+</html>
