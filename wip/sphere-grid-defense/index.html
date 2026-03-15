@@ -25,7 +25,7 @@ function resize(){
   GRID_Y=RUNNER_H+HUD_H;GRID_H=H-GRID_Y;
   if(gN.length) posGrid();
 }
-let RUNNER_H=0;const HUD_H=48;let GRID_Y=0,GRID_H=0;
+let RUNNER_H=0;const HUD_H=66;let GRID_Y=0,GRID_H=0;
 
 // Audio
 const ac=new(window.AudioContext||window.webkitAudioContext)();
@@ -60,284 +60,178 @@ let gN=[],gE=[];
 let gs={x:0,y:0,drag:false,sx:0,sy:0,ox:0,oy:0,zoom:1,zoomStart:1,pinchDist:0};
 let selN=null,gcx=0,gcy=0;
 
-// ===== SPHERE GRID - FF10 style with circular clusters =====
+// ===== SPHERE GRID - 16方向 (8基本職 + 8組み合わせ職) =====
 function buildGrid(){
   gN=[];gE=[];let id=0;const nodes=[],edges=[];
   function N(gx,gy,type,opts={}){const n={id:id++,gx,gy,type,unlocked:false,applied:false,...opts};nodes.push(n);return n.id;}
   function E(a,b){edges.push([a,b]);}
 
-  // ===== CENTER HUB (6) =====
+  // ===== CENTER START =====
   const s0=N(0,0,'start',{unlocked:true,label:'START'});
-  const c1=N(0,-2,'stat',{cost:1,stat:'mhp',val:5,label:'HP+5',cat:'guard'});
-  const c2=N(1.9,-0.6,'stat',{cost:1,stat:'atk',val:1,label:'ATK+1',cat:'might'});
-  const c3=N(1.2,1.6,'stat',{cost:1,stat:'cr',val:0.03,label:'CRT+3%',cat:'arcane'});
-  const c4=N(-1.2,1.6,'stat',{cost:1,stat:'ls',val:0.03,label:'吸血+3%',cat:'dark'});
-  const c5=N(-1.9,-0.6,'stat',{cost:1,stat:'spd',val:0.08,label:'SPD+',cat:'swift'});
-  E(s0,c1);E(s0,c2);E(s0,c3);E(s0,c4);E(s0,c5);
-  E(c1,c2);E(c2,c3);E(c3,c4);E(c4,c5);E(c5,c1);
 
-  // ===== MIGHT (right, 24 nodes) =====
-  // Winding entry
-  const m0=N(3.4,-0.8,'stat',{cost:1,stat:'atk',val:1,label:'ATK+1',cat:'might'});
-  const m1=N(4.8,0.3,'stat',{cost:1,stat:'atk',val:2,label:'ATK+2',cat:'might'});
-  const m2=N(5.8,-0.7,'stat',{cost:1,stat:'mhp',val:8,label:'HP+8',cat:'might'});
-  const m3=N(6.8,0.5,'stat',{cost:1,stat:'atk',val:2,label:'ATK+2',cat:'might'});
-  E(c2,m0);E(m0,m1);E(m1,m2);E(m2,m3);
-  // Loop 1 + Tier1 skill
-  const m4=N(8,-0.6,'stat',{cost:2,stat:'atk',val:2,label:'ATK+2',cat:'might'});
-  const m5=N(8.2,1.2,'stat',{cost:2,stat:'mh',val:1,label:'連撃+1',cat:'might'});
-  const mS1=N(9.2,0.2,'skill',{cost:3,skill:'powerStrike',label:'Brave Strike',cat:'might',desc:'ATK×3',icon:'⚔️',tier:1});
-  const m6=N(9.8,-0.8,'stat',{cost:2,stat:'atk',val:3,label:'ATK+3',cat:'might'});
-  E(m3,m4);E(m3,m5);E(m4,mS1);E(m5,mS1);E(mS1,m6);E(m4,m6);
-  // Dead-end branch (reward)
-  const m7=N(8.8,2.5,'stat',{cost:2,stat:'mhp',val:12,label:'HP+12',cat:'might'});
-  const m8=N(9.8,3.2,'stat',{cost:2,stat:'atk',val:4,label:'ATK+4',cat:'might'});
-  E(m5,m7);E(m7,m8);
-  // Connector
-  const m9=N(11,-0.3,'stat',{cost:2,stat:'atk',val:3,label:'ATK+3',cat:'might'});
-  const m10=N(12,0.8,'stat',{cost:2,stat:'atk',val:3,label:'ATK+3',cat:'might'});
-  const m11=N(12.2,-1,'stat',{cost:2,stat:'mh',val:1,label:'連撃+1',cat:'might'});
-  E(m6,m9);E(m9,m10);E(m9,m11);
-  // Loop 2 + Tier2
-  const m12=N(13.5,0.5,'stat',{cost:2,stat:'atk',val:4,label:'ATK+4',cat:'might'});
-  const m13=N(13.5,-1.2,'stat',{cost:2,stat:'atk',val:4,label:'ATK+4',cat:'might'});
-  const mS2=N(14.8,0,'skill',{cost:6,skill:'berserker',label:'Draconic Fury',cat:'might',desc:'ATK×5全体',icon:'🐉',tier:2});
-  E(m10,m12);E(m11,m13);E(m12,mS2);E(m13,mS2);E(m12,m13);
-  // Dead-end branch 2
-  const m14=N(14.5,-2.5,'stat',{cost:3,stat:'mhp',val:20,label:'HP+20',cat:'might'});
-  const m15=N(15.5,-3.2,'stat',{cost:3,stat:'atk',val:5,label:'ATK+5',cat:'might'});
-  E(m13,m14);E(m14,m15);
-  // Final stretch + Tier3
-  const m16=N(16,1,'stat',{cost:3,stat:'atk',val:5,label:'ATK+5',cat:'might'});
-  const m17=N(16.2,-0.5,'stat',{cost:3,stat:'mh',val:1,label:'連撃+1',cat:'might'});
-  const m18=N(17.5,0.3,'stat',{cost:3,stat:'atk',val:6,label:'ATK+6',cat:'might'});
-  const mS3=N(19,0,'skill',{cost:9,skill:'ragnarok',label:'Ragnarök',cat:'might',desc:'ATK×8殲滅',icon:'💀',tier:3});
-  E(mS2,m16);E(mS2,m17);E(m16,m18);E(m17,m18);E(m18,mS3);
+  // Inner ring (8 nodes around start)
+  const inner=[];
+  for(let i=0;i<8;i++){
+    const ang=i*Math.PI/4;
+    const gx=Math.cos(ang)*1.8,gy=Math.sin(ang)*1.8;
+    const stats=[
+      {stat:'atk',val:1,label:'ATK+1',cat:'attack'},
+      {stat:'def',val:1,label:'DEF+1',cat:'defense'},
+      {stat:'mhp',val:5,label:'HP+5',cat:'heal'},
+      {stat:'cr',val:0.03,label:'CRT+3%',cat:'magic'},
+      {stat:'spd',val:0.08,label:'SPD+',cat:'buffer'},
+      {stat:'ls',val:0.03,label:'吸血+3%',cat:'debuffer'},
+      {stat:'dg',val:0.04,label:'回避+4%',cat:'evade'},
+      {stat:'mhp',val:5,label:'HP+5',cat:'attack'}
+    ][i];
+    const nid=N(gx,gy,'stat',{cost:1,...stats});
+    inner.push(nid);
+    E(s0,nid);
+  }
+  // Connect inner ring
+  for(let i=0;i<8;i++)E(inner[i],inner[(i+1)%8]);
 
-  // ===== GUARD (upper-left, 24 nodes) =====
-  // Winding entry NW
-  const g0=N(-1.8,-3.5,'stat',{cost:1,stat:'def',val:1,label:'DEF+1',cat:'guard'});
-  const g1=N(-3,-4.2,'stat',{cost:1,stat:'mhp',val:8,label:'HP+8',cat:'guard'});
-  const g2=N(-2,-5.5,'stat',{cost:1,stat:'def',val:1,label:'DEF+1',cat:'guard'});
-  const g3=N(-3.5,-6,'stat',{cost:1,stat:'mhp',val:10,label:'HP+10',cat:'guard'});
-  E(c1,g0);E(g0,g1);E(g1,g2);E(g1,g3);
-  // Loop 1 + Tier1
-  const g4=N(-2.5,-7.2,'stat',{cost:2,stat:'dg',val:0.05,label:'回避+5%',cat:'guard'});
-  const g5=N(-4.2,-7,'stat',{cost:2,stat:'mhp',val:12,label:'HP+12',cat:'guard'});
-  const gS1=N(-3.5,-8.2,'skill',{cost:3,skill:'ironWall',label:'Infinity Wall',cat:'guard',desc:'3秒完全防御',icon:'🛡️',tier:1});
-  const g6=N(-2,-8.8,'stat',{cost:2,stat:'def',val:2,label:'DEF+2',cat:'guard'});
-  E(g2,g4);E(g3,g5);E(g4,gS1);E(g5,gS1);E(gS1,g6);E(g4,g6);
-  // Dead-end
-  const g7=N(-5.5,-7.5,'stat',{cost:2,stat:'mhp',val:15,label:'HP+15',cat:'guard'});
-  const g8=N(-6.5,-8.5,'stat',{cost:2,stat:'def',val:2,label:'DEF+2',cat:'guard'});
-  E(g5,g7);E(g7,g8);
-  // Connector
-  const g9=N(-3,-10,'stat',{cost:2,stat:'def',val:2,label:'DEF+2',cat:'guard'});
-  const g10=N(-4.5,-10.5,'stat',{cost:2,stat:'mhp',val:15,label:'HP+15',cat:'guard'});
-  const g11=N(-2,-10.8,'stat',{cost:2,stat:'dg',val:0.06,label:'回避+6%',cat:'guard'});
-  E(g6,g9);E(gS1,g10);E(g9,g10);E(g9,g11);
-  // Loop 2 + Tier2
-  const g12=N(-4,-12,'stat',{cost:2,stat:'def',val:2,label:'DEF+2',cat:'guard'});
-  const g13=N(-2,-12.5,'stat',{cost:2,stat:'mhp',val:20,label:'HP+20',cat:'guard'});
-  const gS2=N(-3,-13.5,'skill',{cost:6,skill:'aegis',label:'Radiant Aegis',cat:'guard',desc:'5秒無敵+全回復',icon:'✨',tier:2});
-  E(g10,g12);E(g11,g13);E(g12,gS2);E(g13,gS2);E(g12,g13);
-  // Final stretch + Tier3
-  const g14=N(-4.5,-14.5,'stat',{cost:3,stat:'def',val:3,label:'DEF+3',cat:'guard'});
-  const g15=N(-2,-15,'stat',{cost:3,stat:'mhp',val:25,label:'HP+25',cat:'guard'});
-  const g16=N(-3.5,-16,'stat',{cost:3,stat:'def',val:4,label:'DEF+4',cat:'guard'});
-  const g17=N(-2.5,-17.5,'stat',{cost:3,stat:'mhp',val:30,label:'HP+30',cat:'guard'});
-  const gS3=N(-3,-19,'skill',{cost:9,skill:'immortal',label:'Immortal Bastion',cat:'guard',desc:'10秒無敵+再生',icon:'🏰',tier:3});
-  E(gS2,g14);E(gS2,g15);E(g14,g16);E(g15,g16);E(g16,g17);E(g17,gS3);
+  // ===== 16方向の定義 =====
+  // 8つの基本職 (0, 45, 90, 135, 180, 225, 270, 315度)
+  const dirs=[
+    {name:'攻撃',ang:270,cat:'attack',stats:[{s:'atk',base:1},{s:'mhp',base:8}],t1:'powerStrike',t2:'battleMaster',t3:'ragnarok'},
+    {name:'防御',ang:315,cat:'defense',stats:[{s:'def',base:1},{s:'mhp',base:10}],t1:'ironWall',t2:'guardian',t3:'immortal'},
+    {name:'回復',ang:0,cat:'heal',stats:[{s:'reg',base:0.2},{s:'mhp',base:8}],t1:'blessing',t2:'archbishop',t3:'holyNova'},
+    {name:'攻撃魔法',ang:45,cat:'magic',stats:[{s:'cr',base:0.04},{s:'cd',base:0.15}],t1:'critSlash',t2:'archmage',t3:'eclipse'},
+    {name:'バッファー',ang:90,cat:'buffer',stats:[{s:'spd',base:0.1},{s:'dg',base:0.04}],t1:'haste',t2:'tactician',t3:'transcend'},
+    {name:'デバッファー',ang:135,cat:'debuffer',stats:[{s:'ls',base:0.04},{s:'reg',base:0.2}],t1:'drain',t2:'hexMaster',t3:'soulBurst'},
+    {name:'回避',ang:180,cat:'evade',stats:[{s:'dg',base:0.05},{s:'spd',base:0.12}],t1:'gale',t2:'phantom',t3:'mirageWalk'},
+    {name:'反撃',ang:225,cat:'counter',stats:[{s:'atk',base:1},{s:'cr',base:0.03}],t1:'execute',t2:'counter',t3:'devastate'}
+  ];
+  
+  // 8つの組み合わせ職 (中間角度: 22.5, 67.5, 112.5, ...)
+  const hybrid=[
+    {name:'重戦士',ang:292.5,cat:'berserker',base1:0,base2:1,t2:'berserker'},
+    {name:'パラディン',ang:337.5,cat:'paladin',base1:1,base2:2,t2:'aegis'},
+    {name:'賢者',ang:22.5,cat:'sage',base1:2,base2:3,t2:'sageBlast'},
+    {name:'黒魔術士',ang:67.5,cat:'darkmage',base1:3,base2:4,t2:'darkPact'},
+    {name:'巫女',ang:112.5,cat:'priestess',base1:4,base2:5,t2:'sanctify'},
+    {name:'盗賊',ang:157.5,cat:'rogue',base1:5,base2:6,t2:'assassinate'},
+    {name:'忍者',ang:202.5,cat:'ninja',base1:6,base2:7,t2:'ninjaBlade'},
+    {name:'狂戦士',ang:247.5,cat:'warlord',base1:7,base2:0,t2:'warlord'}
+  ];
 
-  // ===== SWIFT (lower-left, 24 nodes) =====
-  // Winding entry SW
-  const w0=N(-1.8,3.5,'stat',{cost:1,stat:'spd',val:0.1,label:'SPD+',cat:'swift'});
-  const w1=N(-3,4.2,'stat',{cost:1,stat:'dg',val:0.04,label:'回避+4%',cat:'swift'});
-  const w2=N(-2,5.5,'stat',{cost:1,stat:'spd',val:0.12,label:'SPD+',cat:'swift'});
-  const w3=N(-3.5,6,'stat',{cost:1,stat:'dg',val:0.04,label:'回避+4%',cat:'swift'});
-  E(c5,w0);E(w0,w1);E(w1,w2);E(w1,w3);
-  // Loop 1 + Tier1
-  const w4=N(-2.5,7.2,'stat',{cost:2,stat:'spd',val:0.15,label:'SPD+',cat:'swift'});
-  const w5=N(-4.2,7,'stat',{cost:2,stat:'dg',val:0.06,label:'回避+6%',cat:'swift'});
-  const wS1=N(-3.5,8.2,'skill',{cost:3,skill:'haste',label:'Haste',cat:'swift',desc:'5秒速度2倍',icon:'💨',tier:1});
-  const w6=N(-2,8.8,'stat',{cost:2,stat:'spd',val:0.15,label:'SPD+',cat:'swift'});
-  E(w2,w4);E(w3,w5);E(w4,wS1);E(w5,wS1);E(wS1,w6);E(w4,w6);
-  // Dead-end
-  const w7=N(-5.5,7.5,'stat',{cost:2,stat:'spd',val:0.2,label:'SPD+',cat:'swift'});
-  const w8=N(-6.5,8.5,'stat',{cost:2,stat:'dg',val:0.08,label:'回避+8%',cat:'swift'});
-  E(w5,w7);E(w7,w8);
-  // Connector
-  const w9=N(-3,10,'stat',{cost:2,stat:'spd',val:0.2,label:'SPD+',cat:'swift'});
-  const w10=N(-4.5,10.5,'stat',{cost:2,stat:'dg',val:0.08,label:'回避+8%',cat:'swift'});
-  const w11=N(-2,10.8,'stat',{cost:2,stat:'spd',val:0.2,label:'SPD+',cat:'swift'});
-  E(w6,w9);E(wS1,w10);E(w9,w10);E(w9,w11);
-  // Loop 2 + Tier2
-  const w12=N(-4,12,'stat',{cost:2,stat:'dg',val:0.1,label:'回避+10%',cat:'swift'});
-  const w13=N(-2,12.5,'stat',{cost:2,stat:'spd',val:0.25,label:'SPD+',cat:'swift'});
-  const wS2=N(-3,13.5,'skill',{cost:6,skill:'gale',label:'Gale Force',cat:'swift',desc:'8秒速度3倍+回避',icon:'🌪️',tier:2});
-  E(w10,w12);E(w11,w13);E(w12,wS2);E(w13,wS2);E(w12,w13);
-  // Final stretch + Tier3
-  const w14=N(-4.5,14.5,'stat',{cost:3,stat:'spd',val:0.3,label:'SPD+',cat:'swift'});
-  const w15=N(-2,15,'stat',{cost:3,stat:'dg',val:0.12,label:'回避+12%',cat:'swift'});
-  const w16=N(-3.5,16,'stat',{cost:3,stat:'spd',val:0.35,label:'SPD+',cat:'swift'});
-  const w17=N(-2.5,17.5,'stat',{cost:3,stat:'dg',val:0.15,label:'回避+15%',cat:'swift'});
-  const wS3=N(-3,19,'skill',{cost:9,skill:'phantom',label:'Phantom Shift',cat:'swift',desc:'10秒速度5倍+回避80%',icon:'👻',tier:3});
-  E(wS2,w14);E(wS2,w15);E(w14,w16);E(w15,w16);E(w16,w17);E(w17,wS3);
+  const paths=[];
+  
+  // ===== 8方向の基本職パス =====
+  for(let di=0;di<dirs.length;di++){
+    const d=dirs[di];
+    const path=[];
+    const ang=d.ang*Math.PI/180;
+    const cx=Math.cos(ang),cy=Math.sin(ang);
+    
+    // Tier1: 内側から3-5ユニット
+    for(let r=3;r<=5;r++){
+      const gx=cx*r,gy=cy*r;
+      const st=d.stats[r%2];
+      const val=st.base*(1+Math.floor(r/3));
+      path.push(N(gx,gy,'stat',{cost:1,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
+    }
+    // Tier1 Skill at r=6
+    const t1n=N(cx*6,cy*6,'skill',{cost:3,skill:d.t1,label:d.t1,cat:d.cat,tier:1,icon:'⚔️',desc:'Tier1'});
+    path.push(t1n);
+    
+    // Tier2: 7-10ユニット
+    for(let r=7;r<=10;r++){
+      const gx=cx*r,gy=cy*r;
+      const st=d.stats[r%2];
+      const val=st.base*(2+Math.floor(r/4));
+      path.push(N(gx,gy,'stat',{cost:2,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
+    }
+    // Tier2 Skill at r=11
+    const t2n=N(cx*11,cy*11,'skill',{cost:6,skill:d.t2,label:d.t2,cat:d.cat,tier:2,icon:'✨',desc:'Tier2'});
+    path.push(t2n);
+    
+    // Tier3: 12-15ユニット
+    for(let r=12;r<=15;r++){
+      const gx=cx*r,gy=cy*r;
+      const st=d.stats[r%2];
+      const val=st.base*(3+Math.floor(r/5));
+      path.push(N(gx,gy,'stat',{cost:3,stat:st.s,val,label:`${st.s.toUpperCase()}+${val}`,cat:d.cat}));
+    }
+    // Tier3 Skill at r=16
+    const t3n=N(cx*16,cy*16,'skill',{cost:9,skill:d.t3,label:d.t3,cat:d.cat,tier:3,icon:'💫',desc:'Tier3'});
+    path.push(t3n);
+    
+    // Connect path
+    E(inner[di],path[0]);
+    for(let i=0;i<path.length-1;i++)E(path[i],path[i+1]);
+    
+    paths[di]=path;
+  }
 
-  // ===== ARCANE (upper-right, 24 nodes) =====
-  // Winding entry NE
-  const a0=N(1.8,-3.5,'stat',{cost:1,stat:'cr',val:0.04,label:'CRT+4%',cat:'arcane'});
-  const a1=N(3,-4.2,'stat',{cost:1,stat:'cd',val:0.15,label:'CRD+15%',cat:'arcane'});
-  const a2=N(2,-5.5,'stat',{cost:1,stat:'cr',val:0.04,label:'CRT+4%',cat:'arcane'});
-  const a3=N(3.5,-6,'stat',{cost:1,stat:'cd',val:0.15,label:'CRD+15%',cat:'arcane'});
-  E(c1,a0);E(a0,a1);E(a1,a2);E(a1,a3);
-  // Loop 1 + Tier1
-  const a4=N(2.5,-7.2,'stat',{cost:2,stat:'cr',val:0.06,label:'CRT+6%',cat:'arcane'});
-  const a5=N(4.2,-7,'stat',{cost:2,stat:'cd',val:0.2,label:'CRD+20%',cat:'arcane'});
-  const aS1=N(3.5,-8.2,'skill',{cost:3,skill:'critSlash',label:'Void Slash',cat:'arcane',desc:'確定CRT×3連',icon:'⚡',tier:1});
-  const a6=N(2,-8.8,'stat',{cost:2,stat:'cr',val:0.06,label:'CRT+6%',cat:'arcane'});
-  E(a2,a4);E(a3,a5);E(a4,aS1);E(a5,aS1);E(aS1,a6);E(a4,a6);
-  // Dead-end
-  const a7=N(5.5,-7.5,'stat',{cost:2,stat:'cd',val:0.25,label:'CRD+25%',cat:'arcane'});
-  const a8=N(6.5,-8.5,'stat',{cost:2,stat:'cr',val:0.08,label:'CRT+8%',cat:'arcane'});
-  E(a5,a7);E(a7,a8);
-  // Connector
-  const a9=N(3,-10,'stat',{cost:2,stat:'cd',val:0.3,label:'CRD+30%',cat:'arcane'});
-  const a10=N(4.5,-10.5,'stat',{cost:2,stat:'cr',val:0.08,label:'CRT+8%',cat:'arcane'});
-  const a11=N(2,-10.8,'stat',{cost:2,stat:'cd',val:0.3,label:'CRD+30%',cat:'arcane'});
-  E(a6,a9);E(aS1,a10);E(a9,a10);E(a9,a11);
-  // Loop 2 + Tier2
-  const a12=N(4,-12,'stat',{cost:2,stat:'cr',val:0.1,label:'CRT+10%',cat:'arcane'});
-  const a13=N(2,-12.5,'stat',{cost:2,stat:'cd',val:0.4,label:'CRD+40%',cat:'arcane'});
-  const aS2=N(3,-13.5,'skill',{cost:6,skill:'execute',label:'Executioner',cat:'arcane',desc:'5連100%CRT',icon:'🗡️',tier:2});
-  E(a10,a12);E(a11,a13);E(a12,aS2);E(a13,aS2);E(a12,a13);
-  // Final stretch + Tier3
-  const a14=N(4.5,-14.5,'stat',{cost:3,stat:'cr',val:0.12,label:'CRT+12%',cat:'arcane'});
-  const a15=N(2,-15,'stat',{cost:3,stat:'cd',val:0.5,label:'CRD+50%',cat:'arcane'});
-  const a16=N(3.5,-16,'stat',{cost:3,stat:'cr',val:0.15,label:'CRT+15%',cat:'arcane'});
-  const a17=N(2.5,-17.5,'stat',{cost:3,stat:'cd',val:0.6,label:'CRD+60%',cat:'arcane'});
-  const aS3=N(3,-19,'skill',{cost:10,skill:'eclipse',label:'Eclipse Zero',cat:'arcane',desc:'7連CRD×3',icon:'🌑',tier:3});
-  E(aS2,a14);E(aS2,a15);E(a14,a16);E(a15,a16);E(a16,a17);E(a17,aS3);
+  // ===== 8方向の組み合わせ職パス (中盤から分岐) =====
+  for(let hi=0;hi<hybrid.length;hi++){
+    const h=hybrid[hi];
+    const ang=h.ang*Math.PI/180;
+    const cx=Math.cos(ang),cy=Math.sin(ang);
+    const hpath=[];
+    
+    // 中盤 (r=7-11) に4-6ノード
+    for(let r=7;r<=11;r++){
+      const gx=cx*r,gy=cy*r;
+      const useStat=r%2===0?dirs[h.base1].stats[0]:dirs[h.base2].stats[0];
+      const val=useStat.base*(1+Math.floor(r/4));
+      hpath.push(N(gx,gy,'stat',{cost:2,stat:useStat.s,val,label:`${useStat.s.toUpperCase()}+${val}`,cat:h.cat}));
+    }
+    // Tier2 Skill at r=12
+    const ht2=N(cx*12,cy*12,'skill',{cost:6,skill:h.t2,label:h.t2,cat:h.cat,tier:2,icon:'🔥',desc:'Hybrid T2'});
+    hpath.push(ht2);
+    
+    // Connect hybrid path to adjacent base paths
+    const p1=paths[h.base1];
+    const p2=paths[h.base2];
+    // Connect from inner ring midpoint
+    const mid1=inner[h.base1],mid2=inner[h.base2];
+    E(mid1,hpath[0]);E(mid2,hpath[0]);
+    for(let i=0;i<hpath.length-1;i++)E(hpath[i],hpath[i+1]);
+    // Connect to base paths at mid tier
+    if(p1.length>4)E(hpath[2],p1[4]);
+    if(p2.length>4)E(hpath[2],p2[4]);
+  }
 
-  // ===== DARK (lower-right, 24 nodes) =====
-  // Winding entry SE
-  const d0=N(1.8,3.5,'stat',{cost:1,stat:'ls',val:0.04,label:'吸血+4%',cat:'dark'});
-  const d1=N(3,4.2,'stat',{cost:1,stat:'reg',val:0.2,label:'再生+',cat:'dark'});
-  const d2=N(2,5.5,'stat',{cost:1,stat:'ls',val:0.04,label:'吸血+4%',cat:'dark'});
-  const d3=N(3.5,6,'stat',{cost:1,stat:'reg',val:0.3,label:'再生+',cat:'dark'});
-  E(c3,d0);E(d0,d1);E(d1,d2);E(d1,d3);
-  // Loop 1 + Tier1
-  const d4=N(2.5,7.2,'stat',{cost:2,stat:'ls',val:0.06,label:'吸血+6%',cat:'dark'});
-  const d5=N(4.2,7,'stat',{cost:2,stat:'reg',val:0.5,label:'再生+',cat:'dark'});
-  const dS1=N(3.5,8.2,'skill',{cost:3,skill:'drain',label:'Soul Drain',cat:'dark',desc:'大ダメ+HP回復',icon:'💀',tier:1});
-  const d6=N(2,8.8,'stat',{cost:2,stat:'ls',val:0.06,label:'吸血+6%',cat:'dark'});
-  E(d2,d4);E(d3,d5);E(d4,dS1);E(d5,dS1);E(dS1,d6);E(d4,d6);
-  // Dead-end
-  const d7=N(5.5,7.5,'stat',{cost:2,stat:'reg',val:0.8,label:'再生+',cat:'dark'});
-  const d8=N(6.5,8.5,'stat',{cost:2,stat:'ls',val:0.1,label:'吸血+10%',cat:'dark'});
-  E(d5,d7);E(d7,d8);
-  // Connector
-  const d9=N(3,10,'stat',{cost:2,stat:'ls',val:0.08,label:'吸血+8%',cat:'dark'});
-  const d10=N(4.5,10.5,'stat',{cost:2,stat:'reg',val:0.8,label:'再生+',cat:'dark'});
-  const d11=N(2,10.8,'stat',{cost:2,stat:'mhp',val:15,label:'HP+15',cat:'dark'});
-  E(d6,d9);E(dS1,d10);E(d9,d10);E(d9,d11);
-  // Loop 2 + Tier2
-  const d12=N(4,12,'stat',{cost:2,stat:'ls',val:0.1,label:'吸血+10%',cat:'dark'});
-  const d13=N(2,12.5,'stat',{cost:2,stat:'mhp',val:20,label:'HP+20',cat:'dark'});
-  const dS2=N(3,13.5,'skill',{cost:6,skill:'darkPact',label:'Dark Pact',cat:'dark',desc:'HP半減→ATK3倍',icon:'🩸',tier:2});
-  E(d10,d12);E(d11,d13);E(d12,dS2);E(d13,dS2);E(d12,d13);
-  // Final stretch + Tier3
-  const d14=N(4.5,14.5,'stat',{cost:3,stat:'ls',val:0.12,label:'吸血+12%',cat:'dark'});
-  const d15=N(2,15,'stat',{cost:3,stat:'mhp',val:25,label:'HP+25',cat:'dark'});
-  const d16=N(3.5,16,'stat',{cost:3,stat:'ls',val:0.15,label:'吸血+15%',cat:'dark'});
-  const d17=N(2.5,17.5,'stat',{cost:3,stat:'mhp',val:30,label:'HP+30',cat:'dark'});
-  const dS3=N(3,19,'skill',{cost:10,skill:'soulBurst',label:'Abyss Nova',cat:'dark',desc:'HP70%消費→超火力',icon:'💥',tier:3});
-  E(dS2,d14);E(dS2,d15);E(d14,d16);E(d15,d16);E(d16,d17);E(d17,dS3);
-
-  // ===== BRIDGES (8 nodes) =====
-  // Guard ↔ Arcane (top, via 2 nodes)
-  const b0=N(0.5,-6,'stat',{cost:2,stat:'mhp',val:10,label:'HP+10',cat:'guard'});
-  const b1=N(1,-7,'stat',{cost:2,stat:'cr',val:0.05,label:'CRT+5%',cat:'arcane'});
-  E(g4,b0);E(b0,b1);E(b1,a4);
-  // Swift ↔ Dark (bottom, via 2 nodes)
-  const b2=N(-0.5,6,'stat',{cost:2,stat:'reg',val:0.3,label:'再生+',cat:'dark'});
-  const b3=N(0.5,7,'stat',{cost:2,stat:'spd',val:0.1,label:'SPD+',cat:'swift'});
-  E(w4,b2);E(b2,b3);E(b3,d4);
-  // Might ↔ Arcane (right-upper)
-  const b4=N(5,-3,'stat',{cost:2,stat:'atk',val:2,label:'ATK+2',cat:'might'});
-  E(m2,b4);E(b4,a1);
-  // Might ↔ Dark (right-lower)
-  const b5=N(5,3,'stat',{cost:2,stat:'atk',val:2,label:'ATK+2',cat:'might'});
-  E(m1,b5);E(b5,d1);
-  // Guard ↔ Swift (left)
-  const b6=N(-3.5,0,'stat',{cost:2,stat:'def',val:1,label:'DEF+1',cat:'guard'});
-  E(g1,b6);E(b6,w1);
-  // Mid-tier shortcut: Guard-loop2 ↔ Arcane-loop2
-  const b7=N(0,-12,'stat',{cost:3,stat:'mhp',val:15,label:'HP+15',cat:'guard'});
-  E(g13,b7);E(b7,a13);
-
-  // ===== OUTER RING: Connect Tier3 skills to form a loop =====
-  // Guard T3 → Arcane T3 (top arc)
-  const r0=N(0,-20,'stat',{cost:3,stat:'mhp',val:20,label:'HP+20',cat:'guard'});
-  const r1=N(1,-20.5,'stat',{cost:3,stat:'cr',val:0.1,label:'CRT+10%',cat:'arcane'});
-  E(gS3,r0);E(r0,r1);E(r1,aS3);
-  // Arcane T3 → Might T3 (right arc)
-  const r2=N(8,-14,'stat',{cost:3,stat:'cd',val:0.4,label:'CRD+40%',cat:'arcane'});
-  const r3=N(12,-8,'stat',{cost:3,stat:'atk',val:5,label:'ATK+5',cat:'might'});
-  const r4=N(16,-4,'stat',{cost:3,stat:'atk',val:5,label:'ATK+5',cat:'might'});
-  E(aS3,r2);E(r2,r3);E(r3,r4);E(r4,mS3);
-  // Might T3 → Dark T3 (right-bottom arc)
-  const r5=N(16,5,'stat',{cost:3,stat:'mh',val:1,label:'連撃+1',cat:'might'});
-  const r6=N(12,12,'stat',{cost:3,stat:'ls',val:0.1,label:'吸血+10%',cat:'dark'});
-  const r7=N(7,16,'stat',{cost:3,stat:'reg',val:1,label:'再生+1',cat:'dark'});
-  E(mS3,r5);E(r5,r6);E(r6,r7);E(r7,dS3);
-  // Dark T3 → Swift T3 (bottom arc)
-  const r8=N(0,20,'stat',{cost:3,stat:'ls',val:0.12,label:'吸血+12%',cat:'dark'});
-  const r9=N(-1,20,'stat',{cost:3,stat:'spd',val:0.3,label:'SPD+',cat:'swift'});
-  E(dS3,r8);E(r8,r9);E(r9,wS3);
-  // Swift T3 → Guard T3 (left arc)
-  const r10=N(-7,16,'stat',{cost:3,stat:'dg',val:0.1,label:'回避+10%',cat:'swift'});
-  const r11=N(-8,10,'stat',{cost:3,stat:'def',val:3,label:'DEF+3',cat:'guard'});
-  const r12=N(-7,-5,'stat',{cost:3,stat:'def',val:3,label:'DEF+3',cat:'guard'});
-  E(wS3,r10);E(r10,r11);E(r11,r12);E(r12,gS3);
-
-  // ===== ULTIMATE (center of outer ring) =====
-  // Ultimate: center of outer ring, accessible from 4 directions
-  const u1=N(6,-10,'stat',{cost:4,stat:'atk',val:6,label:'ATK+6',cat:'ultimate'});
-  const u2=N(-5,-14,'stat',{cost:4,stat:'mhp',val:30,label:'HP+30',cat:'ultimate'});
-  const u3=N(-5,14,'stat',{cost:4,stat:'spd',val:0.5,label:'SPD+',cat:'ultimate'});
-  const u4=N(6,10,'stat',{cost:4,stat:'ls',val:0.15,label:'吸血+15%',cat:'ultimate'});
-  const uS=N(5,3.5,'skill',{cost:15,skill:'transcend',label:'Transcendence',cat:'ultimate',desc:'全ステ2倍 20秒',icon:'🌟',tier:3});
-  E(r3,u1);E(u1,uS);
-  E(r12,u2);E(u2,uS);
-  E(r10,u3);E(u3,uS);
-  E(r6,u4);E(u4,uS);
+  // ===== 最外周リング (Tier3同士を繋ぐ高コストリング) =====
+  const outerRing=[];
+  for(let di=0;di<dirs.length;di++){
+    const d=dirs[di];
+    const nextD=dirs[(di+1)%dirs.length];
+    const ang1=d.ang*Math.PI/180;
+    const ang2=nextD.ang*Math.PI/180;
+    const t3node=paths[di][paths[di].length-1];
+    const nextT3=paths[(di+1)%dirs.length][paths[(di+1)%dirs.length].length-1];
+    
+    // 各Tier3間に5-7ノードを配置
+    const numNodes=6;
+    const ringNodes=[];
+    for(let i=1;i<=numNodes;i++){
+      const ratio=i/(numNodes+1);
+      const ang=ang1+(ang2-ang1)*ratio;
+      const r=17;
+      const gx=Math.cos(ang)*r,gy=Math.sin(ang)*r;
+      const stats=['atk','mhp','spd','cr','def','ls','dg','reg'][i%8];
+      const vals=[1,5,0.05,0.01,1,0.02,0.02,0.1][i%8];
+      ringNodes.push(N(gx,gy,'stat',{cost:6,stat:stats,val:vals,label:`${stats.toUpperCase()}+${vals}`,cat:'outer'}));
+    }
+    
+    // Connect ring
+    E(t3node,ringNodes[0]);
+    for(let i=0;i<ringNodes.length-1;i++)E(ringNodes[i],ringNodes[i+1]);
+    E(ringNodes[ringNodes.length-1],nextT3);
+    outerRing.push(...ringNodes);
+  }
 
   gN=nodes;gE=edges;posGrid();
 }
 
 function posGrid(){
-  const S=Math.min(W*0.038,16)*gs.zoom;
-  gcx=W/2;gcy=GRID_Y+GRID_H*0.35;
+  const S=Math.min(W*0.032,14)*gs.zoom;
+  gcx=W/2;gcy=GRID_Y+GRID_H*0.4;
   for(const n of gN){n.x=gcx+n.gx*S;n.y=gcy+n.gy*S;}
-  // Force-relax: push edges toward uniform length
-  const targetLen=S*2;
-  for(let iter=0;iter<20;iter++){
-    const fx=new Float64Array(gN.length),fy=new Float64Array(gN.length);
-    for(const[a,b]of gE){
-      const na=gN[a],nb=gN[b];
-      const dx=nb.x-na.x,dy=nb.y-na.y;
-      const dist=Math.sqrt(dx*dx+dy*dy)||0.1;
-      const force=(dist-targetLen)*0.05;
-      const ux=dx/dist*force,uy=dy/dist*force;
-      if(!na.unlocked||na.type!=='start'){fx[a]+=ux;fy[a]+=uy;}
-      if(!nb.unlocked||nb.type!=='start'){fx[b]-=ux;fy[b]-=uy;}
-    }
-    for(const n of gN){
-      if(n.type==='start')continue;
-      n.x+=fx[n.id]*0.5;n.y+=fy[n.id]*0.5;
-    }
-  }
 }
 
 function canUL(id){for(const[a,b]of gE){if(a===id&&gN[b].unlocked)return true;if(b===id&&gN[a].unlocked)return true;}return false;}
@@ -345,21 +239,37 @@ function canUL(id){for(const[a,b]of gE){if(a===id&&gN[b].unlocked)return true;if
 // Skills
 const SK={
   powerStrike:{cd:300,dm:3,h:1},
-  berserker:{cd:600,dm:5,h:1,aoe:1},
+  battleMaster:{cd:600,dm:6,h:1,aoe:1},
   ragnarok:{cd:900,dm:8,h:1,aoe:1},
   ironWall:{cd:500,bf:'inv',bd:180},
-  aegis:{cd:900,bf:'inv',bd:300,heal:1},
+  guardian:{cd:700,bf:'inv',bd:300,heal:0.5},
   immortal:{cd:1200,bf:'inv',bd:600,heal:1,rboost:5},
-  haste:{cd:400,bf:'hst',bd:300},
-  gale:{cd:700,bf:'gal',bd:480},
-  phantom:{cd:1000,bf:'phm',bd:600},
+  blessing:{cd:400,heal:0.3,bf:'reg',bd:200},
+  archbishop:{cd:700,heal:0.6,bf:'reg',bd:400},
+  holyNova:{cd:1000,heal:1,bf:'reg',bd:600,aoe:1},
   critSlash:{cd:400,dm:1,h:3,fc:1},
-  execute:{cd:700,dm:1,h:5,fc:1},
+  archmage:{cd:700,dm:4,h:1,aoe:1,fc:1},
   eclipse:{cd:1000,dm:3,h:7,fc:1},
-  drain:{cd:400,dm:4,h:1,hp2:0.5},
-  darkPact:{cd:600,bf:'dpk',bd:600,hpc:0.5},
-  soulBurst:{cd:800,dm:12,h:1,aoe:1,hpc:0.7},
+  haste:{cd:400,bf:'hst',bd:300},
+  tactician:{cd:700,bf:'hst',bd:500,atkboost:0.3},
   transcend:{cd:1500,bf:'trs',bd:1200},
+  drain:{cd:400,dm:4,h:1,hp2:0.5},
+  hexMaster:{cd:700,dm:2,h:3,debuff:1},
+  soulBurst:{cd:800,dm:12,h:1,aoe:1,hpc:0.7},
+  gale:{cd:700,bf:'gal',bd:480},
+  phantom:{cd:900,bf:'phm',bd:600},
+  mirageWalk:{cd:1200,bf:'phm',bd:900,dg:0.5},
+  execute:{cd:500,dm:2,h:1,fc:1},
+  counter:{cd:700,dm:4,h:1,reflect:1},
+  devastate:{cd:1000,dm:10,h:1,fc:1},
+  berserker:{cd:600,dm:5,h:1,aoe:1},
+  aegis:{cd:900,bf:'inv',bd:300,heal:1},
+  sageBlast:{cd:700,dm:4,h:1,heal:0.4,fc:1},
+  darkPact:{cd:600,bf:'dpk',bd:600,hpc:0.5},
+  sanctify:{cd:700,bf:'reg',bd:500,heal:0.5},
+  assassinate:{cd:700,dm:7,h:1,fc:1},
+  ninjaBlade:{cd:700,dm:2,h:5,fc:1},
+  warlord:{cd:800,dm:6,h:1,aoe:1,atkboost:0.5}
 };
 
 const PNAMES={atk:'Greater Fortitude',def:'Iron Fortress',mhp:'Life Essence',spd:'Sensory Boost',
@@ -381,17 +291,15 @@ function unlockN(n){
 // Buffs
 function updBuf(){for(const k in buffs){if(buffs[k]>0)buffs[k]--;else delete buffs[k];}}
 function gSpd(){let s=st.spd;if(buffs.hst)s*=2;if(buffs.gal)s*=3;if(buffs.phm)s*=5;if(buffs.trs)s*=2;return s;}
-function gAtk(){let a=st.atk;if(buffs.dpk)a*=3;if(buffs.trs)a*=2;return a;}
+function gAtk(){let a=st.atk;if(buffs.dpk)a*=3;if(buffs.trs)a*=2;if(buffs.atkboost)a*=(1+buffs.atkboost);return a;}
 function gDef(){let d=st.def;if(buffs.trs)d*=2;return d;}
 function gDdg(){let d=st.dg;if(buffs.gal)d=Math.min(d+0.3,0.85);if(buffs.phm)d=Math.min(d+0.8,0.95);return d;}
 
 // ===== CASTING =====
-// Display stats that grow during casting
 let castSt={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
 
 function startCast(){
   state=ST.CAST;castQ=[];castTxts=[];castT=0;
-  // Reset display stats to initial values (before any unlocks)
   castSt={hp:30,mhp:30,atk:5,def:1,spd:1.2,cr:0.05,cd:1.5,reg:0,ls:0,dg:0,mh:1};
   const ul=gN.filter(n=>n.unlocked&&n.type!=='start');
   const ps=ul.filter(n=>n.type==='stat');
@@ -407,7 +315,6 @@ function updCast(){
   if(castT%iv===0&&castQ.length>0){
     const s=castQ.shift();sfxCast();
     castTxts.push({...s,y:groundY-12,a:1,age:0});
-    // Apply stat to display progressively
     const n=s.node;
     if(n&&n.type==='stat'&&n.stat){
       if(n.stat==='mhp'){castSt.mhp+=n.val;castSt.hp=castSt.mhp;}
@@ -455,7 +362,6 @@ function spawnE(x){
 function updRun(){
   if(!alive){dTimer--;if(dTimer<=0)startCast();return;}
   updBuf();
-  // Auto skills
   for(const s of learned){
     if(s.cd>0){s.cd--;continue;}
     const k=SK[s.skill];if(!k)continue;
@@ -463,7 +369,8 @@ function updRun(){
       (k.bf==='inv'&&st.hp<st.mhp*0.4)||(k.bf==='hst'&&!buffs.hst&&!buffs.gal&&!buffs.phm)||
       (k.bf==='gal'&&!buffs.gal&&!buffs.phm)||(k.bf==='phm'&&!buffs.phm)||
       (k.bf==='trs'&&rd>300)||(k.bf==='dpk'&&fight&&st.hp>st.mhp*0.6)||
-      (k.heal&&st.hp<st.mhp*0.5)||(k.hpc&&!k.bf&&st.hp>st.mhp*0.75&&fight);
+      (k.heal&&st.hp<st.mhp*0.5)||(k.hpc&&!k.bf&&st.hp>st.mhp*0.75&&fight)||
+      (k.bf==='reg'&&st.hp<st.mhp*0.7);
     if(use){s.cd=k.cd;exeSkill(s,k);}
   }
   if(buffs.rboost)st.hp=Math.min(st.hp+5*0.016,st.mhp);
@@ -473,10 +380,8 @@ function updRun(){
   if(!fight){const spd=gSpd();rx+=spd;rd+=spd;if(rd>best)best=rd;}
   camX=rx-W*0.25;
   if(st.reg>0)st.hp=Math.min(st.hp+st.reg*0.016,st.mhp);
-  // Spawn
   if(Math.random()<1/Math.max(150,400-rd*0.06))spawnE(rx+W*0.9+Math.random()*150);
   if(rd%350<gSpd()+0.5)spawnE(rx+W*0.8+Math.random()*80);
-  // Attack
   atkCd--;
   if(atkCd<=0&&fight){
     const tg=enemies.filter(e=>e.alive&&Math.abs(e.x-rx)<50);
@@ -489,7 +394,6 @@ function updRun(){
       }
     }
   }
-  // Enemy attack
   for(const e of enemies){
     if(!e.alive)continue;if(e.x>rx+15)e.x-=0.4;if(e.fl>0)e.fl--;
     if(Math.abs(e.x-rx)<25){
@@ -521,8 +425,8 @@ function hitE(t,d,cr){
 
 function exeSkill(s,k){
   if(k.hpc)st.hp*=(1-k.hpc);
-  if(k.bf){buffs[k.bf]=k.bd||300;}
-  if(k.heal)st.hp=st.mhp;
+  if(k.bf){buffs[k.bf]=k.bd||300;if(k.atkboost)buffs.atkboost=k.atkboost;}
+  if(k.heal)st.hp=Math.min(st.hp+st.mhp*k.heal,st.mhp);
   if(k.rboost)buffs.rboost=k.bd||600;
   if(k.h>0&&k.dm>0){
     const tg=k.aoe?enemies.filter(e=>e.alive&&e.x-rx<150&&e.x>camX):enemies.filter(e=>e.alive&&Math.abs(e.x-rx)<80);
@@ -584,14 +488,12 @@ function drawRun(){
   ctx.fillStyle='#0c1024';ctx.fillRect(0,0,W,RUNNER_H);
   for(const b of bgs){const sx=b.x-camX*0.3;if(sx>-b.w&&sx<W+b.w){ctx.fillStyle=b.c;ctx.fillRect(sx,groundY-b.h,b.w,b.h);}}
   ctx.fillStyle='#1a237e';ctx.fillRect(0,groundY,W,RUNNER_H-groundY);
-  // Enemies
   for(const e of enemies){
     if(!e.alive)continue;const ex=e.x-camX;if(ex<-20||ex>W+20)continue;
     ctx.font=`${e.sz*1.5}px sans-serif`;ctx.textAlign='center';ctx.fillText(e.em,ex,e.y);
     if(e.fl>0){ctx.globalAlpha=0.4;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ex,e.y-e.sz*0.5,e.sz,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;}
     if(e.hp<e.mhp){const bw=e.sz*2;ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(ex-bw/2,e.y-e.sz*1.8,bw,3);ctx.fillStyle=e.hp/e.mhp>0.5?'#4caf50':'#e53935';ctx.fillRect(ex-bw/2,e.y-e.sz*1.8,bw*(e.hp/e.mhp),3);}
   }
-  // Player
   const px=W*0.25;
   if(alive){
     const t=Date.now()*0.008,by=fight?0:Math.sin(t*2)*2;
@@ -618,26 +520,28 @@ function drawHUD(casting){
   ctx.fillStyle='#9e9e9e';ctx.fillText(`Run#${runs}`,65,y+14);
   ctx.fillStyle='#64b5f6';ctx.fillText(`Kill:${kills}`,130,y+14);
   ctx.textAlign='right';ctx.fillStyle='#e0e0e0';ctx.fillText(`Best:${Math.floor(best)}m`,W-6,y+14);
-  // Row 2: Stats
+  // Row 2: Main stats
   const s=casting?castSt:st;
   ctx.font='10px sans-serif';ctx.textAlign='left';
   ctx.fillStyle='#e57373';ctx.fillText(`ATK${Math.floor(casting?s.atk:gAtk())}`,6,y+32);
   ctx.fillStyle='#64b5f6';ctx.fillText(`DEF${casting?s.def:gDef()}`,52,y+32);
-  ctx.fillStyle='#66bb6a';ctx.fillText(`SPD${(casting?s.spd:gSpd()).toFixed(1)}`,98,y+32);
-  ctx.fillStyle='#ffeb3b';ctx.fillText(`CRT${Math.floor(s.cr*100)}%`,152,y+32);
-  ctx.fillStyle='#4caf50';ctx.fillText(`HP${Math.floor(s.hp)}/${s.mhp}`,205,y+32);
+  ctx.fillStyle='#4caf50';ctx.fillText(`HP${Math.floor(s.hp)}/${s.mhp}`,98,y+32);
+  ctx.fillStyle='#66bb6a';ctx.fillText(`SPD${(casting?s.spd:gSpd()).toFixed(1)}`,178,y+32);
+  // Row 3: Secondary stats
+  ctx.fillStyle='#ffeb3b';ctx.fillText(`CRT${Math.floor(s.cr*100)}%`,6,y+50);
+  ctx.fillStyle='#ffa726';ctx.fillText(`CD${s.cd.toFixed(1)}x`,58,y+50);
+  if(s.ls>0){ctx.fillStyle='#ab47bc';ctx.fillText(`吸${Math.floor(s.ls*100)}%`,110,y+50);}
+  if(s.dg>0){ctx.fillStyle='#81d4fa';ctx.fillText(`避${Math.floor((casting?s.dg:gDdg())*100)}%`,160,y+50);}
+  if(s.reg>0){ctx.fillStyle='#66bb6a';ctx.fillText(`再${s.reg.toFixed(1)}`,210,y+50);}
   // Skill icons
-  let sx=280;
-  for(const sk of learned){ctx.globalAlpha=sk.cd>0?0.3:1;ctx.font='11px sans-serif';ctx.fillText(sk.icon||'✦',sx,y+32);ctx.globalAlpha=1;sx+=13;}
-  // Row 2 extras
-  if(s.ls>0){ctx.fillStyle='#ab47bc';ctx.textAlign='right';ctx.fillText(`吸${Math.floor(s.ls*100)}%`,W-55,y+32);}
-  if(s.dg>0){ctx.fillStyle='#81d4fa';ctx.textAlign='right';ctx.fillText(`避${Math.floor(s.dg*100)}%`,W-6,y+32);}
-  if(s.reg>0){ctx.fillStyle='#66bb6a';ctx.textAlign='right';ctx.fillText(`再${s.reg.toFixed(1)}`,W-100,y+32);}
-  // Row 2 line under stats
-  ctx.fillStyle='rgba(100,181,246,0.08)';ctx.fillRect(0,y+38,W,1);
+  let sx=260;
+  for(const sk of learned){ctx.globalAlpha=sk.cd>0?0.3:1;ctx.font='12px sans-serif';ctx.fillText(sk.icon||'✦',sx,y+50);ctx.globalAlpha=1;sx+=16;}
 }
 
-const CC={might:'#e53935',guard:'#42a5f5',swift:'#66bb6a',arcane:'#ffeb3b',dark:'#ab47bc',ultimate:'#ffd700'};
+const CC={attack:'#e53935',defense:'#42a5f5',heal:'#66bb6a',magic:'#ffeb3b',buffer:'#ab47bc',
+  debuffer:'#ff7043',evade:'#26c6da',counter:'#ffa726',berserker:'#d32f2f',paladin:'#1976d2',
+  sage:'#43a047',darkmage:'#6a1b9a',priestess:'#f57c00',rogue:'#00695c',ninja:'#00838f',
+  warlord:'#bf360c',outer:'#616161'};
 
 function drawGrid_(){
   const y=GRID_Y;ctx.save();ctx.beginPath();ctx.rect(0,y,W,GRID_H);ctx.clip();
@@ -647,7 +551,7 @@ function drawGrid_(){
   for(const[a,b]of gE){
     const na=gN[a],nb=gN[b];ctx.beginPath();ctx.moveTo(na.x+ox,na.y+oy);ctx.lineTo(nb.x+ox,nb.y+oy);
     if(na.unlocked&&nb.unlocked){ctx.strokeStyle='rgba(100,181,246,0.35)';ctx.lineWidth=2.5;ctx.shadowColor='#42a5f5';ctx.shadowBlur=4;}
-    else{ctx.strokeStyle='rgba(60,60,80,0.2)';ctx.lineWidth=1;ctx.shadowBlur=0;}
+    else{ctx.strokeStyle='rgba(100,100,120,0.5)';ctx.lineWidth=1.8;ctx.shadowBlur=0;}
     ctx.stroke();ctx.shadowBlur=0;
   }
   // Nodes
@@ -672,15 +576,14 @@ function drawGrid_(){
     } else if(n.unlocked){
       ctx.beginPath();ctx.arc(nx,ny,r,0,Math.PI*2);ctx.fillStyle=cc;ctx.shadowColor=cc;ctx.shadowBlur=sel?10:4;ctx.fill();ctx.shadowBlur=0;
       ctx.strokeStyle=sel?'#fff':'rgba(255,255,255,0.2)';ctx.lineWidth=sel?2:0.8;ctx.stroke();
-      ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(n.label,nx,ny+2);
+      ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText(n.label,nx,ny+2);
     } else {
       ctx.beginPath();ctx.arc(nx,ny,r,0,Math.PI*2);ctx.fillStyle=can?'rgba(55,55,85,0.7)':'rgba(30,30,50,0.45)';ctx.fill();
       ctx.strokeStyle=sel?(sp>=n.cost?'#fff176':'#ff9800'):(can?'rgba(140,140,170,0.35)':'rgba(55,55,70,0.2)');ctx.lineWidth=sel?2:0.8;ctx.stroke();
-      ctx.fillStyle=can?'rgba(200,200,220,0.6)':'rgba(110,110,130,0.25)';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.fillText(n.label,nx,ny+2);
-      if(can){ctx.fillStyle=sp>=n.cost?'#fff176':'#e57373';ctx.font='12px sans-serif';ctx.fillText(`${n.cost}SP`,nx,ny+r+9);}
+      ctx.fillStyle=can?'rgba(200,200,220,0.6)':'rgba(110,110,130,0.25)';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText(n.label,nx,ny+2);
+      if(can){ctx.fillStyle=sp>=n.cost?'#fff176':'#e57373';ctx.font='11px sans-serif';ctx.fillText(`${n.cost}SP`,nx,ny+r+9);}
     }
   }
-  // Info popup - shows for ALL nodes (unlocked, locked, skills)
   if(selN!==null){
     const n=gN[selN];
     if(n.type!=='start'){
@@ -720,7 +623,6 @@ function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadr
 function getP(e){const r=C.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top};}
 let ts=0,tm_=false;
 function pinchDist(e){const t=e.touches;if(t.length<2)return 0;return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
-function pinchCenter(e){const t=e.touches;const r=C.getBoundingClientRect();return{x:(t[0].clientX+t[1].clientX)/2-r.left,y:(t[0].clientY+t[1].clientY)/2-r.top};}
 let pinching=false;
 C.addEventListener('touchstart',e=>{e.preventDefault();if(ac.state==='suspended')ac.resume();
   if(e.touches.length===2&&state!==ST.TITLE){
@@ -753,7 +655,6 @@ function startG(){state=ST.PLAY;buildGrid();resize();initRun();}
 
 function gridTap(pos){
   const ox=gs.x,oy=gs.y;
-  // Check unlock button in popup
   if(selN!==null){
     const n=gN[selN];
     if(!n.unlocked&&canUL(n.id)&&sp>=n.cost){
@@ -763,16 +664,14 @@ function gridTap(pos){
       if(pos.x>px_+pw-52&&pos.x<px_+pw-7&&pos.y>py_+ph-24&&pos.y<py_+ph-4){unlockN(n);selN=null;return;}
     }
   }
-  // Check node taps - any node shows info
   for(const n of gN){
     const nx=n.x+ox,ny=n.y+oy;
     if(Math.hypot(pos.x-nx,pos.y-ny)<(n.type==='skill'?24:18)){
       if(selN===n.id){
-        // Double-tap: unlock if possible, else close
         if(!n.unlocked&&canUL(n.id)&&sp>=n.cost)unlockN(n);
         selN=null;
       } else {
-        selN=n.id; // Show info for any node
+        selN=n.id;
       }
       return;
     }
