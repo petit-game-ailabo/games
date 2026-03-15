@@ -146,53 +146,71 @@ function buildGrid(){
   // Label helper
   function LB(s,v){const fv=typeof v==='number'&&v%1?parseFloat(v.toFixed(2)):v;return`${s.toUpperCase()}+${fv}`;}
 
-  // ===== 8方向の基本職パス (蛇行配置) =====
+  // ===== 8方向の基本職パス (リング+分岐構造) =====
   for(let di=0;di<dirs.length;di++){
     const d=dirs[di];
-    const path=[];
-    const baseAng=d.ang*Math.PI/180;
-    // Perpendicular direction for zigzag
-    const px=-Math.sin(baseAng),py=Math.cos(baseAng);
-    
-    // Zigzag pattern: [radius, zigzag offset]
-    // Creates winding path like FF10
-    const layout=[
-      // Tier1 zone
-      {r:2.8,z:0.6},{r:3.5,z:-0.5},{r:4.2,z:0.7},{r:5,z:-0.3},{r:5.8,z:0.5},
-      // T1 skill
-      {r:6.5,z:0,sk:1},
-      // Tier2 zone
-      {r:7.3,z:-0.6},{r:8,z:0.5},{r:8.7,z:-0.7},{r:9.5,z:0.4},
-      // T2 skill
-      {r:10.2,z:0,sk:2},
-      // Tier3 zone
-      {r:11,z:0.6},{r:11.8,z:-0.5},{r:12.5,z:0.7},{r:13.3,z:-0.4},{r:14,z:0.5},
-      // T3 skill
-      {r:15,z:0,sk:3}
-    ];
-    const costs=[1,1,1,1,1, 3, 2,2,2,2, 6, 3,3,3,3,3, 9];
-    const cx=Math.cos(baseAng),cy=Math.sin(baseAng);
-    
-    for(let j=0;j<layout.length;j++){
-      const L=layout[j];
-      const gx=cx*L.r+px*L.z;
-      const gy=cy*L.r+py*L.z;
-      if(L.sk===1){
-        const nid=N(gx,gy,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
-        path.push(nid);t1Nodes.push(nid);
-      }else if(L.sk===2){
-        path.push(N(gx,gy,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d}));
-      }else if(L.sk===3){
-        path.push(N(gx,gy,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d}));
-      }else{
-        const s=d.stats[j%2];
-        const tier=j<6?1:j<11?2:3;
-        const val=s.base*tier;
-        path.push(N(gx,gy,'stat',{cost:costs[j],stat:s.s,val,label:LB(s.s,val),cat:d.cat}));
-      }
-    }
-    E(inner[di],path[0]);
-    for(let i=0;i<path.length-1;i++)E(path[i],path[i+1]);
+    const path=[]; // flat list for outer ring reference
+    const ba=d.ang*Math.PI/180;
+    const cx=Math.cos(ba),cy=Math.sin(ba);
+    const px=-Math.sin(ba),py=Math.cos(ba); // perpendicular
+
+    // --- Entry: 2 nodes leading to a fork ---
+    const e0=N(cx*2.8+px*0.3,cy*2.8+py*0.3,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base,label:LB(d.stats[0].s,d.stats[0].base),cat:d.cat});
+    const e1=N(cx*3.6-px*0.2,cy*3.6-py*0.2,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base,label:LB(d.stats[1].s,d.stats[1].base),cat:d.cat});
+    E(inner[di],e0);E(e0,e1);
+
+    // --- Ring 1: fork into left/right paths that meet at T1 skill ---
+    const r1L=N(cx*4.5+px*1.2,cy*4.5+py*1.2,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
+    const r1R=N(cx*4.5-px*1.2,cy*4.5-py*1.2,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base*2,label:LB(d.stats[1].s,d.stats[1].base*2),cat:d.cat});
+    const r1L2=N(cx*5.5+px*0.8,cy*5.5+py*0.8,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
+    const r1R2=N(cx*5.5-px*0.8,cy*5.5-py*0.8,'stat',{cost:1,stat:d.stats[1].s,val:d.stats[1].base*2,label:LB(d.stats[1].s,d.stats[1].base*2),cat:d.cat});
+    E(e1,r1L);E(e1,r1R);E(r1L,r1L2);E(r1R,r1R2);
+    // Dead-end branch off left path
+    const de1=N(cx*5+px*2,cy*5+py*2,'stat',{cost:1,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
+    E(r1L,de1);
+
+    // T1 Skill (merge point)
+    const t1=N(cx*6.5,cy*6.5,'skill',{cost:3,skill:d.t1,label:d.t1l,cat:d.cat,tier:1,icon:d.t1i,desc:d.t1d});
+    E(r1L2,t1);E(r1R2,t1);
+    t1Nodes.push(t1);
+
+    // --- Connector to Ring 2 ---
+    const c1=N(cx*7.5+px*0.3,cy*7.5+py*0.3,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*2,label:LB(d.stats[0].s,d.stats[0].base*2),cat:d.cat});
+    E(t1,c1);
+
+    // --- Ring 2: bigger ring with 4 nodes + T2 skill ---
+    const r2A=N(cx*8.5+px*1.3,cy*8.5+py*1.3,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
+    const r2B=N(cx*8.5-px*1.3,cy*8.5-py*1.3,'stat',{cost:2,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
+    const r2C=N(cx*9.8+px*0.8,cy*9.8+py*0.8,'stat',{cost:2,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
+    const r2D=N(cx*9.8-px*0.8,cy*9.8-py*0.8,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*3,label:LB(d.stats[0].s,d.stats[0].base*3),cat:d.cat});
+    E(c1,r2A);E(c1,r2B);E(r2A,r2C);E(r2B,r2D);
+    // Dead-end branch off ring 2
+    const de2=N(cx*9+px*2.2,cy*9+py*2.2,'stat',{cost:2,stat:d.stats[0].s,val:d.stats[0].base*4,label:LB(d.stats[0].s,d.stats[0].base*4),cat:d.cat});
+    E(r2A,de2);
+
+    // T2 Skill
+    const t2=N(cx*10.8,cy*10.8,'skill',{cost:6,skill:d.t2,label:d.t2l,cat:d.cat,tier:2,icon:d.t2i,desc:d.t2d});
+    E(r2C,t2);E(r2D,t2);
+
+    // --- Connector to Ring 3 ---
+    const c2=N(cx*11.8-px*0.3,cy*11.8-py*0.3,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*3,label:LB(d.stats[1].s,d.stats[1].base*3),cat:d.cat});
+    E(t2,c2);
+
+    // --- Ring 3: final ring before T3 ---
+    const r3A=N(cx*12.8+px*1,cy*12.8+py*1,'stat',{cost:3,stat:d.stats[0].s,val:d.stats[0].base*4,label:LB(d.stats[0].s,d.stats[0].base*4),cat:d.cat});
+    const r3B=N(cx*12.8-px*1,cy*12.8-py*1,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*4,label:LB(d.stats[1].s,d.stats[1].base*4),cat:d.cat});
+    const r3C=N(cx*13.8+px*0.5,cy*13.8+py*0.5,'stat',{cost:3,stat:d.stats[0].s,val:d.stats[0].base*5,label:LB(d.stats[0].s,d.stats[0].base*5),cat:d.cat});
+    const r3D=N(cx*13.8-px*0.5,cy*13.8-py*0.5,'stat',{cost:3,stat:d.stats[1].s,val:d.stats[1].base*5,label:LB(d.stats[1].s,d.stats[1].base*5),cat:d.cat});
+    E(c2,r3A);E(c2,r3B);E(r3A,r3C);E(r3B,r3D);E(r3C,r3D); // ring closes
+
+    // T3 Skill
+    const t3=N(cx*15,cy*15,'skill',{cost:9,skill:d.t3,label:d.t3l,cat:d.cat,tier:3,icon:d.t3i,desc:d.t3d});
+    E(r3C,t3);E(r3D,t3);
+
+    // path[] for outer ring reference: store key nodes
+    path.push(e0,e1,r1L,r1R,r1L2,r1R2,t1,c1,r2A,r2B,r2C,r2D,t2,c2,r3A,r3B,r3C,r3D,t3);
+    // Also store dead-ends
+    path._t1=t1;path._t2=t2;path._t3=t3;
     paths[di]=path;
   }
 
@@ -232,8 +250,8 @@ function buildGrid(){
     // This forces having BOTH T1 skills to reach the hybrid T2
     const p1=paths[h.base1];
     const p2=paths[h.base2];
-    const t1_1=p1[5]; // Tier1 skill is index 5 in new layout
-    const t1_2=p2[5];
+    const t1_1=p1._t1; // Tier1 skill node
+    const t1_2=p2._t1;
     
     const b1AngRad=dirs[h.base1].ang*Math.PI/180;
     const b2AngRad=dirs[h.base2].ang*Math.PI/180;
@@ -259,8 +277,8 @@ function buildGrid(){
     let diff=ang2-ang1;
     if(diff>Math.PI)diff-=Math.PI*2;
     if(diff<-Math.PI)diff+=Math.PI*2;
-    const t3node=paths[di][paths[di].length-1];
-    const nextT3=paths[(di+1)%dirs.length][paths[(di+1)%dirs.length].length-1];
+    const t3node=paths[di]._t3;
+    const nextT3=paths[(di+1)%dirs.length]._t3;
     
     const numNodes=6;
     const ringNodes=[];
