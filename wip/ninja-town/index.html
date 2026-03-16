@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>忍者の町サンドボックス</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  touch-action: none;
+}
+
+body {
+  font-family: 'Arial', sans-serif;
+  background: #2a2a2a;
+  overflow: hidden;
+  color: #fff;
+}
+
+#container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+#toolbar {
+  background: #1a1a1a;
+  padding: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  border-bottom: 2px solid #444;
+}
+
+.tool-btn {
+  background: #444;
+  color: #fff;
+  border: 2px solid #666;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.tool-btn:hover {
+  background: #555;
+  border-color: #888;
+}
+
+.tool-btn.active {
+  background: #e74c3c;
+  border-color: #c0392b;
+}
+
+#main-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+#palette-area {
+  width: 240px;
+  background: #333;
+  border-right: 2px solid #444;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#palette-tabs {
+  display: flex;
+  background: #222;
+  border-bottom: 2px solid #444;
+}
+
+.palette-tab {
+  flex: 1;
+  padding: 10px 4px;
+  text-align: center;
+  cursor: pointer;
+  background: #333;
+  border: none;
+  color: #aaa;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.palette-tab.active {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.palette-tab:hover {
+  background: #444;
+}
+
+#palette-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(4, 48px);
+  gap: 4px;
+  justify-content: center;
+  align-content: start;
+}
+
+.palette-tile {
+  width: 48px;
+  height: 48px;
+  border: 2px solid #555;
+  cursor: pointer;
+  image-rendering: pixelated;
+  background: #222;
+  transition: all 0.2s;
+}
+
+.palette-tile:hover {
+  border-color: #e74c3c;
+  transform: scale(1.1);
+}
+
+.palette-tile.selected {
+  border-color: #3498db;
+  box-shadow: 0 0 8px #3498db;
+}
+
+#map-area {
+  flex: 1;
+  overflow: auto;
+  background: #1a1a1a;
+  position: relative;
+}
+
+#map-canvas {
+  image-rendering: pixelated;
+  cursor: crosshair;
+  display: block;
+}
+
+#status {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0,0,0,0.7);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.speech-bubble {
+  position: absolute;
+  background: white;
+  color: black;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 100;
+  animation: fadeInOut 2s;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0; }
+  20%, 80% { opacity: 1; }
+}
+
+@media (max-width: 768px) {
+  #main-area {
+    flex-direction: column;
+  }
+  #palette-area {
+    width: 100%;
+    height: 200px;
+    border-right: none;
+    border-bottom: 2px solid #444;
+  }
+  #palette-content {
+    grid-template-columns: repeat(auto-fill, 48px);
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="container">
+  <div id="toolbar">
+    <button class="tool-btn active" id="btn-edit">編集モード</button>
+    <button class="tool-btn" id="btn-play">再生モード</button>
+    <button class="tool-btn" id="btn-save">保存</button>
+    <button class="tool-btn" id="btn-load">読込</button>
+    <button class="tool-btn" id="btn-clear">クリア</button>
+    <span style="margin-left: auto; font-size: 12px;">忍者の町サンドボックス</span>
+  </div>
+
+  <div id="main-area">
+    <div id="palette-area">
+      <div id="palette-tabs">
+        <button class="palette-tab active" data-category="field">地面</button>
+        <button class="palette-tab" data-category="floor">道</button>
+        <button class="palette-tab" data-category="house">建物</button>
+        <button class="palette-tab" data-category="nature">自然</button>
+        <button class="palette-tab" data-category="npc">NPC</button>
+      </div>
+      <div id="palette-content"></div>
+    </div>
+
+    <div id="map-area">
+      <canvas id="map-canvas"></canvas>
+      <div id="status">モード: 編集 | ツール: ペン</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== 定数 ==========
+const TILE_SIZE = 16;
+const DISPLAY_SCALE = 3;
+const MAP_WIDTH = 20;
+const MAP_HEIGHT = 15;
+
+// ========== グローバル変数 ==========
+let canvas, ctx;
+let mode = 'edit'; // 'edit' or 'play'
+let currentCategory = 'field';
+let selectedTile = null;
+let isDrawing = false;
+
+// マップデータ (3レイヤー)
+let mapData = {
+  layer0: [], // 地面
+  layer1: [], // 建物/装飾
+  layer2: []  // NPC/動物
+};
+
+// タイルセット画像
+const tilesets = {
+  field: null,
+  floor: null,
+  house: null,
+  nature: null,
+  water: null,
+  npc_boy: null,
+  npc_girl: null,
+  npc_eskimo: null,
+  animal_cat: null,
+  animal_dog: null,
+  animal_chicken: null
+};
+
+// BGM/SE
+let bgm = null;
+let soundEffects = {};
+
+// NPC/動物のインスタンス
+let entities = [];
+
+// パレット定義
+const palettes = {
+  field: { tileset: 'field', width: 80, height: 240 },
+  floor: { tileset: 'floor', width: 352, height: 417 },
+  house: { tileset: 'house', width: 528, height: 368 },
+  nature: { tileset: 'nature', width: 384, height: 336 },
+  npc: [
+    { type: 'npc', src: 'npc_boy' },
+    { type: 'npc', src: 'npc_girl' },
+    { type: 'npc', src: 'npc_eskimo' },
+    { type: 'animal', src: 'animal_cat' },
+    { type: 'animal', src: 'animal_dog' },
+    { type: 'animal', src: 'animal_chicken' }
+  ]
+};
+
+// ========== 初期化 ==========
+window.addEventListener('load', init);
+
+function init() {
+  canvas = document.getElementById('map-canvas');
+  ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  
+  canvas.width = MAP_WIDTH * TILE_SIZE * DISPLAY_SCALE;
+  canvas.height = MAP_HEIGHT * TILE_SIZE * DISPLAY_SCALE;
+
+  initMapData();
+  loadAssets();
+  setupEventListeners();
+}
+
+function initMapData() {
+  for (let y = 0; y < MAP_HEIGHT; y++) {
+    for (let x = 0; x < MAP_WIDTH; x++) {
+      mapData.layer0.push({ x, y, tileset: 'field', srcX: 16, srcY: 0 }); // デフォルト草
+      mapData.layer1.push(null);
+      mapData.layer2.push(null);
+    }
+  }
+}
+
+function loadAssets() {
+  const imagePromises = [];
+  
+  // タイルセット読み込み
+  ['field', 'floor', 'house', 'nature', 'water'].forEach(name => {
+    const img = new Image();
+    img.src = `assets/tileset_${name}.png`;
+    tilesets[name] = img;
+    imagePromises.push(new Promise(resolve => img.onload = resolve));
+  });
+
+  // NPCスプライト読み込み
+  ['npc_boy', 'npc_girl', 'npc_eskimo'].forEach(name => {
+    const img = new Image();
+    img.src = `assets/${name}.png`;
+    tilesets[name] = img;
+    imagePromises.push(new Promise(resolve => img.onload = resolve));
+  });
+
+  // 動物スプライト読み込み
+  ['animal_cat', 'animal_dog', 'animal_chicken'].forEach(name => {
+    const img = new Image();
+    img.src = `assets/${name}.png`;
+    tilesets[name] = img;
+    imagePromises.push(new Promise(resolve => img.onload = resolve));
+  });
+
+  // BGM
+  bgm = new Audio('assets/bgm_village.ogg');
+  bgm.loop = true;
+
+  // SE
+  ['Accept', 'Bonus', 'Cancel', 'Coin', 'Gold1', 'Move1', 'PowerUp1'].forEach(name => {
+    soundEffects[name] = new Audio(`assets/${name}.wav`);
+  });
+
+  Promise.all(imagePromises).then(() => {
+    loadPresetMap();
+    buildPalette();
+    render();
+  });
+}
+
+function loadPresetMap() {
+  // プリセット: 和風の小さな村
+  
+  // 中央に道（十字路）
+  for (let i = 8; i <= 12; i++) {
+    setTile(1, i, 7, 'floor', 0, 0);
+    setTile(1, i, 8, 'floor', 0, 0);
+  }
+  for (let i = 5; i <= 10; i++) {
+    setTile(1, 10, i, 'floor', 0, 0);
+  }
+
+  // 左上に家（簡易版: 屋根＋壁＋ドア）
+  setTile(1, 3, 3, 'house', 0, 0); // 屋根左上
+  setTile(1, 4, 3, 'house', 16, 0); // 屋根右上
+  setTile(1, 3, 4, 'house', 0, 32); // 壁
+  setTile(1, 4, 4, 'house', 16, 32); // ドア
+
+  // 右上に木と池
+  setTile(1, 15, 3, 'nature', 0, 0); // 木
+  setTile(1, 16, 5, 'water', 0, 0); // 水
+  setTile(1, 17, 5, 'water', 16, 0);
+
+  // 左下に畑（ピンク地面＋花）
+  for (let x = 3; x <= 5; x++) {
+    for (let y = 10; y <= 11; y++) {
+      setTile(0, x, y, 'field', 48, 0); // ピンク地面
+    }
+  }
+  setTile(1, 4, 10, 'nature', 64, 64); // 花
+
+  // 右下に石灯籠と茂み
+  setTile(1, 16, 12, 'house', 320, 160); // 石灯籠
+  setTile(1, 15, 13, 'nature', 32, 64); // 茂み
+
+  // NPC2体と猫1匹
+  entities.push({ type: 'npc', src: 'npc_boy', x: 10, y: 6, dir: 0, frame: 0, speed: 0.03 });
+  entities.push({ type: 'npc', src: 'npc_girl', x: 12, y: 9, dir: 1, frame: 0, speed: 0.02 });
+  entities.push({ type: 'animal', src: 'animal_cat', x: 5, y: 5, dir: 0, frame: 0, speed: 0.05 });
+}
+
+function setTile(layer, x, y, tileset, srcX, srcY) {
+  const idx = y * MAP_WIDTH + x;
+  if (idx < 0 || idx >= MAP_WIDTH * MAP_HEIGHT) return;
+  
+  const tile = { x, y, tileset, srcX, srcY };
+  if (layer === 0) mapData.layer0[idx] = tile;
+  else if (layer === 1) mapData.layer1[idx] = tile;
+  else if (layer === 2) mapData.layer2[idx] = tile;
+}
+
+function buildPalette() {
+  const container = document.getElementById('palette-content');
+  container.innerHTML = '';
+
+  if (currentCategory === 'npc') {
+    // NPC/動物パレット
+    palettes.npc.forEach(item => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 48;
+      canvas.height = 48;
+      canvas.className = 'palette-tile';
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      
+      const img = tilesets[item.src];
+      if (img && img.complete) {
+        ctx.drawImage(img, 0, 0, 16, 16, 0, 0, 48, 48);
+      }
+      
+      canvas.addEventListener('click', () => {
+        document.querySelectorAll('.palette-tile').forEach(t => t.classList.remove('selected'));
+        canvas.classList.add('selected');
+        selectedTile = { type: 'entity', ...item };
+      });
+      
+      container.appendChild(canvas);
+    });
+  } else {
+    // タイルパレット
+    const palette = palettes[currentCategory];
+    const tileset = tilesets[palette.tileset];
+    if (!tileset || !tileset.complete) return;
+
+    const cols = Math.floor(palette.width / TILE_SIZE);
+    const rows = Math.floor(palette.height / TILE_SIZE);
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 48;
+        canvas.height = 48;
+        canvas.className = 'palette-tile';
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        
+        const srcX = col * TILE_SIZE;
+        const srcY = row * TILE_SIZE;
+        ctx.drawImage(tileset, srcX, srcY, TILE_SIZE, TILE_SIZE, 0, 0, 48, 48);
+        
+        canvas.addEventListener('click', () => {
+          document.querySelectorAll('.palette-tile').forEach(t => t.classList.remove('selected'));
+          canvas.classList.add('selected');
+          selectedTile = {
+            type: 'tile',
+            tileset: palette.tileset,
+            srcX,
+            srcY
+          };
+        });
+        
+        container.appendChild(canvas);
+      }
+    }
+  }
+}
+
+function setupEventListeners() {
+  // ツールバー
+  document.getElementById('btn-edit').addEventListener('click', () => switchMode('edit'));
+  document.getElementById('btn-play').addEventListener('click', () => switchMode('play'));
+  document.getElementById('btn-save').addEventListener('click', saveMap);
+  document.getElementById('btn-load').addEventListener('click', loadMap);
+  document.getElementById('btn-clear').addEventListener('click', clearMap);
+
+  // パレットタブ
+  document.querySelectorAll('.palette-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.palette-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentCategory = tab.dataset.category;
+      buildPalette();
+    });
+  });
+
+  // マップキャンバス
+  canvas.addEventListener('mousedown', onCanvasDown);
+  canvas.addEventListener('mousemove', onCanvasMove);
+  canvas.addEventListener('mouseup', onCanvasUp);
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  canvas.addEventListener('touchstart', onCanvasDown);
+  canvas.addEventListener('touchmove', onCanvasMove);
+  canvas.addEventListener('touchend', onCanvasUp);
+}
+
+function switchMode(newMode) {
+  mode = newMode;
+  
+  document.getElementById('btn-edit').classList.toggle('active', mode === 'edit');
+  document.getElementById('btn-play').classList.toggle('active', mode === 'play');
+  
+  if (mode === 'play') {
+    bgm.play().catch(() => {});
+    startPlayMode();
+  } else {
+    bgm.pause();
+    stopPlayMode();
+  }
+  
+  updateStatus();
+  render();
+}
+
+function onCanvasDown(e) {
+  if (mode !== 'edit') {
+    handlePlayClick(e);
+    return;
+  }
+  
+  e.preventDefault();
+  isDrawing = true;
+  placeTile(e);
+}
+
+function onCanvasMove(e) {
+  if (mode !== 'edit' || !isDrawing) return;
+  e.preventDefault();
+  placeTile(e);
+}
+
+function onCanvasUp(e) {
+  if (mode !== 'edit') return;
+  e.preventDefault();
+  isDrawing = false;
+}
+
+function placeTile(e) {
+  if (!selectedTile) return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  
+  const x = Math.floor((clientX - rect.left) / (TILE_SIZE * DISPLAY_SCALE));
+  const y = Math.floor((clientY - rect.top) / (TILE_SIZE * DISPLAY_SCALE));
+  
+  if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) return;
+  
+  const isRightClick = e.button === 2 || e.ctrlKey;
+  
+  if (selectedTile.type === 'entity') {
+    if (isRightClick) {
+      entities = entities.filter(ent => !(Math.floor(ent.x) === x && Math.floor(ent.y) === y));
+    } else {
+      entities.push({
+        type: selectedTile.type,
+        src: selectedTile.src,
+        x: x + 0.5,
+        y: y + 0.5,
+        dir: 0,
+        frame: 0,
+        speed: selectedTile.type === 'npc' ? 0.03 : 0.05
+      });
+    }
+  } else {
+    const idx = y * MAP_WIDTH + x;
+    if (isRightClick) {
+      mapData.layer1[idx] = null;
+    } else {
+      const layer = (currentCategory === 'field') ? 0 : 1;
+      const tile = { x, y, tileset: selectedTile.tileset, srcX: selectedTile.srcX, srcY: selectedTile.srcY };
+      if (layer === 0) mapData.layer0[idx] = tile;
+      else mapData.layer1[idx] = tile;
+    }
+  }
+  
+  render();
+}
+
+function handlePlayClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  
+  const x = (clientX - rect.left) / (TILE_SIZE * DISPLAY_SCALE);
+  const y = (clientY - rect.top) / (TILE_SIZE * DISPLAY_SCALE);
+  
+  entities.forEach(ent => {
+    const dist = Math.sqrt((ent.x - x) ** 2 + (ent.y - y) ** 2);
+    if (dist < 1.5) {
+      soundEffects.Accept.play().catch(() => {});
+      showSpeechBubble(ent, 'こんにちは！');
+    }
+  });
+}
+
+function showSpeechBubble(ent, text) {
+  const bubble = document.createElement('div');
+  bubble.className = 'speech-bubble';
+  bubble.textContent = text;
+  
+  const rect = canvas.getBoundingClientRect();
+  bubble.style.left = (rect.left + ent.x * TILE_SIZE * DISPLAY_SCALE) + 'px';
+  bubble.style.top = (rect.top + (ent.y - 1) * TILE_SIZE * DISPLAY_SCALE) + 'px';
+  
+  document.body.appendChild(bubble);
+  setTimeout(() => bubble.remove(), 2000);
+}
+
+let playInterval = null;
+let frameCounter = 0;
+
+function startPlayMode() {
+  playInterval = setInterval(() => {
+    frameCounter++;
+    
+    entities.forEach(ent => {
+      // ランダム移動
+      if (Math.random() < 0.02) {
+        ent.dir = Math.floor(Math.random() * 4);
+      }
+      
+      let dx = 0, dy = 0;
+      if (ent.dir === 0) dy = ent.speed; // 下
+      else if (ent.dir === 1) dx = ent.speed; // 右
+      else if (ent.dir === 2) dy = -ent.speed; // 上
+      else if (ent.dir === 3) dx = -ent.speed; // 左
+      
+      const newX = ent.x + dx;
+      const newY = ent.y + dy;
+      
+      if (newX >= 0 && newX < MAP_WIDTH && newY >= 0 && newY < MAP_HEIGHT) {
+        ent.x = newX;
+        ent.y = newY;
+      }
+      
+      // アニメーションフレーム
+      if (frameCounter % 12 === 0) {
+        ent.frame = (ent.frame + 1) % 4;
+      }
+    });
+    
+    render();
+  }, 50);
+}
+
+function stopPlayMode() {
+  if (playInterval) {
+    clearInterval(playInterval);
+    playInterval = null;
+  }
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // レイヤー0: 地面
+  mapData.layer0.forEach(tile => {
+    if (!tile) return;
+    const img = tilesets[tile.tileset];
+    if (!img || !img.complete) return;
+    ctx.drawImage(
+      img,
+      tile.srcX, tile.srcY, TILE_SIZE, TILE_SIZE,
+      tile.x * TILE_SIZE * DISPLAY_SCALE, tile.y * TILE_SIZE * DISPLAY_SCALE,
+      TILE_SIZE * DISPLAY_SCALE, TILE_SIZE * DISPLAY_SCALE
+    );
+  });
+  
+  // レイヤー1: 建物/装飾
+  mapData.layer1.forEach(tile => {
+    if (!tile) return;
+    const img = tilesets[tile.tileset];
+    if (!img || !img.complete) return;
+    ctx.drawImage(
+      img,
+      tile.srcX, tile.srcY, TILE_SIZE, TILE_SIZE,
+      tile.x * TILE_SIZE * DISPLAY_SCALE, tile.y * TILE_SIZE * DISPLAY_SCALE,
+      TILE_SIZE * DISPLAY_SCALE, TILE_SIZE * DISPLAY_SCALE
+    );
+  });
+  
+  // レイヤー2: NPC/動物
+  entities.forEach(ent => {
+    const img = tilesets[ent.src];
+    if (!img || !img.complete) return;
+    
+    const srcX = ent.frame * TILE_SIZE;
+    const srcY = ent.dir * TILE_SIZE;
+    
+    ctx.drawImage(
+      img,
+      srcX, srcY, TILE_SIZE, TILE_SIZE,
+      (ent.x - 0.5) * TILE_SIZE * DISPLAY_SCALE, (ent.y - 0.5) * TILE_SIZE * DISPLAY_SCALE,
+      TILE_SIZE * DISPLAY_SCALE, TILE_SIZE * DISPLAY_SCALE
+    );
+  });
+}
+
+function saveMap() {
+  const data = {
+    mapData,
+    entities
+  };
+  localStorage.setItem('ninja-town-map', JSON.stringify(data));
+  alert('マップを保存しました！');
+  soundEffects.Gold1.play().catch(() => {});
+}
+
+function loadMap() {
+  const saved = localStorage.getItem('ninja-town-map');
+  if (!saved) {
+    alert('保存されたマップがありません。');
+    return;
+  }
+  
+  const data = JSON.parse(saved);
+  mapData = data.mapData;
+  entities = data.entities;
+  
+  render();
+  alert('マップを読み込みました！');
+  soundEffects.PowerUp1.play().catch(() => {});
+}
+
+function clearMap() {
+  if (!confirm('マップをクリアしますか？')) return;
+  
+  initMapData();
+  entities = [];
+  render();
+  soundEffects.Cancel.play().catch(() => {});
+}
+
+function updateStatus() {
+  const status = document.getElementById('status');
+  status.textContent = `モード: ${mode === 'edit' ? '編集' : '再生'} | ツール: ${selectedTile ? selectedTile.type : 'なし'}`;
+}
+</script>
+
+</body>
+</html>
