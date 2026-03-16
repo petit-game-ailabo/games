@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>ペットライフ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#fef3c7;touch-action:none;-webkit-user-select:none;user-select:none;font-family:sans-serif}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+const C=document.getElementById('c'),ctx=C.getContext('2d');
+let W,H,dpr;
+function resize(){dpr=Math.min(window.devicePixelRatio||1,3);W=window.innerWidth;H=window.innerHeight;C.width=W*dpr;C.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+window.addEventListener('resize',resize);resize();
+
+const ac=new(window.AudioContext||window.webkitAudioContext)();
+function tone(f,d,v=0.2,t='sine'){const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d);}
+function sfxHappy(){tone(523,0.1);setTimeout(()=>tone(659,0.08),80);setTimeout(()=>tone(784,0.08),160);}
+function sfxEat(){tone(330,0.08);setTimeout(()=>tone(440,0.06),60);}
+function sfxPet(){tone(392,0.15,0.15);}
+function sfxSad(){tone(262,0.2,0.15,'triangle');}
+
+// ===== PET STATE =====
+let pet={
+  name:'ねこ',hunger:80,happy:80,clean:80,energy:80,
+  age:0,stage:0, // 0=baby,1=child,2=adult
+  x:0,y:0,vx:0,vy:0,
+  frame:0,action:'idle',actionTimer:0,
+  hearts:[],poos:[],
+};
+let gameTime=0,lastTick=Date.now(),coins=10;
+let state='title'; // title,play
+let buttons=[];
+let floats=[]; // floating text/emoji
+let bgStars=[];for(let i=0;i<20;i++)bgStars.push({x:Math.random(),y:Math.random(),s:Math.random()*2+1});
+
+// ===== PIXEL ART PET DRAWING =====
+// Cat: 12x12 pixel art, drawn at 4x scale
+const CAT_BABY=[
+  '....wwww....',
+  '...wwwwww...',
+  '..wpwwwpww..',
+  '..wwwwwwww..',
+  '..w.ww.www..',
+  '..wwwwwwww..',
+  '...wwnnww...',
+  '....wwww....',
+  '...wwwwww...',
+  '...wwwwww...',
+  '....w..w....',
+  '............',
+];
+const CAT_CHILD=[
+  '...ww..ww...',
+  '..wwwwwwww..',
+  '..wpwwwwpw..',
+  '..wwwwwwww..',
+  '..ww.ww.ww..',
+  '..wwwwwwww..',
+  '...wwnwww...',
+  '....wwww....',
+  '...wwwwww...',
+  '..wwwwwwww..',
+  '..wwwwwwww..',
+  '...ww..ww...',
+];
+const CAT_ADULT=[
+  '..ww....ww..',
+  '.wwww..wwww.',
+  '.wwwwwwwwww.',
+  '.wpwwwwwwpw.',
+  '.wwwwwwwwww.',
+  '.ww..ww..ww.',
+  '.wwwwwwwwww.',
+  '..wwwnwwww..',
+  '...wwwwww...',
+  '..wwwwwwww..',
+  '.wwwwwwwwww.',
+  '.wwwwwwwwww.',
+];
+const CATS=[CAT_BABY,CAT_CHILD,CAT_ADULT];
+const COLORS_MAP={'.':'','w':'#f5a623','p':'#ff69b4','n':'#333','b':'#333'};
+
+function drawPet(x,y,stage,mood){
+  const art=CATS[Math.min(stage,2)];
+  const s=stage===0?5:stage===1?5:6;
+  const ox=x-art[0].length*s/2;
+  const oy=y-art.length*s;
+  // Body color based on mood
+  const bodyC=mood>60?'#f5a623':mood>30?'#e0a030':'#c08020';
+  ctx.imageSmoothingEnabled=false;
+  for(let r=0;r<art.length;r++){
+    for(let c=0;c<art[r].length;c++){
+      const ch=art[r][c];
+      if(ch==='.') continue;
+      ctx.fillStyle=ch==='w'?bodyC:COLORS_MAP[ch]||'#333';
+      ctx.fillRect(ox+c*s,oy+r*s,s,s);
+    }
+  }
+  // Eyes blink
+  if(Math.random()<0.01||pet.action==='sleep'){
+    const ey=stage===0?2:stage===1?2:3;
+    const ex1=stage===0?2:stage===1?2:1;
+    const ex2=stage===0?6:stage===1?7:8;
+    ctx.fillStyle=bodyC;
+    ctx.fillRect(ox+ex1*s,oy+ey*s,s,s);
+    ctx.fillRect(ox+ex2*s,oy+ey*s,s,s);
+  }
+  // Bounce animation
+  if(pet.action==='jump'){
+    const bounce=Math.sin(gameTime*0.15)*3;
+    // Already positioned by caller
+  }
+}
+
+function drawRoom(){
+  // Floor
+  const floorY=H*0.7;
+  ctx.fillStyle='#d4a574';ctx.fillRect(0,floorY,W,H-floorY);
+  ctx.fillStyle='#c4956a';
+  for(let x=0;x<W;x+=40){ctx.fillRect(x,floorY,20,H-floorY);}
+  // Wall
+  const wallGrd=ctx.createLinearGradient(0,0,0,floorY);
+  wallGrd.addColorStop(0,'#fff8e1');wallGrd.addColorStop(1,'#ffe0b2');
+  ctx.fillStyle=wallGrd;ctx.fillRect(0,0,W,floorY);
+  // Window
+  ctx.fillStyle='#81d4fa';ctx.fillRect(W*0.6,H*0.08,W*0.3,H*0.2);
+  ctx.strokeStyle='#8d6e63';ctx.lineWidth=3;ctx.strokeRect(W*0.6,H*0.08,W*0.3,H*0.2);
+  ctx.beginPath();ctx.moveTo(W*0.75,H*0.08);ctx.lineTo(W*0.75,H*0.28);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(W*0.6,H*0.18);ctx.lineTo(W*0.9,H*0.18);ctx.stroke();
+  // Sun
+  ctx.fillStyle='#ffd54f';ctx.beginPath();ctx.arc(W*0.75,H*0.15,12,0,Math.PI*2);ctx.fill();
+  // Rug
+  ctx.fillStyle='rgba(244,67,54,0.15)';
+  ctx.beginPath();ctx.ellipse(W*0.5,floorY+20,W*0.3,25,0,0,Math.PI*2);ctx.fill();
+  return floorY;
+}
+
+function drawBar(x,y,w,h,val,color){
+  ctx.fillStyle='rgba(0,0,0,0.15)';roundRect(ctx,x,y,w,h,h/2);ctx.fill();
+  ctx.fillStyle=color;
+  const fw=Math.max(0,w*(val/100));
+  if(fw>0){roundRect(ctx,x,y,fw,h,h/2);ctx.fill();}
+}
+
+function drawUI(floorY){
+  // Status bars
+  const bx=15,bw=W*0.45,bh=14,gap=22;
+  const stats=[
+    {label:'🍖',val:pet.hunger,c:pet.hunger>30?'#66bb6a':'#e53935'},
+    {label:'😊',val:pet.happy,c:pet.happy>30?'#fdd835':'#e53935'},
+    {label:'✨',val:pet.clean,c:pet.clean>30?'#42a5f5':'#e53935'},
+    {label:'💤',val:pet.energy,c:pet.energy>30?'#ab47bc':'#e53935'},
+  ];
+  for(let i=0;i<stats.length;i++){
+    ctx.fillStyle='#333';ctx.font='16px sans-serif';ctx.textAlign='left';
+    ctx.fillText(stats[i].label,bx,20+i*gap+bh*0.8);
+    drawBar(bx+25,20+i*gap,bw,bh,stats[i].val,stats[i].c);
+  }
+  // Age + coins
+  ctx.fillStyle='#8d6e63';ctx.font='bold 14px sans-serif';ctx.textAlign='right';
+  const ages=['赤ちゃん','子ども','おとな'];
+  ctx.fillText(`${ages[pet.stage]} (${Math.floor(pet.age)}日)`,W-15,30);
+  ctx.fillStyle='#f9a825';ctx.fillText(`🪙 ${coins}`,W-15,50);
+  
+  // Action buttons
+  buttons=[];
+  const btnY=floorY+50;
+  const btnW=65,btnH=55,btnGap=8;
+  const acts=[
+    {emoji:'🍖',label:'ごはん',cost:2,action:'feed'},
+    {emoji:'🫧',label:'おふろ',cost:1,action:'bath'},
+    {emoji:'🤚',label:'なでる',cost:0,action:'pet'},
+    {emoji:'🎾',label:'あそぶ',cost:1,action:'play'},
+    {emoji:'💤',label:'ねんね',cost:0,action:'sleep'},
+  ];
+  const totalW=acts.length*btnW+(acts.length-1)*btnGap;
+  const startX=(W-totalW)/2;
+  for(let i=0;i<acts.length;i++){
+    const bx_=startX+i*(btnW+btnGap);
+    const a=acts[i];
+    ctx.fillStyle=coins>=a.cost?'rgba(255,255,255,0.9)':'rgba(200,200,200,0.5)';
+    roundRect(ctx,bx_,btnY,btnW,btnH,10);ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.1)';ctx.lineWidth=1;roundRect(ctx,bx_,btnY,btnW,btnH,10);ctx.stroke();
+    ctx.fillStyle='#333';ctx.font='22px sans-serif';ctx.textAlign='center';
+    ctx.fillText(a.emoji,bx_+btnW/2,btnY+26);
+    ctx.font='10px sans-serif';ctx.fillText(a.label,bx_+btnW/2,btnY+42);
+    if(a.cost>0){ctx.fillStyle='#f9a825';ctx.font='9px sans-serif';ctx.fillText(`🪙${a.cost}`,bx_+btnW/2,btnY+52);}
+    buttons.push({x:bx_,y:btnY,w:btnW,h:btnH,...a});
+  }
+}
+
+function doAction(act){
+  if(act.cost>coins)return;
+  coins-=act.cost;
+  switch(act.action){
+    case'feed':pet.hunger=Math.min(100,pet.hunger+25);pet.action='eat';pet.actionTimer=60;sfxEat();
+      floats.push({x:pet.x,y:pet.y-40,text:'🍖+25',life:40,vy:-1});break;
+    case'bath':pet.clean=Math.min(100,pet.clean+30);pet.action='bath';pet.actionTimer=50;sfxHappy();
+      floats.push({x:pet.x,y:pet.y-40,text:'✨+30',life:40,vy:-1});break;
+    case'pet':pet.happy=Math.min(100,pet.happy+15);pet.action='petted';pet.actionTimer=40;sfxPet();
+      pet.hearts.push({x:pet.x+(Math.random()-0.5)*30,y:pet.y-30,life:30,vy:-1.5});break;
+    case'play':pet.happy=Math.min(100,pet.happy+20);pet.energy=Math.max(0,pet.energy-10);
+      pet.action='jump';pet.actionTimer=80;sfxHappy();
+      floats.push({x:pet.x,y:pet.y-40,text:'🎾',life:40,vy:-1.5});break;
+    case'sleep':pet.energy=Math.min(100,pet.energy+35);pet.action='sleep';pet.actionTimer=120;
+      floats.push({x:pet.x,y:pet.y-40,text:'💤+35',life:40,vy:-1});break;
+  }
+}
+
+function update(){
+  const now=Date.now();
+  const dt=(now-lastTick)/1000;
+  lastTick=now;
+  if(state!=='play')return;
+  
+  gameTime++;
+  pet.age+=dt*0.5; // 2 seconds = 1 day
+  if(pet.age>5&&pet.stage===0){pet.stage=1;floats.push({x:W/2,y:H*0.3,text:'🎉 成長！子どもになった！',life:80,vy:-0.5});}
+  if(pet.age>20&&pet.stage===1){pet.stage=2;floats.push({x:W/2,y:H*0.3,text:'🎉 成長！おとなになった！',life:80,vy:-0.5});}
+  
+  // Stat decay
+  pet.hunger=Math.max(0,pet.hunger-dt*1.5);
+  pet.happy=Math.max(0,pet.happy-dt*1.2);
+  pet.clean=Math.max(0,pet.clean-dt*0.8);
+  pet.energy=Math.max(0,pet.energy-dt*1);
+  
+  // Earn coins over time
+  if(gameTime%120===0)coins++;
+  
+  // Action timer
+  if(pet.actionTimer>0){
+    pet.actionTimer--;
+    if(pet.actionTimer<=0)pet.action='idle';
+  }
+  
+  // Idle movement
+  if(pet.action==='idle'){
+    if(Math.random()<0.02){pet.vx=(Math.random()-0.5)*1.5;}
+    pet.x+=pet.vx;
+    if(pet.x<W*0.2)pet.vx=0.5;
+    if(pet.x>W*0.8)pet.vx=-0.5;
+  }
+  if(pet.action==='jump'){
+    pet.x+=Math.sin(gameTime*0.1)*2;
+  }
+  
+  // Hearts
+  for(const h of pet.hearts){h.y+=h.vy;h.life--;}
+  pet.hearts=pet.hearts.filter(h=>h.life>0);
+  // Floats
+  for(const f of floats){f.y+=f.vy;f.life--;}
+  floats=floats.filter(f=>f.life>0);
+  
+  // Sad sounds
+  if(pet.hunger<20&&gameTime%300===0)sfxSad();
+}
+
+function draw(){
+  update();
+  ctx.clearRect(0,0,W,H);
+  
+  if(state==='title'){
+    ctx.fillStyle='#fff8e1';ctx.fillRect(0,0,W,H);
+    // Cute pet preview
+    const t=Date.now()*0.003;
+    drawPet(W/2+Math.sin(t)*10,H*0.45,1,80);
+    // Hearts
+    for(let i=0;i<5;i++){
+      const a=i/5*Math.PI*2+t*0.5;
+      ctx.fillStyle='rgba(244,67,54,0.5)';ctx.font='20px sans-serif';ctx.textAlign='center';
+      ctx.fillText('❤️',W/2+Math.cos(a)*60,H*0.4+Math.sin(a)*30);
+    }
+    ctx.fillStyle='#5d4037';ctx.font='bold 32px sans-serif';ctx.textAlign='center';
+    ctx.fillText('🐱 ペットライフ',W/2,H*0.58);
+    ctx.font='14px sans-serif';ctx.fillStyle='#8d6e63';
+    ctx.fillText('かわいいペットを育てよう！',W/2,H*0.64);
+    ctx.fillStyle='#f4511e';roundRect(ctx,W/2-70,H*0.72,140,44,12);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 18px sans-serif';
+    ctx.fillText('START',W/2,H*0.72+28);
+  }
+  else if(state==='play'){
+    const floorY=drawRoom();
+    // Pet position
+    pet.x=pet.x||W/2;
+    pet.y=floorY-5;
+    const bounce=pet.action==='jump'?Math.abs(Math.sin(gameTime*0.15))*20:0;
+    const mood=(pet.hunger+pet.happy+pet.clean+pet.energy)/4;
+    drawPet(pet.x,pet.y-bounce,pet.stage,mood);
+    
+    // Action effects
+    if(pet.action==='eat'){ctx.font='20px sans-serif';ctx.textAlign='center';ctx.fillText('🍖',pet.x+15,pet.y-30);}
+    if(pet.action==='bath'){
+      for(let i=0;i<3;i++){
+        ctx.fillStyle='rgba(100,181,246,0.3)';
+        ctx.beginPath();ctx.arc(pet.x+(Math.random()-0.5)*30,pet.y-20-Math.random()*20,3+Math.random()*3,0,Math.PI*2);ctx.fill();
+      }
+    }
+    if(pet.action==='sleep'){ctx.font='16px sans-serif';ctx.textAlign='center';
+      const zy=pet.y-40-Math.sin(gameTime*0.05)*5;
+      ctx.fillText('💤',pet.x+10,zy);}
+    
+    // Hearts
+    for(const h of pet.hearts){ctx.globalAlpha=h.life/30;ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText('❤️',h.x,h.y);ctx.globalAlpha=1;}
+    // Floats
+    for(const f of floats){ctx.globalAlpha=Math.min(1,f.life/20);ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillStyle='#333';ctx.fillText(f.text,f.x,f.y);ctx.globalAlpha=1;}
+    
+    // Mood face
+    const moodFace=(pet.hunger+pet.happy+pet.clean+pet.energy)/4;
+    ctx.font='24px sans-serif';ctx.textAlign='center';
+    ctx.fillText(moodFace>70?'😊':moodFace>40?'😐':moodFace>20?'😢':'😭',W/2,H*0.38);
+    
+    drawUI(floorY);
+  }
+  
+  requestAnimationFrame(draw);
+}
+
+function tap(x,y){
+  if(ac.state==='suspended')ac.resume();
+  if(state==='title'){state='play';pet.x=W/2;return;}
+  for(const b of buttons){
+    if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h){doAction(b);return;}
+  }
+  // Tap pet to pet it
+  if(Math.abs(x-pet.x)<40&&Math.abs(y-pet.y)<60){
+    doAction({action:'pet',cost:0});
+  }
+}
+
+C.addEventListener('touchstart',e=>{e.preventDefault();const r=C.getBoundingClientRect();tap(e.touches[0].clientX-r.left,e.touches[0].clientY-r.top);},{passive:false});
+C.addEventListener('click',e=>{const r=C.getBoundingClientRect();tap(e.clientX-r.left,e.clientY-r.top);});
+
+function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+
+draw();
+</script>
+</body>
+</html>
