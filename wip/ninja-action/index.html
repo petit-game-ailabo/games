@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>忍者アクション - Ninja Adventure</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+            color: #fff;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            max-width: 800px;
+            width: 100%;
+        }
+        canvas {
+            display: block;
+            background: #87CEEB;
+            border: 4px solid #333;
+            max-width: 100%;
+            height: auto;
+            touch-action: none;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 20px;
+            text-shadow: 2px 2px 4px #000;
+            pointer-events: none;
+        }
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+        }
+        #message h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        #message button {
+            font-size: 24px;
+            padding: 10px 30px;
+            background: #4CAF50;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #message button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui">
+            <div>スコア: <span id="score">0</span></div>
+            <div>ライフ: <span id="lives">3</span></div>
+        </div>
+        <div id="message">
+            <h2 id="messageText"></h2>
+            <p id="messageDetail"></p>
+            <button id="restartBtn">もう一度プレイ</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const livesEl = document.getElementById('lives');
+        const messageEl = document.getElementById('message');
+        const messageTextEl = document.getElementById('messageText');
+        const messageDetailEl = document.getElementById('messageDetail');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // ゲーム状態
+        let gameState = 'loading'; // loading, playing, gameover, clear
+        let score = 0;
+        let lives = 3;
+        let currentZone = 0; // 0=村, 1=森, 2=ボス
+
+        // 画像とサウンドのロード
+        const images = {};
+        const sounds = {};
+        let loadedAssets = 0;
+        const totalAssets = 13;
+
+        const assetList = [
+            { type: 'image', name: 'player', src: 'assets/player.png' },
+            { type: 'image', name: 'monster1', src: 'assets/monster1.png' },
+            { type: 'image', name: 'monster2', src: 'assets/monster2.png' },
+            { type: 'image', name: 'boss', src: 'assets/boss.png' },
+            { type: 'image', name: 'tileset', src: 'assets/tileset.png' },
+            { type: 'image', name: 'items', src: 'assets/items.png' },
+            { type: 'sound', name: 'bgm', src: 'assets/bgm.ogg' },
+            { type: 'sound', name: 'jump', src: 'assets/se_jump.wav' },
+            { type: 'sound', name: 'hit', src: 'assets/se_hit.wav' },
+            { type: 'sound', name: 'coin', src: 'assets/se_coin.wav' },
+            { type: 'sound', name: 'clear', src: 'assets/jingle_clear.wav' },
+            { type: 'sound', name: 'gameover', src: 'assets/jingle_gameover.wav' }
+        ];
+
+        function loadAssets() {
+            assetList.forEach(asset => {
+                if (asset.type === 'image') {
+                    const img = new Image();
+                    img.onload = () => {
+                        loadedAssets++;
+                        checkAssetsLoaded();
+                    };
+                    img.onerror = () => {
+                        console.error('Failed to load image:', asset.src);
+                        loadedAssets++;
+                        checkAssetsLoaded();
+                    };
+                    img.src = asset.src;
+                    images[asset.name] = img;
+                } else if (asset.type === 'sound') {
+                    const audio = new Audio();
+                    audio.oncanplaythrough = () => {
+                        loadedAssets++;
+                        checkAssetsLoaded();
+                    };
+                    audio.onerror = () => {
+                        console.error('Failed to load sound:', asset.src);
+                        loadedAssets++;
+                        checkAssetsLoaded();
+                    };
+                    audio.src = asset.src;
+                    sounds[asset.name] = audio;
+                }
+            });
+            
+            // タイムアウト：3秒経ってもロードが完了しない場合は強制開始
+            setTimeout(() => {
+                if (gameState === 'loading') {
+                    console.log('Force starting game... Loaded:', loadedAssets, '/', totalAssets);
+                    startGame();
+                }
+            }, 3000);
+        }
+        
+        function checkAssetsLoaded() {
+            if (loadedAssets === totalAssets) {
+                console.log('All assets loaded!');
+                startGame();
+            }
+        }
+
+        // プレイヤー
+        const player = {
+            x: 100,
+            y: 400,
+            width: 32,
+            height: 32,
+            vx: 0,
+            vy: 0,
+            onGround: false,
+            frame: 0,
+            animTimer: 0,
+            direction: 1, // 1=右, -1=左
+            invincible: 0
+        };
+
+        const GRAVITY = 0.5;
+        const JUMP_POWER = -12;
+        const MOVE_SPEED = 4;
+        const SPRITE_SIZE = 16;
+
+        // 地面とプラットフォーム
+        let platforms = [];
+        let enemies = [];
+        let coins = [];
+        let boss = null;
+        let cameraX = 0;
+
+        function initLevel() {
+            platforms = [];
+            enemies = [];
+            coins = [];
+            boss = null;
+            cameraX = 0;
+            player.x = 100;
+            player.y = 300;
+            player.vx = 0;
+            player.vy = 0;
+
+            // 地面（全ゾーン共通）
+            platforms.push({ x: 0, y: 550, width: 3000, height: 50 });
+
+            if (currentZone === 0) {
+                // 村エリア
+                platforms.push({ x: 300, y: 450, width: 150, height: 20 });
+                platforms.push({ x: 550, y: 350, width: 150, height: 20 });
+                enemies.push({ x: 400, y: 510, width: 32, height: 32, vx: 2, type: 1, alive: true });
+                enemies.push({ x: 700, y: 510, width: 32, height: 32, vx: -2, type: 1, alive: true });
+                for (let i = 0; i < 5; i++) {
+                    coins.push({ x: 200 + i * 150, y: 400 - i * 30, collected: false });
+                }
+            } else if (currentZone === 1) {
+                // 森エリア
+                platforms.push({ x: 200, y: 450, width: 100, height: 20 });
+                platforms.push({ x: 400, y: 380, width: 100, height: 20 });
+                platforms.push({ x: 600, y: 300, width: 100, height: 20 });
+                enemies.push({ x: 300, y: 510, width: 32, height: 32, vx: 2, type: 2, alive: true });
+                enemies.push({ x: 500, y: 510, width: 32, height: 32, vx: -2, type: 1, alive: true });
+                enemies.push({ x: 800, y: 510, width: 32, height: 32, vx: 2, type: 2, alive: true });
+                for (let i = 0; i < 6; i++) {
+                    coins.push({ x: 300 + i * 120, y: 350 - Math.sin(i) * 50, collected: false });
+                }
+            } else if (currentZone === 2) {
+                // ボスエリア
+                platforms.push({ x: 300, y: 450, width: 400, height: 20 });
+                boss = {
+                    x: 500,
+                    y: 350,
+                    width: 64,
+                    height: 64,
+                    health: 5,
+                    vx: 3,
+                    jumpTimer: 0,
+                    alive: true
+                };
+            }
+        }
+
+        function startGame() {
+            gameState = 'playing';
+            currentZone = 0;
+            score = 0;
+            lives = 3;
+            initLevel();
+            sounds.bgm.loop = true;
+            sounds.bgm.volume = 0.3;
+            sounds.bgm.play().catch(() => {});
+            gameLoop();
+        }
+
+        // 入力
+        const keys = {};
+        let touchStartY = 0;
+
+        window.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            if (e.key === ' ' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                jump();
+            }
+        });
+        window.addEventListener('keyup', e => keys[e.key] = false);
+
+        canvas.addEventListener('touchstart', e => {
+            e.preventDefault();
+            touchStartY = e.touches[0].clientY;
+        });
+
+        canvas.addEventListener('touchend', e => {
+            e.preventDefault();
+            jump();
+        });
+
+        canvas.addEventListener('click', e => {
+            jump();
+        });
+
+        function jump() {
+            if (gameState !== 'playing') return;
+            if (player.onGround) {
+                player.vy = JUMP_POWER;
+                player.onGround = false;
+                playSound('jump');
+            }
+        }
+
+        function playSound(name) {
+            if (sounds[name]) {
+                sounds[name].currentTime = 0;
+                sounds[name].play().catch(() => {});
+            }
+        }
+
+        function update() {
+            if (gameState !== 'playing') return;
+
+            // プレイヤー移動（自動右移動）
+            player.vx = MOVE_SPEED;
+            player.x += player.vx;
+
+            // 重力
+            player.vy += GRAVITY;
+            player.y += player.vy;
+
+            // プラットフォーム衝突
+            player.onGround = false;
+            platforms.forEach(plat => {
+                if (player.x + player.width > plat.x &&
+                    player.x < plat.x + plat.width &&
+                    player.y + player.height > plat.y &&
+                    player.y + player.height < plat.y + 20 &&
+                    player.vy >= 0) {
+                    player.y = plat.y - player.height;
+                    player.vy = 0;
+                    player.onGround = true;
+                }
+            });
+
+            // 画面外チェック
+            if (player.y > canvas.height) {
+                lives--;
+                livesEl.textContent = lives;
+                if (lives <= 0) {
+                    gameOver();
+                } else {
+                    resetPlayerPosition();
+                }
+            }
+
+            // 敵の移動と衝突
+            enemies.forEach(enemy => {
+                if (!enemy.alive) return;
+                enemy.x += enemy.vx;
+                // 敵の折り返し
+                if (enemy.vx > 0 && enemy.x > 900) enemy.vx = -enemy.vx;
+                if (enemy.vx < 0 && enemy.x < 100) enemy.vx = -enemy.vx;
+
+                // プレイヤーとの衝突
+                if (checkCollision(player, enemy)) {
+                    if (player.invincible <= 0) {
+                        // 踏みつけ判定
+                        if (player.vy > 0 && player.y + player.height - 10 < enemy.y + enemy.height / 2) {
+                            enemy.alive = false;
+                            player.vy = -8;
+                            score += 100;
+                            scoreEl.textContent = score;
+                            playSound('hit');
+                        } else {
+                            // ダメージ
+                            lives--;
+                            livesEl.textContent = lives;
+                            player.invincible = 60;
+                            playSound('hit');
+                            if (lives <= 0) {
+                                gameOver();
+                            }
+                        }
+                    }
+                }
+            });
+
+            // ボス戦
+            if (boss && boss.alive) {
+                boss.x += boss.vx;
+                if (boss.x > 650 || boss.x < 350) boss.vx = -boss.vx;
+
+                boss.jumpTimer++;
+                if (boss.jumpTimer > 80) {
+                    boss.jumpTimer = 0;
+                }
+
+                // ボスとの衝突
+                if (checkCollision(player, boss)) {
+                    if (player.invincible <= 0) {
+                        if (player.vy > 0 && player.y + player.height - 10 < boss.y + boss.height / 2) {
+                            boss.health--;
+                            player.vy = -10;
+                            score += 200;
+                            scoreEl.textContent = score;
+                            playSound('hit');
+                            if (boss.health <= 0) {
+                                boss.alive = false;
+                                setTimeout(() => gameClear(), 1000);
+                            }
+                        } else {
+                            lives--;
+                            livesEl.textContent = lives;
+                            player.invincible = 60;
+                            playSound('hit');
+                            if (lives <= 0) {
+                                gameOver();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // コイン収集
+            coins.forEach(coin => {
+                if (!coin.collected && checkCollision(player, { x: coin.x, y: coin.y, width: 16, height: 16 })) {
+                    coin.collected = true;
+                    score += 50;
+                    scoreEl.textContent = score;
+                    playSound('coin');
+                }
+            });
+
+            // ゾーン進行チェック
+            if (!boss && player.x > 1000 && currentZone < 2) {
+                currentZone++;
+                initLevel();
+            }
+
+            // カメラ追従
+            cameraX = Math.max(0, player.x - 300);
+
+            // 無敵時間減少
+            if (player.invincible > 0) player.invincible--;
+
+            // アニメーション
+            player.animTimer++;
+            if (player.animTimer > 8) {
+                player.animTimer = 0;
+                player.frame = (player.frame + 1) % 4;
+            }
+        }
+
+        function checkCollision(a, b) {
+            return a.x < b.x + b.width &&
+                   a.x + a.width > b.x &&
+                   a.y < b.y + b.height &&
+                   a.y + a.height > b.y;
+        }
+
+        function resetPlayerPosition() {
+            player.x = 100;
+            player.y = 300;
+            player.vx = 0;
+            player.vy = 0;
+            player.invincible = 120;
+        }
+
+        function draw() {
+            // 背景
+            ctx.fillStyle = currentZone === 0 ? '#87CEEB' : currentZone === 1 ? '#228B22' : '#696969';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // プラットフォーム
+            platforms.forEach(plat => {
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+                // タイルセットテクスチャ
+                if (images.tileset) {
+                    for (let i = 0; i < plat.width; i += 16) {
+                        ctx.drawImage(images.tileset, 0, 0, 16, 16, plat.x + i, plat.y, 16, 16);
+                    }
+                }
+            });
+
+            // コイン
+            coins.forEach(coin => {
+                if (!coin.collected && images.items) {
+                    ctx.drawImage(images.items, 0, 0, 16, 16, coin.x, coin.y, 16, 16);
+                }
+            });
+
+            // 敵
+            enemies.forEach(enemy => {
+                if (enemy.alive) {
+                    const monsterImg = enemy.type === 1 ? images.monster1 : images.monster2;
+                    if (monsterImg) {
+                        ctx.drawImage(monsterImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, enemy.x, enemy.y, enemy.width, enemy.height);
+                    } else {
+                        ctx.fillStyle = '#FF0000';
+                        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                    }
+                }
+            });
+
+            // ボス
+            if (boss && boss.alive && images.boss) {
+                ctx.drawImage(images.boss, 0, 0, 32, 32, boss.x, boss.y, boss.width, boss.height);
+                // ボスHP表示
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(boss.x, boss.y - 10, boss.width, 5);
+                ctx.fillStyle = '#00FF00';
+                ctx.fillRect(boss.x, boss.y - 10, boss.width * (boss.health / 5), 5);
+            }
+
+            // プレイヤー
+            if (images.player) {
+                const frameX = player.frame * SPRITE_SIZE;
+                const frameY = 0; // 下向きアニメーション
+                const alpha = player.invincible > 0 && Math.floor(player.invincible / 5) % 2 === 0 ? 0.5 : 1;
+                ctx.globalAlpha = alpha;
+                ctx.drawImage(images.player, frameX, frameY, SPRITE_SIZE, SPRITE_SIZE, player.x, player.y, player.width, player.height);
+                ctx.globalAlpha = 1;
+            } else {
+                ctx.fillStyle = '#0000FF';
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            ctx.restore();
+
+            // ゾーン表示
+            ctx.fillStyle = '#FFF';
+            ctx.font = '24px Arial';
+            ctx.fillText(['村エリア', '森エリア', 'ボス戦！'][currentZone], 10, 40);
+        }
+
+        function gameLoop() {
+            if (gameState === 'playing') {
+                update();
+                draw();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            sounds.bgm.pause();
+            playSound('gameover');
+            messageTextEl.textContent = 'GAME OVER';
+            messageDetailEl.textContent = `最終スコア: ${score}`;
+            messageEl.style.display = 'block';
+        }
+
+        function gameClear() {
+            gameState = 'clear';
+            sounds.bgm.pause();
+            playSound('clear');
+            messageTextEl.textContent = 'ステージクリア！';
+            messageDetailEl.textContent = `最終スコア: ${score}`;
+            messageEl.style.display = 'block';
+        }
+
+        restartBtn.addEventListener('click', () => {
+            messageEl.style.display = 'none';
+            startGame();
+        });
+
+        loadAssets();
+    </script>
+</body>
+</html>
