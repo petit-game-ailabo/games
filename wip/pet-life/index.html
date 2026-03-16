@@ -26,6 +26,18 @@ function sfxEat(){tone(330,0.08);setTimeout(()=>tone(440,0.06),60);}
 function sfxPet(){tone(392,0.15,0.15);}
 function sfxSad(){tone(262,0.2,0.15,'triangle');}
 
+// ===== IMAGE PRELOAD =====
+const images={};
+const imagesToLoad=['cat_idle','cat_happy','cat_sleep','cat_eat','room'];
+let imagesLoaded=0;
+imagesToLoad.forEach(name=>{
+  const img=new Image();
+  img.onload=()=>{imagesLoaded++;};
+  img.onerror=()=>{imagesLoaded++;console.warn(`Failed to load ${name}.png`);};
+  img.src=`assets/${name}.png`;
+  images[name]=img;
+});
+
 // ===== PET STATE =====
 let pet={
   name:'ねこ',hunger:80,happy:80,clean:80,energy:80,
@@ -88,58 +100,86 @@ const CATS=[CAT_BABY,CAT_CHILD,CAT_ADULT];
 const COLORS_MAP={'.':'','w':'#f5a623','p':'#ff69b4','n':'#333','b':'#333'};
 
 function drawPet(x,y,stage,mood){
-  const art=CATS[Math.min(stage,2)];
-  const s=stage===0?5:stage===1?5:6;
-  const ox=x-art[0].length*s/2;
-  const oy=y-art.length*s;
-  // Body color based on mood
-  const bodyC=mood>60?'#f5a623':mood>30?'#e0a030':'#c08020';
-  ctx.imageSmoothingEnabled=false;
-  for(let r=0;r<art.length;r++){
-    for(let c=0;c<art[r].length;c++){
-      const ch=art[r][c];
-      if(ch==='.') continue;
-      ctx.fillStyle=ch==='w'?bodyC:COLORS_MAP[ch]||'#333';
-      ctx.fillRect(ox+c*s,oy+r*s,s,s);
+  // Choose image based on action
+  let imgName='cat_idle';
+  if(pet.action==='sleep')imgName='cat_sleep';
+  else if(pet.action==='eat'||pet.action==='bath')imgName='cat_eat';
+  else if(pet.action==='jump'||pet.action==='play')imgName='cat_happy';
+  else if(pet.action==='petted')imgName='cat_idle';
+  
+  const img=images[imgName];
+  const imgLoaded=img&&img.complete&&img.naturalWidth>0;
+  
+  if(imgLoaded){
+    // Draw image (height ~100px, maintain aspect ratio)
+    ctx.imageSmoothingEnabled=true;
+    const targetH=100;
+    const targetW=targetH*(img.naturalWidth/img.naturalHeight);
+    const ix=x-targetW/2;
+    const iy=y-targetH;
+    ctx.drawImage(img,ix,iy,targetW,targetH);
+  }else{
+    // Fallback: pixel art
+    const art=CATS[Math.min(stage,2)];
+    const s=stage===0?5:stage===1?5:6;
+    const ox=x-art[0].length*s/2;
+    const oy=y-art.length*s;
+    const bodyC=mood>60?'#f5a623':mood>30?'#e0a030':'#c08020';
+    ctx.imageSmoothingEnabled=false;
+    for(let r=0;r<art.length;r++){
+      for(let c=0;c<art[r].length;c++){
+        const ch=art[r][c];
+        if(ch==='.') continue;
+        ctx.fillStyle=ch==='w'?bodyC:COLORS_MAP[ch]||'#333';
+        ctx.fillRect(ox+c*s,oy+r*s,s,s);
+      }
     }
-  }
-  // Eyes blink
-  if(Math.random()<0.01||pet.action==='sleep'){
-    const ey=stage===0?2:stage===1?2:3;
-    const ex1=stage===0?2:stage===1?2:1;
-    const ex2=stage===0?6:stage===1?7:8;
-    ctx.fillStyle=bodyC;
-    ctx.fillRect(ox+ex1*s,oy+ey*s,s,s);
-    ctx.fillRect(ox+ex2*s,oy+ey*s,s,s);
-  }
-  // Bounce animation
-  if(pet.action==='jump'){
-    const bounce=Math.sin(gameTime*0.15)*3;
-    // Already positioned by caller
+    // Eyes blink
+    if(Math.random()<0.01||pet.action==='sleep'){
+      const ey=stage===0?2:stage===1?2:3;
+      const ex1=stage===0?2:stage===1?2:1;
+      const ex2=stage===0?6:stage===1?7:8;
+      ctx.fillStyle=bodyC;
+      ctx.fillRect(ox+ex1*s,oy+ey*s,s,s);
+      ctx.fillRect(ox+ex2*s,oy+ey*s,s,s);
+    }
   }
 }
 
 function drawRoom(){
-  // Floor
-  const floorY=H*0.7;
-  ctx.fillStyle='#d4a574';ctx.fillRect(0,floorY,W,H-floorY);
-  ctx.fillStyle='#c4956a';
-  for(let x=0;x<W;x+=40){ctx.fillRect(x,floorY,20,H-floorY);}
-  // Wall
-  const wallGrd=ctx.createLinearGradient(0,0,0,floorY);
-  wallGrd.addColorStop(0,'#fff8e1');wallGrd.addColorStop(1,'#ffe0b2');
-  ctx.fillStyle=wallGrd;ctx.fillRect(0,0,W,floorY);
-  // Window
-  ctx.fillStyle='#81d4fa';ctx.fillRect(W*0.6,H*0.08,W*0.3,H*0.2);
-  ctx.strokeStyle='#8d6e63';ctx.lineWidth=3;ctx.strokeRect(W*0.6,H*0.08,W*0.3,H*0.2);
-  ctx.beginPath();ctx.moveTo(W*0.75,H*0.08);ctx.lineTo(W*0.75,H*0.28);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(W*0.6,H*0.18);ctx.lineTo(W*0.9,H*0.18);ctx.stroke();
-  // Sun
-  ctx.fillStyle='#ffd54f';ctx.beginPath();ctx.arc(W*0.75,H*0.15,12,0,Math.PI*2);ctx.fill();
-  // Rug
-  ctx.fillStyle='rgba(244,67,54,0.15)';
-  ctx.beginPath();ctx.ellipse(W*0.5,floorY+20,W*0.3,25,0,0,Math.PI*2);ctx.fill();
-  return floorY;
+  const roomImg=images.room;
+  const imgLoaded=roomImg&&roomImg.complete&&roomImg.naturalWidth>0;
+  
+  if(imgLoaded){
+    // Draw room.png as background, fit to screen width
+    ctx.imageSmoothingEnabled=true;
+    const imgAspect=roomImg.naturalWidth/roomImg.naturalHeight;
+    const targetW=W;
+    const targetH=targetW/imgAspect;
+    const ix=0;
+    const iy=(H-targetH)/2; // center vertically
+    ctx.drawImage(roomImg,ix,iy,targetW,targetH);
+    // Floor Y is 80% down the screen
+    const floorY=H*0.8;
+    return floorY;
+  }else{
+    // Fallback: original drawing
+    const floorY=H*0.7;
+    ctx.fillStyle='#d4a574';ctx.fillRect(0,floorY,W,H-floorY);
+    ctx.fillStyle='#c4956a';
+    for(let x=0;x<W;x+=40){ctx.fillRect(x,floorY,20,H-floorY);}
+    const wallGrd=ctx.createLinearGradient(0,0,0,floorY);
+    wallGrd.addColorStop(0,'#fff8e1');wallGrd.addColorStop(1,'#ffe0b2');
+    ctx.fillStyle=wallGrd;ctx.fillRect(0,0,W,floorY);
+    ctx.fillStyle='#81d4fa';ctx.fillRect(W*0.6,H*0.08,W*0.3,H*0.2);
+    ctx.strokeStyle='#8d6e63';ctx.lineWidth=3;ctx.strokeRect(W*0.6,H*0.08,W*0.3,H*0.2);
+    ctx.beginPath();ctx.moveTo(W*0.75,H*0.08);ctx.lineTo(W*0.75,H*0.28);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(W*0.6,H*0.18);ctx.lineTo(W*0.9,H*0.18);ctx.stroke();
+    ctx.fillStyle='#ffd54f';ctx.beginPath();ctx.arc(W*0.75,H*0.15,12,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(244,67,54,0.15)';
+    ctx.beginPath();ctx.ellipse(W*0.5,floorY+20,W*0.3,25,0,0,Math.PI*2);ctx.fill();
+    return floorY;
+  }
 }
 
 function drawBar(x,y,w,h,val,color){
