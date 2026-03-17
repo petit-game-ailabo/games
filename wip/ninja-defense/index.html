@@ -332,6 +332,90 @@
     }
 
     // 忍者が視界内にいるか判定
+    // BFS経路探索（視界を避けつつ最短経路を見つける）
+    function findPathBFS(sx, sy, gx, gy) {
+      const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+      // ダイクストラ的に：視界内のタイルはコスト高、それ以外はコスト1
+      const cost = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(Infinity));
+      const prev = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(null));
+      cost[sy][sx] = 0;
+      
+      // 優先度つきキュー（簡易：配列ソート）
+      const queue = [{x:sx, y:sy, c:0}];
+      
+      while (queue.length > 0) {
+        queue.sort((a,b) => a.c - b.c);
+        const cur = queue.shift();
+        if (cur.x === gx && cur.y === gy) break;
+        if (cur.c > cost[cur.y][cur.x]) continue;
+        
+        for (const d of dirs) {
+          const nx = cur.x + d.x;
+          const ny = cur.y + d.y;
+          if (nx < 0 || ny < 0 || nx >= MAP_SIZE || ny >= MAP_SIZE) continue;
+          if (map[ny][nx] !== FLOOR && map[ny][nx] !== TREASURE) continue;
+          
+          // 視界内なら高コスト、そうでなければ1
+          let tileCost = 1;
+          const testPos = {x: nx+0.5, y: ny+0.5};
+          for (const u of units) {
+            if (isNinjaInVision(u, testPos)) { tileCost = 50; break; }
+          }
+          
+          const nc = cur.c + tileCost;
+          if (nc < cost[ny][nx]) {
+            cost[ny][nx] = nc;
+            prev[ny][nx] = {x: cur.x, y: cur.y};
+            queue.push({x:nx, y:ny, c:nc});
+          }
+        }
+      }
+      
+      // 経路復元
+      if (cost[gy][gx] === Infinity) return null; // 到達不能
+      
+      const path = [];
+      let cx = gx, cy = gy;
+      while (cx !== sx || cy !== sy) {
+        path.unshift({x:cx, y:cy});
+        const p = prev[cy][cx];
+        if (!p) return null;
+        cx = p.x;
+        cy = p.y;
+      }
+      return path;
+    }
+    
+    // 全経路が塞がっているかチェック（降参判定）
+    function isAllPathsBlocked(sx, sy) {
+      // BFSで壁と視界を無視せず、ゴールに到達できるか
+      const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+      const visited = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(false));
+      const queue = [{x:sx, y:sy}];
+      visited[sy][sx] = true;
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        if (cur.x === treasurePos.x && cur.y === treasurePos.y) return false; // 到達可能
+        for (const d of dirs) {
+          const nx = cur.x + d.x;
+          const ny = cur.y + d.y;
+          if (nx < 0 || ny < 0 || nx >= MAP_SIZE || ny >= MAP_SIZE) continue;
+          if (visited[ny][nx]) continue;
+          if (map[ny][nx] !== FLOOR && map[ny][nx] !== TREASURE) continue;
+          // 視界内は通れないとして判定
+          const testPos = {x: nx+0.5, y: ny+0.5};
+          let blocked = false;
+          for (const u of units) {
+            if (isNinjaInVision(u, testPos)) { blocked = true; break; }
+          }
+          if (blocked) continue;
+          visited[ny][nx] = true;
+          queue.push({x:nx, y:ny});
+        }
+      }
+      return true; // 到達不能 → 降参
+    }
+
     function isNinjaInVision(unit, ninja) {
       const dx = ninja.x - unit.x;
       const dy = ninja.y - unit.y;
@@ -448,7 +532,7 @@
 
     // 忍者AI
     function updateNinjaAI(ninja, dt) {
-      if (ninja.state === 'dead' || ninja.state === 'reached') return;
+      if (ninja.state === 'dead' || ninja.state === 'reached' || ninja.state === 'surrender') return;
 
       // タイムアウトチェック（30秒）
       ninja.age = (ninja.age || 0) + dt;
@@ -532,36 +616,23 @@
             ninja.dir = best.d;
           }
         } else if (ninja.ai === 'smart') {
-          // A*風の経路探索（視界回避付き）
-          // 簡易実装：貪欲法
-          const dirs = [
-            {x:0, y:-1, d:3}, {x:0, y:1, d:0}, {x:-1, y:0, d:1}, {x:1, y:0, d:2}
-          ];
-          let best = null;
-          let bestScore = -Infinity;
-
-          for (const move of dirs) {
-            const nx = ninja.tx + move.x;
-            const ny = ninja.ty + move.y;
-            if (nx < 0 || ny < 0 || nx >= MAP_SIZE || ny >= MAP_SIZE) continue;
-            if (map[ny][nx] !== FLOOR && map[ny][nx] !== TREASURE) continue;
-
-            const dist = Math.abs(nx - treasurePos.x) + Math.abs(ny - treasurePos.y);
-            let risk = 0;
-            for (const u of units) {
-              const testNinja = {x: nx+0.5, y: ny+0.5};
-              if (isNinjaInVision(u, testNinja)) risk += 5;
-            }
-            const score = -dist - risk;
-            if (score > bestScore) {
-              bestScore = score;
-              best = {nx, ny, d: move.d};
-            }
-          }
-          if (best) {
-            nextX = best.nx;
-            nextY = best.ny;
-            ninja.dir = best.d;
+          // BFS経路探索（視界コストつき重み付き探索）
+          // 経路を毎回計算（視界は動くため）
+          const path = findPathBFS(ninja.tx, ninja.ty, treasurePos.x, treasurePos.y);
+          if (path && path.length > 0) {
+            const next = path[0];
+            nextX = next.x;
+            nextY = next.y;
+            // 方向設定
+            const ddx = nextX - ninja.tx;
+            const ddy = nextY - ninja.ty;
+            if (ddy < 0) ninja.dir = 3;
+            else if (ddy > 0) ninja.dir = 0;
+            else if (ddx < 0) ninja.dir = 1;
+            else if (ddx > 0) ninja.dir = 2;
+          } else {
+            // 経路なし → 降参（その場で消える）
+            ninja.state = 'surrender';
           }
         }
 
@@ -697,6 +768,13 @@
         const sx = ninja.x * TILE_SIZE;
         const sy = ninja.y * TILE_SIZE;
         if (ninja.state === 'dead') {
+          ctx.drawImage(imgDead, 0, 0, 16, 16, sx - 24, sy - 24, 48, 48);
+        } else if (ninja.state === 'surrender') {
+          // 降参：白旗表示
+          ctx.fillStyle = '#fff';
+          ctx.font = '24px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('🏳️', sx, sy - 10);
           ctx.drawImage(imgDead, 0, 0, 16, 16, sx - 24, sy - 24, 48, 48);
         } else {
           const row = ninja.dir;
