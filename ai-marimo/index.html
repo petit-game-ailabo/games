@@ -335,42 +335,83 @@ function finishSpeaking() {
   document.getElementById('sendBtn').disabled = false;
 }
 
+// Initialize AudioContext on first user interaction (required for mobile)
+function ensureAudioContext() {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
+}
+
+// Init audio on any tap/click
+document.addEventListener('click', ensureAudioContext, { once: true });
+document.addEventListener('touchstart', ensureAudioContext, { once: true });
+
+let audioSourceMap = new WeakMap();
+
 function playAudioWithLipSync(url) {
   return new Promise((resolve) => {
+    ensureAudioContext();
+
     const audio = new Audio(url);
+    audio.crossOrigin = 'anonymous';
+    audio.setAttribute('playsinline', '');
 
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    // For mobile: try to play immediately
+    const playPromise = () => {
+      audio.play().then(() => {
+        // If AudioContext available, do lip sync
+        try {
+          if (!audioSourceMap.has(audio)) {
+            const source = audioContext.createMediaElementSource(audio);
+            audioSourceMap.set(audio, source);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+          }
 
-    const source = audioContext.createMediaElementSource(audio);
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const mouth = document.getElementById('mouth');
 
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    const mouth = document.getElementById('mouth');
+          function animate() {
+            if (!isSpeaking) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < 20; i++) sum += dataArray[i];
+            const avg = sum / 20;
 
-    function animate() {
-      if (!isSpeaking) return;
-      analyser.getByteFrequencyData(dataArray);
-      let sum = 0;
-      for (let i = 0; i < 20; i++) sum += dataArray[i];
-      const avg = sum / 20;
+            if (avg < 30) mouth.className = 'mouth smile';
+            else if (avg < 80) mouth.className = 'mouth speaking-2';
+            else if (avg < 140) mouth.className = 'mouth speaking-1';
+            else mouth.className = 'mouth speaking-3';
 
-      if (avg < 30) mouth.className = 'mouth smile';
-      else if (avg < 80) mouth.className = 'mouth speaking-2';
-      else if (avg < 140) mouth.className = 'mouth speaking-1';
-      else mouth.className = 'mouth speaking-3';
+            requestAnimationFrame(animate);
+          }
+          animate();
+        } catch (e) {
+          // Lip sync failed, but audio still plays - do fake lip sync
+          console.log('Lip sync unavailable, using fake:', e);
+          const mouth = document.getElementById('mouth');
+          const shapes = ['speaking-1', 'speaking-2', 'speaking-3', 'smile'];
+          const lipTimer = setInterval(() => {
+            if (!isSpeaking) { clearInterval(lipTimer); return; }
+            mouth.className = 'mouth ' + shapes[Math.floor(Math.random() * 3)];
+          }, 120);
+          audio.onended = () => clearInterval(lipTimer);
+        }
+      }).catch((e) => {
+        console.log('Audio play failed:', e);
+        resolve();
+      });
+    };
 
-      requestAnimationFrame(animate);
-    }
-
-    audio.onplay = () => animate();
     audio.onended = () => resolve();
     audio.onerror = () => resolve();
-    audio.play().catch(() => resolve());
+    audio.oncanplaythrough = () => playPromise();
+    audio.load();
   });
 }
 
