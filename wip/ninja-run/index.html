@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>忍者ラン！</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      overflow: hidden;
+      background: #111;
+      font-family: 'Arial', sans-serif;
+      touch-action: none;
+    }
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      background: #87CEEB;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .ui {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    }
+    .ui > * {
+      pointer-events: auto;
+    }
+    #titleScreen, #gameOverScreen {
+      display: none;
+    }
+    .title {
+      font-size: 48px;
+      font-weight: bold;
+      margin-bottom: 30px;
+      color: #FFD700;
+    }
+    .btn {
+      padding: 15px 40px;
+      font-size: 24px;
+      background: linear-gradient(to bottom, #FF6B6B, #C92A2A);
+      border: 3px solid #FFF;
+      border-radius: 10px;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      transition: transform 0.1s;
+    }
+    .btn:active {
+      transform: scale(0.95);
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 20px;
+      font-weight: bold;
+      text-align: right;
+      pointer-events: none;
+    }
+    .score-display {
+      font-size: 28px;
+      margin: 10px 0;
+    }
+    .best-score {
+      font-size: 18px;
+      color: #FFD700;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  
+  <div class="ui">
+    <div id="titleScreen">
+      <div class="title">🥷 忍者ラン！</div>
+      <button class="btn" onclick="startGame()">スタート</button>
+    </div>
+    
+    <div id="gameOverScreen">
+      <div class="title">ゲームオーバー</div>
+      <div class="score-display">スコア: <span id="finalScore">0</span></div>
+      <div class="best-score">ベストスコア: <span id="bestScoreDisplay">0</span></div>
+      <button class="btn" onclick="startGame()" style="margin-top: 20px;">リトライ</button>
+    </div>
+    
+    <div id="hud" style="display:none;">
+      <div>スコア: <span id="score">0</span></div>
+      <div>距離: <span id="distance">0</span>m</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // キャンバスサイズ設定
+    function resizeCanvas() {
+      const maxWidth = 800;
+      const maxHeight = 450;
+      const windowRatio = window.innerWidth / window.innerHeight;
+      const gameRatio = maxWidth / maxHeight;
+      
+      if (windowRatio > gameRatio) {
+        canvas.height = Math.min(window.innerHeight, maxHeight);
+        canvas.width = canvas.height * gameRatio;
+      } else {
+        canvas.width = Math.min(window.innerWidth, maxWidth);
+        canvas.height = canvas.width / gameRatio;
+      }
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    ctx.imageSmoothingEnabled = false;
+    
+    // ゲーム状態
+    let gameState = 'title'; // title, playing, gameover
+    let score = 0;
+    let distance = 0;
+    let bestScore = parseInt(localStorage.getItem('ninjaRunBest') || '0');
+    
+    // 物理定数
+    const GRAVITY = 0.8;
+    const GROUND_Y = canvas.height - 80;
+    
+    // スプライト画像
+    const sprites = {
+      idle: new Image(),
+      walk: new Image(),
+      jump: new Image(),
+      attack: new Image(),
+      dead: new Image()
+    };
+    sprites.idle.src = 'assets/ninja_idle.png';
+    sprites.walk.src = 'assets/ninja_walk.png';
+    sprites.jump.src = 'assets/ninja_jump.png';
+    sprites.attack.src = 'assets/ninja_attack.png';
+    sprites.dead.src = 'assets/ninja_dead.png';
+    
+    // SE
+    const sounds = {
+      jump: new Audio('assets/Jump.wav'),
+      hit: new Audio('assets/se_hit.wav'),
+      coin: new Audio('assets/se_coin.wav'),
+      gameover: new Audio('assets/se_gameover.wav'),
+      clear: new Audio('assets/se_clear.wav')
+    };
+    
+    function playSound(name) {
+      try {
+        sounds[name].currentTime = 0;
+        sounds[name].play().catch(() => {});
+      } catch(e) {}
+    }
+    
+    // プレイヤー
+    const player = {
+      x: 100,
+      y: GROUND_Y,
+      width: 48,
+      height: 48,
+      velocityY: 0,
+      isJumping: false,
+      canDoubleJump: true,
+      isSliding: false,
+      isDead: false,
+      animFrame: 0,
+      animTimer: 0
+    };
+    
+    // 背景スクロール
+    let bgOffset1 = 0; // 遠景の山
+    let bgOffset2 = 0; // 中景の木
+    let bgOffset3 = 0; // 地面
+    
+    // ゲームスピード
+    let gameSpeed = 5;
+    let gameTime = 0;
+    
+    // 障害物とコイン
+    let obstacles = [];
+    let coins = [];
+    let spawnTimer = 0;
+    
+    // 障害物タイプ
+    const OBSTACLE_TYPES = {
+      ROCK: { width: 40, height: 40, color: '#666', ground: true },
+      WALL: { width: 20, height: 80, color: '#C92A2A', ground: true },
+      SHURIKEN: { width: 30, height: 30, color: '#333', ground: false, yOffset: -100 }
+    };
+    
+    // 入力処理
+    let keys = {};
+    let touchStartY = 0;
+    
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+      if (gameState === 'playing') {
+        if (e.key === ' ' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          jump();
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          slide();
+        }
+      }
+    });
+    
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+      if (e.key === 'ArrowDown') {
+        player.isSliding = false;
+      }
+    });
+    
+    canvas.addEventListener('click', () => {
+      if (gameState === 'playing') jump();
+    });
+    
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      touchStartY = e.touches[0].clientY;
+      if (gameState === 'playing') jump();
+    }, { passive: false });
+    
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (gameState === 'playing') {
+        const touchY = e.touches[0].clientY;
+        if (touchY - touchStartY > 50) {
+          slide();
+        }
+      }
+    }, { passive: false });
+    
+    canvas.addEventListener('touchend', () => {
+      player.isSliding = false;
+    });
+    
+    function jump() {
+      if (!player.isJumping) {
+        player.velocityY = -15;
+        player.isJumping = true;
+        player.canDoubleJump = true;
+        playSound('jump');
+      } else if (player.canDoubleJump) {
+        player.velocityY = -15;
+        player.canDoubleJump = false;
+        playSound('jump');
+      }
+    }
+    
+    function slide() {
+      if (!player.isJumping) {
+        player.isSliding = true;
+      }
+    }
+    
+    // ゲーム開始
+    function startGame() {
+      gameState = 'playing';
+      score = 0;
+      distance = 0;
+      gameSpeed = 5;
+      gameTime = 0;
+      obstacles = [];
+      coins = [];
+      spawnTimer = 0;
+      
+      player.y = GROUND_Y;
+      player.velocityY = 0;
+      player.isJumping = false;
+      player.canDoubleJump = true;
+      player.isSliding = false;
+      player.isDead = false;
+      
+      document.getElementById('titleScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('hud').style.display = 'block';
+    }
+    
+    // ゲームオーバー
+    function gameOver() {
+      if (player.isDead) return;
+      player.isDead = true;
+      gameState = 'gameover';
+      playSound('gameover');
+      
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem('ninjaRunBest', bestScore);
+      }
+      
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('bestScoreDisplay').textContent = bestScore;
+      document.getElementById('hud').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'block';
+    }
+    
+    // 障害物生成
+    function spawnObstacle() {
+      const types = Object.keys(OBSTACLE_TYPES);
+      const type = types[Math.floor(Math.random() * types.length)];
+      const config = OBSTACLE_TYPES[type];
+      
+      obstacles.push({
+        x: canvas.width,
+        y: config.ground ? GROUND_Y - config.height : GROUND_Y + config.yOffset,
+        width: config.width,
+        height: config.height,
+        color: config.color,
+        type: type,
+        rotation: 0
+      });
+    }
+    
+    // コイン生成
+    function spawnCoin() {
+      const y = GROUND_Y - 50 - Math.random() * 100;
+      coins.push({
+        x: canvas.width,
+        y: y,
+        radius: 15,
+        collected: false
+      });
+    }
+    
+    // 更新処理
+    function update(deltaTime) {
+      if (gameState !== 'playing') return;
+      
+      gameTime += deltaTime;
+      distance = Math.floor(gameTime / 10);
+      
+      // ゲームスピード上昇
+      gameSpeed = 5 + gameTime / 500;
+      
+      // 背景スクロール
+      bgOffset1 += gameSpeed * 0.3;
+      bgOffset2 += gameSpeed * 0.6;
+      bgOffset3 += gameSpeed;
+      
+      // プレイヤー更新
+      if (!player.isDead) {
+        player.animTimer += deltaTime;
+        if (player.animTimer > 100) {
+          player.animFrame = (player.animFrame + 1) % 4;
+          player.animTimer = 0;
+        }
+        
+        // 重力
+        player.velocityY += GRAVITY;
+        player.y += player.velocityY;
+        
+        // 地面判定
+        if (player.y >= GROUND_Y) {
+          player.y = GROUND_Y;
+          player.velocityY = 0;
+          player.isJumping = false;
+          player.canDoubleJump = true;
+        }
+      }
+      
+      // 障害物・コイン生成
+      spawnTimer += deltaTime;
+      const spawnInterval = Math.max(800 - gameTime / 10, 400);
+      if (spawnTimer > spawnInterval) {
+        if (Math.random() < 0.7) {
+          spawnObstacle();
+        } else {
+          spawnCoin();
+        }
+        spawnTimer = 0;
+      }
+      
+      // 障害物更新
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.x -= gameSpeed;
+        
+        if (obs.type === 'SHURIKEN') {
+          obs.rotation += 0.1;
+        }
+        
+        // 衝突判定
+        if (!player.isDead && checkCollision(player, obs)) {
+          playSound('hit');
+          gameOver();
+        }
+        
+        // 画面外で削除
+        if (obs.x + obs.width < 0) {
+          obstacles.splice(i, 1);
+        }
+      }
+      
+      // コイン更新
+      for (let i = coins.length - 1; i >= 0; i--) {
+        const coin = coins[i];
+        coin.x -= gameSpeed;
+        
+        // 取得判定
+        if (!coin.collected && checkCoinCollision(player, coin)) {
+          coin.collected = true;
+          score += 1;
+          playSound('coin');
+          coins.splice(i, 1);
+        }
+        
+        // 画面外で削除
+        if (coin.x + coin.radius < 0) {
+          coins.splice(i, 1);
+        }
+      }
+      
+      // HUD更新
+      document.getElementById('score').textContent = score;
+      document.getElementById('distance').textContent = distance;
+    }
+    
+    // 衝突判定
+    function checkCollision(player, obstacle) {
+      const px = player.x;
+      const py = player.isSliding ? player.y + 24 : player.y;
+      const pw = player.width;
+      const ph = player.isSliding ? 24 : player.height;
+      
+      return px < obstacle.x + obstacle.width &&
+             px + pw > obstacle.x &&
+             py < obstacle.y + obstacle.height &&
+             py + ph > obstacle.y;
+    }
+    
+    function checkCoinCollision(player, coin) {
+      const centerX = player.x + player.width / 2;
+      const centerY = player.y + player.height / 2;
+      const dx = centerX - coin.x;
+      const dy = centerY - coin.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance < coin.radius + 20;
+    }
+    
+    // 描画
+    function draw() {
+      // 背景（空のグラデーション）
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#87CEEB');
+      gradient.addColorStop(0.7, '#FFA500');
+      gradient.addColorStop(1, '#FF6B6B');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // 遠景の山（パララックス）
+      ctx.fillStyle = '#4A148C';
+      for (let i = 0; i < 5; i++) {
+        const x = (i * 200 - bgOffset1) % (canvas.width + 200);
+        ctx.beginPath();
+        ctx.moveTo(x, canvas.height - 100);
+        ctx.lineTo(x + 100, canvas.height - 200);
+        ctx.lineTo(x + 200, canvas.height - 100);
+        ctx.closePath();
+        ctx.fill();
+      }
+      
+      // 中景の木（パララックス）
+      ctx.fillStyle = '#2E7D32';
+      for (let i = 0; i < 8; i++) {
+        const x = (i * 150 - bgOffset2) % (canvas.width + 150);
+        ctx.fillRect(x + 20, canvas.height - 120, 10, 40);
+        ctx.beginPath();
+        ctx.arc(x + 25, canvas.height - 120, 20, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // 地面
+      ctx.fillStyle = '#8B4513';
+      ctx.fillRect(0, GROUND_Y + 48, canvas.width, canvas.height - GROUND_Y - 48);
+      
+      // 地面のライン（パララックス）
+      ctx.strokeStyle = '#654321';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 20; i++) {
+        const x = (i * 50 - bgOffset3) % (canvas.width + 50);
+        ctx.beginPath();
+        ctx.moveTo(x, GROUND_Y + 48);
+        ctx.lineTo(x + 30, GROUND_Y + 48);
+        ctx.stroke();
+      }
+      
+      // コイン描画
+      coins.forEach(coin => {
+        if (!coin.collected) {
+          ctx.fillStyle = '#FFD700';
+          ctx.beginPath();
+          ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#FFA500';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+      });
+      
+      // 障害物描画
+      obstacles.forEach(obs => {
+        if (obs.type === 'SHURIKEN') {
+          ctx.save();
+          ctx.translate(obs.x + obs.width / 2, obs.y + obs.height / 2);
+          ctx.rotate(obs.rotation);
+          ctx.fillStyle = obs.color;
+          // 手裏剣の形（十字型）
+          ctx.fillRect(-15, -3, 30, 6);
+          ctx.fillRect(-3, -15, 6, 30);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = obs.color;
+          ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+          if (obs.type === 'ROCK') {
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+          }
+        }
+      });
+      
+      // プレイヤー描画
+      if (player.isDead) {
+        if (sprites.dead.complete) {
+          ctx.drawImage(sprites.dead, 0, 0, 16, 16, player.x, player.y, 48, 48);
+        }
+      } else if (player.isSliding) {
+        if (sprites.attack.complete) {
+          const frame = player.animFrame;
+          ctx.drawImage(sprites.attack, frame * 16, 0, 16, 16, player.x, player.y + 24, 48, 24);
+        }
+      } else if (player.isJumping) {
+        if (sprites.jump.complete) {
+          const frame = player.animFrame;
+          ctx.drawImage(sprites.jump, frame * 16, 0, 16, 16, player.x, player.y, 48, 48);
+        }
+      } else {
+        if (sprites.walk.complete) {
+          const frame = player.animFrame;
+          // 右向き = 行1（y=16）
+          ctx.drawImage(sprites.walk, frame * 16, 16, 16, 16, player.x, player.y, 48, 48);
+        }
+      }
+    }
+    
+    // メインループ
+    let lastTime = 0;
+    function gameLoop(timestamp) {
+      const deltaTime = timestamp - lastTime;
+      lastTime = timestamp;
+      
+      update(deltaTime);
+      draw();
+      
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // 初期画面表示
+    document.getElementById('titleScreen').style.display = 'block';
+    document.getElementById('bestScoreDisplay').textContent = bestScore;
+    
+    // ゲーム開始
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
