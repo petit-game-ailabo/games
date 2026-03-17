@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AI マリモ - プロトタイプ</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; flex-direction: column; }
+
+.header { background: linear-gradient(135deg, #16213e, #0f3460); padding: 12px 16px; text-align: center; border-bottom: 1px solid #0f3460; }
+.header h1 { font-size: 1.1em; color: #e2e8f0; }
+.header .badge { display: inline-block; background: #00b4d8; color: #fff; font-size: 0.65em; padding: 2px 8px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+
+.main { flex: 1; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding: 16px; }
+
+/* Avatar */
+.avatar-container { position: relative; width: 200px; height: 260px; margin: 10px 0 16px; }
+
+.avatar-body { position: absolute; bottom: 0; width: 200px; height: 260px; }
+
+/* Head */
+.head { position: absolute; top: 0; left: 40px; width: 120px; height: 140px; background: #fdd9b5; border-radius: 60px 60px 50px 50px; z-index: 2; }
+
+/* Hair */
+.hair { position: absolute; top: -8px; left: 32px; width: 136px; height: 80px; background: #2c3e50; border-radius: 68px 68px 20px 20px; z-index: 3; }
+.hair-side-l { position: absolute; top: 30px; left: 30px; width: 20px; height: 60px; background: #2c3e50; border-radius: 10px 0 0 10px; z-index: 1; }
+.hair-side-r { position: absolute; top: 30px; right: 30px; width: 20px; height: 60px; background: #2c3e50; border-radius: 0 10px 10px 0; z-index: 1; }
+
+/* Eyes */
+.eye { position: absolute; top: 60px; width: 14px; height: 16px; background: #2c3e50; border-radius: 50%; z-index: 4; }
+.eye-left { left: 70px; }
+.eye-right { right: 70px; }
+.eye-shine { position: absolute; top: 3px; left: 3px; width: 5px; height: 5px; background: white; border-radius: 50%; }
+
+/* Eyebrows */
+.brow { position: absolute; top: 48px; width: 18px; height: 4px; background: #2c3e50; border-radius: 2px; z-index: 4; }
+.brow-left { left: 67px; }
+.brow-right { right: 67px; }
+
+/* Mouth */
+.mouth { position: absolute; top: 100px; left: 88px; width: 24px; height: 8px; background: #c0392b; border-radius: 0 0 12px 12px; z-index: 4; transition: all 0.08s ease; }
+.mouth.speaking-1 { height: 14px; top: 97px; left: 86px; width: 28px; border-radius: 0 0 14px 14px; }
+.mouth.speaking-2 { height: 6px; top: 102px; left: 90px; width: 20px; border-radius: 0 0 10px 10px; }
+.mouth.speaking-3 { height: 18px; top: 95px; left: 84px; width: 32px; border-radius: 4px 4px 16px 16px; }
+.mouth.smile { height: 6px; top: 102px; border-radius: 0 0 12px 12px; }
+
+/* Nose */
+.nose { position: absolute; top: 82px; left: 95px; width: 10px; height: 12px; border-radius: 50%; border-bottom: 2px solid #e8c39e; z-index: 4; }
+
+/* Body - Suit */
+.suit { position: absolute; bottom: 0; left: 20px; width: 160px; height: 120px; background: #2c3e50; border-radius: 20px 20px 0 0; z-index: 1; }
+.suit-lapel-l { position: absolute; bottom: 40px; left: 40px; width: 0; height: 0; border-left: 30px solid #34495e; border-top: 40px solid transparent; border-bottom: 40px solid transparent; z-index: 2; transform: rotate(5deg); }
+.suit-lapel-r { position: absolute; bottom: 40px; right: 40px; width: 0; height: 0; border-right: 30px solid #34495e; border-top: 40px solid transparent; border-bottom: 40px solid transparent; z-index: 2; transform: rotate(-5deg); }
+
+/* Shirt & Tie */
+.shirt { position: absolute; bottom: 30px; left: 75px; width: 50px; height: 90px; background: #ecf0f1; z-index: 1; clip-path: polygon(10% 0%, 90% 0%, 100% 100%, 0% 100%); }
+.tie { position: absolute; bottom: 45px; left: 90px; width: 20px; height: 65px; z-index: 3; }
+.tie-knot { width: 16px; height: 12px; background: #c0392b; border-radius: 3px; margin: 0 auto; }
+.tie-body { width: 14px; height: 45px; background: #c0392b; margin: 0 auto; clip-path: polygon(15% 0%, 85% 0%, 100% 100%, 50% 85%, 0% 100%); }
+
+/* Neck */
+.neck { position: absolute; top: 130px; left: 80px; width: 40px; height: 30px; background: #fdd9b5; z-index: 1; }
+
+/* Speaking indicator */
+.speaking-indicator { text-align: center; height: 24px; margin: 8px 0; }
+.speaking-indicator .dot { display: inline-block; width: 8px; height: 8px; background: #00b4d8; border-radius: 50%; margin: 0 3px; animation: pulse 1s infinite; opacity: 0; }
+.speaking-indicator.active .dot { opacity: 1; }
+.speaking-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+.speaking-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 100% { transform: scale(0.8); opacity: 0.4; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Chat area */
+.chat-area { width: 100%; max-width: 500px; flex: 1; margin: 8px 0; overflow-y: auto; }
+
+.message { margin: 8px 0; padding: 10px 14px; border-radius: 16px; max-width: 85%; font-size: 0.9em; line-height: 1.5; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.message.user { background: #0f3460; margin-left: auto; border-bottom-right-radius: 4px; }
+.message.ai { background: #2d2d44; margin-right: auto; border-bottom-left-radius: 4px; }
+.message.system { background: transparent; color: #666; text-align: center; font-size: 0.8em; max-width: 100%; }
+
+/* Input */
+.input-area { width: 100%; max-width: 500px; padding: 12px 0; }
+.input-row { display: flex; gap: 8px; }
+.input-row input { flex: 1; padding: 12px 16px; background: #2d2d44; border: 1px solid #3d3d5c; border-radius: 24px; color: #eee; font-size: 0.95em; outline: none; }
+.input-row input:focus { border-color: #00b4d8; }
+.input-row input::placeholder { color: #666; }
+.input-row button { padding: 12px 20px; background: #00b4d8; color: white; border: none; border-radius: 24px; font-size: 0.9em; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.input-row button:disabled { background: #444; cursor: not-allowed; }
+.input-row button:active:not(:disabled) { background: #0096c7; }
+
+.mode-note { text-align: center; font-size: 0.7em; color: #555; margin-top: 8px; }
+
+/* Blink animation */
+@keyframes blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+.eye { animation: blink 3.5s infinite; }
+.eye-right { animation-delay: 0.1s; }
+
+/* Subtle idle breathing */
+@keyframes breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.avatar-body { animation: breathe 4s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🤖 AI マリモ <span class="badge">PROTO</span></h1>
+</div>
+
+<div class="main">
+  <div class="avatar-container">
+    <div class="avatar-body">
+      <!-- Hair -->
+      <div class="hair"></div>
+      <div class="hair-side-l"></div>
+      <div class="hair-side-r"></div>
+      <!-- Head -->
+      <div class="head"></div>
+      <!-- Eyes -->
+      <div class="eye eye-left"><div class="eye-shine"></div></div>
+      <div class="eye eye-right"><div class="eye-shine"></div></div>
+      <!-- Eyebrows -->
+      <div class="brow brow-left"></div>
+      <div class="brow brow-right"></div>
+      <!-- Nose -->
+      <div class="nose"></div>
+      <!-- Mouth -->
+      <div class="mouth smile" id="mouth"></div>
+      <!-- Neck -->
+      <div class="neck"></div>
+      <!-- Suit -->
+      <div class="suit">
+        <div class="suit-lapel-l"></div>
+        <div class="suit-lapel-r"></div>
+      </div>
+      <div class="shirt"></div>
+      <div class="tie">
+        <div class="tie-knot"></div>
+        <div class="tie-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="speaking-indicator" id="speakingIndicator">
+    <span class="dot"></span>
+    <span class="dot"></span>
+    <span class="dot"></span>
+  </div>
+
+  <div class="chat-area" id="chatArea">
+    <div class="message system">AIマリモとの会話を始めよう</div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-row">
+      <input type="text" id="userInput" placeholder="メッセージを入力..." autocomplete="off">
+      <button id="sendBtn" onclick="sendMessage()">送信</button>
+    </div>
+    <div class="mode-note">デモモード — プロトタイプ</div>
+  </div>
+</div>
+
+<script>
+// ===== Config =====
+const DEMO_RESPONSES = [
+  "うん、なるほどね。それってリザルトの話なのかステータスの話なのかっていうところをまず整理したいかなと思っていて。結果が出てないのか、そもそも成果を出せる状態になってないのか。ここの切り分けが大事だよね。",
+  "そういった考え方でいくと、まず3つの軸で判断したいかなと思う。1つ目は社会通念としてどうか。2つ目はお客様の視点。3つ目が会社としての方針。この3つを基に優先度を決めていくっていうのが自分のやり方かな。",
+  "いい質問だね。数値を可視化することの意味っていうのは、結局、未来予測型の経営にシフトするためなんだよね。結果が出てから対処するんじゃなくて、ステータスを見て事前に手を打つ。そういう状態を目指したいと思っている。",
+  "その課題に対しては、まずステータスの確認からやるべきかなと思う。例えば、そもそも必要なリソースが足りてるのか、プロセスに問題があるのか。結果だけ見て判断しちゃうと、本質的な改善にはつながらないからね。",
+  "なるほどね、そこは大事なポイントだと思う。人の要素を無視しちゃいけないっていうのは自分の中でかなり強い考え方があって。IT企業は結局人が立ってるから、組織としての教育、評価、そういったステータスをしっかり管理していかないとね。"
+];
+
+let responseIndex = 0;
+let isSpeaking = false;
+let audioContext = null;
+let analyser = null;
+
+// ===== Chat =====
+function addMessage(text, type) {
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = `message ${type}`;
+  div.textContent = text;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+function sendMessage() {
+  const input = document.getElementById('userInput');
+  const text = input.value.trim();
+  if (!text || isSpeaking) return;
+
+  addMessage(text, 'user');
+  input.value = '';
+  document.getElementById('sendBtn').disabled = true;
+
+  // Simulate thinking delay
+  setTimeout(() => {
+    const response = DEMO_RESPONSES[responseIndex % DEMO_RESPONSES.length];
+    responseIndex++;
+    addMessage(response, 'ai');
+    speakText(response);
+  }, 800);
+}
+
+// Enter key
+document.getElementById('userInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+// ===== Speech with ElevenLabs =====
+async function speakText(text) {
+  isSpeaking = true;
+  const indicator = document.getElementById('speakingIndicator');
+  indicator.classList.add('active');
+
+  // Try ElevenLabs API (if key is set in localStorage)
+  const apiKey = localStorage.getItem('elevenlabs_api_key');
+  const voiceId = localStorage.getItem('elevenlabs_voice_id') || 'GHwqn5WZAoue17pDNMBU';
+
+  if (apiKey) {
+    try {
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+        })
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        await playAudioWithLipSync(url);
+        URL.revokeObjectURL(url);
+        finishSpeaking();
+        return;
+      }
+    } catch (e) {
+      console.log('ElevenLabs error, falling back to animation only:', e);
+    }
+  }
+
+  // Fallback: just animate mouth without audio
+  await fakeLipSync(text);
+  finishSpeaking();
+}
+
+function finishSpeaking() {
+  isSpeaking = false;
+  const mouth = document.getElementById('mouth');
+  mouth.className = 'mouth smile';
+  document.getElementById('speakingIndicator').classList.remove('active');
+  document.getElementById('sendBtn').disabled = false;
+}
+
+// ===== Lip Sync with Audio =====
+function playAudioWithLipSync(url) {
+  return new Promise((resolve) => {
+    const audio = new Audio(url);
+
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    const source = audioContext.createMediaElementSource(audio);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const mouth = document.getElementById('mouth');
+
+    function animate() {
+      if (!isSpeaking) return;
+      analyser.getByteFrequencyData(dataArray);
+
+      // Get average volume
+      let sum = 0;
+      for (let i = 0; i < 20; i++) sum += dataArray[i];
+      const avg = sum / 20;
+
+      if (avg < 30) {
+        mouth.className = 'mouth smile';
+      } else if (avg < 80) {
+        mouth.className = 'mouth speaking-2';
+      } else if (avg < 140) {
+        mouth.className = 'mouth speaking-1';
+      } else {
+        mouth.className = 'mouth speaking-3';
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    audio.onplay = () => { animate(); };
+    audio.onended = () => { resolve(); };
+    audio.onerror = () => { resolve(); };
+    audio.play().catch(() => resolve());
+  });
+}
+
+// ===== Fake lip sync (no audio) =====
+function fakeLipSync(text) {
+  return new Promise((resolve) => {
+    const mouth = document.getElementById('mouth');
+    const duration = text.length * 80; // rough estimate
+    const shapes = ['speaking-1', 'speaking-2', 'speaking-3', 'smile'];
+    let elapsed = 0;
+    const interval = 120;
+
+    const timer = setInterval(() => {
+      elapsed += interval;
+      if (elapsed >= duration) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+      const shape = shapes[Math.floor(Math.random() * 3)];
+      mouth.className = `mouth ${shape}`;
+    }, interval);
+  });
+}
+
+// ===== Settings (localStorage) =====
+// To set API key: open browser console and run:
+// localStorage.setItem('elevenlabs_api_key', 'sk_xxx...')
+// localStorage.setItem('elevenlabs_voice_id', 'GHwqn5WZAoue17pDNMBU')
+
+// Check if key is set
+if (localStorage.getItem('elevenlabs_api_key')) {
+  document.querySelector('.mode-note').textContent = '🔊 ElevenLabs 音声モード';
+} else {
+  document.querySelector('.mode-note').textContent = 'デモモード（音声なし）— コンソールでAPIキーを設定すると音声が出ます';
+}
+</script>
+</body>
+</html>
