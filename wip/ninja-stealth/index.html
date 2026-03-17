@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>忍者ステルス</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  touch-action: manipulation;
+}
+body {
+  background: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'MS Gothic', monospace;
+  color: #fff;
+  overflow: hidden;
+}
+#gameContainer {
+  position: relative;
+  max-width: 100vw;
+  max-height: 100vh;
+}
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 2px solid #333;
+}
+#ui {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 20px;
+  text-shadow: 2px 2px 4px #000;
+  pointer-events: none;
+}
+#controls {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+}
+.dpad {
+  position: relative;
+  width: 150px;
+  height: 150px;
+}
+.dpad-btn {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  background: rgba(255,255,255,0.2);
+  border: 2px solid rgba(255,255,255,0.4);
+  border-radius: 8px;
+  touch-action: none;
+}
+.dpad-btn:active { background: rgba(255,255,255,0.4); }
+#btnUp { top: 0; left: 50px; }
+#btnDown { bottom: 0; left: 50px; }
+#btnLeft { top: 50px; left: 0; }
+#btnRight { top: 50px; right: 0; }
+#message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 32px;
+  text-align: center;
+  padding: 20px;
+  background: rgba(0,0,0,0.8);
+  border: 3px solid #fff;
+  display: none;
+  z-index: 10;
+}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="canvas"></canvas>
+  <div id="ui">
+    <div>宝: <span id="treasures">0</span></div>
+    <div>時間: <span id="timer">0</span>s</div>
+  </div>
+  <div id="controls">
+    <div class="dpad">
+      <div class="dpad-btn" id="btnUp">↑</div>
+      <div class="dpad-btn" id="btnDown">↓</div>
+      <div class="dpad-btn" id="btnLeft">←</div>
+      <div class="dpad-btn" id="btnRight">→</div>
+    </div>
+  </div>
+  <div id="message"></div>
+</div>
+
+<script>
+// ========== Constants ==========
+const TILE = 48; // Display size (16*3)
+const TILE_SRC = 16;
+const CANVAS_W = 672; // 14 tiles * 48
+const CANVAS_H = 672;
+
+const DIR = { DOWN: 0, LEFT: 1, RIGHT: 2, UP: 3 };
+const TILE_TYPE = { FLOOR: 0, WALL: 1, TREASURE: 2, EXIT: 3 };
+
+// ========== DOM ==========
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = CANVAS_W;
+canvas.height = CANVAS_H;
+ctx.imageSmoothingEnabled = false;
+
+const ui = {
+  treasures: document.getElementById('treasures'),
+  timer: document.getElementById('timer'),
+  message: document.getElementById('message'),
+  controls: document.getElementById('controls')
+};
+
+// ========== Assets ==========
+const assets = {
+  walkImg: null,
+  idleImg: null,
+  deadImg: null,
+  sounds: {}
+};
+
+function loadAssets() {
+  return new Promise(resolve => {
+    let loaded = 0;
+    const total = 8;
+    
+    const check = () => { if (++loaded >= total) resolve(); };
+    
+    assets.walkImg = new Image();
+    assets.walkImg.src = 'assets/ninja_walk.png';
+    assets.walkImg.onload = check;
+    
+    assets.idleImg = new Image();
+    assets.idleImg.src = 'assets/ninja_idle.png';
+    assets.idleImg.onload = check;
+    
+    assets.deadImg = new Image();
+    assets.deadImg.src = 'assets/ninja_dead.png';
+    assets.deadImg.onload = check;
+    
+    const soundFiles = ['coin', 'get', 'clear', 'gameover', 'step'];
+    soundFiles.forEach(name => {
+      assets.sounds[name] = new Audio(`assets/se_${name}.wav`);
+      assets.sounds[name].onloadeddata = check;
+    });
+  });
+}
+
+function playSound(name) {
+  if (assets.sounds[name]) {
+    assets.sounds[name].currentTime = 0;
+    assets.sounds[name].play().catch(() => {});
+  }
+}
+
+// ========== Stage Data ==========
+const stages = [
+  {
+    size: 10,
+    map: [
+      [1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,1,0,0,0,2,1],
+      [1,0,1,0,1,0,1,1,0,1],
+      [1,0,1,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,0,1,1],
+      [1,0,0,0,0,0,0,0,0,1],
+      [1,1,1,0,1,1,1,1,0,1],
+      [1,2,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,3,1],
+      [1,1,1,1,1,1,1,1,1,1]
+    ],
+    player: {x: 1, y: 1},
+    guards: [
+      { path: [{x:5,y:3},{x:7,y:3},{x:7,y:6},{x:5,y:6}], rotate: false }
+    ]
+  },
+  {
+    size: 12,
+    map: [
+      [1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,1,0,0,0,0,0,2,1],
+      [1,0,1,0,1,0,1,1,1,1,0,1],
+      [1,0,1,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,0,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,1,0,1],
+      [1,1,1,0,1,1,1,1,0,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,2,1],
+      [1,2,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,3,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1]
+    ],
+    player: {x: 1, y: 1},
+    guards: [
+      { path: [{x:3,y:5},{x:7,y:5},{x:7,y:7},{x:3,y:7}], rotate: false },
+      { path: [{x:9,y:2},{x:9,y:8}], rotate: true }
+    ]
+  },
+  {
+    size: 14,
+    map: [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,1,0,0,0,0,1,0,0,2,1],
+      [1,0,1,0,1,0,1,1,0,1,0,1,0,1],
+      [1,0,1,0,0,0,0,0,0,0,0,1,0,1],
+      [1,0,1,1,1,1,1,0,1,1,0,1,0,1],
+      [1,0,0,0,0,0,0,0,0,1,0,0,0,1],
+      [1,1,1,0,1,1,1,1,0,1,1,1,0,1],
+      [1,2,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,0,1,1,1,1,1,2,1],
+      [1,2,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,1,1,1,1,3,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+    ],
+    player: {x: 1, y: 1},
+    guards: [
+      { path: [{x:3,y:7},{x:8,y:7},{x:8,y:9},{x:3,y:9}], rotate: false },
+      { path: [{x:6,y:3},{x:10,y:3}], rotate: true },
+      { path: [{x:11,y:5},{x:11,y:10}], rotate: false }
+    ]
+  }
+];
+
+// ========== Game State ==========
+let gameState = {
+  scene: 'title', // title, game, gameover, clear
+  currentStage: 0,
+  map: [],
+  player: { x: 0, y: 0, dir: DIR.DOWN, moving: false, frame: 0, frameTime: 0 },
+  guards: [],
+  treasuresLeft: 0,
+  totalTreasures: 0,
+  startTime: 0,
+  elapsedTime: 0,
+  detected: false,
+  particles: []
+};
+
+// ========== Input ==========
+const keys = {};
+const touchState = { up: false, down: false, left: false, right: false };
+
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+});
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// Touch controls
+if ('ontouchstart' in window) {
+  ui.controls.style.display = 'block';
+  
+  ['Up','Down','Left','Right'].forEach(dir => {
+    const btn = document.getElementById('btn'+dir);
+    btn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      touchState[dir.toLowerCase()] = true;
+    });
+    btn.addEventListener('touchend', e => {
+      e.preventDefault();
+      touchState[dir.toLowerCase()] = false;
+    });
+  });
+}
+
+function getInput() {
+  return {
+    up: keys['w'] || keys['arrowup'] || touchState.up,
+    down: keys['s'] || keys['arrowdown'] || touchState.down,
+    left: keys['a'] || keys['arrowleft'] || touchState.left,
+    right: keys['d'] || keys['arrowright'] || touchState.right,
+    space: keys[' ']
+  };
+}
+
+// ========== Game Logic ==========
+function initStage(stageIdx) {
+  const stage = stages[stageIdx];
+  gameState.map = stage.map.map(row => [...row]);
+  gameState.player = { ...stage.player, dir: DIR.DOWN, moving: false, frame: 0, frameTime: 0 };
+  
+  gameState.guards = stage.guards.map(g => ({
+    path: g.path,
+    pathIdx: 0,
+    x: g.path[0].x,
+    y: g.path[0].y,
+    dir: DIR.DOWN,
+    moveProgress: 0,
+    rotate: g.rotate,
+    rotateAngle: 0
+  }));
+  
+  gameState.totalTreasures = gameState.map.flat().filter(t => t === TILE_TYPE.TREASURE).length;
+  gameState.treasuresLeft = gameState.totalTreasures;
+  gameState.startTime = Date.now();
+  gameState.detected = false;
+  gameState.particles = [];
+  
+  ui.treasures.textContent = gameState.treasuresLeft;
+}
+
+function showMessage(text, callback) {
+  ui.message.textContent = text;
+  ui.message.style.display = 'block';
+  setTimeout(() => {
+    ui.message.style.display = 'none';
+    if (callback) callback();
+  }, 2000);
+}
+
+function update(dt) {
+  if (gameState.scene === 'title') {
+    const input = getInput();
+    if (input.space) {
+      gameState.scene = 'game';
+      gameState.currentStage = 0;
+      initStage(0);
+      showMessage('宝を盗め！');
+    }
+  } else if (gameState.scene === 'game') {
+    updateGame(dt);
+  } else if (gameState.scene === 'gameover') {
+    const input = getInput();
+    if (input.space) {
+      gameState.scene = 'game';
+      initStage(gameState.currentStage);
+    }
+  } else if (gameState.scene === 'clear') {
+    const input = getInput();
+    if (input.space) {
+      gameState.currentStage++;
+      if (gameState.currentStage >= stages.length) {
+        gameState.scene = 'title';
+      } else {
+        gameState.scene = 'game';
+        initStage(gameState.currentStage);
+        showMessage('次のステージ！');
+      }
+    }
+  }
+}
+
+function updateGame(dt) {
+  if (gameState.detected) return;
+  
+  // Timer
+  gameState.elapsedTime = Math.floor((Date.now() - gameState.startTime) / 1000);
+  ui.timer.textContent = gameState.elapsedTime;
+  
+  // Player movement
+  updatePlayer(dt);
+  
+  // Guards
+  updateGuards(dt);
+  
+  // Check vision
+  checkVision();
+  
+  // Particles
+  gameState.particles = gameState.particles.filter(p => {
+    p.life -= dt;
+    p.y -= dt * 50;
+    return p.life > 0;
+  });
+}
+
+function updatePlayer(dt) {
+  const p = gameState.player;
+  const input = getInput();
+  
+  if (p.moving) {
+    p.frameTime += dt;
+    if (p.frameTime > 0.15) {
+      p.frameTime = 0;
+      p.frame = (p.frame + 1) % 4;
+    }
+  } else {
+    p.frame = 0;
+    p.frameTime = 0;
+    
+    let dx = 0, dy = 0, newDir = p.dir;
+    
+    if (input.up) { dy = -1; newDir = DIR.UP; }
+    else if (input.down) { dy = 1; newDir = DIR.DOWN; }
+    else if (input.left) { dx = -1; newDir = DIR.LEFT; }
+    else if (input.right) { dx = 1; newDir = DIR.RIGHT; }
+    
+    if (dx !== 0 || dy !== 0) {
+      p.dir = newDir;
+      const nx = p.x + dx;
+      const ny = p.y + dy;
+      
+      if (canMove(nx, ny)) {
+        p.x = nx;
+        p.y = ny;
+        p.moving = true;
+        
+        const tile = gameState.map[ny][nx];
+        if (tile === TILE_TYPE.TREASURE) {
+          gameState.map[ny][nx] = TILE_TYPE.FLOOR;
+          gameState.treasuresLeft--;
+          ui.treasures.textContent = gameState.treasuresLeft;
+          playSound('coin');
+          createParticles(nx * TILE + TILE/2, ny * TILE + TILE/2);
+          
+          if (gameState.treasuresLeft === 0) {
+            showMessage('出口が開いた！');
+          }
+        } else if (tile === TILE_TYPE.EXIT && gameState.treasuresLeft === 0) {
+          playSound('clear');
+          gameState.scene = 'clear';
+          const bonus = gameState.detected ? 0 : 1000;
+          showMessage(`クリア！ 時間: ${gameState.elapsedTime}s`);
+          return;
+        }
+        
+        playSound('step');
+        setTimeout(() => { p.moving = false; }, 150);
+      }
+    }
+  }
+}
+
+function canMove(x, y) {
+  const stage = stages[gameState.currentStage];
+  if (x < 0 || y < 0 || x >= stage.size || y >= stage.size) return false;
+  const tile = gameState.map[y][x];
+  if (tile === TILE_TYPE.WALL) return false;
+  if (tile === TILE_TYPE.EXIT && gameState.treasuresLeft > 0) return false;
+  return true;
+}
+
+function updateGuards(dt) {
+  gameState.guards.forEach(g => {
+    g.moveProgress += dt * 0.5;
+    
+    if (g.moveProgress >= 1) {
+      g.moveProgress = 0;
+      g.pathIdx = (g.pathIdx + 1) % g.path.length;
+      const target = g.path[g.pathIdx];
+      g.x = target.x;
+      g.y = target.y;
+      
+      // Update direction
+      const nextIdx = (g.pathIdx + 1) % g.path.length;
+      const next = g.path[nextIdx];
+      const dx = next.x - g.x;
+      const dy = next.y - g.y;
+      
+      if (dy < 0) g.dir = DIR.UP;
+      else if (dy > 0) g.dir = DIR.DOWN;
+      else if (dx < 0) g.dir = DIR.LEFT;
+      else if (dx > 0) g.dir = DIR.RIGHT;
+    }
+    
+    if (g.rotate) {
+      g.rotateAngle += dt * 0.5;
+    }
+  });
+}
+
+function checkVision() {
+  const p = gameState.player;
+  
+  gameState.guards.forEach(g => {
+    const baseAngle = [Math.PI/2, Math.PI, 0, -Math.PI/2][g.dir];
+    const angles = g.rotate 
+      ? [baseAngle + g.rotateAngle, baseAngle - g.rotateAngle]
+      : [baseAngle];
+    
+    angles.forEach(angle => {
+      if (isInVisionCone(p.x, p.y, g.x, g.y, angle)) {
+        gameState.detected = true;
+        playSound('gameover');
+        gameState.scene = 'gameover';
+        showMessage('見つかった！');
+      }
+    });
+  });
+}
+
+function isInVisionCone(px, py, gx, gy, angle) {
+  const dx = px - gx;
+  const dy = py - gy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  
+  if (dist > 5) return false;
+  
+  const targetAngle = Math.atan2(dy, dx);
+  let diff = targetAngle - angle;
+  while (diff > Math.PI) diff -= 2*Math.PI;
+  while (diff < -Math.PI) diff += 2*Math.PI;
+  
+  if (Math.abs(diff) > Math.PI/3) return false;
+  
+  // Raycast for walls
+  const steps = Math.floor(dist * 2);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const checkX = Math.floor(gx + dx * t);
+    const checkY = Math.floor(gy + dy * t);
+    if (gameState.map[checkY] && gameState.map[checkY][checkX] === TILE_TYPE.WALL) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function createParticles(x, y) {
+  for (let i = 0; i < 8; i++) {
+    gameState.particles.push({
+      x: x + (Math.random()-0.5)*20,
+      y: y + (Math.random()-0.5)*20,
+      life: 0.5
+    });
+  }
+}
+
+// ========== Rendering ==========
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  
+  if (gameState.scene === 'title') {
+    drawTitle();
+  } else if (gameState.scene === 'game' || gameState.scene === 'gameover' || gameState.scene === 'clear') {
+    drawGame();
+  }
+}
+
+function drawTitle() {
+  ctx.fillStyle = '#fff';
+  ctx.font = '48px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('忍者ステルス', CANVAS_W/2, CANVAS_H/2 - 50);
+  
+  ctx.font = '24px monospace';
+  ctx.fillText('SPACE でスタート', CANVAS_W/2, CANVAS_H/2 + 50);
+  
+  // Idle ninja animation
+  const frame = Math.floor(Date.now() / 200) % 4;
+  if (assets.idleImg.complete) {
+    ctx.drawImage(assets.idleImg, frame*16, 0, 16, 16, 
+      CANVAS_W/2 - 24, CANVAS_H/2, 48, 48);
+  }
+}
+
+function drawGame() {
+  const stage = stages[gameState.currentStage];
+  const offsetX = (CANVAS_W - stage.size * TILE) / 2;
+  const offsetY = (CANVAS_H - stage.size * TILE) / 2;
+  
+  // Draw map
+  for (let y = 0; y < stage.size; y++) {
+    for (let x = 0; x < stage.size; x++) {
+      const tile = gameState.map[y][x];
+      const sx = offsetX + x * TILE;
+      const sy = offsetY + y * TILE;
+      
+      if (tile === TILE_TYPE.WALL) {
+        ctx.fillStyle = '#555';
+        ctx.fillRect(sx, sy, TILE, TILE);
+        ctx.fillStyle = '#666';
+        ctx.fillRect(sx+2, sy+2, TILE-4, TILE-4);
+      } else {
+        ctx.fillStyle = '#2a1810';
+        ctx.fillRect(sx, sy, TILE, TILE);
+        
+        if (tile === TILE_TYPE.TREASURE) {
+          const glow = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+          ctx.fillStyle = `rgba(255, 215, 0, ${glow})`;
+          ctx.beginPath();
+          ctx.arc(sx + TILE/2, sy + TILE/2, 12, 0, Math.PI*2);
+          ctx.fill();
+        } else if (tile === TILE_TYPE.EXIT) {
+          ctx.fillStyle = gameState.treasuresLeft === 0 ? '#0f0' : '#333';
+          ctx.fillRect(sx+8, sy+8, TILE-16, TILE-16);
+        }
+      }
+    }
+  }
+  
+  // Draw guard vision cones
+  gameState.guards.forEach(g => {
+    const gx = offsetX + g.x * TILE + TILE/2;
+    const gy = offsetY + g.y * TILE + TILE/2;
+    const baseAngle = [Math.PI/2, Math.PI, 0, -Math.PI/2][g.dir];
+    
+    const angles = g.rotate 
+      ? [baseAngle + g.rotateAngle, baseAngle - g.rotateAngle]
+      : [baseAngle];
+    
+    angles.forEach(angle => {
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+      ctx.beginPath();
+      ctx.moveTo(gx, gy);
+      ctx.arc(gx, gy, TILE * 5, angle - Math.PI/6, angle + Math.PI/6);
+      ctx.closePath();
+      ctx.fill();
+    });
+  });
+  
+  // Draw guards
+  gameState.guards.forEach(g => {
+    const gx = offsetX + g.x * TILE;
+    const gy = offsetY + g.y * TILE;
+    
+    ctx.fillStyle = '#800';
+    ctx.beginPath();
+    ctx.arc(gx + TILE/2, gy + TILE/2, 16, 0, Math.PI*2);
+    ctx.fill();
+    
+    ctx.fillStyle = '#f00';
+    ctx.beginPath();
+    ctx.arc(gx + TILE/2, gy + TILE/2, 12, 0, Math.PI*2);
+    ctx.fill();
+  });
+  
+  // Draw player
+  const p = gameState.player;
+  const px = offsetX + p.x * TILE;
+  const py = offsetY + p.y * TILE;
+  
+  if (gameState.scene === 'gameover' && assets.deadImg.complete) {
+    ctx.drawImage(assets.deadImg, 0, 0, 16, 16, px, py, TILE, TILE);
+  } else if (assets.walkImg.complete) {
+    ctx.drawImage(assets.walkImg, p.frame*16, p.dir*16, 16, 16, px, py, TILE, TILE);
+  }
+  
+  // Draw particles
+  gameState.particles.forEach(particle => {
+    ctx.fillStyle = `rgba(255, 215, 0, ${particle.life * 2})`;
+    ctx.beginPath();
+    ctx.arc(offsetX + particle.x, offsetY + particle.y, 4, 0, Math.PI*2);
+    ctx.fill();
+  });
+  
+  // Red flash on detection
+  if (gameState.detected) {
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  }
+}
+
+// ========== Main Loop ==========
+let lastTime = 0;
+
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+  lastTime = timestamp;
+  
+  update(dt);
+  draw();
+  
+  requestAnimationFrame(gameLoop);
+}
+
+// ========== Init ==========
+loadAssets().then(() => {
+  requestAnimationFrame(gameLoop);
+});
+</script>
+</body>
+</html>
