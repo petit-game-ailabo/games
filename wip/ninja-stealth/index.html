@@ -668,23 +668,35 @@ function drawGame() {
       angle = baseAngle + g.sweepAngle;
     }
     
-    // 判定と同じ角度(±PI/6)で描画、距離も5タイル
+    // 壁を考慮した視界コーン描画（レイキャストで壁にぶつかったら止める）
+    const coneHalf = Math.PI / 6;
+    const maxDist = TILE * 5;
+    const rayCount = 30;
     ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
     ctx.beginPath();
     ctx.moveTo(gx, gy);
-    ctx.arc(gx, gy, TILE * 5, angle - Math.PI/6, angle + Math.PI/6);
+    for (let r = 0; r <= rayCount; r++) {
+      const rayAngle = angle - coneHalf + (2 * coneHalf * r / rayCount);
+      // レイキャストで壁までの距離を求める
+      let rayDist = maxDist;
+      for (let step = 1; step <= 20; step++) {
+        const d = (step / 20) * 5; // タイル単位
+        const tileGx = (g.type === 'patrol') ? g.currentX : g.x;
+        const tileGy = (g.type === 'patrol') ? g.currentY : g.y;
+        const cx = Math.floor(tileGx + 0.5 + Math.cos(rayAngle) * d);
+        const cy = Math.floor(tileGy + 0.5 + Math.sin(rayAngle) * d);
+        if (gameState.map[cy] && gameState.map[cy][cx] === TILE_TYPE.WALL) {
+          rayDist = (step / 20) * maxDist;
+          break;
+        }
+      }
+      ctx.lineTo(gx + Math.cos(rayAngle) * rayDist, gy + Math.sin(rayAngle) * rayDist);
+    }
     ctx.closePath();
     ctx.fill();
-    // 外縁をラインで強調
+    // 境界線
     ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(gx, gy);
-    ctx.lineTo(gx + Math.cos(angle - Math.PI/6) * TILE * 5, gy + Math.sin(angle - Math.PI/6) * TILE * 5);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(gx, gy);
-    ctx.lineTo(gx + Math.cos(angle + Math.PI/6) * TILE * 5, gy + Math.sin(angle + Math.PI/6) * TILE * 5);
     ctx.stroke();
   });
   
