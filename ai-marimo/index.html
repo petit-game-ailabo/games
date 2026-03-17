@@ -167,7 +167,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
       <input type="text" id="userInput" placeholder="メッセージを入力..." autocomplete="off">
       <button id="sendBtn" onclick="sendMessage()">送信</button>
     </div>
-    <div class="mode-note">デモモード — プロトタイプ</div>
+    <div class="mode-note" id="modeNote">デモモード — プロトタイプ</div>
+    <button onclick="openSettings()" style="background:none;border:none;color:#555;font-size:0.75em;cursor:pointer;margin-top:4px;">⚙️ 設定</button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:999;justify-content:center;align-items:center;">
+  <div style="background:#2d2d44;border-radius:16px;padding:24px;width:90%;max-width:400px;">
+    <h3 style="color:#e2e8f0;margin-bottom:16px;">⚙️ 音声設定</h3>
+    <label style="font-size:0.8em;color:#999;">ElevenLabs APIキー</label>
+    <input type="password" id="settingsApiKey" placeholder="sk_..." style="width:100%;padding:10px;background:#1a1a2e;border:1px solid #3d3d5c;border-radius:8px;color:#eee;margin:6px 0 16px;font-size:0.9em;">
+    <label style="font-size:0.8em;color:#999;">ボイスID（変更しなくてOK）</label>
+    <input type="text" id="settingsVoiceId" placeholder="GHwqn5WZAoue17pDNMBU" style="width:100%;padding:10px;background:#1a1a2e;border:1px solid #3d3d5c;border-radius:8px;color:#eee;margin:6px 0 16px;font-size:0.9em;">
+    <div style="display:flex;gap:8px;">
+      <button onclick="saveSettings()" style="flex:1;padding:10px;background:#00b4d8;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">保存</button>
+      <button onclick="closeSettings()" style="flex:1;padding:10px;background:#444;color:white;border:none;border-radius:8px;cursor:pointer;">キャンセル</button>
+    </div>
+    <button onclick="clearSettings()" style="background:none;border:none;color:#c0392b;font-size:0.75em;cursor:pointer;margin-top:12px;">🗑 設定をクリア</button>
   </div>
 </div>
 
@@ -351,17 +368,48 @@ function fakeLipSync(text) {
   });
 }
 
-// ===== Settings (localStorage) =====
-// To set API key: open browser console and run:
-// localStorage.setItem('elevenlabs_api_key', 'sk_xxx...')
-// localStorage.setItem('elevenlabs_voice_id', 'GHwqn5WZAoue17pDNMBU')
-
-// Check if key is set
-if (localStorage.getItem('elevenlabs_api_key')) {
-  document.querySelector('.mode-note').textContent = '🔊 ElevenLabs 音声モード';
-} else {
-  document.querySelector('.mode-note').textContent = 'デモモード（音声なし）— コンソールでAPIキーを設定すると音声が出ます';
+// ===== Settings UI =====
+function openSettings() {
+  const modal = document.getElementById('settingsModal');
+  document.getElementById('settingsApiKey').value = localStorage.getItem('elevenlabs_api_key') || '';
+  document.getElementById('settingsVoiceId').value = localStorage.getItem('elevenlabs_voice_id') || 'GHwqn5WZAoue17pDNMBU';
+  modal.style.display = 'flex';
 }
+
+function closeSettings() {
+  document.getElementById('settingsModal').style.display = 'none';
+}
+
+function saveSettings() {
+  const key = document.getElementById('settingsApiKey').value.trim();
+  const voice = document.getElementById('settingsVoiceId').value.trim() || 'GHwqn5WZAoue17pDNMBU';
+  if (key) {
+    localStorage.setItem('elevenlabs_api_key', key);
+    localStorage.setItem('elevenlabs_voice_id', voice);
+    updateModeNote();
+    addMessage('🔊 音声モードが有効になりました', 'system');
+  }
+  closeSettings();
+}
+
+function clearSettings() {
+  localStorage.removeItem('elevenlabs_api_key');
+  localStorage.removeItem('elevenlabs_voice_id');
+  updateModeNote();
+  addMessage('🔇 音声モードを無効にしました', 'system');
+  closeSettings();
+}
+
+function updateModeNote() {
+  const note = document.getElementById('modeNote');
+  if (localStorage.getItem('elevenlabs_api_key')) {
+    note.textContent = '🔊 ElevenLabs 音声モード';
+  } else {
+    note.textContent = 'デモモード（音声なし）— ⚙️設定からAPIキーを入力';
+  }
+}
+
+updateModeNote();
 </script>
 </body>
 </html>
