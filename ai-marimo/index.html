@@ -197,26 +197,41 @@ function addMessage(text, type) {
 }
 
 function sendMessage() {
-  const input = document.getElementById('userInput');
-  const text = input.value.trim();
-  if (!text || isSpeaking) return;
+  try {
+    const input = document.getElementById('userInput');
+    const text = input.value.trim();
+    if (!text || isSpeaking) return;
 
-  addMessage(text, 'user');
-  input.value = '';
-  document.getElementById('sendBtn').disabled = true;
+    addMessage(text, 'user');
+    input.value = '';
+    document.getElementById('sendBtn').disabled = true;
 
-  // Simulate thinking delay
-  setTimeout(() => {
-    const response = DEMO_RESPONSES[responseIndex % DEMO_RESPONSES.length];
-    responseIndex++;
-    addMessage(response, 'ai');
-    speakText(response);
-  }, 800);
+    // Simulate thinking delay
+    setTimeout(() => {
+      try {
+        const response = DEMO_RESPONSES[responseIndex % DEMO_RESPONSES.length];
+        responseIndex++;
+        addMessage(response, 'ai');
+        speakText(response);
+      } catch(e) {
+        addMessage('エラー: ' + e.message, 'system');
+        document.getElementById('sendBtn').disabled = false;
+      }
+    }, 800);
+  } catch(e) {
+    alert('送信エラー: ' + e.message);
+  }
 }
 
 // Enter key
 document.getElementById('userInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') sendMessage();
+});
+
+// Touch support for send button
+document.getElementById('sendBtn').addEventListener('touchend', (e) => {
+  e.preventDefault();
+  sendMessage();
 });
 
 // ===== Speech with ElevenLabs =====

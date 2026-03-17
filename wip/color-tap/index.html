@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>カラータップ</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#1a1a2e;touch-action:none;-webkit-user-select:none;user-select:none;font-family:sans-serif}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+const C=document.getElementById('c'),ctx=C.getContext('2d');
+let W,H,dpr;
+function resize(){dpr=Math.min(window.devicePixelRatio||1,3);W=window.innerWidth;H=window.innerHeight;C.width=W*dpr;C.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+window.addEventListener('resize',resize);resize();
+
+// Audio
+const ac=new(window.AudioContext||window.webkitAudioContext)();
+function tone(f,d,v=0.3,t='sine'){const o=ac.createOscillator(),g=ac.createGain();o.type=t;o.frequency.value=f;g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d);}
+function sfxOk(){tone(523,0.1,0.3);setTimeout(()=>tone(659,0.08,0.3),80);}
+function sfxNg(){tone(200,0.3,0.3,'sawtooth');}
+function sfxPerfect(){tone(784,0.1,0.4);setTimeout(()=>tone(988,0.08,0.4),80);setTimeout(()=>tone(1175,0.08,0.4),160);}
+
+const COLORS=[
+  {name:'赤',hex:'#e53935',bg:'#ffcdd2'},
+  {name:'青',hex:'#1e88e5',bg:'#bbdefb'},
+  {name:'緑',hex:'#43a047',bg:'#c8e6c9'},
+  {name:'黄',hex:'#fdd835',bg:'#fff9c4'},
+  {name:'紫',hex:'#8e24aa',bg:'#e1bee7'},
+  {name:'橙',hex:'#f4511e',bg:'#ffccbc'},
+];
+
+let state='title'; // title, play, over
+let score=0,best=0,combo=0,maxCombo=0;
+let timeLeft=30,timer=0;
+let targetColor=0,buttons=[],particles=[];
+let wrongFlash=0,perfectFlash=0;
+let level=1; // 3 buttons at start, +1 every 10 points
+
+function newRound(){
+  const n=Math.min(3+Math.floor(score/10),6);
+  // Pick n unique colors
+  const pool=[...COLORS];
+  buttons=[];
+  for(let i=0;i<n;i++){
+    const idx=Math.floor(Math.random()*pool.length);
+    buttons.push(pool.splice(idx,1)[0]);
+  }
+  // Pick target from buttons
+  targetColor=buttons[Math.floor(Math.random()*buttons.length)];
+  // Shuffle buttons
+  for(let i=buttons.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[buttons[i],buttons[j]]=[buttons[j],buttons[i]];}
+}
+
+function startGame(){
+  state='play';score=0;combo=0;maxCombo=0;timeLeft=30;wrongFlash=0;perfectFlash=0;
+  newRound();
+  timer=setInterval(()=>{timeLeft-=0.1;if(timeLeft<=0){timeLeft=0;clearInterval(timer);state='over';if(score>best)best=score;}},100);
+}
+
+function tap(x,y){
+  if(ac.state==='suspended')ac.resume();
+  if(state==='title'){startGame();return;}
+  if(state==='over'){state='title';return;}
+  
+  // Check button taps
+  const bw=W/(buttons.length+0.5);
+  const bh=80;
+  const by=H*0.55;
+  for(let i=0;i<buttons.length;i++){
+    const bx=bw*0.25+i*bw;
+    if(x>=bx&&x<=bx+bw*0.8&&y>=by&&y<=by+bh){
+      if(buttons[i]===targetColor){
+        score++;combo++;
+        if(maxCombo<combo)maxCombo=combo;
+        // Bonus time for combos
+        if(combo>=5){timeLeft=Math.min(30,timeLeft+0.5);perfectFlash=15;sfxPerfect();}
+        else{timeLeft=Math.min(30,timeLeft+0.2);sfxOk();}
+        // Particles
+        for(let j=0;j<8;j++)particles.push({x:bx+bw*0.4,y:by+bh/2,vx:(Math.random()-0.5)*6,vy:-Math.random()*5-2,c:targetColor.hex,life:25,s:4+Math.random()*4});
+        newRound();
+      } else {
+        combo=0;timeLeft=Math.max(0,timeLeft-2);wrongFlash=10;sfxNg();
+      }
+      return;
+    }
+  }
+}
+
+C.addEventListener('touchstart',e=>{e.preventDefault();const r=C.getBoundingClientRect();const t=e.touches[0];tap(t.clientX-r.left,t.clientY-r.top);},{passive:false});
+C.addEventListener('click',e=>{const r=C.getBoundingClientRect();tap(e.clientX-r.left,e.clientY-r.top);});
+
+function draw(){
+  ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);
+  
+  if(state==='title'){
+    const t=Date.now()*0.002;
+    // Animated color circles
+    for(let i=0;i<6;i++){
+      const a=i/6*Math.PI*2+t;
+      const x=W/2+Math.cos(a)*80,y=H*0.35+Math.sin(a)*80;
+      ctx.beginPath();ctx.arc(x,y,25,0,Math.PI*2);
+      ctx.fillStyle=COLORS[i].hex;ctx.fill();
+    }
+    ctx.fillStyle='#fff';ctx.font='bold 32px sans-serif';ctx.textAlign='center';
+    ctx.fillText('カラータップ',W/2,H*0.55);
+    ctx.font='16px sans-serif';ctx.fillStyle='#9e9e9e';
+    ctx.fillText('表示された色をタップ！',W/2,H*0.61);
+    ctx.fillText(`Best: ${best}`,W/2,H*0.66);
+    ctx.fillStyle='rgba(63,81,181,0.8)';
+    roundRect(ctx,W/2-70,H*0.72,140,44,10);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 18px sans-serif';
+    ctx.fillText('START',W/2,H*0.72+28);
+  }
+  
+  else if(state==='play'){
+    // Wrong flash
+    if(wrongFlash>0){
+      ctx.fillStyle=`rgba(229,57,53,${wrongFlash/20})`;ctx.fillRect(0,0,W,H);
+      wrongFlash--;
+    }
+    // Perfect flash
+    if(perfectFlash>0){
+      ctx.fillStyle=`rgba(255,215,0,${perfectFlash/30})`;ctx.fillRect(0,0,W,H);
+      perfectFlash--;
+    }
+    
+    // Timer bar
+    const tp=timeLeft/30;
+    const tc=tp>0.5?'#4caf50':tp>0.25?'#ff9800':'#e53935';
+    ctx.fillStyle='rgba(255,255,255,0.1)';ctx.fillRect(20,20,W-40,12);
+    ctx.fillStyle=tc;ctx.fillRect(20,20,(W-40)*tp,12);
+    
+    // Score + Combo
+    ctx.fillStyle='#fff';ctx.font='bold 28px sans-serif';ctx.textAlign='center';
+    ctx.fillText(`${score}`,W/2,H*0.12);
+    if(combo>=3){
+      ctx.fillStyle='#ffd700';ctx.font='bold 18px sans-serif';
+      ctx.fillText(`${combo} COMBO!`,W/2,H*0.17);
+    }
+    
+    // Target color display
+    ctx.fillStyle=targetColor.bg;
+    roundRect(ctx,W*0.15,H*0.22,W*0.7,H*0.18,16);ctx.fill();
+    ctx.fillStyle=targetColor.hex;
+    ctx.font='bold 48px sans-serif';ctx.textAlign='center';
+    ctx.fillText(targetColor.name,W/2,H*0.34);
+    
+    // Color buttons
+    const bw=W/(buttons.length+0.5);
+    const bh=80;
+    const by=H*0.55;
+    for(let i=0;i<buttons.length;i++){
+      const bx=bw*0.25+i*bw;
+      ctx.fillStyle=buttons[i].hex;
+      roundRect(ctx,bx,by,bw*0.8,bh,12);ctx.fill();
+      // Subtle inner shadow
+      ctx.fillStyle='rgba(0,0,0,0.15)';
+      roundRect(ctx,bx,by+bh-15,bw*0.8,15,0);ctx.fill();
+    }
+    
+    // Time left text
+    ctx.fillStyle='#9e9e9e';ctx.font='14px sans-serif';ctx.textAlign='center';
+    ctx.fillText(`残り ${timeLeft.toFixed(1)}秒`,W/2,H*0.50);
+    
+    // Hint: button count
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='12px sans-serif';
+    ctx.fillText(`${buttons.length}色`,W/2,H*0.70);
+  }
+  
+  else if(state==='over'){
+    ctx.fillStyle='#fff';ctx.font='bold 36px sans-serif';ctx.textAlign='center';
+    ctx.fillText('TIME UP!',W/2,H*0.30);
+    ctx.font='bold 64px sans-serif';
+    ctx.fillStyle=score>=50?'#ffd700':score>=30?'#e040fb':score>=15?'#42a5f5':'#fff';
+    ctx.fillText(score,W/2,H*0.42);
+    ctx.font='18px sans-serif';ctx.fillStyle='#9e9e9e';
+    ctx.fillText(`Max Combo: ${maxCombo}`,W/2,H*0.50);
+    ctx.fillText(`Best: ${best}`,W/2,H*0.55);
+    // Rank
+    let rank='C',rc='#9e9e9e';
+    if(score>=50){rank='S';rc='#ffd700';}
+    else if(score>=30){rank='A';rc='#e040fb';}
+    else if(score>=15){rank='B';rc='#42a5f5';}
+    ctx.fillStyle=rc;ctx.font='bold 48px sans-serif';
+    ctx.fillText(rank,W/2,H*0.65);
+    ctx.fillStyle='rgba(255,255,255,0.4)';ctx.font='14px sans-serif';
+    ctx.fillText('タップでタイトルへ',W/2,H*0.75);
+  }
+  
+  // Particles
+  for(const p of particles){
+    ctx.globalAlpha=p.life/25;
+    ctx.fillStyle=p.c;
+    ctx.fillRect(p.x-p.s/2,p.y-p.s/2,p.s,p.s);
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.2;p.life--;
+  }
+  ctx.globalAlpha=1;
+  particles=particles.filter(p=>p.life>0);
+  
+  requestAnimationFrame(draw);
+}
+
+function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+
+draw();
+</script>
+</body>
+</html>
