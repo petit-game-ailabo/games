@@ -810,9 +810,24 @@
     }
 
     // ガード経路にタイルを追加
+    let lastPatrolTapTime = 0;
+    let lastPatrolTapTile = null;
+    
     function addPatrolTile(tx, ty) {
       if (!patrolDrawing) return false;
       if (map[ty][tx] !== FLOOR) return false;
+      
+      // ダブルタップ検出（同じタイルを0.5秒以内に2回タップ）
+      const now = Date.now();
+      if (lastPatrolTapTile && lastPatrolTapTile.x === tx && lastPatrolTapTile.y === ty) {
+        if (now - lastPatrolTapTime < 500 && patrolPath.length >= 2) {
+          // ダブルタップ → 確定
+          confirmPatrol();
+          return false;
+        }
+      }
+      lastPatrolTapTime = now;
+      lastPatrolTapTile = {x: tx, y: ty};
       
       // 最後のタイルと隣接しているかチェック
       const last = patrolPath[patrolPath.length - 1];
@@ -1287,10 +1302,13 @@
     // ユニット更新
     function updateUnit(unit, dt) {
       if (unit.type === 'camera') {
-        // 首振り
+        // 首振り（初期角度からの振り子運動）
+        if (unit.initialAngle === undefined) {
+          unit.initialAngle = unit.angle;
+        }
         unit.angle += 30 * dt * (unit.patrolDir || 1);
-        if (unit.angle > 60) { unit.angle = 60; unit.patrolDir = -1; }
-        if (unit.angle < -60) { unit.angle = -60; unit.patrolDir = 1; }
+        if (unit.angle > unit.initialAngle + 60) { unit.angle = unit.initialAngle + 60; unit.patrolDir = -1; }
+        if (unit.angle < unit.initialAngle - 60) { unit.angle = unit.initialAngle - 60; unit.patrolDir = 1; }
       } else if (unit.type === 'guard') {
         // タイルベース巡回
         if (unit.path && unit.path.length > 1) {
@@ -1313,8 +1331,8 @@
           unit.angle = Math.atan2(dy, dx) * 180 / Math.PI;
         }
       } else if (unit.type === 'light') {
-        // 360度回転
-        unit.angle = (unit.angle || 0) + 20 * dt;
+        // 360度回転（初期角度から開始）
+        unit.angle = (unit.angle || 0) + 40 * dt; // 回転速度を40に変更（unitTypesに合わせる）
         if (unit.angle >= 360) unit.angle -= 360;
       }
 
