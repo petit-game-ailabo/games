@@ -571,13 +571,16 @@
     // UI更新
     function updateUI() {
       document.getElementById('wave').textContent = currentWave;
-      document.getElementById('life').textContent = life;
+      const lifeEl = document.getElementById('life');
+      if (lifeEl) lifeEl.textContent = life;
       document.getElementById('cost').textContent = cost;
       document.getElementById('caught').textContent = caughtCount;
     }
 
     // レイキャスト（壁判定付き視界コーン）
     function castVisionCone(x, y, angle, range, fov = 60) {
+      const selfTx = Math.floor(x);
+      const selfTy = Math.floor(y);
       const points = [{x, y}];
       const rayCount = 30;
       const startAngle = angle - fov / 2;
@@ -589,6 +592,8 @@
           ry = y + Math.sin(a) * d;
           const tx = Math.floor(rx);
           const ty = Math.floor(ry);
+          // 自分自身のタイルはスキップ（壁上カメラ対応）
+          if (tx === selfTx && ty === selfTy) continue;
           if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE || map[ty][tx] === WALL) {
             break;
           }
@@ -710,7 +715,10 @@
       const dist = Math.sqrt(dx*dx + dy*dy);
       if (dist > unit.range) return false;
 
-      // レイキャストで壁チェック
+      const selfTx = Math.floor(unit.x);
+      const selfTy = Math.floor(unit.y);
+
+      // レイキャストで壁チェック（自分のタイルはスキップ）
       const steps = Math.ceil(dist * 5);
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
@@ -718,6 +726,7 @@
         const cy = unit.y + dy * t;
         const tx = Math.floor(cx);
         const ty = Math.floor(cy);
+        if (tx === selfTx && ty === selfTy) continue;
         if (map[ty] && map[ty][tx] === WALL) return false;
       }
 
@@ -962,16 +971,31 @@
           // 1人でもゴールされたら即敗北
           gameState = 'gameover';
           bgm.pause();
-          showModal('侵入を防げなかった...<br><button id="btnRetry" style="margin-top:15px;padding:10px 20px;font-size:18px;background:#c00;color:#fff;border:none;border-radius:5px;cursor:pointer;">🔄 同じ面をリトライ</button>');
-          setTimeout(()=>{
-            const btn=document.getElementById('btnRetry');
-            if(btn) btn.onclick=()=>{
-              hideModal();
-              gameState='setup';
-              initWave(currentWave);
-              updateUI();
-            };
-          },100);
+          // ゲームオーバー画面
+          const modal = document.getElementById('modal');
+          modal.querySelector('h1').textContent = '侵入を防げなかった...';
+          // 難易度/マップ選択UIを隠す
+          modal.querySelectorAll('div, p').forEach(el => el.style.display = 'none');
+          // リトライボタン表示
+          let retryBtn = document.getElementById('btnRetryGO');
+          if (!retryBtn) {
+            retryBtn = document.createElement('button');
+            retryBtn.id = 'btnRetryGO';
+            retryBtn.textContent = '🔄 同じ面をリトライ';
+            retryBtn.style.cssText = 'margin-top:15px;padding:12px 24px;font-size:18px;background:#c00;color:#fff;border:none;border-radius:8px;cursor:pointer;';
+            modal.appendChild(retryBtn);
+          }
+          retryBtn.style.display = 'block';
+          retryBtn.onclick = () => {
+            hideModal();
+            // UIを復元
+            modal.querySelectorAll('div, p').forEach(el => el.style.display = '');
+            retryBtn.style.display = 'none';
+            gameState = 'setup';
+            initWave(currentWave);
+            updateUI();
+          };
+          modal.style.display = 'flex';
           return;
         }
 
