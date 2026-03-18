@@ -97,10 +97,11 @@
   <canvas id="canvas" width="672" height="672"></canvas>
   
   <div id="ui">
-    <div>Wave: <span id="wave">1</span>/5</div>
+    <div>Wave: <span id="wave">0</span>/6</div>
     <div>ライフ: <span id="life">5</span></div>
-    <div>コスト: <span id="cost">10</span></div>
+    <div>コスト: <span id="cost">0</span></div>
     <div>捕獲: <span id="caught">0</span></div>
+    <div id="tutorialText" style="margin-top: 10px; font-size: 12px; color: #ff0; max-width: 200px; display: none;"></div>
   </div>
 
   <div id="palette">
@@ -128,6 +129,27 @@
 
     // Wave設定
     const waveConfigs = [
+      { // Wave 0 - チュートリアル 8x8
+        size: 8,
+        treasure: {x: 4, y: 4},
+        ninjaCount: 1,
+        startCost: 0,
+        isTutorial: true,
+        tutorialText: '📷カメラを配置して忍者を捕まえよう！<br>カメラは壁に設置できます',
+        preplacedUnits: [
+          {type: 'camera', x: 6, y: 1} // 右上の壁に配置済み
+        ],
+        map: [
+          [1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,0,1,1],
+          [1,0,1,1,1,0,0,1],
+          [1,0,0,0,0,0,1,1],
+          [1,1,1,0,2,0,0,1],
+          [1,0,0,0,1,1,0,1],
+          [1,0,1,0,0,0,0,1],
+          [1,1,1,1,1,1,1,1]
+        ]
+      },
       { // Wave 1 - 10x10
         size: 10,
         treasure: {x: 5, y: 5},
@@ -237,12 +259,36 @@
           [1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
           [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
         ]
+      },
+      { // Wave 6 - 必敗ステージ（10体が四方から）
+        size: 14,
+        treasure: {x: 7, y: 7},
+        ninjaCount: 10,
+        addCost: 3,
+        isUnwinnable: true,
+        spawnPattern: 'surround', // 四方から同時に
+        map: [
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,1,0,0,0,0,1,0,0,0,1],
+          [1,0,1,0,1,0,1,1,0,1,0,1,0,1],
+          [1,0,1,0,0,0,0,0,0,0,0,1,0,1],
+          [1,0,1,1,1,0,1,1,1,1,0,1,0,1],
+          [1,0,0,0,1,0,0,0,0,0,0,0,0,1],
+          [1,1,1,0,1,0,1,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,1,2,1,0,0,0,0,1],
+          [1,0,1,1,1,0,1,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,1,0,0,1],
+          [1,0,1,0,1,1,1,0,1,0,1,0,1,1],
+          [1,0,1,0,0,0,0,0,1,0,0,0,0,1],
+          [1,0,1,0,1,1,0,1,1,0,1,1,0,1],
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
       }
     ];
 
     // ゲーム状態
     let gameState = 'title'; // title, setup, wave, gameover, clear
-    let currentWave = 1;
+    let currentWave = 0; // チュートリアルから開始
     let life = 5;
     let cost = 0;
     let caughtCount = 0;
@@ -277,7 +323,7 @@
 
     // Wave初期化
     function initWave(waveNum) {
-      const config = waveConfigs[waveNum - 1];
+      const config = waveConfigs[waveNum];
       MAP_SIZE = config.size;
       treasurePos = config.treasure;
       
@@ -289,14 +335,42 @@
       canvas.height = MAP_SIZE * TILE_SIZE;
       
       // コスト設定
-      if (waveNum === 1) {
+      if (waveNum === 0 || config.startCost !== undefined) {
         cost = config.startCost;
-      } else {
+      } else if (config.addCost !== undefined) {
         cost += config.addCost;
       }
       
       // ユニットリセット（マップが変わるため）
       units = [];
+      
+      // プリセットユニット配置（チュートリアル用）
+      if (config.preplacedUnits) {
+        for (const preset of config.preplacedUnits) {
+          const ut = unitTypes[preset.type];
+          units.push({
+            type: preset.type,
+            x: preset.x + 0.5,
+            y: preset.y + 0.5,
+            tx: preset.x,
+            ty: preset.y,
+            angle: 0,
+            range: ut.range,
+            patrolDir: 1,
+            patrolAxis: 'x',
+            patrolStart: preset.x
+          });
+        }
+      }
+      
+      // チュートリアルテキスト表示
+      const tutorialEl = document.getElementById('tutorialText');
+      if (config.tutorialText) {
+        tutorialEl.innerHTML = config.tutorialText;
+        tutorialEl.style.display = 'block';
+      } else {
+        tutorialEl.style.display = 'none';
+      }
       
       updateUI();
     }
@@ -485,48 +559,91 @@
     // 忍者生成
     function spawnNinjas(wave) {
       ninjas = [];
-      const config = waveConfigs[wave - 1];
+      const config = waveConfigs[wave];
       const count = config.ninjaCount;
       const aiLevel = 'smart'; // 常に賢いAI
+      const spawnPattern = config.spawnPattern || 'random';
       
-      for (let i = 0; i < count; i++) {
-        // ランダムな端の床タイル
-        let sx, sy;
-        const side = Math.floor(Math.random() * 3); // 上・左・右
-        if (side === 0) { // 上
-          sx = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
-          sy = 1;
-        } else if (side === 1) { // 左
-          sx = 1;
-          sy = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
-        } else { // 右
-          sx = MAP_SIZE - 2;
-          sy = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
-        }
+      if (spawnPattern === 'surround') {
+        // 四方からバランスよく配置
+        const positions = [
+          // 上辺
+          {x: 1, y: 1}, {x: 3, y: 1}, {x: 5, y: 1},
+          // 下辺
+          {x: MAP_SIZE-2, y: 8}, {x: MAP_SIZE-2, y: 10},
+          // 左辺
+          {x: 1, y: 5}, {x: 1, y: 9},
+          // 右辺
+          {x: MAP_SIZE-2, y: 3}, {x: MAP_SIZE-2, y: 6}, {x: MAP_SIZE-2, y: 12}
+        ];
         
-        // 床タイルを見つけるまでリトライ
-        let attempts = 0;
-        while (map[sy] && map[sy][sx] !== FLOOR && attempts < 100) {
-          sx = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
-          sy = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
-          attempts++;
+        for (let i = 0; i < Math.min(count, positions.length); i++) {
+          let {x: sx, y: sy} = positions[i];
+          
+          // 床タイルを見つける
+          let attempts = 0;
+          while (map[sy] && map[sy][sx] !== FLOOR && attempts < 50) {
+            sx = Math.max(1, Math.min(MAP_SIZE - 2, sx + (Math.random() > 0.5 ? 1 : -1)));
+            sy = Math.max(1, Math.min(MAP_SIZE - 2, sy + (Math.random() > 0.5 ? 1 : -1)));
+            attempts++;
+          }
+          
+          ninjas.push({
+            x: sx + 0.5,
+            y: sy + 0.5,
+            tx: sx,
+            ty: sy,
+            dir: 0,
+            frame: 0,
+            frameTime: 0,
+            moveTime: 0,
+            moveDuration: 0.5,
+            ai: aiLevel,
+            state: 'move',
+            path: [],
+            age: 0
+          });
         }
+      } else {
+        // ランダム配置（通常）
+        for (let i = 0; i < count; i++) {
+          let sx, sy;
+          const side = Math.floor(Math.random() * 3); // 上・左・右
+          if (side === 0) { // 上
+            sx = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
+            sy = 1;
+          } else if (side === 1) { // 左
+            sx = 1;
+            sy = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
+          } else { // 右
+            sx = MAP_SIZE - 2;
+            sy = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
+          }
+          
+          // 床タイルを見つけるまでリトライ
+          let attempts = 0;
+          while (map[sy] && map[sy][sx] !== FLOOR && attempts < 100) {
+            sx = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
+            sy = 1 + Math.floor(Math.random() * (MAP_SIZE - 2));
+            attempts++;
+          }
 
-        ninjas.push({
-          x: sx + 0.5,
-          y: sy + 0.5,
-          tx: sx,
-          ty: sy,
-          dir: 0, // 0:down, 1:left, 2:right, 3:up
-          frame: 0,
-          frameTime: 0,
-          moveTime: 0,
-          moveDuration: 0.5,
-          ai: aiLevel,
-          state: 'move',
-          path: [],
-          age: 0 // タイムアウト用
-        });
+          ninjas.push({
+            x: sx + 0.5,
+            y: sy + 0.5,
+            tx: sx,
+            ty: sy,
+            dir: 0,
+            frame: 0,
+            frameTime: 0,
+            moveTime: 0,
+            moveDuration: 0.5,
+            ai: aiLevel,
+            state: 'move',
+            path: [],
+            age: 0
+          });
+        }
       }
     }
 
@@ -806,7 +923,7 @@
         if (aliveNinjas.length === 0 && ninjas.length > 0) {
           // Wave クリア
           currentWave++;
-          if (currentWave > 5) {
+          if (currentWave > 6) {
             gameState = 'clear';
             showModal(`🎉 ゲームクリア！<br>総捕獲数: ${caughtCount}`);
             sounds.clear.play();
@@ -837,7 +954,8 @@
     document.getElementById('btnPlay').addEventListener('click', () => {
       hideModal();
       gameState = 'setup';
-      initWave(1);
+      currentWave = 0; // チュートリアルから
+      initWave(0);
     });
 
     document.getElementById('btnCamera').addEventListener('click', () => {
