@@ -91,6 +91,31 @@
       cursor: pointer;
     }
     #modal button:hover { background: #0af; }
+    #result {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      color: #fff;
+      font-family: sans-serif;
+    }
+    #result h1 { font-size: 36px; margin-bottom: 20px; color: #0f0; }
+    #result p { font-size: 20px; margin: 5px 0; }
+    #result button {
+      margin-top: 20px;
+      padding: 15px 30px;
+      font-size: 18px;
+      background: #08f;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #result button:hover { background: #0af; }
   </style>
 </head>
 <body>
@@ -118,6 +143,14 @@
     <h1>忍者ディフェンス</h1>
     <p>カメラやガードを配置して、侵入する忍者を捕まえろ！</p>
     <button id="btnPlay">プレイ</button>
+  </div>
+
+  <div id="result">
+    <h1>Wave クリア！</h1>
+    <p>捕獲数: <span id="resultCaught">0</span></p>
+    <p>侵入数: <span id="resultInvasion">0</span></p>
+    <p>ライフ残: <span id="resultLife">0</span></p>
+    <button id="btnNextWave">次の Wave へ</button>
   </div>
 
   <script>
@@ -289,7 +322,7 @@
     ];
 
     // ゲーム状態
-    let gameState = 'title'; // title, setup, wave, gameover, clear
+    let gameState = 'title'; // title, setup, wave, gameover, clear, result
     let currentWave = 0; // チュートリアルから開始
     let life = 5;
     let cost = 0;
@@ -300,6 +333,9 @@
     let treasurePos = { x: 7, y: 7 };
     let map = [];
     let MAP_SIZE = 14;
+    let particles = []; // パーティクルエフェクト用
+    let waveCaughtCount = 0; // Wave内捕獲数
+    let waveInvasionCount = 0; // Wave内侵入数
 
     // アセット読み込み
     const imgWalk = new Image();
@@ -315,6 +351,11 @@
       step: new Audio('assets/se_step.wav')
     };
     sounds.step.volume = 0.3;
+
+    // BGM
+    const bgm = new Audio('assets/bgm_action2.ogg');
+    bgm.loop = true;
+    bgm.volume = 0.3;
 
     // ユニット定義
     const unitTypes = {
@@ -605,9 +646,41 @@
       }
     }
 
+    // パーティクル生成（捕獲エフェクト用）
+    function spawnParticles(x, y, color = '#ff0') {
+      const count = 15;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i;
+        const speed = 2 + Math.random() * 3;
+        particles.push({
+          x: x * TILE_SIZE,
+          y: y * TILE_SIZE,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0,
+          color
+        });
+      }
+    }
+
+    // パーティクル更新
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * 60 * dt;
+        p.y += p.vy * 60 * dt;
+        p.life -= dt * 2;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+    }
+
     // 忍者生成
     function spawnNinjas(wave) {
       ninjas = [];
+      waveCaughtCount = 0;
+      waveInvasionCount = 0;
       const config = waveConfigs[wave];
       const count = config.ninjaCount;
       const aiLevel = 'smart'; // 常に賢いAI
@@ -654,7 +727,8 @@
             state: 'move',
             path: [],
             age: 0,
-            routePreference: i % 3 // ルート分散用（3パターン）
+            routePreference: i % 3, // ルート分散用（3パターン）
+            spawnAlpha: 0 // フェードイン用
           });
         }
       } else {
@@ -695,7 +769,8 @@
             state: 'move',
             path: [],
             age: 0,
-            routePreference: i % 3 // ルート分散用（3パターン）
+            routePreference: i % 3, // ルート分散用（3パターン）
+            spawnAlpha: 0 // フェードイン用
           });
         }
       }
@@ -703,6 +778,11 @@
 
     // 忍者AI
     function updateNinjaAI(ninja, dt) {
+      // フェードイン処理
+      if (ninja.spawnAlpha < 1) {
+        ninja.spawnAlpha = Math.min(1, ninja.spawnAlpha + dt * 2);
+      }
+
       if (ninja.state === 'dead' || ninja.state === 'reached' || ninja.state === 'surrender') return;
 
       // タイムアウトチェック（30秒）
@@ -720,10 +800,12 @@
         if (ninja.tx === treasurePos.x && ninja.ty === treasurePos.y) {
           ninja.state = 'reached';
           life--;
+          waveInvasionCount++;
           updateUI();
           sounds.gameover.play();
           if (life <= 0) {
             gameState = 'gameover';
+            bgm.pause();
           }
           return;
         }
@@ -819,6 +901,8 @@
             u.triggered = true; // 罠作動
             ninja.state = 'dead';
             caughtCount++;
+            waveCaughtCount++;
+            spawnParticles(ninja.x, ninja.y, '#0f0');
             updateUI();
             sounds.get.play();
             break;
@@ -872,6 +956,8 @@
         if (ninja.state === 'move' && isNinjaInVision(unit, ninja)) {
           ninja.state = 'dead';
           caughtCount++;
+          waveCaughtCount++;
+          spawnParticles(ninja.x, ninja.y, '#ff0');
           updateUI();
           sounds.get.play();
         }
@@ -972,6 +1058,8 @@
       for (const ninja of ninjas) {
         const sx = ninja.x * TILE_SIZE;
         const sy = ninja.y * TILE_SIZE;
+        const alpha = ninja.spawnAlpha || 1;
+        ctx.globalAlpha = alpha;
         if (ninja.state === 'dead') {
           ctx.drawImage(imgDead, 0, 0, 16, 16, sx - 24, sy - 24, 48, 48);
         } else if (ninja.state === 'surrender') {
@@ -986,6 +1074,17 @@
           const frame = ninja.frame;
           ctx.drawImage(imgWalk, frame * 16, row * 16, 16, 16, sx - 24, sy - 24, 48, 48);
         }
+        ctx.globalAlpha = 1;
+      }
+
+      // パーティクル描画
+      for (const p of particles) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
     }
 
@@ -1006,21 +1105,23 @@
           updateNinjaAI(ninja, dt);
         }
 
+        // パーティクル更新
+        updateParticles(dt);
+
         // Wave終了チェック
         const aliveNinjas = ninjas.filter(n => n.state === 'move');
         if (aliveNinjas.length === 0 && ninjas.length > 0) {
-          // Wave クリア
-          currentWave++;
-          if (currentWave > 6) {
-            gameState = 'clear';
-            showModal(`🎉 ゲームクリア！<br>総捕獲数: ${caughtCount}`);
-            sounds.clear.play();
-          } else {
-            gameState = 'setup';
-            initWave(currentWave);
-            sounds.clear.play();
-          }
+          // Wave クリア → リザルト表示
+          gameState = 'result';
+          sounds.clear.play();
+          showResult();
         }
+      } else if (gameState === 'result') {
+        // リザルト画面表示（パーティクル更新は継続）
+        updateParticles(dt);
+      } else if (gameState === 'setup') {
+        // セットアップ中もパーティクル更新
+        updateParticles(dt);
       }
 
       draw();
@@ -1038,12 +1139,40 @@
       document.getElementById('modal').style.display = 'none';
     }
 
+    // リザルト表示
+    function showResult() {
+      document.getElementById('resultCaught').textContent = waveCaughtCount;
+      document.getElementById('resultInvasion').textContent = waveInvasionCount;
+      document.getElementById('resultLife').textContent = life;
+      document.getElementById('result').style.display = 'flex';
+    }
+
+    function hideResult() {
+      document.getElementById('result').style.display = 'none';
+    }
+
     // イベント
     document.getElementById('btnPlay').addEventListener('click', () => {
       hideModal();
       gameState = 'setup';
       currentWave = 0; // チュートリアルから
       initWave(0);
+      // BGM開始（ユーザーインタラクション後）
+      bgm.currentTime = 0;
+      bgm.play().catch(() => {}); // 自動再生ポリシー対策
+    });
+
+    document.getElementById('btnNextWave').addEventListener('click', () => {
+      hideResult();
+      currentWave++;
+      if (currentWave > 6) {
+        gameState = 'clear';
+        showModal(`🎉 ゲームクリア！<br>総捕獲数: ${caughtCount}`);
+        bgm.pause();
+      } else {
+        gameState = 'setup';
+        initWave(currentWave);
+      }
     });
 
     document.getElementById('btnCamera').addEventListener('click', () => {
@@ -1094,6 +1223,10 @@
         gameState = 'wave';
         selectedTool = null;
         updateSelection();
+        // BGM再開（初回以外）
+        if (bgm.paused) {
+          bgm.play().catch(() => {});
+        }
       }
     });
 
