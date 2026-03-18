@@ -142,6 +142,24 @@
   <div id="modal">
     <h1>忍者ディフェンス</h1>
     <p>カメラやガードを配置して、侵入する忍者を捕まえろ！</p>
+    <div style="margin: 20px 0;">
+      <label style="font-size: 18px; margin-bottom: 10px; display: block;">難易度:</label>
+      <select id="difficulty" style="font-size: 16px; padding: 5px 10px; border-radius: 5px; background: #333; color: #fff; border: 2px solid #666;">
+        <option value="easy">Easy (初心者向け)</option>
+        <option value="normal" selected>Normal (標準)</option>
+        <option value="hard">Hard (上級者)</option>
+      </select>
+    </div>
+    <div style="margin: 20px 0;">
+      <label style="font-size: 18px; margin-bottom: 10px; display: block;">マップタイプ:</label>
+      <select id="mapType" style="font-size: 16px; padding: 5px 10px; border-radius: 5px; background: #333; color: #fff; border: 2px solid #666;">
+        <option value="default">デフォルト</option>
+        <option value="cross">十字型</option>
+        <option value="donut">ドーナツ型</option>
+        <option value="maze">迷路型</option>
+        <option value="random">ランダム生成</option>
+      </select>
+    </div>
     <button id="btnPlay">プレイ</button>
   </div>
 
@@ -336,6 +354,8 @@
     let particles = []; // パーティクルエフェクト用
     let waveCaughtCount = 0; // Wave内捕獲数
     let waveInvasionCount = 0; // Wave内侵入数
+    let difficulty = 'normal'; // easy, normal, hard
+    let mapType = 'default'; // default, cross, donut, maze, random
 
     // アセット読み込み
     const imgWalk = new Image();
@@ -366,24 +386,124 @@
       wall: { cost: 3, name: '壁', onWall: false, isWallBuild: true } // 床→壁変換
     };
 
+    // マップ生成関数
+    function generateMap(size, type) {
+      const m = Array(size).fill(0).map(() => Array(size).fill(FLOOR));
+      
+      // 外壁
+      for (let i = 0; i < size; i++) {
+        m[0][i] = WALL;
+        m[size-1][i] = WALL;
+        m[i][0] = WALL;
+        m[i][size-1] = WALL;
+      }
+      
+      const center = Math.floor(size / 2);
+      
+      if (type === 'cross') {
+        // 十字型
+        for (let i = 2; i < size - 2; i++) {
+          if (i !== center && i !== center - 1 && i !== center + 1) {
+            m[center][i] = WALL;
+            m[i][center] = WALL;
+          }
+        }
+      } else if (type === 'donut') {
+        // ドーナツ型（中央に壁の輪）
+        const innerRadius = Math.floor(size / 4);
+        const outerRadius = Math.floor(size / 3);
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const dx = x - center;
+            const dy = y - center;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > innerRadius && dist < outerRadius) {
+              m[y][x] = WALL;
+            }
+          }
+        }
+      } else if (type === 'maze') {
+        // 迷路型（ランダム壁配置）
+        for (let y = 2; y < size - 2; y += 2) {
+          for (let x = 2; x < size - 2; x += 2) {
+            if (Math.random() < 0.5) {
+              m[y][x] = WALL;
+              // ランダムに隣接タイルも壁化
+              const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+              const dir = dirs[Math.floor(Math.random() * dirs.length)];
+              const nx = x + dir.x;
+              const ny = y + dir.y;
+              if (nx > 0 && ny > 0 && nx < size-1 && ny < size-1) {
+                m[ny][nx] = WALL;
+              }
+            }
+          }
+        }
+      } else if (type === 'random') {
+        // ランダム生成（30%壁密度）
+        for (let y = 2; y < size - 2; y++) {
+          for (let x = 2; x < size - 2; x++) {
+            if (Math.random() < 0.3) {
+              m[y][x] = WALL;
+            }
+          }
+        }
+        // 中央は必ず床
+        m[center][center] = FLOOR;
+        m[center-1][center] = FLOOR;
+        m[center+1][center] = FLOOR;
+        m[center][center-1] = FLOOR;
+        m[center][center+1] = FLOOR;
+      }
+      
+      // 宝物設置
+      m[center][center] = TREASURE;
+      
+      return m;
+    }
+
     // Wave初期化
     function initWave(waveNum) {
       const config = waveConfigs[waveNum];
       MAP_SIZE = config.size;
       treasurePos = config.treasure;
       
-      // マップコピー
-      map = config.map.map(row => [...row]);
+      // マップ生成（カスタムマップタイプ or デフォルト）
+      if (waveNum > 0 && mapType !== 'default') {
+        map = generateMap(MAP_SIZE, mapType);
+        // 宝物位置を生成されたマップの中央に更新
+        const center = Math.floor(MAP_SIZE / 2);
+        treasurePos = {x: center, y: center};
+      } else {
+        // デフォルトマップをコピー
+        map = config.map.map(row => [...row]);
+      }
       
       // キャンバスサイズ変更
       canvas.width = MAP_SIZE * TILE_SIZE;
       canvas.height = MAP_SIZE * TILE_SIZE;
       
-      // コスト設定
+      // コスト設定（難易度補正）
+      let baseCost = 0;
       if (waveNum === 0 || config.startCost !== undefined) {
-        cost = config.startCost;
+        baseCost = config.startCost;
       } else if (config.addCost !== undefined) {
         cost += config.addCost;
+        baseCost = config.addCost;
+      }
+      
+      // 難易度によるコスト補正
+      if (difficulty === 'easy') {
+        cost += Math.floor(baseCost * 0.5); // 50%増量
+      } else if (difficulty === 'hard') {
+        cost = Math.max(0, cost - Math.floor(baseCost * 0.3)); // 30%減少
+      }
+      
+      // 初回のみベースコスト設定
+      if (waveNum === 0 || config.startCost !== undefined) {
+        cost = config.startCost;
+        if (difficulty === 'easy') cost = Math.floor(cost * 1.5);
+        if (difficulty === 'hard') cost = Math.floor(cost * 0.7);
       }
       
       // ユニットリセット（マップが変わるため）
@@ -682,7 +802,15 @@
       waveCaughtCount = 0;
       waveInvasionCount = 0;
       const config = waveConfigs[wave];
-      const count = config.ninjaCount;
+      let count = config.ninjaCount;
+      
+      // 難易度による忍者数調整
+      if (difficulty === 'easy') {
+        count = Math.max(1, Math.floor(count * 0.7)); // 30%減少
+      } else if (difficulty === 'hard') {
+        count = Math.floor(count * 1.3); // 30%増加
+      }
+      
       const aiLevel = 'smart'; // 常に賢いAI
       const spawnPattern = config.spawnPattern || 'random';
       
@@ -1153,10 +1281,24 @@
 
     // イベント
     document.getElementById('btnPlay').addEventListener('click', () => {
+      // 難易度とマップタイプを取得
+      difficulty = document.getElementById('difficulty').value;
+      mapType = document.getElementById('mapType').value;
+      
+      // 難易度によるライフ設定
+      if (difficulty === 'easy') {
+        life = 7;
+      } else if (difficulty === 'normal') {
+        life = 5;
+      } else if (difficulty === 'hard') {
+        life = 3;
+      }
+      
       hideModal();
       gameState = 'setup';
       currentWave = 0; // チュートリアルから
       initWave(0);
+      updateUI();
       // BGM開始（ユーザーインタラクション後）
       bgm.currentTime = 0;
       bgm.play().catch(() => {}); // 自動再生ポリシー対策
