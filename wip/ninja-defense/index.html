@@ -384,7 +384,7 @@
     const unitTypes = {
       camera: { cost: 2, name: 'カメラ', range: 5, angle: 60, rotSpeed: 30, onWall: true },
       guard: { cost: 5, name: 'ガード', range: 4, patrol: 2, onWall: false },
-      light: { cost: 3, name: 'ライト', range: 3, rot360: true, onWall: false },
+      light: { cost: 3, name: 'ライト', range: 4, rot360: true, angle: 45, rotSpeed: 40, onWall: false },
       trap: { cost: 4, name: '罠', onWall: false, isTrap: true }, // 床専用、使い捨て
       wall: { cost: 3, name: '壁', onWall: false, isWallBuild: true } // 床→壁変換
     };
@@ -461,6 +461,27 @@
       
       // 宝物設置
       m[center][center] = TREASURE;
+      
+      // 到達可能性チェック（端から宝に到達できるか）
+      const visited = Array(size).fill(0).map(()=>Array(size).fill(false));
+      const q = [{x:center,y:center}];
+      visited[center][center] = true;
+      while(q.length) {
+        const c = q.shift();
+        [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}].forEach(d=>{
+          const nx=c.x+d.x, ny=c.y+d.y;
+          if(nx>=0&&ny>=0&&nx<size&&ny<size&&!visited[ny][nx]&&m[ny][nx]!==WALL){
+            visited[ny][nx]=true;
+            q.push({x:nx,y:ny});
+          }
+        });
+      }
+      // 端タイルから1つでも到達可能か確認、なければ再生成
+      let reachable = false;
+      for(let i=1;i<size-1;i++){
+        if(visited[1][i]||visited[i][1]||visited[i][size-2]) { reachable=true; break; }
+      }
+      if(!reachable) return generateMap(size, type); // 再帰で再生成
       
       return m;
     }
@@ -698,13 +719,14 @@
         if (map[ty] && map[ty][tx] === WALL) return false;
       }
 
-      // 角度チェック（カメラのみ）
-      if (unit.type === 'camera') {
+      // 角度チェック（カメラ・ライト）
+      if (unit.type === 'camera' || unit.type === 'light') {
         const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        let diff = angle - unit.angle;
+        let diff = angle - (unit.angle || 0);
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
-        if (Math.abs(diff) > 60) return false;
+        const fov = unit.type === 'light' ? 22.5 : 60; // ライトは狭いビーム(±22.5°)
+        if (Math.abs(diff) > fov) return false;
       }
 
       return true;
@@ -932,14 +954,13 @@
         // 目標到達チェック
         if (ninja.tx === treasurePos.x && ninja.ty === treasurePos.y) {
           ninja.state = 'reached';
-          life--;
           waveInvasionCount++;
           updateUI();
           sounds.gameover.play();
-          if (life <= 0) {
-            gameState = 'gameover';
-            bgm.pause();
-          }
+          // 1人でもゴールされたら即敗北
+          gameState = 'gameover';
+          bgm.pause();
+          showModal('侵入を防げなかった...');
           return;
         }
 
@@ -1127,7 +1148,7 @@
         ctx.globalAlpha = 0.3;
         for (const unit of units) {
           let fov = 60;
-          if (unit.type === 'light') fov = 360;
+          if (unit.type === 'light') fov = 45; // 狭い回転ビーム
           const cone = castVisionCone(unit.x, unit.y, unit.angle || 0, unit.range, fov);
           ctx.fillStyle = unit.type === 'light' ? '#ff0' : '#f00';
           ctx.beginPath();
@@ -1246,10 +1267,10 @@
         // Wave終了チェック
         const aliveNinjas = ninjas.filter(n => n.state === 'move');
         if (aliveNinjas.length === 0 && ninjas.length > 0) {
-          // Wave クリア → リザルト表示
+          // 全忍者捕獲！ → クリア
           gameState = 'result';
           sounds.clear.play();
-          showResult();
+          showResult('侵入者発見！ 全員捕獲！');
         }
       } else if (gameState === 'result') {
         // リザルト画面表示（パーティクル更新は継続）
@@ -1275,7 +1296,8 @@
     }
 
     // リザルト表示
-    function showResult() {
+    function showResult(title) {
+      document.getElementById('result').querySelector('h1').textContent = title || '侵入者発見！ 全員捕獲！';
       document.getElementById('resultCaught').textContent = waveCaughtCount;
       document.getElementById('resultInvasion').textContent = waveInvasionCount;
       document.getElementById('resultLife').textContent = life;
