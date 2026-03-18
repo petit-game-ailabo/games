@@ -108,6 +108,8 @@
     <button class="btn" id="btnCamera">📷 カメラ(2)</button>
     <button class="btn" id="btnGuard">🚶 ガード(5)</button>
     <button class="btn" id="btnLight">💡 ライト(3)</button>
+    <button class="btn" id="btnTrap">🕳️ 罠(4)</button>
+    <button class="btn" id="btnWall">🧱 壁(3)</button>
     <button class="btn" id="btnRemove">❌ 撤去</button>
     <button class="btn" id="btnStart">▶️ 開始！</button>
   </div>
@@ -318,7 +320,9 @@
     const unitTypes = {
       camera: { cost: 2, name: 'カメラ', range: 5, angle: 60, rotSpeed: 30, onWall: true },
       guard: { cost: 5, name: 'ガード', range: 4, patrol: 2, onWall: false },
-      light: { cost: 3, name: 'ライト', range: 3, rot360: true, onWall: false }
+      light: { cost: 3, name: 'ライト', range: 3, rot360: true, onWall: false },
+      trap: { cost: 4, name: '罠', onWall: false, isTrap: true }, // 床専用、使い捨て
+      wall: { cost: 3, name: '壁', onWall: false, isWallBuild: true } // 床→壁変換
     };
 
     // Wave初期化
@@ -407,7 +411,7 @@
 
     // 忍者が視界内にいるか判定
     // BFS経路探索（視界を避けつつ最短経路を見つける）
-    function findPathBFS(sx, sy, gx, gy) {
+    function findPathBFS(sx, sy, gx, gy, routePreference = 0) {
       const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
       // ダイクストラ的に：視界内のタイルはコスト高、それ以外はコスト1
       const cost = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(Infinity));
@@ -432,9 +436,30 @@
           // 視界内なら高コスト、そうでなければ1
           let tileCost = 1;
           const testPos = {x: nx+0.5, y: ny+0.5};
+          
+          // 視界チェック
           for (const u of units) {
             if (isNinjaInVision(u, testPos)) { tileCost = 50; break; }
           }
+          
+          // 罠チェック（視界ほどじゃないがリスクあり）
+          for (const u of units) {
+            if (u.isTrap && !u.triggered && u.tx === nx && u.ty === ny) {
+              tileCost += 30;
+              break;
+            }
+          }
+          
+          // ルート分散：他の忍者の経路と重複を避ける（軽いペナルティ）
+          const otherNinjasOnTile = ninjas.filter(n => 
+            n.state === 'move' && Math.floor(n.x) === nx && Math.floor(n.y) === ny
+          ).length;
+          tileCost += otherNinjasOnTile * 2;
+          
+          // ルート選好によるバイアス（縦優先・横優先・バランス）
+          if (routePreference === 0 && d.y !== 0) tileCost += 0.5; // 縦優先
+          if (routePreference === 1 && d.x !== 0) tileCost += 0.5; // 横優先
+          // routePreference === 2 はバイアスなし
           
           const nc = cur.c + tileCost;
           if (nc < cost[ny][nx]) {
@@ -523,6 +548,17 @@
     function placeUnit(type, tx, ty) {
       const ut = unitTypes[type];
       if (cost < ut.cost) return false;
+      
+      // 壁建設の場合
+      if (ut.isWallBuild) {
+        if (map[ty][tx] !== FLOOR) return false;
+        map[ty][tx] = WALL; // 床→壁に変換
+        cost -= ut.cost;
+        sounds.coin.play();
+        updateUI();
+        return true;
+      }
+      
       if (ut.onWall && map[ty][tx] !== WALL) return false;
       if (!ut.onWall && map[ty][tx] !== FLOOR) return false;
 
@@ -532,10 +568,12 @@
         y: ty + 0.5,
         tx, ty,
         angle: 0,
-        range: ut.range,
+        range: ut.range || 0,
         patrolDir: Math.random() > 0.5 ? 1 : -1,
         patrolAxis: Math.random() > 0.5 ? 'x' : 'y',
-        patrolStart: (Math.random() > 0.5 ? tx : ty)
+        patrolStart: (Math.random() > 0.5 ? tx : ty),
+        isTrap: ut.isTrap || false,
+        triggered: false
       };
 
       units.push(unit);
@@ -547,11 +585,22 @@
 
     // 撤去
     function removeUnit(tx, ty) {
+      // ユニットの撤去
       const idx = units.findIndex(u => u.tx === tx && u.ty === ty);
       if (idx >= 0) {
         const u = units[idx];
         cost += unitTypes[u.type].cost;
         units.splice(idx, 1);
+        updateUI();
+        return;
+      }
+      
+      // 壁→床変換（建てた壁の撤去）
+      if (map[ty] && map[ty][tx] === WALL) {
+        // 初期マップと比較して、後から建てた壁かチェック
+        // 簡易実装：常に撤去可能とする（初期壁も含む）
+        map[ty][tx] = FLOOR;
+        cost += 3; // 壁建設コスト返却
         updateUI();
       }
     }
@@ -563,6 +612,9 @@
       const count = config.ninjaCount;
       const aiLevel = 'smart'; // 常に賢いAI
       const spawnPattern = config.spawnPattern || 'random';
+      
+      // 使用済みルート記録（ルート分散のため）
+      const usedRoutes = [];
       
       if (spawnPattern === 'surround') {
         // 四方からバランスよく配置
@@ -601,7 +653,8 @@
             ai: aiLevel,
             state: 'move',
             path: [],
-            age: 0
+            age: 0,
+            routePreference: i % 3 // ルート分散用（3パターン）
           });
         }
       } else {
@@ -641,7 +694,8 @@
             ai: aiLevel,
             state: 'move',
             path: [],
-            age: 0
+            age: 0,
+            routePreference: i % 3 // ルート分散用（3パターン）
           });
         }
       }
@@ -735,7 +789,7 @@
         } else if (ninja.ai === 'smart') {
           // BFS経路探索（視界コストつき重み付き探索）
           // 経路を毎回計算（視界は動くため）
-          const path = findPathBFS(ninja.tx, ninja.ty, treasurePos.x, treasurePos.y);
+          const path = findPathBFS(ninja.tx, ninja.ty, treasurePos.x, treasurePos.y, ninja.routePreference);
           if (path && path.length > 0) {
             const next = path[0];
             nextX = next.x;
@@ -758,6 +812,18 @@
         ninja.ty = nextY;
         ninja.x = nextX + 0.5;
         ninja.y = nextY + 0.5;
+
+        // 罠チェック（踏んだら即捕獲）
+        for (const u of units) {
+          if (u.isTrap && !u.triggered && u.tx === ninja.tx && u.ty === ninja.ty) {
+            u.triggered = true; // 罠作動
+            ninja.state = 'dead';
+            caughtCount++;
+            updateUI();
+            sounds.get.play();
+            break;
+          }
+        }
 
         // 足音
         if (Math.random() < 0.3) {
@@ -877,6 +943,28 @@
           ctx.beginPath();
           ctx.arc(sx, sy, 12, 0, Math.PI * 2);
           ctx.fill();
+        } else if (unit.type === 'trap') {
+          // 罠の描画
+          if (unit.triggered) {
+            // 作動済み：×印
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(sx - 16, sy - 16);
+            ctx.lineTo(sx + 16, sy + 16);
+            ctx.moveTo(sx + 16, sy - 16);
+            ctx.lineTo(sx - 16, sy + 16);
+            ctx.stroke();
+          } else {
+            // 未作動：床と同化（薄い茶色の円）
+            ctx.fillStyle = 'rgba(100, 50, 0, 0.5)';
+            ctx.beginPath();
+            ctx.arc(sx, sy, 18, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#640';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
         }
       }
 
@@ -979,6 +1067,20 @@
       }
     });
 
+    document.getElementById('btnTrap').addEventListener('click', () => {
+      if (gameState === 'setup') {
+        selectedTool = 'trap';
+        updateSelection();
+      }
+    });
+
+    document.getElementById('btnWall').addEventListener('click', () => {
+      if (gameState === 'setup') {
+        selectedTool = 'wall';
+        updateSelection();
+      }
+    });
+
     document.getElementById('btnRemove').addEventListener('click', () => {
       if (gameState === 'setup') {
         selectedTool = 'remove';
@@ -1000,6 +1102,8 @@
       if (selectedTool === 'camera') document.getElementById('btnCamera').classList.add('selected');
       if (selectedTool === 'guard') document.getElementById('btnGuard').classList.add('selected');
       if (selectedTool === 'light') document.getElementById('btnLight').classList.add('selected');
+      if (selectedTool === 'trap') document.getElementById('btnTrap').classList.add('selected');
+      if (selectedTool === 'wall') document.getElementById('btnWall').classList.add('selected');
       if (selectedTool === 'remove') document.getElementById('btnRemove').classList.add('selected');
     }
 
