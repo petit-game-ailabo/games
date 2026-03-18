@@ -43,13 +43,15 @@
     }
     #palette {
       position: fixed;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
+      bottom: 5px;
+      left: 5px;
+      right: 5px;
       display: flex;
-      gap: 10px;
-      background: rgba(0,0,0,0.8);
-      padding: 10px;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+      background: rgba(0,0,0,0.9);
+      padding: 8px;
       border-radius: 10px;
       z-index: 10;
     }
@@ -57,11 +59,11 @@
       background: #444;
       color: #fff;
       border: 2px solid #666;
-      padding: 10px 15px;
+      padding: 6px 8px;
       border-radius: 5px;
       cursor: pointer;
-      font-size: 14px;
-      min-width: 80px;
+      font-size: 12px;
+      min-width: 55px;
       text-align: center;
       user-select: none;
     }
@@ -130,13 +132,13 @@
   </div>
 
   <div id="palette">
-    <button class="btn" id="btnCamera">📷 カメラ(2)</button>
-    <button class="btn" id="btnGuard">🚶 ガード(5)</button>
-    <button class="btn" id="btnLight">💡 ライト(3)</button>
-    <button class="btn" id="btnTrap">🕳️ 罠(4)</button>
-    <button class="btn" id="btnWall">🧱 壁(3)</button>
-    <button class="btn" id="btnRemove">❌ 撤去</button>
-    <button class="btn" id="btnStart">▶️ 開始！</button>
+    <button class="btn" id="btnCamera">📷カメラ<br><small>💰2</small></button>
+    <button class="btn" id="btnGuard">🚶ガード<br><small>💰5</small></button>
+    <button class="btn" id="btnLight">💡ライト<br><small>💰3</small></button>
+    <button class="btn" id="btnTrap">🕳️罠<br><small>💰4</small></button>
+    <button class="btn" id="btnWall">🧱壁<br><small>💰3</small></button>
+    <button class="btn" id="btnRemove">❌撤去</button>
+    <button class="btn" id="btnStart" style="background:#0a0;border-color:#0f0;">▶️開始</button>
   </div>
 
   <div id="modal">
@@ -350,6 +352,7 @@
     let ninjas = []; // 侵入忍者
     let treasurePos = { x: 7, y: 7 };
     let map = [];
+    let originalMap = []; // 初期マップ保持（壁撤去防止用）
     let MAP_SIZE = 14;
     let particles = []; // パーティクルエフェクト用
     let waveCaughtCount = 0; // Wave内捕獲数
@@ -478,6 +481,8 @@
         // デフォルトマップをコピー
         map = config.map.map(row => [...row]);
       }
+      // 初期マップを保存（壁撤去判定用）
+      originalMap = map.map(row => [...row]);
       
       // キャンバスサイズ変更
       canvas.width = MAP_SIZE * TILE_SIZE;
@@ -756,10 +761,10 @@
         return;
       }
       
-      // 壁→床変換（建てた壁の撤去）
+      // 壁→床変換（建てた壁のみ撤去可能）
       if (map[ty] && map[ty][tx] === WALL) {
-        // 初期マップと比較して、後から建てた壁かチェック
-        // 簡易実装：常に撤去可能とする（初期壁も含む）
+        // 初期マップの壁は壊せない
+        if (originalMap[ty] && originalMap[ty][tx] === WALL) return;
         map[ty][tx] = FLOOR;
         cost += 3; // 壁建設コスト返却
         updateUI();
