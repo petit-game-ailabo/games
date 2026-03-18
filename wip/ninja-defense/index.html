@@ -1086,10 +1086,25 @@
               if (isNinjaInVision(u, testPos)) { inVision = true; break; }
             }
             if (inVision) {
-              // 待機：移動しない（その場にとどまる）
-              nextX = ninja.tx;
-              nextY = ninja.ty;
+              // 待機：カウント増加、3秒待ったら強行突破
+              ninja.waitTime = (ninja.waitTime || 0) + ninja.moveDuration;
+              if (ninja.waitTime < 3) {
+                nextX = ninja.tx;
+                nextY = ninja.ty;
+              } else {
+                // 強行突破
+                ninja.waitTime = 0;
+                nextX = next.x;
+                nextY = next.y;
+                const ddx = nextX - ninja.tx;
+                const ddy = nextY - ninja.ty;
+                if (ddy < 0) ninja.dir = 3;
+                else if (ddy > 0) ninja.dir = 0;
+                else if (ddx < 0) ninja.dir = 1;
+                else if (ddx > 0) ninja.dir = 2;
+              }
             } else {
+              ninja.waitTime = 0;
               nextX = next.x;
               nextY = next.y;
               const ddx = nextX - ninja.tx;
