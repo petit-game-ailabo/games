@@ -162,7 +162,7 @@
         <option value="random">ランダム生成</option>
       </select>
     </div>
-    <button id="btnPlay">プレイ</button>
+    <button id="btnPlay" style="padding:12px 30px;font-size:20px;background:#08f;color:#fff;border:none;border-radius:8px;cursor:pointer;">🎮 最初から始める</button>
   </div>
 
   <div id="result">
@@ -1274,6 +1274,12 @@
           const row = ninja.dir;
           const frame = ninja.frame;
           ctx.drawImage(imgWalk, frame * 16, row * 16, 16, 16, sx - 24, sy - 24, 48, 48);
+          // 当たり判定可視化（忍者の検知範囲を薄い青で表示）
+          ctx.strokeStyle = 'rgba(0, 150, 255, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 20, 0, Math.PI * 2);
+          ctx.stroke();
         }
         ctx.globalAlpha = 1;
       }
@@ -1309,13 +1315,16 @@
         // パーティクル更新
         updateParticles(dt);
 
-        // Wave終了チェック
-        const aliveNinjas = ninjas.filter(n => n.state === 'move');
-        if (aliveNinjas.length === 0 && ninjas.length > 0) {
-          // 全忍者捕獲！ → クリア
-          gameState = 'result';
-          sounds.clear.play();
-          showResult('侵入者発見！ 全員捕獲！');
+        // Wave終了チェック（gameoverでなければ）
+        if (gameState === 'wave') {
+          const aliveNinjas = ninjas.filter(n => n.state === 'move');
+          const reachedNinjas = ninjas.filter(n => n.state === 'reached');
+          if (aliveNinjas.length === 0 && ninjas.length > 0 && reachedNinjas.length === 0) {
+            // 全忍者捕獲！ → クリア
+            gameState = 'result';
+            sounds.clear.play();
+            showResult('侵入者発見！ 全員捕獲！');
+          }
         }
       } else if (gameState === 'result') {
         // リザルト画面表示（パーティクル更新は継続）
