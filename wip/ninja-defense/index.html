@@ -172,6 +172,30 @@
     <button id="btnNextWave">次の Wave へ</button>
   </div>
 
+  <!-- 向き指定UI -->
+  <div id="directionPicker" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:20; background:rgba(0,0,0,0.9); padding:30px; border-radius:15px; border:3px solid #08f;">
+    <div style="text-align:center; margin-bottom:10px;">
+      <button class="dir-btn" data-dir="up" style="width:60px; height:60px; font-size:32px; background:#444; border:2px solid #666; border-radius:10px; cursor:pointer; color:#fff;">⬆️</button>
+    </div>
+    <div style="display:flex; gap:20px; justify-content:center; margin-bottom:10px;">
+      <button class="dir-btn" data-dir="left" style="width:60px; height:60px; font-size:32px; background:#444; border:2px solid #666; border-radius:10px; cursor:pointer; color:#fff;">⬅️</button>
+      <button class="dir-btn" data-dir="right" style="width:60px; height:60px; font-size:32px; background:#444; border:2px solid #666; border-radius:10px; cursor:pointer; color:#fff;">➡️</button>
+    </div>
+    <div style="text-align:center; margin-bottom:15px;">
+      <button class="dir-btn" data-dir="down" style="width:60px; height:60px; font-size:32px; background:#444; border:2px solid #666; border-radius:10px; cursor:pointer; color:#fff;">⬇️</button>
+    </div>
+    <p id="directionPickerText" style="color:#fff; text-align:center; margin:0; font-size:16px; font-weight:bold;">向きを選択</p>
+  </div>
+
+  <!-- ガード経路確定UI -->
+  <div id="patrolConfirm" style="display:none; position:fixed; bottom:120px; left:50%; transform:translateX(-50%); z-index:20; background:rgba(0,0,0,0.9); padding:15px 25px; border-radius:10px; border:2px solid #0f0;">
+    <p style="color:#fff; margin:0 0 10px 0; text-align:center; font-size:14px;">経路を確定しますか？</p>
+    <div style="display:flex; gap:15px; justify-content:center;">
+      <button id="btnConfirmPatrol" style="padding:10px 20px; font-size:16px; background:#0a0; color:#fff; border:none; border-radius:8px; cursor:pointer;">✅ 確定</button>
+      <button id="btnCancelPatrol" style="padding:10px 20px; font-size:16px; background:#c00; color:#fff; border:none; border-radius:8px; cursor:pointer;">❌ キャンセル</button>
+    </div>
+  </div>
+
   <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -358,6 +382,14 @@
     let waveInvasionCount = 0; // Wave内侵入数
     let difficulty = 'normal'; // easy, normal, hard
     let mapType = 'default'; // default, cross, donut, maze, random
+    
+    // 向き指定用
+    let pendingUnit = null; // 仮配置ユニット（カメラ/ライト）
+    let pendingUnitType = null;
+    
+    // ガード経路指定用
+    let patrolDrawing = false; // 経路描画モード
+    let patrolPath = []; // タップした座標リスト
 
     // アセット読み込み
     const imgWalk = new Image();
@@ -491,6 +523,14 @@
       treasurePos = config.treasure;
       ninjas = []; // 前のWaveの忍者をクリア
       particles = []; // パーティクルもクリア
+      
+      // UI状態をリセット
+      pendingUnit = null;
+      pendingUnitType = null;
+      patrolDrawing = false;
+      patrolPath = [];
+      hideDirectionPicker();
+      document.getElementById('patrolConfirm').style.display = 'none';
       
       // マップ生成（カスタムマップタイプ or デフォルト）
       if (waveNum > 0 && mapType !== 'default') {
@@ -707,32 +747,112 @@
       return true; // 到達不能 → 降参
     }
 
-    // ガード巡回パス生成（BFS、半径3タイル）
-    function generatePatrolPath(sx, sy) {
-      const visited = new Set();
-      const path = [];
-      const queue = [{x:sx, y:sy, dist:0}];
-      visited.add(`${sx},${sy}`);
+    // 向き指定UI表示
+    function showDirectionPicker(unitType) {
+      const picker = document.getElementById('directionPicker');
+      const text = document.getElementById('directionPickerText');
+      if (unitType === 'camera') {
+        text.textContent = 'カメラの向きを選択';
+      } else if (unitType === 'light') {
+        text.textContent = 'ライトの初期向きを選択';
+      }
+      picker.style.display = 'block';
+    }
+
+    function hideDirectionPicker() {
+      document.getElementById('directionPicker').style.display = 'none';
+    }
+
+    function confirmDirection(dir) {
+      if (!pendingUnit) return;
       
-      while (queue.length > 0) {
-        const cur = queue.shift();
-        if (cur.dist > 3) continue;
-        path.push({x: cur.x, y: cur.y});
-        
-        for (const d of [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}]) {
-          const nx = cur.x + d.x, ny = cur.y + d.y;
-          const key = `${nx},${ny}`;
-          if (!visited.has(key) && map[ny] && (map[ny][nx] === FLOOR || map[ny][nx] === TREASURE)) {
-            visited.add(key);
-            queue.push({x:nx, y:ny, dist: cur.dist+1});
-          }
-        }
+      // 向きを設定
+      const angleMap = {
+        up: -90,
+        down: 90,
+        left: 180,
+        right: 0
+      };
+      pendingUnit.angle = angleMap[dir];
+      
+      // unitsに追加
+      units.push(pendingUnit);
+      sounds.coin.play();
+      
+      // クリーンアップ
+      pendingUnit = null;
+      pendingUnitType = null;
+      hideDirectionPicker();
+    }
+
+    function cancelPendingUnit() {
+      if (!pendingUnit) return;
+      
+      // コスト返還
+      const ut = unitTypes[pendingUnitType];
+      cost += ut.cost;
+      updateUI();
+      
+      // クリーンアップ
+      pendingUnit = null;
+      pendingUnitType = null;
+      hideDirectionPicker();
+    }
+
+    // ガード経路描画開始
+    function startPatrolDrawing(tx, ty) {
+      if (map[ty][tx] !== FLOOR) return false;
+      patrolDrawing = true;
+      patrolPath = [{x: tx, y: ty}];
+      selectedTool = null; // ツール選択解除
+      updateSelection();
+      return true;
+    }
+
+    // ガード経路にタイルを追加
+    function addPatrolTile(tx, ty) {
+      if (!patrolDrawing) return false;
+      if (map[ty][tx] !== FLOOR) return false;
+      
+      // 最後のタイルと隣接しているかチェック
+      const last = patrolPath[patrolPath.length - 1];
+      const dx = Math.abs(tx - last.x);
+      const dy = Math.abs(ty - last.y);
+      if (dx + dy !== 1) {
+        // 隣接していない
+        return false;
       }
       
-      // 往復パス（行って帰る）
-      if (path.length < 2) return path; // 1タイルしかない場合はそのまま
-      const reversePath = [...path].reverse().slice(1);
-      return [...path, ...reversePath];
+      // 既にパスに含まれているかチェック（ループ防止）
+      const exists = patrolPath.some(p => p.x === tx && p.y === ty);
+      if (exists) return false;
+      
+      patrolPath.push({x: tx, y: ty});
+      return true;
+    }
+
+    // ガード経路確定
+    function confirmPatrol() {
+      if (patrolPath.length < 2) {
+        alert('経路は最低2タイル必要です');
+        return;
+      }
+      
+      // ガードを配置
+      const start = patrolPath[0];
+      placeUnit('guard', start.x, start.y, patrolPath);
+      
+      // クリーンアップ
+      patrolDrawing = false;
+      patrolPath = [];
+      document.getElementById('patrolConfirm').style.display = 'none';
+    }
+
+    // ガード経路キャンセル
+    function cancelPatrol() {
+      patrolDrawing = false;
+      patrolPath = [];
+      document.getElementById('patrolConfirm').style.display = 'none';
     }
 
     function isNinjaInVision(unit, ninja) {
@@ -770,12 +890,29 @@
     }
 
     // 配置
-    function placeUnit(type, tx, ty) {
+    function placeUnit(type, tx, ty, manualPath = null) {
       const ut = unitTypes[type];
       if (cost < ut.cost) return false;
       
       if (ut.onWall && map[ty][tx] !== WALL) return false;
       if (!ut.onWall && map[ty][tx] !== FLOOR) return false;
+
+      // カメラ/ライトの場合は仮配置 → 向き指定UIを表示
+      if (type === 'camera' || type === 'light') {
+        pendingUnit = {
+          type,
+          x: tx + 0.5,
+          y: ty + 0.5,
+          tx, ty,
+          angle: 0,
+          range: ut.range || 0
+        };
+        pendingUnitType = type;
+        cost -= ut.cost; // コスト先払い
+        updateUI();
+        showDirectionPicker(type);
+        return true;
+      }
 
       const unit = {
         type,
@@ -788,9 +925,13 @@
         triggered: false
       };
 
-      // ガードの場合は巡回パス生成
+      // ガードの場合は手動経路を使用
       if (type === 'guard') {
-        unit.path = generatePatrolPath(tx, ty);
+        if (!manualPath || manualPath.length < 2) {
+          alert('ガードの経路を設定してください（最低2タイル）');
+          return false;
+        }
+        unit.path = manualPath;
         unit.pathIdx = 0;
         unit.moveProgress = 0;
         console.log(`Guard patrol path (${unit.path.length} tiles):`, unit.path);
@@ -1086,25 +1227,13 @@
               if (isNinjaInVision(u, testPos)) { inVision = true; break; }
             }
             if (inVision) {
-              // 待機：カウント増加、3秒待ったら強行突破
-              ninja.waitTime = (ninja.waitTime || 0) + ninja.moveDuration;
-              if (ninja.waitTime < 3) {
-                nextX = ninja.tx;
-                nextY = ninja.ty;
-              } else {
-                // 強行突破
-                ninja.waitTime = 0;
-                nextX = next.x;
-                nextY = next.y;
-                const ddx = nextX - ninja.tx;
-                const ddy = nextY - ninja.ty;
-                if (ddy < 0) ninja.dir = 3;
-                else if (ddy > 0) ninja.dir = 0;
-                else if (ddx < 0) ninja.dir = 1;
-                else if (ddx > 0) ninja.dir = 2;
-              }
+              // 待機：次の移動タイミングまで待つ（1回だけスキップ）
+              nextX = ninja.tx;
+              nextY = ninja.ty;
+              // ただし待機中の移動間隔を短くして素早く再判定
+              ninja.moveDuration = 0.15; // 通常0.3→0.15で高速再チェック
             } else {
-              ninja.waitTime = 0;
+              ninja.moveDuration = 0.3; // 通常速度に戻す
               nextX = next.x;
               nextY = next.y;
               const ddx = nextX - ninja.tx;
@@ -1246,6 +1375,74 @@
           ctx.fill();
         }
         ctx.globalAlpha = 1;
+      }
+
+      // ガード経路描画（setup中）
+      if (gameState === 'setup') {
+        for (const unit of units) {
+          if (unit.type === 'guard' && unit.path && unit.path.length > 1) {
+            ctx.strokeStyle = '#f00';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            for (let i = 0; i < unit.path.length; i++) {
+              const p = unit.path[i];
+              const px = (p.x + 0.5) * TILE_SIZE;
+              const py = (p.y + 0.5) * TILE_SIZE;
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+      }
+
+      // 仮配置ユニット描画（pendingUnit）
+      if (pendingUnit) {
+        const sx = pendingUnit.x * TILE_SIZE;
+        const sy = pendingUnit.y * TILE_SIZE;
+        ctx.globalAlpha = 0.6;
+        if (pendingUnit.type === 'camera') {
+          ctx.fillStyle = '#888';
+          ctx.fillRect(sx - 8, sy - 8, 16, 16);
+          ctx.fillStyle = '#f00';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (pendingUnit.type === 'light') {
+          ctx.fillStyle = '#ff0';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // ガード経路描画中のパス表示
+      if (patrolDrawing && patrolPath.length > 0) {
+        ctx.strokeStyle = '#f00';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        for (let i = 0; i < patrolPath.length; i++) {
+          const p = patrolPath[i];
+          const px = (p.x + 0.5) * TILE_SIZE;
+          const py = (p.y + 0.5) * TILE_SIZE;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // 最後のタイルに白い点
+        const last = patrolPath[patrolPath.length - 1];
+        const lx = (last.x + 0.5) * TILE_SIZE;
+        const ly = (last.y + 0.5) * TILE_SIZE;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(lx, ly, 8, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       // ユニット描画
@@ -1540,10 +1737,42 @@
       const tx = Math.floor((clientX - rect.left) * scaleX / TILE_SIZE);
       const ty = Math.floor((clientY - rect.top) * scaleY / TILE_SIZE);
 
+      // pendingUnitがある場合、マップ外クリックでキャンセル
+      if (pendingUnit) {
+        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE) {
+          cancelPendingUnit();
+        }
+        return;
+      }
+
+      // ガード経路描画中
+      if (patrolDrawing) {
+        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE) {
+          // マップ外でキャンセル
+          cancelPatrol();
+          return;
+        }
+        const added = addPatrolTile(tx, ty);
+        if (added && patrolPath.length >= 2) {
+          // 確定UIを表示
+          document.getElementById('patrolConfirm').style.display = 'block';
+        }
+        return;
+      }
+
       if (e.button === 2 || e.type === 'contextmenu') {
         removeUnit(tx, ty);
       } else if (selectedTool === 'remove') {
         removeUnit(tx, ty);
+      } else if (selectedTool === 'guard') {
+        // ガード選択時は経路描画開始
+        const ut = unitTypes['guard'];
+        if (cost >= ut.cost) {
+          if (startPatrolDrawing(tx, ty)) {
+            cost -= ut.cost; // コスト先払い
+            updateUI();
+          }
+        }
       } else if (selectedTool) {
         placeUnit(selectedTool, tx, ty);
       }
@@ -1555,6 +1784,37 @@
 
     canvas.addEventListener('touchmove', () => {
       clearTimeout(touchTimeout);
+    });
+
+    // Escキーでキャンセル
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (pendingUnit) {
+          cancelPendingUnit();
+        } else if (patrolDrawing) {
+          cancelPatrol();
+        }
+      }
+    });
+
+    // 向き指定UIのイベントリスナー
+    document.querySelectorAll('.dir-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const dir = e.target.dataset.dir;
+        confirmDirection(dir);
+      });
+    });
+
+    // ガード経路確定UIのイベントリスナー
+    document.getElementById('btnConfirmPatrol').addEventListener('click', () => {
+      confirmPatrol();
+    });
+
+    document.getElementById('btnCancelPatrol').addEventListener('click', () => {
+      // コスト返還
+      cost += unitTypes['guard'].cost;
+      updateUI();
+      cancelPatrol();
     });
 
     // 開始
