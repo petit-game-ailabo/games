@@ -863,10 +863,12 @@
       document.getElementById('patrolConfirm').style.display = 'none';
     }
 
-    // ガード経路キャンセル
+    // ガード経路キャンセル（コスト返還）
     function cancelPatrol() {
       patrolDrawing = false;
       patrolPath = [];
+      cost += unitTypes['guard'].cost; // 先払いしたコストを返還
+      updateUI();
       document.getElementById('patrolConfirm').style.display = 'none';
     }
 
@@ -1141,34 +1143,36 @@
           waveInvasionCount++;
           updateUI();
           sounds.gameover.play();
-          // 1人でもゴールされたら即敗北
-          gameState = 'gameover';
+          // 1人でもゴールされたら即敗北（1.5秒ディレイ）
+          gameState = 'gameoverDelay';
           bgm.pause();
-          // ゲームオーバー画面
-          const modal = document.getElementById('modal');
-          modal.querySelector('h1').textContent = '侵入を防げなかった...';
-          // 難易度/マップ選択UIを隠す
-          modal.querySelectorAll('div, p').forEach(el => el.style.display = 'none');
-          // リトライボタン表示
-          let retryBtn = document.getElementById('btnRetryGO');
-          if (!retryBtn) {
-            retryBtn = document.createElement('button');
-            retryBtn.id = 'btnRetryGO';
-            retryBtn.textContent = '🔄 同じ面をリトライ';
-            retryBtn.style.cssText = 'margin-top:15px;padding:12px 24px;font-size:18px;background:#c00;color:#fff;border:none;border-radius:8px;cursor:pointer;';
-            modal.appendChild(retryBtn);
-          }
-          retryBtn.style.display = 'block';
-          retryBtn.onclick = () => {
-            hideModal();
-            // UIを復元
-            modal.querySelectorAll('div, p').forEach(el => el.style.display = '');
-            retryBtn.style.display = 'none';
-            gameState = 'setup';
-            initWave(currentWave);
-            updateUI();
-          };
-          modal.style.display = 'flex';
+          setTimeout(() => {
+            if (gameState === 'gameoverDelay') {
+              gameState = 'gameover';
+              // ゲームオーバー画面
+              const modal = document.getElementById('modal');
+              modal.querySelector('h1').textContent = '侵入を防げなかった...';
+              modal.querySelectorAll('div, p').forEach(el => el.style.display = 'none');
+              let retryBtn = document.getElementById('btnRetryGO');
+              if (!retryBtn) {
+                retryBtn = document.createElement('button');
+                retryBtn.id = 'btnRetryGO';
+                retryBtn.textContent = '🔄 同じ面をリトライ';
+                retryBtn.style.cssText = 'margin-top:15px;padding:12px 24px;font-size:18px;background:#c00;color:#fff;border:none;border-radius:8px;cursor:pointer;';
+                modal.appendChild(retryBtn);
+              }
+              retryBtn.style.display = 'block';
+              retryBtn.onclick = () => {
+                hideModal();
+                modal.querySelectorAll('div, p').forEach(el => el.style.display = '');
+                retryBtn.style.display = 'none';
+                gameState = 'setup';
+                initWave(currentWave);
+                updateUI();
+              };
+              modal.style.display = 'flex';
+            }
+          }, 1500);
           return;
         }
 
@@ -1439,6 +1443,22 @@
 
       // ガード経路描画中のパス表示
       if (patrolDrawing && patrolPath.length > 0) {
+        // 配置可能な隣接タイルをハイライト
+        const last = patrolPath[patrolPath.length - 1];
+        [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}].forEach(d => {
+          const nx = last.x + d.x, ny = last.y + d.y;
+          if (nx >= 0 && ny >= 0 && nx < MAP_SIZE && ny < MAP_SIZE && 
+              map[ny][nx] === 0 && !patrolPath.some(p => p.x === nx && p.y === ny)) {
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+            ctx.fillRect(nx * TILE_SIZE, ny * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+          }
+        });
+        // ガイドテキスト
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('🟢タップで経路追加 → 確定ボタンで配置', canvas.width / 2, 20);
+        
         ctx.strokeStyle = '#f00';
         ctx.lineWidth = 3;
         ctx.setLineDash([6, 6]);
@@ -1582,12 +1602,20 @@
           const aliveNinjas = ninjas.filter(n => n.state === 'move');
           const reachedNinjas = ninjas.filter(n => n.state === 'reached');
           if (aliveNinjas.length === 0 && ninjas.length > 0 && reachedNinjas.length === 0) {
-            // 全忍者捕獲！ → クリア
-            gameState = 'result';
-            sounds.clear.play();
-            showResult('侵入者発見！ 全員捕獲！');
+            // 全忍者捕獲！ → 1.5秒待ってからリザルト
+            gameState = 'waveEndDelay';
+            setTimeout(() => {
+              if (gameState === 'waveEndDelay') {
+                gameState = 'result';
+                sounds.clear.play();
+                showResult('侵入者発見！ 全員捕獲！');
+              }
+            }, 1500);
           }
         }
+      } else if (gameState === 'waveEndDelay') {
+        // Wave終了待機中（パーティクル更新+描画継続）
+        updateParticles(dt);
       } else if (gameState === 'result') {
         // リザルト画面表示（パーティクル更新は継続）
         updateParticles(dt);
