@@ -125,7 +125,7 @@
   
   <div id="ui">
     <div>Wave: <span id="wave">0</span>/6</div>
-    <div>ライフ: <span id="life">5</span></div>
+    <!-- ライフ不要: 1人ゴール=即敗北 -->
     <div>コスト: <span id="cost">0</span></div>
     <div>捕獲: <span id="caught">0</span></div>
     <div id="tutorialText" style="margin-top: 10px; font-size: 12px; color: #ff0; max-width: 200px; display: none;"></div>
@@ -491,6 +491,8 @@
       const config = waveConfigs[waveNum];
       MAP_SIZE = config.size;
       treasurePos = config.treasure;
+      ninjas = []; // 前のWaveの忍者をクリア
+      particles = []; // パーティクルもクリア
       
       // マップ生成（カスタムマップタイプ or デフォルト）
       if (waveNum > 0 && mapType !== 'default') {
@@ -877,7 +879,7 @@
             frame: 0,
             frameTime: 0,
             moveTime: 0,
-            moveDuration: 0.5,
+            moveDuration: 0.3,
             ai: aiLevel,
             state: 'move',
             path: [],
@@ -919,7 +921,7 @@
             frame: 0,
             frameTime: 0,
             moveTime: 0,
-            moveDuration: 0.5,
+            moveDuration: 0.3,
             ai: aiLevel,
             state: 'move',
             path: [],
@@ -960,7 +962,16 @@
           // 1人でもゴールされたら即敗北
           gameState = 'gameover';
           bgm.pause();
-          showModal('侵入を防げなかった...');
+          showModal('侵入を防げなかった...<br><button id="btnRetry" style="margin-top:15px;padding:10px 20px;font-size:18px;background:#c00;color:#fff;border:none;border-radius:5px;cursor:pointer;">🔄 同じ面をリトライ</button>');
+          setTimeout(()=>{
+            const btn=document.getElementById('btnRetry');
+            if(btn) btn.onclick=()=>{
+              hideModal();
+              gameState='setup';
+              initWave(currentWave);
+              updateUI();
+            };
+          },100);
           return;
         }
 
@@ -1024,21 +1035,31 @@
           }
         } else if (ninja.ai === 'smart') {
           // BFS経路探索（視界コストつき重み付き探索）
-          // 経路を毎回計算（視界は動くため）
           const path = findPathBFS(ninja.tx, ninja.ty, treasurePos.x, treasurePos.y, ninja.routePreference);
           if (path && path.length > 0) {
             const next = path[0];
-            nextX = next.x;
-            nextY = next.y;
-            // 方向設定
-            const ddx = nextX - ninja.tx;
-            const ddy = nextY - ninja.ty;
-            if (ddy < 0) ninja.dir = 3;
-            else if (ddy > 0) ninja.dir = 0;
-            else if (ddx < 0) ninja.dir = 1;
-            else if (ddx > 0) ninja.dir = 2;
+            // 次のタイルが視界内なら待機（隙を狙う）
+            const testPos = {x: next.x+0.5, y: next.y+0.5};
+            let inVision = false;
+            for (const u of units) {
+              if (isNinjaInVision(u, testPos)) { inVision = true; break; }
+            }
+            if (inVision) {
+              // 待機：移動しない（その場にとどまる）
+              nextX = ninja.tx;
+              nextY = ninja.ty;
+            } else {
+              nextX = next.x;
+              nextY = next.y;
+              const ddx = nextX - ninja.tx;
+              const ddy = nextY - ninja.ty;
+              if (ddy < 0) ninja.dir = 3;
+              else if (ddy > 0) ninja.dir = 0;
+              else if (ddx < 0) ninja.dir = 1;
+              else if (ddx > 0) ninja.dir = 2;
+            }
           } else {
-            // 経路なし → 降参（その場で消える）
+            // 経路なし → 降参
             ninja.state = 'surrender';
           }
         }
