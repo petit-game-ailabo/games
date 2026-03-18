@@ -172,21 +172,6 @@
     <button id="btnNextWave">次の Wave へ</button>
   </div>
 
-  <!-- 向き指定UI -->
-  <div id="directionPicker" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:20; background:rgba(0,0,0,0.9); padding:30px; border-radius:15px; border:3px solid #08f;">
-    <div style="text-align:center; margin-bottom:10px;">
-      <button class="dir-btn" data-dir="up" style="width:60px; height:60px; font-size:32px; background:#444; border:2px solid #666; border-radius:10px; cursor:pointer; color:#fff;">⬆️</button>
-    </div>
-    <div style="display:flex; gap:20px; justify-content:center; margin-bottom:10px;">
-      <button class="dir-btn" data-dir="left" style="width:60px; height:60px; font-size:32px; background:#444; border:2px solid #666; border-radius:10px; cursor:pointer; color:#fff;">⬅️</button>
-      <button class="dir-btn" data-dir="right" style="width:60px; height:60px; font-size:32px; background:#444; border:2px solid #666; border-radius:10px; cursor:pointer; color:#fff;">➡️</button>
-    </div>
-    <div style="text-align:center; margin-bottom:15px;">
-      <button class="dir-btn" data-dir="down" style="width:60px; height:60px; font-size:32px; background:#444; border:2px solid #666; border-radius:10px; cursor:pointer; color:#fff;">⬇️</button>
-    </div>
-    <p id="directionPickerText" style="color:#fff; text-align:center; margin:0; font-size:16px; font-weight:bold;">向きを選択</p>
-  </div>
-
   <!-- ガード経路確定UI -->
   <div id="patrolConfirm" style="display:none; position:fixed; bottom:120px; left:50%; transform:translateX(-50%); z-index:20; background:rgba(0,0,0,0.9); padding:15px 25px; border-radius:10px; border:2px solid #0f0;">
     <p style="color:#fff; margin:0 0 10px 0; text-align:center; font-size:14px;">経路を確定しますか？</p>
@@ -383,10 +368,6 @@
     let difficulty = 'normal'; // easy, normal, hard
     let mapType = 'default'; // default, cross, donut, maze, random
     
-    // 向き指定用
-    let pendingUnit = null; // 仮配置ユニット（カメラ/ライト）
-    let pendingUnitType = null;
-    
     // ガード経路指定用
     let patrolDrawing = false; // 経路描画モード
     let patrolPath = []; // タップした座標リスト
@@ -525,11 +506,8 @@
       particles = []; // パーティクルもクリア
       
       // UI状態をリセット
-      pendingUnit = null;
-      pendingUnitType = null;
       patrolDrawing = false;
       patrolPath = [];
-      hideDirectionPicker();
       document.getElementById('patrolConfirm').style.display = 'none';
       
       // マップ生成（カスタムマップタイプ or デフォルト）
@@ -747,57 +725,7 @@
       return true; // 到達不能 → 降参
     }
 
-    // 向き指定UI表示
-    function showDirectionPicker(unitType) {
-      const picker = document.getElementById('directionPicker');
-      const text = document.getElementById('directionPickerText');
-      if (unitType === 'camera') {
-        text.textContent = 'カメラの向きを選択';
-      } else if (unitType === 'light') {
-        text.textContent = 'ライトの初期向きを選択';
-      }
-      picker.style.display = 'block';
-    }
 
-    function hideDirectionPicker() {
-      document.getElementById('directionPicker').style.display = 'none';
-    }
-
-    function confirmDirection(dir) {
-      if (!pendingUnit) return;
-      
-      // 向きを設定
-      const angleMap = {
-        up: -90,
-        down: 90,
-        left: 180,
-        right: 0
-      };
-      pendingUnit.angle = angleMap[dir];
-      
-      // unitsに追加
-      units.push(pendingUnit);
-      sounds.coin.play();
-      
-      // クリーンアップ
-      pendingUnit = null;
-      pendingUnitType = null;
-      hideDirectionPicker();
-    }
-
-    function cancelPendingUnit() {
-      if (!pendingUnit) return;
-      
-      // コスト返還
-      const ut = unitTypes[pendingUnitType];
-      cost += ut.cost;
-      updateUI();
-      
-      // クリーンアップ
-      pendingUnit = null;
-      pendingUnitType = null;
-      hideDirectionPicker();
-    }
 
     // ガード経路描画開始
     function startPatrolDrawing(tx, ty) {
@@ -899,7 +827,7 @@
         let diff = angle - (unit.angle || 0);
         while (diff > 180) diff -= 360;
         while (diff < -180) diff += 360;
-        const fov = unit.type === 'light' ? 22.5 : 60; // ライトは狭いビーム(±22.5°)、ガード/カメラは60度
+        const fov = unit.type === 'light' ? 22.5 : 30; // ±fov度 = 描画FOV/2。ライト±22.5(45°)、カメラ/ガード±30(60°)
         if (Math.abs(diff) > fov) return false;
       }
 
@@ -914,33 +842,21 @@
       if (ut.onWall && map[ty][tx] !== WALL) return false;
       if (!ut.onWall && map[ty][tx] !== FLOOR) return false;
 
-      // カメラ/ライトの場合は仮配置 → 向き指定UIを表示
-      if (type === 'camera' || type === 'light') {
-        pendingUnit = {
-          type,
-          x: tx + 0.5,
-          y: ty + 0.5,
-          tx, ty,
-          angle: 0,
-          range: ut.range || 0
-        };
-        pendingUnitType = type;
-        cost -= ut.cost; // コスト先払い
-        updateUI();
-        showDirectionPicker(type);
-        return true;
-      }
-
       const unit = {
         type,
         x: tx + 0.5,
         y: ty + 0.5,
         tx, ty,
-        angle: 0,
+        angle: 90, // デフォルト向き: 下=90度
         range: ut.range || 0,
         isTrap: ut.isTrap || false,
         triggered: false
       };
+
+      // カメラの場合は初期角度も設定（首振りの基準角度）
+      if (type === 'camera') {
+        unit.initialAngle = 90;
+      }
 
       // ガードの場合は手動経路を使用
       if (type === 'guard') {
@@ -1420,27 +1336,6 @@
         }
       }
 
-      // 仮配置ユニット描画（pendingUnit）
-      if (pendingUnit) {
-        const sx = pendingUnit.x * TILE_SIZE;
-        const sy = pendingUnit.y * TILE_SIZE;
-        ctx.globalAlpha = 0.6;
-        if (pendingUnit.type === 'camera') {
-          ctx.fillStyle = '#888';
-          ctx.fillRect(sx - 8, sy - 8, 16, 16);
-          ctx.fillStyle = '#f00';
-          ctx.beginPath();
-          ctx.arc(sx, sy, 6, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (pendingUnit.type === 'light') {
-          ctx.fillStyle = '#ff0';
-          ctx.beginPath();
-          ctx.arc(sx, sy, 12, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
-
       // ガード経路描画中のパス表示
       if (patrolDrawing && patrolPath.length > 0) {
         // 配置可能な隣接タイルをハイライト
@@ -1783,14 +1678,6 @@
       const tx = Math.floor((clientX - rect.left) * scaleX / TILE_SIZE);
       const ty = Math.floor((clientY - rect.top) * scaleY / TILE_SIZE);
 
-      // pendingUnitがある場合、マップ外クリックでキャンセル
-      if (pendingUnit) {
-        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE) {
-          cancelPendingUnit();
-        }
-        return;
-      }
-
       // ガード経路描画中
       if (patrolDrawing) {
         if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE) {
@@ -1803,6 +1690,19 @@
           // 確定UIを表示
           document.getElementById('patrolConfirm').style.display = 'block';
         }
+        return;
+      }
+
+      // 既存ユニットのタップ判定（カメラ/ライトの向き回転）
+      const existingUnit = units.find(u => u.tx === tx && u.ty === ty);
+      if (existingUnit && (existingUnit.type === 'camera' || existingUnit.type === 'light')) {
+        // タップで90度回転
+        existingUnit.angle = ((existingUnit.angle || 0) + 90) % 360;
+        if (existingUnit.type === 'camera') {
+          existingUnit.initialAngle = existingUnit.angle;
+        }
+        // SE再生
+        sounds.coin.play();
         return;
       }
 
@@ -1835,20 +1735,10 @@
     // Escキーでキャンセル
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        if (pendingUnit) {
-          cancelPendingUnit();
-        } else if (patrolDrawing) {
+        if (patrolDrawing) {
           cancelPatrol();
         }
       }
-    });
-
-    // 向き指定UIのイベントリスナー
-    document.querySelectorAll('.dir-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const dir = e.target.dataset.dir;
-        confirmDirection(dir);
-      });
     });
 
     // ガード経路確定UIのイベントリスナー
