@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Shadow Guard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background: #111;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      touch-action: none;
+    }
+    canvas {
+      border: 2px solid #333;
+      display: block;
+      max-width: 100vw;
+      max-height: 70vh;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #ui {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 10;
+    }
+    #palette {
+      position: fixed;
+      bottom: 5px;
+      left: 5px;
+      right: 5px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      justify-content: center;
+      background: rgba(0,0,0,0.9);
+      padding: 8px;
+      border-radius: 10px;
+      z-index: 10;
+    }
+    .btn {
+      background: #444;
+      color: #fff;
+      border: 2px solid #666;
+      padding: 6px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      min-width: 55px;
+      text-align: center;
+      user-select: none;
+    }
+    .btn:hover { background: #555; }
+    .btn.selected { background: #08f; border-color: #0af; }
+    .btn.disabled { opacity: 0.5; cursor: not-allowed; }
+    #modal {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    #modal h1 { font-size: 48px; margin-bottom: 20px; }
+    #modal p { font-size: 20px; margin: 10px 0; }
+    #modal button { 
+      margin-top: 20px; 
+      padding: 15px 30px; 
+      font-size: 18px;
+      background: #08f;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #modal button:hover { background: #0af; }
+    #result {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      color: #fff;
+      font-family: sans-serif;
+    }
+    #result h1 { font-size: 36px; margin-bottom: 20px; color: #0f0; }
+    #result p { font-size: 20px; margin: 5px 0; }
+    #result button {
+      margin-top: 20px;
+      padding: 15px 30px;
+      font-size: 18px;
+      background: #08f;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #result button:hover { background: #0af; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" width="672" height="672"></canvas>
+  
+  <div id="ui">
+    <div>Wave: <span id="wave">0</span>/6</div>
+    <div id="tutorialText" style="margin-top: 10px; font-size: 12px; color: #ff0; max-width: 200px; display: none;"></div>
+  </div>
+
+  <div id="palette">
+    <span id="funds" style="color:#ff0;font-size:14px;padding:6px;">💰 <span id="cost">0</span></span>
+    <button class="btn" id="btnGuard">Guard<br><small>💰2</small></button>
+    <button class="btn" id="btnLight">Spotlight<br><small>💰3</small></button>
+    <button class="btn" id="btnCamera">Camera<br><small>💰5</small></button>
+    <button class="btn" id="btnRemove">Remove</button>
+    <button class="btn" id="btnStart" style="background:#0a0;border-color:#0f0;">Start!</button>
+  </div>
+
+  <div id="modal">
+    <h1>Shadow Guard</h1>
+    <p>Place guards and cameras to catch the ninjas!</p>
+    <button id="btnPlay" style="padding:12px 30px;font-size:20px;background:#08f;color:#fff;border:none;border-radius:8px;cursor:pointer;">🎮 Start Game</button>
+  </div>
+
+  <div id="result">
+    <h1>All ninjas caught!</h1>
+    <button id="btnNextWave">Next Wave</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    // ゲーム定数
+    const TILE_SIZE = 48;
+    const WALL = 1, FLOOR = 0, TREASURE = 2;
+
+    // Wave設定
+    const waveConfigs = [
+      { // Wave 0 - チュートリアル 8x8
+        size: 8,
+        treasure: {x: 4, y: 4},
+        ninjaCount: 1,
+        totalCost: 8,
+        isTutorial: true,
+        tutorialText: '📷 Place cameras on walls to catch ninjas!',
+        preplacedUnits: [
+          {type: 'camera', x: 6, y: 1} // 右上の壁に配置済み
+        ],
+        map: [
+          [1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,0,1,1],
+          [1,0,1,1,1,0,0,1],
+          [1,0,0,0,0,0,1,1],
+          [1,1,1,0,2,0,0,1],
+          [1,0,0,0,1,1,0,1],
+          [1,0,1,0,0,0,0,1],
+          [1,1,1,1,1,1,1,1]
+        ]
+      },
+      { // Wave 1 - 10x10
+        size: 10,
+        treasure: {x: 5, y: 5},
+        ninjaCount: 1,
+        totalCost: 12,
+        map: [
+          [1,1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,1,0,0,0,0,1],
+          [1,0,1,0,1,0,1,1,0,1],
+          [1,0,1,0,0,0,0,0,0,1],
+          [1,0,1,1,1,0,1,1,0,1],
+          [1,0,0,0,0,2,0,1,0,1],
+          [1,0,1,1,0,1,0,1,0,1],
+          [1,0,0,0,0,0,0,0,0,1],
+          [1,0,1,0,1,1,1,0,0,1],
+          [1,1,1,1,1,1,1,1,1,1]
+        ]
+      },
+      { // Wave 2 - 12x12
+        size: 12,
+        treasure: {x: 6, y: 6},
+        ninjaCount: 2,
+        totalCost: 18,
+        map: [
+          [1,1,1,1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,1,0,0,0,0,0,1],
+          [1,0,1,1,0,1,0,1,1,1,0,1],
+          [1,0,1,0,0,0,0,0,0,0,0,1],
+          [1,0,1,0,1,1,1,1,0,1,1,1],
+          [1,0,0,0,1,0,0,1,0,0,0,1],
+          [1,1,1,0,1,0,2,0,0,1,0,1],
+          [1,0,0,0,0,0,1,1,0,1,0,1],
+          [1,0,1,1,1,0,0,0,0,1,0,1],
+          [1,0,0,0,0,0,1,1,0,0,0,1],
+          [1,0,1,0,1,0,0,0,0,1,0,1],
+          [1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
+      },
+      { // Wave 3 - 14x14
+        size: 14,
+        treasure: {x: 7, y: 7},
+        ninjaCount: 3,
+        totalCost: 24,
+        map: [
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,0,0,0,0,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,1,1,0,1,1,1],
+          [1,0,0,0,0,0,0,2,0,0,0,0,0,1],
+          [1,1,1,1,0,1,1,0,1,1,0,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,1,0,1],
+          [1,0,1,1,0,0,0,0,0,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,1,1,0,1,1,0,1],
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
+      },
+      { // Wave 4 - 16x16（複数ゴール: 中央付近に2-3個）
+        size: 16,
+        treasure: {x: 8, y: 8},
+        ninjaCount: 4,
+        totalCost: 35,
+        map: [
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,2,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,0,0,2,2,0,0,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,1,1,0,1,1,0,1],
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
+      },
+      { // Wave 5 - 18x18（複数ゴール: 3-4個を分散配置）
+        size: 18,
+        treasure: {x: 9, y: 9},
+        ninjaCount: 6,
+        totalCost: 50,
+        map: [
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,2,1,1,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,1,1,2,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,0,0,1,1,0,1,1,0,1],
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
+      },
+      { // Wave 6 - 必敗ステージ（10体が四方から、複数ゴール: 4-5個広範囲分散）
+        size: 18,
+        treasure: {x: 9, y: 9},
+        ninjaCount: 10,
+        totalCost: 55,
+        isUnwinnable: true,
+        spawnPattern: 'surround', // 四方から同時に
+        map: [
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,0,0,1,1,1,1,0,0,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,1],
+          [1,0,0,1,1,0,1,1,0,0,1,1,0,1,1,0,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,0,0,0,1,1,0,0,0,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,0,0,0,1,1,0,0,0,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,1],
+          [1,0,1,1,0,1,1,0,0,0,0,1,1,0,1,1,0,1],
+          [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+          [1,0,0,1,1,0,1,1,0,0,1,1,0,1,1,0,0,1],
+          [1,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,1],
+          [1,0,1,1,0,0,0,1,1,1,1,0,0,0,1,1,0,1],
+          [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ]
+      }
+    ];
+
+    // ゲーム状態
+    let gameState = 'title'; // title, setup, wave, gameover, clear, result
+    let currentWave = 0; // チュートリアルから開始
+    let cost = 0;
+    let selectedTool = null;
+    let units = []; // 配置したユニット
+    let ninjas = []; // 侵入忍者
+    let treasurePositions = []; // 複数の宝の位置（配列に変更）
+    let map = [];
+    let originalMap = []; // 初期マップ保持（壁撤去防止用）
+    let MAP_SIZE = 14;
+    let particles = []; // パーティクルエフェクト用
+    
+    // ガード配置用（3点選択方式: 始点→中間点→終点）
+    let guardPlacingState = 'none'; // 'none' | 'point1' | 'point2' | 'point3'
+    let guardPoints = []; // [{x,y}, {x,y}, {x,y}]
+    
+    // リトライ用スナップショット
+    let savedUnits = [];
+    let savedCost = 0;
+
+    // アセット読み込み
+    const imgWalk = new Image();
+    imgWalk.src = 'assets/ninja_walk.png';
+    const imgDead = new Image();
+    imgDead.src = 'assets/ninja_dead.png';
+
+    const sounds = {
+      coin: new Audio('assets/se_coin.wav'),
+      get: new Audio('assets/se_get.wav'),
+      clear: new Audio('assets/se_clear.wav'),
+      gameover: new Audio('assets/se_gameover.wav'),
+      step: new Audio('assets/se_step.wav')
+    };
+    sounds.step.volume = 0.3;
+
+    // BGM
+    const bgm = new Audio('assets/bgm_action2.ogg');
+    bgm.loop = true;
+    bgm.volume = 0.3;
+
+    // ユニット定義
+    const unitTypes = {
+      camera: { cost: 5, name: 'Camera', range: 5, angle: 60, rotSpeed: 30, onWall: true },
+      guard: { cost: 2, name: 'Guard', range: 4, patrol: 2, onWall: false },
+      light: { cost: 3, name: 'Spotlight', range: 4, rot360: true, angle: 60, rotSpeed: 40, onWall: false }
+    };
+
+
+
+    // Wave初期化
+    function initWave(waveNum) {
+      const config = waveConfigs[waveNum];
+      MAP_SIZE = config.size;
+      treasurePositions = []; // 宝の位置をリセット
+      ninjas = []; // 前のWaveの忍者をクリア
+      particles = []; // パーティクルもクリア
+      
+      // UI状態をリセット
+      guardPlacingState = 'none';
+      guardPoints = [];
+      
+      // デフォルトマップをコピー
+      map = config.map.map(row => [...row]);
+      
+      // マップからTREASUREタイルの実際の位置を全て検出（複数対応）
+      for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+          if (map[y][x] === TREASURE) {
+            treasurePositions.push({x, y});
+          }
+        }
+      }
+      
+      // 初期マップを保存（壁撤去判定用）
+      originalMap = map.map(row => [...row]);
+      
+      // キャンバスサイズ変更
+      canvas.width = MAP_SIZE * TILE_SIZE;
+      canvas.height = MAP_SIZE * TILE_SIZE;
+      
+      // コスト設定（各Waveごとに固定コスト）
+      cost = config.totalCost || config.startCost || 10;
+      
+      // ユニットリセット（マップが変わるため）
+      units = [];
+      
+      // プリセットユニット配置（チュートリアル用）
+      if (config.preplacedUnits) {
+        for (const preset of config.preplacedUnits) {
+          const ut = unitTypes[preset.type];
+          units.push({
+            type: preset.type,
+            x: preset.x + 0.5,
+            y: preset.y + 0.5,
+            tx: preset.x,
+            ty: preset.y,
+            angle: 0,
+            range: ut.range,
+            patrolDir: 1,
+            patrolAxis: 'x',
+            patrolStart: preset.x
+          });
+        }
+      }
+      
+      // チュートリアルテキスト表示
+      const tutorialEl = document.getElementById('tutorialText');
+      if (config.tutorialText) {
+        tutorialEl.innerHTML = config.tutorialText;
+        tutorialEl.style.display = 'block';
+      } else {
+        tutorialEl.style.display = 'none';
+      }
+      
+      updateUI();
+    }
+
+    // UI更新
+    function updateUI() {
+      document.getElementById('wave').textContent = currentWave;
+      document.getElementById('cost').textContent = cost;
+    }
+
+    // レイキャスト（壁判定付き視界コーン）
+    function castVisionCone(x, y, angle, range, fov = 60, skipSelf = false) {
+      const selfTx = Math.floor(x);
+      const selfTy = Math.floor(y);
+      const points = [];
+      const rayCount = 30;
+      const startAngle = angle - fov / 2;
+      // 最初の点（コーンの頂点）
+      if (skipSelf) {
+        // ライト: 自タイル境界から開始（弧状に切る）
+        const a0 = (startAngle) * Math.PI / 180;
+        // 自タイルの端までの距離を概算（最大1タイル）
+        points.push({x: x + Math.cos(a0) * 1, y: y + Math.sin(a0) * 1});
+      } else {
+        points.push({x, y});
+      }
+      for (let i = 0; i <= rayCount; i++) {
+        const a = (startAngle + (fov / rayCount) * i) * Math.PI / 180;
+        let rx = x, ry = y;
+        let started = false;
+        for (let d = 0; d <= range; d += 0.2) {
+          rx = x + Math.cos(a) * d;
+          ry = y + Math.sin(a) * d;
+          const tx = Math.floor(rx);
+          const ty = Math.floor(ry);
+          // 自分自身のタイルはスキップ（壁上カメラ対応）
+          if (tx === selfTx && ty === selfTy) {
+            if (skipSelf) continue; // ライト: 自タイル内は描画しない
+            else continue; // カメラ: 壁スキップ
+          }
+          if (!started && skipSelf) {
+            // ライト: 自タイルを出た最初の点を記録（弧の内側）
+            started = true;
+          }
+          if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE || map[ty][tx] === WALL) {
+            break;
+          }
+        }
+        points.push({x: rx, y: ry});
+      }
+      // ライト: 最後のレイの自タイル境界点で閉じる
+      if (skipSelf) {
+        const aLast = (startAngle + fov) * Math.PI / 180;
+        points.push({x: x + Math.cos(aLast) * 1, y: y + Math.sin(aLast) * 1});
+      }
+      return points;
+    }
+
+    // 忍者が視界内にいるか判定
+    // BFS経路探索（視界を避けつつ最短経路を見つける）
+    function findPathBFS(sx, sy, routePreference = 0) {
+      // 最も近い宝を目標に設定
+      let closestTreasure = null;
+      let minDist = Infinity;
+      for (const t of treasurePositions) {
+        const d = Math.abs(sx - t.x) + Math.abs(sy - t.y);
+        if (d < minDist) {
+          minDist = d;
+          closestTreasure = t;
+        }
+      }
+      
+      if (!closestTreasure) return null; // 宝が存在しない
+      
+      const gx = closestTreasure.x;
+      const gy = closestTreasure.y;
+      
+      const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+      // ダイクストラ的に：視界内のタイルはコスト高、それ以外はコスト1
+      const cost = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(Infinity));
+      const prev = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(null));
+      cost[sy][sx] = 0;
+      
+      // 優先度つきキュー（簡易：配列ソート）
+      const queue = [{x:sx, y:sy, c:0}];
+      
+      while (queue.length > 0) {
+        queue.sort((a,b) => a.c - b.c);
+        const cur = queue.shift();
+        if (cur.x === gx && cur.y === gy) break;
+        if (cur.c > cost[cur.y][cur.x]) continue;
+        
+        for (const d of dirs) {
+          const nx = cur.x + d.x;
+          const ny = cur.y + d.y;
+          if (nx < 0 || ny < 0 || nx >= MAP_SIZE || ny >= MAP_SIZE) continue;
+          if (map[ny][nx] !== FLOOR && map[ny][nx] !== TREASURE) continue;
+          
+          // 視界内なら高コスト、そうでなければ1
+          let tileCost = 1;
+          const testPos = {x: nx+0.5, y: ny+0.5};
+          
+          // 視界チェック
+          for (const u of units) {
+            if (isNinjaInVision(u, testPos)) { tileCost = 50; break; }
+          }
+          
+          // ルート分散：他の忍者の経路と重複を避ける（軽いペナルティ）
+          const otherNinjasOnTile = ninjas.filter(n => 
+            n.state === 'move' && Math.floor(n.x) === nx && Math.floor(n.y) === ny
+          ).length;
+          tileCost += otherNinjasOnTile * 2;
+          
+          // ルート選好によるバイアス（縦優先・横優先・バランス）
+          if (routePreference === 0 && d.y !== 0) tileCost += 0.5; // 縦優先
+          if (routePreference === 1 && d.x !== 0) tileCost += 0.5; // 横優先
+          // routePreference === 2 はバイアスなし
+          
+          const nc = cur.c + tileCost;
+          if (nc < cost[ny][nx]) {
+            cost[ny][nx] = nc;
+            prev[ny][nx] = {x: cur.x, y: cur.y};
+            queue.push({x:nx, y:ny, c:nc});
+          }
+        }
+      }
+      
+      // 経路復元
+      if (cost[gy][gx] === Infinity) return null; // 到達不能
+      
+      const path = [];
+      let cx = gx, cy = gy;
+      while (cx !== sx || cy !== sy) {
+        path.unshift({x:cx, y:cy});
+        const p = prev[cy][cx];
+        if (!p) return null;
+        cx = p.x;
+        cy = p.y;
+      }
+      return path;
+    }
+    
+    // 全経路が塞がっているかチェック（降参判定）（複数ゴール対応）
+    function isAllPathsBlocked(sx, sy) {
+      // BFSで壁と視界を無視せず、どれか1つのゴールに到達できるか
+      const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+      const visited = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(false));
+      const queue = [{x:sx, y:sy}];
+      visited[sy][sx] = true;
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        // どれか1つの宝に到達できればOK
+        if (treasurePositions.some(t => cur.x === t.x && cur.y === t.y)) return false; // 到達可能
+        for (const d of dirs) {
+          const nx = cur.x + d.x;
+          const ny = cur.y + d.y;
+          if (nx < 0 || ny < 0 || nx >= MAP_SIZE || ny >= MAP_SIZE) continue;
+          if (visited[ny][nx]) continue;
+          if (map[ny][nx] !== FLOOR && map[ny][nx] !== TREASURE) continue;
+          // 視界内は通れないとして判定
+          const testPos = {x: nx+0.5, y: ny+0.5};
+          let blocked = false;
+          for (const u of units) {
+            if (isNinjaInVision(u, testPos)) { blocked = true; break; }
+          }
+          if (blocked) continue;
+          visited[ny][nx] = true;
+          queue.push({x:nx, y:ny});
+        }
+      }
+      return true; // 全ゴールに到達不能 → 降参
+    }
+
+
+
+    // BFSでガードの経路を自動生成（始点→終点）
+    function findGuardPath(sx, sy, ex, ey) {
+      const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+      const visited = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(false));
+      const prev = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(null));
+      const queue = [{x:sx, y:sy}];
+      visited[sy][sx] = true;
+      
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        if (cur.x === ex && cur.y === ey) break;
+        
+        for (const d of dirs) {
+          const nx = cur.x + d.x;
+          const ny = cur.y + d.y;
+          if (nx < 0 || ny < 0 || nx >= MAP_SIZE || ny >= MAP_SIZE) continue;
+          if (visited[ny][nx]) continue;
+          if (map[ny][nx] !== FLOOR) continue; // 床タイルのみ通過
+          
+          visited[ny][nx] = true;
+          prev[ny][nx] = {x: cur.x, y: cur.y};
+          queue.push({x:nx, y:ny});
+        }
+      }
+      
+      // 到達不能チェック
+      if (!visited[ey][ex]) return null;
+      
+      // 経路復元
+      const path = [];
+      let cx = ex, cy = ey;
+      while (cx !== sx || cy !== sy) {
+        path.unshift({x:cx, y:cy});
+        const p = prev[cy][cx];
+        if (!p) return null;
+        cx = p.x;
+        cy = p.y;
+      }
+      path.unshift({x:sx, y:sy}); // 始点を先頭に追加
+      
+      return path;
+    }
+
+    function isNinjaInVision(unit, ninja) {
+      const dx = ninja.x - unit.x;
+      const dy = ninja.y - unit.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist > unit.range) return false;
+      // ライトは同じタイル内は判定なし（根本の死角）
+      if (unit.type === 'light') {
+        const ninTx = Math.floor(ninja.x);
+        const ninTy = Math.floor(ninja.y);
+        const unitTx = Math.floor(unit.x);
+        const unitTy = Math.floor(unit.y);
+        if (ninTx === unitTx && ninTy === unitTy) return false;
+      }
+
+      const selfTx = Math.floor(unit.x);
+      const selfTy = Math.floor(unit.y);
+
+      // レイキャストで壁チェック（自分のタイルはスキップ）
+      const steps = Math.ceil(dist * 5);
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const cx = unit.x + dx * t;
+        const cy = unit.y + dy * t;
+        const tx = Math.floor(cx);
+        const ty = Math.floor(cy);
+        if (tx === selfTx && ty === selfTy) continue;
+        if (map[ty] && map[ty][tx] === WALL) return false;
+      }
+
+      // 角度チェック（カメラ・ライト・ガード）
+      if (unit.type === 'camera' || unit.type === 'light' || unit.type === 'guard') {
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        let diff = angle - (unit.angle || 0);
+        while (diff > 180) diff -= 360;
+        while (diff < -180) diff += 360;
+        const fov = unit.type === 'light' ? 30 : 30; // ±30度（合計60度）に統一
+        if (Math.abs(diff) > fov) return false;
+      }
+
+      return true;
+    }
+
+    // 配置
+    function placeUnit(type, tx, ty, manualPath = null) {
+      const ut = unitTypes[type];
+      if (cost < ut.cost) return false;
+      
+      if (ut.onWall && map[ty][tx] !== WALL) return false;
+      if (!ut.onWall && map[ty][tx] !== FLOOR) return false;
+
+      const unit = {
+        type,
+        x: tx + 0.5,
+        y: ty + 0.5,
+        tx, ty,
+        angle: 90, // デフォルト向き: 下=90度
+        range: ut.range || 0
+      };
+
+      // カメラの場合は初期角度も設定（首振りの基準角度）
+      if (type === 'camera') {
+        unit.initialAngle = 90;
+      }
+
+      // ガードの場合は手動経路を使用
+      if (type === 'guard') {
+        if (!manualPath || manualPath.length < 2) {
+          alert('Guard path required (minimum 2 tiles)');
+          return false;
+        }
+        unit.path = manualPath;
+        unit.pathIdx = 0;
+        unit.moveProgress = 0;
+        console.log(`Guard patrol path (${unit.path.length} tiles):`, unit.path);
+      } else {
+        // カメラやライト用の旧来のパラメータ
+        unit.patrolDir = Math.random() > 0.5 ? 1 : -1;
+        unit.patrolAxis = Math.random() > 0.5 ? 'x' : 'y';
+        unit.patrolStart = (Math.random() > 0.5 ? tx : ty);
+      }
+
+      units.push(unit);
+      cost -= ut.cost;
+      sounds.coin.play();
+      updateUI();
+      return true;
+    }
+
+    // 撤去
+    function removeUnit(tx, ty) {
+      // ユニットの撤去
+      const idx = units.findIndex(u => u.tx === tx && u.ty === ty);
+      if (idx >= 0) {
+        const u = units[idx];
+        cost += unitTypes[u.type].cost;
+        units.splice(idx, 1);
+        updateUI();
+        return;
+      }
+    }
+
+    // パーティクル生成（捕獲エフェクト用）
+    function spawnParticles(x, y, color = '#ff0') {
+      const count = 15;
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 / count) * i;
+        const speed = 2 + Math.random() * 3;
+        particles.push({
+          x: x * TILE_SIZE,
+          y: y * TILE_SIZE,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1.0,
+          color
+        });
+      }
+    }
+
+    // パーティクル更新
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * 60 * dt;
+        p.y += p.vy * 60 * dt;
+        p.life -= dt * 2;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    // 侵入口を自動検出（外周の床タイル）
+    function detectEntryPoints() {
+      const entryPoints = [];
+      // 上辺（y=1）
+      for (let x = 1; x < MAP_SIZE - 1; x++) {
+        if (map[1] && map[1][x] === FLOOR) {
+          entryPoints.push({x, y: 1});
+        }
+      }
+      // 下辺（y=MAP_SIZE-2）
+      for (let x = 1; x < MAP_SIZE - 1; x++) {
+        if (map[MAP_SIZE-2] && map[MAP_SIZE-2][x] === FLOOR) {
+          entryPoints.push({x, y: MAP_SIZE-2});
+        }
+      }
+      // 左辺（x=1）
+      for (let y = 1; y < MAP_SIZE - 1; y++) {
+        if (map[y] && map[y][1] === FLOOR) {
+          entryPoints.push({x: 1, y});
+        }
+      }
+      // 右辺（x=MAP_SIZE-2）
+      for (let y = 1; y < MAP_SIZE - 1; y++) {
+        if (map[y] && map[y][MAP_SIZE-2] === FLOOR) {
+          entryPoints.push({x: MAP_SIZE-2, y});
+        }
+      }
+      return entryPoints;
+    }
+
+    // 忍者生成
+    function spawnNinjas(wave) {
+      ninjas = [];
+      const config = waveConfigs[wave];
+      let count = config.ninjaCount;
+      
+      const aiLevel = 'smart'; // 常に賢いAI
+      const spawnPattern = config.spawnPattern || 'random';
+      
+      // 侵入口を検出
+      const allEntryPoints = detectEntryPoints();
+      
+      // 視界外の侵入口を優先
+      const visibleEntryPoints = allEntryPoints.filter(p => {
+        const testPos = {x: p.x + 0.5, y: p.y + 0.5};
+        for (const u of units) {
+          if (isNinjaInVision(u, testPos)) return true;
+        }
+        return false;
+      });
+      
+      // 視界外の侵入口があればそこを使用、なければ全侵入口から
+      const entryPoints = allEntryPoints.filter(p => !visibleEntryPoints.includes(p));
+      const useEntryPoints = entryPoints.length > 0 ? entryPoints : allEntryPoints;
+      
+      if (useEntryPoints.length === 0) {
+        console.warn('No entry points found! Using fallback spawn.');
+        // フォールバック: 外周の床タイルを強制的に探す
+        for (let i = 0; i < count; i++) {
+          ninjas.push({
+            x: 1.5,
+            y: 1.5,
+            tx: 1,
+            ty: 1,
+            dir: 0,
+            frame: 0,
+            frameTime: 0,
+            moveTime: 0,
+            moveDuration: 0.3,
+            ai: aiLevel,
+            state: 'move',
+            path: [],
+            age: 0,
+            routePreference: i % 3,
+            spawnAlpha: 0
+          });
+        }
+        return;
+      }
+      
+      if (spawnPattern === 'surround') {
+        // 四方からバランスよく配置（侵入口から）
+        for (let i = 0; i < count; i++) {
+          const entry = useEntryPoints[i % useEntryPoints.length];
+          ninjas.push({
+            x: entry.x + 0.5,
+            y: entry.y + 0.5,
+            tx: entry.x,
+            ty: entry.y,
+            dir: 0,
+            frame: 0,
+            frameTime: 0,
+            moveTime: 0,
+            moveDuration: 0.3,
+            ai: aiLevel,
+            state: 'move',
+            path: [],
+            age: 0,
+            routePreference: i % 3, // ルート分散用（3パターン）
+            spawnAlpha: 0 // フェードイン用
+          });
+        }
+      } else {
+        // ランダム配置（侵入口から）
+        for (let i = 0; i < count; i++) {
+          const entry = useEntryPoints[Math.floor(Math.random() * useEntryPoints.length)];
+          ninjas.push({
+            x: entry.x + 0.5,
+            y: entry.y + 0.5,
+            tx: entry.x,
+            ty: entry.y,
+            dir: 0,
+            frame: 0,
+            frameTime: 0,
+            moveTime: 0,
+            moveDuration: 0.3,
+            ai: aiLevel,
+            state: 'move',
+            path: [],
+            age: 0,
+            routePreference: i % 3, // ルート分散用（3パターン）
+            spawnAlpha: 0 // フェードイン用
+          });
+        }
+      }
+    }
+
+    // 忍者AI
+    function updateNinjaAI(ninja, dt) {
+      // フェードイン処理
+      if (ninja.spawnAlpha < 1) {
+        ninja.spawnAlpha = Math.min(1, ninja.spawnAlpha + dt * 2);
+      }
+
+      if (ninja.state === 'dead' || ninja.state === 'reached' || ninja.state === 'surrender') return;
+
+      // タイムアウトチェック（30秒）
+      ninja.age = (ninja.age || 0) + dt;
+      if (ninja.age > 30) {
+        ninja.state = 'dead';
+        return;
+      }
+
+      ninja.moveTime += dt;
+      if (ninja.moveTime >= ninja.moveDuration) {
+        ninja.moveTime = 0;
+
+        // 目標到達チェック（複数ゴール対応: どれか1つに到達したらゲームオーバー）
+        if (treasurePositions.some(t => ninja.tx === t.x && ninja.ty === t.y)) {
+          ninja.state = 'reached';
+          updateUI();
+          sounds.gameover.play();
+          // 1人でもゴールされたら即敗北（1.5秒ディレイ）
+          gameState = 'gameoverDelay';
+          bgm.pause();
+          setTimeout(() => {
+            if (gameState === 'gameoverDelay') {
+              gameState = 'gameover';
+              // ゲームオーバー画面
+              const modal = document.getElementById('modal');
+              modal.querySelector('h1').textContent = 'The ninja got through...';
+              modal.querySelector('p').style.display = 'none';
+              modal.querySelector('#btnPlay').style.display = 'none';
+              let retryBtn = document.getElementById('btnRetryGO');
+              if (!retryBtn) {
+                retryBtn = document.createElement('button');
+                retryBtn.id = 'btnRetryGO';
+                retryBtn.textContent = '🔄 Retry';
+                retryBtn.style.cssText = 'margin-top:15px;padding:12px 24px;font-size:18px;background:#c00;color:#fff;border:none;border-radius:8px;cursor:pointer;';
+                modal.appendChild(retryBtn);
+              }
+              retryBtn.style.display = 'block';
+              
+              // 「最初から」ボタン（目立たなく）
+              let restartBtn = document.getElementById('btnRestartGO');
+              if (!restartBtn) {
+                restartBtn = document.createElement('button');
+                restartBtn.id = 'btnRestartGO';
+                restartBtn.textContent = 'Start Over';
+                restartBtn.style.cssText = 'margin-top:30px;padding:8px 16px;font-size:13px;background:transparent;color:#888;border:1px solid #555;border-radius:5px;cursor:pointer;display:block;margin-left:auto;margin-right:auto;';
+                modal.appendChild(restartBtn);
+              }
+              restartBtn.style.display = 'block';
+              restartBtn.onclick = () => {
+                hideModal();
+                modal.querySelector('p').style.display = '';
+                modal.querySelector('#btnPlay').style.display = '';
+                retryBtn.style.display = 'none';
+                restartBtn.style.display = 'none';
+                location.reload();
+              };
+              
+              retryBtn.onclick = () => {
+                hideModal();
+                modal.querySelector('p').style.display = '';
+                modal.querySelector('#btnPlay').style.display = '';
+                retryBtn.style.display = 'none';
+                restartBtn.style.display = 'none';
+                
+                // スナップショットから復元
+                units = savedUnits.map(u => {
+                  const restored = {...u, path: u.path ? [...u.path] : null};
+                  // ガードの位置をパス開始地点にリセット
+                  if (restored.type === 'guard' && restored.path && restored.path.length > 0) {
+                    restored.x = restored.path[0].x + 0.5;
+                    restored.y = restored.path[0].y + 0.5;
+                    restored.tx = restored.path[0].x;
+                    restored.ty = restored.path[0].y;
+                    restored.pathIdx = 0;
+                    restored.moveProgress = 0;
+                  }
+                  return restored;
+                });
+                cost = savedCost;
+                ninjas = [];
+                particles = [];
+                gameState = 'setup';
+                guardPlacingState = 'none';
+                guardPoints = [];
+                updateUI();
+              };
+              modal.style.display = 'flex';
+            }
+          }, 1500);
+          return;
+        }
+
+        // 次の移動先を決定
+        let nextX = ninja.tx;
+        let nextY = ninja.ty;
+
+        if (ninja.ai === 'random') {
+          // ランダム歩き（最も近い宝方向に少し偏る）
+          const dirs = [];
+          if (map[ninja.ty-1] && map[ninja.ty-1][ninja.tx] === FLOOR) dirs.push({x:0, y:-1, d:3});
+          if (map[ninja.ty+1] && map[ninja.ty+1][ninja.tx] === FLOOR) dirs.push({x:0, y:1, d:0});
+          if (map[ninja.ty][ninja.tx-1] === FLOOR) dirs.push({x:-1, y:0, d:1});
+          if (map[ninja.ty][ninja.tx+1] === FLOOR) dirs.push({x:1, y:0, d:2});
+
+          // 最も近い宝の方向を優先
+          let closestTreasure = treasurePositions[0];
+          let minDist = Infinity;
+          for (const t of treasurePositions) {
+            const d = Math.abs(ninja.tx - t.x) + Math.abs(ninja.ty - t.y);
+            if (d < minDist) {
+              minDist = d;
+              closestTreasure = t;
+            }
+          }
+          const dx = closestTreasure.x - ninja.tx;
+          const dy = closestTreasure.y - ninja.ty;
+          const preferred = dirs.filter(d => 
+            (dx > 0 && d.x > 0) || (dx < 0 && d.x < 0) ||
+            (dy > 0 && d.y > 0) || (dy < 0 && d.y < 0)
+          );
+          const choice = (Math.random() < 0.7 && preferred.length) ? preferred : dirs;
+          if (choice.length) {
+            const move = choice[Math.floor(Math.random() * choice.length)];
+            nextX += move.x;
+            nextY += move.y;
+            ninja.dir = move.d;
+          }
+        } else if (ninja.ai === 'avoid') {
+          // 視界を避けつつ最も近い宝へ
+          const dirs = [
+            {x:0, y:-1, d:3}, {x:0, y:1, d:0}, {x:-1, y:0, d:1}, {x:1, y:0, d:2}
+          ];
+          let best = null;
+          let bestScore = -Infinity;
+
+          // 最も近い宝を探す
+          let closestTreasure = treasurePositions[0];
+          let minTreasureDist = Infinity;
+          for (const t of treasurePositions) {
+            const d = Math.abs(ninja.tx - t.x) + Math.abs(ninja.ty - t.y);
+            if (d < minTreasureDist) {
+              minTreasureDist = d;
+              closestTreasure = t;
+            }
+          }
+
+          for (const move of dirs) {
+            const nx = ninja.tx + move.x;
+            const ny = ninja.ty + move.y;
+            if (nx < 0 || ny < 0 || nx >= MAP_SIZE || ny >= MAP_SIZE) continue;
+            if (map[ny][nx] !== FLOOR && map[ny][nx] !== TREASURE) continue;
+
+            // スコア = 宝への距離 - 視界リスク
+            const dist = Math.abs(nx - closestTreasure.x) + Math.abs(ny - closestTreasure.y);
+            let risk = 0;
+            for (const u of units) {
+              const testNinja = {x: nx+0.5, y: ny+0.5};
+              if (isNinjaInVision(u, testNinja)) risk += 10;
+            }
+            const score = -dist - risk;
+            if (score > bestScore) {
+              bestScore = score;
+              best = {nx, ny, d: move.d};
+            }
+          }
+          if (best) {
+            nextX = best.nx;
+            nextY = best.ny;
+            ninja.dir = best.d;
+          }
+        } else if (ninja.ai === 'smart') {
+          // BFS経路探索（視界コストつき重み付き探索）
+          const path = findPathBFS(ninja.tx, ninja.ty, ninja.routePreference);
+          if (path && path.length > 0) {
+            const next = path[0];
+            // 次のタイルが視界内なら待機（隙を狙う）
+            const testPos = {x: next.x+0.5, y: next.y+0.5};
+            let inVision = false;
+            for (const u of units) {
+              if (isNinjaInVision(u, testPos)) { inVision = true; break; }
+            }
+            if (inVision) {
+              // 待機：次の移動タイミングまで待つ（1回だけスキップ）
+              nextX = ninja.tx;
+              nextY = ninja.ty;
+              // ただし待機中の移動間隔を短くして素早く再判定
+              ninja.moveDuration = 0.15; // 通常0.3→0.15で高速再チェック
+            } else {
+              ninja.moveDuration = 0.3; // 通常速度に戻す
+              nextX = next.x;
+              nextY = next.y;
+              const ddx = nextX - ninja.tx;
+              const ddy = nextY - ninja.ty;
+              if (ddy < 0) ninja.dir = 3;
+              else if (ddy > 0) ninja.dir = 0;
+              else if (ddx < 0) ninja.dir = 1;
+              else if (ddx > 0) ninja.dir = 2;
+            }
+          } else {
+            // 経路なし → 降参
+            ninja.state = 'surrender';
+          }
+        }
+
+        // 移動
+        ninja.tx = nextX;
+        ninja.ty = nextY;
+        ninja.x = nextX + 0.5;
+        ninja.y = nextY + 0.5;
+
+        // 足音
+        if (Math.random() < 0.3) {
+          sounds.step.currentTime = 0;
+          sounds.step.play();
+        }
+      }
+
+      // アニメーション
+      ninja.frameTime += dt;
+      if (ninja.frameTime >= 0.15) {
+        ninja.frameTime = 0;
+        ninja.frame = (ninja.frame + 1) % 4;
+      }
+    }
+
+    // ユニット更新
+    function updateUnit(unit, dt) {
+      if (unit.type === 'camera') {
+        // 首振り（初期角度からの振り子運動）
+        if (unit.initialAngle === undefined) {
+          unit.initialAngle = unit.angle;
+        }
+        unit.angle += 30 * dt * (unit.patrolDir || 1);
+        if (unit.angle > unit.initialAngle + 60) { unit.angle = unit.initialAngle + 60; unit.patrolDir = -1; }
+        if (unit.angle < unit.initialAngle - 60) { unit.angle = unit.initialAngle - 60; unit.patrolDir = 1; }
+      } else if (unit.type === 'guard') {
+        // タイルベース巡回
+        if (unit.path && unit.path.length > 1) {
+          unit.moveProgress += dt / 0.8; // 0.8秒で1タイル
+          if (unit.moveProgress >= 1) {
+            unit.moveProgress = 0;
+            unit.pathIdx = (unit.pathIdx + 1) % unit.path.length;
+          }
+          // 現在位置を補間
+          const cur = unit.path[unit.pathIdx];
+          const next = unit.path[(unit.pathIdx + 1) % unit.path.length];
+          unit.x = cur.x + 0.5 + (next.x - cur.x) * unit.moveProgress;
+          unit.y = cur.y + 0.5 + (next.y - cur.y) * unit.moveProgress;
+          unit.tx = cur.x;
+          unit.ty = cur.y;
+          
+          // 視界方向を移動方向に合わせる
+          const dx = next.x - cur.x;
+          const dy = next.y - cur.y;
+          unit.angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        }
+      } else if (unit.type === 'light') {
+        // 360度回転（初期角度から開始）
+        unit.angle = (unit.angle || 0) + 40 * dt; // 回転速度を40に変更（unitTypesに合わせる）
+        if (unit.angle >= 360) unit.angle -= 360;
+      }
+
+      // 忍者捕獲チェック
+      for (const ninja of ninjas) {
+        if (ninja.state === 'move' && isNinjaInVision(unit, ninja)) {
+          ninja.state = 'dead';
+          spawnParticles(ninja.x, ninja.y, '#ff0');
+          updateUI();
+          sounds.get.play();
+        }
+      }
+    }
+
+    // 描画
+    function draw() {
+      ctx.fillStyle = '#222';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // マップ描画
+      if (!map.length) return; // マップ未初期化
+      for (let y = 0; y < MAP_SIZE; y++) {
+        if (!map[y]) continue;
+        for (let x = 0; x < MAP_SIZE; x++) {
+          const sx = x * TILE_SIZE;
+          const sy = y * TILE_SIZE;
+          if (map[y][x] === WALL) {
+            ctx.fillStyle = '#666';
+          } else if (map[y][x] === TREASURE) {
+            ctx.fillStyle = '#332200'; // 床と同じ背景
+          } else {
+            ctx.fillStyle = '#332200';
+          }
+          ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          if (map[y][x] === TREASURE) {
+            // 宝物マーク
+            ctx.font = '28px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💎', sx + TILE_SIZE/2, sy + TILE_SIZE/2);
+          }
+          ctx.strokeStyle = '#444';
+          ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
+        }
+      }
+
+      // 視界コーン描画
+      if (gameState === 'setup' || gameState === 'wave' || gameState === 'waveEndDelay' || gameState === 'gameoverDelay') {
+        ctx.globalAlpha = 0.3;
+        for (const unit of units) {
+          let fov = 60;
+          const skipSelf = (unit.type === 'light');
+          const cone = castVisionCone(unit.x, unit.y, unit.angle || 0, unit.range, fov, skipSelf);
+          ctx.fillStyle = unit.type === 'light' ? '#ff0' : '#f00';
+          ctx.beginPath();
+          cone.forEach((p, i) => {
+            const sx = p.x * TILE_SIZE;
+            const sy = p.y * TILE_SIZE;
+            if (i === 0) ctx.moveTo(sx, sy);
+            else ctx.lineTo(sx, sy);
+          });
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // ガード経路描画（setup中）
+      if (gameState === 'setup') {
+        for (const unit of units) {
+          if (unit.type === 'guard' && unit.path && unit.path.length > 1) {
+            ctx.strokeStyle = '#f00';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            for (let i = 0; i < unit.path.length; i++) {
+              const p = unit.path[i];
+              const px = (p.x + 0.5) * TILE_SIZE;
+              const py = (p.y + 0.5) * TILE_SIZE;
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+      }
+
+      // ガード配置中のガイド表示
+      if (guardPlacingState === 'point1') {
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('🚶 Tap start point', canvas.width / 2, 20);
+      } else if (guardPlacingState === 'point2') {
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('🚶 Tap mid point', canvas.width / 2, 20);
+        
+        // 始点に緑の点
+        if (guardPoints[0]) {
+          const sx = (guardPoints[0].x + 0.5) * TILE_SIZE;
+          const sy = (guardPoints[0].y + 0.5) * TILE_SIZE;
+          ctx.fillStyle = '#0f0';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (guardPlacingState === 'point3') {
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('🚶 Tap end point', canvas.width / 2, 20);
+        
+        // 始点と中間点に緑の点
+        for (let i = 0; i < guardPoints.length; i++) {
+          const p = guardPoints[i];
+          const px = (p.x + 0.5) * TILE_SIZE;
+          const py = (p.y + 0.5) * TILE_SIZE;
+          ctx.fillStyle = '#0f0';
+          ctx.beginPath();
+          ctx.arc(px, py, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        // 始点→中間点のパスを緑の点線で表示
+        if (guardPoints.length === 2) {
+          const path1 = findGuardPath(guardPoints[0].x, guardPoints[0].y, guardPoints[1].x, guardPoints[1].y);
+          if (path1) {
+            ctx.strokeStyle = '#0f0';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            for (let i = 0; i < path1.length; i++) {
+              const p = path1[i];
+              const px = (p.x + 0.5) * TILE_SIZE;
+              const py = (p.y + 0.5) * TILE_SIZE;
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+      }
+
+      // ユニット描画
+      for (const unit of units) {
+        const sx = unit.x * TILE_SIZE;
+        const sy = unit.y * TILE_SIZE;
+        if (unit.type === 'camera') {
+          ctx.fillStyle = '#888';
+          ctx.fillRect(sx - 8, sy - 8, 16, 16);
+          ctx.fillStyle = '#f00';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (unit.type === 'guard') {
+          ctx.fillStyle = '#f00';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+          ctx.fill();
+          // 向いてる方向に白い点
+          const angle = (unit.angle || 0) * Math.PI / 180;
+          const px = sx + Math.cos(angle) * 16;
+          const py = sy + Math.sin(angle) * 16;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(px, py, 4, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (unit.type === 'light') {
+          ctx.fillStyle = '#ff0';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 忍者描画
+      for (const ninja of ninjas) {
+        const sx = ninja.x * TILE_SIZE;
+        const sy = ninja.y * TILE_SIZE;
+        const alpha = ninja.spawnAlpha || 1;
+        
+        if (ninja.state === 'dead') {
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(imgDead, 0, 0, 16, 16, sx - 24, sy - 24, 48, 48);
+          ctx.globalAlpha = 1;
+        } else if (ninja.state === 'surrender') {
+          // 降参：白旗表示
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = '#fff';
+          ctx.font = '24px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('🏳️', sx, sy - 10);
+          ctx.drawImage(imgDead, 0, 0, 16, 16, sx - 24, sy - 24, 48, 48);
+          ctx.globalAlpha = 1;
+        } else {
+          // 忍者本体を先に描画
+          ctx.globalAlpha = alpha;
+          const row = ninja.dir;
+          const frame = ninja.frame;
+          ctx.drawImage(imgWalk, frame * 16, row * 16, 16, 16, sx - 24, sy - 24, 48, 48);
+          
+          // 当たり判定可視化（忍者の上に目立つ表示）
+          ctx.globalAlpha = 0.4;
+          ctx.fillStyle = 'rgba(0, 200, 255, 0.3)';
+          ctx.beginPath();
+          ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = '#0ff';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // パーティクル描画
+      for (const p of particles) {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // ゲームループ
+    let lastTime = 0;
+    function gameLoop(time) {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+
+      if (gameState === 'wave') {
+        // ユニット更新
+        for (const unit of units) {
+          updateUnit(unit, dt);
+        }
+
+        // 忍者更新
+        for (const ninja of ninjas) {
+          updateNinjaAI(ninja, dt);
+        }
+
+        // パーティクル更新
+        updateParticles(dt);
+
+        // Wave終了チェック（gameoverでなければ）
+        if (gameState === 'wave') {
+          const aliveNinjas = ninjas.filter(n => n.state === 'move');
+          const reachedNinjas = ninjas.filter(n => n.state === 'reached');
+          if (aliveNinjas.length === 0 && ninjas.length > 0 && reachedNinjas.length === 0) {
+            // 全忍者捕獲！ → 1.5秒待ってからリザルト
+            gameState = 'waveEndDelay';
+            setTimeout(() => {
+              if (gameState === 'waveEndDelay') {
+                gameState = 'result';
+                sounds.clear.play();
+                showResult('All ninjas caught!');
+              }
+            }, 1500);
+          }
+        }
+      } else if (gameState === 'waveEndDelay') {
+        // Wave終了待機中（パーティクル更新+描画継続）
+        updateParticles(dt);
+      } else if (gameState === 'result') {
+        // リザルト画面表示（パーティクル更新は継続）
+        updateParticles(dt);
+      } else if (gameState === 'setup') {
+        // セットアップ中もパーティクル更新
+        updateParticles(dt);
+      }
+
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // モーダル表示
+    function showModal(html) {
+      const modal = document.getElementById('modal');
+      modal.querySelector('h1').innerHTML = html;
+      modal.style.display = 'flex';
+    }
+
+    function hideModal() {
+      document.getElementById('modal').style.display = 'none';
+    }
+
+    // リザルト表示
+    function showResult(title) {
+      document.getElementById('result').style.display = 'flex';
+    }
+
+    function hideResult() {
+      document.getElementById('result').style.display = 'none';
+    }
+
+    // イベント
+    document.getElementById('btnPlay').addEventListener('click', () => {
+      hideModal();
+      gameState = 'setup';
+      currentWave = 0; // チュートリアルから
+      initWave(0);
+      updateUI();
+      // BGM開始（ユーザーインタラクション後）
+      bgm.currentTime = 0;
+      bgm.play().catch(() => {}); // 自動再生ポリシー対策
+    });
+
+    document.getElementById('btnNextWave').addEventListener('click', () => {
+      hideResult();
+      currentWave++;
+      if (currentWave > 6) {
+        gameState = 'clear';
+        showModal('🎉 All Clear!');
+        bgm.pause();
+      } else {
+        gameState = 'setup';
+        initWave(currentWave);
+      }
+    });
+
+    document.getElementById('btnCamera').addEventListener('click', () => {
+      if (gameState === 'setup') {
+        selectedTool = 'camera';
+        updateSelection();
+      }
+    });
+
+    document.getElementById('btnGuard').addEventListener('click', () => {
+      if (gameState === 'setup') {
+        const ut = unitTypes['guard'];
+        if (cost >= ut.cost) {
+          selectedTool = 'guard';
+          guardPlacingState = 'point1';
+          guardPoints = [];
+          updateSelection();
+        }
+      }
+    });
+
+    document.getElementById('btnLight').addEventListener('click', () => {
+      if (gameState === 'setup') {
+        selectedTool = 'light';
+        updateSelection();
+      }
+    });
+
+    document.getElementById('btnRemove').addEventListener('click', () => {
+      if (gameState === 'setup') {
+        selectedTool = 'remove';
+        updateSelection();
+      }
+    });
+
+    document.getElementById('btnStart').addEventListener('click', () => {
+      if (gameState === 'setup') {
+        // スナップショット保存（リトライ用）
+        savedUnits = units.map(u => ({...u, path: u.path ? [...u.path] : null}));
+        savedCost = cost;
+        
+        spawnNinjas(currentWave);
+        gameState = 'wave';
+        selectedTool = null;
+        updateSelection();
+        // BGM再開（初回以外）
+        if (bgm.paused) {
+          bgm.play().catch(() => {});
+        }
+      }
+    });
+
+    function updateSelection() {
+      document.querySelectorAll('.btn').forEach(b => b.classList.remove('selected'));
+      if (selectedTool === 'camera') document.getElementById('btnCamera').classList.add('selected');
+      if (selectedTool === 'guard') document.getElementById('btnGuard').classList.add('selected');
+      if (selectedTool === 'light') document.getElementById('btnLight').classList.add('selected');
+      if (selectedTool === 'remove') document.getElementById('btnRemove').classList.add('selected');
+    }
+
+    // マップクリック
+    let touchStartTime = 0;
+    let touchTimeout = null;
+
+    canvas.addEventListener('mousedown', handlePointerDown);
+    canvas.addEventListener('touchstart', handlePointerDown);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    function handlePointerDown(e) {
+      e.preventDefault();
+      if (gameState !== 'setup') return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      let clientX, clientY;
+
+      if (e.type === 'touchstart') {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+        
+        // ガード配置中は長押しタイマーを起動しない
+        if (guardPlacingState === 'none') {
+          // 長押し検出
+          touchTimeout = setTimeout(() => {
+            const tx = Math.floor((clientX - rect.left) * scaleX / TILE_SIZE);
+            const ty = Math.floor((clientY - rect.top) * scaleY / TILE_SIZE);
+            removeUnit(tx, ty);
+          }, 500);
+        }
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      const tx = Math.floor((clientX - rect.left) * scaleX / TILE_SIZE);
+      const ty = Math.floor((clientY - rect.top) * scaleY / TILE_SIZE);
+
+      // ガード配置中の処理（3点選択）
+      if (guardPlacingState === 'point1') {
+        // 始点設定
+        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE || map[ty][tx] !== FLOOR) {
+          // 床以外はキャンセル
+          guardPlacingState = 'none';
+          guardPoints = [];
+          // コスト返還不要（先払い廃止）
+          updateUI();
+          return;
+        }
+        guardPoints[0] = {x: tx, y: ty};
+        guardPlacingState = 'point2';
+        return;
+      } else if (guardPlacingState === 'point2') {
+        // 中間点設定
+        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE || map[ty][tx] !== FLOOR) {
+          // 床以外はキャンセル
+          guardPlacingState = 'none';
+          guardPoints = [];
+          // コスト返還不要（先払い廃止）
+          updateUI();
+          return;
+        }
+        guardPoints[1] = {x: tx, y: ty};
+        guardPlacingState = 'point3';
+        return;
+      } else if (guardPlacingState === 'point3') {
+        // 終点設定→パス生成→配置
+        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE || map[ty][tx] !== FLOOR) {
+          // 床以外はキャンセル
+          guardPlacingState = 'none';
+          guardPoints = [];
+          // コスト返還不要（先払い廃止）
+          updateUI();
+          return;
+        }
+        guardPoints[2] = {x: tx, y: ty};
+        
+        // 3セグメントのパス生成
+        const path1 = findGuardPath(guardPoints[0].x, guardPoints[0].y, guardPoints[1].x, guardPoints[1].y);
+        const path2 = findGuardPath(guardPoints[1].x, guardPoints[1].y, guardPoints[2].x, guardPoints[2].y);
+        const path3 = findGuardPath(guardPoints[2].x, guardPoints[2].y, guardPoints[0].x, guardPoints[0].y);
+        
+        if (path1 && path2 && path3 && path1.length >= 2 && path2.length >= 2 && path3.length >= 2) {
+          // 3セグメントを結合（重複点を除く）
+          const fullPath = [
+            ...path1,
+            ...path2.slice(1), // 中間点の重複を除く
+            ...path3.slice(1)  // 終点の重複を除く
+          ];
+          
+          // ガード配置（コスト消費）
+          cost -= unitTypes['guard'].cost;
+          const start = guardPoints[0];
+          const unit = {
+            type: 'guard',
+            x: start.x + 0.5,
+            y: start.y + 0.5,
+            tx: start.x,
+            ty: start.y,
+            angle: 90,
+            range: unitTypes['guard'].range || 0,
+            path: fullPath,
+            pathIdx: 0,
+            moveProgress: 0
+          };
+          units.push(unit);
+          sounds.coin.play();
+          console.log(`Guard placed with ${fullPath.length}-tile path (3 segments):`, fullPath);
+        } else {
+          // 経路が見つからない（コスト未消費なので返還不要）
+          alert('No path found (blocked by walls)');
+        }
+        
+        guardPlacingState = 'none';
+        guardPoints = [];
+        updateUI();
+        return;
+      }
+
+      // 既存ユニットのタップ判定（カメラ/ライトの向き回転）
+      const existingUnit = units.find(u => u.tx === tx && u.ty === ty);
+      if (existingUnit && (existingUnit.type === 'camera' || existingUnit.type === 'light') 
+          && selectedTool !== 'remove' && (selectedTool === 'camera' || selectedTool === 'light')) {
+        // カメラ/ライト選択中のみ回転
+        existingUnit.angle = ((existingUnit.angle || 0) + 90) % 360;
+        if (existingUnit.type === 'camera') {
+          existingUnit.initialAngle = existingUnit.angle;
+        }
+        // SE再生
+        sounds.coin.play();
+        return;
+      }
+
+      if (e.button === 2 || e.type === 'contextmenu') {
+        removeUnit(tx, ty);
+      } else if (selectedTool === 'remove') {
+        removeUnit(tx, ty);
+      } else if (selectedTool) {
+        placeUnit(selectedTool, tx, ty);
+      }
+    }
+
+    canvas.addEventListener('touchend', () => {
+      clearTimeout(touchTimeout);
+    });
+
+    canvas.addEventListener('touchmove', () => {
+      clearTimeout(touchTimeout);
+    });
+
+    // Escキーでガード配置キャンセル
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (guardPlacingState !== 'none') {
+          // コスト返還不要（先払い廃止）
+          guardPlacingState = 'none';
+          guardPoints = [];
+          updateUI();
+        }
+      }
+    });
+
+    // 開始
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
