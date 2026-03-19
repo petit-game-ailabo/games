@@ -461,24 +461,46 @@
     function castVisionCone(x, y, angle, range, fov = 60, skipSelf = false) {
       const selfTx = Math.floor(x);
       const selfTy = Math.floor(y);
-      const points = [{x, y}];
+      const points = [];
       const rayCount = 30;
       const startAngle = angle - fov / 2;
+      // 最初の点（コーンの頂点）
+      if (skipSelf) {
+        // ライト: 自タイル境界から開始（弧状に切る）
+        const a0 = (startAngle) * Math.PI / 180;
+        // 自タイルの端までの距離を概算（最大1タイル）
+        points.push({x: x + Math.cos(a0) * 1, y: y + Math.sin(a0) * 1});
+      } else {
+        points.push({x, y});
+      }
       for (let i = 0; i <= rayCount; i++) {
         const a = (startAngle + (fov / rayCount) * i) * Math.PI / 180;
         let rx = x, ry = y;
+        let started = false;
         for (let d = 0; d <= range; d += 0.2) {
           rx = x + Math.cos(a) * d;
           ry = y + Math.sin(a) * d;
           const tx = Math.floor(rx);
           const ty = Math.floor(ry);
           // 自分自身のタイルはスキップ（壁上カメラ対応）
-          if (tx === selfTx && ty === selfTy) continue;
+          if (tx === selfTx && ty === selfTy) {
+            if (skipSelf) continue; // ライト: 自タイル内は描画しない
+            else continue; // カメラ: 壁スキップ
+          }
+          if (!started && skipSelf) {
+            // ライト: 自タイルを出た最初の点を記録（弧の内側）
+            started = true;
+          }
           if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE || map[ty][tx] === WALL) {
             break;
           }
         }
         points.push({x: rx, y: ry});
+      }
+      // ライト: 最後のレイの自タイル境界点で閉じる
+      if (skipSelf) {
+        const aLast = (startAngle + fov) * Math.PI / 180;
+        points.push({x: x + Math.cos(aLast) * 1, y: y + Math.sin(aLast) * 1});
       }
       return points;
     }
@@ -1237,11 +1259,12 @@
       }
 
       // 視界コーン描画
-      if (gameState === 'setup' || gameState === 'wave') {
+      if (gameState === 'setup' || gameState === 'wave' || gameState === 'waveEndDelay' || gameState === 'gameoverDelay') {
         ctx.globalAlpha = 0.3;
         for (const unit of units) {
           let fov = 60;
-          const cone = castVisionCone(unit.x, unit.y, unit.angle || 0, unit.range, fov);
+          const skipSelf = (unit.type === 'light');
+          const cone = castVisionCone(unit.x, unit.y, unit.angle || 0, unit.range, fov, skipSelf);
           ctx.fillStyle = unit.type === 'light' ? '#ff0' : '#f00';
           ctx.beginPath();
           cone.forEach((p, i) => {
@@ -1550,10 +1573,10 @@
       if (gameState === 'setup') {
         const ut = unitTypes['guard'];
         if (cost >= ut.cost) {
-          cost -= ut.cost; // コスト先払い
+          selectedTool = 'guard';
           guardPlacingState = 'point1';
           guardPoints = [];
-          updateUI();
+          updateSelection();
         }
       }
     });
@@ -1651,7 +1674,7 @@
           // 床以外はキャンセル
           guardPlacingState = 'none';
           guardPoints = [];
-          cost += unitTypes['guard'].cost; // コスト返還
+          // コスト返還不要（先払い廃止）
           updateUI();
           return;
         }
@@ -1664,7 +1687,7 @@
           // 床以外はキャンセル
           guardPlacingState = 'none';
           guardPoints = [];
-          cost += unitTypes['guard'].cost; // コスト返還
+          // コスト返還不要（先払い廃止）
           updateUI();
           return;
         }
@@ -1677,7 +1700,7 @@
           // 床以外はキャンセル
           guardPlacingState = 'none';
           guardPoints = [];
-          cost += unitTypes['guard'].cost; // コスト返還
+          // コスト返還不要（先払い廃止）
           updateUI();
           return;
         }
@@ -1696,7 +1719,8 @@
             ...path3.slice(1)  // 終点の重複を除く
           ];
           
-          // ガード配置（コストは既に差し引き済み）
+          // ガード配置（コスト消費）
+          cost -= unitTypes['guard'].cost;
           const start = guardPoints[0];
           const unit = {
             type: 'guard',
@@ -1714,9 +1738,8 @@
           sounds.coin.play();
           console.log(`Guard placed with ${fullPath.length}-tile path (3 segments):`, fullPath);
         } else {
-          // 経路が見つからない→コスト返還
+          // 経路が見つからない（コスト未消費なので返還不要）
           alert('ガードの経路が見つかりません（壁に遮られています）');
-          cost += unitTypes['guard'].cost;
         }
         
         guardPlacingState = 'none';
@@ -1760,7 +1783,7 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         if (guardPlacingState !== 'none') {
-          cost += unitTypes['guard'].cost; // コスト返還
+          // コスト返還不要（先払い廃止）
           guardPlacingState = 'none';
           guardPoints = [];
           updateUI();
