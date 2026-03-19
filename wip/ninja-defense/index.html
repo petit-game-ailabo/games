@@ -458,18 +458,19 @@
     }
 
     // レイキャスト（壁判定付き視界コーン）
-    function castVisionCone(x, y, angle, range, fov = 60) {
+    function castVisionCone(x, y, angle, range, fov = 60, startDist = 0) {
       const selfTx = Math.floor(x);
       const selfTy = Math.floor(y);
-      const startDist = 0.8; // 根本を空ける（ライトの足元は判定なし）
-      // コーン開始点（根本から少し離れた位置）
       const points = [];
       const rayCount = 30;
       const startAngle = angle - fov / 2;
-      // 最初のレイの開始点でコーンの根本の弧を描く
-      for (let i = 0; i <= rayCount; i++) {
-        const a = (startAngle + (fov / rayCount) * i) * Math.PI / 180;
-        if (i === 0) points.push({x: x + Math.cos(a) * startDist, y: y + Math.sin(a) * startDist});
+      // 開始点
+      if (startDist > 0) {
+        // 根本空け: 最初のレイ開始位置
+        const a0 = (startAngle) * Math.PI / 180;
+        points.push({x: x + Math.cos(a0) * startDist, y: y + Math.sin(a0) * startDist});
+      } else {
+        points.push({x, y});
       }
       for (let i = 0; i <= rayCount; i++) {
         const a = (startAngle + (fov / rayCount) * i) * Math.PI / 180;
@@ -664,7 +665,7 @@
       const dy = ninja.y - unit.y;
       const dist = Math.sqrt(dx*dx + dy*dy);
       if (dist > unit.range) return false;
-      if (dist < 0.8) return false; // 根本（足元）は判定なし
+      if ((unit.type === 'light' || unit.type === 'guard') && dist < 0.8) return false; // ライト/ガードの根本は判定なし
 
       const selfTx = Math.floor(unit.x);
       const selfTy = Math.floor(unit.y);
@@ -1220,11 +1221,18 @@
           if (map[y][x] === WALL) {
             ctx.fillStyle = '#666';
           } else if (map[y][x] === TREASURE) {
-            ctx.fillStyle = '#ff0';
+            ctx.fillStyle = '#332200'; // 床と同じ背景
           } else {
             ctx.fillStyle = '#332200';
           }
           ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+          if (map[y][x] === TREASURE) {
+            // 宝物マーク
+            ctx.font = '28px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💎', sx + TILE_SIZE/2, sy + TILE_SIZE/2);
+          }
           ctx.strokeStyle = '#444';
           ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
         }
@@ -1234,8 +1242,9 @@
       if (gameState === 'setup' || gameState === 'wave') {
         ctx.globalAlpha = 0.3;
         for (const unit of units) {
-          let fov = 60; // 全ユニット60度に統一
-          const cone = castVisionCone(unit.x, unit.y, unit.angle || 0, unit.range, fov);
+          let fov = 60;
+          const sd = (unit.type === 'light' || unit.type === 'guard') ? 0.8 : 0; // ライト/ガードは根本空け
+          const cone = castVisionCone(unit.x, unit.y, unit.angle || 0, unit.range, fov, sd);
           ctx.fillStyle = unit.type === 'light' ? '#ff0' : '#f00';
           ctx.beginPath();
           cone.forEach((p, i) => {
@@ -1410,12 +1419,17 @@
           const frame = ninja.frame;
           ctx.drawImage(imgWalk, frame * 16, row * 16, 16, 16, sx - 24, sy - 24, 48, 48);
           
-          // 当たり判定可視化（忍者の上に表示）
-          ctx.globalAlpha = 0.3;
-          ctx.strokeStyle = '#0af';
-          ctx.lineWidth = 2;
+          // 当たり判定可視化（忍者の上に目立つ表示）
+          ctx.globalAlpha = 0.4;
+          ctx.fillStyle = 'rgba(0, 200, 255, 0.3)';
           ctx.beginPath();
-          ctx.arc(sx, sy, 20, 0, Math.PI * 2);
+          ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = '#0ff';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 22, 0, Math.PI * 2);
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
