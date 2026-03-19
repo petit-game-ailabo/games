@@ -496,7 +496,7 @@
     function initWave(waveNum) {
       const config = waveConfigs[waveNum];
       MAP_SIZE = config.size;
-      treasurePos = config.treasure;
+      treasurePos = config.treasure; // デフォルト値
       ninjas = []; // 前のWaveの忍者をクリア
       particles = []; // パーティクルもクリア
       
@@ -514,6 +514,15 @@
         // デフォルトマップをコピー
         map = config.map.map(row => [...row]);
       }
+      // マップからTREASUREタイルの実際の位置を検出（config.treasureとのずれ防止）
+      for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+          if (map[y][x] === TREASURE) {
+            treasurePos = {x, y};
+          }
+        }
+      }
+      
       // 初期マップを保存（壁撤去判定用）
       originalMap = map.map(row => [...row]);
       
@@ -1032,7 +1041,7 @@
               // ゲームオーバー画面
               const modal = document.getElementById('modal');
               modal.querySelector('h1').textContent = '侵入を防げなかった...';
-              modal.querySelectorAll('div, p').forEach(el => el.style.display = 'none');
+              modal.querySelectorAll('div, p, #btnPlay').forEach(el => el.style.display = 'none');
               let retryBtn = document.getElementById('btnRetryGO');
               if (!retryBtn) {
                 retryBtn = document.createElement('button');
@@ -1055,7 +1064,7 @@
               restartBtn.style.display = 'block';
               restartBtn.onclick = () => {
                 hideModal();
-                modal.querySelectorAll('div, p').forEach(el => el.style.display = '');
+                modal.querySelectorAll('div, p, #btnPlay').forEach(el => el.style.display = '');
                 retryBtn.style.display = 'none';
                 restartBtn.style.display = 'none';
                 location.reload();
@@ -1063,7 +1072,7 @@
               
               retryBtn.onclick = () => {
                 hideModal();
-                modal.querySelectorAll('div, p').forEach(el => el.style.display = '');
+                modal.querySelectorAll('div, p, #btnPlay').forEach(el => el.style.display = '');
                 retryBtn.style.display = 'none';
                 restartBtn.style.display = 'none';
                 
