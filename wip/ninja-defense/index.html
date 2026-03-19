@@ -1042,13 +1042,45 @@
                 modal.appendChild(retryBtn);
               }
               retryBtn.style.display = 'block';
+              
+              // 「最初から」ボタン（目立たなく）
+              let restartBtn = document.getElementById('btnRestartGO');
+              if (!restartBtn) {
+                restartBtn = document.createElement('button');
+                restartBtn.id = 'btnRestartGO';
+                restartBtn.textContent = '最初からやり直す';
+                restartBtn.style.cssText = 'margin-top:30px;padding:8px 16px;font-size:13px;background:transparent;color:#888;border:1px solid #555;border-radius:5px;cursor:pointer;display:block;margin-left:auto;margin-right:auto;';
+                modal.appendChild(restartBtn);
+              }
+              restartBtn.style.display = 'block';
+              restartBtn.onclick = () => {
+                hideModal();
+                modal.querySelectorAll('div, p').forEach(el => el.style.display = '');
+                retryBtn.style.display = 'none';
+                restartBtn.style.display = 'none';
+                location.reload();
+              };
+              
               retryBtn.onclick = () => {
                 hideModal();
                 modal.querySelectorAll('div, p').forEach(el => el.style.display = '');
                 retryBtn.style.display = 'none';
+                restartBtn.style.display = 'none';
                 
                 // スナップショットから復元
-                units = savedUnits.map(u => ({...u, path: u.path ? [...u.path] : null}));
+                units = savedUnits.map(u => {
+                  const restored = {...u, path: u.path ? [...u.path] : null};
+                  // ガードの位置をパス開始地点にリセット
+                  if (restored.type === 'guard' && restored.path && restored.path.length > 0) {
+                    restored.x = restored.path[0].x + 0.5;
+                    restored.y = restored.path[0].y + 0.5;
+                    restored.tx = restored.path[0].x;
+                    restored.ty = restored.path[0].y;
+                    restored.pathIdx = 0;
+                    restored.moveProgress = 0;
+                  }
+                  return restored;
+                });
                 cost = savedCost;
                 ninjas = [];
                 particles = [];
