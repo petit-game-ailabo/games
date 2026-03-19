@@ -458,25 +458,16 @@
     }
 
     // レイキャスト（壁判定付き視界コーン）
-    function castVisionCone(x, y, angle, range, fov = 60, startDist = 0) {
+    function castVisionCone(x, y, angle, range, fov = 60, skipSelf = false) {
       const selfTx = Math.floor(x);
       const selfTy = Math.floor(y);
-      const points = [];
+      const points = [{x, y}];
       const rayCount = 30;
       const startAngle = angle - fov / 2;
-      // 開始点
-      if (startDist > 0) {
-        // 根本空け: 最初のレイ開始位置
-        const a0 = (startAngle) * Math.PI / 180;
-        points.push({x: x + Math.cos(a0) * startDist, y: y + Math.sin(a0) * startDist});
-      } else {
-        points.push({x, y});
-      }
       for (let i = 0; i <= rayCount; i++) {
         const a = (startAngle + (fov / rayCount) * i) * Math.PI / 180;
-        let rx = x + Math.cos(a) * startDist;
-        let ry = y + Math.sin(a) * startDist;
-        for (let d = startDist; d <= range; d += 0.2) {
+        let rx = x, ry = y;
+        for (let d = 0; d <= range; d += 0.2) {
           rx = x + Math.cos(a) * d;
           ry = y + Math.sin(a) * d;
           const tx = Math.floor(rx);
@@ -665,7 +656,14 @@
       const dy = ninja.y - unit.y;
       const dist = Math.sqrt(dx*dx + dy*dy);
       if (dist > unit.range) return false;
-      if ((unit.type === 'light') && dist < 0.8) return false; // ライト/ガードの根本は判定なし
+      // ライトは同じタイル内は判定なし（根本の死角）
+      if (unit.type === 'light') {
+        const ninTx = Math.floor(ninja.x);
+        const ninTy = Math.floor(ninja.y);
+        const unitTx = Math.floor(unit.x);
+        const unitTy = Math.floor(unit.y);
+        if (ninTx === unitTx && ninTy === unitTy) return false;
+      }
 
       const selfTx = Math.floor(unit.x);
       const selfTy = Math.floor(unit.y);
@@ -1243,8 +1241,7 @@
         ctx.globalAlpha = 0.3;
         for (const unit of units) {
           let fov = 60;
-          const sd = (unit.type === 'light') ? 0.8 : 0; // ライト/ガードは根本空け
-          const cone = castVisionCone(unit.x, unit.y, unit.angle || 0, unit.range, fov, sd);
+          const cone = castVisionCone(unit.x, unit.y, unit.angle || 0, unit.range, fov);
           ctx.fillStyle = unit.type === 'light' ? '#ff0' : '#f00';
           ctx.beginPath();
           cone.forEach((p, i) => {
