@@ -172,15 +172,6 @@
     <button id="btnNextWave">次の Wave へ</button>
   </div>
 
-  <!-- ガード経路確定UI -->
-  <div id="patrolConfirm" style="display:none; position:fixed; bottom:120px; left:50%; transform:translateX(-50%); z-index:20; background:rgba(0,0,0,0.9); padding:15px 25px; border-radius:10px; border:2px solid #0f0;">
-    <p style="color:#fff; margin:0 0 10px 0; text-align:center; font-size:14px;">経路を確定しますか？</p>
-    <div style="display:flex; gap:15px; justify-content:center;">
-      <button id="btnConfirmPatrol" style="padding:10px 20px; font-size:16px; background:#0a0; color:#fff; border:none; border-radius:8px; cursor:pointer;">✅ 確定</button>
-      <button id="btnCancelPatrol" style="padding:10px 20px; font-size:16px; background:#c00; color:#fff; border:none; border-radius:8px; cursor:pointer;">❌ キャンセル</button>
-    </div>
-  </div>
-
   <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -368,9 +359,13 @@
     let difficulty = 'normal'; // easy, normal, hard
     let mapType = 'default'; // default, cross, donut, maze, random
     
-    // ガード経路指定用
-    let patrolDrawing = false; // 経路描画モード
-    let patrolPath = []; // タップした座標リスト
+    // ガード配置用（始点→終点の2タップ方式）
+    let guardPlacingState = 'none'; // 'none' | 'start' | 'end'
+    let guardStartTile = null;
+    
+    // リトライ用スナップショット
+    let savedUnits = [];
+    let savedCost = 0;
 
     // アセット読み込み
     const imgWalk = new Image();
@@ -506,9 +501,8 @@
       particles = []; // パーティクルもクリア
       
       // UI状態をリセット
-      patrolDrawing = false;
-      patrolPath = [];
-      document.getElementById('patrolConfirm').style.display = 'none';
+      guardPlacingState = 'none';
+      guardStartTile = null;
       
       // マップ生成（カスタムマップタイプ or デフォルト）
       if (waveNum > 0 && mapType !== 'default') {
@@ -727,77 +721,47 @@
 
 
 
-    // ガード経路描画開始
-    function startPatrolDrawing(tx, ty) {
-      if (map[ty][tx] !== FLOOR) return false;
-      patrolDrawing = true;
-      patrolPath = [{x: tx, y: ty}];
-      selectedTool = null; // ツール選択解除
-      updateSelection();
-      return true;
-    }
-
-    // ガード経路にタイルを追加
-    let lastPatrolTapTime = 0;
-    let lastPatrolTapTile = null;
-    
-    function addPatrolTile(tx, ty) {
-      if (!patrolDrawing) return false;
-      if (map[ty][tx] !== FLOOR) return false;
+    // BFSでガードの経路を自動生成（始点→終点）
+    function findGuardPath(sx, sy, ex, ey) {
+      const dirs = [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}];
+      const visited = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(false));
+      const prev = Array(MAP_SIZE).fill(0).map(() => Array(MAP_SIZE).fill(null));
+      const queue = [{x:sx, y:sy}];
+      visited[sy][sx] = true;
       
-      // ダブルタップ検出（同じタイルを0.5秒以内に2回タップ）
-      const now = Date.now();
-      if (lastPatrolTapTile && lastPatrolTapTile.x === tx && lastPatrolTapTile.y === ty) {
-        if (now - lastPatrolTapTime < 500 && patrolPath.length >= 2) {
-          // ダブルタップ → 確定
-          confirmPatrol();
-          return false;
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        if (cur.x === ex && cur.y === ey) break;
+        
+        for (const d of dirs) {
+          const nx = cur.x + d.x;
+          const ny = cur.y + d.y;
+          if (nx < 0 || ny < 0 || nx >= MAP_SIZE || ny >= MAP_SIZE) continue;
+          if (visited[ny][nx]) continue;
+          if (map[ny][nx] !== FLOOR) continue; // 床タイルのみ通過
+          
+          visited[ny][nx] = true;
+          prev[ny][nx] = {x: cur.x, y: cur.y};
+          queue.push({x:nx, y:ny});
         }
       }
-      lastPatrolTapTime = now;
-      lastPatrolTapTile = {x: tx, y: ty};
       
-      // 最後のタイルと隣接しているかチェック
-      const last = patrolPath[patrolPath.length - 1];
-      const dx = Math.abs(tx - last.x);
-      const dy = Math.abs(ty - last.y);
-      if (dx + dy !== 1) {
-        // 隣接していない
-        return false;
+      // 到達不能チェック
+      if (!visited[ey][ex]) return null;
+      
+      // 経路復元
+      const path = [];
+      let cx = ex, cy = ey;
+      while (cx !== sx || cy !== sy) {
+        path.unshift({x:cx, y:cy});
+        const p = prev[cy][cx];
+        if (!p) return null;
+        cx = p.x;
+        cy = p.y;
       }
+      path.unshift({x:sx, y:sy}); // 始点を先頭に追加
       
-      // 既にパスに含まれているかチェック（ループ防止）
-      const exists = patrolPath.some(p => p.x === tx && p.y === ty);
-      if (exists) return false;
-      
-      patrolPath.push({x: tx, y: ty});
-      return true;
-    }
-
-    // ガード経路確定
-    function confirmPatrol() {
-      if (patrolPath.length < 2) {
-        alert('経路は最低2タイル必要です');
-        return;
-      }
-      
-      // ガードを配置
-      const start = patrolPath[0];
-      placeUnit('guard', start.x, start.y, patrolPath);
-      
-      // クリーンアップ
-      patrolDrawing = false;
-      patrolPath = [];
-      document.getElementById('patrolConfirm').style.display = 'none';
-    }
-
-    // ガード経路キャンセル（コスト返還）
-    function cancelPatrol() {
-      patrolDrawing = false;
-      patrolPath = [];
-      cost += unitTypes['guard'].cost; // 先払いしたコストを返還
-      updateUI();
-      document.getElementById('patrolConfirm').style.display = 'none';
+      return path;
     }
 
     function isNinjaInVision(unit, ninja) {
@@ -1082,8 +1046,15 @@
                 hideModal();
                 modal.querySelectorAll('div, p').forEach(el => el.style.display = '');
                 retryBtn.style.display = 'none';
+                
+                // スナップショットから復元
+                units = savedUnits.map(u => ({...u, path: u.path ? [...u.path] : null}));
+                cost = savedCost;
+                ninjas = [];
+                particles = [];
                 gameState = 'setup';
-                initWave(currentWave);
+                guardPlacingState = 'none';
+                guardStartTile = null;
                 updateUI();
               };
               modal.style.display = 'flex';
@@ -1336,45 +1307,24 @@
         }
       }
 
-      // ガード経路描画中のパス表示
-      if (patrolDrawing && patrolPath.length > 0) {
-        // 配置可能な隣接タイルをハイライト
-        const last = patrolPath[patrolPath.length - 1];
-        [{x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0}].forEach(d => {
-          const nx = last.x + d.x, ny = last.y + d.y;
-          if (nx >= 0 && ny >= 0 && nx < MAP_SIZE && ny < MAP_SIZE && 
-              map[ny][nx] === 0 && !patrolPath.some(p => p.x === nx && p.y === ny)) {
-            ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-            ctx.fillRect(nx * TILE_SIZE, ny * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-          }
-        });
-        // ガイドテキスト
+      // ガード配置中のガイド表示
+      if (guardPlacingState === 'start') {
         ctx.fillStyle = '#fff';
         ctx.font = '14px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('🟢タップで経路追加 → 確定ボタンで配置', canvas.width / 2, 20);
-        
-        ctx.strokeStyle = '#f00';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([6, 6]);
-        ctx.beginPath();
-        for (let i = 0; i < patrolPath.length; i++) {
-          const p = patrolPath[i];
-          const px = (p.x + 0.5) * TILE_SIZE;
-          const py = (p.y + 0.5) * TILE_SIZE;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-        
-        // 最後のタイルに白い点
-        const lastPt = patrolPath[patrolPath.length - 1];
-        const lx = (lastPt.x + 0.5) * TILE_SIZE;
-        const ly = (lastPt.y + 0.5) * TILE_SIZE;
+        ctx.fillText('ガードの始点をタップ', canvas.width / 2, 20);
+      } else if (guardPlacingState === 'end' && guardStartTile) {
         ctx.fillStyle = '#fff';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('ガードの終点をタップ（始点から通れる床タイル）', canvas.width / 2, 20);
+        
+        // 始点に緑の点
+        const sx = (guardStartTile.x + 0.5) * TILE_SIZE;
+        const sy = (guardStartTile.y + 0.5) * TILE_SIZE;
+        ctx.fillStyle = '#0f0';
         ctx.beginPath();
-        ctx.arc(lx, ly, 8, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 12, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -1622,6 +1572,10 @@
 
     document.getElementById('btnStart').addEventListener('click', () => {
       if (gameState === 'setup') {
+        // スナップショット保存（リトライ用）
+        savedUnits = units.map(u => ({...u, path: u.path ? [...u.path] : null}));
+        savedCost = cost;
+        
         spawnNinjas(currentWave);
         gameState = 'wave';
         selectedTool = null;
@@ -1664,12 +1618,15 @@
         clientY = e.touches[0].clientY;
         touchStartTime = Date.now();
         
-        // 長押し検出
-        touchTimeout = setTimeout(() => {
-          const tx = Math.floor((clientX - rect.left) * scaleX / TILE_SIZE);
-          const ty = Math.floor((clientY - rect.top) * scaleY / TILE_SIZE);
-          removeUnit(tx, ty);
-        }, 500);
+        // ガード配置中は長押しタイマーを起動しない
+        if (guardPlacingState === 'none') {
+          // 長押し検出
+          touchTimeout = setTimeout(() => {
+            const tx = Math.floor((clientX - rect.left) * scaleX / TILE_SIZE);
+            const ty = Math.floor((clientY - rect.top) * scaleY / TILE_SIZE);
+            removeUnit(tx, ty);
+          }, 500);
+        }
       } else {
         clientX = e.clientX;
         clientY = e.clientY;
@@ -1678,18 +1635,64 @@
       const tx = Math.floor((clientX - rect.left) * scaleX / TILE_SIZE);
       const ty = Math.floor((clientY - rect.top) * scaleY / TILE_SIZE);
 
-      // ガード経路描画中
-      if (patrolDrawing) {
-        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE) {
-          // マップ外でキャンセル
-          cancelPatrol();
+      // ガード配置中の処理
+      if (guardPlacingState === 'start') {
+        // 始点設定
+        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE || map[ty][tx] !== FLOOR) {
+          // 床以外はキャンセル
+          guardPlacingState = 'none';
+          guardStartTile = null;
+          cost += unitTypes['guard'].cost; // コスト返還
+          updateUI();
           return;
         }
-        const added = addPatrolTile(tx, ty);
-        if (added && patrolPath.length >= 2) {
-          // 確定UIを表示
-          document.getElementById('patrolConfirm').style.display = 'block';
+        guardStartTile = {x: tx, y: ty};
+        guardPlacingState = 'end';
+        return;
+      } else if (guardPlacingState === 'end') {
+        // 終点設定→パス生成→配置
+        if (tx < 0 || ty < 0 || tx >= MAP_SIZE || ty >= MAP_SIZE || map[ty][tx] !== FLOOR) {
+          // 床以外はキャンセル
+          guardPlacingState = 'none';
+          guardStartTile = null;
+          cost += unitTypes['guard'].cost; // コスト返還
+          updateUI();
+          return;
         }
+        
+        // BFSで経路生成
+        const path = findGuardPath(guardStartTile.x, guardStartTile.y, tx, ty);
+        if (path && path.length >= 2) {
+          // 往復パス生成（始点→終点→始点）
+          const reversePath = [...path].reverse().slice(1); // 終点を重複させない
+          const fullPath = [...path, ...reversePath];
+          
+          // ガード配置（コストは既に差し引き済み）
+          const start = guardStartTile;
+          const unit = {
+            type: 'guard',
+            x: start.x + 0.5,
+            y: start.y + 0.5,
+            tx: start.x,
+            ty: start.y,
+            angle: 90,
+            range: unitTypes['guard'].range || 0,
+            path: fullPath,
+            pathIdx: 0,
+            moveProgress: 0
+          };
+          units.push(unit);
+          sounds.coin.play();
+          console.log(`Guard placed with ${fullPath.length}-tile path:`, fullPath);
+        } else {
+          // 経路が見つからない→コスト返還
+          alert('ガードの経路が見つかりません（壁に遮られています）');
+          cost += unitTypes['guard'].cost;
+        }
+        
+        guardPlacingState = 'none';
+        guardStartTile = null;
+        updateUI();
         return;
       }
 
@@ -1711,13 +1714,12 @@
       } else if (selectedTool === 'remove') {
         removeUnit(tx, ty);
       } else if (selectedTool === 'guard') {
-        // ガード選択時は経路描画開始
+        // ガード選択時は始点選択開始
         const ut = unitTypes['guard'];
         if (cost >= ut.cost) {
-          if (startPatrolDrawing(tx, ty)) {
-            cost -= ut.cost; // コスト先払い
-            updateUI();
-          }
+          cost -= ut.cost; // コスト先払い
+          guardPlacingState = 'start';
+          updateUI();
         }
       } else if (selectedTool) {
         placeUnit(selectedTool, tx, ty);
@@ -1732,25 +1734,16 @@
       clearTimeout(touchTimeout);
     });
 
-    // Escキーでキャンセル
+    // Escキーでガード配置キャンセル
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        if (patrolDrawing) {
-          cancelPatrol();
+        if (guardPlacingState !== 'none') {
+          cost += unitTypes['guard'].cost; // コスト返還
+          guardPlacingState = 'none';
+          guardStartTile = null;
+          updateUI();
         }
       }
-    });
-
-    // ガード経路確定UIのイベントリスナー
-    document.getElementById('btnConfirmPatrol').addEventListener('click', () => {
-      confirmPatrol();
-    });
-
-    document.getElementById('btnCancelPatrol').addEventListener('click', () => {
-      // コスト返還
-      cost += unitTypes['guard'].cost;
-      updateUI();
-      cancelPatrol();
     });
 
     // 開始
