@@ -461,13 +461,21 @@
     function castVisionCone(x, y, angle, range, fov = 60) {
       const selfTx = Math.floor(x);
       const selfTy = Math.floor(y);
-      const points = [{x, y}];
+      const startDist = 0.8; // 根本を空ける（ライトの足元は判定なし）
+      // コーン開始点（根本から少し離れた位置）
+      const points = [];
       const rayCount = 30;
       const startAngle = angle - fov / 2;
+      // 最初のレイの開始点でコーンの根本の弧を描く
       for (let i = 0; i <= rayCount; i++) {
         const a = (startAngle + (fov / rayCount) * i) * Math.PI / 180;
-        let rx = x, ry = y;
-        for (let d = 0; d <= range; d += 0.2) {
+        if (i === 0) points.push({x: x + Math.cos(a) * startDist, y: y + Math.sin(a) * startDist});
+      }
+      for (let i = 0; i <= rayCount; i++) {
+        const a = (startAngle + (fov / rayCount) * i) * Math.PI / 180;
+        let rx = x + Math.cos(a) * startDist;
+        let ry = y + Math.sin(a) * startDist;
+        for (let d = startDist; d <= range; d += 0.2) {
           rx = x + Math.cos(a) * d;
           ry = y + Math.sin(a) * d;
           const tx = Math.floor(rx);
@@ -656,6 +664,7 @@
       const dy = ninja.y - unit.y;
       const dist = Math.sqrt(dx*dx + dy*dy);
       if (dist > unit.range) return false;
+      if (dist < 0.8) return false; // 根本（足元）は判定なし
 
       const selfTx = Math.floor(unit.x);
       const selfTy = Math.floor(unit.y);
@@ -1395,25 +1404,19 @@
           ctx.drawImage(imgDead, 0, 0, 16, 16, sx - 24, sy - 24, 48, 48);
           ctx.globalAlpha = 1;
         } else {
-          // 当たり判定可視化（塗りつぶし円 + ストローク）
-          ctx.globalAlpha = alpha * 0.4;
-          ctx.fillStyle = 'rgba(0, 150, 255, 1)';
-          ctx.beginPath();
-          ctx.arc(sx, sy, 20, 0, Math.PI * 2);
-          ctx.fill();
-          
-          ctx.globalAlpha = alpha * 0.7;
-          ctx.strokeStyle = 'rgba(0, 150, 255, 1)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(sx, sy, 20, 0, Math.PI * 2);
-          ctx.stroke();
-          
-          // 忍者本体を描画
+          // 忍者本体を先に描画
           ctx.globalAlpha = alpha;
           const row = ninja.dir;
           const frame = ninja.frame;
           ctx.drawImage(imgWalk, frame * 16, row * 16, 16, 16, sx - 24, sy - 24, 48, 48);
+          
+          // 当たり判定可視化（忍者の上に表示）
+          ctx.globalAlpha = 0.3;
+          ctx.strokeStyle = '#0af';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 20, 0, Math.PI * 2);
+          ctx.stroke();
           ctx.globalAlpha = 1;
         }
       }
