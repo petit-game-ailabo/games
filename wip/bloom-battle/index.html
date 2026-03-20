@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Bloom Battle - プロトタイプ</title>
+<title>Bloom Battle - プロトタイプ v2</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { 
@@ -11,51 +11,69 @@ body {
   display: flex; justify-content: center; align-items: center; min-height: 100vh;
   overflow: hidden;
 }
-#game { width: 420px; max-width: 100vw; padding: 12px; }
+#game { width: 440px; max-width: 100vw; padding: 10px; user-select: none; }
 
-/* Header */
-.stage-info { text-align: center; margin-bottom: 10px; font-size: 14px; color: #aaa; }
-.stage-info .stage-num { font-size: 20px; font-weight: bold; color: #f0c060; }
+.stage-info { text-align: center; margin-bottom: 8px; font-size: 13px; color: #aaa; }
+.stage-info .stage-num { font-size: 18px; font-weight: bold; color: #f0c060; }
 
-/* Enemy */
-.enemy-area { 
-  background: #2a1a3a; border-radius: 12px; padding: 16px; margin-bottom: 12px;
-  text-align: center; border: 1px solid #4a2a6a;
+/* Enemies area */
+.enemies-area { display: flex; gap: 6px; margin-bottom: 10px; }
+.enemy-card {
+  flex: 1; background: #2a1a3a; border-radius: 10px; padding: 10px 6px;
+  text-align: center; border: 1px solid #4a2a6a; min-width: 0; transition: all 0.3s;
 }
-.enemy-name { font-size: 18px; font-weight: bold; color: #ff6b8a; margin-bottom: 8px; }
-.enemy-emoji { font-size: 48px; margin: 8px 0; }
-.hp-bar-container { background: #333; border-radius: 8px; height: 18px; position: relative; overflow: hidden; }
-.hp-bar { height: 100%; border-radius: 8px; transition: width 0.5s ease; }
-.hp-bar.enemy { background: linear-gradient(90deg, #ff4466, #ff6b8a); }
-.hp-text { position: absolute; top: 0; left: 0; right: 0; text-align: center; font-size: 12px; line-height: 18px; font-weight: bold; }
+.enemy-card.boss { border-color: #8a3a5a; background: #3a1a2a; }
+.enemy-card.dead-enemy { opacity: 0.2; }
+.enemy-card.targeted { border-color: #ff6b8a; box-shadow: 0 0 10px rgba(255,107,138,0.4); }
+.enemy-name { font-size: 11px; font-weight: bold; color: #ff6b8a; }
+.enemy-emoji { font-size: 32px; margin: 4px 0; }
+.hp-bar-container { background: #333; border-radius: 6px; height: 14px; position: relative; overflow: hidden; }
+.hp-bar { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+.hp-bar.enemy-hp { background: linear-gradient(90deg, #ff4466, #ff6b8a); }
+.hp-bar.ally-hp { background: linear-gradient(90deg, #44cc66, #80ff80); }
+.hp-text { position: absolute; top: 0; left: 0; right: 0; text-align: center; font-size: 10px; line-height: 14px; font-weight: bold; }
 
 /* Allies */
-.allies-area { display: flex; gap: 6px; margin-bottom: 12px; }
+.allies-area { display: flex; gap: 6px; margin-bottom: 8px; }
 .ally-card {
-  flex: 1; background: #1e2d1e; border-radius: 10px; padding: 10px 6px;
-  text-align: center; border: 2px solid #3a5a3a; transition: all 0.3s; cursor: pointer;
-  min-width: 0;
+  flex: 1; background: #1e2d1e; border-radius: 10px; padding: 8px 4px;
+  text-align: center; border: 2px solid #3a5a3a; transition: all 0.3s; cursor: pointer; min-width: 0;
 }
-.ally-card.selected { border-color: #80ff80; box-shadow: 0 0 12px rgba(128,255,128,0.3); }
-.ally-card.dead { opacity: 0.3; border-color: #555; cursor: default; }
-.ally-card.acting { border-color: #ffdd57; }
-.ally-name { font-size: 13px; font-weight: bold; margin-bottom: 4px; white-space: nowrap; overflow: hidden; }
-.ally-emoji { font-size: 28px; }
-.bloom-stage { font-size: 11px; color: #f0c060; margin: 4px 0; }
-.ally-hp-bar { background: #333; border-radius: 4px; height: 10px; margin-top: 4px; position: relative; overflow: hidden; }
-.ally-hp-bar .hp-bar { background: linear-gradient(90deg, #44cc66, #80ff80); }
-.ally-hp-bar .hp-text { font-size: 9px; line-height: 10px; }
+.ally-card.acting { border-color: #ffdd57; box-shadow: 0 0 10px rgba(255,221,87,0.3); }
+.ally-card.dead { opacity: 0.25; border-color: #555; cursor: default; }
+.ally-card.bloomed-this-turn { border-color: #f0c060; }
+.ally-name { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
+.ally-emoji { font-size: 24px; }
+.bloom-stage { font-size: 10px; color: #f0c060; margin: 2px 0; }
+.ally-hp-bar { background: #333; border-radius: 4px; height: 10px; margin-top: 3px; position: relative; overflow: hidden; }
+.ally-hp-bar .hp-text { font-size: 8px; line-height: 10px; }
+
+/* Skill Tree Panel */
+.skill-tree-panel {
+  background: #0e1525; border-radius: 10px; padding: 10px; margin-bottom: 8px;
+  border: 1px solid #2a3a5e; display: none;
+}
+.skill-tree-panel.visible { display: block; }
+.skill-tree-title { font-size: 12px; color: #f0c060; margin-bottom: 6px; font-weight: bold; }
+.skill-tree-row {
+  display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 11px;
+  border-bottom: 1px solid #1a2a3e;
+}
+.skill-tree-row:last-child { border-bottom: none; }
+.skill-tree-row.locked { color: #555; }
+.skill-tree-row.current { color: #80ff80; font-weight: bold; }
+.skill-tree-row.future { color: #888; }
+.skill-bloom-label { width: 55px; font-size: 10px; }
+.skill-name { flex: 1; }
+.skill-desc { color: #aaa; font-size: 10px; }
 
 /* Commands */
-.command-area { 
-  background: #16213e; border-radius: 12px; padding: 14px; margin-bottom: 10px;
-  border: 1px solid #1a3a5e;
-}
-.command-label { font-size: 12px; color: #888; margin-bottom: 8px; }
-.commands { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.command-area { background: #16213e; border-radius: 10px; padding: 10px; margin-bottom: 8px; border: 1px solid #1a3a5e; }
+.command-label { font-size: 11px; color: #888; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+.commands { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .cmd-btn {
-  padding: 12px 8px; border-radius: 8px; border: 2px solid #3a5a8a;
-  background: #1a2a4a; color: #eee; font-size: 14px; font-weight: bold;
+  padding: 10px 6px; border-radius: 8px; border: 2px solid #3a5a8a;
+  background: #1a2a4a; color: #eee; font-size: 13px; font-weight: bold;
   cursor: pointer; transition: all 0.2s; text-align: center;
 }
 .cmd-btn:hover:not(:disabled) { background: #2a3a5a; border-color: #5a8abb; }
@@ -63,533 +81,517 @@ body {
 .cmd-btn:disabled { opacity: 0.3; cursor: default; }
 .cmd-btn.bloom-btn { border-color: #8a5a3a; background: #3a2a1a; }
 .cmd-btn.bloom-btn:hover:not(:disabled) { background: #4a3a2a; border-color: #bb8a5a; }
+.cmd-btn .sub { font-size: 9px; color: #aaa; display: block; margin-top: 2px; }
+
+/* Target select */
+.target-select { margin-top: 6px; }
+.target-btn {
+  padding: 8px 12px; margin: 3px; border-radius: 6px; border: 1px solid #5a3a3a;
+  background: #2a1a1a; color: #eee; cursor: pointer; font-size: 12px;
+}
+.target-btn:hover { background: #4a2a2a; border-color: #8a5a5a; }
 
 /* Log */
 .log-area {
-  background: #111; border-radius: 8px; padding: 10px; height: 120px;
-  overflow-y: auto; font-size: 12px; line-height: 1.6;
+  background: #111; border-radius: 8px; padding: 8px; height: 100px;
+  overflow-y: auto; font-size: 11px; line-height: 1.5;
 }
 .log-area .dmg { color: #ff6b6b; }
 .log-area .heal { color: #6bff6b; }
 .log-area .bloom-log { color: #ffcc44; }
 .log-area .info { color: #88aacc; }
-.log-area .dead { color: #888; }
+.log-area .dead-log { color: #666; font-style: italic; }
+.log-area .summon { color: #cc88ff; }
 
 /* Overlay */
 .overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.85); display: flex; justify-content: center;
-  align-items: center; z-index: 100; flex-direction: column;
+  background: rgba(0,0,0,0.88); display: flex; justify-content: center;
+  align-items: center; z-index: 100; flex-direction: column; padding: 20px;
 }
-.overlay h2 { font-size: 28px; margin-bottom: 12px; }
-.overlay p { font-size: 16px; color: #aaa; margin-bottom: 20px; text-align: center; line-height: 1.6; }
+.overlay h2 { font-size: 26px; margin-bottom: 12px; }
+.overlay p { font-size: 14px; color: #aaa; margin-bottom: 16px; text-align: center; line-height: 1.6; }
 .overlay button {
-  padding: 14px 40px; border-radius: 10px; border: none;
-  background: #f0c060; color: #1a1a2e; font-size: 18px; font-weight: bold;
-  cursor: pointer;
+  padding: 12px 36px; border-radius: 10px; border: none;
+  background: #f0c060; color: #1a1a2e; font-size: 16px; font-weight: bold; cursor: pointer;
 }
 .overlay button:hover { background: #ffdd88; }
-
 .hidden { display: none !important; }
 
-/* Bloom animation */
 @keyframes bloomFlash {
   0% { filter: brightness(1); }
-  50% { filter: brightness(2) saturate(2); }
+  50% { filter: brightness(2.5) saturate(2); }
   100% { filter: brightness(1); }
 }
 .bloom-anim { animation: bloomFlash 0.6s ease; }
 
-/* Damage flash */
 @keyframes damageFlash {
-  0%, 100% { opacity: 1; }
-  25%, 75% { opacity: 0.3; }
+  0%,100% { opacity:1; transform: translateX(0); }
+  25% { opacity:0.4; transform: translateX(-4px); }
+  75% { opacity:0.4; transform: translateX(4px); }
 }
-.damage-anim { animation: damageFlash 0.4s ease; }
+.damage-anim { animation: damageFlash 0.35s ease; }
+
+@keyframes deathFade {
+  0% { opacity:1; transform: scale(1); }
+  100% { opacity:0; transform: scale(0.5); }
+}
+.death-anim { animation: deathFade 0.8s ease forwards; }
 </style>
 </head>
 <body>
 
 <div id="game">
-  <!-- Stage Info -->
-  <div class="stage-info">
-    STAGE <span class="stage-num" id="stageNum">1</span> / 3
-  </div>
-
-  <!-- Enemy -->
-  <div class="enemy-area">
-    <div class="enemy-name" id="enemyName">スライム</div>
-    <div class="enemy-emoji" id="enemyEmoji">👾</div>
-    <div class="hp-bar-container">
-      <div class="hp-bar enemy" id="enemyHpBar" style="width:100%"></div>
-      <div class="hp-text" id="enemyHpText">100 / 100</div>
-    </div>
-  </div>
-
-  <!-- Allies -->
+  <div class="stage-info">STAGE <span class="stage-num" id="stageNum">1</span> / 3</div>
+  <div class="enemies-area" id="enemiesArea"></div>
   <div class="allies-area" id="alliesArea"></div>
-
-  <!-- Commands -->
+  <div class="skill-tree-panel" id="skillTreePanel"></div>
   <div class="command-area" id="commandArea">
-    <div class="command-label" id="commandLabel">行動を選択</div>
+    <div class="command-label"><span id="commandLabel">行動を選択</span><button style="background:none;border:1px solid #555;color:#aaa;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer" onclick="toggleSkillTree()">スキル一覧</button></div>
     <div class="commands" id="commands"></div>
   </div>
-
-  <!-- Log -->
   <div class="log-area" id="logArea"></div>
 </div>
 
-<!-- Start Screen -->
 <div class="overlay" id="startScreen">
   <h2>🌸 Bloom Battle</h2>
-  <p>花の少女たちを率いて3体の敵を倒せ。<br>
-  戦うほど開花が進み強くなる。<br>
-  しかし満開の先は……散る。</p>
+  <p>花の少女たちを率いて3体のボスを倒せ。<br>
+  開花するほど強くなる。<br>
+  しかし満開の先は——散る。<br><br>
+  <span style="font-size:12px;color:#f0c060">開花はターン消費なし（1ターン1回まで）<br>
+  倒されると一気に3段階開花して復活<br>
+  満開を超えたキャラは永久退場</span></p>
   <button onclick="startGame()">はじめる</button>
 </div>
 
-<!-- Result Screen -->
 <div class="overlay hidden" id="resultScreen">
-  <h2 id="resultTitle">勝利！</h2>
+  <h2 id="resultTitle"></h2>
   <p id="resultText"></p>
   <button onclick="startGame()">もう一度</button>
 </div>
 
 <script>
-// === Data ===
-const BLOOM_STAGES = ['つぼみ', '一分咲き', '三分咲き', '五分咲き', '七分咲き', '満開', '散る'];
-const BLOOM_EMOJI = ['🌱', '🌷', '🌸', '💮', '🏵️', '🌺', '🥀'];
+const BLOOM = ['つぼみ','一分咲き','三分咲き','五分咲き','七分咲き','満開','散る'];
+const BEMOJI = ['🌱','🌷','🌸','💮','🏵️','🌺','🥀'];
 
-const ALLY_DATA = [
-  { name: '桜花', emoji: '🌸', flower: 'sakura', baseHp: 80, baseAtk: 18, baseDef: 8,
+const ALLIES = [
+  { name:'桜花', emoji:'🌸', baseHp:90, baseAtk:20, baseDef:10,
     skills: [
       null,
-      { name: '花びら斬り', power: 1.5, desc: '1.5倍ダメージ' },
-      { name: '回復の蜜', power: 0, heal: 30, desc: 'HP30回復' },
-      { name: '花粉の舞', power: 1.3, debuff: true, desc: '1.3倍+敵攻撃↓' },
-      { name: '花吹雪', power: 2.0, desc: '2倍ダメージ' },
-      { name: '満開一閃', power: 3.0, desc: '3倍ダメージ！' }
+      { name:'花びら斬り', power:1.6, desc:'1.6倍ダメージ' },
+      { name:'癒しの蜜', power:0, heal:40, desc:'自分HP40回復' },
+      { name:'花粉の霧', power:1.4, debuff:true, desc:'1.4倍+敵攻撃↓' },
+      { name:'花吹雪', power:2.2, aoe:true, desc:'全体2.2倍' },
+      { name:'満開一閃', power:3.5, desc:'3.5倍！' }
     ]
   },
-  { name: '蓮華', emoji: '🪷', flower: 'lotus', baseHp: 100, baseAtk: 12, baseDef: 12,
+  { name:'蓮華', emoji:'🪷', baseHp:120, baseAtk:14, baseDef:14,
     skills: [
       null,
-      { name: '蓮の盾', power: 0, shield: 15, desc: '全員に防御+15' },
-      { name: '浄化の光', power: 1.2, healAll: 15, desc: '攻撃+全員HP15回復' },
-      { name: '泥中の華', power: 0, heal: 50, desc: 'HP50回復' },
-      { name: '蓮華結界', power: 0, shield: 30, desc: '全員に防御+30' },
-      { name: '極楽浄土', power: 2.5, healAll: 30, desc: '2.5倍+全員HP30回復' }
+      { name:'蓮の盾', power:0, shieldAll:20, desc:'全員防御+20' },
+      { name:'浄化の光', power:1.3, healAll:20, desc:'1.3倍+全員HP20回復' },
+      { name:'泥中の華', power:0, heal:60, desc:'自分HP60回復' },
+      { name:'蓮華結界', power:0, shieldAll:35, desc:'全員防御+35' },
+      { name:'極楽浄土', power:2.8, healAll:40, desc:'2.8倍+全員HP40回復' }
     ]
   },
-  { name: '百合', emoji: '🏵️', flower: 'lily', baseHp: 60, baseAtk: 25, baseDef: 5,
+  { name:'百合', emoji:'🏵️', baseHp:70, baseAtk:28, baseDef:6,
     skills: [
       null,
-      { name: '突撃', power: 1.8, recoil: 10, desc: '1.8倍(反動10)' },
-      { name: '二連撃', power: 1.3, hits: 2, desc: '1.3倍×2回' },
-      { name: '貫通撃', power: 1.6, pierce: true, desc: '1.6倍(防御無視)' },
-      { name: '百花繚乱', power: 2.2, hits: 2, desc: '2.2倍×2回' },
-      { name: '散華', power: 4.0, desc: '4倍！最強の一撃' }
+      { name:'突撃', power:2.0, recoil:10, desc:'2倍(反動10)' },
+      { name:'二連撃', power:1.5, hits:2, desc:'1.5倍×2回' },
+      { name:'貫通撃', power:1.8, pierce:true, desc:'1.8倍(防御無視)' },
+      { name:'百花繚乱', power:2.5, hits:2, aoe:true, desc:'全体2.5倍×2' },
+      { name:'散華', power:5.0, desc:'5倍！究極の一撃' }
     ]
   }
 ];
 
-const ENEMY_DATA = [
-  { name: 'ゴブリン', emoji: '👺', hp: 100, atk: 12, def: 5 },
-  { name: 'オーガ', emoji: '👹', hp: 180, atk: 20, def: 10 },
-  { name: 'ドラゴン', emoji: '🐉', hp: 300, atk: 28, def: 15 }
+const STAGES = [
+  { boss: { name:'ゴーレム', emoji:'🗿', hp:200, atk:22, def:8 }, minions: [] },
+  { boss: { name:'キメラ', emoji:'🦁', hp:350, atk:32, def:12 },
+    minions: [
+      { name:'子蛇', emoji:'🐍', hp:60, atk:18, def:3, summonTurn:1 },
+      { name:'子蛇', emoji:'🐍', hp:60, atk:18, def:3, summonTurn:3 }
+    ]
+  },
+  { boss: { name:'邪龍', emoji:'🐉', hp:550, atk:42, def:18 },
+    minions: [
+      { name:'骸骨兵', emoji:'💀', hp:80, atk:24, def:5, summonTurn:1 },
+      { name:'骸骨兵', emoji:'💀', hp:80, atk:24, def:5, summonTurn:2 },
+      { name:'闇術師', emoji:'🧙', hp:50, atk:30, def:3, summonTurn:4 }
+    ]
+  }
 ];
 
-// === State ===
-let allies = [];
-let enemy = null;
-let stage = 0; // 0-2
-let currentAlly = 0; // whose turn
-let phase = 'player'; // player | enemy | transition
-let turnOrder = [];
-let turnIndex = 0;
+let allies=[], enemies=[], stage=0, currentAlly=0, phase='', turnOrder=[], turnIndex=0;
+let stageTurn=0, pendingAction=null, selectedTarget=null, skillTreeVisible=false;
+let bloomedThisTurn = new Set();
 
-// === Init ===
 function startGame() {
-  document.getElementById('startScreen').classList.add('hidden');
-  document.getElementById('resultScreen').classList.add('hidden');
-  document.getElementById('logArea').innerHTML = '';
-  
-  allies = ALLY_DATA.map((d, i) => ({
-    ...d, id: i,
-    hp: d.baseHp, maxHp: d.baseHp,
-    atk: d.baseAtk, def: d.baseDef,
-    bloom: 0, dead: false, shieldBuff: 0
+  hide('startScreen'); hide('resultScreen');
+  el('logArea').innerHTML='';
+  allies = ALLIES.map((d,i) => ({
+    ...d, id:i, hp:d.baseHp, maxHp:d.baseHp,
+    atk:d.baseAtk, def:d.baseDef,
+    bloom:0, dead:false, shieldBuff:0, defending:false
   }));
-  
-  stage = 0;
-  startStage();
+  stage=0; startStage();
 }
 
 function startStage() {
-  const ed = ENEMY_DATA[stage];
-  enemy = { ...ed, maxHp: ed.hp };
-  
-  document.getElementById('stageNum').textContent = stage + 1;
-  updateEnemyUI();
-  updateAlliesUI();
-  
-  log(`<span class="info">── STAGE ${stage + 1}: ${enemy.name}が現れた！ ──</span>`);
-  
-  startPlayerPhase();
+  const sd = STAGES[stage];
+  enemies = [{ ...sd.boss, maxHp:sd.boss.hp, isBoss:true, dead:false, id:'boss' }];
+  stageTurn=0;
+  el('stageNum').textContent=stage+1;
+  log(`<span class="info">── STAGE ${stage+1}: ${sd.boss.name}が現れた！ ──</span>`);
+  updateUI(); startPlayerPhase();
 }
 
-function getBloomMultiplier(bloom) {
-  return 1 + bloom * 0.2; // 0: x1.0, 1: x1.2, ... 5: x2.0
-}
-
-function getAllyStats(ally) {
-  const m = getBloomMultiplier(ally.bloom);
-  return {
-    atk: Math.floor(ally.baseAtk * m),
-    def: Math.floor(ally.baseDef * m),
-    maxHp: Math.floor(ally.baseHp * m)
-  };
+function bm(b) { return 1+b*0.25; }
+function astat(a) {
+  const m=bm(a.bloom);
+  return { atk:Math.floor(a.baseAtk*m), def:Math.floor(a.baseDef*m), maxHp:Math.floor(a.baseHp*m) };
 }
 
 // === Player Phase ===
 function startPlayerPhase() {
-  phase = 'player';
-  turnOrder = allies.filter(a => !a.dead).map(a => a.id);
-  turnIndex = 0;
+  phase='player'; stageTurn++;
+  bloomedThisTurn.clear();
+  allies.forEach(a=>{ a.defending=false; a.shieldBuff=0; });
   
-  if (turnOrder.length === 0) {
-    gameOver(false);
-    return;
-  }
+  // Summon minions
+  const sd=STAGES[stage];
+  sd.minions.forEach((md,i) => {
+    if(md.summonTurn===stageTurn && !enemies.find(e=>e.id==='m'+i)) {
+      const m={...md, maxHp:md.hp, isBoss:false, dead:false, id:'m'+i};
+      enemies.push(m);
+      log(`<span class="summon">⚡ ${md.name}が召喚された！</span>`);
+    }
+  });
   
-  promptAction();
+  turnOrder=allies.filter(a=>!a.dead).map(a=>a.id);
+  turnIndex=0;
+  
+  if(!turnOrder.length){ gameOver(false); return; }
+  updateUI(); promptAction();
 }
 
 function promptAction() {
-  if (turnIndex >= turnOrder.length) {
-    startEnemyPhase();
-    return;
-  }
-  
-  currentAlly = turnOrder[turnIndex];
-  const ally = allies[currentAlly];
-  
-  updateAlliesUI();
-  showCommands(ally);
+  if(turnIndex>=turnOrder.length){ startEnemyPhase(); return; }
+  currentAlly=turnOrder[turnIndex];
+  updateUI(); showCommands(allies[currentAlly]);
 }
 
-function showCommands(ally) {
-  const cmds = document.getElementById('commands');
-  const label = document.getElementById('commandLabel');
-  label.textContent = `${ally.name}の行動`;
+function showCommands(a) {
+  const s=astat(a), sk=a.skills[a.bloom], cmds=el('commands');
+  el('commandLabel').textContent=`${a.name}（${BLOOM[a.bloom]}）`;
   
-  const stats = getAllyStats(ally);
-  let html = '';
+  const canBloom = a.bloom<5 && !bloomedThisTurn.has(a.id);
+  const aliveEnemies = enemies.filter(e=>!e.dead);
+  const multiTarget = aliveEnemies.length>1;
   
+  let h='';
   // Attack
-  html += `<button class="cmd-btn" onclick="doAttack()">⚔️ 攻撃</button>`;
-  
+  h+=`<button class="cmd-btn" onclick="chooseTarget('attack')">⚔️ 攻撃<span class="sub">ATK:${s.atk}</span></button>`;
   // Skill
-  const skill = ally.skills[ally.bloom];
-  if (skill) {
-    html += `<button class="cmd-btn" onclick="doSkill()">${skill.name}<br><span style="font-size:10px;color:#aaa">${skill.desc}</span></button>`;
-  } else {
-    html += `<button class="cmd-btn" disabled>スキルなし</button>`;
-  }
-  
-  // Bloom (voluntary)
-  const canBloom = ally.bloom < 5;
-  const bloomLabel = canBloom ? `🌸 開花<br><span style="font-size:10px;color:#f0c060">${BLOOM_STAGES[ally.bloom]}→${BLOOM_STAGES[ally.bloom+1]}</span>` : '満開済み';
-  html += `<button class="cmd-btn bloom-btn" onclick="doBloom()" ${!canBloom ? 'disabled' : ''}>${bloomLabel}</button>`;
-  
+  if(sk) h+=`<button class="cmd-btn" onclick="chooseTarget('skill')">✨ ${sk.name}<span class="sub">${sk.desc}</span></button>`;
+  else h+=`<button class="cmd-btn" disabled>スキルなし</button>`;
+  // Bloom
+  h+=`<button class="cmd-btn bloom-btn" onclick="doBloom()" ${!canBloom?'disabled':''}>${canBloom?`🌸 開花<span class="sub">${BLOOM[a.bloom]}→${BLOOM[a.bloom+1]}</span>`:(a.bloom>=5?'満開済み':'開花済(このターン)')}</button>`;
   // Defend
-  html += `<button class="cmd-btn" onclick="doDefend()">🛡️ 防御</button>`;
+  h+=`<button class="cmd-btn" onclick="doDefend()">🛡️ 防御<span class="sub">被ダメ半減</span></button>`;
   
-  cmds.innerHTML = html;
+  cmds.innerHTML=h;
 }
 
-// === Actions ===
-function doAttack() {
-  if (phase !== 'player') return;
-  const ally = allies[currentAlly];
-  const stats = getAllyStats(ally);
-  const dmg = Math.max(1, stats.atk - enemy.def + Math.floor(Math.random() * 6) - 2);
+function chooseTarget(action) {
+  const aliveEnemies=enemies.filter(e=>!e.dead);
+  const a=allies[currentAlly], sk=a.skills[a.bloom];
   
-  enemy.hp = Math.max(0, enemy.hp - dmg);
-  log(`${ally.name}の攻撃！ <span class="dmg">${dmg}ダメージ</span>`);
-  
-  animateEnemy();
-  updateEnemyUI();
-  
-  if (enemy.hp <= 0) {
-    enemyDefeated();
+  // AOE skills hit all
+  if(action==='skill' && sk && sk.aoe) {
+    if(action==='skill') doSkillOn(null); // null = all
     return;
   }
   
+  if(aliveEnemies.length===1) {
+    if(action==='attack') doAttackOn(aliveEnemies[0].id);
+    else doSkillOn(aliveEnemies[0].id);
+    return;
+  }
+  
+  // Show target selection
+  let h=`<div class="target-select"><div style="font-size:11px;color:#aaa;margin-bottom:4px">対象を選択:</div>`;
+  aliveEnemies.forEach(e=>{
+    h+=`<button class="target-btn" onclick="${action==='attack'?`doAttackOn('${e.id}')`:`doSkillOn('${e.id}')`}">${e.emoji} ${e.name} (HP:${e.hp})</button>`;
+  });
+  h+=`<button class="target-btn" onclick="promptAction()" style="border-color:#555">戻る</button></div>`;
+  el('commands').innerHTML+=h;
+}
+
+function doAttackOn(tid) {
+  if(phase!=='player') return;
+  const a=allies[currentAlly], s=astat(a);
+  const t=enemies.find(e=>e.id===tid);
+  if(!t||t.dead) return;
+  
+  const dmg=Math.max(1, s.atk - t.def + rng(-3,4));
+  t.hp=Math.max(0,t.hp-dmg);
+  log(`${a.name}→${t.name}に<span class="dmg">${dmg}ダメージ</span>`);
+  animateEl(tid);
+  
+  checkEnemyDeath(t);
+  updateUI();
+  if(checkAllEnemiesDead()) return;
   nextTurn();
 }
 
-function doSkill() {
-  if (phase !== 'player') return;
-  const ally = allies[currentAlly];
-  const skill = ally.skills[ally.bloom];
-  if (!skill) return;
+function doSkillOn(tid) {
+  if(phase!=='player') return;
+  const a=allies[currentAlly], sk=a.skills[a.bloom], s=astat(a);
+  if(!sk) return;
   
-  const stats = getAllyStats(ally);
+  log(`<span class="bloom-log">${a.name}の${sk.name}！</span>`);
   
-  log(`<span class="bloom-log">${ally.name}の${skill.name}！</span>`);
-  
-  if (skill.power > 0) {
-    const hits = skill.hits || 1;
-    let totalDmg = 0;
-    for (let i = 0; i < hits; i++) {
-      let dmg = Math.max(1, Math.floor(stats.atk * skill.power) - (skill.pierce ? 0 : enemy.def) + Math.floor(Math.random() * 6) - 2);
-      totalDmg += dmg;
-      enemy.hp = Math.max(0, enemy.hp - dmg);
-    }
-    log(`<span class="dmg">${totalDmg}ダメージ${skill.hits > 1 ? `(${skill.hits}hit)` : ''}</span>`);
-    animateEnemy();
-    
-    if (skill.recoil) {
-      ally.hp = Math.max(1, ally.hp - skill.recoil);
-      log(`<span class="dmg">反動で${skill.recoil}ダメージ</span>`);
-    }
-  }
-  
-  if (skill.heal) {
-    const newStats = getAllyStats(ally);
-    ally.hp = Math.min(newStats.maxHp, ally.hp + skill.heal);
-    log(`<span class="heal">${ally.name}のHPが${skill.heal}回復</span>`);
-  }
-  
-  if (skill.healAll) {
-    allies.forEach(a => {
-      if (!a.dead) {
-        const s = getAllyStats(a);
-        a.hp = Math.min(s.maxHp, a.hp + skill.healAll);
+  if(sk.power>0) {
+    const targets = sk.aoe ? enemies.filter(e=>!e.dead) : [enemies.find(e=>e.id===tid)];
+    targets.forEach(t=>{
+      if(!t||t.dead) return;
+      const hits=sk.hits||1;
+      let total=0;
+      for(let i=0;i<hits;i++){
+        const d=Math.max(1, Math.floor(s.atk*sk.power) - (sk.pierce?0:t.def) + rng(-3,5));
+        total+=d; t.hp=Math.max(0,t.hp-d);
       }
+      log(`→${t.name}に<span class="dmg">${total}${hits>1?`(${hits}hit)`:''}</span>`);
+      animateEl(t.id);
+      checkEnemyDeath(t);
     });
-    log(`<span class="heal">全員のHPが${skill.healAll}回復</span>`);
+    if(sk.recoil){ a.hp=Math.max(1,a.hp-sk.recoil); log(`<span class="dmg">反動${sk.recoil}</span>`); }
   }
+  if(sk.heal){ const ms=astat(a); a.hp=Math.min(ms.maxHp,a.hp+sk.heal); log(`<span class="heal">${a.name} HP+${sk.heal}</span>`); }
+  if(sk.healAll){ allies.forEach(x=>{ if(!x.dead){ const ms=astat(x); x.hp=Math.min(ms.maxHp,x.hp+sk.healAll); }}); log(`<span class="heal">全員 HP+${sk.healAll}</span>`); }
+  if(sk.shieldAll){ allies.forEach(x=>{ if(!x.dead) x.shieldBuff+=sk.shieldAll; }); log(`<span class="info">全員 防御+${sk.shieldAll}</span>`); }
+  if(sk.debuff){ enemies.forEach(e=>{ if(!e.dead) e.atk=Math.max(1,e.atk-5); }); log(`<span class="info">敵全体の攻撃↓</span>`); }
   
-  if (skill.shield) {
-    allies.forEach(a => { if (!a.dead) a.shieldBuff += skill.shield; });
-    log(`<span class="info">全員の防御+${skill.shield}</span>`);
-  }
-  
-  if (skill.debuff) {
-    enemy.atk = Math.max(1, enemy.atk - 3);
-    log(`<span class="info">敵の攻撃力が下がった</span>`);
-  }
-  
-  updateEnemyUI();
-  updateAlliesUI();
-  
-  if (enemy.hp <= 0) {
-    enemyDefeated();
-    return;
-  }
-  
+  updateUI();
+  if(checkAllEnemiesDead()) return;
   nextTurn();
 }
 
 function doBloom() {
-  if (phase !== 'player') return;
-  const ally = allies[currentAlly];
-  if (ally.bloom >= 5) return;
+  if(phase!=='player') return;
+  const a=allies[currentAlly];
+  if(a.bloom>=5 || bloomedThisTurn.has(a.id)) return;
   
-  ally.bloom++;
-  const stats = getAllyStats(ally);
-  ally.maxHp = stats.maxHp;
-  // HP stays the same (voluntary bloom = no heal)
-  ally.hp = Math.min(ally.hp, ally.maxHp);
+  a.bloom++;
+  bloomedThisTurn.add(a.id);
+  const s=astat(a);
+  a.maxHp=s.maxHp;
+  a.hp=Math.min(a.hp,a.maxHp);
   
-  log(`<span class="bloom-log">🌸 ${ally.name}が${BLOOM_STAGES[ally.bloom]}に開花！ ステータスUP！</span>`);
+  log(`<span class="bloom-log">🌸 ${a.name}が${BLOOM[a.bloom]}に開花！</span>`);
+  if(a.skills[a.bloom]) log(`<span class="bloom-log">→「${a.skills[a.bloom].name}」習得！</span>`);
   
-  const card = document.querySelectorAll('.ally-card')[ally.id];
-  if (card) { card.classList.add('bloom-anim'); setTimeout(() => card.classList.remove('bloom-anim'), 600); }
+  const card=document.querySelectorAll('.ally-card')[a.id];
+  if(card){ card.classList.add('bloom-anim'); setTimeout(()=>card.classList.remove('bloom-anim'),600); }
   
-  updateAlliesUI();
-  showCommands(ally); // Don't consume turn - let them act again? No, bloom IS the action.
-  nextTurn();
+  updateUI();
+  // No turn consumption — show commands again
+  showCommands(a);
 }
 
 function doDefend() {
-  if (phase !== 'player') return;
-  const ally = allies[currentAlly];
-  ally.defending = true;
-  log(`${ally.name}は身を守っている`);
+  if(phase!=='player') return;
+  allies[currentAlly].defending=true;
+  log(`${allies[currentAlly].name}は身を守っている`);
   nextTurn();
 }
 
-function nextTurn() {
-  turnIndex++;
-  setTimeout(() => promptAction(), 300);
-}
+function nextTurn() { turnIndex++; setTimeout(()=>promptAction(),250); }
 
 // === Enemy Phase ===
 function startEnemyPhase() {
-  phase = 'enemy';
-  document.getElementById('commands').innerHTML = '<div style="text-align:center;color:#888;grid-column:1/-1">敵のターン...</div>';
+  phase='enemy';
+  el('commands').innerHTML='<div style="text-align:center;color:#666;grid-column:1/-1;font-size:12px">敵のターン...</div>';
   
-  setTimeout(() => {
-    // Enemy attacks random alive ally
-    const alive = allies.filter(a => !a.dead);
-    if (alive.length === 0) { gameOver(false); return; }
-    
-    const target = alive[Math.floor(Math.random() * alive.length)];
-    const tStats = getAllyStats(target);
-    const def = tStats.def + target.shieldBuff + (target.defending ? 15 : 0);
-    const dmg = Math.max(1, enemy.atk - def + Math.floor(Math.random() * 8) - 3);
-    
-    target.hp -= dmg;
-    log(`${enemy.name}の攻撃→${target.name}に <span class="dmg">${dmg}ダメージ</span>`);
-    
-    // Animate
-    const card = document.querySelectorAll('.ally-card')[target.id];
-    if (card) { card.classList.add('damage-anim'); setTimeout(() => card.classList.remove('damage-anim'), 400); }
-    
-    if (target.hp <= 0) {
-      target.hp = 0;
-      // Defeated: bloom +3 and revive
-      const oldBloom = target.bloom;
-      target.bloom = Math.min(target.bloom + 3, 6);
-      
-      if (target.bloom >= 6) {
-        // 散る
-        target.dead = true;
-        target.hp = 0;
-        log(`<span class="dead">🥀 ${target.name}は散ってしまった……</span>`);
-      } else {
-        const newStats = getAllyStats(target);
-        target.hp = newStats.maxHp;
-        target.maxHp = newStats.maxHp;
-        log(`<span class="bloom-log">🌸 ${target.name}が倒れたが${BLOOM_STAGES[target.bloom]}に覚醒！ HP全回復！</span>`);
-      }
-    }
-    
-    // Reset defend flags
-    allies.forEach(a => { a.defending = false; a.shieldBuff = 0; });
-    
-    updateAlliesUI();
-    
-    // Check if all dead
-    if (allies.every(a => a.dead)) {
-      gameOver(false);
-      return;
-    }
-    
-    setTimeout(() => startPlayerPhase(), 500);
-  }, 800);
+  const alive=enemies.filter(e=>!e.dead);
+  let delay=0;
+  alive.forEach((e,i)=>{
+    setTimeout(()=>enemyAttack(e, i===alive.length-1), delay);
+    delay+=900;
+  });
 }
 
-// === Stage Transition ===
-function enemyDefeated() {
-  log(`<span class="info">🎉 ${enemy.name}を倒した！</span>`);
+function enemyAttack(e, isLast) {
+  const aliveAllies=allies.filter(a=>!a.dead);
+  if(!aliveAllies.length){ gameOver(false); return; }
   
-  // All alive allies bloom +1
-  allies.forEach(a => {
-    if (!a.dead) {
-      const oldBloom = a.bloom;
-      a.bloom = Math.min(a.bloom + 1, 6);
-      
-      if (a.bloom >= 6) {
-        a.dead = true;
-        a.hp = 0;
-        log(`<span class="dead">🥀 ${a.name}は満開を超え、散ってしまった……</span>`);
-      } else {
-        const stats = getAllyStats(a);
-        a.maxHp = stats.maxHp;
-        // HP stays after victory bloom
-        a.hp = Math.min(a.hp, a.maxHp);
-        log(`<span class="bloom-log">🌸 ${a.name}が${BLOOM_STAGES[a.bloom]}に開花</span>`);
+  const t=aliveAllies[Math.floor(Math.random()*aliveAllies.length)];
+  const ts=astat(t);
+  const def=ts.def + t.shieldBuff + (t.defending?999:0);
+  const dmg=Math.max(1, e.atk - def + rng(-4,5));
+  
+  t.hp-=dmg;
+  log(`${e.emoji}${e.name}→${t.name}に<span class="dmg">${dmg}ダメージ</span>`);
+  const card=document.querySelectorAll('.ally-card')[t.id];
+  if(card){ card.classList.add('damage-anim'); setTimeout(()=>card.classList.remove('damage-anim'),350); }
+  
+  if(t.hp<=0) {
+    t.hp=0;
+    const ob=t.bloom;
+    t.bloom=Math.min(t.bloom+3, 6);
+    if(t.bloom>=6){
+      t.dead=true;
+      log(`<span class="dead-log">🥀 ${t.name}は散ってしまった……</span>`);
+    } else {
+      const ns=astat(t);
+      t.hp=ns.maxHp; t.maxHp=ns.maxHp;
+      log(`<span class="bloom-log">🌸 ${t.name}が倒れたが${BLOOM[t.bloom]}に覚醒！ HP全回復！</span>`);
+      for(let b=ob+1;b<=t.bloom;b++){
+        if(t.skills[b]) log(`<span class="bloom-log">→「${t.skills[b].name}」習得！</span>`);
       }
+    }
+  }
+  
+  updateUI();
+  
+  if(isLast) {
+    if(allies.every(a=>a.dead)){ setTimeout(()=>gameOver(false),500); return; }
+    setTimeout(()=>startPlayerPhase(),500);
+  }
+}
+
+// === Stage transitions ===
+function checkEnemyDeath(t) {
+  if(t.hp<=0) { t.dead=true; log(`<span class="info">💥 ${t.name}を撃破！</span>`); }
+}
+
+function checkAllEnemiesDead() {
+  if(!enemies.every(e=>e.dead)) return false;
+  
+  log(`<span class="info">🎉 STAGE ${stage+1} クリア！</span>`);
+  
+  // Victory bloom +1
+  allies.forEach(a=>{
+    if(!a.dead){
+      a.bloom=Math.min(a.bloom+1,6);
+      if(a.bloom>=6){ a.dead=true; a.hp=0; log(`<span class="dead-log">🥀 ${a.name}は満開を超え散った……</span>`); }
+      else { const s=astat(a); a.maxHp=s.maxHp; a.hp=Math.min(a.hp,a.maxHp); log(`<span class="bloom-log">🌸 ${a.name}→${BLOOM[a.bloom]}</span>`); }
     }
   });
   
-  updateAlliesUI();
+  updateUI();
   
-  if (stage >= 2) {
-    gameOver(true);
-    return;
-  }
-  
-  if (allies.every(a => a.dead)) {
-    gameOver(false);
-    return;
-  }
+  if(stage>=2){ setTimeout(()=>gameOver(true),800); return true; }
+  if(allies.every(a=>a.dead)){ setTimeout(()=>gameOver(false),800); return true; }
   
   stage++;
-  setTimeout(() => startStage(), 1000);
+  setTimeout(()=>startStage(),1200);
+  return true;
 }
 
 function gameOver(won) {
-  const screen = document.getElementById('resultScreen');
-  screen.classList.remove('hidden');
-  
-  if (won) {
-    const alive = allies.filter(a => !a.dead);
-    document.getElementById('resultTitle').textContent = '🌸 勝利！';
-    let text = '全ての敵を倒した！\n\n';
-    allies.forEach(a => {
-      if (a.dead) {
-        text += `🥀 ${a.name} — 散華\n`;
-      } else {
-        text += `${BLOOM_EMOJI[a.bloom]} ${a.name} — ${BLOOM_STAGES[a.bloom]} (HP: ${a.hp})\n`;
-      }
-    });
-    document.getElementById('resultText').innerHTML = text.replace(/\n/g, '<br>');
+  const s=el('resultScreen'); s.classList.remove('hidden');
+  if(won){
+    el('resultTitle').textContent='🌸 勝利！';
+    let t='全ての敵を討ち倒した！\n\n';
+    allies.forEach(a=>{ t += a.dead ? `🥀 ${a.name} — 散華\n` : `${BEMOJI[a.bloom]} ${a.name} — ${BLOOM[a.bloom]} (HP:${a.hp})\n`; });
+    el('resultText').innerHTML=t.replace(/\n/g,'<br>');
   } else {
-    document.getElementById('resultTitle').textContent = '💀 全滅…';
-    document.getElementById('resultText').textContent = '全員散ってしまった……';
+    el('resultTitle').textContent='💀 全滅…';
+    el('resultText').textContent='全ての花が散ってしまった……';
   }
 }
 
-// === UI Updates ===
-function updateEnemyUI() {
-  document.getElementById('enemyName').textContent = enemy.name;
-  document.getElementById('enemyEmoji').textContent = ENEMY_DATA[stage].emoji;
-  const pct = Math.max(0, (enemy.hp / enemy.maxHp) * 100);
-  document.getElementById('enemyHpBar').style.width = pct + '%';
-  document.getElementById('enemyHpText').textContent = `${Math.max(0, enemy.hp)} / ${enemy.maxHp}`;
-}
-
-function updateAlliesUI() {
-  const area = document.getElementById('alliesArea');
-  area.innerHTML = '';
+// === Skill Tree ===
+function toggleSkillTree() {
+  skillTreeVisible=!skillTreeVisible;
+  const p=el('skillTreePanel');
+  if(!skillTreeVisible){ p.classList.remove('visible'); return; }
   
-  allies.forEach((ally, i) => {
-    const stats = getAllyStats(ally);
-    const pct = ally.dead ? 0 : Math.max(0, (ally.hp / stats.maxHp) * 100);
-    const isActing = (phase === 'player' && i === currentAlly);
-    
-    const card = document.createElement('div');
-    card.className = `ally-card${ally.dead ? ' dead' : ''}${isActing ? ' acting' : ''}`;
-    
-    card.innerHTML = `
-      <div class="ally-emoji">${ally.dead ? '🥀' : BLOOM_EMOJI[ally.bloom]}</div>
-      <div class="ally-name">${ally.name}</div>
-      <div class="bloom-stage">${BLOOM_STAGES[ally.bloom]}</div>
-      <div class="ally-hp-bar">
-        <div class="hp-bar" style="width:${pct}%"></div>
-        <div class="hp-text">${ally.dead ? '散華' : `${ally.hp}/${stats.maxHp}`}</div>
-      </div>
-    `;
-    area.appendChild(card);
+  const a=allies[currentAlly];
+  if(!a){ p.classList.remove('visible'); return; }
+  
+  let h=`<div class="skill-tree-title">${a.name} のスキルツリー</div>`;
+  for(let i=0;i<=5;i++){
+    const sk=a.skills[i];
+    const cls = i<a.bloom?'locked': i===a.bloom?'current':'future';
+    const icon = i<=a.bloom?'✅':'🔒';
+    h+=`<div class="skill-tree-row ${cls}">`
+      +`<span class="skill-bloom-label">${BEMOJI[i]} ${BLOOM[i]}</span>`
+      +`<span class="skill-name">${sk?`${icon} ${sk.name}`:`${icon} (なし)`}</span>`
+      +`<span class="skill-desc">${sk?sk.desc:'-'}</span>`
+      +`</div>`;
+  }
+  p.innerHTML=h;
+  p.classList.add('visible');
+}
+
+// === UI ===
+function updateUI() {
+  // Enemies
+  const ea=el('enemiesArea'); ea.innerHTML='';
+  enemies.forEach(e=>{
+    if(e.dead){
+      ea.innerHTML+=`<div class="enemy-card dead-enemy"><div class="enemy-emoji">💀</div><div class="enemy-name">${e.name}</div></div>`;
+      return;
+    }
+    const pct=(e.hp/e.maxHp*100);
+    ea.innerHTML+=`<div class="enemy-card${e.isBoss?' boss':''}" id="ecard-${e.id}">`
+      +`<div class="enemy-name">${e.name}${e.isBoss?' 👑':''}</div>`
+      +`<div class="enemy-emoji">${e.emoji}</div>`
+      +`<div class="hp-bar-container"><div class="hp-bar enemy-hp" style="width:${pct}%"></div>`
+      +`<div class="hp-text">${e.hp}/${e.maxHp}</div></div></div>`;
   });
+  
+  // Allies
+  const aa=el('alliesArea'); aa.innerHTML='';
+  allies.forEach((a,i)=>{
+    const s=astat(a), pct=a.dead?0:(a.hp/s.maxHp*100);
+    const acting=(phase==='player'&&i===currentAlly);
+    const btt=bloomedThisTurn.has(i);
+    aa.innerHTML+=`<div class="ally-card${a.dead?' dead':''}${acting?' acting':''}${btt?' bloomed-this-turn':''}" onclick="viewAllySkills(${i})">`
+      +`<div class="ally-emoji">${a.dead?'🥀':BEMOJI[a.bloom]}</div>`
+      +`<div class="ally-name">${a.name}</div>`
+      +`<div class="bloom-stage">${BLOOM[a.bloom]}</div>`
+      +`<div class="ally-hp-bar"><div class="hp-bar ally-hp" style="width:${pct}%"></div>`
+      +`<div class="hp-text">${a.dead?'散華':`${a.hp}/${s.maxHp}`}</div></div></div>`;
+  });
+  
+  if(skillTreeVisible) toggleSkillTree(); // refresh
 }
 
-function animateEnemy() {
-  const el = document.getElementById('enemyEmoji');
-  el.classList.add('damage-anim');
-  setTimeout(() => el.classList.remove('damage-anim'), 400);
+function viewAllySkills(i) {
+  // Clicking an ally card shows their skill tree
+  const a=allies[i]; if(!a) return;
+  const p=el('skillTreePanel');
+  let h=`<div class="skill-tree-title">${a.name} のスキルツリー</div>`;
+  for(let b=0;b<=5;b++){
+    const sk=a.skills[b];
+    const cls=b<a.bloom?'locked':b===a.bloom?'current':'future';
+    const icon=b<=a.bloom?'✅':'🔒';
+    h+=`<div class="skill-tree-row ${cls}">`
+      +`<span class="skill-bloom-label">${BEMOJI[b]} ${BLOOM[b]}</span>`
+      +`<span class="skill-name">${sk?`${icon} ${sk.name}`:`${icon} (なし)`}</span>`
+      +`<span class="skill-desc">${sk?sk.desc:'-'}</span>`
+      +`</div>`;
+  }
+  p.innerHTML=h;
+  p.classList.add('visible');
+  skillTreeVisible=true;
 }
 
-function log(msg) {
-  const area = document.getElementById('logArea');
-  area.innerHTML += msg + '<br>';
-  area.scrollTop = area.scrollHeight;
+function animateEl(id) {
+  const c=document.getElementById('ecard-'+id);
+  if(c){ c.classList.add('damage-anim'); setTimeout(()=>c.classList.remove('damage-anim'),350); }
 }
+
+function rng(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function el(id){ return document.getElementById(id); }
+function hide(id){ el(id).classList.add('hidden'); }
+function log(m){ const a=el('logArea'); a.innerHTML+=m+'<br>'; a.scrollTop=a.scrollHeight; }
 </script>
 </body>
 </html>
