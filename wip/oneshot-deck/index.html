@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>One Shot Deck</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#e6edf3;font-family:'Helvetica Neue',Arial,sans-serif;display:flex;justify-content:center;min-height:100vh;overflow-x:hidden}
+#game{width:440px;max-width:100vw;padding:10px;user-select:none}
+
+/* Top bar */
+.top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12px;color:#8b949e}
+.stage-label{font-size:16px;font-weight:bold;color:#f0c060}
+.coin-display{font-size:14px;color:#ffd700}
+
+/* Boss area */
+.boss-area{background:#1a1020;border:2px solid #4a2060;border-radius:12px;padding:12px;margin-bottom:10px;text-align:center}
+.boss-name{font-size:16px;font-weight:bold;color:#ff6b8a}
+.boss-emoji{font-size:40px;margin:6px 0}
+.boss-hp-bar{background:#333;border-radius:8px;height:20px;position:relative;overflow:hidden;margin-top:6px}
+.boss-hp-fill{height:100%;background:linear-gradient(90deg,#ff4466,#ff6b8a);border-radius:8px;transition:width 0.5s}
+.boss-hp-text{position:absolute;top:0;left:0;right:0;text-align:center;font-size:12px;line-height:20px;font-weight:bold}
+
+/* Damage display */
+.dmg-display{font-size:24px;font-weight:bold;color:#ff4444;text-align:center;height:36px;line-height:36px;text-shadow:0 0 10px rgba(255,68,68,0.5)}
+.dmg-display.big{font-size:32px;color:#ff0;text-shadow:0 0 20px rgba(255,255,0,0.8)}
+
+/* Shop */
+.shop-area{background:#111820;border:1px solid #21262d;border-radius:10px;padding:10px;margin-bottom:8px}
+.shop-title{font-size:12px;color:#8b949e;margin-bottom:8px;display:flex;justify-content:space-between}
+.shop-cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.shop-card{background:#161b22;border:2px solid #30363d;border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;transition:all 0.2s;min-height:90px}
+.shop-card:hover{border-color:#58a6ff;background:#1a2233}
+.shop-card:active{transform:scale(0.95)}
+.shop-card.sold{opacity:0.2;cursor:default}
+.shop-card .card-emoji{font-size:24px}
+.shop-card .card-name{font-size:10px;font-weight:bold;margin:3px 0;color:#e6edf3}
+.shop-card .card-desc{font-size:9px;color:#8b949e;line-height:1.2}
+.shop-card .card-cost{font-size:11px;color:#ffd700;margin-top:4px}
+
+/* Deck / Hand */
+.section-title{font-size:12px;color:#8b949e;margin:8px 0 6px}
+.hand-area{display:flex;gap:4px;flex-wrap:wrap;min-height:60px;margin-bottom:8px}
+.hand-card{background:#161b22;border:2px solid #30363d;border-radius:8px;padding:6px 4px;text-align:center;cursor:pointer;transition:all 0.2s;width:62px;min-height:72px}
+.hand-card:hover{border-color:#58a6ff;transform:translateY(-4px)}
+.hand-card:active{transform:scale(0.95)}
+.hand-card .card-emoji{font-size:18px}
+.hand-card .card-name{font-size:8px;font-weight:bold;margin:2px 0}
+.hand-card .card-desc{font-size:7px;color:#8b949e}
+
+/* Play zone */
+.play-zone{background:#0a1628;border:1px dashed #1f3a5f;border-radius:10px;padding:8px;margin-bottom:8px;min-height:50px}
+.play-zone-title{font-size:10px;color:#3a6ea5;margin-bottom:6px}
+.played-cards{display:flex;gap:4px;flex-wrap:wrap}
+.played-card{background:#1a2a44;border:1px solid #2a4a6a;border-radius:6px;padding:4px;text-align:center;width:50px;font-size:8px}
+.played-card .card-emoji{font-size:16px}
+
+/* Combo display */
+.combo-line{font-size:11px;color:#58a6ff;margin-top:6px;line-height:1.4}
+.combo-total{font-size:16px;font-weight:bold;color:#ff4444;margin-top:4px}
+
+/* Buttons */
+.btn-row{display:flex;gap:6px;margin-bottom:8px}
+.btn{flex:1;padding:12px;border-radius:8px;border:none;font-size:14px;font-weight:bold;cursor:pointer;transition:all 0.2s}
+.btn:hover{filter:brightness(1.2)}
+.btn:active{transform:scale(0.97)}
+.btn:disabled{opacity:0.3;cursor:default}
+.btn-primary{background:#238636;color:#fff}
+.btn-danger{background:#da3633;color:#fff}
+.btn-secondary{background:#21262d;color:#e6edf3;border:1px solid #30363d}
+.btn-gold{background:#6a4c11;color:#ffd700;border:1px solid #8a6c21}
+
+/* Log */
+.log-area{background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:8px;height:80px;overflow-y:auto;font-size:10px;line-height:1.5;color:#8b949e}
+.log-area .hit{color:#ff6b6b}
+.log-area .mult{color:#ffd700}
+.log-area .info{color:#58a6ff}
+.log-area .chain{color:#a371f7}
+
+/* Overlay */
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;justify-content:center;align-items:center;z-index:100;flex-direction:column;padding:20px}
+.overlay h2{font-size:26px;margin-bottom:12px}
+.overlay p{font-size:14px;color:#8b949e;margin-bottom:16px;text-align:center;line-height:1.8}
+.overlay button{padding:12px 36px;border-radius:10px;border:none;background:#238636;color:#fff;font-size:16px;font-weight:bold;cursor:pointer}
+.overlay button:hover{background:#2ea043}
+.hidden{display:none!important}
+
+/* Card type colors */
+.type-atk{border-color:#da3633}
+.type-mult{border-color:#ffd700}
+.type-chain{border-color:#a371f7}
+.type-draw{border-color:#58a6ff}
+.type-coin{border-color:#3fb950}
+.type-cond{border-color:#f778ba}
+
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.shake{animation:shake 0.3s ease}
+@keyframes popIn{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
+.pop-in{animation:popIn 0.3s ease}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div class="top-bar">
+    <span class="stage-label" id="stageLabel">STAGE 1</span>
+    <span>ターン <span id="turnNum">1</span> / <span id="maxTurns">4</span></span>
+    <span class="coin-display">💰 <span id="coinDisplay">10</span></span>
+  </div>
+
+  <div class="boss-area">
+    <div class="boss-name" id="bossName">ゴブリンキング</div>
+    <div class="boss-emoji" id="bossEmoji">👹</div>
+    <div class="boss-hp-bar">
+      <div class="boss-hp-fill" id="bossHpFill" style="width:100%"></div>
+      <div class="boss-hp-text" id="bossHpText">999 / 999</div>
+    </div>
+    <div class="dmg-display" id="dmgDisplay"></div>
+  </div>
+
+  <div id="shopContainer">
+    <div class="shop-area">
+      <div class="shop-title"><span>🛒 ショップ（カードを買ってデッキを強化）</span><span id="shopRefreshInfo"></span></div>
+      <div class="shop-cards" id="shopCards"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="refreshShop()">🔄 補充（2💰）</button>
+      <button class="btn btn-primary" onclick="endShopPhase()">⚔️ バトル開始</button>
+    </div>
+  </div>
+
+  <div id="battleContainer" class="hidden">
+    <div class="section-title">🃏 手札（タップでプレイ）</div>
+    <div class="hand-area" id="handArea"></div>
+    <div class="play-zone">
+      <div class="play-zone-title">▶ プレイゾーン</div>
+      <div class="played-cards" id="playedCards"></div>
+      <div class="combo-line" id="comboLine"></div>
+      <div class="combo-total" id="comboTotal"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-danger" id="fireBtn" onclick="fireDamage()">🔥 発射！</button>
+      <button class="btn btn-secondary" onclick="undoCard()">↩ 戻す</button>
+    </div>
+  </div>
+
+  <div class="log-area" id="logArea"></div>
+</div>
+
+<div class="overlay" id="startScreen">
+  <h2>🃏 One Shot Deck</h2>
+  <p>デッキを組んで、<br>コンボを繋いで、<br>ワンショットで仕留めろ。<br><br>
+  <span style="font-size:12px;color:#ffd700">準備フェーズ: カードを買ってデッキ構築<br>
+  バトルフェーズ: カードを並べてコンボ発動<br>
+  合計ダメージでボスのHPを削りきれ！</span></p>
+  <button onclick="startGame()">はじめる</button>
+</div>
+
+<div class="overlay hidden" id="resultScreen">
+  <h2 id="resultTitle"></h2>
+  <p id="resultText"></p>
+  <button onclick="startGame()">もう一度</button>
+</div>
+
+<script>
+// === Card Definitions ===
+const CARD_POOL = [
+  // ATK cards
+  {name:'斬撃',emoji:'⚔️',type:'atk',dmg:8,desc:'8ダメージ',cost:3},
+  {name:'強撃',emoji:'🗡️',type:'atk',dmg:15,desc:'15ダメージ',cost:5},
+  {name:'必殺斬',emoji:'⚡',type:'atk',dmg:25,desc:'25ダメージ',cost:8},
+  {name:'暗殺',emoji:'🗡️',type:'atk',dmg:40,desc:'40ダメージ',cost:12},
+  {name:'小突き',emoji:'👊',type:'atk',dmg:3,desc:'3ダメージ',cost:1},
+
+  // MULT cards
+  {name:'気合',emoji:'🔥',type:'mult',mult:2,desc:'次のATK×2',cost:4},
+  {name:'怒り',emoji:'💢',type:'mult',mult:3,desc:'次のATK×3',cost:7},
+  {name:'覚醒',emoji:'✨',type:'mult',mult:5,desc:'次のATK×5',cost:12},
+  {name:'集中',emoji:'🎯',type:'mult',mult:1.5,desc:'次のATK×1.5',cost:2},
+
+  // CHAIN cards
+  {name:'残響',emoji:'🔗',type:'chain',desc:'直前のカード再発動',cost:5},
+  {name:'二重奏',emoji:'🎵',type:'chain',desc:'直前のカード再発動',cost:5},
+
+  // DRAW cards
+  {name:'閃き',emoji:'💡',type:'draw',draw:2,desc:'+2枚ドロー',cost:3},
+  {name:'知恵の泉',emoji:'📚',type:'draw',draw:3,desc:'+3枚ドロー',cost:6},
+
+  // CONDITIONAL cards
+  {name:'フィニッシャー',emoji:'💀',type:'cond',condType:'lastCard',mult:3,desc:'最後に出すと×3',cost:6},
+  {name:'連撃ボーナス',emoji:'🔄',type:'cond',condType:'chainCount',threshold:3,mult:2,desc:'3枚以上で×2',cost:4},
+  {name:'速攻',emoji:'⚡',type:'cond',condType:'fewCards',threshold:3,mult:4,desc:'3枚以下で×4',cost:5},
+
+  // COIN cards
+  {name:'金脈',emoji:'💎',type:'coin',coins:5,desc:'次ターン+5💰',cost:2},
+  {name:'宝箱',emoji:'🎁',type:'coin',coins:10,desc:'次ターン+10💰',cost:4},
+];
+
+const BOSSES = [
+  {name:'ゴブリン将軍',emoji:'👺',hp:200},
+  {name:'炎の魔人',emoji:'🔥',hp:500},
+  {name:'闇竜',emoji:'🐉',hp:999},
+];
+
+// === State ===
+let deck=[], hand=[], played=[], shopSlots=[];
+let coins=0, bonusCoins=0, stage=0, turn=0, maxTurns=4;
+let bossHp=0, bossMaxHp=0;
+let phase=''; // shop | battle
+let pendingMults=[]; // stack of multipliers for next atk
+
+function startGame(){
+  hide('startScreen'); hide('resultScreen');
+  el('logArea').innerHTML='';
+  deck=[]; hand=[]; played=[]; coins=10; bonusCoins=0; stage=0;
+  startStage();
+}
+
+function startStage(){
+  const boss=BOSSES[stage];
+  bossHp=boss.hp; bossMaxHp=boss.hp;
+  turn=0; maxTurns = 3 + stage; // 3,4,5 turns
+  el('stageLabel').textContent=`STAGE ${stage+1}`;
+  el('bossName').textContent=boss.name;
+  el('bossEmoji').textContent=boss.emoji;
+  updateBossHp();
+  log(`<span class="info">── STAGE ${stage+1}: ${boss.name} HP:${boss.hp} ──</span>`);
+  startShopPhase();
+}
+
+// === Shop Phase ===
+function startShopPhase(){
+  phase='shop';
+  turn++;
+  coins = 8 + stage*3 + bonusCoins;
+  bonusCoins=0;
+  el('turnNum').textContent=turn;
+  el('maxTurns').textContent=maxTurns;
+  el('coinDisplay').textContent=coins;
+  el('shopContainer').classList.remove('hidden');
+  el('battleContainer').classList.add('hidden');
+  el('dmgDisplay').textContent='';
+  generateShop();
+}
+
+function generateShop(){
+  shopSlots=[];
+  const pool=[...CARD_POOL];
+  for(let i=0;i<3;i++){
+    const idx=Math.floor(Math.random()*pool.length);
+    shopSlots.push({...pool[idx], sold:false, slotId:i});
+  }
+  renderShop();
+}
+
+function renderShop(){
+  const sc=el('shopCards');
+  sc.innerHTML='';
+  shopSlots.forEach((c,i)=>{
+    const typeClass='type-'+c.type;
+    sc.innerHTML+=`<div class="shop-card ${typeClass}${c.sold?' sold':''}" onclick="buyCard(${i})">
+      <div class="card-emoji">${c.emoji}</div>
+      <div class="card-name">${c.name}</div>
+      <div class="card-desc">${c.desc}</div>
+      <div class="card-cost">${c.sold?'売切':'💰'+c.cost}</div>
+    </div>`;
+  });
+}
+
+function buyCard(i){
+  const c=shopSlots[i];
+  if(c.sold||coins<c.cost) return;
+  coins-=c.cost;
+  c.sold=true;
+  deck.push({...c});
+  el('coinDisplay').textContent=coins;
+  log(`<span class="info">📦 ${c.name}を購入（デッキ${deck.length}枚）</span>`);
+  renderShop();
+}
+
+function refreshShop(){
+  if(coins<2) return;
+  coins-=2;
+  el('coinDisplay').textContent=coins;
+  generateShop();
+}
+
+function endShopPhase(){
+  if(deck.length===0){
+    log(`<span class="hit">デッキにカードがありません！</span>`);
+    return;
+  }
+  startBattlePhase();
+}
+
+// === Battle Phase ===
+function startBattlePhase(){
+  phase='battle';
+  el('shopContainer').classList.add('hidden');
+  el('battleContainer').classList.remove('hidden');
+
+  // Shuffle deck and draw
+  hand=shuffle([...deck]);
+  played=[];
+  pendingMults=[];
+
+  // Draw initial hand (5 cards)
+  const drawCount=Math.min(5, hand.length);
+  const drawn=hand.splice(0, drawCount);
+  hand=drawn;
+  // Rest stays as draw pile
+  const drawPile=deck.length-drawCount;
+
+  log(`<span class="info">⚔️ バトル開始！手札${hand.length}枚</span>`);
+  renderHand();
+  renderPlayed();
+}
+
+function renderHand(){
+  const ha=el('handArea');
+  ha.innerHTML='';
+  hand.forEach((c,i)=>{
+    const typeClass='type-'+c.type;
+    ha.innerHTML+=`<div class="hand-card ${typeClass} pop-in" onclick="playCard(${i})">
+      <div class="card-emoji">${c.emoji}</div>
+      <div class="card-name">${c.name}</div>
+      <div class="card-desc">${c.desc}</div>
+    </div>`;
+  });
+}
+
+function playCard(i){
+  if(phase!=='battle') return;
+  const c=hand.splice(i,1)[0];
+
+  // Process card effect
+  if(c.type==='draw'){
+    // Draw more cards from remaining deck
+    const remaining=shuffle(deck.filter((_,idx)=>!hand.includes(_)&&!played.includes(_)));
+    const toDraw=Math.min(c.draw, remaining.length);
+    for(let j=0;j<toDraw;j++) hand.push({...CARD_POOL[Math.floor(Math.random()*CARD_POOL.length)]});
+    log(`<span class="info">💡 ${c.draw}枚ドロー！</span>`);
+  }
+
+  if(c.type==='coin'){
+    bonusCoins+=c.coins;
+    log(`<span class="mult">💎 次ターン+${c.coins}💰</span>`);
+  }
+
+  played.push(c);
+  renderHand();
+  renderPlayed();
+}
+
+function undoCard(){
+  if(played.length===0) return;
+  const c=played.pop();
+  hand.push(c);
+  if(c.type==='coin') bonusCoins-=c.coins;
+  renderHand();
+  renderPlayed();
+}
+
+function renderPlayed(){
+  const pc=el('playedCards');
+  pc.innerHTML='';
+  played.forEach(c=>{
+    pc.innerHTML+=`<div class="played-card type-${c.type}"><div class="card-emoji">${c.emoji}</div>${c.name}</div>`;
+  });
+
+  // Calculate preview damage
+  const {total, breakdown}=calcDamage();
+  el('comboLine').innerHTML=breakdown;
+  el('comboTotal').textContent=total>0?`= ${total} ダメージ`:'';
+}
+
+function calcDamage(){
+  let totalDmg=0;
+  let multStack=1;
+  let breakdown='';
+  let cardCount=played.length;
+
+  for(let i=0;i<played.length;i++){
+    const c=played[i];
+
+    if(c.type==='atk'){
+      let d=Math.floor(c.dmg*multStack);
+      totalDmg+=d;
+      breakdown+=`<span class="hit">${c.name}(${c.dmg}${multStack>1?'×'+multStack:''}=${d})</span> `;
+      multStack=1; // reset mult after use
+    }
+    else if(c.type==='mult'){
+      multStack*=c.mult;
+      breakdown+=`<span class="mult">${c.name}(×${c.mult})</span> → `;
+    }
+    else if(c.type==='chain'){
+      // Replay previous card
+      if(i>0){
+        const prev=played[i-1];
+        if(prev.type==='atk'){
+          let d=Math.floor(prev.dmg*multStack);
+          totalDmg+=d;
+          breakdown+=`<span class="chain">${c.name}→${prev.name}(${d})</span> `;
+          multStack=1;
+        } else if(prev.type==='mult'){
+          multStack*=prev.mult;
+          breakdown+=`<span class="chain">${c.name}→${prev.name}(×${prev.mult})</span> → `;
+        }
+      }
+    }
+    else if(c.type==='cond'){
+      if(c.condType==='lastCard' && i===played.length-1){
+        multStack*=c.mult;
+        breakdown+=`<span class="mult">${c.name}(最後!×${c.mult})</span> → `;
+      } else if(c.condType==='chainCount' && cardCount>=c.threshold){
+        multStack*=c.mult;
+        breakdown+=`<span class="mult">${c.name}(${cardCount}枚!×${c.mult})</span> → `;
+      } else if(c.condType==='fewCards' && cardCount<=c.threshold){
+        multStack*=c.mult;
+        breakdown+=`<span class="mult">${c.name}(${cardCount}枚!×${c.mult})</span> → `;
+      } else {
+        breakdown+=`<span style="color:#555">${c.name}(条件未達)</span> `;
+      }
+    }
+    else if(c.type==='draw'||c.type==='coin'){
+      breakdown+=`<span class="info">${c.name}</span> `;
+    }
+  }
+
+  return {total:totalDmg, breakdown};
+}
+
+function fireDamage(){
+  if(phase!=='battle') return;
+  const {total}=calcDamage();
+
+  if(total===0){
+    log(`<span class="hit">ダメージ0！攻撃カードを出して！</span>`);
+    return;
+  }
+
+  phase='animating';
+
+  // Animate damage
+  bossHp=Math.max(0, bossHp-total);
+  const bossArea=document.querySelector('.boss-area');
+  bossArea.classList.add('shake');
+  setTimeout(()=>bossArea.classList.remove('shake'),300);
+
+  const display=el('dmgDisplay');
+  display.textContent=`-${total}`;
+  display.className='dmg-display'+(total>=100?' big':'');
+
+  log(`<span class="hit">🔥 合計 ${total} ダメージ！</span>`);
+
+  updateBossHp();
+
+  setTimeout(()=>{
+    display.textContent='';
+
+    if(bossHp<=0){
+      log(`<span class="info">🎉 ${BOSSES[stage].name}を撃破！</span>`);
+      if(stage>=BOSSES.length-1){
+        gameOver(true);
+      } else {
+        stage++;
+        // Keep deck for next stage
+        setTimeout(()=>startStage(),800);
+      }
+      return;
+    }
+
+    // Check if more turns
+    if(turn<maxTurns){
+      log(`<span class="info">残りHP: ${bossHp} — 次の準備フェーズへ</span>`);
+      setTimeout(()=>startShopPhase(),600);
+    } else {
+      gameOver(false);
+    }
+  },1000);
+}
+
+function updateBossHp(){
+  const pct=Math.max(0,(bossHp/bossMaxHp)*100);
+  el('bossHpFill').style.width=pct+'%';
+  el('bossHpText').textContent=`${bossHp} / ${bossMaxHp}`;
+}
+
+function gameOver(won){
+  const s=el('resultScreen'); s.classList.remove('hidden');
+  if(won){
+    el('resultTitle').textContent='🏆 完全勝利！';
+    el('resultText').innerHTML=`全ボスを撃破！<br>デッキ枚数: ${deck.length}枚`;
+  } else {
+    el('resultTitle').textContent='💀 敗北…';
+    el('resultText').innerHTML=`${BOSSES[stage].name}を倒しきれなかった<br>残りHP: ${bossHp}`;
+  }
+}
+
+// === Utils ===
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+  return arr;
+}
+function el(id){return document.getElementById(id)}
+function hide(id){el(id).classList.add('hidden')}
+function log(m){const a=el('logArea');a.innerHTML+=m+'<br>';a.scrollTop=a.scrollHeight}
+</script>
+</body>
+</html>
