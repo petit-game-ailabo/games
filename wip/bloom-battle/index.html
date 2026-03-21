@@ -65,9 +65,8 @@ body {
 /* Skill Tree */
 .skill-tree-panel {
   background: #0e1525; border-radius: 10px; padding: 10px; margin-bottom: 8px;
-  border: 1px solid #2a3a5e; display: none;
+  border: 1px solid #2a3a5e;
 }
-.skill-tree-panel.visible { display: block; }
 .skill-tree-title { font-size: 12px; color: #f0c060; margin-bottom: 6px; font-weight: bold; }
 .skill-tree-row {
   display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 11px;
@@ -149,7 +148,7 @@ body {
   <div class="allies-area" id="alliesArea"></div>
   <div class="skill-tree-panel" id="skillTreePanel"></div>
   <div class="command-area" id="commandArea">
-    <div class="command-label"><span id="commandLabel">行動を選択</span><button style="background:none;border:1px solid #555;color:#aaa;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer" onclick="toggleSkillTree()">スキル一覧</button></div>
+    <div class="command-label"><span id="commandLabel">行動を選択</span></div>
     <div class="commands" id="commands"></div>
   </div>
   <div class="log-area" id="logArea"></div>
@@ -329,6 +328,7 @@ function showPopup(elemId, value, isHeal) {
 
 // === Target Selection ===
 function selectEnemy(id) {
+  if(animating) return;
   const e = enemies.find(x => x.id === id);
   if(!e || e.dead) return;
   selectedEnemyId = id;
@@ -379,6 +379,7 @@ function promptAction() {
 }
 
 function showCommands(a) {
+  if(animating) return; // block while animating
   const s=astat(a), sk=a.skills[a.bloom], cmds=el('commands');
   el('commandLabel').textContent=`${a.name}（${BLOOM[a.bloom]}）`;
   
@@ -409,7 +410,7 @@ function doAttack() {
   shakeEl('ecard-'+t.id);
   showPopup('ecard-'+t.id, dmg, false);
   
-  animateHp(t, false, 1500, () => {
+  animateHp(t, false, 500, () => {
     checkEnemyDeath(t);
     ensureValidTarget();
     updateUI();
@@ -452,7 +453,7 @@ function doSkill() {
   if(sk.debuff){ enemies.forEach(e=>{ if(!e.dead) e.atk=Math.max(1,e.atk-5); }); log(`<span class="info">敵全体の攻撃↓</span>`); }
   
   // Animate all HP changes simultaneously
-  animateMultiHp(ops, 1500, () => {
+  animateMultiHp(ops, 500, () => {
     enemies.forEach(e => { if(e.hp<=0) checkEnemyDeath(e); });
     ensureValidTarget();
     updateUI();
@@ -546,18 +547,19 @@ function enemyAttack(e, cb) {
   const t=aliveAllies[Math.floor(Math.random()*aliveAllies.length)];
   const ts=astat(t);
   const def=ts.def + t.shieldBuff + (t.defending?999:0);
-  const dmg=Math.max(1, e.atk - def + rng(-4,5));
+  const rawDmg=Math.max(1, e.atk - def + rng(-4,5));
+  const dmg=Math.min(rawDmg, t.hp); // don't carry over excess damage
   
   t.hp-=dmg;
-  log(`${e.emoji}${e.name}→${t.name}に<span class="dmg">${dmg}ダメージ</span>`);
+  log(`${e.emoji}${e.name}→${t.name}に<span class="dmg">${rawDmg}ダメージ</span>`);
   
   // Shake ally card
   const card=document.querySelectorAll('.ally-card')[t.id];
   const cardId = 'acard-'+t.id;
   if(card) { card.id=cardId; card.classList.add('shake-anim'); setTimeout(()=>card.classList.remove('shake-anim'),400); }
-  showPopup(cardId, dmg, false);
+  showPopup(cardId, rawDmg, false);
   
-  animateHp(t, true, 1500, () => {
+  animateHp(t, true, 500, () => {
     if(t.hp<=0) {
       t.hp=0;
       const ob=t.bloom;
@@ -625,14 +627,7 @@ function gameOver(won) {
   }
 }
 
-// === Skill Tree ===
-function toggleSkillTree() {
-  skillTreeVisible=!skillTreeVisible;
-  const p=el('skillTreePanel');
-  if(!skillTreeVisible){ p.classList.remove('visible'); return; }
-  showSkillTreeFor(allies[currentAlly]);
-}
-
+// === Skill Tree (always visible) ===
 function showSkillTreeFor(a) {
   if(!a) return;
   const p=el('skillTreePanel');
@@ -648,8 +643,6 @@ function showSkillTreeFor(a) {
       +`</div>`;
   }
   p.innerHTML=h;
-  p.classList.add('visible');
-  skillTreeVisible=true;
 }
 
 // === UI ===
@@ -684,7 +677,7 @@ function updateUI() {
       +`<div class="hp-text">${a.dead?'散華':`${a.displayHp}/${s.maxHp}`}</div></div></div>`;
   });
   
-  if(skillTreeVisible) showSkillTreeFor(allies[currentAlly]);
+  showSkillTreeFor(allies[currentAlly]);
 }
 
 function shakeEl(id) {
