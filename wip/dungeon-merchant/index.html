@@ -157,7 +157,7 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
 <div id="game">
   <div class="top-bar">
     <span class="gold">💰 <span id="gold">100</span>G</span>
-    <span style="color:#c0a870">📅 Day <span id="dayNum">1</span></span>
+    <span style="color:#c0a870">📅 Day <span id="dayNum">1</span> <span id="seasonDisplay"></span></span>
     <span style="font-size:10px" id="staminaDisplay">⚡ <span id="stamina">100</span></span>
   </div>
 
@@ -332,14 +332,35 @@ const MAT_NAMES={
   rice:'米',egg:'卵',milk:'牛乳',pork:'豚肉',chicken_meat:'鶏肉',
 };
 
+// === Season System ===
+const SEASONS=[
+  {id:'spring',name:'春',emoji:'🌸',color:'#ffb6c1'},
+  {id:'summer',name:'夏',emoji:'☀️',color:'#ffd700'},
+  {id:'autumn',name:'秋',emoji:'🍂',color:'#ff8c00'},
+  {id:'winter',name:'冬',emoji:'❄️',color:'#87ceeb'}
+];
+const SEASON_LENGTH=7; // days per season
+
+function getCurrentSeason(){
+  if(day<=0) return SEASONS[0]; // Default to spring
+  const dayInCycle=(day-1)%28; // 0-27
+  const seasonIdx=Math.floor(dayInCycle/SEASON_LENGTH);
+  return SEASONS[seasonIdx];
+}
+
+function getDayInSeason(){
+  if(day<=0) return 1;
+  return ((day-1)%SEASON_LENGTH)+1;
+}
+
 // === Farm Data ===
 const SEEDS=[
-  {id:'carrot',name:'ニンジン',emoji:'🥕',mat:'carrot',growDays:3,yield:[2,4],cost:5},
-  {id:'potato',name:'ジャガイモ',emoji:'🥔',mat:'potato',growDays:4,yield:[3,5],cost:5},
-  {id:'wheat',name:'小麦',emoji:'🌾',mat:'wheat',growDays:3,yield:[3,6],cost:4},
-  {id:'tomato',name:'トマト',emoji:'🍅',mat:'tomato',growDays:3,yield:[2,3],cost:6},
-  {id:'cabbage',name:'キャベツ',emoji:'🥬',mat:'cabbage',growDays:5,yield:[2,4],cost:7},
-  {id:'pumpkin',name:'カボチャ',emoji:'🎃',mat:'pumpkin',growDays:6,yield:[1,3],cost:10},
+  {id:'carrot',name:'ニンジン',emoji:'🥕',mat:'carrot',growDays:3,yield:[2,4],cost:5,seasons:['spring','autumn']},
+  {id:'potato',name:'ジャガイモ',emoji:'🥔',mat:'potato',growDays:4,yield:[3,5],cost:5,seasons:['spring','autumn']},
+  {id:'wheat',name:'小麦',emoji:'🌾',mat:'wheat',growDays:3,yield:[3,6],cost:4,seasons:['spring','summer','autumn']},
+  {id:'tomato',name:'トマト',emoji:'🍅',mat:'tomato',growDays:3,yield:[2,3],cost:6,seasons:['summer']},
+  {id:'cabbage',name:'キャベツ',emoji:'🥬',mat:'cabbage',growDays:5,yield:[2,4],cost:7,seasons:['autumn','winter']},
+  {id:'pumpkin',name:'カボチャ',emoji:'🎃',mat:'pumpkin',growDays:6,yield:[1,3],cost:10,seasons:['autumn']},
 ];
 const TOTAL_FARM_PLOTS=8; // 2x4 grid, first 2 unlocked
 const FARM_UNLOCK_COSTS=[0,0,50,50,100,100,200,200]; // cost per plot
@@ -664,8 +685,19 @@ function newGame(){
 // === Day Cycle ===
 function nextDay(){
   playSFX('day');
+  const prevSeason=getCurrentSeason();
   day++;dailyIncome=0;dailyExpense=0;cookedToday=false;stamina=100;
   el('dayNum').textContent=day;
+  
+  // Check for season change
+  const newSeason=getCurrentSeason();
+  if(prevSeason.id!==newSeason.id){
+    logMsg(`<span class="q">${newSeason.emoji} ${newSeason.name}が訪れました！</span>`);
+    if(newSeason.id==='winter'){
+      logMsg(`<span class="w">❄️ 冬季に入りました。ほとんどの作物は枯れます。</span>`);
+    }
+  }
+  
   processQuests();
   processFacilities();
   processAdventurers();
@@ -823,10 +855,26 @@ function cancelQuest(id){
 
 // === Farm Functions ===
 function processFarm(){
+  const season=getCurrentSeason();
   farmPlots.forEach(p=>{
     if(p.state==='planted'||p.state==='growing'){
       const elapsed=day-p.plantedDay;
       if(elapsed>=1&&p.state==='planted') p.state='growing';
+      
+      // Check if crop can survive current season
+      const seed=SEEDS.find(s=>s.id===p.seedId);
+      if(seed&&season.id==='winter'&&!seed.seasons.includes('winter')){
+        // Winter kills non-winter crops
+        logMsg(`<span class="w">❄️ 冬の寒さで${seed.name}が枯れてしまった...</span>`);
+        p.state='wild';
+        p.seedId=null;
+        p.plantedDay=0;
+        p.growDays=0;
+        p.waterCount=0;
+        p.wateredToday=false;
+        return;
+      }
+      
       if(elapsed>=p.growDays) p.state='ready';
     }
     p.wateredToday=false;
@@ -886,7 +934,19 @@ function renderFarm(){
 
 function renderFarmField(){
   const area=el('farmFieldArea');
-  let h='<div class="farm-field-grid">';
+  const season=getCurrentSeason();
+  const isWinter=season.id==='winter';
+  
+  let h='';
+  
+  // Season warning for winter
+  if(isWinter){
+    h+=`<div style="background:#1a3a5a;border:1px solid #3a5a7a;border-radius:6px;padding:8px;margin-bottom:8px;font-size:10px;color:#87ceeb">
+      ❄️ 冬季は畑作業が制限されます。キャベツのみ栽培可能です。
+    </div>`;
+  }
+  
+  h+='<div class="farm-field-grid">';
   
   for(let i=0;i<TOTAL_FARM_PLOTS;i++){
     const plot=farmPlots[i];
@@ -909,16 +969,25 @@ function renderFarmField(){
     if(plot.state==='wild'){
       emoji='🪨🌵🪨';
       statusText='荒れ地';
-      actionsHtml=`<button class="farm-act-btn" onclick="farmTill(${i})" ${stamina>=10?'':'disabled'}>🪓 耕す (10⚡)</button>`;
+      if(!isWinter){
+        actionsHtml=`<button class="farm-act-btn" onclick="farmTill(${i})" ${stamina>=10?'':'disabled'}>🪓 耕す (10⚡)</button>`;
+      } else {
+        actionsHtml=`<div style="font-size:9px;color:#87ceeb">❄️ 冬季凍結</div>`;
+      }
     } else if(plot.state==='tilled'){
       emoji=''; // clean soil shown by background
       statusText='耕した土';
-      actionsHtml=`<div style="font-size:9px;color:#8a7a60;margin-bottom:4px">種を選んで植える:</div><div class="farm-plot-actions">`;
-      SEEDS.forEach(s=>{
-        const canPlant=stamina>=5&&gold>=s.cost;
-        actionsHtml+=`<button class="farm-act-btn" onclick="farmPlant(${i},'${s.id}')" ${canPlant?'':'disabled'}>${s.emoji}${s.name}(${s.cost}G)</button>`;
-      });
-      actionsHtml+='</div>';
+      const availableSeeds=SEEDS.filter(s=>s.seasons.includes(season.id));
+      if(availableSeeds.length>0){
+        actionsHtml=`<div style="font-size:9px;color:#8a7a60;margin-bottom:4px">種を選んで植える:</div><div class="farm-plot-actions">`;
+        availableSeeds.forEach(s=>{
+          const canPlant=stamina>=5&&gold>=s.cost;
+          actionsHtml+=`<button class="farm-act-btn" onclick="farmPlant(${i},'${s.id}')" ${canPlant?'':'disabled'}>${s.emoji}${s.name}(${s.cost}G)</button>`;
+        });
+        actionsHtml+='</div>';
+      } else {
+        actionsHtml=`<div style="font-size:9px;color:#8a7a60">この季節に植えられる作物なし</div>`;
+      }
     } else if(plot.state==='planted'||plot.state==='growing'){
       const pct=Math.min(100,(elapsed/plot.growDays)*100);
       emoji=plot.state==='planted'?'🌱':'🌿';
@@ -972,6 +1041,14 @@ function farmPlant(i,seedId){
   if(stamina<5||farmPlots[i].state!=='tilled') return;
   const seed=SEEDS.find(s=>s.id===seedId);
   if(!seed||gold<seed.cost) return;
+  
+  // Check if seed can be planted in current season
+  const season=getCurrentSeason();
+  if(!seed.seasons.includes(season.id)){
+    logMsg(`<span class="w">⚠️ ${seed.name}は${season.name}には植えられません</span>`);
+    return;
+  }
+  
   stamina-=5;
   gold-=seed.cost;
   farmPlots[i].state='planted';
@@ -1313,6 +1390,14 @@ function updateAll(){
   el('stamina').textContent=stamina;
   el('staminaNum').textContent=stamina;
   el('staminaFill').style.width=(stamina/100*100)+'%';
+  
+  // Update season display
+  if(day>0){
+    const season=getCurrentSeason();
+    const dayInSeason=getDayInSeason();
+    el('seasonDisplay').innerHTML=`<span style="color:${season.color}">${season.emoji}${season.name} ${dayInSeason}日目</span>`;
+  }
+  
   renderQuestBoard();renderFarm();renderFacilities();renderStorage();renderTown();
 }
 
