@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>One Shot Deck</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0d1117;color:#e6edf3;font-family:'Helvetica Neue',Arial,sans-serif;display:flex;justify-content:center;min-height:100vh;overflow-x:hidden}
+#game{width:460px;max-width:100vw;padding:8px;user-select:none}
+
+.top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:11px;color:#8b949e}
+.stage-label{font-size:15px;font-weight:bold;color:#f0c060}
+
+/* Boss */
+.boss-area{background:#1a1020;border:2px solid #4a2060;border-radius:10px;padding:10px;margin-bottom:8px;text-align:center;position:relative}
+.boss-row{display:flex;align-items:center;gap:10px;justify-content:center}
+.boss-emoji{font-size:36px}
+.boss-info{text-align:left}
+.boss-name{font-size:14px;font-weight:bold;color:#ff6b8a}
+.hp-bar{background:#333;border-radius:6px;height:16px;position:relative;overflow:hidden;width:200px;margin-top:4px}
+.hp-fill{height:100%;background:linear-gradient(90deg,#ff4466,#ff6b8a);border-radius:6px;transition:width 0.6s}
+.hp-text{position:absolute;top:0;left:0;right:0;text-align:center;font-size:10px;line-height:16px;font-weight:bold}
+.dmg-popup{position:absolute;right:10px;top:8px;font-size:22px;font-weight:bold;color:#ff4444;text-shadow:0 0 8px rgba(255,68,68,0.6);opacity:0;transition:opacity 0.3s}
+.dmg-popup.show{opacity:1}
+.dmg-popup.big{color:#ff0;font-size:28px;text-shadow:0 0 16px rgba(255,255,0,0.8)}
+
+/* Stats */
+.stats-bar{display:flex;justify-content:space-around;background:#161b22;border-radius:8px;padding:6px;margin-bottom:8px;font-size:11px}
+.stat{text-align:center}
+.stat-val{font-size:14px;font-weight:bold;color:#58a6ff}
+.stat-label{color:#8b949e;font-size:9px}
+
+/* Section labels */
+.section-label{font-size:11px;color:#8b949e;margin:6px 0 4px;display:flex;justify-content:space-between}
+
+/* Cards */
+.card{border-radius:8px;padding:6px 4px;text-align:center;cursor:pointer;transition:all 0.15s;position:relative}
+.card:hover:not(.disabled){transform:translateY(-3px);filter:brightness(1.15)}
+.card:active:not(.disabled){transform:scale(0.93)}
+.card.disabled{opacity:0.3;cursor:default}
+.card .c-emoji{font-size:20px}
+.card .c-name{font-size:9px;font-weight:bold;margin:2px 0}
+.card .c-desc{font-size:7px;color:#8b949e;line-height:1.2}
+.card .c-cost{font-size:9px;color:#ffd700;margin-top:2px}
+
+/* Type colors */
+.t-gem{border-color:#3fb950}.t-gem .c-name{color:#3fb950}
+.t-atk{border-color:#da3633}.t-atk .c-name{color:#ff6b6b}
+.t-mult{border-color:#ffd700}.t-mult .c-name{color:#ffd700}
+.t-draw{border-color:#58a6ff}.t-draw .c-name{color:#58a6ff}
+.t-heal{border-color:#f778ba}.t-heal .c-name{color:#f778ba}
+.t-thin{border-color:#a371f7}.t-thin .c-name{color:#a371f7}
+.t-util{border-color:#79c0ff}.t-util .c-name{color:#79c0ff}
+.t-hand{border-color:#f0c060}.t-hand .c-name{color:#f0c060}
+
+/* Hand */
+.hand-area{display:flex;gap:4px;flex-wrap:wrap;min-height:80px;margin-bottom:6px}
+.hand-card{width:72px;min-height:82px;background:#161b22;border:2px solid #30363d}
+
+/* Played zone */
+.played-zone{background:#0a1628;border:1px dashed #1f3a5f;border-radius:8px;padding:6px;margin-bottom:6px;min-height:36px}
+.played-row{display:flex;gap:3px;flex-wrap:wrap}
+.played-mini{background:#1a2a44;border:1px solid #2a4a6a;border-radius:4px;padding:3px;text-align:center;width:40px;font-size:7px}
+.played-mini .c-emoji{font-size:14px}
+.played-mini.consumed{opacity:0.4;text-decoration:line-through}
+.turn-summary{font-size:11px;margin-top:4px}
+.turn-summary .atk-val{color:#ff6b6b;font-weight:bold}
+.turn-summary .gem-val{color:#3fb950;font-weight:bold}
+
+/* Supply */
+.supply-area{background:#111820;border:1px solid #21262d;border-radius:8px;padding:8px;margin-bottom:6px;max-height:240px;overflow-y:auto}
+.supply-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.supply-card{width:100%;min-height:75px;background:#161b22;border:2px solid #30363d}
+
+/* Buttons */
+.btn-row{display:flex;gap:6px;margin-bottom:6px}
+.btn{flex:1;padding:10px;border-radius:8px;border:none;font-size:13px;font-weight:bold;cursor:pointer;transition:all 0.15s}
+.btn:hover{filter:brightness(1.2)}.btn:active{transform:scale(0.97)}
+.btn:disabled{opacity:0.3;cursor:default;filter:none;transform:none}
+.btn-end{background:#238636;color:#fff}
+
+/* Log */
+.log-area{background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:6px;height:65px;overflow-y:auto;font-size:10px;line-height:1.4;color:#8b949e}
+.log-area .hit{color:#ff6b6b}.log-area .buy{color:#3fb950}.log-area .info{color:#58a6ff}.log-area .thin{color:#a371f7}
+
+/* Overlay */
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;justify-content:center;align-items:center;z-index:100;flex-direction:column;padding:20px}
+.overlay h2{font-size:24px;margin-bottom:10px}
+.overlay p{font-size:13px;color:#8b949e;margin-bottom:14px;text-align:center;line-height:1.8}
+.overlay button{padding:12px 32px;border-radius:10px;border:none;background:#238636;color:#fff;font-size:15px;font-weight:bold;cursor:pointer}
+.hidden{display:none!important}
+
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.shake{animation:shake 0.3s ease}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div class="top-bar">
+    <span class="stage-label" id="stageLabel">STAGE 1</span>
+    <span>ターン <span id="turnNum">1</span></span>
+    <span>デッキ残 <span id="deckCount">0</span> | 手札上限 <span id="handLimit">5</span></span>
+  </div>
+
+  <div class="boss-area" id="bossArea">
+    <div class="boss-row">
+      <div class="boss-emoji" id="bossEmoji">👹</div>
+      <div class="boss-info">
+        <div class="boss-name" id="bossName">ゴブリン将軍</div>
+        <div class="hp-bar"><div class="hp-fill" id="hpFill" style="width:100%"></div><div class="hp-text" id="hpText">200/200</div></div>
+      </div>
+    </div>
+    <div class="dmg-popup" id="dmgPopup"></div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat"><div class="stat-val" id="gemCount">0</div><div class="stat-label">💎 宝石</div></div>
+    <div class="stat"><div class="stat-val" id="atkCount">0</div><div class="stat-label">⚔️ 攻撃力</div></div>
+    <div class="stat"><div class="stat-val" id="multCount">×1</div><div class="stat-label">🔥 倍率</div></div>
+    <div class="stat"><div class="stat-val" id="hpDisplay">100</div><div class="stat-label">❤️ HP</div></div>
+  </div>
+
+  <div class="section-label"><span>🃏 手札</span><span id="handCount"></span></div>
+  <div class="hand-area" id="handArea"></div>
+
+  <div class="played-zone">
+    <div class="played-row" id="playedRow"></div>
+    <div class="turn-summary" id="turnSummary"></div>
+  </div>
+
+  <div class="supply-area">
+    <div class="section-label" style="margin-top:0"><span>🛒 サプライ（宝石で購入 → デッキの底へ）</span></div>
+    <div class="supply-grid" id="supplyGrid"></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-end" id="endTurnBtn" onclick="endTurn()">ターン終了</button>
+  </div>
+
+  <div class="log-area" id="logArea"></div>
+</div>
+
+<div class="overlay" id="startScreen">
+  <h2>🃏 One Shot Deck</h2>
+  <p>デッキを育てて、ボスを倒せ！<br><br>
+  <span style="font-size:11px;color:#ffd700">
+  💎 宝石カードを使って資金を得る<br>
+  🛒 サプライからカードを購入 → デッキの底へ<br>
+  ⚔️ 攻撃カードでダメージ<br>
+  🗑️ 圧縮カードで不要カードを廃棄<br>
+  📦 消耗品: 使ったらデッキに戻らず消える<br>
+  🃏 並び順がそのまま戦略（シャッフルなし）</span></p>
+  <button onclick="startGame()">はじめる</button>
+</div>
+
+<div class="overlay hidden" id="resultScreen">
+  <h2 id="resultTitle"></h2>
+  <p id="resultText"></p>
+  <button onclick="startGame()">もう一度</button>
+</div>
+
+<script>
+// === Card factory ===
+const C=(name,emoji,type,props)=>({name,emoji,type,...props});
+
+// All supply cards
+const ALL_SUPPLY = [
+  // Gems
+  C('銀貨','💿','gem',{value:2,cost:3,desc:'2💎'}),
+  C('金貨','🥇','gem',{value:3,cost:6,desc:'3💎'}),
+  C('ダイヤ','💠','gem',{value:5,cost:10,desc:'5💎'}),
+
+  // Attacks
+  C('鉄の剣','🗡️','atk',{dmg:8,cost:3,desc:'8ダメージ'}),
+  C('炎の剣','🔥','atk',{dmg:15,cost:5,desc:'15ダメージ'}),
+  C('聖剣','⚡','atk',{dmg:25,cost:8,desc:'25ダメージ'}),
+  C('魔剣','💀','atk',{dmg:40,cost:12,desc:'40ダメージ'}),
+  C('覇王剣','👑','atk',{dmg:60,cost:16,desc:'60ダメージ'}),
+
+  // Multipliers
+  C('集中','🎯','mult',{mult:1.5,cost:3,desc:'攻撃×1.5'}),
+  C('気合','🔥','mult',{mult:2,cost:5,desc:'攻撃×2'}),
+  C('怒り','💢','mult',{mult:3,cost:9,desc:'攻撃×3'}),
+  C('覚醒','✨','mult',{mult:5,cost:14,desc:'攻撃×5'}),
+
+  // Draw
+  C('閃き','💡','draw',{draw:1,cost:2,desc:'+1ドロー',consumable:true}),
+  C('知恵の書','📚','draw',{draw:2,cost:4,desc:'+2ドロー',consumable:true}),
+  C('天啓','🌟','draw',{draw:3,cost:7,desc:'+3ドロー',consumable:true}),
+
+  // Heal
+  C('薬草','🌿','heal',{heal:15,cost:2,desc:'HP15回復',consumable:true}),
+  C('聖水','💧','heal',{heal:40,cost:5,desc:'HP40回復',consumable:true}),
+
+  // Thin (deck compression) - consumable
+  C('鍛冶屋','🔨','thin',{thinCount:1,cost:3,desc:'手札1枚廃棄',consumable:true}),
+  C('商人','🧹','thin',{thinCount:2,cost:5,desc:'手札2枚廃棄',consumable:true}),
+  C('錬金術師','⚗️','thin',{thinCount:3,cost:8,desc:'手札3枚廃棄',consumable:true}),
+
+  // Hand size increase - consumable, permanent effect
+  C('手帳','📒','hand',{handUp:1,cost:4,desc:'手札上限+1',consumable:true}),
+  C('魔導書','📖','hand',{handUp:2,cost:8,desc:'手札上限+2',consumable:true}),
+
+  // Utility
+  C('略奪','🏴‍☠️','util',{effect:'doubleGems',cost:5,desc:'宝石2倍(このターン)',consumable:true}),
+  C('鍛錬','🛠️','util',{effect:'atkBoost',cost:6,desc:'全攻撃+5(永続)'}),
+];
+
+const BOSSES = [
+  {name:'ゴブリン将軍',emoji:'👺',hp:200,atk:8,turnLimit:25},
+  {name:'炎の魔人',emoji:'🔥',hp:600,atk:15,turnLimit:22},
+  {name:'闇竜王',emoji:'🐉',hp:1500,atk:25,turnLimit:18},
+];
+
+// === State ===
+let deck=[],hand=[],played=[];
+let supply=[];
+let turnGems=0,turnAtk=0,turnMult=1,turnEffects=[];
+let bossHp=0,bossMaxHp=0,bossAtk=0;
+let playerHp=0,playerMaxHp=100;
+let handSize=5,atkBonus=0;
+let stage=0,turnNum=0,turnLimit=25;
+let phase='';
+let trashMode=false, trashRemaining=0;
+let purchased=[]; // bought this turn, added to deck bottom after played cards
+
+function startGame(){
+  hide('startScreen');hide('resultScreen');
+  el('logArea').innerHTML='';
+  stage=0; playerHp=100; playerMaxHp=100; handSize=5; atkBonus=0;
+
+  // Starter deck: 1 attack + 4 gems (order matters!)
+  deck=[
+    C('銅の剣','⚔️','atk',{dmg:5,cost:0,desc:'5ダメージ'}),
+    C('宝石','💎','gem',{value:1,cost:0,desc:'1💎'}),
+    C('宝石','💎','gem',{value:1,cost:0,desc:'1💎'}),
+    C('宝石','💎','gem',{value:1,cost:0,desc:'1💎'}),
+    C('宝石','💎','gem',{value:1,cost:0,desc:'1💎'}),
+  ];
+
+  hand=[]; played=[];
+  startStage();
+}
+
+function startStage(){
+  const boss=BOSSES[stage];
+  bossHp=boss.hp; bossMaxHp=boss.hp; bossAtk=boss.atk; turnLimit=boss.turnLimit;
+  turnNum=0;
+
+  // Supply = all cards
+  supply=ALL_SUPPLY.map(c=>({...c}));
+
+  el('stageLabel').textContent=`STAGE ${stage+1}`;
+  el('bossName').textContent=boss.name;
+  el('bossEmoji').textContent=boss.emoji;
+  updateBossHp();
+  renderSupply();
+  log(`<span class="info">── STAGE ${stage+1}: ${boss.name} HP:${boss.hp} ──</span>`);
+
+  startTurn();
+}
+
+// === Deck: no shuffle, order preserved ===
+function drawCards(n){
+  for(let i=0;i<n;i++){
+    if(deck.length===0) return;
+    hand.push(deck.shift()); // draw from top
+  }
+}
+
+function startTurn(){
+  turnNum++;
+  phase='play';
+  trashMode=false; trashRemaining=0;
+  turnGems=0; turnAtk=0; turnMult=1; turnEffects=[];
+  played=[]; purchased=[];
+
+  const toDraw=Math.max(0, handSize - hand.length);
+  drawCards(toDraw);
+
+  el('turnNum').textContent=turnNum;
+  el('handLimit').textContent=handSize;
+  updateCounts();
+  renderHand();
+  renderPlayed();
+  renderSupply();
+  el('endTurnBtn').disabled=false;
+}
+
+// === Play card from hand ===
+function playHandCard(idx){
+  if(phase!=='play') return;
+
+  // If in trash mode, trash the card instead
+  if(trashMode){
+    const card=hand.splice(idx,1)[0];
+    log(`<span class="thin">🗑️ ${card.name}を廃棄</span>`);
+    trashRemaining--;
+    if(trashRemaining<=0) trashMode=false;
+    renderHand();
+    renderPlayed();
+    updateCounts();
+    return;
+  }
+
+  const card=hand.splice(idx,1)[0];
+  played.push(card);
+
+  applyCard(card);
+
+  updateCounts();
+  renderHand();
+  renderPlayed();
+  renderSupply();
+}
+
+function applyCard(card){
+  const isConsumed = card.consumable;
+
+  switch(card.type){
+    case 'gem': {
+      let val=card.value;
+      if(turnEffects.includes('doubleGems')) val*=2;
+      turnGems+=val;
+      break;
+    }
+    case 'atk':
+      turnAtk+=card.dmg+atkBonus;
+      break;
+    case 'mult':
+      turnMult*=card.mult;
+      break;
+    case 'draw':
+      drawCards(card.draw);
+      log(`<span class="info">💡 +${card.draw}ドロー</span>`);
+      break;
+    case 'heal':
+      playerHp=Math.min(playerMaxHp,playerHp+card.heal);
+      log(`<span class="info">💚 HP+${card.heal} (${playerHp})</span>`);
+      break;
+    case 'thin':
+      if(hand.length>0){
+        trashMode=true;
+        trashRemaining=Math.min(card.thinCount, hand.length);
+        log(`<span class="thin">🔨 ${trashRemaining}枚選んで廃棄してください</span>`);
+      }
+      break;
+    case 'hand':
+      handSize+=card.handUp;
+      log(`<span class="info">📒 手札上限 → ${handSize}枚</span>`);
+      break;
+    case 'util':
+      if(card.effect==='doubleGems') turnEffects.push('doubleGems');
+      if(card.effect==='atkBoost'){ atkBonus+=5; log(`<span class="info">🛠️ 全攻撃+5(永続)</span>`); }
+      break;
+  }
+}
+
+// === Buy from supply ===
+function buySupply(idx){
+  if(phase!=='play'||trashMode) return;
+  const card=supply[idx];
+  if(turnGems<card.cost) return;
+
+  turnGems-=card.cost;
+  // Hold until end of turn, then add below played cards
+  purchased.push({...card});
+  log(`<span class="buy">📦 ${card.name}を購入</span>`);
+
+  updateCounts();
+  renderSupply();
+  renderPlayed();
+}
+
+// === End Turn ===
+function endTurn(){
+  if(phase!=='play'||trashMode) return;
+  phase='end';
+  el('endTurnBtn').disabled=true;
+
+  const totalDmg=Math.floor(turnAtk*turnMult);
+
+  if(totalDmg>0){
+    bossHp=Math.max(0,bossHp-totalDmg);
+    log(`<span class="hit">⚔️ ${turnAtk}${turnMult>1?'×'+turnMult+'='+totalDmg:''} ダメージ！</span>`);
+    showDmg(totalDmg);
+    el('bossArea').classList.add('shake');
+    setTimeout(()=>el('bossArea').classList.remove('shake'),300);
+    updateBossHp();
+  }
+
+  // Boss attacks
+  if(bossHp>0){
+    playerHp=Math.max(0,playerHp-bossAtk);
+    log(`👹 反撃 ${bossAtk}ダメージ (HP:${playerHp})`);
+  }
+
+  // Return played cards (non-consumable) to bottom in played order
+  played.forEach(c=>{
+    if(!c.consumable) deck.push(c);
+  });
+  // Then purchased cards go below those
+  purchased.forEach(c=>deck.push(c));
+  // Unused hand cards stay in hand for next turn
+  played=[]; purchased=[];
+
+  setTimeout(()=>{
+    if(bossHp<=0){
+      log(`<span class="info">🎉 ${BOSSES[stage].name}を撃破！</span>`);
+      if(stage>=BOSSES.length-1){ gameOver(true); return; }
+      stage++;
+      setTimeout(()=>startStage(),600);
+      return;
+    }
+    if(playerHp<=0){ gameOver(false); return; }
+    if(turnNum>=turnLimit){ gameOver(false); return; }
+    startTurn();
+  },800);
+}
+
+// === Render ===
+function renderHand(){
+  const area=el('handArea');
+  area.innerHTML='';
+  hand.forEach((c,i)=>{
+    const cls=trashMode?'hand-card t-'+c.type:'hand-card t-'+c.type;
+    const label=trashMode?'<div style="color:#ff4444;font-size:8px;font-weight:bold">🗑️ タップで廃棄</div>':'';
+    area.innerHTML+=`<div class="card ${cls}" onclick="playHandCard(${i})">
+      <div class="c-emoji">${c.emoji}</div>
+      <div class="c-name">${c.name}</div>
+      <div class="c-desc">${c.desc}</div>
+      ${label}
+    </div>`;
+  });
+  el('handCount').textContent=`${hand.length}枚${trashMode?' ⚠️'+trashRemaining+'枚廃棄':''}`;
+}
+
+function renderPlayed(){
+  const row=el('playedRow');
+  row.innerHTML='';
+  played.forEach(c=>{
+    const consumed=c.consumable?'consumed':'';
+    row.innerHTML+=`<div class="played-mini ${consumed}"><div class="c-emoji">${c.emoji}</div>${c.name}${c.consumable?'🔥':''}</div>`;
+  });
+
+  const totalDmg=Math.floor(turnAtk*turnMult);
+  el('turnSummary').innerHTML=`💎<span class="gem-val">${turnGems}</span> ⚔️<span class="atk-val">${turnAtk}${turnMult>1?'×'+turnMult+'='+totalDmg:''}</span> ❤️${playerHp}`;
+}
+
+function renderSupply(){
+  const grid=el('supplyGrid');
+  grid.innerHTML='';
+  supply.forEach((c,i)=>{
+    const affordable=turnGems>=c.cost&&!trashMode;
+    grid.innerHTML+=`<div class="card supply-card t-${c.type}${affordable?'':' disabled'}" onclick="buySupply(${i})">
+      <div class="c-emoji">${c.emoji}</div>
+      <div class="c-name">${c.name}</div>
+      <div class="c-desc">${c.desc}${c.consumable?' 🔥消耗':''}</div>
+      <div class="c-cost">💎${c.cost}</div>
+    </div>`;
+  });
+}
+
+function updateCounts(){
+  el('gemCount').textContent=turnGems;
+  el('atkCount').textContent=turnAtk;
+  el('multCount').textContent='×'+turnMult;
+  el('hpDisplay').textContent=playerHp;
+  el('deckCount').textContent=deck.length;
+  el('handLimit').textContent=handSize;
+}
+
+function updateBossHp(){
+  const pct=Math.max(0,(bossHp/bossMaxHp)*100);
+  el('hpFill').style.width=pct+'%';
+  el('hpText').textContent=`${bossHp} / ${bossMaxHp}`;
+}
+
+function showDmg(val){
+  const p=el('dmgPopup');
+  p.textContent='-'+val;
+  p.className='dmg-popup show'+(val>=100?' big':'');
+  setTimeout(()=>p.className='dmg-popup',1500);
+}
+
+function gameOver(won){
+  el('resultScreen').classList.remove('hidden');
+  if(won){
+    el('resultTitle').textContent='🏆 完全勝利！';
+    el('resultText').innerHTML=`全ボスを撃破！<br>ターン数: ${turnNum}<br>残りHP: ${playerHp}`;
+  } else {
+    const reason=playerHp<=0?'HPが0になった…':'ターン制限超過…';
+    el('resultTitle').textContent='💀 敗北…';
+    el('resultText').innerHTML=`${BOSSES[stage].name}に敗北<br>${reason}<br>残りボスHP: ${bossHp}`;
+  }
+}
+
+function el(id){return document.getElementById(id)}
+function hide(id){el(id).classList.add('hidden')}
+function log(m){const a=el('logArea');a.innerHTML+=m+'<br>';a.scrollTop=a.scrollHeight}
+</script>
+</body>
+</html>
