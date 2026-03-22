@@ -236,6 +236,17 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
   </div>
 </div>
 
+<!-- Tutorial Overlay -->
+<div class="overlay hidden" id="tutorialOverlay">
+  <div class="cook-panel" style="max-width:420px">
+    <div class="cook-title" id="tutorialTitle">📖 チュートリアル</div>
+    <div style="text-align:left;font-size:11px;line-height:1.8;color:#e8dcc8;padding:10px" id="tutorialContent"></div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:10px" id="tutorialButtons">
+      <button class="btn btn-primary" onclick="tutorialNext()">次へ →</button>
+    </div>
+  </div>
+</div>
+
 <!-- Cooking Overlay -->
 <div class="cook-overlay hidden" id="cookOverlay">
   <div class="cook-panel">
@@ -397,6 +408,10 @@ let actionMenuTarget=null;
 // Farm tool system
 let selectedSeed=null;
 
+// Tutorial state
+let tutorialStep=0;
+let tutorialActive=false;
+let tutorialCompleted=false;
 
 const SAVE_KEY='dungeon_merchant_save';
 
@@ -404,7 +419,7 @@ const SAVE_KEY='dungeon_merchant_save';
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -423,6 +438,7 @@ function loadGame(){
     paddyPlots=s.paddyPlots||[];
     animals=s.animals||[];
     currentFarmTab=s.currentFarmTab||'field';
+    tutorialCompleted=s.tutorialCompleted||false;
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -473,6 +489,7 @@ function newGame(){
   adventurersInTown=2;totalAdventurers=5;
   dailyIncome=0;dailyExpense=0;questIdCounter=0;
   selType=null;selTarget=null;cookedToday=false;
+  tutorialStep=0;tutorialActive=false;tutorialCompleted=false;
   FACILITIES.forEach(f=>facilities[f.id]=0);
   farmPlots=[];paddyPlots=[];animals=[];currentFarmTab='field';
   for(let i=0;i<TOTAL_FARM_PLOTS;i++){
@@ -482,7 +499,7 @@ function newGame(){
   selectedSeed=null;
   renderQuestCreator();
   switchFarmTabProg('field');
-  nextDay();
+  startTutorial();
 }
 
 // === Day Cycle ===
@@ -1203,7 +1220,10 @@ function renderTown(){
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
-  event.target.classList.add('active');
+  const tabs=document.querySelectorAll('.tab');
+  const tabNames=['guild','farm','facility','storage','town'];
+  const idx=tabNames.indexOf(name);
+  if(idx>=0&&tabs[idx]) tabs[idx].classList.add('active');
   el('tab-'+name).classList.add('active');
 }
 
@@ -1214,6 +1234,96 @@ function rng(a,b){return Math.floor(Math.random()*(b-a+1))+a}
 function el(id){return document.getElementById(id)}
 function hide(id){el(id).classList.add('hidden')}
 function logMsg(m){const a=el('log');a.innerHTML+=m+'<br>';a.scrollTop=a.scrollHeight}
+
+// === Tutorial System ===
+const TUTORIAL_STEPS=[
+  {
+    title:'📖 ようこそ！',
+    content:'辺境の町の管理者として、冒険者ギルドと施設を運営していきましょう。<br><br>このチュートリアルで基本的な流れを学びます。',
+    tab:null
+  },
+  {
+    title:'⚔️ ギルドタブ',
+    content:'まず「⚔️ ギルド」タブでクエストを作成します。<br><br>① 種類を選ぶ（例: 鉱石採掘）<br>② 目標を選ぶ（例: 鉄鉱石）<br>③ 報酬額を設定（<b>前払い</b>です！）<br><br>報酬が高いほど、冒険者が早く受注します。',
+    tab:'guild'
+  },
+  {
+    title:'💰 報酬の仕組み',
+    content:'クエスト掲載時に報酬を<b>先に支払い</b>ます。<br><br>冒険者が受注すると、クエスト達成まで数日かかります。<br><br>達成後、素材が手に入り評判が上がります。',
+    tab:'guild'
+  },
+  {
+    title:'🏨 施設タブ',
+    content:'「🏨 施設」タブでは、宿屋や食堂を建設できます。<br><br>施設があると、町に滞在中の冒険者から<b>毎日収入</b>を得られます。<br><br>建設には素材とお金が必要です。',
+    tab:'facility'
+  },
+  {
+    title:'🏡 農場タブ',
+    content:'「🏡 農場」タブでは、畑・水田・牧場を運営できます。<br><br><b>畑</b>: 種を植えて野菜を収穫<br><b>水田</b>: 米を育てる<br><b>牧場</b>: 動物を飼って卵・牛乳・肉を生産<br><br>行動には⚡行動力が必要です。',
+    tab:'farm'
+  },
+  {
+    title:'📦 倉庫タブ',
+    content:'「📦 倉庫」タブで、集めた素材を確認できます。<br><br>素材は施設建設や調理に使えます。',
+    tab:'storage'
+  },
+  {
+    title:'🌅 次の日へ',
+    content:'「🌅 次の日へ」ボタンで1日進みます。<br><br>• クエストが進行<br>• 施設から収入<br>• 作物が成長<br>• 行動力が回復<br><br>町を発展させて評判を高めましょう！',
+    tab:null
+  },
+  {
+    title:'✅ チュートリアル完了',
+    content:'基本的な流れを学びました！<br><br>まずはクエストを掲載して素材を集め、施設を建てて収入を増やしましょう。<br><br>がんばって町を繁栄させてください！',
+    tab:null
+  }
+];
+
+function startTutorial(){
+  tutorialStep=0;
+  tutorialActive=true;
+  showTutorialStep();
+}
+
+function showTutorialStep(){
+  if(tutorialStep>=TUTORIAL_STEPS.length){
+    endTutorial();
+    return;
+  }
+  
+  const step=TUTORIAL_STEPS[tutorialStep];
+  el('tutorialTitle').textContent=step.title;
+  el('tutorialContent').innerHTML=step.content;
+  
+  if(step.tab){
+    switchTab(step.tab);
+  }
+  
+  const isLast=tutorialStep===TUTORIAL_STEPS.length-1;
+  el('tutorialButtons').innerHTML=isLast
+    ?`<button class="btn btn-green" onclick="tutorialNext()">始める！</button>`
+    :`<button class="btn btn-primary" onclick="tutorialNext()">次へ →</button>
+      <button class="btn btn-primary secondary" onclick="skipTutorial()">スキップ</button>`;
+  
+  el('tutorialOverlay').classList.remove('hidden');
+}
+
+function tutorialNext(){
+  tutorialStep++;
+  showTutorialStep();
+}
+
+function skipTutorial(){
+  endTutorial();
+}
+
+function endTutorial(){
+  tutorialActive=false;
+  tutorialCompleted=true;
+  el('tutorialOverlay').classList.add('hidden');
+  nextDay();
+  saveGame();
+}
 </script>
 </body>
 </html>
