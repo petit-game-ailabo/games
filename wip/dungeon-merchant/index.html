@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ダンジョン商人</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-serif;display:flex;justify-content:center;min-height:100vh}
+#game{width:460px;max-width:100vw;padding:8px;user-select:none}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;margin-bottom:6px}
+.tab{flex:1;padding:8px 4px;text-align:center;background:#2a2318;border:1px solid #3a3020;border-radius:6px 6px 0 0;cursor:pointer;font-size:11px;color:#8a7a60;transition:all 0.2s}
+.tab.active{background:#3a3020;color:#f0d890;border-bottom-color:#3a3020;font-weight:bold}
+.tab:hover{background:#332a1e}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* Top bar */
+.top-bar{display:flex;justify-content:space-between;align-items:center;background:#2a2318;border-radius:8px;padding:8px;margin-bottom:6px;font-size:11px}
+.gold-display{font-size:14px;color:#ffd700;font-weight:bold}
+.town-level{color:#8bc34a}
+
+/* Common */
+.panel{background:#2a2318;border:1px solid #3a3020;border-radius:8px;padding:8px;margin-bottom:6px}
+.panel-title{font-size:12px;color:#c0a870;font-weight:bold;margin-bottom:6px;border-bottom:1px solid #3a3020;padding-bottom:4px}
+.btn{padding:8px 12px;border-radius:6px;border:none;font-size:11px;font-weight:bold;cursor:pointer;transition:all 0.15s}
+.btn:hover{filter:brightness(1.2)}.btn:active{transform:scale(0.95)}
+.btn:disabled{opacity:0.3;cursor:default;filter:none}
+.btn-craft{background:#8b6914;color:#fff}
+.btn-sell{background:#2e7d32;color:#fff}
+.btn-buy{background:#1565c0;color:#fff}
+.btn-sm{padding:5px 8px;font-size:10px}
+
+/* Materials */
+.mat-grid{display:flex;flex-wrap:wrap;gap:4px}
+.mat-item{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:4px 8px;font-size:10px;display:flex;align-items:center;gap:4px}
+.mat-item .qty{color:#ffd700;font-weight:bold}
+
+/* Recipe list */
+.recipe-list{display:flex;flex-direction:column;gap:4px}
+.recipe-card{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:8px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.recipe-card.locked{opacity:0.35}
+.recipe-info{flex:1;min-width:0}
+.recipe-name{font-size:12px;font-weight:bold;color:#e8dcc8}
+.recipe-mats{font-size:9px;color:#8a7a60;margin-top:2px}
+.recipe-effect{font-size:9px;color:#8bc34a;margin-top:1px}
+
+/* Inventory */
+.inv-list{display:flex;flex-direction:column;gap:3px}
+.inv-item{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;font-size:11px}
+.inv-item .item-name{font-weight:bold}
+.inv-item .item-qty{color:#ffd700}
+
+/* Adventurers */
+.adv-list{display:flex;flex-direction:column;gap:4px}
+.adv-card{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:8px}
+.adv-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.adv-name{font-size:12px;font-weight:bold}
+.adv-rank{font-size:10px;padding:2px 6px;border-radius:4px;background:#3a3020}
+.adv-wants{font-size:10px;color:#ffab40;margin-bottom:4px}
+.adv-bar{background:#333;border-radius:4px;height:8px;overflow:hidden}
+.adv-bar-fill{height:100%;background:#4caf50;border-radius:4px;transition:width 0.5s}
+
+/* Trade */
+.trade-list{display:flex;flex-direction:column;gap:3px}
+.trade-item{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;font-size:11px}
+
+/* Town */
+.town-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.town-stat{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:8px;text-align:center}
+.town-stat-val{font-size:18px;font-weight:bold;color:#ffd700}
+.town-stat-label{font-size:9px;color:#8a7a60}
+.milestone{font-size:10px;padding:4px 8px;background:#1a2a15;border:1px solid #2a4a20;border-radius:4px;margin:2px 0;color:#8bc34a}
+.milestone.done{opacity:0.4;text-decoration:line-through}
+
+/* Log */
+.log-area{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px;height:60px;overflow-y:auto;font-size:9px;line-height:1.4;color:#8a7a60}
+.log-area .gold{color:#ffd700}.log-area .craft{color:#ffab40}.log-area .adv{color:#8bc34a}.log-area .trade{color:#64b5f6}.log-area .town{color:#ce93d8}
+
+/* Overlay */
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;justify-content:center;align-items:center;z-index:100;flex-direction:column;padding:20px}
+.overlay h2{font-size:22px;margin-bottom:10px;color:#ffd700}
+.overlay p{font-size:13px;color:#8a7a60;margin-bottom:14px;text-align:center;line-height:1.8}
+.overlay button{padding:12px 32px;border-radius:10px;border:none;background:#8b6914;color:#fff;font-size:15px;font-weight:bold;cursor:pointer}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div class="top-bar">
+    <span class="gold-display">💰 <span id="gold">0</span>G</span>
+    <span class="town-level" id="townLevelDisp">🏘️ 町Lv.1</span>
+    <span>📅 Day <span id="dayNum">1</span></span>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('craft')">🔨 生産</div>
+    <div class="tab" onclick="switchTab('shop')">🏪 販売</div>
+    <div class="tab" onclick="switchTab('trade')">🌍 貿易</div>
+    <div class="tab" onclick="switchTab('town')">🏘️ 町</div>
+  </div>
+
+  <!-- Craft Tab -->
+  <div class="tab-content active" id="tab-craft">
+    <div class="panel">
+      <div class="panel-title">📦 素材</div>
+      <div class="mat-grid" id="matGrid"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">📜 レシピ</div>
+      <div class="recipe-list" id="recipeList"></div>
+    </div>
+  </div>
+
+  <!-- Shop Tab -->
+  <div class="tab-content" id="tab-shop">
+    <div class="panel">
+      <div class="panel-title">🎒 在庫</div>
+      <div class="inv-list" id="invList"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">🧑‍🤝‍🧑 来店中の冒険者</div>
+      <div class="adv-list" id="advList"></div>
+    </div>
+  </div>
+
+  <!-- Trade Tab -->
+  <div class="tab-content" id="tab-trade">
+    <div class="panel">
+      <div class="panel-title">🌍 交易所（素材を購入）</div>
+      <div class="trade-list" id="tradeList"></div>
+    </div>
+  </div>
+
+  <!-- Town Tab -->
+  <div class="tab-content" id="tab-town">
+    <div class="town-stats" id="townStats"></div>
+    <div class="panel">
+      <div class="panel-title">🏗️ マイルストーン</div>
+      <div id="milestones"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:6px">
+    <button class="btn btn-craft" style="width:100%;padding:10px" onclick="nextDay()">🌅 次の日へ</button>
+  </div>
+
+  <div class="log-area" id="logArea"></div>
+</div>
+
+<div class="overlay" id="startScreen">
+  <h2>🏪 ダンジョン商人</h2>
+  <p>あなたは辺境の町の職人。<br>
+  武器を鍛え、薬を調合し、冒険者を支えよ。<br><br>
+  <span style="font-size:11px;color:#ffab40">
+  🔨 素材から装備・ポーションを生産<br>
+  🏪 冒険者に販売して資金を得る<br>
+  🌍 貿易で素材を仕入れる<br>
+  🏘️ 町が発展するほど全てが加速する<br><br>
+  目標: 伝説の武器「天空の剣」を鍛え上げろ！</span></p>
+  <button onclick="startGame()">開店する</button>
+</div>
+
+<div class="overlay hidden" id="resultScreen">
+  <h2 id="resultTitle"></h2>
+  <p id="resultText"></p>
+  <button onclick="startGame()">もう一度</button>
+</div>
+
+<script>
+// === Data ===
+const MATS = {
+  iron:   {name:'鉄鉱石',emoji:'⛏️'},
+  herb:   {name:'薬草',emoji:'🌿'},
+  wood:   {name:'木材',emoji:'🪵'},
+  leather:{name:'革',emoji:'🧶'},
+  steel:  {name:'鋼鉄',emoji:'🔩'},
+  crystal:{name:'魔石',emoji:'💎'},
+  dragon: {name:'竜鱗',emoji:'🐉'},
+  myth:   {name:'神鉄',emoji:'✨'},
+  elixir: {name:'霊薬草',emoji:'🌺'},
+  jewel:  {name:'宝玉',emoji:'💠'},
+};
+
+const RECIPES = [
+  {id:'bronze_sword',name:'銅の剣',type:'weapon',mats:{iron:2,wood:1},power:5,price:15,townReq:1},
+  {id:'herb_pot',name:'薬草ポーション',type:'potion',mats:{herb:3},power:3,price:10,townReq:1},
+  {id:'leather_armor',name:'革の鎧',type:'armor',mats:{leather:3,iron:1},power:4,price:18,townReq:1},
+  {id:'iron_sword',name:'鉄の剣',type:'weapon',mats:{iron:4,wood:2},power:10,price:30,townReq:2},
+  {id:'heal_pot',name:'回復薬',type:'potion',mats:{herb:5,crystal:1},power:8,price:25,townReq:2},
+  {id:'iron_armor',name:'鉄の鎧',type:'armor',mats:{iron:5,leather:2},power:8,price:35,townReq:2},
+  {id:'steel_sword',name:'鋼鉄の剣',type:'weapon',mats:{steel:3,wood:2,crystal:1},power:20,price:60,townReq:3},
+  {id:'magic_pot',name:'魔力の薬',type:'potion',mats:{herb:3,crystal:3},power:15,price:50,townReq:3},
+  {id:'steel_armor',name:'鋼鉄の鎧',type:'armor',mats:{steel:4,leather:3},power:18,price:65,townReq:3},
+  {id:'magic_sword',name:'魔法の剣',type:'weapon',mats:{steel:5,crystal:5,jewel:2},power:40,price:120,townReq:4},
+  {id:'elixir_pot',name:'エリクサー',type:'potion',mats:{elixir:5,crystal:3,jewel:1},power:35,price:100,townReq:4},
+  {id:'dragon_armor',name:'竜鱗の鎧',type:'armor',mats:{dragon:5,steel:3},power:45,price:140,townReq:4},
+  {id:'sky_sword',name:'天空の剣',type:'legend',mats:{myth:10,dragon:5,jewel:5,crystal:10},power:100,price:999,townReq:5},
+];
+
+const TRADE_ROUTES = [
+  {townReq:1, items:[{mat:'iron',price:3,qty:5},{mat:'herb',price:2,qty:5},{mat:'wood',price:2,qty:5},{mat:'leather',price:3,qty:5}]},
+  {townReq:2, items:[{mat:'steel',price:8,qty:3},{mat:'crystal',price:10,qty:3}]},
+  {townReq:3, items:[{mat:'elixir',price:15,qty:2},{mat:'jewel',price:20,qty:2}]},
+  {townReq:4, items:[{mat:'dragon',price:30,qty:2},{mat:'myth',price:50,qty:1}]},
+];
+
+const ADV_NAMES = ['アルト','ベル','カイン','ダリア','エリカ','フィン','ギル','ハナ','イリス','ジーク'];
+const ADV_RANKS = ['F','E','D','C','B','A','S'];
+
+const TOWN_MILESTONES = [
+  {level:2,name:'鍛冶場拡張',desc:'鋼鉄レシピ解放',rep:30},
+  {level:3,name:'錬金窯設置',desc:'上位ポーション解放',rep:80},
+  {level:4,name:'交易路開拓',desc:'レア素材入手可能',rep:150},
+  {level:5,name:'伝説の鍛冶場',desc:'天空の剣レシピ解放',rep:300},
+];
+
+// === State ===
+let gold=0, day=0, townLevel=1, reputation=0;
+let materials={};
+let inventory={}; // crafted items {id: count}
+let adventurers=[];
+let advIdCounter=0;
+
+function startGame(){
+  hide('startScreen');hide('resultScreen');
+  el('logArea').innerHTML='';
+  gold=30; day=0; townLevel=1; reputation=0;
+  materials={iron:5,herb:5,wood:3,leather:2};
+  inventory={};
+  adventurers=[];
+  advIdCounter=0;
+  spawnAdventurers(2);
+  nextDay();
+}
+
+function nextDay(){
+  day++;
+  el('dayNum').textContent=day;
+
+  // Adventurers return from dungeon
+  processReturns();
+  // Spawn new adventurers
+  if(adventurers.length<3+townLevel) spawnAdventurers(1);
+  // Free material income based on town level
+  gatherMaterials();
+  // Check town level up
+  checkTownLevel();
+
+  updateAll();
+  log(`<span class="town">🌅 ${day}日目</span>`);
+}
+
+function gatherMaterials(){
+  // Adventurers bring back materials based on their rank
+  adventurers.forEach(a=>{
+    if(a.onMission) return;
+    const rank=a.rankIdx;
+    if(Math.random()<0.5+rank*0.1){
+      const tier=Math.min(rank, 3);
+      const drops=[
+        ['iron','herb','wood','leather'],
+        ['iron','herb','steel','leather'],
+        ['steel','crystal','elixir','leather'],
+        ['crystal','dragon','jewel','myth'],
+      ][tier];
+      const mat=drops[Math.floor(Math.random()*drops.length)];
+      const qty=1+Math.floor(Math.random()*(1+rank));
+      addMat(mat,qty);
+      log(`<span class="adv">${a.name}が${MATS[mat].emoji}${MATS[mat].name}×${qty}を持ち帰った</span>`);
+    }
+  });
+}
+
+function processReturns(){
+  adventurers.forEach(a=>{
+    if(a.onMission){
+      a.missionDays--;
+      if(a.missionDays<=0){
+        a.onMission=false;
+        // Power up from equipment
+        a.exp+=a.power;
+        if(a.exp>=a.nextLevel){
+          a.rankIdx=Math.min(a.rankIdx+1,6);
+          a.exp=0;
+          a.nextLevel=Math.floor(a.nextLevel*1.8);
+          log(`<span class="adv">🎉 ${a.name}がランク${ADV_RANKS[a.rankIdx]}に昇格！</span>`);
+          reputation+=5+a.rankIdx*3;
+        }
+      }
+    }
+  });
+}
+
+function spawnAdventurers(n){
+  for(let i=0;i<n;i++){
+    const rank=Math.min(Math.floor(townLevel/2), 4);
+    const a={
+      id:advIdCounter++,
+      name:ADV_NAMES[Math.floor(Math.random()*ADV_NAMES.length)],
+      rankIdx:rank,
+      power:0,
+      exp:0,
+      nextLevel:10+rank*10,
+      onMission:false,
+      missionDays:0,
+      wants:randomWant(),
+    };
+    adventurers.push(a);
+  }
+}
+
+function randomWant(){
+  const types=['weapon','potion','armor'];
+  return types[Math.floor(Math.random()*types.length)];
+}
+
+// === Crafting ===
+function craft(recipeId){
+  const r=RECIPES.find(x=>x.id===recipeId);
+  if(!r||r.townReq>townLevel) return;
+  // Check materials
+  for(const[mat,qty] of Object.entries(r.mats)){
+    if((materials[mat]||0)<qty) return;
+  }
+  // Consume
+  for(const[mat,qty] of Object.entries(r.mats)) materials[mat]-=qty;
+  // Add to inventory
+  inventory[r.id]=(inventory[r.id]||0)+1;
+  log(`<span class="craft">🔨 ${r.name}を作成！</span>`);
+  reputation+=r.power/5;
+  checkTownLevel();
+  updateAll();
+}
+
+// === Selling ===
+function sellTo(advId, itemId){
+  const a=adventurers.find(x=>x.id===advId);
+  const r=RECIPES.find(x=>x.id===itemId);
+  if(!a||!r||(inventory[itemId]||0)<=0) return;
+
+  inventory[itemId]--;
+  gold+=r.price;
+  a.power+=r.power;
+  a.wants=randomWant();
+  reputation+=2;
+
+  // Send on mission
+  a.onMission=true;
+  a.missionDays=2;
+
+  log(`<span class="gold">💰 ${a.name}に${r.name}を${r.price}Gで販売</span>`);
+  checkTownLevel();
+  updateAll();
+}
+
+// === Trading ===
+function buyMat(matId, price, maxQty){
+  const qty=Math.min(maxQty, Math.floor(gold/price));
+  if(qty<=0) return;
+  const buyQty=1; // buy 1 at a time
+  if(gold<price) return;
+  gold-=price;
+  addMat(matId, 1);
+  log(`<span class="trade">🌍 ${MATS[matId].emoji}${MATS[matId].name}を${price}Gで購入</span>`);
+  updateAll();
+}
+
+// === Town ===
+function checkTownLevel(){
+  const ms=TOWN_MILESTONES.find(m=>m.level===townLevel+1);
+  if(ms&&reputation>=ms.rep){
+    townLevel++;
+    log(`<span class="town">🏘️ 町がレベル${townLevel}に発展！ ${ms.name}！</span>`);
+    if(adventurers.length<2+townLevel) spawnAdventurers(1);
+    if(townLevel>=5){
+      // Check if sky sword is crafted
+    }
+  }
+  el('townLevelDisp').textContent=`🏘️ 町Lv.${townLevel}`;
+}
+
+// === Helpers ===
+function addMat(id,qty){ materials[id]=(materials[id]||0)+qty; }
+
+// === Render ===
+function updateAll(){
+  el('gold').textContent=gold;
+  renderMats();
+  renderRecipes();
+  renderInventory();
+  renderAdventurers();
+  renderTrade();
+  renderTown();
+}
+
+function renderMats(){
+  const g=el('matGrid');
+  g.innerHTML='';
+  Object.entries(materials).forEach(([id,qty])=>{
+    if(qty<=0) return;
+    const m=MATS[id];
+    g.innerHTML+=`<div class="mat-item">${m.emoji} ${m.name} <span class="qty">×${qty}</span></div>`;
+  });
+  if(g.innerHTML==='') g.innerHTML='<span style="font-size:10px;color:#555">素材なし</span>';
+}
+
+function renderRecipes(){
+  const list=el('recipeList');
+  list.innerHTML='';
+  RECIPES.forEach(r=>{
+    const locked=r.townReq>townLevel;
+    const canCraft=!locked&&Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
+    const matsStr=Object.entries(r.mats).map(([m,q])=>`${MATS[m].emoji}${q}`).join(' ');
+    const typeEmoji=r.type==='weapon'?'⚔️':r.type==='potion'?'🧪':r.type==='armor'?'🛡️':'👑';
+    list.innerHTML+=`<div class="recipe-card${locked?' locked':''}">
+      <div class="recipe-info">
+        <div class="recipe-name">${typeEmoji} ${r.name}${locked?' 🔒':''}</div>
+        <div class="recipe-mats">${locked?`町Lv.${r.townReq}で解放`:matsStr}</div>
+        <div class="recipe-effect">威力${r.power} / 💰${r.price}G</div>
+      </div>
+      <button class="btn btn-craft btn-sm" onclick="craft('${r.id}')" ${canCraft?'':'disabled'}>作る</button>
+    </div>`;
+  });
+}
+
+function renderInventory(){
+  const list=el('invList');
+  list.innerHTML='';
+  let hasItems=false;
+  Object.entries(inventory).forEach(([id,qty])=>{
+    if(qty<=0) return;
+    hasItems=true;
+    const r=RECIPES.find(x=>x.id===id);
+    const typeEmoji=r.type==='weapon'?'⚔️':r.type==='potion'?'🧪':r.type==='armor'?'🛡️':'👑';
+    list.innerHTML+=`<div class="inv-item">
+      <span class="item-name">${typeEmoji} ${r.name}</span>
+      <span class="item-qty">×${qty}</span>
+    </div>`;
+  });
+  if(!hasItems) list.innerHTML='<span style="font-size:10px;color:#555">在庫なし</span>';
+
+  // Check win condition
+  if((inventory['sky_sword']||0)>0){
+    setTimeout(()=>gameWin(),500);
+  }
+}
+
+function renderAdventurers(){
+  const list=el('advList');
+  list.innerHTML='';
+  adventurers.forEach(a=>{
+    const wantEmoji=a.wants==='weapon'?'⚔️武器':a.wants==='potion'?'🧪ポーション':'🛡️防具';
+    const pct=Math.min(100,(a.exp/a.nextLevel)*100);
+
+    // Find sellable items matching want
+    let sellBtns='';
+    if(!a.onMission){
+      Object.entries(inventory).forEach(([id,qty])=>{
+        if(qty<=0) return;
+        const r=RECIPES.find(x=>x.id===id);
+        if(r.type===a.wants||r.type==='legend'){
+          sellBtns+=`<button class="btn btn-sell btn-sm" onclick="sellTo(${a.id},'${id}')" style="margin:2px">${r.name}(${r.price}G)</button>`;
+        }
+      });
+    }
+
+    list.innerHTML+=`<div class="adv-card">
+      <div class="adv-top">
+        <span class="adv-name">${a.name}</span>
+        <span class="adv-rank" style="color:${a.rankIdx>=5?'#ffd700':a.rankIdx>=3?'#ff9800':'#aaa'}">${ADV_RANKS[a.rankIdx]}ランク</span>
+      </div>
+      <div class="adv-wants">${a.onMission?'🏃 冒険中…あと'+a.missionDays+'日':'欲しい: '+wantEmoji}</div>
+      <div class="adv-bar"><div class="adv-bar-fill" style="width:${pct}%"></div></div>
+      <div style="font-size:9px;color:#666;margin-top:2px">装備力:${a.power} EXP:${a.exp}/${a.nextLevel}</div>
+      ${!a.onMission&&sellBtns?'<div style="margin-top:4px">'+sellBtns+'</div>':''}
+    </div>`;
+  });
+}
+
+function renderTrade(){
+  const list=el('tradeList');
+  list.innerHTML='';
+  TRADE_ROUTES.forEach(route=>{
+    if(route.townReq>townLevel) return;
+    route.items.forEach(item=>{
+      const m=MATS[item.mat];
+      const canBuy=gold>=item.price;
+      list.innerHTML+=`<div class="trade-item">
+        <span>${m.emoji} ${m.name} (${item.price}G)</span>
+        <button class="btn btn-buy btn-sm" onclick="buyMat('${item.mat}',${item.price},${item.qty})" ${canBuy?'':'disabled'}>購入</button>
+      </div>`;
+    });
+  });
+}
+
+function renderTown(){
+  const stats=el('townStats');
+  stats.innerHTML=`
+    <div class="town-stat"><div class="town-stat-val">${townLevel}</div><div class="town-stat-label">町レベル</div></div>
+    <div class="town-stat"><div class="town-stat-val">${Math.floor(reputation)}</div><div class="town-stat-label">評判</div></div>
+    <div class="town-stat"><div class="town-stat-val">${adventurers.length}</div><div class="town-stat-label">冒険者数</div></div>
+    <div class="town-stat"><div class="town-stat-val">${day}</div><div class="town-stat-label">経過日数</div></div>
+  `;
+
+  const ms=el('milestones');
+  ms.innerHTML='';
+  TOWN_MILESTONES.forEach(m=>{
+    const done=townLevel>=m.level;
+    const pct=done?100:Math.min(100,(reputation/m.rep)*100);
+    ms.innerHTML+=`<div class="milestone${done?' done'}">
+      ${done?'✅':'🔒'} Lv.${m.level} ${m.name} — ${m.desc}
+      ${!done?`<div style="font-size:9px;color:#666">評判 ${Math.floor(reputation)}/${m.rep}</div>`:''}
+    </div>`;
+  });
+}
+
+function gameWin(){
+  el('resultScreen').classList.remove('hidden');
+  el('resultTitle').textContent='👑 伝説達成！';
+  el('resultText').innerHTML=`天空の剣を鍛え上げた！<br><br>
+    経過日数: ${day}日<br>
+    町レベル: ${townLevel}<br>
+    評判: ${Math.floor(reputation)}<br>
+    冒険者数: ${adventurers.length}`;
+}
+
+// === Tabs ===
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  el('tab-'+name).classList.add('active');
+}
+
+function el(id){return document.getElementById(id)}
+function hide(id){el(id).classList.add('hidden')}
+function log(m){const a=el('logArea');a.innerHTML+=m+'<br>';a.scrollTop=a.scrollHeight}
+</script>
+</body>
+</html>
