@@ -161,9 +161,10 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
     <span style="font-size:10px" id="staminaDisplay">⚡ <span id="stamina">100</span></span>
   </div>
 
+  <button class="btn btn-primary btn-full" onclick="nextDay()" style="margin-bottom:6px">🌅 次の日へ</button>
   <div class="tabs">
     <div class="tab active" onclick="switchTab('guild')">⚔️ ギルド</div>
-    <div class="tab" onclick="switchTab('farm')">🌾 畑</div>
+    <div class="tab" onclick="switchTab('farm')">🏡 農場</div>
     <div class="tab" onclick="switchTab('facility')">🏨 施設</div>
     <div class="tab" onclick="switchTab('storage')">📦 倉庫</div>
     <div class="tab" onclick="switchTab('town')">🏘️ 町</div>
@@ -218,7 +219,6 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
     <div class="panel"><div class="panel-title">📊 経営レポート</div><div id="report"></div></div>
   </div>
 
-  <button class="btn btn-primary btn-full" onclick="nextDay()" style="margin-top:6px">🌅 次の日へ</button>
   <div class="log" id="log"></div>
 </div>
 
@@ -425,7 +425,7 @@ function loadGame(){
     currentFarmTab=s.currentFarmTab||'field';
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
-    while(paddyPlots.length<4) paddyPlots.push({state:'empty'});
+    while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
     // Rebuild quests
     quests=s.quests.map((q,i)=>{
       const meta=s.questsMeta[i];
@@ -478,7 +478,7 @@ function newGame(){
   for(let i=0;i<TOTAL_FARM_PLOTS;i++){
     farmPlots.push({state:i<2?'wild':'locked',seedId:null,plantedDay:0,growDays:0,waterCount:0,wateredToday:false});
   }
-  for(let i=0;i<4;i++) paddyPlots.push({state:'empty'});
+  for(let i=0;i<TOTAL_PADDY_PLOTS;i++) paddyPlots.push({state:i<2?'empty':'locked',plantedDay:0});
   selectedSeed=null;
   renderQuestCreator();
   switchFarmTabProg('field');
@@ -727,7 +727,7 @@ function renderFarmField(){
     let progressHtml='', waterHtml='', actionsHtml='';
     
     if(plot.state==='wild'){
-      emoji='🌿🌾🌿';
+      emoji='🪨🌵🪨';
       statusText='荒れ地';
       actionsHtml=`<button class="farm-act-btn" onclick="farmTill(${i})" ${stamina>=10?'':'disabled'}>🪓 耕す (10⚡)</button>`;
     } else if(plot.state==='tilled'){
@@ -830,32 +830,65 @@ function farmHarvest(i){
   updateAll();saveGame();
 }
 
+const TOTAL_PADDY_PLOTS=6;
+const PADDY_UNLOCK_COSTS=[0,0,80,80,150,150];
+
 function renderFarmPaddy(){
   const area=el('farmPaddyArea');
-  area.innerHTML='<div class="paddy-grid" id="paddyGrid"></div>';
-  const grid=el('paddyGrid');grid.innerHTML='';
-  for(let i=0;i<4;i++){
+  let h='<div class="paddy-grid">';
+  
+  while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
+  
+  for(let i=0;i<TOTAL_PADDY_PLOTS;i++){
     const plot=paddyPlots[i];
-    let cls='paddy-plot';
-    let emoji='💧';
-    let label='空き';
-    if(plot.state==='empty'){cls+=' empty';emoji='🟫';}
-    else if(plot.state==='flooded'){emoji='💧';label='水張り済';}
-    else if(plot.state==='growing'){
-      const elapsed=day-plot.plantedDay;
-      emoji='🌾';
-      label=`稲 あと${6-elapsed}日`;
-      cls+=' growing';
-    } else if(plot.state==='ready'){
-      emoji='🌾';
-      label='収穫！';
-      cls+=' ready';
+    
+    if(plot.state==='locked'){
+      const cost=PADDY_UNLOCK_COSTS[i];
+      h+=`<div class="paddy-plot empty" onclick="unlockPaddy(${i})">
+        <div class="farm-plot-emoji">🔒</div>
+        <div class="farm-plot-name">未開拓</div>
+        <div class="farm-lock-cost">${cost}Gで解放</div>
+      </div>`;
+      continue;
     }
-    grid.innerHTML+=`<div class="${cls}" onclick="openPaddyMenu(${i})">
-      <div class="farm-emoji">${emoji}</div>
-      <div class="farm-label">${label}</div>
+    
+    let emoji,statusText='',cls='paddy-plot',actionsHtml='',progressHtml='';
+    
+    if(plot.state==='empty'){
+      cls+=' empty';emoji='🟫';statusText='空き地';
+      actionsHtml=`<button class="farm-act-btn" onclick="paddyAction('flood',${i})" ${stamina>=5?'':'disabled'}>💧 水を張る (5⚡)</button>`;
+    } else if(plot.state==='flooded'){
+      emoji='💧';statusText='水張り済';
+      actionsHtml=`<button class="farm-act-btn" onclick="paddyAction('plant',${i})" ${stamina>=5?'':'disabled'}>🌾 田植え (5⚡)</button>`;
+    } else if(plot.state==='growing'){
+      const elapsed=day-plot.plantedDay;
+      const pct=Math.min(100,(elapsed/6)*100);
+      emoji='🌾';statusText=`稲 あと${Math.max(0,6-elapsed)}日`;cls+=' growing';
+      progressHtml=`<div class="farm-plot-progress"><div class="farm-plot-progress-fill" style="width:${pct}%"></div></div>`;
+    } else if(plot.state==='ready'){
+      emoji='🌾';statusText='収穫可能！';cls+=' ready';
+      actionsHtml=`<button class="farm-act-btn" onclick="paddyAction('harvest',${i})" ${stamina>=5?'':'disabled'}>✂️ 収穫 (5⚡)</button>`;
+    }
+    
+    h+=`<div class="${cls}">
+      <div class="farm-plot-emoji">${emoji}</div>
+      <div class="farm-plot-name">${statusText}</div>
+      ${progressHtml}
+      <div class="farm-plot-actions">${actionsHtml}</div>
     </div>`;
   }
+  
+  h+='</div>';
+  area.innerHTML=h;
+}
+
+function unlockPaddy(i){
+  const cost=PADDY_UNLOCK_COSTS[i];
+  if(gold<cost) return;
+  gold-=cost;
+  paddyPlots[i]={state:'empty',plantedDay:0};
+  logMsg(`<span class="a">🔓 水田を解放！(${cost}G)</span>`);
+  updateAll();saveGame();
 }
 
 function renderFarmRanch(){
@@ -894,33 +927,7 @@ function renderFarmRanch(){
 
 
 
-function openPaddyMenu(idx){
-  actionMenuTarget={type:'paddy',idx};
-  const plot=paddyPlots[idx];
-  el('actionMenuTitle').textContent=`水田 ${idx+1}`;
-  const btns=el('actionMenuBtns');btns.innerHTML='';
 
-  if(plot.state==='empty'){
-    const canFlood=stamina>=5;
-    btns.innerHTML+=`<div class="action-menu-btn${canFlood?'':' disabled'}" onclick="${canFlood?`paddyAction('flood',${idx})`:''}" ${canFlood?'':'disabled'}>
-      💧 水を張る <span class="action-menu-cost">⚡5</span>
-    </div>`;
-  } else if(plot.state==='flooded'){
-    const canPlant=stamina>=5;
-    btns.innerHTML+=`<div class="action-menu-btn${canPlant?'':' disabled'}" onclick="${canPlant?`paddyAction('plant',${idx})`:''}" ${canPlant?'':'disabled'}>
-      🌾 田植え <span class="action-menu-cost">⚡5</span>
-    </div>`;
-  } else if(plot.state==='ready'){
-    const canHarv=stamina>=5;
-    btns.innerHTML+=`<div class="action-menu-btn${canHarv?'':' disabled'}" onclick="${canHarv?`paddyAction('harvest',${idx})`:''}" ${canHarv?'':'disabled'}>
-      🌾 収穫する <span class="action-menu-cost">⚡5</span>
-    </div>`;
-  }
-
-  btns.innerHTML+=`<div class="action-menu-btn" onclick="closeActionMenu()" style="background:#3a3020;margin-top:8px">閉じる</div>`;
-  el('actionMenuBg').classList.remove('hidden');
-  el('actionMenu').classList.remove('hidden');
-}
 
 function closeActionMenu(){
   el('actionMenuBg').classList.add('hidden');
@@ -953,7 +960,6 @@ function paddyAction(action,idx){
     logMsg(`<span class="a">🌾 米×${qty}を収穫！</span>`);
     reputation+=2;
   }
-  closeActionMenu();
   updateAll();
   saveGame();
 }
