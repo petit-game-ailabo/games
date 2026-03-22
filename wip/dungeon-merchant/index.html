@@ -76,6 +76,30 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
 .stamina-fill{height:100%;background:linear-gradient(90deg,#4caf50,#8bc34a);border-radius:4px;transition:width 0.3s}
 .stamina-value{font-size:11px;color:#4caf50;font-weight:bold}
 
+.farm-toolbar{display:flex;gap:4px;margin-bottom:6px;padding:6px;background:#1a1510;border:1px solid #3a3020;border-radius:6px;flex-wrap:wrap}
+.tool-btn{flex:1;min-width:60px;padding:6px 4px;background:#2a2318;border:2px solid #3a3020;border-radius:6px;cursor:pointer;font-size:10px;text-align:center;transition:all 0.15s;user-select:none}
+.tool-btn:hover{border-color:#6a8a40;transform:translateY(-2px)}
+.tool-btn.active{border-color:#ffd700;background:#3a3020;box-shadow:0 0 12px rgba(255,215,0,0.5);transform:scale(1.05)}
+.tool-btn.disabled{opacity:0.3;cursor:not-allowed}
+.tool-cost{font-size:8px;color:#8a7a60;display:block}
+
+.farm-field.dragging .farm-cell{pointer-events:none}
+
+.seed-picker{display:flex;gap:4px;margin-bottom:6px;padding:6px;background:#1a1510;border:1px solid #3a3020;border-radius:6px;overflow-x:auto}
+.seed-btn{padding:6px 8px;background:#2a2318;border:2px solid #3a3020;border-radius:5px;cursor:pointer;font-size:10px;white-space:nowrap;transition:all 0.15s}
+.seed-btn:hover{border-color:#6a8a40}
+.seed-btn.active{border-color:#4caf50;background:#2a3a20}
+
+.farm-field{background:#3a2a1a;border-radius:8px;padding:1px;display:grid;grid-template-columns:repeat(8,1fr);gap:1px;margin-bottom:8px;box-shadow:inset 0 0 10px rgba(0,0,0,0.5)}
+.farm-cell{width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all 0.1s;user-select:none;position:relative;background-position:center;background-size:cover}
+.farm-cell:hover{filter:brightness(1.3);transform:scale(1.05)}
+.farm-cell.wild{background:#2a1a0a;color:#8a7a50}
+.farm-cell.tilled{background:#6a5a4a;background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.1) 3px,rgba(0,0,0,0.1) 4px)}
+.farm-cell.planted{background:#4a5a3a;color:#8bc34a}
+.farm-cell.growing{background:#3a5a2a;color:#4caf50}
+.farm-cell.ready{background:#5a5a2a;box-shadow:0 0 12px rgba(255,215,0,0.8);animation:glow 1.5s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:0 0 8px rgba(255,215,0,0.6)}50%{box-shadow:0 0 16px rgba(255,215,0,1)}}
+
 .farm-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
 .farm-plot{background:#1a1510;border:2px solid #3a3020;border-radius:8px;padding:12px 6px;text-align:center;cursor:pointer;transition:all 0.15s;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .farm-plot:hover{border-color:#6a8a40}
@@ -332,6 +356,14 @@ const SEEDS=[
 const FERTILIZER_COST={wood:1,herb:1};
 const FERTILIZER_YIELD_BONUS=2;
 
+const FARM_TOOLS=[
+  {id:'till',name:'耕す',emoji:'🪓',cost:10},
+  {id:'water',name:'水やり',emoji:'💧',cost:5},
+  {id:'fertilize',name:'肥料',emoji:'🌿',cost:8},
+  {id:'plant',name:'種植え',emoji:'🌱',cost:5},
+  {id:'harvest',name:'収穫',emoji:'✂️',cost:5},
+];
+
 const ANIMALS=[
   {id:'chicken',name:'ニワトリ',emoji:'🐔',cost:50,product:'egg',productDays:1,feedCost:{wheat:1}},
   {id:'cow',name:'ウシ',emoji:'🐄',cost:150,product:'milk',productDays:2,feedCost:{wheat:2}},
@@ -393,6 +425,12 @@ let animals=[]; // {type,fedToday,lastProduct,happiness,daysSinceProduct}
 let currentFarmTab='field';
 let actionMenuTarget=null;
 
+// Farm tool system
+let selectedTool=null;
+let selectedSeed=null;
+let isDragging=false;
+let processedCells=new Set();
+
 const SAVE_KEY='dungeon_merchant_save';
 
 // === Save/Load ===
@@ -419,7 +457,7 @@ function loadGame(){
     animals=s.animals||[];
     currentFarmTab=s.currentFarmTab||'field';
     // Initialize plots if needed
-    while(farmPlots.length<16) farmPlots.push({state:'wild'});
+    while(farmPlots.length<48) farmPlots.push({state:'wild'});
     while(paddyPlots.length<4) paddyPlots.push({state:'empty'});
     // Rebuild quests
     quests=s.quests.map((q,i)=>{
@@ -470,8 +508,9 @@ function newGame(){
   selType=null;selTarget=null;cookedToday=false;
   FACILITIES.forEach(f=>facilities[f.id]=0);
   farmPlots=[];paddyPlots=[];animals=[];currentFarmTab='field';
-  for(let i=0;i<16;i++) farmPlots.push({state:'wild'});
+  for(let i=0;i<48;i++) farmPlots.push({state:'wild'});
   for(let i=0;i<4;i++) paddyPlots.push({state:'empty'});
+  selectedTool=null;selectedSeed=null;
   renderQuestCreator();
   switchFarmTabProg('field');
   nextDay();
@@ -559,8 +598,6 @@ function processAdventurers(){
   left=Math.min(left,adventurersInTown-1);
   if(left>0) adventurersInTown-=left;
   if(day%5===0&&reputation>20) totalAdventurers++;
-  const advEl=el('advInTown');
-  if(advEl) advEl.textContent=adventurersInTown;
 }
 
 function getQuestSpeedup(){
@@ -695,40 +732,215 @@ function renderFarm(){
 
 function renderFarmField(){
   const area=el('farmFieldArea');
-  area.innerHTML='<div class="farm-grid" id="farmGrid"></div>';
-  const grid=el('farmGrid');grid.innerHTML='';
-  for(let i=0;i<16;i++){
-    const plot=farmPlots[i];
-    let cls='farm-plot '+plot.state;
-    let emoji='🟫';
-    let label=getPlotLabel(plot);
-    let progress='';
-
-    if(plot.state==='wild') emoji='🟫';
-    else if(plot.state==='tilled') emoji='🟤';
-    else if(plot.state==='planted'){
-      const seed=SEEDS.find(s=>s.id===plot.seedId);
-      emoji='🌱';
-      label=seed?seed.name+' 発芽':label;
-    } else if(plot.state==='growing'){
-      const seed=SEEDS.find(s=>s.id===plot.seedId);
-      const elapsed=day-plot.plantedDay;
-      const total=plot.growDays;
-      const pct=Math.min(100,(elapsed/total)*100);
-      emoji='🌿';
-      label=seed?`${seed.name} あと${total-elapsed}日`:label;
-      progress=`<div class="farm-progress"><div class="farm-progress-fill" style="width:${pct}%"></div></div>`;
-    } else if(plot.state==='ready'){
-      const seed=SEEDS.find(s=>s.id===plot.seedId);
-      emoji=seed?seed.emoji:'🥕';
-      label='収穫！';
-    }
-
-    grid.innerHTML+=`<div class="${cls}" onclick="openPlotMenu(${i})">
-      <div class="farm-emoji">${emoji}</div>
-      <div class="farm-label">${label}</div>
-      ${progress}
+  
+  // Toolbar
+  let toolbar='<div class="farm-toolbar">';
+  FARM_TOOLS.forEach(tool=>{
+    const canUse=stamina>=tool.cost;
+    const isActive=selectedTool===tool.id;
+    const cls=`tool-btn${isActive?' active':''}${!canUse?' disabled':''}`;
+    toolbar+=`<div class="${cls}" onclick="selectTool('${tool.id}')">
+      ${tool.emoji} ${tool.name}<span class="tool-cost">${tool.cost}⚡</span>
     </div>`;
+  });
+  toolbar+='</div>';
+  
+  // Seed picker (only visible when plant tool selected)
+  let seedPicker='';
+  if(selectedTool==='plant'){
+    seedPicker='<div class="seed-picker">';
+    SEEDS.forEach(seed=>{
+      const isActive=selectedSeed===seed.id;
+      const cls=`seed-btn${isActive?' active':''}`;
+      seedPicker+=`<div class="${cls}" onclick="selectSeed('${seed.id}')">${seed.emoji} ${seed.name}</div>`;
+    });
+    seedPicker+='</div>';
+  }
+  
+  // Field grid
+  let field='<div class="farm-field" id="farmField">';
+  for(let i=0;i<48;i++){
+    const plot=farmPlots[i];
+    let cls='farm-cell '+plot.state;
+    let emoji=getCellEmoji(plot);
+    field+=`<div class="${cls}" data-idx="${i}">${emoji}</div>`;
+  }
+  field+='</div>';
+  
+  area.innerHTML=toolbar+seedPicker+field;
+  
+  // Attach drag events
+  attachFieldDragEvents();
+}
+
+function getCellEmoji(plot){
+  if(plot.state==='wild') return '🌾'; // weeds
+  if(plot.state==='tilled') return ''; // clean soil
+  if(plot.state==='planted') return '🌱'; // seedling
+  if(plot.state==='growing'){
+    const seed=SEEDS.find(s=>s.id===plot.seedId);
+    return '🌿'; // growing plant
+  }
+  if(plot.state==='ready'){
+    const seed=SEEDS.find(s=>s.id===plot.seedId);
+    return seed?seed.emoji:'🥕';
+  }
+  return '';
+}
+
+function selectTool(toolId){
+  if(stamina<FARM_TOOLS.find(t=>t.id===toolId).cost){
+    logMsg(`<span class="w">⚡ 行動力が足りません</span>`);
+    return;
+  }
+  selectedTool=toolId;
+  if(toolId!=='plant') selectedSeed=null;
+  renderFarmField();
+}
+
+function selectSeed(seedId){
+  selectedSeed=seedId;
+  renderFarmField();
+}
+
+function attachFieldDragEvents(){
+  const field=el('farmField');
+  if(!field) return;
+  
+  const cells=field.querySelectorAll('.farm-cell');
+  
+  // Mouse events
+  field.addEventListener('mousedown',e=>{
+    if(!selectedTool) return;
+    const cell=e.target.closest('.farm-cell');
+    if(cell){
+      isDragging=true;
+      processedCells=new Set();
+      field.classList.add('dragging');
+      applyToolToCell(cell);
+    }
+  });
+  
+  field.addEventListener('mousemove',e=>{
+    if(!isDragging||!selectedTool) return;
+    const cell=document.elementFromPoint(e.clientX,e.clientY)?.closest('.farm-cell');
+    if(cell) applyToolToCell(cell);
+  });
+  
+  field.addEventListener('mouseup',()=>{
+    isDragging=false;
+    processedCells.clear();
+    field.classList.remove('dragging');
+  });
+  
+  field.addEventListener('mouseleave',()=>{
+    isDragging=false;
+    processedCells.clear();
+    field.classList.remove('dragging');
+  });
+  
+  // Touch events
+  field.addEventListener('touchstart',e=>{
+    if(!selectedTool) return;
+    const touch=e.touches[0];
+    const cell=document.elementFromPoint(touch.clientX,touch.clientY)?.closest('.farm-cell');
+    if(cell){
+      isDragging=true;
+      processedCells=new Set();
+      field.classList.add('dragging');
+      applyToolToCell(cell);
+    }
+    e.preventDefault();
+  },{passive:false});
+  
+  field.addEventListener('touchmove',e=>{
+    if(!isDragging||!selectedTool) return;
+    const touch=e.touches[0];
+    const cell=document.elementFromPoint(touch.clientX,touch.clientY)?.closest('.farm-cell');
+    if(cell) applyToolToCell(cell);
+    e.preventDefault();
+  },{passive:false});
+  
+  field.addEventListener('touchend',()=>{
+    isDragging=false;
+    processedCells.clear();
+    field.classList.remove('dragging');
+  });
+}
+
+function applyToolToCell(cell){
+  const idx=parseInt(cell.dataset.idx);
+  if(isNaN(idx)||processedCells.has(idx)) return;
+  
+  const tool=FARM_TOOLS.find(t=>t.id===selectedTool);
+  if(!tool||stamina<tool.cost) return;
+  
+  const plot=farmPlots[idx];
+  let applied=false;
+  
+  if(selectedTool==='till'&&plot.state==='wild'){
+    plot.state='tilled';
+    stamina-=tool.cost;
+    applied=true;
+  } else if(selectedTool==='plant'&&plot.state==='tilled'&&selectedSeed){
+    const seed=SEEDS.find(s=>s.id===selectedSeed);
+    if(seed){
+      plot.state='planted';
+      plot.seedId=seed.id;
+      plot.plantedDay=day;
+      plot.growDays=seed.growDays;
+      plot.watered=0;
+      plot.fertilized=false;
+      plot.wateredToday=false;
+      stamina-=tool.cost;
+      applied=true;
+    }
+  } else if(selectedTool==='water'&&(plot.state==='planted'||plot.state==='growing')&&!plot.wateredToday){
+    plot.wateredToday=true;
+    plot.growDays=Math.max(1,plot.growDays-1);
+    if(plot.state==='planted') plot.state='growing';
+    stamina-=tool.cost;
+    applied=true;
+  } else if(selectedTool==='fertilize'&&(plot.state==='planted'||plot.state==='growing')&&!plot.fertilized){
+    if(Object.entries(FERTILIZER_COST).every(([m,q])=>(materials[m]||0)>=q)){
+      Object.entries(FERTILIZER_COST).forEach(([m,q])=>materials[m]-=q);
+      plot.fertilized=true;
+      stamina-=tool.cost;
+      applied=true;
+    }
+  } else if(selectedTool==='harvest'&&plot.state==='ready'){
+    const seed=SEEDS.find(s=>s.id===plot.seedId);
+    if(seed){
+      let qty=rng(seed.yield[0],seed.yield[1]);
+      if(plot.fertilized) qty+=FERTILIZER_YIELD_BONUS;
+      addMat(seed.mat,qty);
+      plot.state='wild';
+      plot.seedId=null;
+      plot.plantedDay=0;
+      plot.growDays=0;
+      plot.watered=0;
+      plot.fertilized=false;
+      plot.wateredToday=false;
+      stamina-=tool.cost;
+      reputation+=1;
+      applied=true;
+    }
+  }
+  
+  if(applied){
+    processedCells.add(idx);
+    
+    // Update growth state
+    const elapsed=day-plot.plantedDay;
+    if(plot.state==='planted'&&elapsed>=1) plot.state='growing';
+    if(plot.state==='growing'&&elapsed>=plot.growDays) plot.state='ready';
+    
+    // Re-render cell
+    cell.className='farm-cell '+plot.state;
+    cell.innerHTML=getCellEmoji(plot);
+    
+    updateAll();
+    saveGame();
   }
 }
 
@@ -794,54 +1006,7 @@ function renderFarmRanch(){
   });
 }
 
-function getPlotLabel(plot){
-  if(plot.state==='wild') return '荒地';
-  if(plot.state==='tilled') return '耕した';
-  if(plot.state==='planted') return '種植え済';
-  if(plot.state==='growing') return '成長中';
-  if(plot.state==='ready') return '収穫可能';
-  return '';
-}
 
-function openPlotMenu(idx){
-  actionMenuTarget={type:'field',idx};
-  const plot=farmPlots[idx];
-  el('actionMenuTitle').textContent=`区画${idx+1}`;
-  const btns=el('actionMenuBtns');btns.innerHTML='';
-
-  if(plot.state==='wild'){
-    const canTill=stamina>=10;
-    btns.innerHTML+=`<div class="action-menu-btn${canTill?'':' disabled'}" onclick="${canTill?`farmAction('till',${idx})`:''}" ${canTill?'':'disabled'}>
-      🪓 耕す <span class="action-menu-cost">⚡10</span>
-    </div>`;
-  } else if(plot.state==='tilled'){
-    SEEDS.forEach(seed=>{
-      const canPlant=stamina>=5;
-      btns.innerHTML+=`<div class="action-menu-btn${canPlant?'':' disabled'}" onclick="${canPlant?`farmAction('plant',${idx},'${seed.id}')`:''}" ${canPlant?'':'disabled'}>
-        ${seed.emoji} ${seed.name}を植える <span class="action-menu-cost">⚡5</span>
-      </div>`;
-    });
-  } else if(plot.state==='planted'||plot.state==='growing'){
-    const canWater=stamina>=5&&!plot.wateredToday;
-    btns.innerHTML+=`<div class="action-menu-btn${canWater?'':' disabled'}" onclick="${canWater?`farmAction('water',${idx})`:''}" ${canWater?'':'disabled'}>
-      💧 水やり <span class="action-menu-cost">⚡5</span>
-    </div>`;
-    const canFert=stamina>=8&&!plot.fertilized&&Object.entries(FERTILIZER_COST).every(([m,q])=>(materials[m]||0)>=q);
-    const fertLabel=Object.entries(FERTILIZER_COST).map(([m,q])=>`${MAT_NAMES[m]}×${q}`).join(', ');
-    btns.innerHTML+=`<div class="action-menu-btn${canFert?'':' disabled'}" onclick="${canFert?`farmAction('fertilize',${idx})`:''}" ${canFert?'':'disabled'}>
-      🌿 肥料 (${fertLabel}) <span class="action-menu-cost">⚡8</span>
-    </div>`;
-  } else if(plot.state==='ready'){
-    const canHarv=stamina>=5;
-    btns.innerHTML+=`<div class="action-menu-btn${canHarv?'':' disabled'}" onclick="${canHarv?`farmAction('harvest',${idx})`:''}" ${canHarv?'':'disabled'}>
-      🌾 収穫する <span class="action-menu-cost">⚡5</span>
-    </div>`;
-  }
-
-  btns.innerHTML+=`<div class="action-menu-btn" onclick="closeActionMenu()" style="background:#3a3020;margin-top:8px">閉じる</div>`;
-  el('actionMenuBg').classList.remove('hidden');
-  el('actionMenu').classList.remove('hidden');
-}
 
 function openPaddyMenu(idx){
   actionMenuTarget={type:'paddy',idx};
@@ -877,67 +1042,7 @@ function closeActionMenu(){
   actionMenuTarget=null;
 }
 
-function farmAction(action,idx,seedId){
-  const plot=farmPlots[idx];
-  if(action==='till'){
-    if(stamina<10) return;
-    stamina-=10;
-    plot.state='tilled';
-    logMsg(`<span class="a">🪓 畑を耕した</span>`);
-  } else if(action==='plant'){
-    if(stamina<5) return;
-    const seed=SEEDS.find(s=>s.id===seedId);
-    if(!seed) return;
-    stamina-=5;
-    plot.state='planted';
-    plot.seedId=seed.id;
-    plot.plantedDay=day;
-    plot.growDays=seed.growDays;
-    plot.watered=0;
-    plot.fertilized=false;
-    plot.wateredToday=false;
-    logMsg(`<span class="a">🌱 ${seed.name}を植えた（${seed.growDays}日）</span>`);
-  } else if(action==='water'){
-    if(stamina<5||plot.wateredToday) return;
-    stamina-=5;
-    plot.wateredToday=true;
-    plot.growDays=Math.max(1,plot.growDays-1);
-    if(plot.state==='planted') plot.state='growing';
-    logMsg(`<span class="a">💧 水やり完了（成長速度+1日）</span>`);
-  } else if(action==='fertilize'){
-    if(stamina<8||plot.fertilized) return;
-    if(!Object.entries(FERTILIZER_COST).every(([m,q])=>(materials[m]||0)>=q)) return;
-    stamina-=8;
-    Object.entries(FERTILIZER_COST).forEach(([m,q])=>materials[m]-=q);
-    plot.fertilized=true;
-    logMsg(`<span class="a">🌿 肥料を使った（収穫量+${FERTILIZER_YIELD_BONUS}）</span>`);
-  } else if(action==='harvest'){
-    if(stamina<5) return;
-    const seed=SEEDS.find(s=>s.id===plot.seedId);
-    if(!seed) return;
-    stamina-=5;
-    let qty=rng(seed.yield[0],seed.yield[1]);
-    if(plot.fertilized) qty+=FERTILIZER_YIELD_BONUS;
-    addMat(seed.mat,qty);
-    plot.state='wild';
-    plot.seedId=null;
-    plot.plantedDay=0;
-    plot.growDays=0;
-    plot.watered=0;
-    plot.fertilized=false;
-    plot.wateredToday=false;
-    logMsg(`<span class="a">🌾 ${seed.name}×${qty}を収穫！</span>`);
-    reputation+=1;
-  }
 
-  const elapsed=day-plot.plantedDay;
-  if(plot.state==='planted'&&elapsed>=1) plot.state='growing';
-  if(plot.state==='growing'&&elapsed>=plot.growDays) plot.state='ready';
-
-  closeActionMenu();
-  updateAll();
-  saveGame();
-}
 
 function paddyAction(action,idx){
   const plot=paddyPlots[idx];
@@ -1121,7 +1226,6 @@ function updateAll(){
   el('stamina').textContent=stamina;
   el('staminaNum').textContent=stamina;
   el('staminaFill').style.width=(stamina/100*100)+'%';
-  el('advInTown').textContent=adventurersInTown;
   renderQuestBoard();renderFarm();renderFacilities();renderStorage();renderTown();
 }
 
