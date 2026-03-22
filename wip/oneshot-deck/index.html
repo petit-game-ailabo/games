@@ -224,6 +224,7 @@ let handSize=5,atkBonus=0;
 let stage=0,turnNum=0,turnLimit=25;
 let phase='';
 let trashMode=false, trashRemaining=0;
+let purchased=[]; // bought this turn, added to deck bottom after played cards
 
 function startGame(){
   hide('startScreen');hide('resultScreen');
@@ -274,7 +275,7 @@ function startTurn(){
   phase='play';
   trashMode=false; trashRemaining=0;
   turnGems=0; turnAtk=0; turnMult=1; turnEffects=[];
-  played=[];
+  played=[]; purchased=[];
 
   const toDraw=Math.max(0, handSize - hand.length);
   drawCards(toDraw);
@@ -364,9 +365,9 @@ function buySupply(idx){
   if(turnGems<card.cost) return;
 
   turnGems-=card.cost;
-  // Add to bottom of deck (not discard!)
-  deck.push({...card});
-  log(`<span class="buy">📦 ${card.name}を購入 → デッキの底へ</span>`);
+  // Hold until end of turn, then add below played cards
+  purchased.push({...card});
+  log(`<span class="buy">📦 ${card.name}を購入</span>`);
 
   updateCounts();
   renderSupply();
@@ -396,12 +397,14 @@ function endTurn(){
     log(`👹 反撃 ${bossAtk}ダメージ (HP:${playerHp})`);
   }
 
-  // Return played cards: non-consumable go to bottom of deck in played order
+  // Return played cards (non-consumable) to bottom in played order
   played.forEach(c=>{
     if(!c.consumable) deck.push(c);
   });
+  // Then purchased cards go below those
+  purchased.forEach(c=>deck.push(c));
   // Unused hand cards stay in hand for next turn
-  played=[];
+  played=[]; purchased=[];
 
   setTimeout(()=>{
     if(bossHp<=0){
