@@ -64,6 +64,22 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
 .mat-item{background:#1a1510;border:1px solid #3a3020;border-radius:5px;padding:3px 7px;font-size:10px;display:inline-flex;align-items:center;gap:3px}
 .mat-qty{color:#ffd700;font-weight:bold}
 
+/* Farm */
+.farm-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
+.farm-plot{background:#1a1510;border:2px solid #3a3020;border-radius:8px;padding:10px;text-align:center;cursor:pointer;transition:all 0.15s;min-height:90px}
+.farm-plot:hover{border-color:#6a8a40}
+.farm-plot.empty{border-style:dashed}
+.farm-plot.growing{border-color:#4caf50}
+.farm-plot.ready{border-color:#ffd700;box-shadow:0 0 8px rgba(255,215,0,0.3)}
+.farm-emoji{font-size:28px}
+.farm-label{font-size:9px;color:#8a7a60;margin-top:3px}
+.farm-progress{background:#333;border-radius:3px;height:6px;margin-top:4px;overflow:hidden}
+.farm-progress-fill{height:100%;background:#4caf50;border-radius:3px;transition:width 0.3s}
+.seed-grid{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.seed-btn{padding:5px 8px;border-radius:5px;border:1px solid #3a3020;background:#1a1510;color:#e8dcc8;font-size:9px;cursor:pointer;transition:all 0.15s}
+.seed-btn:hover{border-color:#6a8a40}
+.seed-btn:disabled{opacity:0.3;cursor:default}
+
 .town-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
 .town-stat{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px;text-align:center}
 .ts-val{font-size:16px;font-weight:bold;color:#ffd700}
@@ -103,6 +119,7 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
 
   <div class="tabs">
     <div class="tab active" onclick="switchTab('guild')">⚔️ ギルド</div>
+    <div class="tab" onclick="switchTab('farm')">🌾 畑</div>
     <div class="tab" onclick="switchTab('facility')">🏨 施設</div>
     <div class="tab" onclick="switchTab('storage')">📦 倉庫</div>
     <div class="tab" onclick="switchTab('town')">🏘️ 町</div>
@@ -125,6 +142,17 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
       </div>
     </div>
     <div class="panel"><div class="panel-title">📋 掲載中のクエスト</div><div class="quest-list" id="questBoard"></div></div>
+  </div>
+
+  <div class="tc" id="tab-farm">
+    <div class="panel">
+      <div class="panel-title">🌾 畑（タップで植える・収穫）</div>
+      <div class="farm-grid" id="farmGrid"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">🌱 種を買う</div>
+      <div class="seed-grid" id="seedShop"></div>
+    </div>
   </div>
 
   <div class="tc" id="tab-facility">
@@ -232,7 +260,21 @@ const MAT_NAMES={
   ancient_relic:'古代遺物',spell_tome:'魔導書',treasure:'秘宝',
   wood:'木材',hardwood:'硬木',spirit_wood:'霊木',
   fish:'川魚',golden_fish:'黄金魚',
+  carrot:'ニンジン',potato:'ジャガイモ',wheat:'小麦',tomato:'トマト',
+  cabbage:'キャベツ',pumpkin:'カボチャ',magic_herb_crop:'魔法薬草',
 };
+
+// === Farm Data ===
+const SEEDS=[
+  {id:'carrot',name:'ニンジン',emoji:'🥕',mat:'carrot',growDays:2,yield:[2,4],cost:5},
+  {id:'potato',name:'ジャガイモ',emoji:'🥔',mat:'potato',growDays:3,yield:[3,5],cost:5},
+  {id:'wheat',name:'小麦',emoji:'🌾',mat:'wheat',growDays:3,yield:[3,6],cost:4},
+  {id:'tomato',name:'トマト',emoji:'🍅',mat:'tomato',growDays:2,yield:[2,3],cost:6},
+  {id:'cabbage',name:'キャベツ',emoji:'🥬',mat:'cabbage',growDays:4,yield:[2,4],cost:7},
+  {id:'pumpkin',name:'カボチャ',emoji:'🎃',mat:'pumpkin',growDays:5,yield:[1,3],cost:10},
+  {id:'magic_herb',name:'魔法薬草',emoji:'🌿',mat:'magic_herb_crop',growDays:6,yield:[1,2],cost:20},
+];
+const MAX_PLOTS=9; // 3x3 grid
 
 const COOK_RECIPES=[
   {name:'焼き魚定食',emoji:'🐟',mats:{fish:2},income:12,diff:'easy'},
@@ -241,6 +283,11 @@ const COOK_RECIPES=[
   {name:'熊鍋',emoji:'🐻',mats:{bear_claw:1,mushroom:2},income:25,diff:'medium'},
   {name:'竜肉ステーキ',emoji:'🐉',mats:{dragon_fang:1,spirit_root:1},income:60,diff:'hard'},
   {name:'魔法花のサラダ',emoji:'🌺',mats:{magic_flower:1,herb:2},income:20,diff:'easy'},
+  {name:'野菜シチュー',emoji:'🥕',mats:{carrot:2,potato:2},income:18,diff:'easy'},
+  {name:'パンプキンスープ',emoji:'🎃',mats:{pumpkin:1,wheat:2},income:22,diff:'medium'},
+  {name:'トマトパスタ',emoji:'🍅',mats:{tomato:2,wheat:2},income:20,diff:'easy'},
+  {name:'キャベツロール',emoji:'🥬',mats:{cabbage:2,wolf_pelt:1},income:28,diff:'medium'},
+  {name:'魔法薬草茶',emoji:'🍵',mats:{magic_herb_crop:1},income:35,diff:'hard'},
 ];
 
 const FACILITIES=[
@@ -274,13 +321,16 @@ let questIdCounter=0;
 let selType=null,selTarget=null;
 let cookTimer=null,cookPos=0,cookDir=1,cookRecipe=null,cookPhase='';
 let cookedToday=false;
+let farmPlots=[]; // {seedId, plantedDay, growDays} or null
+let unlockedPlots=3; // start with 3 plots
 
 const SAVE_KEY='dungeon_merchant_save';
 
 // === Save/Load ===
 function saveGame(){
   const state={gold,day,reputation,materials,quests:quests.map(q=>({...q,targetData:undefined})),
-    facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday};
+    facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
+    farmPlots,unlockedPlots};
   // Re-attach targetData references on load
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
@@ -295,6 +345,9 @@ function loadGame(){
     facilities=s.facilities; adventurersInTown=s.adventurersInTown;
     totalAdventurers=s.totalAdventurers; questIdCounter=s.questIdCounter;
     cookedToday=s.cookedToday||false;
+    farmPlots=s.farmPlots||[];
+    unlockedPlots=s.unlockedPlots||3;
+    while(farmPlots.length<MAX_PLOTS) farmPlots.push(null);
     // Rebuild quests with targetData
     quests=s.quests.map((q,i)=>{
       const meta=s.questsMeta[i];
@@ -341,17 +394,20 @@ function newGame(){
   dailyIncome=0;dailyExpense=0;questIdCounter=0;
   selType=null;selTarget=null;cookedToday=false;
   FACILITIES.forEach(f=>facilities[f.id]=0);
+  farmPlots=[];unlockedPlots=3;
+  for(let i=0;i<MAX_PLOTS;i++) farmPlots.push(null);
   renderQuestCreator();
   nextDay();
 }
 
 // === Day Cycle ===
 function nextDay(){
-  day++;dailyIncome=0;dailyExpense=0;cookedToday=false;
+  day++;dailyIncome=0;dailyExpense=0;cookedToday=false;selectedPlot=null;
   el('dayNum').textContent=day;
   processQuests();
   processFacilities();
   processAdventurers();
+  processFarm();
   updateAll();
   logMsg(`<span class="q">🌅 ${day}日目 — 💰${gold}G 👥${adventurersInTown}人滞在</span>`);
   saveGame();
@@ -517,6 +573,107 @@ function buildFacility(id){
   updateAll();saveGame();
 }
 
+// === Farm ===
+function processFarm(){
+  // Crops grow each day (just track by comparing day - plantedDay)
+}
+
+function plantSeed(plotIdx, seedId){
+  if(plotIdx>=unlockedPlots||farmPlots[plotIdx]!==null) return;
+  const seed=SEEDS.find(s=>s.id===seedId);
+  if(!seed||gold<seed.cost) return;
+  gold-=seed.cost;
+  farmPlots[plotIdx]={seedId:seed.id,plantedDay:day,growDays:seed.growDays};
+  logMsg(`<span class="a">🌱 ${seed.name}を植えた（${seed.growDays}日で収穫）</span>`);
+  updateAll();saveGame();
+}
+
+function harvestPlot(plotIdx){
+  const plot=farmPlots[plotIdx];
+  if(!plot) return;
+  const seed=SEEDS.find(s=>s.id===plot.seedId);
+  if(!seed) return;
+  const elapsed=day-plot.plantedDay;
+  if(elapsed<plot.growDays) return;
+  const qty=rng(seed.yield[0],seed.yield[1]);
+  addMat(seed.mat,qty);
+  farmPlots[plotIdx]=null;
+  logMsg(`<span class="a">🌾 ${seed.name}×${qty}を収穫！</span>`);
+  reputation+=1;
+  updateAll();saveGame();
+}
+
+function farmPlotClick(idx){
+  if(idx>=unlockedPlots){
+    // Buy new plot
+    const cost=30+unlockedPlots*20;
+    if(gold>=cost){
+      gold-=cost;
+      unlockedPlots++;
+      logMsg(`<span class="f">🏗️ 畑を拡張！(${unlockedPlots}区画)</span>`);
+      updateAll();saveGame();
+    }
+    return;
+  }
+  const plot=farmPlots[idx];
+  if(!plot) return; // empty - handled by seed buttons
+  const seed=SEEDS.find(s=>s.id===plot.seedId);
+  const elapsed=day-plot.plantedDay;
+  if(elapsed>=plot.growDays) harvestPlot(idx);
+}
+
+let selectedPlot=null;
+function selectPlot(idx){
+  if(idx>=unlockedPlots||farmPlots[idx]!==null) return;
+  selectedPlot=idx;
+  renderFarm();
+}
+
+function renderFarm(){
+  const grid=el('farmGrid');grid.innerHTML='';
+  for(let i=0;i<MAX_PLOTS;i++){
+    if(i>=unlockedPlots){
+      const cost=30+i*20;
+      grid.innerHTML+=`<div class="farm-plot empty" onclick="farmPlotClick(${i})">
+        <div class="farm-emoji">🔒</div>
+        <div class="farm-label">拡張 ${cost}G</div>
+      </div>`;
+      continue;
+    }
+    const plot=farmPlots[i];
+    if(!plot){
+      const isSel=selectedPlot===i;
+      grid.innerHTML+=`<div class="farm-plot empty${isSel?' ready':''}" onclick="selectPlot(${i})">
+        <div class="farm-emoji">🟫</div>
+        <div class="farm-label">${isSel?'↓ 種を選んで':'空き地'}</div>
+      </div>`;
+    } else {
+      const seed=SEEDS.find(s=>s.id===plot.seedId);
+      const elapsed=day-plot.plantedDay;
+      const ready=elapsed>=plot.growDays;
+      const pct=Math.min(100,(elapsed/plot.growDays)*100);
+      grid.innerHTML+=`<div class="farm-plot ${ready?'ready':'growing'}" onclick="farmPlotClick(${i})">
+        <div class="farm-emoji">${ready?seed.emoji:'🌱'}</div>
+        <div class="farm-label">${seed.name}${ready?' 収穫！':` あと${plot.growDays-elapsed}日`}</div>
+        ${!ready?`<div class="farm-progress"><div class="farm-progress-fill" style="width:${pct}%"></div></div>`:''}
+      </div>`;
+    }
+  }
+
+  // Seed shop
+  const shop=el('seedShop');shop.innerHTML='';
+  if(selectedPlot!==null&&selectedPlot<unlockedPlots&&farmPlots[selectedPlot]===null){
+    SEEDS.forEach(s=>{
+      const can=gold>=s.cost;
+      shop.innerHTML+=`<div class="seed-btn${can?'':' disabled'}" onclick="${can?`plantSeed(${selectedPlot},'${s.id}')`:''}" ${can?'':'disabled'}>
+        ${s.emoji} ${s.name} (${s.cost}G / ${s.growDays}日)
+      </div>`;
+    });
+  } else {
+    shop.innerHTML='<span style="font-size:10px;color:#555">空き地をタップして種を植えよう</span>';
+  }
+}
+
 // === Cooking Minigame ===
 function canCook(){
   if(facilities.tavern<=0||cookedToday) return[];
@@ -598,7 +755,7 @@ function cookAction(){
 function updateAll(){
   el('gold').textContent=gold;
   el('advInTown').textContent=adventurersInTown;
-  renderQuestBoard();renderFacilities();renderStorage();renderTown();
+  renderQuestBoard();renderFarm();renderFacilities();renderStorage();renderTown();
 }
 
 function renderQuestBoard(){
