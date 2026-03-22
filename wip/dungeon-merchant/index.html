@@ -405,6 +405,14 @@ let animals=[]; // {type,fedToday,lastProduct,happiness,daysSinceProduct}
 let currentFarmTab='field';
 let actionMenuTarget=null;
 
+// === Audio System ===
+let audioCtx=null;
+let bgmGain=null;
+let sfxGain=null;
+let bgmOscillator=null;
+let sfxEnabled=true;
+let bgmEnabled=true;
+
 // Farm tool system
 let selectedSeed=null;
 
@@ -414,6 +422,155 @@ let tutorialActive=false;
 let tutorialCompleted=false;
 
 const SAVE_KEY='dungeon_merchant_save';
+
+// === Audio Functions ===
+function initAudio(){
+  if(audioCtx) return;
+  try{
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    bgmGain=audioCtx.createGain();
+    bgmGain.gain.value=0.15;
+    bgmGain.connect(audioCtx.destination);
+    sfxGain=audioCtx.createGain();
+    sfxGain.gain.value=0.3;
+    sfxGain.connect(audioCtx.destination);
+    if(bgmEnabled) startBGM();
+  }catch(e){console.warn('Audio init failed',e);}
+}
+
+function startBGM(){
+  if(!audioCtx||bgmOscillator) return;
+  try{
+    // Simple ambient background loop using multiple oscillators
+    const osc1=audioCtx.createOscillator();
+    const osc2=audioCtx.createOscillator();
+    const lfo=audioCtx.createOscillator();
+    const lfoGain=audioCtx.createGain();
+    
+    osc1.type='sine';
+    osc1.frequency.value=220; // A3
+    osc2.type='sine';
+    osc2.frequency.value=330; // E4
+    
+    lfo.type='sine';
+    lfo.frequency.value=0.3; // Slow modulation
+    lfoGain.gain.value=10;
+    
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc1.frequency);
+    lfoGain.connect(osc2.frequency);
+    
+    const merger=audioCtx.createChannelMerger(2);
+    osc1.connect(merger,0,0);
+    osc2.connect(merger,0,1);
+    merger.connect(bgmGain);
+    
+    osc1.start();
+    osc2.start();
+    lfo.start();
+    
+    bgmOscillator={osc1,osc2,lfo};
+  }catch(e){console.warn('BGM start failed',e);}
+}
+
+function stopBGM(){
+  if(!bgmOscillator) return;
+  try{
+    bgmOscillator.osc1.stop();
+    bgmOscillator.osc2.stop();
+    bgmOscillator.lfo.stop();
+    bgmOscillator=null;
+  }catch(e){}
+}
+
+function playSFX(type){
+  if(!audioCtx||!sfxEnabled) return;
+  try{
+    const osc=audioCtx.createOscillator();
+    const gain=audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(sfxGain);
+    
+    const now=audioCtx.currentTime;
+    
+    switch(type){
+      case 'click':
+        osc.type='square';
+        osc.frequency.value=800;
+        gain.gain.setValueAtTime(0.3,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.05);
+        osc.start(now);
+        osc.stop(now+0.05);
+        break;
+      case 'harvest':
+        osc.type='sine';
+        osc.frequency.setValueAtTime(440,now);
+        osc.frequency.exponentialRampToValueAtTime(880,now+0.1);
+        gain.gain.setValueAtTime(0.4,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.15);
+        osc.start(now);
+        osc.stop(now+0.15);
+        break;
+      case 'coin':
+        osc.type='sine';
+        osc.frequency.setValueAtTime(1000,now);
+        osc.frequency.exponentialRampToValueAtTime(1500,now+0.08);
+        gain.gain.setValueAtTime(0.3,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.1);
+        osc.start(now);
+        osc.stop(now+0.1);
+        break;
+      case 'quest':
+        osc.type='triangle';
+        osc.frequency.setValueAtTime(330,now);
+        osc.frequency.setValueAtTime(440,now+0.05);
+        osc.frequency.setValueAtTime(550,now+0.1);
+        gain.gain.setValueAtTime(0.3,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.2);
+        osc.start(now);
+        osc.stop(now+0.2);
+        break;
+      case 'day':
+        osc.type='sine';
+        osc.frequency.setValueAtTime(523,now); // C5
+        osc.frequency.setValueAtTime(659,now+0.1); // E5
+        osc.frequency.setValueAtTime(784,now+0.2); // G5
+        gain.gain.setValueAtTime(0.4,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.4);
+        osc.start(now);
+        osc.stop(now+0.4);
+        break;
+      case 'water':
+        osc.type='sine';
+        osc.frequency.setValueAtTime(200,now);
+        osc.frequency.exponentialRampToValueAtTime(100,now+0.15);
+        gain.gain.setValueAtTime(0.2,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.15);
+        osc.start(now);
+        osc.stop(now+0.15);
+        break;
+      case 'build':
+        osc.type='sawtooth';
+        osc.frequency.setValueAtTime(150,now);
+        osc.frequency.exponentialRampToValueAtTime(100,now+0.25);
+        gain.gain.setValueAtTime(0.25,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.25);
+        osc.start(now);
+        osc.stop(now+0.25);
+        break;
+      case 'cook':
+        osc.type='triangle';
+        osc.frequency.setValueAtTime(600,now);
+        osc.frequency.setValueAtTime(700,now+0.05);
+        osc.frequency.setValueAtTime(800,now+0.1);
+        gain.gain.setValueAtTime(0.3,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.15);
+        osc.start(now);
+        osc.stop(now+0.15);
+        break;
+    }
+  }catch(e){console.warn('SFX failed',e);}
+}
 
 // === Save/Load ===
 function saveGame(){
@@ -471,6 +628,7 @@ window.addEventListener('load',()=>{
 
 function continueGame(){
   if(loadGame()){
+    initAudio();
     hide('startScreen');
     renderQuestCreator();
     switchFarmTabProg(currentFarmTab);
@@ -481,6 +639,7 @@ function continueGame(){
 
 function newGame(){
   try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+  initAudio();
   hide('startScreen');hide('resultScreen');
   el('log').innerHTML='';
   gold=100;day=0;reputation=0;stamina=100;
@@ -504,6 +663,7 @@ function newGame(){
 
 // === Day Cycle ===
 function nextDay(){
+  playSFX('day');
   day++;dailyIncome=0;dailyExpense=0;cookedToday=false;stamina=100;
   el('dayNum').textContent=day;
   processQuests();
@@ -547,6 +707,7 @@ function processQuests(){
         if(target){
           const qty=rng(target.qty[0],target.qty[1]);
           addMat(target.mat,qty);
+          playSFX('quest');
           logMsg(`<span class="a">✅ ${q.advName}が帰還！${MAT_NAMES[target.mat]||target.mat}×${qty}を納品</span>`);
         }
         adventurersInTown++;
@@ -563,14 +724,14 @@ function processFacilities(){
     const d=FACILITIES.find(f=>f.id==='inn').levels[innLv-1];
     const guests=Math.min(adventurersInTown,d.capacity);
     const inc=guests*d.income;
-    if(inc>0){gold+=inc;dailyIncome+=inc;logMsg(`<span class="f">🏨 宿泊収入: ${inc}G (${guests}人)</span>`);}
+    if(inc>0){gold+=inc;dailyIncome+=inc;playSFX('coin');logMsg(`<span class="f">🏨 宿泊収入: ${inc}G (${guests}人)</span>`);}
   }
   const tavLv=facilities.tavern;
   if(tavLv>0){
     const d=FACILITIES.find(f=>f.id==='tavern').levels[tavLv-1];
     const diners=Math.min(adventurersInTown,d.capacity);
     const inc=diners*d.income;
-    if(inc>0){gold+=inc;dailyIncome+=inc;logMsg(`<span class="f">🍺 食事収入: ${inc}G (${diners}人)</span>`);}
+    if(inc>0){gold+=inc;dailyIncome+=inc;playSFX('coin');logMsg(`<span class="f">🍺 食事収入: ${inc}G (${diners}人)</span>`);}
   }
 }
 
@@ -636,6 +797,7 @@ function postQuest(){
   const market=Math.floor(typeData.baseCost*targetData.costMult);
 
   gold-=price;
+  playSFX('click');
 
   quests.push({
     id:questIdCounter++,type:selType,target:selTarget,targetData,
@@ -697,6 +859,7 @@ function processRanch(){
         const prodQty=1;
         addMat(spec.product,prodQty);
         a.daysSinceProduct=0;
+        playSFX('harvest');
         logMsg(`<span class="a">${spec.emoji} ${MAT_NAMES[spec.product]}×${prodQty}を生産！</span>`);
       }
     }
@@ -791,6 +954,7 @@ function unlockPlot(i){
   if(gold<cost) return;
   gold-=cost;
   farmPlots[i]={state:'wild',seedId:null,plantedDay:0,growDays:0,waterCount:0,wateredToday:false};
+  playSFX('coin');
   logMsg(`<span class="a">🔓 畑を解放！(${cost}G)</span>`);
   updateAll();saveGame();
 }
@@ -799,6 +963,7 @@ function farmTill(i){
   if(stamina<10||farmPlots[i].state!=='wild') return;
   stamina-=10;
   farmPlots[i].state='tilled';
+  playSFX('click');
   logMsg(`<span class="a">🪓 畑を耕した</span>`);
   updateAll();saveGame();
 }
@@ -815,6 +980,7 @@ function farmPlant(i,seedId){
   farmPlots[i].growDays=seed.growDays;
   farmPlots[i].waterCount=0;
   farmPlots[i].wateredToday=false;
+  playSFX('click');
   logMsg(`<span class="a">🌱 ${seed.name}を植えた（${seed.growDays}日で収穫）</span>`);
   updateAll();saveGame();
 }
@@ -826,6 +992,7 @@ function farmWater(i){
   p.wateredToday=true;
   p.waterCount=(p.waterCount||0)+1;
   if(p.state==='planted') p.state='growing';
+  playSFX('water');
   logMsg(`<span class="a">💧 水やりした（${p.waterCount}回目）</span>`);
   updateAll();saveGame();
 }
@@ -841,6 +1008,7 @@ function farmHarvest(i){
   const waterBonus=Math.min(p.waterCount||0, seed.growDays); // max bonus = growDays
   qty+=waterBonus;
   addMat(seed.mat,qty);
+  playSFX('harvest');
   logMsg(`<span class="a">✂️ ${seed.name}×${qty}を収穫！（水ボーナス+${waterBonus}）</span>`);
   p.state='wild';p.seedId=null;p.plantedDay=0;p.growDays=0;p.waterCount=0;p.wateredToday=false;
   reputation+=1;
@@ -904,6 +1072,7 @@ function unlockPaddy(i){
   if(gold<cost) return;
   gold-=cost;
   paddyPlots[i]={state:'empty',plantedDay:0};
+  playSFX('coin');
   logMsg(`<span class="a">🔓 水田を解放！(${cost}G)</span>`);
   updateAll();saveGame();
 }
@@ -960,12 +1129,14 @@ function paddyAction(action,idx){
     if(stamina<5) return;
     stamina-=5;
     plot.state='flooded';
+    playSFX('water');
     logMsg(`<span class="a">💧 水田に水を張った</span>`);
   } else if(action==='plant'){
     if(stamina<5) return;
     stamina-=5;
     plot.state='growing';
     plot.plantedDay=day;
+    playSFX('click');
     logMsg(`<span class="a">🌾 田植え完了（6日で収穫）</span>`);
   } else if(action==='harvest'){
     if(stamina<5) return;
@@ -974,6 +1145,7 @@ function paddyAction(action,idx){
     addMat('rice',qty);
     plot.state='empty';
     plot.plantedDay=0;
+    playSFX('harvest');
     logMsg(`<span class="a">🌾 米×${qty}を収穫！</span>`);
     reputation+=2;
   }
@@ -986,6 +1158,7 @@ function buyAnimal(type){
   if(!spec||gold<spec.cost) return;
   gold-=spec.cost;
   animals.push({type:type,fedToday:false,lastProduct:0,happiness:50,daysSinceProduct:0});
+  playSFX('coin');
   logMsg(`<span class="a">${spec.emoji} ${spec.name}を購入！</span>`);
   updateAll();
   saveGame();
@@ -1000,6 +1173,7 @@ function feedAnimal(idx){
   Object.entries(spec.feedCost).forEach(([m,q])=>materials[m]-=q);
   a.fedToday=true;
   a.happiness=Math.min(100,a.happiness+10);
+  playSFX('click');
   logMsg(`<span class="a">${spec.emoji} 給餌完了</span>`);
   updateAll();
   saveGame();
@@ -1051,6 +1225,7 @@ function buildFacility(id){
   for(const[mat,qty] of Object.entries(data.mats)) materials[mat]-=qty;
   facilities[id]=nextLv+1;
   reputation+=10*(nextLv+1);
+  playSFX('build');
   logMsg(`<span class="f">🏗️ ${data.name}を建設！</span>`);
   updateAll();saveGame();
 }
@@ -1107,11 +1282,14 @@ function cookAction(){
       quality='失敗';multiplier=0.3;label='😓 焦がしてしまった...';
     } else if(center<maxDist*0.3){
       quality='極上';multiplier=2.0;label='✨ 極上の仕上がり！';
+      playSFX('coin');
     } else if(center<maxDist*0.7){
       quality='上出来';multiplier=1.5;label='😊 上出来！';
+      playSFX('coin');
     } else {
       quality='普通';multiplier=1.0;label='👍 まあまあの出来';
     }
+    playSFX('cook');
 
     const income=Math.floor(cookRecipe.income*multiplier);
     gold+=income;
