@@ -653,6 +653,7 @@ const STORAGE_CAPACITIES=[0,100,200,400,800,1600]; // Capacity per level (index 
 const STORAGE_UPGRADE_COSTS=[0,100,250,500,1000]; // Cost to upgrade to next level (index 0 unused)
 let inventory={}; // {dishName: {qty, sellPrice}} - cooked dishes and crafted items for auto-sale
 let lastGuildRankLevel=1; // Track for rank-up notifications
+let dailyStats=[]; // Track daily income/expense for graph (last 10 days)
 
 // === Audio System ===
 let audioCtx=null;
@@ -879,7 +880,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,tutorialGuideVisible,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel,inventory,lastGuildRankLevel,timeOfDay};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,tutorialGuideVisible,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel,inventory,lastGuildRankLevel,timeOfDay,dailyStats};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -909,6 +910,7 @@ function loadGame(){
     inventory=s.inventory||{};
     lastGuildRankLevel=s.lastGuildRankLevel||1;
     timeOfDay=s.timeOfDay||'day';
+    dailyStats=s.dailyStats||[];
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -980,6 +982,7 @@ function newGame(){
   inventory={};
   lastGuildRankLevel=1;
   timeOfDay='day';
+  dailyStats=[];
   // Initialize market prices to 1.0 (neutral)
   QUEST_TYPES.forEach(qt=>marketPriceMultipliers[qt.id]=1.0);
   FACILITIES.forEach(f=>facilities[f.id]=0);
@@ -1024,6 +1027,14 @@ function nextDay(){
   playSFX('day');
   const prevSeason=getCurrentSeason();
   const prevGuildRank=getGuildRank();
+  
+  // Record previous day's stats before resetting
+  if(day>0){
+    dailyStats.push({day:day,income:dailyIncome,expense:dailyExpense,net:dailyIncome-dailyExpense,gold:gold});
+    // Keep only last 10 days
+    if(dailyStats.length>10) dailyStats.shift();
+  }
+  
   day++;dailyIncome=0;dailyExpense=0;cookedToday=false;stamina=100;
   el('dayNum').textContent=day;
   
@@ -2417,11 +2428,21 @@ function renderTown(){
   });
   achList.innerHTML+='</div>';
   
-  el('report').innerHTML=`
+  let reportHtml=`
     <div style="font-size:11px;margin:4px 0">📅 Day ${day}</div>
     <div style="font-size:11px;color:#4caf50">📈 日収入: ${dailyIncome}G</div>
     <div style="font-size:11px;color:#f44336">📉 日支出: ${dailyExpense}G</div>
     <div style="font-size:11px;color:#ffd700;font-weight:bold">💰 純利益: ${dailyIncome-dailyExpense}G</div>`;
+  
+  // Add graph if we have historical data
+  if(dailyStats.length>0){
+    reportHtml+=`<div style="margin-top:12px">
+      <div style="font-size:11px;color:#c0a870;font-weight:bold;margin-bottom:6px">📊 収支推移（直近10日分）</div>
+      ${renderStatsGraph()}
+    </div>`;
+  }
+  
+  el('report').innerHTML=reportHtml;
 }
 
 function drawTownCanvas(){
@@ -2639,6 +2660,65 @@ function drawAdventurer(ctx,x,y){
   ctx.moveTo(x,y);
   ctx.lineTo(x+5,y+12);
   ctx.stroke();
+}
+
+function renderStatsGraph(){
+  if(dailyStats.length===0) return '';
+  
+  // Calculate min/max for scaling
+  const allValues=dailyStats.flatMap(s=>[s.income,s.expense,Math.abs(s.net)]);
+  const maxValue=Math.max(...allValues,1);
+  
+  const graphHeight=120;
+  const graphWidth=400;
+  const barWidth=Math.floor(graphWidth/dailyStats.length)-4;
+  
+  let html=`<div style="background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:10px">`;
+  
+  // Legend
+  html+=`<div style="display:flex;gap:12px;justify-content:center;font-size:9px;margin-bottom:8px">
+    <div><span style="display:inline-block;width:12px;height:12px;background:#4caf50;border-radius:2px;margin-right:3px"></span>収入</div>
+    <div><span style="display:inline-block;width:12px;height:12px;background:#f44336;border-radius:2px;margin-right:3px"></span>支出</div>
+    <div><span style="display:inline-block;width:12px;height:12px;background:#ffd700;border-radius:2px;margin-right:3px"></span>純利益</div>
+  </div>`;
+  
+  // Graph container
+  html+=`<div style="display:flex;align-items:flex-end;justify-content:space-around;height:${graphHeight}px;background:#0a0a08;border-radius:4px;padding:8px;gap:2px">`;
+  
+  dailyStats.forEach((stat,i)=>{
+    const incomeHeight=Math.floor((stat.income/maxValue)*graphHeight*0.8);
+    const expenseHeight=Math.floor((stat.expense/maxValue)*graphHeight*0.8);
+    const netHeight=Math.floor((Math.abs(stat.net)/maxValue)*graphHeight*0.8);
+    const netColor=stat.net>=0?'#ffd700':'#ff5722';
+    
+    html+=`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;position:relative">
+      <div style="display:flex;gap:1px;align-items:flex-end;height:${graphHeight-20}px">
+        <div style="width:${Math.max(barWidth/3,2)}px;height:${incomeHeight}px;background:#4caf50;border-radius:2px 2px 0 0" title="Day ${stat.day}: 収入${stat.income}G"></div>
+        <div style="width:${Math.max(barWidth/3,2)}px;height:${expenseHeight}px;background:#f44336;border-radius:2px 2px 0 0" title="Day ${stat.day}: 支出${stat.expense}G"></div>
+        <div style="width:${Math.max(barWidth/3,2)}px;height:${netHeight}px;background:${netColor};border-radius:2px 2px 0 0" title="Day ${stat.day}: 純利益${stat.net}G"></div>
+      </div>
+      <div style="font-size:8px;color:#8a7a60">D${stat.day}</div>
+    </div>`;
+  });
+  
+  html+=`</div>`;
+  
+  // Summary stats
+  const totalIncome=dailyStats.reduce((sum,s)=>sum+s.income,0);
+  const totalExpense=dailyStats.reduce((sum,s)=>sum+s.expense,0);
+  const totalNet=totalIncome-totalExpense;
+  const avgNet=Math.floor(totalNet/dailyStats.length);
+  
+  html+=`<div style="margin-top:8px;font-size:9px;color:#8a7a60;text-align:center">
+    累計: <span style="color:#4caf50">+${totalIncome}G</span> 
+    <span style="color:#f44336">-${totalExpense}G</span> = 
+    <span style="color:${totalNet>=0?'#ffd700':'#ff5722'};font-weight:bold">${totalNet>=0?'+':''}${totalNet}G</span>
+    (平均 ${avgNet>=0?'+':''}${avgNet}G/日)
+  </div>`;
+  
+  html+=`</div>`;
+  
+  return html;
 }
 
 function switchTab(name){
