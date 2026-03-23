@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>モンスタースロット</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            color: #fff;
+            overflow-x: hidden;
+            max-width: 460px;
+            margin: 0 auto;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        body.kakuhen {
+            animation: rainbowPulse 1s infinite;
+        }
+
+        @keyframes rainbowPulse {
+            0%, 100% { background: linear-gradient(135deg, #ff0080 0%, #ff8c00 25%, #40e0d0 50%, #9370db 75%, #ff0080 100%); }
+            50% { background: linear-gradient(135deg, #9370db 0%, #ff0080 25%, #ff8c00 50%, #40e0d0 75%, #9370db 100%); }
+        }
+
+        .container {
+            padding: 15px;
+        }
+
+        /* Top Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-box {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid rgba(255,215,0,0.3);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 3px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #ffd700;
+        }
+
+        /* Kakuhen Gauge */
+        .kakuhen-gauge {
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 2px solid #ff00ff;
+        }
+
+        .kakuhen-label {
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-align: center;
+            color: #ff00ff;
+            font-weight: bold;
+        }
+
+        .gauge-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .gauge-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff, #00ffff);
+            transition: width 0.3s;
+            position: relative;
+        }
+
+        .gauge-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: gaugeShine 2s infinite;
+        }
+
+        @keyframes gaugeShine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        /* Slot Machine */
+        .slot-machine {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border: 4px solid;
+            border-image: linear-gradient(45deg, #ffd700, #ff8c00, #ffd700) 1;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 30px rgba(255,215,0,0.3), inset 0 0 20px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .slot-machine.winning {
+            animation: slotShake 0.3s, slotFlash 0.5s;
+        }
+
+        @keyframes slotShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @keyframes slotFlash {
+            0%, 100% { box-shadow: 0 0 30px rgba(255,215,0,0.3); }
+            50% { box-shadow: 0 0 60px rgba(255,215,0,0.8), inset 0 0 30px rgba(255,215,0,0.3); }
+        }
+
+        .reels {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .reel {
+            width: 100px;
+            height: 120px;
+            background: rgba(0,0,0,0.7);
+            border: 3px solid #444;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reel-symbol {
+            font-size: 60px;
+            transition: filter 0.1s;
+        }
+
+        .reel.spinning .reel-symbol {
+            filter: blur(8px);
+            animation: spinSymbol 0.1s infinite;
+        }
+
+        @keyframes spinSymbol {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-20px); }
+        }
+
+        /* Spin Button */
+        #spinBtn {
+            width: 100%;
+            padding: 18px;
+            font-size: 24px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #ff0080, #ff8c00);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(255,0,128,0.4);
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #spinBtn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 8px rgba(255,0,128,0.4);
+        }
+
+        #spinBtn:disabled {
+            background: #555;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #spinBtn::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+            transform: rotate(45deg);
+            animation: buttonShine 3s infinite;
+        }
+
+        @keyframes buttonShine {
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) rotate(45deg); }
+        }
+
+        /* Monster Team */
+        .monster-team {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border: 2px solid rgba(255,215,0,0.2);
+        }
+
+        .team-title {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .team-monsters {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .team-monster {
+            background: rgba(0,0,0,0.5);
+            padding: 8px;
+            border-radius: 8px;
+            border: 2px solid #666;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .monster-icon {
+            font-size: 30px;
+        }
+
+        .monster-info {
+            font-size: 11px;
+            margin-top: 3px;
+        }
+
+        /* Battle Log */
+        .battle-log {
+            background: rgba(0,0,0,0.5);
+            padding: 12px;
+            border-radius: 10px;
+            min-height: 100px;
+            max-height: 150px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            border: 2px solid rgba(255,255,255,0.1);
+        }
+
+        .battle-log-title {
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+
+        .log-entry {
+            font-size: 11px;
+            margin-bottom: 4px;
+            opacity: 0.9;
+        }
+
+        .log-entry.win {
+            color: #51cf66;
+        }
+
+        .log-entry.damage {
+            color: #ff6b6b;
+        }
+
+        /* Shop Button */
+        .shop-btn {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,215,0,0.2);
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            color: #ffd700;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 15px;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+            padding: 20px;
+            border-radius: 15px;
+            max-width: 400px;
+            width: 90%;
+            border: 3px solid #ffd700;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #ffd700;
+            text-align: center;
+        }
+
+        .upgrade-item {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border: 2px solid rgba(255,215,0,0.3);
+        }
+
+        .upgrade-name {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .upgrade-desc {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 8px;
+        }
+
+        .upgrade-cost {
+            color: #ffd700;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .upgrade-btn {
+            width: 100%;
+            padding: 8px;
+            background: linear-gradient(135deg, #ff0080, #ff8c00);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .upgrade-btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .close-btn {
+            width: 100%;
+            padding: 12px;
+            background: #555;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        /* Particle Effects */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            font-size: 20px;
+            animation: particleFloat 1s forwards;
+        }
+
+        @keyframes particleFloat {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) scale(1.5);
+            }
+        }
+
+        /* Win Message */
+        .win-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 0 0 20px rgba(255,215,0,0.8);
+            pointer-events: none;
+            animation: winPop 0.5s;
+            z-index: 100;
+        }
+
+        @keyframes winPop {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-label">コイン</div>
+                <div class="stat-value" id="coins">100</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">WAVE</div>
+                <div class="stat-value" id="wave">1</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">ポイント</div>
+                <div class="stat-value" id="points">0</div>
+            </div>
+        </div>
+
+        <!-- Kakuhen Gauge -->
+        <div class="kakuhen-gauge">
+            <div class="kakuhen-label" id="kakuhenLabel">確変ゲージ</div>
+            <div class="gauge-bar">
+                <div class="gauge-fill" id="gaugeFill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Slot Machine -->
+        <div class="slot-machine" id="slotMachine">
+            <div class="reels">
+                <div class="reel" id="reel1">
+                    <div class="reel-symbol">🐺</div>
+                </div>
+                <div class="reel" id="reel2">
+                    <div class="reel-symbol">🐉</div>
+                </div>
+                <div class="reel" id="reel3">
+                    <div class="reel-symbol">🦅</div>
+                </div>
+            </div>
+            <button id="spinBtn">SPIN (10コイン)</button>
+        </div>
+
+        <!-- Monster Team -->
+        <div class="monster-team">
+            <div class="team-title">🦸 バトルチーム (TOP 3)</div>
+            <div class="team-monsters" id="teamMonsters">
+                <div style="font-size: 12px; opacity: 0.6;">モンスターを召喚しよう！</div>
+            </div>
+        </div>
+
+        <!-- Battle Log -->
+        <div class="battle-log">
+            <div class="battle-log-title">⚔️ バトルログ</div>
+            <div id="battleLog">ゲーム開始！スピンしてモンスターを召喚しよう！</div>
+        </div>
+
+        <!-- Shop Button -->
+        <button class="shop-btn" id="shopBtn">🏪 アップグレードショップ</button>
+    </div>
+
+    <!-- Shop Modal -->
+    <div class="modal" id="shopModal">
+        <div class="modal-content">
+            <div class="modal-title">🏪 アップグレードショップ</div>
+            <div id="upgradeList"></div>
+            <button class="close-btn" id="closeShop">閉じる</button>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        const SYMBOLS = ['🐺', '🐉', '🦅', '🐻', '🦊', '🌟', '💀', '👑'];
+        const SPIN_COST = 10;
+        const KAKUHEN_SPINS = 10;
+        
+        let gameState = {
+            coins: 100,
+            points: 0,
+            wave: 1,
+            monsters: {}, // {symbol: {level, exp, power}}
+            kakuhenGauge: 0,
+            kakuhenMode: false,
+            kakuhenSpinsLeft: 0,
+            spinning: false,
+            upgrades: {
+                reelPower: 0,
+                effects: 0,
+                gaugeSpeed: 0,
+                payout: 0,
+                newMonsters: 0
+            }
+        };
+
+        // Elements
+        const spinBtn = document.getElementById('spinBtn');
+        const slotMachine = document.getElementById('slotMachine');
+        const reels = [
+            document.getElementById('reel1'),
+            document.getElementById('reel2'),
+            document.getElementById('reel3')
+        ];
+        const coinsEl = document.getElementById('coins');
+        const pointsEl = document.getElementById('points');
+        const waveEl = document.getElementById('wave');
+        const gaugeFillEl = document.getElementById('gaugeFill');
+        const kakuhenLabelEl = document.getElementById('kakuhenLabel');
+        const teamMonstersEl = document.getElementById('teamMonsters');
+        const battleLogEl = document.getElementById('battleLog');
+        const shopBtn = document.getElementById('shopBtn');
+        const shopModal = document.getElementById('shopModal');
+        const closeShopBtn = document.getElementById('closeShop');
+        const upgradeListEl = document.getElementById('upgradeList');
+
+        // Initialize
+        updateUI();
+
+        // Spin Button
+        spinBtn.addEventListener('click', async () => {
+            if (gameState.spinning) return;
+            
+            if (gameState.coins < SPIN_COST) {
+                gameState.coins += 50;
+                addLog('💰 コインが足りない！50コイン補充！');
+                updateUI();
+            }
+            
+            gameState.coins -= SPIN_COST;
+            gameState.spinning = true;
+            spinBtn.disabled = true;
+            
+            updateUI();
+            
+            const results = await spinReels();
+            processSpinResults(results);
+            
+            gameState.spinning = false;
+            spinBtn.disabled = false;
+        });
+
+        // Spin Reels
+        async function spinReels() {
+            const results = [];
+            
+            for (let i = 0; i < 3; i++) {
+                reels[i].classList.add('spinning');
+                const symbolEl = reels[i].querySelector('.reel-symbol');
+                
+                // Animate spinning
+                const spinDuration = 1000 + (i * 500);
+                const startTime = Date.now();
+                
+                const spinInterval = setInterval(() => {
+                    symbolEl.textContent = getRandomSymbol();
+                }, 100);
+                
+                await new Promise(resolve => setTimeout(resolve, spinDuration));
+                
+                clearInterval(spinInterval);
+                
+                // Final result
+                const result = gameState.kakuhenMode ? getKakuhenSymbol() : getRandomSymbol();
+                symbolEl.textContent = result;
+                results.push(result);
+                
+                reels[i].classList.remove('spinning');
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            return results;
+        }
+
+        // Get Random Symbol
+        function getRandomSymbol() {
+            const availableSymbols = SYMBOLS.slice(0, Math.min(8, 5 + gameState.upgrades.newMonsters));
+            return availableSymbols[Math.floor(Math.random() * availableSymbols.length)];
+        }
+
+        // Get Kakuhen Symbol (better odds)
+        function getKakuhenSymbol() {
+            const rand = Math.random();
+            if (rand < 0.4) {
+                // 40% chance for same as first reel
+                return reels[0].querySelector('.reel-symbol').textContent;
+            } else if (rand < 0.6) {
+                // 20% chance for special
+                return ['🌟', '👑'][Math.floor(Math.random() * 2)];
+            } else {
+                return getRandomSymbol();
+            }
+        }
+
+        // Process Spin Results
+        function processSpinResults(results) {
+            const [r1, r2, r3] = results;
+            
+            // Update gauge
+            const gaugeIncrease = 10 + (gameState.upgrades.gaugeSpeed * 5);
+            gameState.kakuhenGauge = Math.min(100, gameState.kakuhenGauge + gaugeIncrease);
+            
+            // Check for matches
+            let winType = 'none';
+            let mainSymbol = null;
+            let powerMultiplier = 0.5;
+            let pointBonus = 10;
+            
+            if (r1 === r2 && r2 === r3) {
+                // 3 of a kind!
+                winType = '3match';
+                mainSymbol = r1;
+                powerMultiplier = 1.0;
+                pointBonus = 100;
+                
+                if (r1 === '👑') {
+                    winType = 'jackpot';
+                    pointBonus = 500;
+                    showWinMessage('🎊 JACKPOT 🎊');
+                } else {
+                    showWinMessage('🎉 BIG WIN 🎉');
+                }
+                
+                slotMachine.classList.add('winning');
+                setTimeout(() => slotMachine.classList.remove('winning'), 500);
+                
+                // Extend kakuhen if in kakuhen mode
+                if (gameState.kakuhenMode) {
+                    gameState.kakuhenSpinsLeft += 5;
+                    addLog('🌈 確変延長！+5スピン！');
+                }
+                
+            } else if (r1 === r2 || r2 === r3 || r1 === r3) {
+                // 2 of a kind
+                winType = '2match';
+                mainSymbol = r1 === r2 ? r1 : (r2 === r3 ? r2 : r1);
+                powerMultiplier = 0.7;
+                pointBonus = 30;
+                showWinMessage('✨ NICE ✨');
+            } else {
+                // All different
+                winType = 'lose';
+                mainSymbol = results[Math.floor(Math.random() * 3)];
+                powerMultiplier = 0.3;
+                pointBonus = 5;
+            }
+            
+            // Star bonus
+            const starCount = results.filter(s => s === '🌟').length;
+            if (starCount > 0) {
+                pointBonus *= (1 + starCount * 0.5);
+                addLog(`⭐ スターボーナス！×${1 + starCount * 0.5}`);
+            }
+            
+            // Add points
+            gameState.points += Math.floor(pointBonus);
+            
+            // Summon/strengthen monster
+            if (mainSymbol && mainSymbol !== '🌟') {
+                summonMonster(mainSymbol, powerMultiplier);
+            }
+            
+            // Battle
+            battle();
+            
+            // Check kakuhen activation
+            if (gameState.kakuhenGauge >= 100 && !gameState.kakuhenMode) {
+                activateKakuhen();
+            }
+            
+            // Decrement kakuhen spins
+            if (gameState.kakuhenMode) {
+                gameState.kakuhenSpinsLeft--;
+                if (gameState.kakuhenSpinsLeft <= 0) {
+                    deactivateKakuhen();
+                }
+            }
+            
+            updateUI();
+        }
+
+        // Summon Monster
+        function summonMonster(symbol, powerMultiplier) {
+            if (!gameState.monsters[symbol]) {
+                gameState.monsters[symbol] = {
+                    level: 1,
+                    exp: 0,
+                    power: 10
+                };
+                addLog(`✨ ${symbol} を召喚！Lv1`);
+            } else {
+                const monster = gameState.monsters[symbol];
+                const expGain = Math.floor(20 * powerMultiplier);
+                monster.exp += expGain;
+                
+                // Level up
+                const expNeeded = monster.level * 50;
+                if (monster.exp >= expNeeded && monster.level < 10) {
+                    monster.level++;
+                    monster.exp = 0;
+                    monster.power = 10 + (monster.level * 5);
+                    addLog(`⬆️ ${symbol} がLv${monster.level}にレベルアップ！`);
+                    createParticles(slotMachine, '⬆️');
+                }
+            }
+        }
+
+        // Battle
+        function battle() {
+            const team = getTopMonsters();
+            if (team.length === 0) {
+                addLog('⚠️ モンスターがいません！');
+                return;
+            }
+            
+            const enemyHP = 50 + (gameState.wave * 20);
+            let totalDamage = 0;
+            
+            team.forEach(monster => {
+                const damage = monster.data.power;
+                totalDamage += damage;
+                addLog(`⚔️ ${monster.symbol} が${damage}ダメージ！`, 'damage');
+            });
+            
+            if (totalDamage >= enemyHP) {
+                const coinReward = Math.floor((20 + gameState.wave * 5) * (1 + gameState.upgrades.payout * 0.2));
+                const pointReward = gameState.wave * 10;
+                gameState.coins += coinReward;
+                gameState.points += pointReward;
+                gameState.wave++;
+                addLog(`🎉 WIN！+${coinReward}コイン +${pointReward}pt`, 'win');
+                createParticles(slotMachine, '💰');
+            } else {
+                addLog(`💀 敗北... (残りHP: ${enemyHP - totalDamage})`);
+            }
+        }
+
+        // Get Top Monsters
+        function getTopMonsters() {
+            return Object.entries(gameState.monsters)
+                .map(([symbol, data]) => ({symbol, data}))
+                .sort((a, b) => b.data.power - a.data.power)
+                .slice(0, 3);
+        }
+
+        // Activate Kakuhen
+        function activateKakuhen() {
+            gameState.kakuhenMode = true;
+            gameState.kakuhenSpinsLeft = KAKUHEN_SPINS;
+            gameState.kakuhenGauge = 0;
+            document.body.classList.add('kakuhen');
+            addLog('🌈🌈🌈 確変モード突入！🌈🌈🌈', 'win');
+            showWinMessage('🌈 確変突入 🌈');
+            createParticles(slotMachine, '🌈');
+        }
+
+        // Deactivate Kakuhen
+        function deactivateKakuhen() {
+            gameState.kakuhenMode = false;
+            document.body.classList.remove('kakuhen');
+            addLog('確変モード終了');
+        }
+
+        // Show Win Message
+        function showWinMessage(text) {
+            const msg = document.createElement('div');
+            msg.className = 'win-message';
+            msg.textContent = text;
+            slotMachine.appendChild(msg);
+            setTimeout(() => msg.remove(), 1000);
+        }
+
+        // Create Particles
+        function createParticles(container, symbol) {
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+                    particle.textContent = symbol;
+                    particle.style.left = Math.random() * 100 + '%';
+                    particle.style.top = Math.random() * 100 + '%';
+                    container.appendChild(particle);
+                    setTimeout(() => particle.remove(), 1000);
+                }, i * 100);
+            }
+        }
+
+        // Add Log
+        function addLog(message, type = '') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = message;
+            battleLogEl.appendChild(entry);
+            battleLogEl.scrollTop = battleLogEl.scrollHeight;
+            
+            // Keep only last 20 entries
+            while (battleLogEl.children.length > 21) {
+                battleLogEl.removeChild(battleLogEl.children[1]);
+            }
+        }
+
+        // Update UI
+        function updateUI() {
+            coinsEl.textContent = gameState.coins;
+            pointsEl.textContent = gameState.points;
+            waveEl.textContent = gameState.wave;
+            gaugeFillEl.style.width = gameState.kakuhenGauge + '%';
+            
+            if (gameState.kakuhenMode) {
+                kakuhenLabelEl.textContent = `🌈 確変中！残り${gameState.kakuhenSpinsLeft}回 🌈`;
+            } else {
+                kakuhenLabelEl.textContent = '確変ゲージ';
+            }
+            
+            // Update team display
+            const team = getTopMonsters();
+            if (team.length === 0) {
+                teamMonstersEl.innerHTML = '<div style="font-size: 12px; opacity: 0.6;">モンスターを召喚しよう！</div>';
+            } else {
+                teamMonstersEl.innerHTML = team.map(m => `
+                    <div class="team-monster">
+                        <div class="monster-icon">${m.symbol}</div>
+                        <div class="monster-info">Lv${m.data.level}<br>⚡${m.data.power}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Shop
+        shopBtn.addEventListener('click', () => {
+            shopModal.classList.add('active');
+            renderShop();
+        });
+
+        closeShopBtn.addEventListener('click', () => {
+            shopModal.classList.remove('active');
+        });
+
+        function renderShop() {
+            const upgrades = [
+                {
+                    id: 'reelPower',
+                    name: 'リール強化',
+                    desc: 'より強いモンスターが出やすくなる',
+                    cost: 200 + (gameState.upgrades.reelPower * 150),
+                    max: 5
+                },
+                {
+                    id: 'effects',
+                    name: '演出追加',
+                    desc: '勝利時のビジュアルエフェクト強化',
+                    cost: 150 + (gameState.upgrades.effects * 100),
+                    max: 3
+                },
+                {
+                    id: 'gaugeSpeed',
+                    name: '確変ゲージ速度UP',
+                    desc: 'ゲージがより早く溜まる',
+                    cost: 300 + (gameState.upgrades.gaugeSpeed * 200),
+                    max: 5
+                },
+                {
+                    id: 'payout',
+                    name: 'ペイアウト率UP',
+                    desc: 'バトル勝利時のコイン報酬増加',
+                    cost: 250 + (gameState.upgrades.payout * 150),
+                    max: 5
+                },
+                {
+                    id: 'newMonsters',
+                    name: '新モンスター解放',
+                    desc: 'リールに新しいモンスター追加',
+                    cost: 400 + (gameState.upgrades.newMonsters * 300),
+                    max: 3
+                }
+            ];
+            
+            upgradeListEl.innerHTML = upgrades.map(upgrade => {
+                const current = gameState.upgrades[upgrade.id];
+                const disabled = current >= upgrade.max || gameState.coins < upgrade.cost;
+                
+                return `
+                    <div class="upgrade-item">
+                        <div class="upgrade-name">${upgrade.name} [${current}/${upgrade.max}]</div>
+                        <div class="upgrade-desc">${upgrade.desc}</div>
+                        <div class="upgrade-cost">💰 ${upgrade.cost} コイン</div>
+                        <button class="upgrade-btn" 
+                                onclick="buyUpgrade('${upgrade.id}')" 
+                                ${disabled ? 'disabled' : ''}>
+                            ${current >= upgrade.max ? 'MAX' : '購入'}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function buyUpgrade(id) {
+            const upgrades = {
+                reelPower: { cost: 200, costIncrease: 150, max: 5 },
+                effects: { cost: 150, costIncrease: 100, max: 3 },
+                gaugeSpeed: { cost: 300, costIncrease: 200, max: 5 },
+                payout: { cost: 250, costIncrease: 150, max: 5 },
+                newMonsters: { cost: 400, costIncrease: 300, max: 3 }
+            };
+            
+            const upgrade = upgrades[id];
+            const current = gameState.upgrades[id];
+            const cost = upgrade.cost + (current * upgrade.costIncrease);
+            
+            if (current >= upgrade.max || gameState.coins < cost) return;
+            
+            gameState.coins -= cost;
+            gameState.upgrades[id]++;
+            
+            addLog(`🛒 アップグレード購入！`);
+            updateUI();
+            renderShop();
+        }
+    </script>
+</body>
+</html>
