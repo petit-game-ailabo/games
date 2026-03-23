@@ -64,6 +64,16 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
 .mat-item{background:#1a1510;border:1px solid #3a3020;border-radius:5px;padding:3px 7px;font-size:10px;display:inline-flex;align-items:center;gap:3px}
 .mat-qty{color:#ffd700;font-weight:bold}
 
+/* Achievements */
+.achievement-grid{display:flex;flex-wrap:wrap;gap:6px}
+.achievement-card{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px 8px;font-size:10px;display:flex;align-items:center;gap:6px;flex:0 0 calc(50% - 3px);transition:all 0.2s}
+.achievement-card.unlocked{border-color:#ffd700;background:linear-gradient(135deg,#2a2318 0%,#3a3020 100%)}
+.achievement-card.locked{opacity:0.4}
+.achievement-emoji{font-size:18px}
+.achievement-info{flex:1}
+.achievement-name{font-weight:bold;color:#e8dcc8;font-size:10px}
+.achievement-desc{font-size:8px;color:#8a7a60;margin-top:1px}
+
 /* Farm */
 .farm-subtabs{display:flex;gap:3px;margin-bottom:8px;border-bottom:2px solid #3a3020;padding-bottom:4px}
 .farm-subtab{flex:1;padding:6px 4px;text-align:center;background:#1a1510;border-radius:4px 4px 0 0;cursor:pointer;font-size:11px;color:#8a7a60;transition:all 0.15s}
@@ -219,6 +229,7 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
       <canvas id="townCanvas" width="440" height="240" style="display:block;width:100%;height:auto;border-radius:8px"></canvas>
     </div>
     <div class="town-grid" id="townGrid"></div>
+    <div class="panel"><div class="panel-title">🏆 実績</div><div id="achievementsList"></div></div>
     <div class="panel"><div class="panel-title">📊 経営レポート</div><div id="report"></div></div>
   </div>
 
@@ -447,6 +458,59 @@ let tutorialCompleted=false;
 
 const SAVE_KEY='dungeon_merchant_save';
 
+// === Achievement System ===
+const ACHIEVEMENTS=[
+  {id:'first_quest',name:'初めてのクエスト',desc:'初めてクエストを掲載した',emoji:'📋',check:(s)=>s.totalQuestsPosted>=1},
+  {id:'quest_master',name:'クエストマスター',desc:'クエストを10回掲載した',emoji:'⚔️',check:(s)=>s.totalQuestsPosted>=10},
+  {id:'earn_100',name:'初収入',desc:'累計100G稼いだ',emoji:'💰',check:(s)=>s.totalEarned>=100},
+  {id:'earn_1000',name:'商人',desc:'累計1000G稼いだ',emoji:'💎',check:(s)=>s.totalEarned>=1000},
+  {id:'earn_10000',name:'大商人',desc:'累計10000G稼いだ',emoji:'👑',check:(s)=>s.totalEarned>=10000},
+  {id:'build_first',name:'建設家',desc:'初めて施設を建てた',emoji:'🏗️',check:(s)=>s.totalBuilds>=1},
+  {id:'build_all',name:'町の建築士',desc:'全施設を建設した',emoji:'🏘️',check:(s)=>s.totalBuilds>=FACILITIES.length},
+  {id:'harvest_first',name:'初収穫',desc:'初めて作物を収穫した',emoji:'🌾',check:(s)=>s.totalHarvests>=1},
+  {id:'harvest_100',name:'農業マスター',desc:'作物を100回収穫した',emoji:'🚜',check:(s)=>s.totalHarvests>=100},
+  {id:'cook_first',name:'初めての料理',desc:'初めて調理した',emoji:'🍳',check:(s)=>s.totalCooks>=1},
+  {id:'cook_master',name:'料理長',desc:'20回調理した',emoji:'👨‍🍳',check:(s)=>s.totalCooks>=20},
+  {id:'day_7',name:'1週間',desc:'7日目到達',emoji:'📅',check:(s)=>s.day>=7},
+  {id:'day_30',name:'1ヶ月',desc:'30日目到達',emoji:'📆',check:(s)=>s.day>=30},
+  {id:'day_100',name:'100日',desc:'100日目到達',emoji:'🎉',check:(s)=>s.day>=100},
+  {id:'rep_100',name:'評判',desc:'評判100達成',emoji:'⭐',check:(s)=>s.reputation>=100},
+  {id:'rep_500',name:'名声',desc:'評判500達成',emoji:'✨',check:(s)=>s.reputation>=500},
+  {id:'all_seasons',name:'四季を巡る',desc:'全ての季節を経験した',emoji:'🌸☀️🍂❄️',check:(s)=>s.day>=28},
+  {id:'animal_keeper',name:'牧場主',desc:'動物を5匹飼った',emoji:'🐄',check:(s)=>s.totalAnimals>=5},
+  {id:'quest_success_10',name:'成功者',desc:'クエストを10回成功させた',emoji:'✅',check:(s)=>s.totalQuestSuccess>=10},
+];
+
+let achievements={}; // {id: unlocked_timestamp}
+let achievementStats={
+  totalQuestsPosted:0,
+  totalEarned:0,
+  totalBuilds:0,
+  totalHarvests:0,
+  totalCooks:0,
+  totalAnimals:0,
+  totalQuestSuccess:0,
+  day:0,
+  reputation:0
+};
+
+function checkAchievements(){
+  achievementStats.day=day;
+  achievementStats.reputation=reputation;
+  
+  const newAchievements=[];
+  ACHIEVEMENTS.forEach(ach=>{
+    if(!achievements[ach.id]&&ach.check(achievementStats)){
+      achievements[ach.id]=Date.now();
+      newAchievements.push(ach);
+      playSFX('coin');
+      logMsg(`<span style="color:#ffd700;font-weight:bold">🏆 実績解除: ${ach.emoji} ${ach.name}</span>`);
+    }
+  });
+  
+  return newAchievements;
+}
+
 // === Audio Functions ===
 function initAudio(){
   if(audioCtx) return;
@@ -600,7 +664,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -620,6 +684,8 @@ function loadGame(){
     animals=s.animals||[];
     currentFarmTab=s.currentFarmTab||'field';
     tutorialCompleted=s.tutorialCompleted||false;
+    achievements=s.achievements||{};
+    achievementStats=s.achievementStats||{totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -673,6 +739,7 @@ function newGame(){
   dailyIncome=0;dailyExpense=0;questIdCounter=0;
   selType=null;selTarget=null;cookedToday=false;
   tutorialStep=0;tutorialActive=false;tutorialCompleted=false;
+  achievements={};achievementStats={totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
   FACILITIES.forEach(f=>facilities[f.id]=0);
   farmPlots=[];paddyPlots=[];animals=[];currentFarmTab='field';
   for(let i=0;i<TOTAL_FARM_PLOTS;i++){
@@ -691,6 +758,7 @@ function nextDay(){
   const prevSeason=getCurrentSeason();
   day++;dailyIncome=0;dailyExpense=0;cookedToday=false;stamina=100;
   el('dayNum').textContent=day;
+  checkAchievements();
   
   // Check for season change
   const newSeason=getCurrentSeason();
@@ -786,6 +854,7 @@ function processQuests(){
             
             addMat(target.mat,qty);
             playSFX('quest');
+            achievementStats.totalQuestSuccess++;
             
             const bonusText=rankBonus>0?` (+${rankBonus}ランクボーナス)`:'';
             logMsg(`<span class="a">✅ ${adv.rank.emoji}${adv.name}が帰還！${MAT_NAMES[target.mat]||target.mat}×${qty}を納品${bonusText}</span>`);
@@ -822,14 +891,14 @@ function processFacilities(){
     const d=FACILITIES.find(f=>f.id==='inn').levels[innLv-1];
     const guests=Math.min(adventurersInTown,d.capacity);
     const inc=guests*d.income;
-    if(inc>0){gold+=inc;dailyIncome+=inc;playSFX('coin');logMsg(`<span class="f">🏨 宿泊収入: ${inc}G (${guests}人)</span>`);}
+    if(inc>0){gold+=inc;dailyIncome+=inc;achievementStats.totalEarned+=inc;playSFX('coin');logMsg(`<span class="f">🏨 宿泊収入: ${inc}G (${guests}人)</span>`);}
   }
   const tavLv=facilities.tavern;
   if(tavLv>0){
     const d=FACILITIES.find(f=>f.id==='tavern').levels[tavLv-1];
     const diners=Math.min(adventurersInTown,d.capacity);
     const inc=diners*d.income;
-    if(inc>0){gold+=inc;dailyIncome+=inc;playSFX('coin');logMsg(`<span class="f">🍺 食事収入: ${inc}G (${diners}人)</span>`);}
+    if(inc>0){gold+=inc;dailyIncome+=inc;achievementStats.totalEarned+=inc;playSFX('coin');logMsg(`<span class="f">🍺 食事収入: ${inc}G (${diners}人)</span>`);}
   }
 }
 
@@ -904,8 +973,10 @@ function postQuest(){
     postedDay:day,status:'posted',activeDaysLeft:0,advName:'',
   });
   reputation+=1;
+  achievementStats.totalQuestsPosted++;
   logMsg(`<span class="q">📋 クエスト掲載「${typeData.name}: ${targetData.name}」報酬${price}G（前払い）</span>`);
   selType=null;selTarget=null;el('priceInput').value='';
+  checkAchievements();
   renderQuestCreator();updateAll();saveGame();
 }
 
@@ -1152,9 +1223,11 @@ function farmHarvest(i){
   qty+=waterBonus;
   addMat(seed.mat,qty);
   playSFX('harvest');
+  achievementStats.totalHarvests++;
   logMsg(`<span class="a">✂️ ${seed.name}×${qty}を収穫！（水ボーナス+${waterBonus}）</span>`);
   p.state='wild';p.seedId=null;p.plantedDay=0;p.growDays=0;p.waterCount=0;p.wateredToday=false;
   reputation+=1;
+  checkAchievements();
   updateAll();saveGame();
 }
 
@@ -1289,8 +1362,10 @@ function paddyAction(action,idx){
     plot.state='empty';
     plot.plantedDay=0;
     playSFX('harvest');
+    achievementStats.totalHarvests++;
     logMsg(`<span class="a">🌾 米×${qty}を収穫！</span>`);
     reputation+=2;
+    checkAchievements();
   }
   updateAll();
   saveGame();
@@ -1301,8 +1376,10 @@ function buyAnimal(type){
   if(!spec||gold<spec.cost) return;
   gold-=spec.cost;
   animals.push({type:type,fedToday:false,lastProduct:0,happiness:50,daysSinceProduct:0});
+  achievementStats.totalAnimals++;
   playSFX('coin');
   logMsg(`<span class="a">${spec.emoji} ${spec.name}を購入！</span>`);
+  checkAchievements();
   updateAll();
   saveGame();
 }
@@ -1368,8 +1445,10 @@ function buildFacility(id){
   for(const[mat,qty] of Object.entries(data.mats)) materials[mat]-=qty;
   facilities[id]=nextLv+1;
   reputation+=10*(nextLv+1);
+  achievementStats.totalBuilds++;
   playSFX('build');
   logMsg(`<span class="f">🏗️ ${data.name}を建設！</span>`);
+  checkAchievements();
   updateAll();saveGame();
 }
 
@@ -1437,12 +1516,15 @@ function cookAction(){
     const income=Math.floor(cookRecipe.income*multiplier);
     gold+=income;
     dailyIncome+=income;
+    achievementStats.totalEarned+=income;
+    achievementStats.totalCooks++;
     cookedToday=true;
 
     el('cookResult').innerHTML=`${label}<br><span style="color:#ffd700;font-size:16px">+${income}G</span>`;
     el('cookBtn').textContent='閉じる';
     logMsg(`<span class="c">🍳 ${cookRecipe.name}(${quality}) → +${income}G</span>`);
     reputation+=multiplier>=1.5?3:1;
+    checkAchievements();
   } else {
     el('cookOverlay').classList.add('hidden');
     cookPhase='';
@@ -1574,6 +1656,25 @@ function renderTown(){
     <div class="town-stat"><div class="ts-val">${gold}</div><div class="ts-label">💰 所持金</div></div>
     <div class="town-stat"><div class="ts-val">${Math.floor(reputation)}</div><div class="ts-label">⭐ 評判</div></div>
     <div class="town-stat"><div class="ts-val">${totalAdventurers}</div><div class="ts-label">👥 冒険者総数</div></div>`;
+  
+  // Achievements
+  const achList=el('achievementsList');
+  const unlockedCount=Object.keys(achievements).length;
+  const totalCount=ACHIEVEMENTS.length;
+  achList.innerHTML=`<div style="font-size:11px;color:#ffd700;margin-bottom:6px">🏆 ${unlockedCount}/${totalCount} 解除済み</div><div class="achievement-grid">`;
+  ACHIEVEMENTS.forEach(ach=>{
+    const unlocked=!!achievements[ach.id];
+    const cls=unlocked?'unlocked':'locked';
+    achList.innerHTML+=`<div class="achievement-card ${cls}">
+      <div class="achievement-emoji">${unlocked?ach.emoji:'🔒'}</div>
+      <div class="achievement-info">
+        <div class="achievement-name">${unlocked?ach.name:'???'}</div>
+        <div class="achievement-desc">${unlocked?ach.desc:'未解除'}</div>
+      </div>
+    </div>`;
+  });
+  achList.innerHTML+='</div>';
+  
   el('report').innerHTML=`
     <div style="font-size:11px;margin:4px 0">📅 Day ${day}</div>
     <div style="font-size:11px;color:#4caf50">📈 日収入: ${dailyIncome}G</div>
