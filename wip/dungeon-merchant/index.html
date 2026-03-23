@@ -160,6 +160,13 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
 .hidden{display:none!important}
 
 .overlay-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:94}
+
+.tutorial-guide-banner{background:linear-gradient(135deg,#8b6914 0%,#6a5010 100%);border:2px solid #ffd700;border-radius:8px;padding:10px 14px;margin-bottom:8px;position:relative;animation:glow 2s ease-in-out infinite}
+@keyframes glow{0%,100%{box-shadow:0 0 10px rgba(255,215,0,0.3)}50%{box-shadow:0 0 20px rgba(255,215,0,0.6)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+.tutorial-guide-text{font-size:11px;color:#ffd700;font-weight:bold;line-height:1.5}
+.tutorial-guide-close{position:absolute;top:4px;right:8px;font-size:16px;color:#ffd700;cursor:pointer;opacity:0.7}
+.tutorial-guide-close:hover{opacity:1}
 </style>
 </head>
 <body>
@@ -171,6 +178,7 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
     <span style="font-size:10px" id="staminaDisplay">⚡ <span id="stamina">100</span></span>
   </div>
 
+  <div id="tutorialGuideBanner" class="hidden"></div>
   <button class="btn btn-primary btn-full" onclick="nextDay()" style="margin-bottom:6px">🌅 次の日へ</button>
   <div class="tabs">
     <div class="tab active" onclick="switchTab('guild')">⚔️ ギルド</div>
@@ -602,6 +610,7 @@ let selectedSeed=null;
 let tutorialStep=0;
 let tutorialActive=false;
 let tutorialCompleted=false;
+let tutorialGuideVisible=false; // Banner guide when skipped
 
 const SAVE_KEY='dungeon_merchant_save';
 
@@ -811,7 +820,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,tutorialGuideVisible,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -831,6 +840,7 @@ function loadGame(){
     animals=s.animals||[];
     currentFarmTab=s.currentFarmTab||'field';
     tutorialCompleted=s.tutorialCompleted||false;
+    tutorialGuideVisible=s.tutorialGuideVisible||false;
     achievements=s.achievements||{};
     achievementStats=s.achievementStats||{totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
     craftingJobs=s.craftingJobs||[];
@@ -1788,6 +1798,7 @@ function updateAll(){
   }
   
   renderQuestBoard();renderFarm();renderFacilities();renderStorage();renderTown();
+  updateTutorialGuideBanner();
 }
 
 function renderQuestBoard(){
@@ -2293,49 +2304,64 @@ function logMsg(m){const a=el('log');a.innerHTML+=m+'<br>';a.scrollTop=a.scrollH
 const TUTORIAL_STEPS=[
   {
     title:'📖 ようこそ！',
-    content:'辺境の町の管理者として、冒険者ギルドと施設を運営していきましょう。<br><br>このチュートリアルで基本的な流れを学びます。',
-    tab:null
+    content:'辺境の町の管理者として、冒険者ギルドと施設を運営していきましょう。<br><br>このチュートリアルでは、実際にクエストを掲載して施設を建てる流れを体験します。',
+    tab:null,
+    action:null
   },
   {
-    title:'⚔️ ギルドタブ',
-    content:'まず「⚔️ ギルド」タブでクエストを作成します。<br><br>① 種類を選ぶ（例: 鉱石採掘）<br>② 目標を選ぶ（例: 鉄鉱石）<br>③ 報酬額を設定（<b>前払い</b>です！）<br><br>報酬が高いほど、冒険者が早く受注します。',
-    tab:'guild'
+    title:'🪓 まずは木材を集めよう',
+    content:'施設を建てるには素材が必要です。<br><br>「⚔️ ギルド」タブで<b>🪓 伐採</b>を選んでください。',
+    tab:'guild',
+    action:'select_lumber',
+    check:()=>selType==='lumber'
   },
   {
-    title:'💰 報酬の仕組み',
-    content:'クエスト掲載時に報酬を<b>先に支払い</b>ます。<br><br>冒険者が受注すると、クエスト達成まで数日かかります。<br><br>達成後、素材が手に入り評判が上がります。',
-    tab:'guild'
+    title:'🪵 木材を目標に設定',
+    content:'次に、目標として<b>🪵 木材</b>を選んでください。',
+    tab:'guild',
+    action:'select_wood',
+    check:()=>selType==='lumber'&&selTarget==='wood'
   },
   {
-    title:'🏨 施設タブ',
-    content:'「🏨 施設」タブでは、宿屋や食堂を建設できます。<br><br>施設があると、町に滞在中の冒険者から<b>毎日収入</b>を得られます。<br><br>建設には素材とお金が必要です。',
-    tab:'facility'
+    title:'💰 報酬額を設定',
+    content:'報酬額を設定します。相場は<b id="tutorialMarket">0</b>Gです。<br><br>相場通りか少し高めに設定して、「📋 掲載する」ボタンを押してください。<br><br>⚠️ 報酬は<b>前払い</b>なので、今すぐお金を支払います。',
+    tab:'guild',
+    action:'post_quest',
+    check:()=>quests.some(q=>q.type==='lumber'&&q.target==='wood')
   },
   {
-    title:'🏡 農場タブ',
-    content:'「🏡 農場」タブでは、畑・水田・牧場を運営できます。<br><br><b>畑</b>: 種を植えて野菜を収穫<br><b>水田</b>: 米を育てる<br><b>牧場</b>: 動物を飼って卵・牛乳・肉を生産<br><br>行動には⚡行動力が必要です。',
-    tab:'farm'
+    title:'🌅 時間を進めよう',
+    content:'クエストを掲載しました！<br><br>冒険者が受注するのを待ちます。「🌅 次の日へ」ボタンを数回押して、クエストが完了するまで待ちましょう。',
+    tab:'guild',
+    action:'wait_quest',
+    check:()=>quests.some(q=>q.type==='lumber'&&q.target==='wood'&&q.status==='done'&&q.success)
   },
   {
-    title:'📦 倉庫タブ',
-    content:'「📦 倉庫」タブで、集めた素材を確認できます。<br><br>素材は施設建設や調理に使えます。',
-    tab:'storage'
+    title:'🏨 宿屋を建設しよう',
+    content:'木材が手に入りました！<br><br>「🏨 施設」タブに移動してください。',
+    tab:'facility',
+    action:'switch_facility',
+    check:()=>true // Just need to be on facility tab
   },
   {
-    title:'🌅 次の日へ',
-    content:'「🌅 次の日へ」ボタンで1日進みます。<br><br>• クエストが進行<br>• 施設から収入<br>• 作物が成長<br>• 行動力が回復<br><br>町を発展させて評判を高めましょう！',
-    tab:null
+    title:'🏗️ 建設開始',
+    content:'下部の「🏗️ 建設」セクションで、<b>🏨 簡素な宿</b>の「建設」ボタンを押してください。<br><br>宿屋があると、冒険者から毎日宿泊料を得られます。',
+    tab:'facility',
+    action:'build_inn',
+    check:()=>facilities.inn>=1
   },
   {
-    title:'✅ チュートリアル完了',
-    content:'基本的な流れを学びました！<br><br>まずはクエストを掲載して素材を集め、施設を建てて収入を増やしましょう。<br><br>がんばって町を繁栄させてください！',
-    tab:null
+    title:'✅ チュートリアル完了！',
+    content:'おめでとうございます！<br><br>基本的な流れを体験しました：<br>1️⃣ クエストで素材を集める<br>2️⃣ 施設を建てて収入を得る<br><br>これを繰り返して町を発展させましょう！',
+    tab:null,
+    action:null
   }
 ];
 
 function startTutorial(){
   tutorialStep=0;
   tutorialActive=true;
+  tutorialGuideVisible=false;
   showTutorialStep();
 }
 
@@ -2347,19 +2373,49 @@ function showTutorialStep(){
   
   const step=TUTORIAL_STEPS[tutorialStep];
   el('tutorialTitle').textContent=step.title;
-  el('tutorialContent').innerHTML=step.content;
+  
+  // Update market price in tutorial text
+  let content=step.content;
+  if(step.action==='post_quest'){
+    const market=getMarketPrice('lumber',QUEST_TARGETS['lumber'].find(t=>t.id==='wood'));
+    content=content.replace('id="tutorialMarket">0',`id="tutorialMarket">${market}`);
+  }
+  el('tutorialContent').innerHTML=content;
   
   if(step.tab){
     switchTab(step.tab);
   }
   
   const isLast=tutorialStep===TUTORIAL_STEPS.length-1;
-  el('tutorialButtons').innerHTML=isLast
-    ?`<button class="btn btn-green" onclick="tutorialNext()">始める！</button>`
-    :`<button class="btn btn-primary" onclick="tutorialNext()">次へ →</button>
+  
+  // For action steps, show "check" instead of "next"
+  if(step.action&&!isLast){
+    el('tutorialButtons').innerHTML=`
+      <button class="btn btn-primary" onclick="checkTutorialProgress()">確認 ✓</button>
       <button class="btn btn-primary secondary" onclick="skipTutorial()">スキップ</button>`;
+  } else {
+    el('tutorialButtons').innerHTML=isLast
+      ?`<button class="btn btn-green" onclick="tutorialNext()">始める！</button>`
+      :`<button class="btn btn-primary" onclick="tutorialNext()">次へ →</button>
+        <button class="btn btn-primary secondary" onclick="skipTutorial()">スキップ</button>`;
+  }
   
   el('tutorialOverlay').classList.remove('hidden');
+}
+
+function checkTutorialProgress(){
+  const step=TUTORIAL_STEPS[tutorialStep];
+  if(step.check&&step.check()){
+    // Condition met, advance
+    playSFX('coin');
+    tutorialStep++;
+    showTutorialStep();
+  } else {
+    // Not yet - shake the dialog
+    const panel=el('tutorialOverlay').querySelector('.cook-panel');
+    panel.style.animation='shake 0.3s';
+    setTimeout(()=>{panel.style.animation='';},300);
+  }
 }
 
 function tutorialNext(){
@@ -2368,15 +2424,52 @@ function tutorialNext(){
 }
 
 function skipTutorial(){
-  endTutorial();
+  tutorialActive=false;
+  tutorialCompleted=false;
+  tutorialGuideVisible=true;
+  el('tutorialOverlay').classList.add('hidden');
+  showTutorialGuideBanner();
+  saveGame();
 }
 
 function endTutorial(){
   tutorialActive=false;
   tutorialCompleted=true;
+  tutorialGuideVisible=false;
   el('tutorialOverlay').classList.add('hidden');
+  hideTutorialGuideBanner();
   nextDay();
   saveGame();
+}
+
+function showTutorialGuideBanner(){
+  if(!tutorialGuideVisible||tutorialCompleted||facilities.inn>=1) return;
+  
+  const banner=el('tutorialGuideBanner');
+  banner.className='tutorial-guide-banner';
+  banner.innerHTML=`
+    <div class="tutorial-guide-close" onclick="hideTutorialGuideBanner()">✕</div>
+    <div class="tutorial-guide-text">
+      💡 まずは<b>ギルドで木材を集めて宿屋を建てよう！</b><br>
+      🪓 伐採クエスト → 🏨 宿屋建設で収入を得られます
+    </div>`;
+}
+
+function hideTutorialGuideBanner(){
+  tutorialGuideVisible=false;
+  el('tutorialGuideBanner').className='hidden';
+  saveGame();
+}
+
+function updateTutorialGuideBanner(){
+  if(!tutorialGuideVisible||tutorialCompleted) return;
+  
+  // Hide banner once inn is built
+  if(facilities.inn>=1){
+    hideTutorialGuideBanner();
+  } else {
+    showTutorialGuideBanner();
+  }
 }
 </script>
 </body>
