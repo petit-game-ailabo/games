@@ -429,7 +429,7 @@
         }
         
         const type = CUSTOMER_TYPES[typeIndex];
-        const bases = Object.keys(BASES);
+        const bases = gameState.unlockedBases.length > 0 ? gameState.unlockedBases : Object.keys(BASES);
         const prefBase = bases[Math.floor(Math.random() * bases.length)];
         
         customers.push({
@@ -461,7 +461,7 @@
       });
       
       if (!bestMatch) {
-        // No match - check if any recipe fits budget
+        // No exact base match - serve any recipe within budget
         gameState.todayMenu.forEach(recipe => {
           if (gameState.todayPrice <= customer.budget) {
             const taste = calculateTaste(recipe);
@@ -471,6 +471,12 @@
             }
           }
         });
+      }
+      
+      if (!bestMatch && gameState.todayMenu.length > 0) {
+        // Still no match (too expensive) - serve anyway at reduced satisfaction
+        bestMatch = gameState.todayMenu[0];
+        bestTaste = calculateTaste(bestMatch) * 0.5;
       }
       
       if (bestMatch) {
