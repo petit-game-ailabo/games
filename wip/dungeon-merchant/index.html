@@ -183,8 +183,10 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
   <div class="tabs">
     <div class="tab active" onclick="switchTab('guild')">⚔️ ギルド</div>
     <div class="tab" onclick="switchTab('farm')">🏡 農場</div>
-    <div class="tab" onclick="switchTab('facility')">🏨 施設</div>
+    <div class="tab" onclick="switchTab('tavern')">🍳 食堂</div>
+    <div class="tab" onclick="switchTab('smithy')">🔨 鍛冶</div>
     <div class="tab" onclick="switchTab('storage')">📦 倉庫</div>
+    <div class="tab" onclick="switchTab('facility')">🏨 施設</div>
     <div class="tab" onclick="switchTab('town')">🏘️ 町</div>
   </div>
 
@@ -223,13 +225,27 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
     <div id="farmRanchArea" class="farm-area hidden"></div>
   </div>
 
-  <div class="tc" id="tab-facility">
-    <div id="facilityList"></div>
-    <div class="panel" id="buildPanel"><div class="panel-title">🏗️ 建設</div><div id="buildList"></div></div>
+  <div class="tc" id="tab-tavern">
+    <div class="panel">
+      <div class="panel-title">🍳 食堂</div>
+      <div id="tavernContent"></div>
+    </div>
+  </div>
+
+  <div class="tc" id="tab-smithy">
+    <div class="panel">
+      <div class="panel-title">🔨 鍛冶屋</div>
+      <div id="smithyContent"></div>
+    </div>
   </div>
 
   <div class="tc" id="tab-storage">
     <div class="panel"><div class="panel-title">📦 素材倉庫</div><div class="mat-grid" id="matGrid"></div></div>
+  </div>
+
+  <div class="tc" id="tab-facility">
+    <div id="facilityList"></div>
+    <div class="panel" id="buildPanel"><div class="panel-title">🏗️ 建設</div><div id="buildList"></div></div>
   </div>
 
   <div class="tc" id="tab-town">
@@ -1797,7 +1813,7 @@ function updateAll(){
     el('weatherDisplay').innerHTML=`<span style="color:${w.color}">${w.emoji}${w.name}</span>`;
   }
   
-  renderQuestBoard();renderFarm();renderFacilities();renderStorage();renderTown();
+  renderQuestBoard();renderFarm();renderTavern();renderSmithy();renderFacilities();renderStorage();renderTown();
   updateTutorialGuideBanner();
 }
 
@@ -1852,68 +1868,25 @@ function renderQuestBoard(){
 }
 
 function renderFacilities(){
+  // Render non-tavern, non-smithy, non-brewery facilities (inn, stable, etc.)
   const list=el('facilityList');list.innerHTML='';
   FACILITIES.forEach(f=>{
+    if(f.id==='tavern'||f.id==='smithy'||f.id==='brewery') return; // Skip - they have their own tabs
     const lv=facilities[f.id];
     if(lv===0) return;
     const d=f.levels[lv-1];
-    let extra='';
-    if(f.id==='tavern'){
-      const avail=canCook();
-      if(avail.length>0&&!cookedToday){
-        extra='<div style="margin-top:6px;font-size:11px;color:#ff8a65;font-weight:bold">🍳 今日の調理:</div>';
-        avail.forEach((r,i)=>{
-          const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
-          extra+=`<div style="margin:3px 0"><button class="btn btn-orange btn-sm" onclick="startCook(${i})">${r.emoji} ${r.name}</button> <span style="font-size:9px;color:#8a7a60">${matsStr} → ~${r.income}G</span></div>`;
-        });
-      } else if(cookedToday){
-        extra='<div style="font-size:10px;color:#555;margin-top:4px">🍳 今日は調理済み</div>';
-      }
-    }
-    if(f.id==='smithy'){
-      // Show active crafting jobs
-      const active=craftingJobs.filter(j=>j.facility==='smithy');
-      if(active.length>0){
-        extra+='<div style="margin-top:6px;font-size:11px;color:#ff8a65;font-weight:bold">⚒️ 製作中:</div>';
-        active.forEach(job=>{
-          extra+=`<div style="font-size:10px;color:#8a7a60;margin:2px 0">${job.recipe.emoji} ${job.recipe.name} (あと${job.daysLeft}日)</div>`;
-        });
-      }
-      // Show available recipes
-      extra+='<div style="margin-top:6px;font-size:11px;color:#c0a870;font-weight:bold">⚒️ 製作可能:</div>';
-      SMITHY_RECIPES.forEach((r,i)=>{
-        const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
-        const canCraft=Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
-        extra+=`<div style="margin:3px 0"><button class="btn btn-sm ${canCraft?'btn-primary':'btn-primary'}" onclick="startCrafting('smithy',${i})" ${canCraft?'':'disabled'}>${r.emoji} ${r.name}</button> <span style="font-size:9px;color:#8a7a60">${matsStr} → ${r.time}日 +${r.sellPrice}G</span></div>`;
-      });
-    }
-    if(f.id==='brewery'){
-      // Show active crafting jobs
-      const active=craftingJobs.filter(j=>j.facility==='brewery');
-      if(active.length>0){
-        extra+='<div style="margin-top:6px;font-size:11px;color:#ff8a65;font-weight:bold">⚗️ 醸造中:</div>';
-        active.forEach(job=>{
-          extra+=`<div style="font-size:10px;color:#8a7a60;margin:2px 0">${job.recipe.emoji} ${job.recipe.name} (あと${job.daysLeft}日)</div>`;
-        });
-      }
-      // Show available recipes
-      extra+='<div style="margin-top:6px;font-size:11px;color:#c0a870;font-weight:bold">⚗️ 醸造可能:</div>';
-      BREWERY_RECIPES.forEach((r,i)=>{
-        const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
-        const canCraft=Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
-        extra+=`<div style="margin:3px 0"><button class="btn btn-sm ${canCraft?'btn-primary':'btn-primary'}" onclick="startCrafting('brewery',${i})" ${canCraft?'':'disabled'}>${r.emoji} ${r.name}</button> <span style="font-size:9px;color:#8a7a60">${matsStr} → ${r.time}日 +${r.sellPrice}G</span></div>`;
-      });
-    }
     list.innerHTML+=`<div class="facility-card">
       <div class="facility-top"><span class="facility-name">${f.emoji} ${d.name}</span><span class="facility-level">Lv.${lv}</span></div>
       <div class="facility-stat">${f.desc}</div>
       ${d.income?`<div class="facility-income">💰 1人あたり${d.income}G/日</div>`:''}
       ${d.questSpeedup?`<div class="facility-stat" style="color:#64b5f6">⚡ クエスト${d.questSpeedup}日短縮</div>`:''}
-      ${extra}
     </div>`;
   });
+  
+  // Build list - only show non-tavern/smithy/brewery facilities
   const bList=el('buildList');bList.innerHTML='';
   FACILITIES.forEach(f=>{
+    if(f.id==='tavern'||f.id==='smithy'||f.id==='brewery') return; // Skip
     const lv=facilities[f.id];
     if(lv>=f.levels.length) return;
     const next=f.levels[lv];
@@ -1925,6 +1898,221 @@ function renderFacilities(){
       <button class="btn btn-green btn-sm" onclick="buildFacility('${f.id}')" ${can?'':'disabled'}>建設</button>
     </div>`;
   });
+}
+
+function renderTavern(){
+  const content=el('tavernContent');
+  const lv=facilities.tavern||0;
+  
+  if(lv===0){
+    // Not built yet - show build option
+    const f=FACILITIES.find(x=>x.id==='tavern');
+    const next=f.levels[0];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    content.innerHTML=`
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:48px;margin-bottom:10px">🍳</div>
+        <div style="font-size:14px;color:#c0a870;margin-bottom:8px">食堂は未建設です</div>
+        <div style="font-size:11px;color:#8a7a60;margin-bottom:12px">素材を使って料理を作り、冒険者に提供できます</div>
+        <div class="facility-card">
+          <div class="facility-top"><span class="facility-name">🍺 ${next.name}</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+          <div class="facility-stat">${f.desc}</div>
+          <div class="facility-stat">素材: ${matsStr}</div>
+          <button class="btn btn-green btn-full" onclick="buildFacility('tavern')" ${can?'':'disabled'}>建設する</button>
+        </div>
+      </div>`;
+    return;
+  }
+  
+  // Tavern is built - show status and cooking
+  const d=FACILITIES.find(f=>f.id==='tavern').levels[lv-1];
+  let html=`
+    <div class="facility-card">
+      <div class="facility-top"><span class="facility-name">🍺 ${d.name}</span><span class="facility-level">Lv.${lv}</span></div>
+      <div class="facility-stat">毎日、冒険者に食事を提供</div>
+      <div class="facility-income">💰 1人あたり${d.income}G/日</div>
+    </div>`;
+  
+  // Upgrade option
+  const f=FACILITIES.find(x=>x.id==='tavern');
+  if(lv<f.levels.length){
+    const next=f.levels[lv];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    html+=`<div class="facility-card">
+      <div class="facility-top"><span class="facility-name">🍺 ${next.name} (升級)</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+      <div class="facility-stat">素材: ${matsStr}</div>
+      <button class="btn btn-green btn-sm" onclick="buildFacility('tavern')" ${can?'':'disabled'}>升級する</button>
+    </div>`;
+  }
+  
+  // Cooking section
+  const avail=canCook();
+  if(avail.length>0&&!cookedToday){
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#ff8a65;font-weight:bold;margin-bottom:8px">🍳 今日の調理メニュー:</div>';
+    avail.forEach((r,i)=>{
+      const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+      html+=`<div style="margin:6px 0;padding:8px;background:#2a2318;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:bold">${r.emoji} ${r.name}</div>
+            <div style="font-size:10px;color:#8a7a60;margin-top:2px">素材: ${matsStr}</div>
+          </div>
+          <button class="btn btn-orange btn-sm" onclick="startCook(${i})">調理</button>
+        </div>
+        <div style="font-size:9px;color:#4caf50;margin-top:4px">💰 基本収入: ~${r.income}G (品質で変動)</div>
+      </div>`;
+    });
+    html+='</div>';
+  } else if(cookedToday){
+    html+='<div style="margin-top:12px;text-align:center;padding:20px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:36px;margin-bottom:8px">✅</div>';
+    html+='<div style="font-size:12px;color:#4caf50">今日は調理済みです</div>';
+    html+='<div style="font-size:10px;color:#8a7a60;margin-top:4px">明日また調理できます</div>';
+    html+='</div>';
+  } else if(avail.length===0){
+    html+='<div style="margin-top:12px;text-align:center;padding:20px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:36px;margin-bottom:8px">🥘</div>';
+    html+='<div style="font-size:12px;color:#8a7a60">調理できる素材がありません</div>';
+    html+='<div style="font-size:10px;color:#666;margin-top:4px">クエストで素材を集めましょう</div>';
+    html+='</div>';
+  }
+  
+  content.innerHTML=html;
+}
+
+function renderSmithy(){
+  const content=el('smithyContent');
+  const lv=facilities.smithy||0;
+  
+  if(lv===0){
+    // Not built yet
+    const f=FACILITIES.find(x=>x.id==='smithy');
+    const next=f.levels[0];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    content.innerHTML=`
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:48px;margin-bottom:10px">⚒️</div>
+        <div style="font-size:14px;color:#c0a870;margin-bottom:8px">鍛冶屋は未建設です</div>
+        <div style="font-size:11px;color:#8a7a60;margin-bottom:12px">武器とポーションを製作して販売できます</div>
+        <div class="facility-card">
+          <div class="facility-top"><span class="facility-name">⚒️ ${next.name}</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+          <div class="facility-stat">${f.desc}</div>
+          <div class="facility-stat">素材: ${matsStr}</div>
+          <button class="btn btn-green btn-full" onclick="buildFacility('smithy')" ${can?'':'disabled'}>建設する</button>
+        </div>
+      </div>`;
+    return;
+  }
+  
+  // Smithy is built
+  const d=FACILITIES.find(f=>f.id==='smithy').levels[lv-1];
+  let html=`
+    <div class="facility-card">
+      <div class="facility-top"><span class="facility-name">⚒️ ${d.name}</span><span class="facility-level">Lv.${lv}</span></div>
+      <div class="facility-stat">武器を鍛造して販売</div>
+    </div>`;
+  
+  // Upgrade option
+  const f=FACILITIES.find(x=>x.id==='smithy');
+  if(lv<f.levels.length){
+    const next=f.levels[lv];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    html+=`<div class="facility-card">
+      <div class="facility-top"><span class="facility-name">⚒️ ${next.name} (升級)</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+      <div class="facility-stat">素材: ${matsStr}</div>
+      <button class="btn btn-green btn-sm" onclick="buildFacility('smithy')" ${can?'':'disabled'}>升級する</button>
+    </div>`;
+  }
+  
+  // Show active crafting jobs
+  const activeS=craftingJobs.filter(j=>j.facility==='smithy');
+  if(activeS.length>0){
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#ff8a65;font-weight:bold;margin-bottom:8px">⚒️ 製作中:</div>';
+    activeS.forEach(job=>{
+      html+=`<div style="margin:4px 0;padding:6px;background:#2a2318;border-radius:6px">
+        <div style="font-size:12px">${job.recipe.emoji} ${job.recipe.name}</div>
+        <div style="font-size:10px;color:#8a7a60">あと${job.daysLeft}日で完成</div>
+      </div>`;
+    });
+    html+='</div>';
+  }
+  
+  // Show smithy recipes
+  html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+  html+='<div style="font-size:12px;color:#c0a870;font-weight:bold;margin-bottom:8px">⚔️ 武器製作:</div>';
+  SMITHY_RECIPES.forEach((r,i)=>{
+    const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const canCraft=Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
+    html+=`<div style="margin:6px 0;padding:8px;background:#2a2318;border-radius:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:bold">${r.emoji} ${r.name}</div>
+          <div style="font-size:10px;color:#8a7a60;margin-top:2px">素材: ${matsStr}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="startCrafting('smithy',${i})" ${canCraft?'':'disabled'}>製作</button>
+      </div>
+      <div style="font-size:9px;color:#4caf50;margin-top:4px">⏱️ ${r.time}日 → 💰 +${r.sellPrice}G</div>
+    </div>`;
+  });
+  html+='</div>';
+  
+  // Show brewery recipes if brewery is built
+  const brewLv=facilities.brewery||0;
+  if(brewLv>0){
+    const activeB=craftingJobs.filter(j=>j.facility==='brewery');
+    if(activeB.length>0){
+      html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+      html+='<div style="font-size:12px;color:#ff8a65;font-weight:bold;margin-bottom:8px">⚗️ 醸造中:</div>';
+      activeB.forEach(job=>{
+        html+=`<div style="margin:4px 0;padding:6px;background:#2a2318;border-radius:6px">
+          <div style="font-size:12px">${job.recipe.emoji} ${job.recipe.name}</div>
+          <div style="font-size:10px;color:#8a7a60">あと${job.daysLeft}日で完成</div>
+        </div>`;
+      });
+      html+='</div>';
+    }
+    
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#c0a870;font-weight:bold;margin-bottom:8px">⚗️ ポーション醸造:</div>';
+    BREWERY_RECIPES.forEach((r,i)=>{
+      const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+      const canCraft=Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
+      html+=`<div style="margin:6px 0;padding:8px;background:#2a2318;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:bold">${r.emoji} ${r.name}</div>
+            <div style="font-size:10px;color:#8a7a60;margin-top:2px">素材: ${matsStr}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="startCrafting('brewery',${i})" ${canCraft?'':'disabled'}>醸造</button>
+        </div>
+        <div style="font-size:9px;color:#4caf50;margin-top:4px">⏱️ ${r.time}日 → 💰 +${r.sellPrice}G</div>
+      </div>`;
+    });
+    html+='</div>';
+  } else {
+    // Show brewery build option
+    const brewF=FACILITIES.find(x=>x.id==='brewery');
+    const brewNext=brewF.levels[0];
+    const brewMatsStr=Object.entries(brewNext.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const brewCan=gold>=brewNext.cost&&Object.entries(brewNext.mats).every(([m,q])=>(materials[m]||0)>=q);
+    html+=`<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">
+      <div style="font-size:12px;color:#c0a870;font-weight:bold;margin-bottom:8px">⚗️ ポーション醸造</div>
+      <div style="font-size:10px;color:#8a7a60;margin-bottom:8px">醸造所を建設するとポーションを作れます</div>
+      <div class="facility-card" style="margin:0">
+        <div class="facility-top"><span class="facility-name">⚗️ ${brewNext.name}</span><span style="font-size:10px;color:#ffd700">${brewNext.cost}G</span></div>
+        <div class="facility-stat">素材: ${brewMatsStr}</div>
+        <button class="btn btn-green btn-sm" onclick="buildFacility('brewery')" ${brewCan?'':'disabled'}>建設する</button>
+      </div>
+    </div>`;
+  }
+  
+  content.innerHTML=html;
 }
 
 function renderStorage(){
@@ -2214,7 +2402,7 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
   const tabs=document.querySelectorAll('.tab');
-  const tabNames=['guild','farm','facility','storage','town'];
+  const tabNames=['guild','farm','tavern','smithy','storage','facility','town'];
   const idx=tabNames.indexOf(name);
   if(idx>=0&&tabs[idx]) tabs[idx].classList.add('active');
   el('tab-'+name).classList.add('active');
