@@ -215,6 +215,9 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
   </div>
 
   <div class="tc" id="tab-town">
+    <div class="panel" style="padding:0;overflow:hidden;margin-bottom:8px">
+      <canvas id="townCanvas" width="440" height="240" style="display:block;width:100%;height:auto;border-radius:8px"></canvas>
+    </div>
     <div class="town-grid" id="townGrid"></div>
     <div class="panel"><div class="panel-title">📊 経営レポート</div><div id="report"></div></div>
   </div>
@@ -1566,6 +1569,7 @@ function renderStorage(){
 }
 
 function renderTown(){
+  drawTownCanvas();
   el('townGrid').innerHTML=`
     <div class="town-stat"><div class="ts-val">${gold}</div><div class="ts-label">💰 所持金</div></div>
     <div class="town-stat"><div class="ts-val">${Math.floor(reputation)}</div><div class="ts-label">⭐ 評判</div></div>
@@ -1575,6 +1579,205 @@ function renderTown(){
     <div style="font-size:11px;color:#4caf50">📈 日収入: ${dailyIncome}G</div>
     <div style="font-size:11px;color:#f44336">📉 日支出: ${dailyExpense}G</div>
     <div style="font-size:11px;color:#ffd700;font-weight:bold">💰 純利益: ${dailyIncome-dailyExpense}G</div>`;
+}
+
+function drawTownCanvas(){
+  const canvas=el('townCanvas');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  const w=canvas.width;
+  const h=canvas.height;
+  
+  // Clear background - sky gradient
+  const grad=ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'#87ceeb');
+  grad.addColorStop(0.6,'#e0f6ff');
+  grad.addColorStop(1,'#7cb342');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,w,h);
+  
+  // Ground
+  ctx.fillStyle='#6d4c41';
+  ctx.fillRect(0,h*0.7,w,h*0.3);
+  
+  // Grass texture
+  ctx.fillStyle='#8bc34a';
+  ctx.fillRect(0,h*0.7,w,h*0.05);
+  
+  // Road
+  ctx.fillStyle='#8d6e63';
+  ctx.fillRect(0,h*0.75,w,h*0.1);
+  ctx.fillStyle='#7a5847';
+  for(let i=0;i<10;i++){
+    ctx.fillRect(i*(w/10)+w/20-5,h*0.78,10,4);
+  }
+  
+  // Draw buildings based on facility levels
+  const innLv=facilities.inn||0;
+  const tavLv=facilities.tavern||0;
+  const stableLv=facilities.stable||0;
+  
+  // Inn position: left side
+  if(innLv>0){
+    drawBuilding(ctx,60,h*0.45,80,100,innLv,'#d7ccc8','#5d4037','🏨');
+  } else {
+    drawEmptyPlot(ctx,60,h*0.55,80,60,'宿屋');
+  }
+  
+  // Tavern position: center
+  if(tavLv>0){
+    drawBuilding(ctx,180,h*0.48,90,90,tavLv,'#ffccbc','#bf360c','🍺');
+  } else {
+    drawEmptyPlot(ctx,180,h*0.58,90,50,'食堂');
+  }
+  
+  // Stable position: right side
+  if(stableLv>0){
+    drawBuilding(ctx,310,h*0.50,90,80,stableLv,'#ffe0b2','#6d4c41','🐴');
+  } else {
+    drawEmptyPlot(ctx,310,h*0.60,90,45,'厩舎');
+  }
+  
+  // Draw some decorative elements
+  // Trees
+  drawTree(ctx,20,h*0.55);
+  drawTree(ctx,w-30,h*0.52);
+  
+  // Clouds
+  drawCloud(ctx,50,30);
+  drawCloud(ctx,w-80,50);
+  
+  // Adventurers walking
+  if(adventurersInTown>0){
+    for(let i=0;i<Math.min(3,adventurersInTown);i++){
+      drawAdventurer(ctx,120+i*80,h*0.72);
+    }
+  }
+}
+
+function drawBuilding(ctx,x,y,w,h,level,color,roofColor,emoji){
+  // Building body
+  ctx.fillStyle=color;
+  ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='#3e2723';
+  ctx.lineWidth=2;
+  ctx.strokeRect(x,y,w,h);
+  
+  // Windows based on level
+  const windowRows=level;
+  ctx.fillStyle='#fff9c4';
+  for(let r=0;r<windowRows;r++){
+    for(let c=0;c<2;c++){
+      const wx=x+15+c*40;
+      const wy=y+15+r*25;
+      ctx.fillRect(wx,wy,15,15);
+      ctx.strokeStyle='#5d4037';
+      ctx.lineWidth=1;
+      ctx.strokeRect(wx,wy,15,15);
+    }
+  }
+  
+  // Roof - triangle
+  ctx.fillStyle=roofColor;
+  ctx.beginPath();
+  ctx.moveTo(x-10,y);
+  ctx.lineTo(x+w/2,y-30);
+  ctx.lineTo(x+w+10,y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle='#3e2723';
+  ctx.lineWidth=2;
+  ctx.stroke();
+  
+  // Emoji sign
+  ctx.font='28px Arial';
+  ctx.fillText(emoji,x+w/2-14,y-8);
+  
+  // Door
+  ctx.fillStyle='#4e342e';
+  ctx.fillRect(x+w/2-12,y+h-30,24,30);
+  ctx.strokeStyle='#3e2723';
+  ctx.strokeRect(x+w/2-12,y+h-30,24,30);
+}
+
+function drawEmptyPlot(ctx,x,y,w,h,label){
+  // Empty plot with dashed border
+  ctx.strokeStyle='#8d6e63';
+  ctx.lineWidth=2;
+  ctx.setLineDash([5,5]);
+  ctx.strokeRect(x,y,w,h);
+  ctx.setLineDash([]);
+  
+  // Label
+  ctx.fillStyle='#6d4c41';
+  ctx.font='12px Arial';
+  ctx.textAlign='center';
+  ctx.fillText(label,x+w/2,y+h/2);
+  ctx.textAlign='left';
+}
+
+function drawTree(ctx,x,y){
+  // Trunk
+  ctx.fillStyle='#5d4037';
+  ctx.fillRect(x-5,y,10,25);
+  
+  // Leaves - simple circles
+  ctx.fillStyle='#66bb6a';
+  ctx.beginPath();
+  ctx.arc(x,y-5,15,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x-10,y+5,12,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+10,y+5,12,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawCloud(ctx,x,y){
+  ctx.fillStyle='rgba(255,255,255,0.8)';
+  ctx.beginPath();
+  ctx.arc(x,y,15,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+20,y,20,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+40,y,15,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawAdventurer(ctx,x,y){
+  // Simple stick figure adventurer
+  ctx.strokeStyle='#5d4037';
+  ctx.lineWidth=2;
+  
+  // Head
+  ctx.fillStyle='#ffccbc';
+  ctx.beginPath();
+  ctx.arc(x,y-20,5,0,Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(x,y-15);
+  ctx.lineTo(x,y);
+  ctx.stroke();
+  
+  // Arms
+  ctx.beginPath();
+  ctx.moveTo(x-7,y-10);
+  ctx.lineTo(x+7,y-10);
+  ctx.stroke();
+  
+  // Legs
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x-5,y+12);
+  ctx.moveTo(x,y);
+  ctx.lineTo(x+5,y+12);
+  ctx.stroke();
 }
 
 function switchTab(name){
