@@ -344,6 +344,8 @@ const MAT_NAMES={
   carrot:'ニンジン',potato:'ジャガイモ',wheat:'小麦',tomato:'トマト',
   cabbage:'キャベツ',pumpkin:'カボチャ',magic_herb_crop:'魔法薬草',
   rice:'米',egg:'卵',milk:'牛乳',pork:'豚肉',chicken_meat:'鶏肉',
+  iron_sword:'鉄の剣',silver_sword:'銀の剣',dragon_sword:'竜剣',
+  health_potion:'回復薬',mana_potion:'魔力薬',elixir:'エリクサー',
 };
 
 // === Season System ===
@@ -403,6 +405,20 @@ const COOK_RECIPES=[
   {name:'親子丼',emoji:'🍚',mats:{chicken_meat:1,egg:2,rice:2},income:40,diff:'hard'},
 ];
 
+// Smithy recipes - craft weapons
+const SMITHY_RECIPES=[
+  {name:'鉄の剣',emoji:'⚔️',mats:{iron:3,wood:1},product:'iron_sword',productQty:1,sellPrice:25,time:1},
+  {name:'銀の剣',emoji:'🗡️',mats:{silver:2,iron:2,wood:1},product:'silver_sword',productQty:1,sellPrice:60,time:2},
+  {name:'竜剣',emoji:'⚔️✨',mats:{dragon_fang:1,crystal:2,iron:5},product:'dragon_sword',productQty:1,sellPrice:150,time:3},
+];
+
+// Brewery recipes - craft potions
+const BREWERY_RECIPES=[
+  {name:'回復薬',emoji:'🧪',mats:{herb:3,mushroom:1},product:'health_potion',productQty:2,sellPrice:20,time:1},
+  {name:'魔力薬',emoji:'💙',mats:{magic_flower:2,herb:2},product:'mana_potion',productQty:2,sellPrice:40,time:2},
+  {name:'エリクサー',emoji:'✨',mats:{spirit_root:1,magic_flower:2,crystal:1},product:'elixir',productQty:1,sellPrice:100,time:3},
+];
+
 const FACILITIES=[
   {id:'inn',name:'宿屋',emoji:'🏨',desc:'冒険者が宿泊。1人あたり収入を得る',
     levels:[
@@ -420,6 +436,16 @@ const FACILITIES=[
     levels:[
       {cost:60,mats:{wood:10,iron:3},questSpeedup:1,name:'小さな厩舎'},
       {cost:180,mats:{hardwood:8,iron:8},questSpeedup:2,name:'大きな厩舎'},
+    ]},
+  {id:'smithy',name:'鍛冶屋',emoji:'⚒️',desc:'武器を鍛造して販売',
+    levels:[
+      {cost:100,mats:{iron:10,wood:5},name:'小さな鍛冶屋'},
+      {cost:250,mats:{iron:15,hardwood:8,crystal:3},name:'本格鍛冶屋'},
+    ]},
+  {id:'brewery',name:'醸造所',emoji:'⚗️',desc:'ポーションを醸造して販売',
+    levels:[
+      {cost:120,mats:{wood:10,herb:8},name:'小さな醸造所'},
+      {cost:300,mats:{hardwood:10,magic_flower:5,crystal:5},name:'本格醸造所'},
     ]},
 ];
 
@@ -439,6 +465,7 @@ let paddyPlots=[]; // {state,plantedDay,watered}
 let animals=[]; // {type,fedToday,lastProduct,happiness,daysSinceProduct}
 let currentFarmTab='field';
 let actionMenuTarget=null;
+let craftingJobs=[]; // {facility:'smithy'|'brewery', recipe, startDay, daysLeft}
 
 // === Audio System ===
 let audioCtx=null;
@@ -664,7 +691,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats,craftingJobs};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -686,6 +713,7 @@ function loadGame(){
     tutorialCompleted=s.tutorialCompleted||false;
     achievements=s.achievements||{};
     achievementStats=s.achievementStats||{totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
+    craftingJobs=s.craftingJobs||[];
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -740,6 +768,7 @@ function newGame(){
   selType=null;selTarget=null;cookedToday=false;
   tutorialStep=0;tutorialActive=false;tutorialCompleted=false;
   achievements={};achievementStats={totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
+  craftingJobs=[];
   FACILITIES.forEach(f=>facilities[f.id]=0);
   farmPlots=[];paddyPlots=[];animals=[];currentFarmTab='field';
   for(let i=0;i<TOTAL_FARM_PLOTS;i++){
@@ -775,6 +804,7 @@ function nextDay(){
   processFarm();
   processPaddy();
   processRanch();
+  processCrafting();
   updateAll();
   logMsg(`<span class="q">🌅 ${day}日目 — 💰${gold}G 👥${adventurersInTown}人滞在 ⚡${stamina}</span>`);
   saveGame();
@@ -1050,6 +1080,25 @@ function processRanch(){
     }
     a.fedToday=false;
   });
+}
+
+function processCrafting(){
+  craftingJobs.forEach(job=>{
+    job.daysLeft--;
+    if(job.daysLeft<=0){
+      // Crafting complete
+      addMat(job.recipe.product,job.recipe.productQty);
+      const sellIncome=job.recipe.sellPrice*job.recipe.productQty;
+      gold+=sellIncome;
+      dailyIncome+=sellIncome;
+      achievementStats.totalEarned+=sellIncome;
+      playSFX('coin');
+      const facName=job.facility==='smithy'?'⚒️鍛冶屋':'⚗️醸造所';
+      logMsg(`<span class="f">${facName} ${job.recipe.emoji}${job.recipe.name}完成！${MAT_NAMES[job.recipe.product]}×${job.recipe.productQty}、販売+${sellIncome}G</span>`);
+      reputation+=job.recipe.time;
+    }
+  });
+  craftingJobs=craftingJobs.filter(j=>j.daysLeft>0);
 }
 
 function switchFarmTab(tab){
@@ -1399,6 +1448,33 @@ function feedAnimal(idx){
   saveGame();
 }
 
+function startCrafting(facility,recipeIdx){
+  const recipes=facility==='smithy'?SMITHY_RECIPES:BREWERY_RECIPES;
+  if(recipeIdx>=recipes.length) return;
+  const recipe=recipes[recipeIdx];
+  
+  // Check materials
+  if(!Object.entries(recipe.mats).every(([m,q])=>(materials[m]||0)>=q)) return;
+  
+  // Consume materials
+  Object.entries(recipe.mats).forEach(([m,q])=>materials[m]-=q);
+  
+  // Start crafting job
+  craftingJobs.push({
+    facility:facility,
+    recipe:recipe,
+    startDay:day,
+    daysLeft:recipe.time
+  });
+  
+  playSFX('build');
+  const facName=facility==='smithy'?'⚒️鍛冶屋':'⚗️醸造所';
+  logMsg(`<span class="f">${facName} ${recipe.emoji}${recipe.name}の製作開始（${recipe.time}日後完成）</span>`);
+  
+  updateAll();
+  saveGame();
+}
+
 // === Swipe Detection ===
 let touchStartX=0,touchEndX=0;
 function setupSwipe(){
@@ -1618,6 +1694,40 @@ function renderFacilities(){
         extra='<div style="font-size:10px;color:#555;margin-top:4px">🍳 今日は調理済み</div>';
       }
     }
+    if(f.id==='smithy'){
+      // Show active crafting jobs
+      const active=craftingJobs.filter(j=>j.facility==='smithy');
+      if(active.length>0){
+        extra+='<div style="margin-top:6px;font-size:11px;color:#ff8a65;font-weight:bold">⚒️ 製作中:</div>';
+        active.forEach(job=>{
+          extra+=`<div style="font-size:10px;color:#8a7a60;margin:2px 0">${job.recipe.emoji} ${job.recipe.name} (あと${job.daysLeft}日)</div>`;
+        });
+      }
+      // Show available recipes
+      extra+='<div style="margin-top:6px;font-size:11px;color:#c0a870;font-weight:bold">⚒️ 製作可能:</div>';
+      SMITHY_RECIPES.forEach((r,i)=>{
+        const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+        const canCraft=Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
+        extra+=`<div style="margin:3px 0"><button class="btn btn-sm ${canCraft?'btn-primary':'btn-primary'}" onclick="startCrafting('smithy',${i})" ${canCraft?'':'disabled'}>${r.emoji} ${r.name}</button> <span style="font-size:9px;color:#8a7a60">${matsStr} → ${r.time}日 +${r.sellPrice}G</span></div>`;
+      });
+    }
+    if(f.id==='brewery'){
+      // Show active crafting jobs
+      const active=craftingJobs.filter(j=>j.facility==='brewery');
+      if(active.length>0){
+        extra+='<div style="margin-top:6px;font-size:11px;color:#ff8a65;font-weight:bold">⚗️ 醸造中:</div>';
+        active.forEach(job=>{
+          extra+=`<div style="font-size:10px;color:#8a7a60;margin:2px 0">${job.recipe.emoji} ${job.recipe.name} (あと${job.daysLeft}日)</div>`;
+        });
+      }
+      // Show available recipes
+      extra+='<div style="margin-top:6px;font-size:11px;color:#c0a870;font-weight:bold">⚗️ 醸造可能:</div>';
+      BREWERY_RECIPES.forEach((r,i)=>{
+        const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+        const canCraft=Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
+        extra+=`<div style="margin:3px 0"><button class="btn btn-sm ${canCraft?'btn-primary':'btn-primary'}" onclick="startCrafting('brewery',${i})" ${canCraft?'':'disabled'}>${r.emoji} ${r.name}</button> <span style="font-size:9px;color:#8a7a60">${matsStr} → ${r.time}日 +${r.sellPrice}G</span></div>`;
+      });
+    }
     list.innerHTML+=`<div class="facility-card">
       <div class="facility-top"><span class="facility-name">${f.emoji} ${d.name}</span><span class="facility-level">Lv.${lv}</span></div>
       <div class="facility-stat">${f.desc}</div>
@@ -1717,26 +1827,44 @@ function drawTownCanvas(){
   const innLv=facilities.inn||0;
   const tavLv=facilities.tavern||0;
   const stableLv=facilities.stable||0;
+  const smithyLv=facilities.smithy||0;
+  const breweryLv=facilities.brewery||0;
   
+  // Row 1: Inn, Tavern, Stable
   // Inn position: left side
   if(innLv>0){
-    drawBuilding(ctx,60,h*0.45,80,100,innLv,'#d7ccc8','#5d4037','🏨');
+    drawBuilding(ctx,30,h*0.35,70,80,innLv,'#d7ccc8','#5d4037','🏨');
   } else {
-    drawEmptyPlot(ctx,60,h*0.55,80,60,'宿屋');
+    drawEmptyPlot(ctx,30,h*0.50,70,50,'宿屋');
   }
   
-  // Tavern position: center
+  // Tavern position: center-left
   if(tavLv>0){
-    drawBuilding(ctx,180,h*0.48,90,90,tavLv,'#ffccbc','#bf360c','🍺');
+    drawBuilding(ctx,120,h*0.38,70,75,tavLv,'#ffccbc','#bf360c','🍺');
   } else {
-    drawEmptyPlot(ctx,180,h*0.58,90,50,'食堂');
+    drawEmptyPlot(ctx,120,h*0.52,70,45,'食堂');
   }
   
-  // Stable position: right side
+  // Stable position: center
   if(stableLv>0){
-    drawBuilding(ctx,310,h*0.50,90,80,stableLv,'#ffe0b2','#6d4c41','🐴');
+    drawBuilding(ctx,210,h*0.40,65,70,stableLv,'#ffe0b2','#6d4c41','🐴');
   } else {
-    drawEmptyPlot(ctx,310,h*0.60,90,45,'厩舎');
+    drawEmptyPlot(ctx,210,h*0.54,65,40,'厩舎');
+  }
+  
+  // Row 2: Smithy, Brewery
+  // Smithy position: center-right
+  if(smithyLv>0){
+    drawBuilding(ctx,295,h*0.42,65,65,smithyLv,'#b0bec5','#37474f','⚒️');
+  } else {
+    drawEmptyPlot(ctx,295,h*0.56,65,38,'鍛冶屋');
+  }
+  
+  // Brewery position: right side
+  if(breweryLv>0){
+    drawBuilding(ctx,380,h*0.44,60,60,breweryLv,'#ce93d8','#4a148c','⚗️');
+  } else {
+    drawEmptyPlot(ctx,380,h*0.58,60,35,'醸造所');
   }
   
   // Draw some decorative elements
