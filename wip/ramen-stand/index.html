@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ラーメン屋台 🍜</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: #fdf6e3;
+      color: #333;
+      max-width: 460px;
+      margin: 0 auto;
+      overflow-x: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #app {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .top-bar {
+      background: linear-gradient(135deg, #8b6914 0%, #6b5210 100%);
+      color: #fdf6e3;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .top-bar-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .main-content {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+    }
+    .night-mode {
+      background: linear-gradient(135deg, #2c1810 0%, #1a0f08 100%);
+      color: #ffd89b;
+    }
+    .night-mode .top-bar {
+      background: linear-gradient(135deg, #1a0f08 0%, #0d0604 100%);
+    }
+    button {
+      background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(255,94,98,0.3);
+      transition: transform 0.1s, box-shadow 0.1s;
+      width: 100%;
+      margin: 8px 0;
+    }
+    button:active {
+      transform: scale(0.97);
+      box-shadow: 0 2px 8px rgba(255,94,98,0.2);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, #b8860b 0%, #8b6914 100%);
+      box-shadow: 0 4px 12px rgba(184,134,11,0.3);
+    }
+    button:disabled {
+      background: #ccc;
+      color: #666;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    .title-screen {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .title-screen h1 {
+      font-size: 36px;
+      margin: 20px 0;
+      color: #8b6914;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    .title-screen .ramen-icon {
+      font-size: 80px;
+      animation: bounce 2s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .recipe-builder {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      margin: 12px 0;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    .recipe-builder h3 {
+      color: #8b6914;
+      margin-bottom: 12px;
+    }
+    .ingredient-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .ingredient-btn {
+      background: white;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      padding: 12px 8px;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .ingredient-btn span {
+      font-size: 11px;
+      color: #666;
+    }
+    .ingredient-btn.selected {
+      background: #fff3cd;
+      border-color: #ff9966;
+      box-shadow: 0 0 0 2px #ff9966;
+    }
+    .ingredient-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .recipe-list {
+      margin-top: 16px;
+    }
+    .recipe-item {
+      background: #f8f8f8;
+      border-radius: 12px;
+      padding: 12px;
+      margin: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .recipe-item:hover {
+      background: #fff3cd;
+      border-color: #ff9966;
+    }
+    .recipe-item.active {
+      background: #fff3cd;
+      border-color: #ff5e62;
+      box-shadow: 0 0 0 2px #ff5e62;
+    }
+    .customer {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+      animation: slideIn 0.5s ease-out;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .customer-emoji {
+      font-size: 48px;
+    }
+    .customer-info {
+      flex: 1;
+    }
+    .speech-bubble {
+      background: #f0f0f0;
+      border-radius: 12px;
+      padding: 8px 12px;
+      margin: 8px 0;
+      position: relative;
+      font-size: 14px;
+    }
+    .summary-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin: 16px 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+    .summary-card h2 {
+      color: #8b6914;
+      margin-bottom: 16px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .stat-row:last-child {
+      border-bottom: none;
+    }
+    .shop-grid {
+      display: grid;
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .shop-item {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .shop-item.owned {
+      background: #e8f5e9;
+    }
+    .price-slider {
+      width: 100%;
+      margin: 16px 0;
+    }
+    .price-display {
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      color: #ff5e62;
+      margin: 8px 0;
+    }
+    .lantern {
+      font-size: 32px;
+      animation: glow 2s infinite alternate;
+    }
+    @keyframes glow {
+      from { opacity: 0.7; }
+      to { opacity: 1; }
+    }
+    .coin-animation {
+      position: fixed;
+      font-size: 24px;
+      animation: coinFly 1s ease-out forwards;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    @keyframes coinFly {
+      0% { transform: translate(0, 0) scale(1); opacity: 1; }
+      100% { transform: translate(0, -100px) scale(1.5); opacity: 0; }
+    }
+    .serving-area {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .stall-center {
+      text-align: center;
+      font-size: 64px;
+      padding: 20px;
+      background: linear-gradient(135deg, #fff3cd 0%, #ffe4a3 100%);
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+    .served-count {
+      text-align: center;
+      font-size: 18px;
+      color: #8b6914;
+      font-weight: bold;
+      padding: 12px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: #ddd;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #ff5e62;
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #ff5e62;
+      cursor: pointer;
+      border: none;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    // Game State
+    const BASES = {
+      soy: { name: '醤油', emoji: '🟤', score: 10, price: 0 },
+      miso: { name: '味噌', emoji: '🟠', score: 12, price: 3000 },
+      salt: { name: '塩', emoji: '⚪', score: 8, price: 2000 },
+      tonkotsu: { name: '豚骨', emoji: '🦴', score: 15, price: 5000 }
+    };
+
+    const TOPPINGS = {
+      chashu: { name: 'チャーシュー', emoji: '🥩', score: 8, price: 1000 },
+      egg: { name: '味玉', emoji: '🥚', score: 6, price: 800 },
+      menma: { name: 'メンマ', emoji: '🎋', score: 4, price: 0 },
+      negi: { name: 'ネギ', emoji: '🌿', score: 3, price: 0 },
+      nori: { name: 'のり', emoji: '🟩', score: 3, price: 0 },
+      moyashi: { name: 'もやし', emoji: '🌱', score: 2, price: 500 },
+      corn: { name: 'コーン', emoji: '🌽', score: 5, price: 600 },
+      butter: { name: 'バター', emoji: '🧈', score: 7, price: 1500 }
+    };
+
+    const SYNERGIES = [
+      { combo: ['miso', 'butter'], bonus: 10 },
+      { combo: ['miso', 'corn'], bonus: 8 },
+      { combo: ['tonkotsu', 'chashu'], bonus: 10 },
+      { combo: ['tonkotsu', 'egg'], bonus: 8 },
+      { combo: ['salt', 'negi'], bonus: 6 },
+      { combo: ['soy', 'menma'], bonus: 6 },
+      { combo: ['soy', 'nori'], bonus: 5 }
+    ];
+
+    const CUSTOMER_TYPES = [
+      { name: 'サラリーマン', emoji: '👨‍💼', budget: 800, pref: null, tip: 0.1 },
+      { name: '学生', emoji: '👩‍🎓', budget: 500, pref: null, tip: 0 },
+      { name: 'グルメ', emoji: '👨‍🍳', budget: 1500, pref: 'specific', tip: 0.3 },
+      { name: '常連', emoji: '👴', budget: 1000, pref: 'loyal', tip: 0.5 }
+    ];
+
+    let gameState = {
+      day: 1,
+      money: 5000,
+      reputation: 0,
+      unlockedBases: ['soy'],
+      unlockedToppings: ['negi', 'menma', 'nori'],
+      savedRecipes: [],
+      currentRecipe: { base: null, toppings: [] },
+      phase: 'title', // title, morning, serving, summary, night
+      todayMenu: [],
+      todayPrice: 500,
+      todayCustomers: [],
+      todayStats: { served: 0, sales: 0, tips: 0, repChange: 0 }
+    };
+
+    function saveGame() {
+      localStorage.setItem('ramenStand', JSON.stringify(gameState));
+    }
+
+    function loadGame() {
+      const saved = localStorage.getItem('ramenStand');
+      if (saved) {
+        gameState = JSON.parse(saved);
+      }
+    }
+
+    function resetGame() {
+      localStorage.removeItem('ramenStand');
+      location.reload();
+    }
+
+    function calculateTaste(recipe) {
+      if (!recipe.base) return 0;
+      let score = BASES[recipe.base].score;
+      recipe.toppings.forEach(t => {
+        score += TOPPINGS[t].score;
+      });
+      // Check synergies
+      const ingredients = [recipe.base, ...recipe.toppings];
+      SYNERGIES.forEach(syn => {
+        if (syn.combo.every(ing => ingredients.includes(ing))) {
+          score += syn.bonus;
+        }
+      });
+      return score;
+    }
+
+    function getRecipeName(recipe) {
+      if (!recipe.base) return '未設定';
+      const baseName = BASES[recipe.base].name;
+      const toppingNames = recipe.toppings.map(t => TOPPINGS[t].name).join('');
+      return `${baseName}${toppingNames}ラーメン`;
+    }
+
+    function generateCustomers() {
+      const baseCount = 5;
+      const repBonus = Math.floor(gameState.reputation / 10);
+      const count = Math.min(20, baseCount + repBonus);
+      const customers = [];
+      
+      for (let i = 0; i < count; i++) {
+        let typeIndex = 0;
+        if (gameState.reputation >= 75) {
+          typeIndex = Math.floor(Math.random() * 4);
+        } else if (gameState.reputation >= 50) {
+          typeIndex = Math.floor(Math.random() * 3);
+        } else if (gameState.reputation >= 10) {
+          typeIndex = Math.floor(Math.random() * 2);
+        }
+        
+        const type = CUSTOMER_TYPES[typeIndex];
+        const bases = Object.keys(BASES);
+        const prefBase = bases[Math.floor(Math.random() * bases.length)];
+        
+        customers.push({
+          type: type.name,
+          emoji: type.emoji,
+          budget: type.budget,
+          preferredBase: prefBase,
+          tipRate: type.tip,
+          served: false
+        });
+      }
+      
+      return customers;
+    }
+
+    function serveCustomer(customer) {
+      // Find matching recipe
+      let bestMatch = null;
+      let bestTaste = 0;
+      
+      gameState.todayMenu.forEach(recipe => {
+        if (recipe.base === customer.preferredBase && gameState.todayPrice <= customer.budget) {
+          const taste = calculateTaste(recipe);
+          if (taste > bestTaste) {
+            bestTaste = taste;
+            bestMatch = recipe;
+          }
+        }
+      });
+      
+      if (!bestMatch) {
+        // No match - check if any recipe fits budget
+        gameState.todayMenu.forEach(recipe => {
+          if (gameState.todayPrice <= customer.budget) {
+            const taste = calculateTaste(recipe);
+            if (taste > bestTaste) {
+              bestTaste = taste;
+              bestMatch = recipe;
+            }
+          }
+        });
+      }
+      
+      if (bestMatch) {
+        const basePrice = gameState.todayPrice;
+        const tip = Math.floor(basePrice * customer.tipRate * (bestTaste / 30));
+        const total = basePrice + tip;
+        
+        gameState.money += total;
+        gameState.todayStats.served++;
+        gameState.todayStats.sales += basePrice;
+        gameState.todayStats.tips += tip;
+        
+        // Reputation changes
+        const priceRatio = gameState.todayPrice / customer.budget;
+        let repChange = 1;
+        if (priceRatio < 0.7) repChange += 1; // Fair price
+        if (bestTaste > 30) repChange += 1; // Great taste
+        if (bestMatch.base === customer.preferredBase) repChange += 1; // Perfect match
+        
+        gameState.todayStats.repChange += repChange;
+        
+        customer.served = true;
+        customer.satisfied = true;
+        customer.payment = total;
+        
+        return true;
+      } else {
+        // Customer leaves
+        gameState.todayStats.repChange -= 1;
+        customer.served = true;
+        customer.satisfied = false;
+        return false;
+      }
+    }
+
+    function unlockItem(type, id) {
+      const item = type === 'base' ? BASES[id] : TOPPINGS[id];
+      if (gameState.money >= item.price) {
+        gameState.money -= item.price;
+        if (type === 'base') {
+          gameState.unlockedBases.push(id);
+        } else {
+          gameState.unlockedToppings.push(id);
+        }
+        saveGame();
+        render();
+      }
+    }
+
+    // Render functions
+    function render() {
+      const app = document.getElementById('app');
+      
+      if (gameState.phase === 'title') {
+        app.innerHTML = `
+          <div class="title-screen">
+            <div class="ramen-icon">🍜</div>
+            <h1>ラーメン屋台</h1>
+            <p>レシピを開発して評判の屋台を目指そう！</p>
+            <button onclick="startGame()">はじめる</button>
+            ${localStorage.getItem('ramenStand') ? '<button class="secondary" onclick="resetGame()">はじめから</button>' : ''}
+          </div>
+        `;
+      } else {
+        const isNight = gameState.phase === 'night';
+        app.innerHTML = `
+          <div class="top-bar">
+            <div class="top-bar-item">📅 ${gameState.day}日目</div>
+            <div class="top-bar-item">💰 ${gameState.money.toLocaleString()}円</div>
+            <div class="top-bar-item">⭐ ${gameState.reputation}/100</div>
+          </div>
+          <div class="main-content ${isNight ? 'night-mode' : ''}">
+            ${renderPhase()}
+          </div>
+        `;
+      }
+    }
+
+    function renderPhase() {
+      switch (gameState.phase) {
+        case 'morning':
+          return renderMorning();
+        case 'serving':
+          return renderServing();
+        case 'summary':
+          return renderSummary();
+        case 'night':
+          return renderNight();
+        default:
+          return '';
+      }
+    }
+
+    function renderMorning() {
+      return `
+        <h2 style="text-align:center; color:#8b6914; margin-bottom:20px;">🌅 朝の準備</h2>
+        
+        <div class="recipe-builder">
+          <h3>レシピを作る</h3>
+          <div>
+            <h4 style="margin:12px 0 8px 0; color:#666;">スープ（1つ選択）</h4>
+            <div class="ingredient-grid">
+              ${Object.entries(BASES).map(([id, base]) => `
+                <button class="ingredient-btn ${gameState.currentRecipe.base === id ? 'selected' : ''}"
+                        ${!gameState.unlockedBases.includes(id) ? 'disabled' : ''}
+                        onclick="selectBase('${id}')">
+                  ${base.emoji}<br><span>${base.name}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          
+          <div>
+            <h4 style="margin:12px 0 8px 0; color:#666;">トッピング（3つまで）</h4>
+            <div class="ingredient-grid">
+              ${Object.entries(TOPPINGS).map(([id, topping]) => `
+                <button class="ingredient-btn ${gameState.currentRecipe.toppings.includes(id) ? 'selected' : ''}"
+                        ${!gameState.unlockedToppings.includes(id) ? 'disabled' : ''}
+                        onclick="toggleTopping('${id}')">
+                  ${topping.emoji}<br><span>${topping.name}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          
+          <button onclick="saveRecipe()" ${!gameState.currentRecipe.base || gameState.savedRecipes.length >= 5 ? 'disabled' : ''}>
+            レシピを保存 (${gameState.savedRecipes.length}/5)
+          </button>
+        </div>
+        
+        <div class="recipe-builder">
+          <h3>今日のメニュー</h3>
+          ${gameState.savedRecipes.length === 0 ? 
+            '<p class="empty-state">レシピを保存してメニューに追加しよう</p>' :
+            gameState.savedRecipes.map((recipe, i) => `
+              <div class="recipe-item ${gameState.todayMenu.includes(recipe) ? 'active' : ''}"
+                   onclick="toggleMenu(${i})">
+                <div>
+                  <div style="font-weight:bold;">${getRecipeName(recipe)}</div>
+                  <div style="font-size:12px; color:#666;">
+                    ${BASES[recipe.base].emoji} ${recipe.toppings.map(t => TOPPINGS[t].emoji).join(' ')}
+                  </div>
+                </div>
+                <div style="font-size:20px;">
+                  ${gameState.todayMenu.includes(recipe) ? '✅' : '⭕'}
+                </div>
+              </div>
+            `).join('')
+          }
+        </div>
+        
+        <div class="recipe-builder">
+          <h3>価格設定</h3>
+          <div class="price-display">${gameState.todayPrice}円</div>
+          <input type="range" class="price-slider" min="100" max="1000" step="50" 
+                 value="${gameState.todayPrice}" 
+                 oninput="updatePrice(this.value)">
+          <div style="display:flex; justify-content:space-between; font-size:12px; color:#666;">
+            <span>100円</span>
+            <span>1000円</span>
+          </div>
+        </div>
+        
+        <button onclick="startDay()" ${gameState.todayMenu.length === 0 ? 'disabled' : ''}>
+          開店！
+        </button>
+      `;
+    }
+
+    function renderServing() {
+      const currentCustomer = gameState.todayCustomers.find(c => !c.served);
+      
+      return `
+        <h2 style="text-align:center; color:#8b6914; margin-bottom:20px;">🏪 営業中</h2>
+        
+        <div class="served-count">
+          接客: ${gameState.todayStats.served} / ${gameState.todayCustomers.length}人
+        </div>
+        
+        <div class="stall-center">
+          🍜
+        </div>
+        
+        ${currentCustomer ? `
+          <div class="customer">
+            <div class="customer-emoji">${currentCustomer.emoji}</div>
+            <div class="customer-info">
+              <div style="font-weight:bold;">${currentCustomer.type}</div>
+              <div class="speech-bubble">
+                ${BASES[currentCustomer.preferredBase].name}ラーメンください！
+              </div>
+            </div>
+          </div>
+          <button onclick="serveNextCustomer()">提供する</button>
+        ` : `
+          <div class="empty-state">
+            ${gameState.todayStats.served > 0 ? '本日の営業が終了しました' : '準備中...'}
+          </div>
+          <button onclick="endDay()">閉店</button>
+        `}
+      `;
+    }
+
+    function renderSummary() {
+      return `
+        <div class="summary-card">
+          <h2>📊 本日の結果</h2>
+          <div class="stat-row">
+            <span>接客数</span>
+            <span>${gameState.todayStats.served}人</span>
+          </div>
+          <div class="stat-row">
+            <span>売上</span>
+            <span>${gameState.todayStats.sales.toLocaleString()}円</span>
+          </div>
+          <div class="stat-row">
+            <span>チップ</span>
+            <span>${gameState.todayStats.tips.toLocaleString()}円</span>
+          </div>
+          <div class="stat-row">
+            <span>評判変化</span>
+            <span style="color:${gameState.todayStats.repChange >= 0 ? 'green' : 'red'};">
+              ${gameState.todayStats.repChange >= 0 ? '+' : ''}${gameState.todayStats.repChange}
+            </span>
+          </div>
+          <div class="stat-row">
+            <span>所持金</span>
+            <span style="font-weight:bold; font-size:20px; color:#ff5e62;">
+              ${gameState.money.toLocaleString()}円
+            </span>
+          </div>
+        </div>
+        
+        ${getReputationMilestone()}
+        
+        <button onclick="goToNight()">夜の市場へ</button>
+      `;
+    }
+
+    function getReputationMilestone() {
+      const milestones = [
+        { rep: 10, msg: '🎓 学生さんが来るようになった！' },
+        { rep: 25, msg: '📰 メディアに取り上げられた！' },
+        { rep: 50, msg: '👨‍🍳 グルメな客が来始めた！' },
+        { rep: 75, msg: '🔥 行列ができている！' },
+        { rep: 100, msg: '🏆 伝説の屋台になった！' }
+      ];
+      
+      const achieved = milestones.find(m => 
+        gameState.reputation >= m.rep && 
+        gameState.reputation - gameState.todayStats.repChange < m.rep
+      );
+      
+      if (achieved) {
+        return `<div style="background:#fff3cd; padding:16px; border-radius:12px; margin:16px 0; text-align:center; font-weight:bold;">
+          ${achieved.msg}
+        </div>`;
+      }
+      return '';
+    }
+
+    function renderNight() {
+      return `
+        <div style="text-align:center; margin:20px 0;">
+          <div class="lantern">🏮</div>
+          <h2 style="color:#ffd89b; margin:12px 0;">夜の市場</h2>
+        </div>
+        
+        <div class="recipe-builder" style="background:#3a2a1a; color:#ffd89b;">
+          <h3 style="color:#ffd89b;">スープの素を購入</h3>
+          <div class="shop-grid">
+            ${Object.entries(BASES).map(([id, base]) => {
+              const owned = gameState.unlockedBases.includes(id);
+              return `
+                <div class="shop-item ${owned ? 'owned' : ''}">
+                  <div>
+                    <span style="font-size:24px;">${base.emoji}</span>
+                    <span style="margin-left:8px; font-weight:bold;">${base.name}</span>
+                  </div>
+                  ${owned ? 
+                    '<span style="color:#4caf50;">✓ 所有</span>' :
+                    `<button class="secondary" style="width:auto; margin:0; padding:8px 16px;" 
+                            onclick="unlockItem('base', '${id}')"
+                            ${gameState.money < base.price ? 'disabled' : ''}>
+                      ${base.price.toLocaleString()}円
+                    </button>`
+                  }
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <div class="recipe-builder" style="background:#3a2a1a; color:#ffd89b;">
+          <h3 style="color:#ffd89b;">トッピングを購入</h3>
+          <div class="shop-grid">
+            ${Object.entries(TOPPINGS).map(([id, topping]) => {
+              const owned = gameState.unlockedToppings.includes(id);
+              return `
+                <div class="shop-item ${owned ? 'owned' : ''}">
+                  <div>
+                    <span style="font-size:24px;">${topping.emoji}</span>
+                    <span style="margin-left:8px; font-weight:bold;">${topping.name}</span>
+                  </div>
+                  ${owned ? 
+                    '<span style="color:#4caf50;">✓ 所有</span>' :
+                    `<button class="secondary" style="width:auto; margin:0; padding:8px 16px;" 
+                            onclick="unlockItem('topping', '${id}')"
+                            ${gameState.money < topping.price ? 'disabled' : ''}>
+                      ${topping.price.toLocaleString()}円
+                    </button>`
+                  }
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        
+        <button onclick="nextDay()">次の日へ</button>
+      `;
+    }
+
+    // Game actions
+    function startGame() {
+      loadGame();
+      gameState.phase = 'morning';
+      render();
+    }
+
+    function selectBase(baseId) {
+      gameState.currentRecipe.base = baseId;
+      render();
+    }
+
+    function toggleTopping(toppingId) {
+      const idx = gameState.currentRecipe.toppings.indexOf(toppingId);
+      if (idx >= 0) {
+        gameState.currentRecipe.toppings.splice(idx, 1);
+      } else if (gameState.currentRecipe.toppings.length < 3) {
+        gameState.currentRecipe.toppings.push(toppingId);
+      }
+      render();
+    }
+
+    function saveRecipe() {
+      if (gameState.currentRecipe.base && gameState.savedRecipes.length < 5) {
+        gameState.savedRecipes.push({
+          base: gameState.currentRecipe.base,
+          toppings: [...gameState.currentRecipe.toppings]
+        });
+        gameState.currentRecipe = { base: null, toppings: [] };
+        saveGame();
+        render();
+      }
+    }
+
+    function toggleMenu(index) {
+      const recipe = gameState.savedRecipes[index];
+      const idx = gameState.todayMenu.indexOf(recipe);
+      if (idx >= 0) {
+        gameState.todayMenu.splice(idx, 1);
+      } else {
+        gameState.todayMenu.push(recipe);
+      }
+      render();
+    }
+
+    function updatePrice(value) {
+      gameState.todayPrice = parseInt(value);
+      render();
+    }
+
+    function startDay() {
+      if (gameState.todayMenu.length === 0) return;
+      gameState.todayCustomers = generateCustomers();
+      gameState.todayStats = { served: 0, sales: 0, tips: 0, repChange: 0 };
+      gameState.phase = 'serving';
+      saveGame();
+      render();
+    }
+
+    function serveNextCustomer() {
+      const customer = gameState.todayCustomers.find(c => !c.served);
+      if (!customer) return;
+      
+      const success = serveCustomer(customer);
+      
+      // Show animation
+      if (success) {
+        showCoinAnimation();
+      }
+      
+      saveGame();
+      
+      // Short delay before next customer
+      setTimeout(() => {
+        render();
+      }, 500);
+    }
+
+    function showCoinAnimation() {
+      const coin = document.createElement('div');
+      coin.className = 'coin-animation';
+      coin.textContent = '💰';
+      coin.style.left = Math.random() * (window.innerWidth - 50) + 'px';
+      coin.style.top = window.innerHeight / 2 + 'px';
+      document.body.appendChild(coin);
+      setTimeout(() => coin.remove(), 1000);
+    }
+
+    function endDay() {
+      gameState.reputation = Math.max(0, Math.min(100, gameState.reputation + gameState.todayStats.repChange));
+      gameState.phase = 'summary';
+      saveGame();
+      render();
+    }
+
+    function goToNight() {
+      gameState.phase = 'night';
+      render();
+    }
+
+    function nextDay() {
+      gameState.day++;
+      gameState.todayMenu = [];
+      gameState.phase = 'morning';
+      saveGame();
+      render();
+    }
+
+    // Initialize
+    loadGame();
+    render();
+  </script>
+</body>
+</html>
