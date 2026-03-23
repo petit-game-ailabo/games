@@ -191,6 +191,15 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
   </div>
 
   <div class="tc active" id="tab-guild">
+    <div class="panel" style="background:#1a3a5a;border-color:#3a5a7a;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;color:#ffd700;font-weight:bold" id="guildRankName">新米ギルド</div>
+          <div style="font-size:10px;color:#64b5f6;margin-top:2px">⭐ 評判: <span id="guildRepValue">0</span></div>
+        </div>
+        <div id="guildRankProgress" style="text-align:right;font-size:9px;color:#8a7a60"></div>
+      </div>
+    </div>
     <div class="panel" id="questCreator">
       <div class="panel-title">📝 クエスト作成</div>
       <div class="quest-step"><div class="quest-step-label">① 種類</div><div class="option-grid" id="questTypeGrid"></div></div>
@@ -588,6 +597,37 @@ const FACILITIES=[
     ]},
 ];
 
+// === Guild Rank System ===
+const GUILD_RANKS=[
+  {level:1,name:'新米ギルド',minRep:0,unlocks:['mine','herb','lumber','fish']},
+  {level:2,name:'駆け出しギルド',minRep:50,unlocks:['hunt']},
+  {level:3,name:'一人前ギルド',minRep:150,unlocks:['explore']},
+  {level:4,name:'有名ギルド',minRep:300,unlocks:[]},
+  {level:5,name:'伝説のギルド',minRep:500,unlocks:[]},
+];
+
+function getGuildRank(){
+  for(let i=GUILD_RANKS.length-1;i>=0;i--){
+    if(reputation>=GUILD_RANKS[i].minRep) return GUILD_RANKS[i];
+  }
+  return GUILD_RANKS[0];
+}
+
+function getNextGuildRank(){
+  const current=getGuildRank();
+  const nextIdx=GUILD_RANKS.findIndex(r=>r.level===current.level)+1;
+  return nextIdx<GUILD_RANKS.length?GUILD_RANKS[nextIdx]:null;
+}
+
+function isQuestTypeUnlocked(questTypeId){
+  const rank=getGuildRank();
+  // Check all ranks up to current level
+  for(let i=0;i<=GUILD_RANKS.findIndex(r=>r.level===rank.level);i++){
+    if(GUILD_RANKS[i].unlocks.includes(questTypeId)) return true;
+  }
+  return false;
+}
+
 // === State ===
 let gold=0,day=0,reputation=0,stamina=100;
 let materials={};
@@ -611,6 +651,7 @@ let storageLevel=1; // Warehouse level (1-5)
 const STORAGE_CAPACITIES=[0,100,200,400,800,1600]; // Capacity per level (index 0 unused)
 const STORAGE_UPGRADE_COSTS=[0,100,250,500,1000]; // Cost to upgrade to next level (index 0 unused)
 let inventory={}; // {dishName: {qty, sellPrice}} - cooked dishes and crafted items for auto-sale
+let lastGuildRankLevel=1; // Track for rank-up notifications
 
 // === Audio System ===
 let audioCtx=null;
@@ -837,7 +878,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,tutorialGuideVisible,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel,inventory};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,tutorialGuideVisible,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel,inventory,lastGuildRankLevel};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -865,6 +906,7 @@ function loadGame(){
     marketPriceMultipliers=s.marketPriceMultipliers||{};
     storageLevel=s.storageLevel||1;
     inventory=s.inventory||{};
+    lastGuildRankLevel=s.lastGuildRankLevel||1;
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -924,6 +966,7 @@ function newGame(){
   marketPriceMultipliers={};
   storageLevel=1;
   inventory={};
+  lastGuildRankLevel=1;
   // Initialize market prices to 1.0 (neutral)
   QUEST_TYPES.forEach(qt=>marketPriceMultipliers[qt.id]=1.0);
   FACILITIES.forEach(f=>facilities[f.id]=0);
@@ -942,9 +985,22 @@ function newGame(){
 function nextDay(){
   playSFX('day');
   const prevSeason=getCurrentSeason();
+  const prevGuildRank=getGuildRank();
   day++;dailyIncome=0;dailyExpense=0;cookedToday=false;stamina=100;
   el('dayNum').textContent=day;
   checkAchievements();
+  
+  // Check for guild rank up
+  const newGuildRank=getGuildRank();
+  if(newGuildRank.level>prevGuildRank.level){
+    playSFX('coin');
+    logMsg(`<span style="color:#ffd700;font-weight:bold">🏆 ギルドランクアップ！${newGuildRank.name}に昇格！</span>`);
+    if(newGuildRank.unlocks.length>0){
+      const unlockNames=newGuildRank.unlocks.map(id=>QUEST_TYPES.find(t=>t.id===id)?.name).filter(n=>n).join('、');
+      logMsg(`<span class="q">🔓 新クエスト解放: ${unlockNames}</span>`);
+    }
+    lastGuildRankLevel=newGuildRank.level;
+  }
   
   // Check for season change
   const newSeason=getCurrentSeason();
@@ -1141,7 +1197,10 @@ function renderQuestCreator(){
   QUEST_TYPES.forEach(t=>{
     const mult=marketPriceMultipliers[t.id]||1.0;
     const indicator=mult>1.10?'📈':mult<0.90?'📉':'';
-    g.innerHTML+=`<div class="option-btn${selType===t.id?' selected':''}" onclick="selectType('${t.id}')">${t.emoji} ${t.name} ${indicator}</div>`;
+    const unlocked=isQuestTypeUnlocked(t.id);
+    const lockIcon=unlocked?'':'🔒';
+    const disabled=unlocked?'':' style="opacity:0.4;cursor:default"';
+    g.innerHTML+=`<div class="option-btn${selType===t.id?' selected':''}" onclick="${unlocked?`selectType('${t.id}')`:'showQuestLockedMessage()'}"${disabled}>${lockIcon}${t.emoji} ${t.name} ${indicator}</div>`;
   });
   if(!selType){el('step2').style.display='none';el('step3').style.display='none';return;}
   el('step2').style.display='';
@@ -1158,6 +1217,13 @@ function renderQuestCreator(){
   el('marketPrice').innerHTML=`${market} ${trendText}`;
   if(!el('priceInput').value) el('priceInput').value=market;
   updatePriceIndicator();
+}
+
+function showQuestLockedMessage(){
+  const nextRank=getNextGuildRank();
+  if(nextRank){
+    logMsg(`<span class="w">🔒 このクエストは${nextRank.name}（評判${nextRank.minRep}）で解放されます</span>`);
+  }
 }
 function selectType(id){selType=id;selTarget=null;el('priceInput').value='';renderQuestCreator();}
 function selectTarget(id){selTarget=id;el('priceInput').value='';renderQuestCreator();}
@@ -1842,6 +1908,18 @@ function updateAll(){
     // Update weather display
     const w=getWeather();
     el('weatherDisplay').innerHTML=`<span style="color:${w.color}">${w.emoji}${w.name}</span>`;
+  }
+  
+  // Update guild rank display
+  const guildRank=getGuildRank();
+  const nextRank=getNextGuildRank();
+  el('guildRankName').textContent=guildRank.name;
+  el('guildRepValue').textContent=reputation;
+  if(nextRank){
+    const needed=nextRank.minRep-reputation;
+    el('guildRankProgress').innerHTML=`次のランクまで: <span style="color:#ffd700">${needed}</span> (${nextRank.name})`;
+  } else {
+    el('guildRankProgress').innerHTML=`<span style="color:#ffd700">最高ランク到達！</span>`;
   }
   
   renderQuestBoard();renderFarm();renderTavern();renderSmithy();renderFacilities();renderStorage();renderTown();
