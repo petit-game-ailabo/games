@@ -1630,17 +1630,56 @@ function renderFarmRanch(){
     const happyPct=(a.happiness/100)*100;
     const canFeed=!a.fedToday&&stamina>=5&&Object.entries(spec.feedCost).every(([m,q])=>(materials[m]||0)>=q);
     const feedLabel=Object.entries(spec.feedCost).map(([m,q])=>`${MAT_NAMES[m]}×${q}`).join(', ');
-    grid.innerHTML+=`<div class="animal-card">
+    
+    // Satiety/hunger icon
+    let satietyIcon='';
+    let satietyText='';
+    if(a.fedToday){
+      satietyIcon='🍽️';
+      satietyText='満腹';
+    } else {
+      satietyIcon='😋';
+      satietyText='空腹';
+    }
+    
+    // Happiness emoji
+    let happinessEmoji='';
+    if(a.happiness>=80){
+      happinessEmoji='😊';
+    } else if(a.happiness>=50){
+      happinessEmoji='😐';
+    } else if(a.happiness>=20){
+      happinessEmoji='😟';
+    } else {
+      happinessEmoji='😢';
+    }
+    
+    // Product readiness indicator
+    let productIndicator='';
+    const readyForProduct=a.happiness>=50&&a.daysSinceProduct>=spec.productDays;
+    if(readyForProduct&&a.fedToday){
+      productIndicator='<div style="font-size:10px;color:#4caf50;margin-top:2px">✨ 明日生産可能！</div>';
+    } else if(a.daysSinceProduct>=spec.productDays){
+      productIndicator='<div style="font-size:10px;color:#ff9800;margin-top:2px">⚠️ 給餌が必要</div>';
+    }
+    
+    grid.innerHTML+=`<div class="animal-card" style="position:relative">
+      <div style="position:absolute;top:8px;right:8px;font-size:20px">${satietyIcon}</div>
       <div class="animal-emoji">${spec.emoji}</div>
       <div class="animal-info">
-        <div class="animal-name">${spec.name}</div>
-        <div class="animal-status">生産: ${MAT_NAMES[spec.product]} (${a.daysSinceProduct}/${spec.productDays}日)</div>
-        <div class="animal-happiness">幸福度: ${a.happiness}%
-          <div class="happy-bar"><div class="happy-fill" style="width:${happyPct}%"></div></div>
+        <div class="animal-name">${spec.name} <span style="font-size:16px">${happinessEmoji}</span></div>
+        <div class="animal-status" style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:10px">${satietyText}</span>
+          <span style="color:#8a7a60">|</span>
+          <span style="font-size:10px">生産: ${MAT_NAMES[spec.product]} (${a.daysSinceProduct}/${spec.productDays}日)</span>
+        </div>
+        ${productIndicator}
+        <div class="animal-happiness">幸福度: ${a.happiness}% ${happinessEmoji}
+          <div class="happy-bar"><div class="happy-fill" style="width:${happyPct}%;${a.happiness<50?'background:#ff5722':''}"></div></div>
         </div>
       </div>
-      <button class="animal-btn" onclick="feedAnimal(${i})" ${canFeed?'':'disabled'}>
-        ${a.fedToday?'給餌済':'給餌 (⚡5)'}
+      <button class="animal-btn" onclick="feedAnimal(${i})" ${canFeed?'':'disabled'} style="${a.fedToday?'background:#4caf50':''}">
+        ${a.fedToday?'✓ 給餌済':'🥕 給餌 (⚡5)'}
       </button>
     </div>`;
   });
