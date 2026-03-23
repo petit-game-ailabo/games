@@ -167,7 +167,7 @@ body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-se
 <div id="game">
   <div class="top-bar">
     <span class="gold">💰 <span id="gold">100</span>G</span>
-    <span style="color:#c0a870">📅 Day <span id="dayNum">1</span> <span id="seasonDisplay"></span></span>
+    <span style="color:#c0a870">📅 Day <span id="dayNum">1</span> <span id="seasonDisplay"></span> <span id="weatherDisplay"></span></span>
     <span style="font-size:10px" id="staminaDisplay">⚡ <span id="stamina">100</span></span>
   </div>
 
@@ -357,6 +357,66 @@ const SEASONS=[
 ];
 const SEASON_LENGTH=7; // days per season
 
+// === Weather System ===
+const WEATHER_TYPES=[
+  {id:'sunny',name:'晴れ',emoji:'☀️',color:'#ffd700',chance:0.60},
+  {id:'rainy',name:'雨',emoji:'🌧️',color:'#64b5f6',chance:0.30},
+  {id:'storm',name:'嵐',emoji:'⛈️',color:'#9575cd',chance:0.10}
+];
+
+function getWeather(){
+  return WEATHER_TYPES.find(w=>w.id===weather)||WEATHER_TYPES[0];
+}
+
+function updateWeather(){
+  // Roll for new weather each day
+  const roll=Math.random();
+  if(roll<0.60){
+    weather='sunny';
+  } else if(roll<0.90){
+    weather='rainy';
+  } else {
+    weather='storm';
+  }
+  
+  const w=getWeather();
+  logMsg(`<span class="q">${w.emoji} 今日の天気: ${w.name}</span>`);
+  
+  // Weather effects on farm
+  if(weather==='rainy'){
+    // Rainy day: auto-water all growing crops
+    let autoWatered=0;
+    farmPlots.forEach(p=>{
+      if((p.state==='planted'||p.state==='growing')&&!p.wateredToday){
+        p.wateredToday=true;
+        p.waterCount=(p.waterCount||0)+1;
+        if(p.state==='planted') p.state='growing';
+        autoWatered++;
+      }
+    });
+    if(autoWatered>0){
+      logMsg(`<span class="a">🌧️ 雨のおかげで畑に自動水やり！（${autoWatered}区画）</span>`);
+    }
+  } else if(weather==='storm'){
+    // Storm: damage to crops - 30% chance per plot to lose 1 water count or revert growing->planted
+    let damaged=0;
+    farmPlots.forEach(p=>{
+      if((p.state==='planted'||p.state==='growing')&&Math.random()<0.30){
+        if(p.waterCount>0){
+          p.waterCount=Math.max(0,p.waterCount-1);
+          damaged++;
+        } else if(p.state==='growing'){
+          p.state='planted';
+          damaged++;
+        }
+      }
+    });
+    if(damaged>0){
+      logMsg(`<span class="w">⛈️ 嵐で作物がダメージを受けた！（${damaged}区画）</span>`);
+    }
+  }
+}
+
 function getCurrentSeason(){
   if(day<=0) return SEASONS[0]; // Default to spring
   const dayInCycle=(day-1)%28; // 0-27
@@ -466,6 +526,7 @@ let animals=[]; // {type,fedToday,lastProduct,happiness,daysSinceProduct}
 let currentFarmTab='field';
 let actionMenuTarget=null;
 let craftingJobs=[]; // {facility:'smithy'|'brewery', recipe, startDay, daysLeft}
+let weather='sunny'; // current weather: 'sunny', 'rainy', 'storm'
 
 // === Audio System ===
 let audioCtx=null;
@@ -691,7 +752,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats,craftingJobs};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats,craftingJobs,weather};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -714,6 +775,7 @@ function loadGame(){
     achievements=s.achievements||{};
     achievementStats=s.achievementStats||{totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
     craftingJobs=s.craftingJobs||[];
+    weather=s.weather||'sunny';
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -769,6 +831,7 @@ function newGame(){
   tutorialStep=0;tutorialActive=false;tutorialCompleted=false;
   achievements={};achievementStats={totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
   craftingJobs=[];
+  weather='sunny';
   FACILITIES.forEach(f=>facilities[f.id]=0);
   farmPlots=[];paddyPlots=[];animals=[];currentFarmTab='field';
   for(let i=0;i<TOTAL_FARM_PLOTS;i++){
@@ -797,6 +860,9 @@ function nextDay(){
       logMsg(`<span class="w">❄️ 冬季に入りました。ほとんどの作物は枯れます。</span>`);
     }
   }
+  
+  // Update weather
+  updateWeather();
   
   processQuests();
   processFacilities();
@@ -1122,8 +1188,20 @@ function renderFarmField(){
   const area=el('farmFieldArea');
   const season=getCurrentSeason();
   const isWinter=season.id==='winter';
+  const w=getWeather();
   
   let h='';
+  
+  // Weather info
+  if(weather==='rainy'){
+    h+=`<div style="background:#1a3a5a;border:1px solid #64b5f6;border-radius:6px;padding:8px;margin-bottom:8px;font-size:10px;color:#64b5f6">
+      🌧️ 雨の日: 水やり不要（自動で水やりされます）
+    </div>`;
+  } else if(weather==='storm'){
+    h+=`<div style="background:#3a1a5a;border:1px solid #9575cd;border-radius:6px;padding:8px;margin-bottom:8px;font-size:10px;color:#ce93d8">
+      ⛈️ 嵐: 作物がダメージを受ける可能性があります
+    </div>`;
+  }
   
   // Season warning for winter
   if(isWinter){
@@ -1251,6 +1329,13 @@ function farmPlant(i,seedId){
 function farmWater(i){
   const p=farmPlots[i];
   if(stamina<5||p.wateredToday||(p.state!=='planted'&&p.state!=='growing')) return;
+  
+  // Skip if rainy day (auto-watered)
+  if(weather==='rainy'){
+    logMsg(`<span class="w">🌧️ 雨が降っているので水やり不要です</span>`);
+    return;
+  }
+  
   stamina-=5;
   p.wateredToday=true;
   p.waterCount=(p.waterCount||0)+1;
@@ -1620,6 +1705,10 @@ function updateAll(){
     const season=getCurrentSeason();
     const dayInSeason=getDayInSeason();
     el('seasonDisplay').innerHTML=`<span style="color:${season.color}">${season.emoji}${season.name} ${dayInSeason}日目</span>`;
+    
+    // Update weather display
+    const w=getWeather();
+    el('weatherDisplay').innerHTML=`<span style="color:${w.color}">${w.emoji}${w.name}</span>`;
   }
   
   renderQuestBoard();renderFarm();renderFacilities();renderStorage();renderTown();
