@@ -621,7 +621,7 @@ let dailyIncome=0,dailyExpense=0;
 let questIdCounter=0;
 let selType=null,selTarget=null;
 let cookTimer=null,cookPos=0,cookDir=1,cookRecipe=null,cookPhase='';
-let cookedToday=false;
+
 let farmPlots=[]; // {state:'locked'|'wild'|'tilled'|'planted'|'growing'|'ready', seedId, plantedDay, growDays, waterCount, wateredToday}
 let paddyPlots=[]; // {state,plantedDay,watered}
 let animals=[]; // {type,fedToday,lastProduct,happiness,daysSinceProduct}
@@ -856,7 +856,7 @@ function playSFX(type){
 // === Save/Load ===
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
-    facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
+    facilities,adventurersInTown,totalAdventurers,questIdCounter,
     farmPlots,paddyPlots,animals,currentFarmTab,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel,inventory,lastGuildRankLevel,timeOfDay,dailyStats};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
@@ -871,7 +871,7 @@ function loadGame(){
     materials=s.materials;
     facilities=s.facilities; adventurersInTown=s.adventurersInTown;
     totalAdventurers=s.totalAdventurers; questIdCounter=s.questIdCounter;
-    cookedToday=s.cookedToday||false;
+    
     farmPlots=s.farmPlots||[];
     paddyPlots=s.paddyPlots||[];
     animals=s.animals||[];
@@ -938,7 +938,7 @@ function newGame(){
   quests=[];facilities={};
   adventurersInTown=2;totalAdventurers=5;
   dailyIncome=0;dailyExpense=0;questIdCounter=0;
-  selType=null;selTarget=null;cookedToday=false;
+  selType=null;selTarget=null;
   achievements={};achievementStats={totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
   craftingJobs=[];
   weather='sunny';
@@ -990,7 +990,7 @@ function nextDay(){
     if(dailyStats.length>10) dailyStats.shift();
   }
   
-  day++;dailyIncome=0;dailyExpense=0;cookedToday=false;stamina=100;
+  day++;dailyIncome=0;dailyExpense=0;stamina=100;
   el('dayNum').textContent=day;
   
   // Update time of day
@@ -1853,89 +1853,34 @@ function buildFacility(id){
   updateAll();saveGame();
 }
 
-// === Cooking Minigame ===
+// === Cooking (instant, no minigame) ===
 function canCook(){
-  if(facilities.tavern<=0||cookedToday) return[];
+  if(facilities.tavern<=0) return[];
   return COOK_RECIPES.filter(r=>Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q));
 }
 
 function startCook(idx){
   const available=canCook();
   if(idx>=available.length) return;
-  cookRecipe=available[idx];
-  cookPos=0;cookDir=1;cookPhase='moving';
+  const recipe=available[idx];
 
-  for(const[m,q] of Object.entries(cookRecipe.mats)) materials[m]-=q;
+  // Consume ingredients
+  for(const[m,q] of Object.entries(recipe.mats)) materials[m]-=q;
 
-  el('cookTitle').textContent=`🍳 ${cookRecipe.emoji} ${cookRecipe.name}を調理中...`;
-  el('cookIngredients').innerHTML=Object.entries(cookRecipe.mats).map(([m,q])=>`<div class="cook-ing">${MAT_NAMES[m]||m}×${q}</div>`).join('');
-  el('cookResult').textContent='';
-  el('cookBtn').textContent='🍳 ストップ！';
-  el('cookBtn').disabled=false;
-  el('cookOverlay').classList.remove('hidden');
-
-  const zone=cookRecipe.diff==='easy'?{start:30,end:70}:cookRecipe.diff==='medium'?{start:35,end:60}:{start:40,end:55};
-  const zoneEl=el('cookZone');
-  zoneEl.style.left=zone.start+'%';
-  zoneEl.style.width=(zone.end-zone.start)+'%';
-  cookRecipe._zone=zone;
-
-  const speed=cookRecipe.diff==='easy'?1.5:cookRecipe.diff==='medium'?2.5:3.5;
-  if(cookTimer) clearInterval(cookTimer);
-  cookTimer=setInterval(()=>{
-    if(cookPhase!=='moving') return;
-    cookPos+=cookDir*speed;
-    if(cookPos>=100){cookPos=100;cookDir=-1;}
-    if(cookPos<=0){cookPos=0;cookDir=1;}
-    el('cookNeedle').style.left=cookPos+'%';
-  },30);
-}
-
-function cookAction(){
-  if(cookPhase==='moving'){
-    cookPhase='stopped';
-    clearInterval(cookTimer);
-    const zone=cookRecipe._zone;
-    const inZone=cookPos>=zone.start&&cookPos<=zone.end;
-    const center=Math.abs(cookPos-((zone.start+zone.end)/2));
-    const maxDist=(zone.end-zone.start)/2;
-
-    let quality,multiplier,label;
-    if(!inZone){
-      quality='失敗';multiplier=0.3;label='😓 焦がしてしまった...';
-    } else if(center<maxDist*0.3){
-      quality='極上';multiplier=2.0;label='✨ 極上の仕上がり！';
-      playSFX('coin');
-    } else if(center<maxDist*0.7){
-      quality='上出来';multiplier=1.5;label='😊 上出来！';
-      playSFX('coin');
-    } else {
-      quality='普通';multiplier=1.0;label='👍 まあまあの出来';
-    }
-    playSFX('cook');
-
-    const sellPrice=Math.floor(cookRecipe.income*multiplier);
-    
-    // Add to inventory instead of immediate income
-    if(!inventory[cookRecipe.name]){
-      inventory[cookRecipe.name]={qty:0,sellPrice:sellPrice};
-    }
-    inventory[cookRecipe.name].qty++;
-    inventory[cookRecipe.name].sellPrice=sellPrice; // Update price with latest quality
-    
-    achievementStats.totalCooks++;
-    cookedToday=true;
-
-    el('cookResult').innerHTML=`${label}<br><span style="color:#4caf50;font-size:14px">📦 在庫+1 (売値${sellPrice}G)</span>`;
-    el('cookBtn').textContent='閉じる';
-    logMsg(`<span class="c">🍳 ${cookRecipe.name}(${quality}) → 在庫+1 (売値${sellPrice}G)</span>`);
-    reputation+=multiplier>=1.5?3:1;
-    checkAchievements();
-  } else {
-    el('cookOverlay').classList.add('hidden');
-    cookPhase='';
-    updateAll();saveGame();
+  // Add to inventory
+  const sellPrice=recipe.income;
+  if(!inventory[recipe.name]){
+    inventory[recipe.name]={qty:0,sellPrice:sellPrice};
   }
+  inventory[recipe.name].qty++;
+  inventory[recipe.name].sellPrice=sellPrice;
+
+  achievementStats.totalCooks++;
+  playSFX('cook');
+  logMsg(`<span class="c">🍳 ${recipe.name}を調理 → 在庫+1 (売値${sellPrice}G)</span>`);
+  reputation+=1;
+  checkAchievements();
+  updateAll();saveGame();
 }
 
 // === Render ===
@@ -2115,9 +2060,9 @@ function renderTavern(){
   
   // Cooking section
   const avail=canCook();
-  if(avail.length>0&&!cookedToday){
+  if(avail.length>0){
     html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
-    html+='<div style="font-size:12px;color:#ff8a65;font-weight:bold;margin-bottom:8px">🍳 今日の調理メニュー:</div>';
+    html+='<div style="font-size:12px;color:#ff8a65;font-weight:bold;margin-bottom:8px">🍳 調理メニュー:</div>';
     avail.forEach((r,i)=>{
       const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
       html+=`<div style="margin:6px 0;padding:8px;background:#2a2318;border-radius:6px">
@@ -2128,15 +2073,9 @@ function renderTavern(){
           </div>
           <button class="btn btn-orange btn-sm" onclick="startCook(${i})">調理</button>
         </div>
-        <div style="font-size:9px;color:#4caf50;margin-top:4px">💰 基本収入: ~${r.income}G (品質で変動)</div>
+        <div style="font-size:9px;color:#4caf50;margin-top:4px">💰 売値: ${r.income}G</div>
       </div>`;
     });
-    html+='</div>';
-  } else if(cookedToday){
-    html+='<div style="margin-top:12px;text-align:center;padding:20px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
-    html+='<div style="font-size:36px;margin-bottom:8px">✅</div>';
-    html+='<div style="font-size:12px;color:#4caf50">今日は調理済みです</div>';
-    html+='<div style="font-size:10px;color:#8a7a60;margin-top:4px">明日また調理できます</div>';
     html+='</div>';
   } else if(avail.length===0){
     html+='<div style="margin-top:12px;text-align:center;padding:20px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
