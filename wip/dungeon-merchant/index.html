@@ -583,6 +583,9 @@ let actionMenuTarget=null;
 let craftingJobs=[]; // {facility:'smithy'|'brewery', recipe, startDay, daysLeft}
 let weather='sunny'; // current weather: 'sunny', 'rainy', 'storm'
 let marketPriceMultipliers={}; // {questType: multiplier} - daily price fluctuation
+let storageLevel=1; // Warehouse level (1-5)
+const STORAGE_CAPACITIES=[0,100,200,400,800,1600]; // Capacity per level (index 0 unused)
+const STORAGE_UPGRADE_COSTS=[0,100,250,500,1000]; // Cost to upgrade to next level (index 0 unused)
 
 // === Audio System ===
 let audioCtx=null;
@@ -808,7 +811,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -833,6 +836,7 @@ function loadGame(){
     craftingJobs=s.craftingJobs||[];
     weather=s.weather||'sunny';
     marketPriceMultipliers=s.marketPriceMultipliers||{};
+    storageLevel=s.storageLevel||1;
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -890,6 +894,7 @@ function newGame(){
   craftingJobs=[];
   weather='sunny';
   marketPriceMultipliers={};
+  storageLevel=1;
   // Initialize market prices to 1.0 (neutral)
   QUEST_TYPES.forEach(qt=>marketPriceMultipliers[qt.id]=1.0);
   FACILITIES.forEach(f=>facilities[f.id]=0);
@@ -1912,12 +1917,37 @@ function renderFacilities(){
 }
 
 function renderStorage(){
+  const total=getTotalMaterials();
+  const capacity=getStorageCapacity();
+  const pct=(total/capacity)*100;
+  const almostFull=pct>=80;
+  
+  // Capacity display
+  const storageHeader=`<div style="background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:8px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-size:11px;color:#c0a870;font-weight:bold">📦 倉庫容量</span>
+      <span style="font-size:12px;color:${almostFull?'#ff9800':'#4caf50'};font-weight:bold">${total}/${capacity}</span>
+    </div>
+    <div style="background:#333;border-radius:4px;height:12px;overflow:hidden">
+      <div style="height:100%;background:${almostFull?'linear-gradient(90deg,#ff9800,#ff5722)':'linear-gradient(90deg,#4caf50,#8bc34a)'};border-radius:4px;width:${pct}%;transition:width 0.3s"></div>
+    </div>
+    ${almostFull?`<div style="font-size:9px;color:#ff9800;margin-top:4px">⚠️ 倉庫がほぼ満杯です！</div>`:''}
+    ${storageLevel<STORAGE_CAPACITIES.length-1?`<div style="margin-top:6px">
+      <button class="btn btn-green btn-sm" onclick="upgradeStorage()" ${canUpgradeStorage()?'':'disabled'}>
+        📦 倉庫拡張 Lv.${storageLevel+1} (${STORAGE_UPGRADE_COSTS[storageLevel]}G → 容量${STORAGE_CAPACITIES[storageLevel+1]})
+      </button>
+    </div>`:`<div style="font-size:9px;color:#8a7a60;margin-top:4px">倉庫は最大レベルです</div>`}
+  </div>`;
+  
   const g=el('matGrid');g.innerHTML='';let has=false;
   Object.entries(materials).sort().forEach(([id,qty])=>{
     if(qty<=0) return;has=true;
     g.innerHTML+=`<div class="mat-item">${MAT_NAMES[id]||id} <span class="mat-qty">×${qty}</span></div>`;
   });
   if(!has) g.innerHTML='<span style="font-size:10px;color:#555">素材なし</span>';
+  
+  // Insert capacity display before materials
+  el('tab-storage').querySelector('.panel').insertAdjacentHTML('afterbegin',storageHeader);
 }
 
 function renderTown(){
@@ -2222,7 +2252,38 @@ function generateAdventurer(){
 }
 
 function randomName(){return ADVENTURER_NAMES[rng(0,ADVENTURER_NAMES.length-1)]}
-function addMat(id,qty){materials[id]=(materials[id]||0)+qty}
+function addMat(id,qty){
+  const current=getTotalMaterials();
+  const capacity=getStorageCapacity();
+  const newTotal=current+qty;
+  
+  if(newTotal>capacity){
+    const canAdd=Math.max(0,capacity-current);
+    if(canAdd>0){
+      materials[id]=(materials[id]||0)+canAdd;
+      logMsg(`<span class="w">⚠️ 倉庫が満杯！${MAT_NAMES[id]}×${qty-canAdd}を入れられませんでした</span>`);
+    } else {
+      logMsg(`<span class="w">⚠️ 倉庫が満杯！${MAT_NAMES[id]}×${qty}を入れられませんでした</span>`);
+    }
+  } else {
+    materials[id]=(materials[id]||0)+qty;
+  }
+}
+function getStorageCapacity(){return STORAGE_CAPACITIES[storageLevel]||100}
+function getTotalMaterials(){return Object.values(materials).reduce((sum,qty)=>sum+qty,0)}
+function canUpgradeStorage(){
+  return storageLevel<STORAGE_CAPACITIES.length-1&&gold>=STORAGE_UPGRADE_COSTS[storageLevel];
+}
+function upgradeStorage(){
+  if(!canUpgradeStorage()) return;
+  const cost=STORAGE_UPGRADE_COSTS[storageLevel];
+  gold-=cost;
+  storageLevel++;
+  playSFX('build');
+  logMsg(`<span class="f">📦 倉庫を拡張！容量${getStorageCapacity()}に増加</span>`);
+  updateAll();
+  saveGame();
+}
 function rng(a,b){return Math.floor(Math.random()*(b-a+1))+a}
 function el(id){return document.getElementById(id)}
 function hide(id){el(id).classList.add('hidden')}
