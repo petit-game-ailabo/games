@@ -1054,64 +1054,43 @@ function processQuests(){
     } else if(q.status==='active'){
       q.activeDaysLeft--;
       if(q.activeDaysLeft<=0){
-        // Calculate success rate based on adventurer rank and quest difficulty
+        // Quest always succeeds - quantity varies by rank and specialty
         const target=q.targetData;
         const adv=q.adventurer;
         
-        // Base success rate from rank (F=60%, E=70%, D=75%, C=80%, B=85%, A=90%, S=95%)
-        let successRate=0.60+(adv.rank.mult-1.0)*0.5;
-        
-        // Specialty bonus: +15% if specialty matches
-        if(q.specialtyBonus) successRate+=0.15;
-        
-        // Potion bonus: +10% success rate
-        if(q.potionBonus) successRate+=0.10;
-        
-        // Quest difficulty modifier (based on cost multiplier)
-        if(target){
-          const difficulty=target.costMult;
-          if(difficulty>=3.0) successRate-=0.15; // Very hard quests
-          else if(difficulty>=2.0) successRate-=0.10; // Hard quests
-          else if(difficulty>=1.5) successRate-=0.05; // Medium quests
-        }
-        
-        // Clamp to 10%-99% range
-        successRate=Math.max(0.10,Math.min(0.99,successRate));
-        
-        const success=Math.random()<successRate;
         q.status='done';
-        q.success=success;
+        q.success=true;
         
-        if(success){
-          // Success: full rewards
-          if(target){
-            const baseQty=rng(target.qty[0],target.qty[1]);
-            const rankBonus=Math.floor(baseQty*(adv.rank.mult-1.0));
-            const qty=baseQty+rankBonus;
-            
-            addMat(target.mat,qty);
-            playSFX('quest');
-            achievementStats.totalQuestSuccess++;
-            
-            const bonusText=rankBonus>0?` (+${rankBonus}ランクボーナス)`:'';
-            logMsg(`<span class="a">✅ ${adv.rank.emoji}${adv.name}が帰還！${MAT_NAMES[target.mat]||target.mat}×${qty}を納品${bonusText}</span>`);
-          }
-        } else {
-          // Failure: partial reward returned (30-50% based on rank)
-          const returnRate=0.30+(adv.rank.mult-1.0)*0.15;
-          const returnAmount=Math.floor(q.reward*returnRate);
-          gold+=returnAmount;
-          dailyIncome+=returnAmount;
+        if(target){
+          const baseQty=rng(target.qty[0],target.qty[1]);
           
-          // Partial materials on failure (20-40% of minimum)
-          if(target){
-            const partialQty=Math.max(1,Math.floor(target.qty[0]*0.3));
-            addMat(target.mat,partialQty);
-            logMsg(`<span class="w">❌ ${adv.rank.emoji}${adv.name}がクエスト失敗... ${MAT_NAMES[target.mat]||target.mat}×${partialQty}のみ入手、${returnAmount}G返金</span>`);
-          } else {
-            logMsg(`<span class="w">❌ ${adv.rank.emoji}${adv.name}がクエスト失敗... ${returnAmount}G返金</span>`);
+          // Rank multiplier: determines quantity bonus (1.0x to 2.2x)
+          let qtyMultiplier=adv.rank.mult;
+          
+          // Specialty bonus: +20% if specialty matches quest type
+          if(q.specialtyBonus){
+            qtyMultiplier*=1.20;
           }
-          playSFX('click');
+          
+          // Potion bonus: +10% quantity
+          if(q.potionBonus){
+            qtyMultiplier*=1.10;
+          }
+          
+          // Final quantity = base × multiplier (rounded)
+          const qty=Math.max(1,Math.floor(baseQty*qtyMultiplier));
+          
+          addMat(target.mat,qty);
+          playSFX('quest');
+          achievementStats.totalQuestSuccess++;
+          
+          const bonusInfo=[];
+          if(qtyMultiplier>1.0){
+            bonusInfo.push(`×${qtyMultiplier.toFixed(2)}倍`);
+          }
+          const bonusText=bonusInfo.length>0?` (${bonusInfo.join(' ')})`:'';
+          
+          logMsg(`<span class="a">✅ ${adv.rank.emoji}${adv.name}が帰還！${MAT_NAMES[target.mat]||target.mat}×${qty}を納品${bonusText}</span>`);
         }
         
         adventurersInTown++;
@@ -1911,22 +1890,14 @@ function renderQuestBoard(){
         ${q.specialtyBonus?' <span style="color:#4caf50">⚡得意</span>':''}
       </div>`;
     } else {
-      // Done - show success or failure
-      if(q.success){
-        txt='✅ 成功';
-      } else {
-        txt='❌ 失敗';
-      }
+      // Done - always successful
+      txt='✅ 完了';
       
       if(q.adventurer){
         const adv=q.adventurer;
         advInfo=`<div class="quest-detail" style="margin-top:4px">
           ${adv.rank.emoji}${adv.name} (${adv.rank.name})
         </div>`;
-      }
-      
-      if(q.success===false){
-        resultInfo=`<div class="quest-detail" style="color:#ff9800;margin-top:2px">一部報酬返金済</div>`;
       }
     }
     
