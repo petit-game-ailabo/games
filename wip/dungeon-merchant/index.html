@@ -610,6 +610,7 @@ let marketPriceMultipliers={}; // {questType: multiplier} - daily price fluctuat
 let storageLevel=1; // Warehouse level (1-5)
 const STORAGE_CAPACITIES=[0,100,200,400,800,1600]; // Capacity per level (index 0 unused)
 const STORAGE_UPGRADE_COSTS=[0,100,250,500,1000]; // Cost to upgrade to next level (index 0 unused)
+let inventory={}; // {dishName: {qty, sellPrice}} - cooked dishes and crafted items for auto-sale
 
 // === Audio System ===
 let audioCtx=null;
@@ -836,7 +837,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,tutorialGuideVisible,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,tutorialGuideVisible,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel,inventory};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -863,6 +864,7 @@ function loadGame(){
     weather=s.weather||'sunny';
     marketPriceMultipliers=s.marketPriceMultipliers||{};
     storageLevel=s.storageLevel||1;
+    inventory=s.inventory||{};
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -921,6 +923,7 @@ function newGame(){
   weather='sunny';
   marketPriceMultipliers={};
   storageLevel=1;
+  inventory={};
   // Initialize market prices to 1.0 (neutral)
   QUEST_TYPES.forEach(qt=>marketPriceMultipliers[qt.id]=1.0);
   FACILITIES.forEach(f=>facilities[f.id]=0);
@@ -1000,6 +1003,47 @@ function processQuests(){
           q.specialtyBonus=false;
         }
         
+        // Auto-sell meal and equipment when departing
+        let mealSold=false,weaponSold=false,potionSold=false;
+        
+        // Try to sell a meal
+        const availableMeals=Object.entries(inventory).filter(([name,data])=>data.qty>0&&COOK_RECIPES.some(r=>r.name===name));
+        if(availableMeals.length>0){
+          const [mealName,mealData]=availableMeals[rng(0,availableMeals.length-1)];
+          inventory[mealName].qty--;
+          gold+=mealData.sellPrice;
+          dailyIncome+=mealData.sellPrice;
+          achievementStats.totalEarned+=mealData.sellPrice;
+          mealSold=true;
+          logMsg(`<span class="c">🍽️ ${adv.name}が${mealName}を購入 +${mealData.sellPrice}G</span>`);
+        }
+        
+        // Try to sell a weapon (reduces quest days by 1)
+        const availableWeapons=Object.entries(inventory).filter(([name,data])=>data.qty>0&&SMITHY_RECIPES.some(r=>r.name===name));
+        if(availableWeapons.length>0){
+          const [weaponName,weaponData]=availableWeapons[rng(0,availableWeapons.length-1)];
+          inventory[weaponName].qty--;
+          gold+=weaponData.sellPrice;
+          dailyIncome+=weaponData.sellPrice;
+          achievementStats.totalEarned+=weaponData.sellPrice;
+          weaponSold=true;
+          baseDays=Math.max(1,baseDays-1);
+          logMsg(`<span class="c">⚔️ ${adv.name}が${weaponName}を購入 +${weaponData.sellPrice}G (クエスト1日短縮)</span>`);
+        }
+        
+        // Try to sell a potion (increases success rate)
+        const availablePotions=Object.entries(inventory).filter(([name,data])=>data.qty>0&&BREWERY_RECIPES.some(r=>r.name===name));
+        if(availablePotions.length>0){
+          const [potionName,potionData]=availablePotions[rng(0,availablePotions.length-1)];
+          inventory[potionName].qty--;
+          gold+=potionData.sellPrice;
+          dailyIncome+=potionData.sellPrice;
+          achievementStats.totalEarned+=potionData.sellPrice;
+          potionSold=true;
+          q.potionBonus=true; // Mark quest for success rate boost
+          logMsg(`<span class="c">🧪 ${adv.name}が${potionName}を購入 +${potionData.sellPrice}G (成功率UP)</span>`);
+        }
+        
         q.activeDaysLeft=Math.max(1,baseDays);
         adventurersInTown=Math.max(0,adventurersInTown-1);
         dailyExpense+=q.reward;
@@ -1019,6 +1063,9 @@ function processQuests(){
         
         // Specialty bonus: +15% if specialty matches
         if(q.specialtyBonus) successRate+=0.15;
+        
+        // Potion bonus: +10% success rate
+        if(q.potionBonus) successRate+=0.10;
         
         // Quest difficulty modifier (based on cost multiplier)
         if(target){
@@ -1082,6 +1129,27 @@ function processFacilities(){
     const guests=Math.min(adventurersInTown,d.capacity);
     const inc=guests*d.income;
     if(inc>0){gold+=inc;dailyIncome+=inc;achievementStats.totalEarned+=inc;playSFX('coin');logMsg(`<span class="f">🏨 宿泊収入: ${inc}G (${guests}人)</span>`);}
+    
+    // Auto-sell meals to staying guests
+    if(guests>0){
+      const availableMeals=Object.entries(inventory).filter(([name,data])=>data.qty>0&&COOK_RECIPES.some(r=>r.name===name));
+      if(availableMeals.length>0){
+        let mealsSold=0;
+        for(let i=0;i<Math.min(guests,availableMeals.reduce((sum,[_,data])=>sum+data.qty,0));i++){
+          const [mealName,mealData]=availableMeals[rng(0,availableMeals.length-1)];
+          if(inventory[mealName]&&inventory[mealName].qty>0){
+            inventory[mealName].qty--;
+            gold+=mealData.sellPrice;
+            dailyIncome+=mealData.sellPrice;
+            achievementStats.totalEarned+=mealData.sellPrice;
+            mealsSold++;
+          }
+        }
+        if(mealsSold>0){
+          logMsg(`<span class="c">🍽️ 宿泊客に料理を販売 +${mealsSold}食</span>`);
+        }
+      }
+    }
   }
   const tavLv=facilities.tavern;
   if(tavLv>0){
@@ -1254,15 +1322,15 @@ function processCrafting(){
   craftingJobs.forEach(job=>{
     job.daysLeft--;
     if(job.daysLeft<=0){
-      // Crafting complete
-      addMat(job.recipe.product,job.recipe.productQty);
-      const sellIncome=job.recipe.sellPrice*job.recipe.productQty;
-      gold+=sellIncome;
-      dailyIncome+=sellIncome;
-      achievementStats.totalEarned+=sellIncome;
+      // Crafting complete - add to inventory instead of immediate sale
+      if(!inventory[job.recipe.name]){
+        inventory[job.recipe.name]={qty:0,sellPrice:job.recipe.sellPrice};
+      }
+      inventory[job.recipe.name].qty+=job.recipe.productQty;
+      
       playSFX('coin');
       const facName=job.facility==='smithy'?'⚒️鍛冶屋':'⚗️醸造所';
-      logMsg(`<span class="f">${facName} ${job.recipe.emoji}${job.recipe.name}完成！${MAT_NAMES[job.recipe.product]}×${job.recipe.productQty}、販売+${sellIncome}G</span>`);
+      logMsg(`<span class="f">${facName} ${job.recipe.emoji}${job.recipe.name}完成！在庫+${job.recipe.productQty} (売値${job.recipe.sellPrice}G)</span>`);
       reputation+=job.recipe.time;
     }
   });
@@ -1776,16 +1844,21 @@ function cookAction(){
     }
     playSFX('cook');
 
-    const income=Math.floor(cookRecipe.income*multiplier);
-    gold+=income;
-    dailyIncome+=income;
-    achievementStats.totalEarned+=income;
+    const sellPrice=Math.floor(cookRecipe.income*multiplier);
+    
+    // Add to inventory instead of immediate income
+    if(!inventory[cookRecipe.name]){
+      inventory[cookRecipe.name]={qty:0,sellPrice:sellPrice};
+    }
+    inventory[cookRecipe.name].qty++;
+    inventory[cookRecipe.name].sellPrice=sellPrice; // Update price with latest quality
+    
     achievementStats.totalCooks++;
     cookedToday=true;
 
-    el('cookResult').innerHTML=`${label}<br><span style="color:#ffd700;font-size:16px">+${income}G</span>`;
+    el('cookResult').innerHTML=`${label}<br><span style="color:#4caf50;font-size:14px">📦 在庫+1 (売値${sellPrice}G)</span>`;
     el('cookBtn').textContent='閉じる';
-    logMsg(`<span class="c">🍳 ${cookRecipe.name}(${quality}) → +${income}G</span>`);
+    logMsg(`<span class="c">🍳 ${cookRecipe.name}(${quality}) → 在庫+1 (売値${sellPrice}G)</span>`);
     reputation+=multiplier>=1.5?3:1;
     checkAchievements();
   } else {
@@ -1934,6 +2007,26 @@ function renderTavern(){
       <div class="facility-income">💰 1人あたり${d.income}G/日</div>
     </div>`;
   
+  // Show food inventory
+  const foodInv=Object.entries(inventory).filter(([name,_])=>COOK_RECIPES.some(r=>r.name===name));
+  if(foodInv.length>0){
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#4caf50;font-weight:bold;margin-bottom:8px">📦 料理在庫 (自動販売)</div>';
+    foodInv.forEach(([name,data])=>{
+      if(data.qty>0){
+        html+=`<div style="margin:4px 0;padding:6px;background:#2a2318;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:11px">${COOK_RECIPES.find(r=>r.name===name)?.emoji||'🍽️'} ${name}</div>
+          <div>
+            <span style="font-size:11px;color:#ffd700">×${data.qty}</span>
+            <span style="font-size:9px;color:#8a7a60;margin-left:6px">${data.sellPrice}G/個</span>
+          </div>
+        </div>`;
+      }
+    });
+    html+='<div style="font-size:9px;color:#8a7a60;margin-top:6px">💡 冒険者が出発時と宿泊中に自動購入します</div>';
+    html+='</div>';
+  }
+  
   // Upgrade option
   const f=FACILITIES.find(x=>x.id==='tavern');
   if(lv<f.levels.length){
@@ -2027,6 +2120,48 @@ function renderSmithy(){
       <div class="facility-stat">素材: ${matsStr}</div>
       <button class="btn btn-green btn-sm" onclick="buildFacility('smithy')" ${can?'':'disabled'}>升級する</button>
     </div>`;
+  }
+  
+  // Show weapon/potion inventory
+  const weaponInv=Object.entries(inventory).filter(([name,_])=>SMITHY_RECIPES.some(r=>r.name===name));
+  const potionInv=Object.entries(inventory).filter(([name,_])=>BREWERY_RECIPES.some(r=>r.name===name));
+  
+  if(weaponInv.length>0||potionInv.length>0){
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#4caf50;font-weight:bold;margin-bottom:8px">📦 製品在庫 (自動販売)</div>';
+    
+    if(weaponInv.length>0){
+      html+='<div style="font-size:11px;color:#c0a870;margin:4px 0">⚔️ 武器:</div>';
+      weaponInv.forEach(([name,data])=>{
+        if(data.qty>0){
+          html+=`<div style="margin:2px 0;padding:4px;background:#2a2318;border-radius:4px;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:10px">${SMITHY_RECIPES.find(r=>r.name===name)?.emoji||'⚔️'} ${name}</div>
+            <div>
+              <span style="font-size:11px;color:#ffd700">×${data.qty}</span>
+              <span style="font-size:9px;color:#8a7a60;margin-left:6px">${data.sellPrice}G/個</span>
+            </div>
+          </div>`;
+        }
+      });
+    }
+    
+    if(potionInv.length>0){
+      html+='<div style="font-size:11px;color:#c0a870;margin:8px 0 4px 0">🧪 ポーション:</div>';
+      potionInv.forEach(([name,data])=>{
+        if(data.qty>0){
+          html+=`<div style="margin:2px 0;padding:4px;background:#2a2318;border-radius:4px;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:10px">${BREWERY_RECIPES.find(r=>r.name===name)?.emoji||'🧪'} ${name}</div>
+            <div>
+              <span style="font-size:11px;color:#ffd700">×${data.qty}</span>
+              <span style="font-size:9px;color:#8a7a60;margin-left:6px">${data.sellPrice}G/個</span>
+            </div>
+          </div>`;
+        }
+      });
+    }
+    
+    html+='<div style="font-size:9px;color:#8a7a60;margin-top:6px">💡 冒険者が出発時に自動購入<br>⚔️ 武器→クエスト日数-1 | 🧪 ポーション→成功率+10%</div>';
+    html+='</div>';
   }
   
   // Show active crafting jobs
