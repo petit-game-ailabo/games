@@ -1,0 +1,2716 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ダンジョン商人</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1510;color:#e8dcc8;font-family:'Helvetica Neue',Arial,sans-serif;display:flex;justify-content:center;min-height:100vh}
+#game{width:460px;max-width:100vw;padding:8px;user-select:none}
+
+.top-bar{display:flex;justify-content:space-between;align-items:center;background:#2a2318;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:11px}
+.gold{font-size:15px;color:#ffd700;font-weight:bold}
+
+.tabs{display:flex;gap:2px;margin-bottom:6px}
+.tab{flex:1;padding:8px 2px;text-align:center;background:#2a2318;border:1px solid #3a3020;border-radius:6px 6px 0 0;cursor:pointer;font-size:10px;color:#8a7a60;transition:all 0.15s}
+.tab.active{background:#3a3020;color:#f0d890;font-weight:bold}
+.tc{display:none}.tc.active{display:block}
+
+.panel{background:#2a2318;border:1px solid #3a3020;border-radius:8px;padding:10px;margin-bottom:6px}
+.panel-title{font-size:12px;color:#c0a870;font-weight:bold;margin-bottom:8px;border-bottom:1px solid #3a3020;padding-bottom:4px}
+
+.btn{padding:8px 14px;border-radius:6px;border:none;font-size:11px;font-weight:bold;cursor:pointer;transition:all 0.15s}
+.btn:hover:not(:disabled){filter:brightness(1.2)}.btn:active:not(:disabled){transform:scale(0.95)}
+.btn:disabled{opacity:0.3;cursor:default}
+.btn-primary{background:#8b6914;color:#fff}
+.btn-green{background:#2e7d32;color:#fff}
+.btn-red{background:#c62828;color:#fff}
+.btn-orange{background:#e65100;color:#fff}
+.btn-sm{padding:5px 10px;font-size:10px}
+.btn-full{width:100%;padding:10px;font-size:13px}
+
+.quest-step{margin-bottom:8px}
+.quest-step-label{font-size:11px;color:#c0a870;margin-bottom:4px;font-weight:bold}
+.option-grid{display:flex;flex-wrap:wrap;gap:4px}
+.option-btn{padding:6px 10px;border-radius:6px;border:2px solid #3a3020;background:#1a1510;color:#e8dcc8;font-size:10px;cursor:pointer;transition:all 0.15s}
+.option-btn:hover{border-color:#8a7a60}
+.option-btn.selected{border-color:#ffd700;background:#3a3020;color:#ffd700}
+
+.price-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.price-input{background:#1a1510;border:1px solid #3a3020;border-radius:4px;color:#ffd700;font-size:14px;width:70px;padding:4px 8px;text-align:center;font-weight:bold}
+.price-indicator{font-size:11px;font-weight:bold;margin-top:2px}
+.pi-fast{color:#4caf50}.pi-normal{color:#ffd700}.pi-slow{color:#ff9800}.pi-unlikely{color:#f44336}
+
+.quest-list{display:flex;flex-direction:column;gap:4px}
+.quest-card{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:8px}
+.quest-top{display:flex;justify-content:space-between;align-items:center}
+.quest-name{font-size:12px;font-weight:bold}
+.quest-status{font-size:9px;padding:2px 6px;border-radius:4px}
+.qs-posted{background:#1a3a5a;color:#64b5f6}
+.qs-active{background:#1a4a1a;color:#81c784}
+.qs-done{background:#3a3020;color:#ffd700}
+.quest-detail{font-size:10px;color:#8a7a60;margin-top:3px}
+.quest-reward{font-size:10px;color:#ffd700;margin-top:2px}
+
+.facility-card{background:#1a1510;border:1px solid #3a3020;border-radius:8px;padding:10px;margin-bottom:6px}
+.facility-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.facility-name{font-size:13px;font-weight:bold}
+.facility-level{font-size:10px;color:#ffd700;padding:2px 6px;background:#3a3020;border-radius:4px}
+.facility-stat{font-size:10px;color:#8a7a60;margin:2px 0}
+.facility-income{font-size:11px;color:#4caf50;font-weight:bold}
+
+.mat-grid{display:flex;flex-wrap:wrap;gap:4px}
+.mat-item{background:#1a1510;border:1px solid #3a3020;border-radius:5px;padding:3px 7px;font-size:10px;display:inline-flex;align-items:center;gap:3px}
+.mat-qty{color:#ffd700;font-weight:bold}
+
+/* Achievements */
+.achievement-grid{display:flex;flex-wrap:wrap;gap:6px}
+.achievement-card{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px 8px;font-size:10px;display:flex;align-items:center;gap:6px;flex:0 0 calc(50% - 3px);transition:all 0.2s}
+.achievement-card.unlocked{border-color:#ffd700;background:linear-gradient(135deg,#2a2318 0%,#3a3020 100%)}
+.achievement-card.locked{opacity:0.4}
+.achievement-emoji{font-size:18px}
+.achievement-info{flex:1}
+.achievement-name{font-weight:bold;color:#e8dcc8;font-size:10px}
+.achievement-desc{font-size:8px;color:#8a7a60;margin-top:1px}
+
+/* Farm */
+.farm-subtabs{display:flex;gap:3px;margin-bottom:8px;border-bottom:2px solid #3a3020;padding-bottom:4px}
+.farm-subtab{flex:1;padding:6px 4px;text-align:center;background:#1a1510;border-radius:4px 4px 0 0;cursor:pointer;font-size:11px;color:#8a7a60;transition:all 0.15s}
+.farm-subtab.active{background:#3a3020;color:#f0d890;font-weight:bold}
+.farm-subtab:hover:not(.active){background:#2a2318}
+
+.stamina-bar{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px 8px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.stamina-label{font-size:10px;color:#c0a870;font-weight:bold}
+.stamina-fill-container{flex:1;background:#333;border-radius:4px;height:12px;overflow:hidden}
+.stamina-fill{height:100%;background:linear-gradient(90deg,#4caf50,#8bc34a);border-radius:4px;transition:width 0.3s}
+.stamina-value{font-size:11px;color:#4caf50;font-weight:bold}
+
+/* Farm plots - 2x2 landscape style */
+.farm-field-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.farm-plot{background:#2a1a0a;border:2px solid #3a3020;border-radius:10px;padding:12px;text-align:center;cursor:pointer;transition:all 0.2s;min-height:140px;position:relative;overflow:hidden}
+.farm-plot:hover{border-color:#6a8a40;filter:brightness(1.1)}
+.farm-plot.locked{border-style:dashed;opacity:0.5;background:#1a1510}
+.farm-plot.wild{background:linear-gradient(180deg,#3a2a1a 0%,#2a1a0a 100%)}
+.farm-plot.tilled{background:linear-gradient(180deg,#5a4a3a 0%,#4a3a2a 100%);background-image:repeating-linear-gradient(90deg,transparent,transparent 8px,rgba(0,0,0,0.1) 8px,rgba(0,0,0,0.1) 9px)}
+.farm-plot.planted{background:linear-gradient(180deg,#3a4a2a 0%,#2a3a1a 100%)}
+.farm-plot.growing{background:linear-gradient(180deg,#2a5a1a 0%,#1a4a0a 100%)}
+.farm-plot.ready{background:linear-gradient(180deg,#4a5a1a 0%,#3a4a0a 100%);box-shadow:0 0 15px rgba(255,215,0,0.5);animation:plotGlow 2s ease-in-out infinite}
+@keyframes plotGlow{0%,100%{box-shadow:0 0 10px rgba(255,215,0,0.4)}50%{box-shadow:0 0 20px rgba(255,215,0,0.8)}}
+.farm-plot-emoji{font-size:36px;margin:6px 0}
+.farm-plot-name{font-size:11px;font-weight:bold;color:#e8dcc8}
+.farm-plot-status{font-size:9px;color:#8a7a60;margin-top:3px}
+.farm-plot-water{font-size:9px;color:#64b5f6;margin-top:2px}
+.farm-plot-progress{background:#333;border-radius:4px;height:8px;margin-top:6px;overflow:hidden}
+.farm-plot-progress-fill{height:100%;background:linear-gradient(90deg,#4caf50,#8bc34a);border-radius:4px;transition:width 0.3s}
+.farm-plot-actions{display:flex;gap:4px;margin-top:8px;justify-content:center;flex-wrap:wrap}
+.farm-act-btn{padding:4px 8px;border-radius:5px;border:1px solid #3a3020;background:#2a2318;color:#e8dcc8;font-size:9px;cursor:pointer;transition:all 0.15s}
+.farm-act-btn:hover:not(:disabled){background:#3a3020;border-color:#6a8a40}
+.farm-act-btn:disabled{opacity:0.3;cursor:default}
+.farm-lock-cost{font-size:10px;color:#ffd700;margin-top:6px}
+
+.paddy-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.paddy-plot{background:#1a1510;border:2px solid #3a3020;border-radius:8px;padding:16px 10px;text-align:center;cursor:pointer;transition:all 0.15s;min-height:120px}
+.paddy-plot:hover{border-color:#4a8aaa}
+.paddy-plot.empty{border-style:dashed}
+.paddy-plot.growing{border-color:#4a8aaa}
+.paddy-plot.ready{border-color:#ffd700;box-shadow:0 0 12px rgba(255,215,0,0.4)}
+
+.ranch-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.animal-card{background:#1a1510;border:1px solid #3a3020;border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px}
+.animal-emoji{font-size:32px}
+.animal-info{flex:1}
+.animal-name{font-size:12px;font-weight:bold;color:#e8dcc8}
+.animal-status{font-size:10px;color:#8a7a60;margin-top:2px}
+.animal-happiness{font-size:9px;margin-top:2px}
+.happy-bar{background:#333;border-radius:3px;height:6px;overflow:hidden;margin-top:3px}
+.happy-fill{height:100%;background:#4caf50;border-radius:3px;transition:width 0.3s}
+.animal-btn{padding:5px 10px;border-radius:5px;background:#2e7d32;border:none;color:#fff;font-size:9px;cursor:pointer;font-weight:bold}
+.animal-btn:hover{filter:brightness(1.2)}
+.animal-btn:disabled{opacity:0.3;cursor:default}
+
+.buy-animal{background:#1a1510;border:2px dashed #3a3020;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.15s}
+.buy-animal:hover{border-color:#6a8a40;background:#2a2318}
+
+.town-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
+.town-stat{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px;text-align:center}
+.ts-val{font-size:16px;font-weight:bold;color:#ffd700}
+.ts-label{font-size:8px;color:#8a7a60}
+
+/* Cooking minigame */
+.cook-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);display:flex;justify-content:center;align-items:center;z-index:90;flex-direction:column;padding:16px}
+.cook-panel{background:#2a2318;border:2px solid #8b6914;border-radius:12px;padding:16px;width:400px;max-width:90vw;text-align:center}
+.cook-title{font-size:16px;font-weight:bold;color:#ffd700;margin-bottom:10px}
+.cook-meter{background:#333;border-radius:8px;height:30px;position:relative;overflow:hidden;margin:10px 0}
+.cook-meter-fill{height:100%;border-radius:8px;transition:width 0.1s}
+.cook-meter-zone{position:absolute;height:100%;background:rgba(76,175,80,0.3);border-left:2px solid #4caf50;border-right:2px solid #4caf50}
+.cook-needle{position:absolute;top:0;width:3px;height:100%;background:#ff4444;transition:left 0.05s}
+.cook-result{font-size:14px;font-weight:bold;margin:8px 0}
+.cook-ingredients{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin:8px 0}
+.cook-ing{background:#1a1510;border:1px solid #3a3020;border-radius:4px;padding:3px 8px;font-size:10px}
+
+.log{background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:6px;height:65px;overflow-y:auto;font-size:9px;line-height:1.4;color:#8a7a60;margin-top:6px}
+.log .g{color:#ffd700}.log .q{color:#64b5f6}.log .a{color:#81c784}.log .f{color:#ce93d8}.log .w{color:#ff9800}.log .c{color:#ff8a65}
+
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);display:flex;justify-content:center;align-items:center;z-index:100;flex-direction:column;padding:20px}
+.overlay h2{font-size:22px;margin-bottom:10px;color:#ffd700}
+.overlay p{font-size:12px;color:#8a7a60;margin-bottom:14px;text-align:center;line-height:1.8}
+.overlay button{padding:12px 32px;border-radius:10px;border:none;background:#8b6914;color:#fff;font-size:15px;font-weight:bold;cursor:pointer;margin:4px}
+.overlay button.secondary{background:#3a3020;color:#c0a870}
+.hidden{display:none!important}
+
+.overlay-bg{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:94}
+
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div class="top-bar">
+    <span class="gold">💰 <span id="gold">100</span>G</span>
+    <span style="color:#c0a870">📅 Day <span id="dayNum">1</span> <span id="seasonDisplay"></span> <span id="weatherDisplay"></span></span>
+    <span style="font-size:10px" id="staminaDisplay">⚡ <span id="stamina">100</span></span>
+  </div>
+
+  <button class="btn btn-primary btn-full" onclick="nextDay()" style="margin-bottom:6px">🌅 次の日へ</button>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('guild')">⚔️ ギルド</div>
+    <div class="tab" onclick="switchTab('farm')">🏡 農場</div>
+    <div class="tab" onclick="switchTab('tavern')">🍳 食堂</div>
+    <div class="tab" onclick="switchTab('smithy')">🔨 鍛冶</div>
+    <div class="tab" onclick="switchTab('storage')">📦 倉庫</div>
+    <div class="tab" onclick="switchTab('facility')">🏨 施設</div>
+    <div class="tab" onclick="switchTab('town')">🏘️ 町</div>
+  </div>
+
+  <div class="tc active" id="tab-guild">
+    <div class="panel" style="background:#1a3a5a;border-color:#3a5a7a;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;color:#ffd700;font-weight:bold" id="guildRankName">新米ギルド</div>
+          <div style="font-size:10px;color:#64b5f6;margin-top:2px">⭐ 評判: <span id="guildRepValue">0</span></div>
+        </div>
+        <div id="guildRankProgress" style="text-align:right;font-size:9px;color:#8a7a60"></div>
+      </div>
+    </div>
+    <div class="panel" id="questCreator">
+      <div class="panel-title">📝 クエスト作成</div>
+      <div class="quest-step"><div class="quest-step-label">① 種類</div><div class="option-grid" id="questTypeGrid"></div></div>
+      <div class="quest-step" id="step2" style="display:none"><div class="quest-step-label">② 目標</div><div class="option-grid" id="questTargetGrid"></div></div>
+      <div class="quest-step" id="step3" style="display:none">
+        <div class="quest-step-label">③ 報酬額（掲載時に支払い）</div>
+        <div class="price-row">
+          <span>相場: <span id="marketPrice">0</span>G</span>
+          <input type="number" class="price-input" id="priceInput" min="1" oninput="updatePriceIndicator()">
+          <span>G</span>
+        </div>
+        <div class="price-indicator" id="priceIndicator"></div>
+        <div style="margin-top:8px"><button class="btn btn-primary" onclick="postQuest()">📋 掲載する</button></div>
+      </div>
+    </div>
+    <div class="panel"><div class="panel-title">📋 掲載中のクエスト</div><div class="quest-list" id="questBoard"></div></div>
+  </div>
+
+  <div class="tc" id="tab-farm">
+    <div class="farm-subtabs">
+      <div class="farm-subtab active" onclick="switchFarmTab('field')">🌾 畑</div>
+      <div class="farm-subtab" onclick="switchFarmTab('paddy')">🌊 水田</div>
+      <div class="farm-subtab" onclick="switchFarmTab('ranch')">🐄 牧場</div>
+    </div>
+    <div class="stamina-bar">
+      <span class="stamina-label">⚡ 行動力</span>
+      <div class="stamina-fill-container"><div class="stamina-fill" id="staminaFill" style="width:100%"></div></div>
+      <span class="stamina-value"><span id="staminaNum">100</span>/100</span>
+    </div>
+    <div id="farmFieldArea" class="farm-area active"></div>
+    <div id="farmPaddyArea" class="farm-area hidden"></div>
+    <div id="farmRanchArea" class="farm-area hidden"></div>
+  </div>
+
+  <div class="tc" id="tab-tavern">
+    <div class="panel">
+      <div class="panel-title">🍳 食堂</div>
+      <div id="tavernContent"></div>
+    </div>
+  </div>
+
+  <div class="tc" id="tab-smithy">
+    <div class="panel">
+      <div class="panel-title">🔨 鍛冶屋</div>
+      <div id="smithyContent"></div>
+    </div>
+  </div>
+
+  <div class="tc" id="tab-storage">
+    <div class="panel"><div class="panel-title">📦 素材倉庫</div><div class="mat-grid" id="matGrid"></div></div>
+  </div>
+
+  <div class="tc" id="tab-facility">
+    <div id="facilityList"></div>
+    <div class="panel" id="buildPanel"><div class="panel-title">🏗️ 建設</div><div id="buildList"></div></div>
+  </div>
+
+  <div class="tc" id="tab-town">
+    <div class="panel" style="padding:0;overflow:hidden;margin-bottom:8px">
+      <canvas id="townCanvas" width="440" height="240" style="display:block;width:100%;height:auto;border-radius:8px"></canvas>
+    </div>
+    <div class="town-grid" id="townGrid"></div>
+    <div class="panel"><div class="panel-title">🏆 実績</div><div id="achievementsList"></div></div>
+    <div class="panel"><div class="panel-title">📊 経営レポート</div><div id="report"></div></div>
+  </div>
+
+  <div class="log" id="log"></div>
+</div>
+
+<!-- Start/Continue Screen -->
+<div class="overlay" id="startScreen">
+  <h2>🏘️ ダンジョン商人</h2>
+  <p>辺境の町の管理者となり、<br>冒険者ギルドと施設を運営せよ。<br><br>
+  <span style="font-size:11px;color:#ffab40">
+  ⚔️ クエスト掲載時に報酬を前払い<br>
+  🏨 施設で冒険者からお金を稼ぐ<br>
+  🍳 食堂で調理ミニゲーム → 収入UP<br>
+  📦 素材を集めて町を発展させる</span></p>
+  <div id="startButtons">
+    <button onclick="newGame()">はじめから</button>
+  </div>
+</div>
+
+<!-- Cooking Overlay -->
+<div class="cook-overlay hidden" id="cookOverlay">
+  <div class="cook-panel">
+    <div class="cook-title" id="cookTitle">🍳 調理中...</div>
+    <div class="cook-ingredients" id="cookIngredients"></div>
+    <div class="cook-meter" id="cookMeter">
+      <div class="cook-meter-zone" id="cookZone"></div>
+      <div class="cook-needle" id="cookNeedle" style="left:0%"></div>
+    </div>
+    <div style="font-size:10px;color:#8a7a60;margin:4px 0">タップでストップ！緑ゾーンで高品質</div>
+    <div class="cook-result" id="cookResult"></div>
+    <button class="btn btn-orange" id="cookBtn" onclick="cookAction()">🍳 ストップ！</button>
+  </div>
+</div>
+
+<!-- Action Menu (legacy, kept for paddy) -->
+<div class="overlay-bg hidden" id="actionMenuBg" onclick="closeActionMenu()"></div>
+<div class="action-menu hidden" id="actionMenu">
+  <div class="action-menu-title" id="actionMenuTitle">アクション選択</div>
+  <div class="action-menu-btns" id="actionMenuBtns"></div>
+</div>
+
+<div class="overlay hidden" id="resultScreen">
+  <h2 id="resultTitle"></h2>
+  <p id="resultText"></p>
+  <button onclick="newGame()">もう一度</button>
+</div>
+
+<script>
+// === Data ===
+const QUEST_TYPES=[
+  {id:'mine',name:'鉱石採掘',emoji:'⛏️',baseCost:20,baseDays:3},
+  {id:'herb',name:'薬草採取',emoji:'🌿',baseCost:15,baseDays:2},
+  {id:'hunt',name:'モンスター討伐',emoji:'⚔️',baseCost:35,baseDays:4},
+  {id:'explore',name:'遺跡探索',emoji:'🏛️',baseCost:50,baseDays:5},
+  {id:'lumber',name:'伐採',emoji:'🪓',baseCost:12,baseDays:2},
+  {id:'fish',name:'漁',emoji:'🎣',baseCost:10,baseDays:1},
+];
+const QUEST_TARGETS={
+  mine:[
+    {id:'iron',name:'鉄鉱石',emoji:'⛏️',mat:'iron',qty:[2,4],costMult:1.0},
+    {id:'copper',name:'銅鉱石',emoji:'🟤',mat:'copper',qty:[3,5],costMult:0.8},
+    {id:'silver',name:'銀鉱石',emoji:'⬜',mat:'silver',qty:[1,2],costMult:1.8},
+    {id:'gold_ore',name:'金鉱石',emoji:'🟡',mat:'gold_ore',qty:[1,1],costMult:3.0},
+    {id:'crystal',name:'魔石',emoji:'💎',mat:'crystal',qty:[1,2],costMult:2.5},
+  ],
+  herb:[
+    {id:'herb_common',name:'薬草',emoji:'🌿',mat:'herb',qty:[3,6],costMult:1.0},
+    {id:'mushroom',name:'キノコ',emoji:'🍄',mat:'mushroom',qty:[2,4],costMult:0.9},
+    {id:'flower',name:'魔法花',emoji:'🌺',mat:'magic_flower',qty:[1,2],costMult:2.0},
+    {id:'root',name:'霊草の根',emoji:'🌱',mat:'spirit_root',qty:[1,2],costMult:2.2},
+  ],
+  hunt:[
+    {id:'wolf',name:'灰狼',emoji:'🐺',mat:'wolf_pelt',qty:[2,3],costMult:1.0},
+    {id:'bear',name:'大熊',emoji:'🐻',mat:'bear_claw',qty:[1,2],costMult:1.5},
+    {id:'wyvern',name:'ワイバーン',emoji:'🦅',mat:'wyvern_scale',qty:[1,1],costMult:3.0},
+    {id:'dragon',name:'ドラゴン',emoji:'🐉',mat:'dragon_fang',qty:[1,1],costMult:5.0},
+  ],
+  explore:[
+    {id:'ruin_a',name:'古代遺跡',emoji:'🏛️',mat:'ancient_relic',qty:[1,2],costMult:1.0},
+    {id:'ruin_b',name:'魔導書庫',emoji:'📚',mat:'spell_tome',qty:[1,1],costMult:1.5},
+    {id:'ruin_c',name:'宝物庫',emoji:'👑',mat:'treasure',qty:[1,1],costMult:2.5},
+  ],
+  lumber:[
+    {id:'wood',name:'木材',emoji:'🪵',mat:'wood',qty:[4,8],costMult:1.0},
+    {id:'hardwood',name:'硬木',emoji:'🌳',mat:'hardwood',qty:[2,4],costMult:1.5},
+    {id:'spirit_wood',name:'霊木',emoji:'✨',mat:'spirit_wood',qty:[1,2],costMult:2.5},
+  ],
+  fish:[
+    {id:'fish_common',name:'川魚',emoji:'🐟',mat:'fish',qty:[3,6],costMult:1.0},
+    {id:'fish_rare',name:'黄金魚',emoji:'🐠',mat:'golden_fish',qty:[1,2],costMult:2.0},
+  ],
+};
+const MAT_NAMES={
+  iron:'鉄鉱石',copper:'銅鉱石',silver:'銀鉱石',gold_ore:'金鉱石',crystal:'魔石',
+  herb:'薬草',mushroom:'キノコ',magic_flower:'魔法花',spirit_root:'霊草の根',
+  wolf_pelt:'狼の毛皮',bear_claw:'熊の爪',wyvern_scale:'飛竜の鱗',dragon_fang:'竜の牙',
+  ancient_relic:'古代遺物',spell_tome:'魔導書',treasure:'秘宝',
+  wood:'木材',hardwood:'硬木',spirit_wood:'霊木',
+  fish:'川魚',golden_fish:'黄金魚',
+  carrot:'ニンジン',potato:'ジャガイモ',wheat:'小麦',tomato:'トマト',
+  cabbage:'キャベツ',pumpkin:'カボチャ',magic_herb_crop:'魔法薬草',
+  rice:'米',egg:'卵',milk:'牛乳',pork:'豚肉',chicken_meat:'鶏肉',
+  iron_sword:'鉄の剣',silver_sword:'銀の剣',dragon_sword:'竜剣',
+  health_potion:'回復薬',mana_potion:'魔力薬',elixir:'エリクサー',
+};
+
+// === Season System ===
+const SEASONS=[
+  {id:'spring',name:'春',emoji:'🌸',color:'#ffb6c1'},
+  {id:'summer',name:'夏',emoji:'☀️',color:'#ffd700'},
+  {id:'autumn',name:'秋',emoji:'🍂',color:'#ff8c00'},
+  {id:'winter',name:'冬',emoji:'❄️',color:'#87ceeb'}
+];
+const SEASON_LENGTH=7; // days per season
+
+// === Weather System ===
+const WEATHER_TYPES=[
+  {id:'sunny',name:'晴れ',emoji:'☀️',color:'#ffd700',chance:0.60},
+  {id:'rainy',name:'雨',emoji:'🌧️',color:'#64b5f6',chance:0.30},
+  {id:'storm',name:'嵐',emoji:'⛈️',color:'#9575cd',chance:0.10}
+];
+
+function getWeather(){
+  return WEATHER_TYPES.find(w=>w.id===weather)||WEATHER_TYPES[0];
+}
+
+function updateWeather(){
+  // Roll for new weather each day
+  const roll=Math.random();
+  if(roll<0.60){
+    weather='sunny';
+  } else if(roll<0.90){
+    weather='rainy';
+  } else {
+    weather='storm';
+  }
+  
+  const w=getWeather();
+  logMsg(`<span class="q">${w.emoji} 今日の天気: ${w.name}</span>`);
+  
+  // Weather effects on farm
+  if(weather==='rainy'){
+    // Rainy day: auto-water all growing crops
+    let autoWatered=0;
+    farmPlots.forEach(p=>{
+      if((p.state==='planted'||p.state==='growing')&&!p.wateredToday){
+        p.wateredToday=true;
+        p.waterCount=(p.waterCount||0)+1;
+        if(p.state==='planted') p.state='growing';
+        autoWatered++;
+      }
+    });
+    if(autoWatered>0){
+      logMsg(`<span class="a">🌧️ 雨のおかげで畑に自動水やり！（${autoWatered}区画）</span>`);
+    }
+  } else if(weather==='storm'){
+    // Storm: damage to crops - 30% chance per plot to lose 1 water count or revert growing->planted
+    let damaged=0;
+    farmPlots.forEach(p=>{
+      if((p.state==='planted'||p.state==='growing')&&Math.random()<0.30){
+        if(p.waterCount>0){
+          p.waterCount=Math.max(0,p.waterCount-1);
+          damaged++;
+        } else if(p.state==='growing'){
+          p.state='planted';
+          damaged++;
+        }
+      }
+    });
+    if(damaged>0){
+      logMsg(`<span class="w">⛈️ 嵐で作物がダメージを受けた！（${damaged}区画）</span>`);
+    }
+  }
+}
+
+// === Market Price System ===
+function updateMarketPrices(){
+  // Update market price multipliers for each quest type daily
+  // Base fluctuation: 0.80 to 1.20 (±20%)
+  // Trends persist slightly (70% keep direction, 30% random)
+  
+  QUEST_TYPES.forEach(qType=>{
+    const prevMult=marketPriceMultipliers[qType.id]||1.0;
+    
+    // 70% chance to continue trend direction, 30% chance to reverse
+    const trendContinue=Math.random()<0.70;
+    const prevDirection=prevMult>=1.0?1:-1;
+    const direction=trendContinue?prevDirection:(Math.random()<0.5?1:-1);
+    
+    // Fluctuation amount: 0.05 to 0.15 per day
+    const change=(Math.random()*0.10+0.05)*direction;
+    let newMult=prevMult+change;
+    
+    // Clamp to 0.80 - 1.20 range
+    newMult=Math.max(0.80,Math.min(1.20,newMult));
+    
+    marketPriceMultipliers[qType.id]=newMult;
+  });
+  
+  // Log significant price changes (>10%)
+  const changes=QUEST_TYPES.filter(qt=>{
+    const mult=marketPriceMultipliers[qt.id]||1.0;
+    return Math.abs(mult-1.0)>0.10;
+  });
+  
+  if(changes.length>0){
+    const high=changes.filter(qt=>marketPriceMultipliers[qt.id]>1.10);
+    const low=changes.filter(qt=>marketPriceMultipliers[qt.id]<0.90);
+    
+    if(high.length>0){
+      const names=high.map(qt=>qt.name).join('、');
+      logMsg(`<span class="q">📈 市場高騰: ${names}の相場が上昇中</span>`);
+    }
+    if(low.length>0){
+      const names=low.map(qt=>qt.name).join('、');
+      logMsg(`<span class="w">📉 市場下落: ${names}の相場が下落中</span>`);
+    }
+  }
+}
+
+function getMarketPrice(questType,targetData){
+  const baseType=QUEST_TYPES.find(t=>t.id===questType);
+  if(!baseType||!targetData) return 0;
+  
+  const basePrice=Math.floor(baseType.baseCost*targetData.costMult);
+  const multiplier=marketPriceMultipliers[questType]||1.0;
+  
+  return Math.floor(basePrice*multiplier);
+}
+
+function getCurrentSeason(){
+  if(day<=0) return SEASONS[0]; // Default to spring
+  const dayInCycle=(day-1)%28; // 0-27
+  const seasonIdx=Math.floor(dayInCycle/SEASON_LENGTH);
+  return SEASONS[seasonIdx];
+}
+
+function getDayInSeason(){
+  if(day<=0) return 1;
+  return ((day-1)%SEASON_LENGTH)+1;
+}
+
+// === Farm Data ===
+const SEEDS=[
+  {id:'carrot',name:'ニンジン',emoji:'🥕',mat:'carrot',growDays:3,yield:[2,4],cost:5,seasons:['spring','autumn']},
+  {id:'potato',name:'ジャガイモ',emoji:'🥔',mat:'potato',growDays:4,yield:[3,5],cost:5,seasons:['spring','autumn']},
+  {id:'wheat',name:'小麦',emoji:'🌾',mat:'wheat',growDays:3,yield:[3,6],cost:4,seasons:['spring','summer','autumn']},
+  {id:'tomato',name:'トマト',emoji:'🍅',mat:'tomato',growDays:3,yield:[2,3],cost:6,seasons:['summer']},
+  {id:'cabbage',name:'キャベツ',emoji:'🥬',mat:'cabbage',growDays:5,yield:[2,4],cost:7,seasons:['autumn','winter']},
+  {id:'pumpkin',name:'カボチャ',emoji:'🎃',mat:'pumpkin',growDays:6,yield:[1,3],cost:10,seasons:['autumn']},
+];
+const TOTAL_FARM_PLOTS=8; // 2x4 grid, first 2 unlocked
+const FARM_UNLOCK_COSTS=[0,0,50,50,100,100,200,200]; // cost per plot
+
+const ANIMALS=[
+  {id:'chicken',name:'ニワトリ',emoji:'🐔',cost:50,product:'egg',productDays:1,feedCost:{wheat:1}},
+  {id:'cow',name:'ウシ',emoji:'🐄',cost:150,product:'milk',productDays:2,feedCost:{wheat:2}},
+  {id:'pig',name:'ブタ',emoji:'🐷',cost:120,product:'pork',productDays:5,feedCost:{potato:1,carrot:1}},
+];
+
+const COOK_RECIPES=[
+  {name:'焼き魚定食',emoji:'🐟',mats:{fish:2},income:25,diff:'easy'},
+  {name:'キノコスープ',emoji:'🍄',mats:{mushroom:2,herb:1},income:30,diff:'easy'},
+  {name:'黄金魚のソテー',emoji:'🐠',mats:{golden_fish:1,herb:1},income:50,diff:'medium'},
+  {name:'熊鍋',emoji:'🐻',mats:{bear_claw:1,mushroom:2},income:45,diff:'medium'},
+  {name:'竜肉ステーキ',emoji:'🐉',mats:{dragon_fang:1,spirit_root:1},income:100,diff:'hard'},
+  {name:'魔法花のサラダ',emoji:'🌺',mats:{magic_flower:1,herb:2},income:35,diff:'easy'},
+  {name:'野菜シチュー',emoji:'🥕',mats:{carrot:2,potato:2},income:30,diff:'easy'},
+  {name:'パンプキンスープ',emoji:'🎃',mats:{pumpkin:1,wheat:2},income:40,diff:'medium'},
+  {name:'トマトパスタ',emoji:'🍅',mats:{tomato:2,wheat:2},income:35,diff:'easy'},
+  {name:'キャベツロール',emoji:'🥬',mats:{cabbage:2,wolf_pelt:1},income:50,diff:'medium'},
+  {name:'おにぎり',emoji:'🍙',mats:{rice:2},income:25,diff:'easy'},
+  {name:'卵焼き',emoji:'🍳',mats:{egg:2},income:20,diff:'easy'},
+  {name:'ミルクシチュー',emoji:'🥛',mats:{milk:1,potato:2,carrot:1},income:50,diff:'medium'},
+  {name:'豚の角煮',emoji:'🍖',mats:{pork:1,cabbage:1},income:60,diff:'medium'},
+  {name:'親子丼',emoji:'🍚',mats:{chicken_meat:1,egg:2,rice:2},income:70,diff:'hard'},
+];
+
+// Smithy recipes - craft weapons
+const SMITHY_RECIPES=[
+  {name:'鉄の剣',emoji:'⚔️',mats:{iron:3,wood:1},product:'iron_sword',productQty:1,sellPrice:50,time:1},
+  {name:'銀の剣',emoji:'🗡️',mats:{silver:2,iron:2,wood:1},product:'silver_sword',productQty:1,sellPrice:100,time:2},
+  {name:'竜剣',emoji:'⚔️✨',mats:{dragon_fang:1,crystal:2,iron:5},product:'dragon_sword',productQty:1,sellPrice:250,time:3},
+];
+
+// Brewery recipes - craft potions
+const BREWERY_RECIPES=[
+  {name:'回復薬',emoji:'🧪',mats:{herb:3,mushroom:1},product:'health_potion',productQty:2,sellPrice:35,time:1},
+  {name:'魔力薬',emoji:'💙',mats:{magic_flower:2,herb:2},product:'mana_potion',productQty:2,sellPrice:70,time:2},
+  {name:'エリクサー',emoji:'✨',mats:{spirit_root:1,magic_flower:2,crystal:1},product:'elixir',productQty:1,sellPrice:180,time:3},
+];
+
+const FACILITIES=[
+  {id:'inn',name:'宿屋',emoji:'🏨',desc:'冒険者が宿泊。1人あたり収入を得る',
+    levels:[
+      {cost:0,mats:{wood:5},capacity:3,income:3,name:'簡素な宿'},
+      {cost:150,mats:{wood:10,iron:5},capacity:6,income:4,name:'快適な宿'},
+      {cost:400,mats:{hardwood:8,iron:10,crystal:3},capacity:10,income:5,name:'高級旅館'},
+    ]},
+  {id:'tavern',name:'食堂',emoji:'🍺',desc:'食事提供＋調理ミニゲーム',
+    levels:[
+      {cost:80,mats:{wood:8},capacity:5,income:8,stayBonus:1,name:'簡素な食堂'},
+      {cost:200,mats:{wood:10,iron:5,fish:5},capacity:10,income:15,stayBonus:2,name:'酒場'},
+      {cost:500,mats:{hardwood:10,iron:8,golden_fish:2},capacity:20,income:25,stayBonus:3,name:'高級レストラン'},
+    ]},
+  {id:'stable',name:'厩舎',emoji:'🐴',desc:'クエスト日数短縮',
+    levels:[
+      {cost:60,mats:{wood:10,iron:3},questSpeedup:1,name:'小さな厩舎'},
+      {cost:180,mats:{hardwood:8,iron:8},questSpeedup:2,name:'大きな厩舎'},
+    ]},
+  {id:'smithy',name:'鍛冶屋',emoji:'⚒️',desc:'武器を鍛造して販売',
+    levels:[
+      {cost:100,mats:{iron:10,wood:5},name:'小さな鍛冶屋'},
+      {cost:250,mats:{iron:15,hardwood:8,crystal:3},name:'本格鍛冶屋'},
+    ]},
+  {id:'brewery',name:'醸造所',emoji:'⚗️',desc:'ポーションを醸造して販売',
+    levels:[
+      {cost:120,mats:{wood:10,herb:8},name:'小さな醸造所'},
+      {cost:300,mats:{hardwood:10,magic_flower:5,crystal:5},name:'本格醸造所'},
+    ]},
+];
+
+// === Guild Rank System ===
+const GUILD_RANKS=[
+  {level:1,name:'新米ギルド',minRep:0,unlocks:['mine','herb','lumber','fish']},
+  {level:2,name:'駆け出しギルド',minRep:50,unlocks:['hunt']},
+  {level:3,name:'一人前ギルド',minRep:150,unlocks:['explore']},
+  {level:4,name:'有名ギルド',minRep:300,unlocks:[]},
+  {level:5,name:'伝説のギルド',minRep:500,unlocks:[]},
+];
+
+function getGuildRank(){
+  for(let i=GUILD_RANKS.length-1;i>=0;i--){
+    if(reputation>=GUILD_RANKS[i].minRep) return GUILD_RANKS[i];
+  }
+  return GUILD_RANKS[0];
+}
+
+function getNextGuildRank(){
+  const current=getGuildRank();
+  const nextIdx=GUILD_RANKS.findIndex(r=>r.level===current.level)+1;
+  return nextIdx<GUILD_RANKS.length?GUILD_RANKS[nextIdx]:null;
+}
+
+function isQuestTypeUnlocked(questTypeId){
+  const rank=getGuildRank();
+  // Check all ranks up to current level
+  for(let i=0;i<=GUILD_RANKS.findIndex(r=>r.level===rank.level);i++){
+    if(GUILD_RANKS[i].unlocks.includes(questTypeId)) return true;
+  }
+  return false;
+}
+
+// === State ===
+let gold=0,day=0,reputation=0,stamina=100;
+let materials={};
+let quests=[];
+let facilities={};
+let adventurersInTown=0,totalAdventurers=0;
+let dailyIncome=0,dailyExpense=0;
+let questIdCounter=0;
+let selType=null,selTarget=null;
+let cookTimer=null,cookPos=0,cookDir=1,cookRecipe=null,cookPhase='';
+
+let farmPlots=[]; // {state:'locked'|'wild'|'tilled'|'planted'|'growing'|'ready', seedId, plantedDay, growDays, waterCount, wateredToday}
+let paddyPlots=[]; // {state,plantedDay,watered}
+let animals=[]; // {type,fedToday,lastProduct,happiness,daysSinceProduct}
+let currentFarmTab='field';
+let actionMenuTarget=null;
+let craftingJobs=[]; // {facility:'smithy'|'brewery', recipe, startDay, daysLeft}
+let weather='sunny'; // current weather: 'sunny', 'rainy', 'storm'
+let marketPriceMultipliers={}; // {questType: multiplier} - daily price fluctuation
+let storageLevel=1; // Warehouse level (1-5)
+let timeOfDay='day'; // 'dawn', 'day', 'dusk', 'night'
+const STORAGE_CAPACITIES=[0,100,200,400,800,1600]; // Capacity per level (index 0 unused)
+const STORAGE_UPGRADE_COSTS=[0,100,250,500,1000]; // Cost to upgrade to next level (index 0 unused)
+let inventory={}; // {dishName: {qty, sellPrice}} - cooked dishes and crafted items for auto-sale
+let lastGuildRankLevel=1; // Track for rank-up notifications
+let dailyStats=[]; // Track daily income/expense for graph (last 10 days)
+
+// === Audio System ===
+let audioCtx=null;
+let bgmGain=null;
+let sfxGain=null;
+let bgmOscillator=null;
+let sfxEnabled=true;
+let bgmEnabled=true;
+
+// Farm tool system
+let selectedSeed=null;
+
+const SAVE_KEY='dungeon_merchant_save';
+
+// === Achievement System ===
+const ACHIEVEMENTS=[
+  {id:'first_quest',name:'初めてのクエスト',desc:'初めてクエストを掲載した',emoji:'📋',check:(s)=>s.totalQuestsPosted>=1},
+  {id:'quest_master',name:'クエストマスター',desc:'クエストを10回掲載した',emoji:'⚔️',check:(s)=>s.totalQuestsPosted>=10},
+  {id:'earn_100',name:'初収入',desc:'累計100G稼いだ',emoji:'💰',check:(s)=>s.totalEarned>=100},
+  {id:'earn_1000',name:'商人',desc:'累計1000G稼いだ',emoji:'💎',check:(s)=>s.totalEarned>=1000},
+  {id:'earn_10000',name:'大商人',desc:'累計10000G稼いだ',emoji:'👑',check:(s)=>s.totalEarned>=10000},
+  {id:'build_first',name:'建設家',desc:'初めて施設を建てた',emoji:'🏗️',check:(s)=>s.totalBuilds>=1},
+  {id:'build_all',name:'町の建築士',desc:'全施設を建設した',emoji:'🏘️',check:(s)=>s.totalBuilds>=FACILITIES.length},
+  {id:'harvest_first',name:'初収穫',desc:'初めて作物を収穫した',emoji:'🌾',check:(s)=>s.totalHarvests>=1},
+  {id:'harvest_100',name:'農業マスター',desc:'作物を100回収穫した',emoji:'🚜',check:(s)=>s.totalHarvests>=100},
+  {id:'cook_first',name:'初めての料理',desc:'初めて調理した',emoji:'🍳',check:(s)=>s.totalCooks>=1},
+  {id:'cook_master',name:'料理長',desc:'20回調理した',emoji:'👨‍🍳',check:(s)=>s.totalCooks>=20},
+  {id:'day_7',name:'1週間',desc:'7日目到達',emoji:'📅',check:(s)=>s.day>=7},
+  {id:'day_30',name:'1ヶ月',desc:'30日目到達',emoji:'📆',check:(s)=>s.day>=30},
+  {id:'day_100',name:'100日',desc:'100日目到達',emoji:'🎉',check:(s)=>s.day>=100},
+  {id:'rep_100',name:'評判',desc:'評判100達成',emoji:'⭐',check:(s)=>s.reputation>=100},
+  {id:'rep_500',name:'名声',desc:'評判500達成',emoji:'✨',check:(s)=>s.reputation>=500},
+  {id:'all_seasons',name:'四季を巡る',desc:'全ての季節を経験した',emoji:'🌸☀️🍂❄️',check:(s)=>s.day>=28},
+  {id:'animal_keeper',name:'牧場主',desc:'動物を5匹飼った',emoji:'🐄',check:(s)=>s.totalAnimals>=5},
+  {id:'quest_success_10',name:'成功者',desc:'クエストを10回成功させた',emoji:'✅',check:(s)=>s.totalQuestSuccess>=10},
+];
+
+let achievements={}; // {id: unlocked_timestamp}
+let achievementStats={
+  totalQuestsPosted:0,
+  totalEarned:0,
+  totalBuilds:0,
+  totalHarvests:0,
+  totalCooks:0,
+  totalAnimals:0,
+  totalQuestSuccess:0,
+  day:0,
+  reputation:0
+};
+
+function checkAchievements(){
+  achievementStats.day=day;
+  achievementStats.reputation=reputation;
+  
+  const newAchievements=[];
+  ACHIEVEMENTS.forEach(ach=>{
+    if(!achievements[ach.id]&&ach.check(achievementStats)){
+      achievements[ach.id]=Date.now();
+      newAchievements.push(ach);
+      playSFX('coin');
+      logMsg(`<span style="color:#ffd700;font-weight:bold">🏆 実績解除: ${ach.emoji} ${ach.name}</span>`);
+    }
+  });
+  
+  return newAchievements;
+}
+
+// === Audio Functions ===
+function initAudio(){
+  if(audioCtx) return;
+  try{
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    bgmGain=audioCtx.createGain();
+    bgmGain.gain.value=0.15;
+    bgmGain.connect(audioCtx.destination);
+    sfxGain=audioCtx.createGain();
+    sfxGain.gain.value=0.3;
+    sfxGain.connect(audioCtx.destination);
+    if(bgmEnabled) startBGM();
+  }catch(e){console.warn('Audio init failed',e);}
+}
+
+function startBGM(){
+  if(!audioCtx||bgmOscillator) return;
+  try{
+    // Simple ambient background loop using multiple oscillators
+    const osc1=audioCtx.createOscillator();
+    const osc2=audioCtx.createOscillator();
+    const lfo=audioCtx.createOscillator();
+    const lfoGain=audioCtx.createGain();
+    
+    osc1.type='sine';
+    osc1.frequency.value=220; // A3
+    osc2.type='sine';
+    osc2.frequency.value=330; // E4
+    
+    lfo.type='sine';
+    lfo.frequency.value=0.3; // Slow modulation
+    lfoGain.gain.value=10;
+    
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc1.frequency);
+    lfoGain.connect(osc2.frequency);
+    
+    const merger=audioCtx.createChannelMerger(2);
+    osc1.connect(merger,0,0);
+    osc2.connect(merger,0,1);
+    merger.connect(bgmGain);
+    
+    osc1.start();
+    osc2.start();
+    lfo.start();
+    
+    bgmOscillator={osc1,osc2,lfo};
+  }catch(e){console.warn('BGM start failed',e);}
+}
+
+function stopBGM(){
+  if(!bgmOscillator) return;
+  try{
+    bgmOscillator.osc1.stop();
+    bgmOscillator.osc2.stop();
+    bgmOscillator.lfo.stop();
+    bgmOscillator=null;
+  }catch(e){}
+}
+
+function playSFX(type){
+  if(!audioCtx||!sfxEnabled) return;
+  try{
+    const osc=audioCtx.createOscillator();
+    const gain=audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(sfxGain);
+    
+    const now=audioCtx.currentTime;
+    
+    switch(type){
+      case 'click':
+        osc.type='square';
+        osc.frequency.value=800;
+        gain.gain.setValueAtTime(0.3,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.05);
+        osc.start(now);
+        osc.stop(now+0.05);
+        break;
+      case 'harvest':
+        osc.type='sine';
+        osc.frequency.setValueAtTime(440,now);
+        osc.frequency.exponentialRampToValueAtTime(880,now+0.1);
+        gain.gain.setValueAtTime(0.4,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.15);
+        osc.start(now);
+        osc.stop(now+0.15);
+        break;
+      case 'coin':
+        osc.type='sine';
+        osc.frequency.setValueAtTime(1000,now);
+        osc.frequency.exponentialRampToValueAtTime(1500,now+0.08);
+        gain.gain.setValueAtTime(0.3,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.1);
+        osc.start(now);
+        osc.stop(now+0.1);
+        break;
+      case 'quest':
+        osc.type='triangle';
+        osc.frequency.setValueAtTime(330,now);
+        osc.frequency.setValueAtTime(440,now+0.05);
+        osc.frequency.setValueAtTime(550,now+0.1);
+        gain.gain.setValueAtTime(0.3,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.2);
+        osc.start(now);
+        osc.stop(now+0.2);
+        break;
+      case 'day':
+        osc.type='sine';
+        osc.frequency.setValueAtTime(523,now); // C5
+        osc.frequency.setValueAtTime(659,now+0.1); // E5
+        osc.frequency.setValueAtTime(784,now+0.2); // G5
+        gain.gain.setValueAtTime(0.4,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.4);
+        osc.start(now);
+        osc.stop(now+0.4);
+        break;
+      case 'water':
+        osc.type='sine';
+        osc.frequency.setValueAtTime(200,now);
+        osc.frequency.exponentialRampToValueAtTime(100,now+0.15);
+        gain.gain.setValueAtTime(0.2,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.15);
+        osc.start(now);
+        osc.stop(now+0.15);
+        break;
+      case 'build':
+        osc.type='sawtooth';
+        osc.frequency.setValueAtTime(150,now);
+        osc.frequency.exponentialRampToValueAtTime(100,now+0.25);
+        gain.gain.setValueAtTime(0.25,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.25);
+        osc.start(now);
+        osc.stop(now+0.25);
+        break;
+      case 'cook':
+        osc.type='triangle';
+        osc.frequency.setValueAtTime(600,now);
+        osc.frequency.setValueAtTime(700,now+0.05);
+        osc.frequency.setValueAtTime(800,now+0.1);
+        gain.gain.setValueAtTime(0.3,now);
+        gain.gain.exponentialRampToValueAtTime(0.01,now+0.15);
+        osc.start(now);
+        osc.stop(now+0.15);
+        break;
+    }
+  }catch(e){console.warn('SFX failed',e);}
+}
+
+// === Save/Load ===
+function saveGame(){
+  const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
+    facilities,adventurersInTown,totalAdventurers,questIdCounter,
+    farmPlots,paddyPlots,animals,currentFarmTab,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers,storageLevel,inventory,lastGuildRankLevel,timeOfDay,dailyStats};
+  state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
+}
+
+function loadGame(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(!raw) return false;
+    const s=JSON.parse(raw);
+    gold=s.gold; day=s.day; reputation=s.reputation; stamina=s.stamina||100;
+    materials=s.materials;
+    facilities=s.facilities; adventurersInTown=s.adventurersInTown;
+    totalAdventurers=s.totalAdventurers; questIdCounter=s.questIdCounter;
+    
+    farmPlots=s.farmPlots||[];
+    paddyPlots=s.paddyPlots||[];
+    animals=s.animals||[];
+    currentFarmTab=s.currentFarmTab||'field';
+    achievements=s.achievements||{};
+    achievementStats=s.achievementStats||{totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
+    craftingJobs=s.craftingJobs||[];
+    weather=s.weather||'sunny';
+    marketPriceMultipliers=s.marketPriceMultipliers||{};
+    storageLevel=s.storageLevel||1;
+    inventory=s.inventory||{};
+    lastGuildRankLevel=s.lastGuildRankLevel||1;
+    timeOfDay=s.timeOfDay||'day';
+    dailyStats=s.dailyStats||[];
+    // Initialize plots if needed
+    while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
+    while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
+    // Rebuild quests
+    quests=s.quests.map((q,i)=>{
+      const meta=s.questsMeta[i];
+      const targets=QUEST_TARGETS[meta.type]||[];
+      q.targetData=targets.find(t=>t.id===meta.target)||null;
+      return q;
+    });
+    dailyIncome=0; dailyExpense=0;
+    selType=null; selTarget=null;
+    return true;
+  }catch(e){return false;}
+}
+
+function hasSave(){
+  try{return !!localStorage.getItem(SAVE_KEY);}catch(e){return false;}
+}
+
+// === Init ===
+window.addEventListener('load',()=>{
+  if(hasSave()){
+    el('startButtons').innerHTML=`
+      <button onclick="continueGame()">続きから</button>
+      <button class="secondary" onclick="newGame()">はじめから</button>`;
+  }
+  setupSwipe();
+});
+
+function continueGame(){
+  if(loadGame()){
+    initAudio();
+    hide('startScreen');
+    renderQuestCreator();
+    switchFarmTabProg(currentFarmTab);
+    
+    updateAll();
+    logMsg(`<span class="q">📂 セーブデータを読み込みました（Day ${day}）</span>`);
+  }
+}
+
+function newGame(){
+  try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+  initAudio();
+  hide('startScreen');hide('resultScreen');
+  el('log').innerHTML='';
+  gold=100;day=0;reputation=0;stamina=100;
+  materials={wood:5,iron:2,herb:2,fish:2};
+  quests=[];facilities={};
+  adventurersInTown=2;totalAdventurers=5;
+  dailyIncome=0;dailyExpense=0;questIdCounter=0;
+  selType=null;selTarget=null;
+  achievements={};achievementStats={totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
+  craftingJobs=[];
+  weather='sunny';
+  marketPriceMultipliers={};
+  storageLevel=1;
+  inventory={};
+  lastGuildRankLevel=1;
+  timeOfDay='day';
+  dailyStats=[];
+  // Initialize market prices to 1.0 (neutral)
+  QUEST_TYPES.forEach(qt=>marketPriceMultipliers[qt.id]=1.0);
+  FACILITIES.forEach(f=>facilities[f.id]=0);
+  farmPlots=[];paddyPlots=[];animals=[];currentFarmTab='field';
+  for(let i=0;i<TOTAL_FARM_PLOTS;i++){
+    farmPlots.push({state:i<2?'wild':'locked',seedId:null,plantedDay:0,growDays:0,waterCount:0,wateredToday:false});
+  }
+  for(let i=0;i<TOTAL_PADDY_PLOTS;i++) paddyPlots.push({state:i<2?'empty':'locked',plantedDay:0});
+  selectedSeed=null;
+  renderQuestCreator();
+  switchFarmTabProg('field');
+  nextDay();
+}
+
+// === Time of Day System ===
+function updateTimeOfDay(){
+  // Cycle through time phases each day
+  // Dawn (5-8) -> Day (8-17) -> Dusk (17-19) -> Night (19-5)
+  const phases=['dawn','day','dusk','night'];
+  const currentIdx=phases.indexOf(timeOfDay);
+  const nextIdx=(currentIdx+1)%phases.length;
+  timeOfDay=phases[nextIdx];
+  
+  // Log time change
+  const timeEmojis={dawn:'🌅',day:'☀️',dusk:'🌆',night:'🌙'};
+  const timeNames={dawn:'夜明け',day:'昼',dusk:'夕暮れ',night:'夜'};
+  logMsg(`<span style="color:#87ceeb">${timeEmojis[timeOfDay]} ${timeNames[timeOfDay]}になりました</span>`);
+}
+
+// === Day Cycle ===
+function nextDay(){
+  playSFX('day');
+  const prevSeason=getCurrentSeason();
+  const prevGuildRank=getGuildRank();
+  
+  // Record previous day's stats before resetting
+  if(day>0){
+    dailyStats.push({day:day,income:dailyIncome,expense:dailyExpense,net:dailyIncome-dailyExpense,gold:gold});
+    // Keep only last 10 days
+    if(dailyStats.length>10) dailyStats.shift();
+  }
+  
+  day++;dailyIncome=0;dailyExpense=0;stamina=100;
+  el('dayNum').textContent=day;
+  
+  // Update time of day
+  updateTimeOfDay();
+  checkAchievements();
+  
+  // Check for guild rank up
+  const newGuildRank=getGuildRank();
+  if(newGuildRank.level>prevGuildRank.level){
+    playSFX('coin');
+    logMsg(`<span style="color:#ffd700;font-weight:bold">🏆 ギルドランクアップ！${newGuildRank.name}に昇格！</span>`);
+    if(newGuildRank.unlocks.length>0){
+      const unlockNames=newGuildRank.unlocks.map(id=>QUEST_TYPES.find(t=>t.id===id)?.name).filter(n=>n).join('、');
+      logMsg(`<span class="q">🔓 新クエスト解放: ${unlockNames}</span>`);
+    }
+    lastGuildRankLevel=newGuildRank.level;
+  }
+  
+  // Check for season change
+  const newSeason=getCurrentSeason();
+  if(prevSeason.id!==newSeason.id){
+    logMsg(`<span class="q">${newSeason.emoji} ${newSeason.name}が訪れました！</span>`);
+    if(newSeason.id==='winter'){
+      logMsg(`<span class="w">❄️ 冬季に入りました。ほとんどの作物は枯れます。</span>`);
+    }
+  }
+  
+  // Update weather
+  updateWeather();
+  
+  // Update market prices
+  updateMarketPrices();
+  
+  processQuests();
+  processFacilities();
+  processAdventurers();
+  processFarm();
+  processPaddy();
+  processRanch();
+  processCrafting();
+  updateAll();
+  logMsg(`<span class="q">🌅 ${day}日目 — 💰${gold}G 👥${adventurersInTown}人滞在 ⚡${stamina}</span>`);
+  saveGame();
+}
+
+function processQuests(){
+  quests.forEach(q=>{
+    if(q.status==='posted'){
+      const ratio=q.reward/q.marketPrice;
+      let chance=0;
+      if(ratio>=1.5) chance=0.95;
+      else if(ratio>=1.2) chance=0.7;
+      else if(ratio>=1.0) chance=0.4;
+      else if(ratio>=0.8) chance=0.15;
+      else if(ratio>=0.5) chance=0.05;
+      else chance=0.01;
+      chance=Math.min(0.98,chance+adventurersInTown*0.02);
+
+      if(Math.random()<chance&&adventurersInTown>0){
+        q.status='active';
+        const adv=generateAdventurer();
+        q.adventurer=adv;
+        q.advName=adv.name; // Keep for compatibility
+        
+        const speedup=getQuestSpeedup();
+        let baseDays=q.baseDays-speedup;
+        
+        // Specialty bonus: -1 day if specialty matches quest type
+        if(adv.specialty.id===q.type){
+          baseDays=Math.max(1,baseDays-1);
+          q.specialtyBonus=true;
+        } else {
+          q.specialtyBonus=false;
+        }
+        
+        // Auto-sell meal and equipment when departing
+        let mealSold=false,weaponSold=false,potionSold=false;
+        
+        // Try to sell a meal
+        const availableMeals=Object.entries(inventory).filter(([name,data])=>data.qty>0&&COOK_RECIPES.some(r=>r.name===name));
+        if(availableMeals.length>0){
+          const [mealName,mealData]=availableMeals[rng(0,availableMeals.length-1)];
+          inventory[mealName].qty--;
+          gold+=mealData.sellPrice;
+          dailyIncome+=mealData.sellPrice;
+          achievementStats.totalEarned+=mealData.sellPrice;
+          mealSold=true;
+          logMsg(`<span class="c">🍽️ ${adv.name}がクエスト出発前に${mealName}を購入 +${mealData.sellPrice}G</span>`);
+        }
+        
+        // Try to sell a weapon (reduces quest days by 1)
+        const availableWeapons=Object.entries(inventory).filter(([name,data])=>data.qty>0&&SMITHY_RECIPES.some(r=>r.name===name));
+        if(availableWeapons.length>0){
+          const [weaponName,weaponData]=availableWeapons[rng(0,availableWeapons.length-1)];
+          inventory[weaponName].qty--;
+          gold+=weaponData.sellPrice;
+          dailyIncome+=weaponData.sellPrice;
+          achievementStats.totalEarned+=weaponData.sellPrice;
+          weaponSold=true;
+          baseDays=Math.max(1,baseDays-1);
+          logMsg(`<span class="c">⚔️ ${adv.name}が${weaponName}を購入 +${weaponData.sellPrice}G (クエスト1日短縮)</span>`);
+        }
+        
+        // Try to sell a potion (increases success rate)
+        const availablePotions=Object.entries(inventory).filter(([name,data])=>data.qty>0&&BREWERY_RECIPES.some(r=>r.name===name));
+        if(availablePotions.length>0){
+          const [potionName,potionData]=availablePotions[rng(0,availablePotions.length-1)];
+          inventory[potionName].qty--;
+          gold+=potionData.sellPrice;
+          dailyIncome+=potionData.sellPrice;
+          achievementStats.totalEarned+=potionData.sellPrice;
+          potionSold=true;
+          q.potionBonus=true; // Mark quest for success rate boost
+          logMsg(`<span class="c">🧪 ${adv.name}が${potionName}を購入 +${potionData.sellPrice}G (成功率UP)</span>`);
+        }
+        
+        q.activeDaysLeft=Math.max(1,baseDays);
+        adventurersInTown=Math.max(0,adventurersInTown-1);
+        dailyExpense+=q.reward;
+        
+        const specialtyText=q.specialtyBonus?` ⚡得意分野で1日短縮！`:'';
+        logMsg(`<span class="a">⚔️ ${adv.rank.emoji}${adv.name}(${adv.rank.name} ${adv.specialty.emoji}${adv.specialty.name})が「${q.questName}」を受注！${specialtyText}</span>`);
+      }
+    } else if(q.status==='active'){
+      q.activeDaysLeft--;
+      if(q.activeDaysLeft<=0){
+        // Quest always succeeds - quantity varies by rank and specialty
+        const target=q.targetData;
+        const adv=q.adventurer;
+        
+        q.status='done';
+        q.success=true;
+        
+        if(target){
+          const baseQty=rng(target.qty[0],target.qty[1]);
+          
+          // Rank multiplier: determines quantity bonus (1.0x to 2.2x)
+          let qtyMultiplier=adv.rank.mult;
+          
+          // Specialty bonus: +20% if specialty matches quest type
+          if(q.specialtyBonus){
+            qtyMultiplier*=1.20;
+          }
+          
+          // Potion bonus: +10% quantity
+          if(q.potionBonus){
+            qtyMultiplier*=1.10;
+          }
+          
+          // Final quantity = base × multiplier (rounded)
+          const qty=Math.max(1,Math.floor(baseQty*qtyMultiplier));
+          
+          addMat(target.mat,qty);
+          playSFX('quest');
+          achievementStats.totalQuestSuccess++;
+          
+          const bonusInfo=[];
+          if(qtyMultiplier>1.0){
+            bonusInfo.push(`×${qtyMultiplier.toFixed(2)}倍`);
+          }
+          const bonusText=bonusInfo.length>0?` (${bonusInfo.join(' ')})`:'';
+          
+          logMsg(`<span class="a">✅ ${adv.rank.emoji}${adv.name}が帰還！${MAT_NAMES[target.mat]||target.mat}×${qty}を納品${bonusText}</span>`);
+        }
+        
+        adventurersInTown++;
+      }
+    }
+  });
+  const done=quests.filter(q=>q.status==='done');
+  if(done.length>5) quests=quests.filter(q=>q.status!=='done').concat(done.slice(-5));
+}
+
+function processFacilities(){
+  const innLv=facilities.inn;
+  if(innLv>0){
+    const d=FACILITIES.find(f=>f.id==='inn').levels[innLv-1];
+    const guests=Math.min(adventurersInTown,d.capacity);
+    const inc=guests*d.income;
+    if(inc>0){gold+=inc;dailyIncome+=inc;achievementStats.totalEarned+=inc;playSFX('coin');logMsg(`<span class="f">🏨 宿泊収入: ${inc}G (${guests}人)</span>`);}
+  }
+  const tavLv=facilities.tavern;
+  if(tavLv>0){
+    const d=FACILITIES.find(f=>f.id==='tavern').levels[tavLv-1];
+    const diners=Math.min(adventurersInTown,d.capacity);
+    const inc=diners*d.income;
+    if(inc>0){gold+=inc;dailyIncome+=inc;achievementStats.totalEarned+=inc;playSFX('coin');logMsg(`<span class="f">🍺 食事収入: ${inc}G (${diners}人)</span>`);}
+  }
+}
+
+function processAdventurers(){
+  const base=1+Math.floor(reputation/50);
+  const arrivals=Math.min(base,totalAdventurers-adventurersInTown);
+  if(arrivals>0){adventurersInTown+=arrivals;logMsg(`<span class="a">👥 冒険者${arrivals}人が到着</span>`);}
+  const lc=facilities.tavern>0?0.1:0.3;
+  let left=0;
+  for(let i=0;i<adventurersInTown;i++) if(Math.random()<lc) left++;
+  left=Math.min(left,adventurersInTown-1);
+  if(left>0) adventurersInTown-=left;
+  if(day%5===0&&reputation>20) totalAdventurers++;
+}
+
+function getQuestSpeedup(){
+  const lv=facilities.stable;
+  return lv>0?FACILITIES.find(f=>f.id==='stable').levels[lv-1].questSpeedup:0;
+}
+
+// === Quest Creator ===
+function renderQuestCreator(){
+  const g=el('questTypeGrid');g.innerHTML='';
+  QUEST_TYPES.forEach(t=>{
+    const mult=marketPriceMultipliers[t.id]||1.0;
+    const indicator=mult>1.10?'📈':mult<0.90?'📉':'';
+    const unlocked=isQuestTypeUnlocked(t.id);
+    const lockIcon=unlocked?'':'🔒';
+    const disabled=unlocked?'':' style="opacity:0.4;cursor:default"';
+    g.innerHTML+=`<div class="option-btn${selType===t.id?' selected':''}" onclick="${unlocked?`selectType('${t.id}')`:'showQuestLockedMessage()'}"${disabled}>${lockIcon}${t.emoji} ${t.name} ${indicator}</div>`;
+  });
+  if(!selType){el('step2').style.display='none';el('step3').style.display='none';return;}
+  el('step2').style.display='';
+  const tg=el('questTargetGrid');tg.innerHTML='';
+  (QUEST_TARGETS[selType]||[]).forEach(t=>{tg.innerHTML+=`<div class="option-btn${selTarget===t.id?' selected':''}" onclick="selectTarget('${t.id}')">${t.emoji} ${t.name}<br><span style="font-size:8px;color:#8a7a60">${MAT_NAMES[t.mat]} ×${t.qty[0]}~${t.qty[1]}</span></div>`;});
+  if(!selTarget){el('step3').style.display='none';return;}
+  el('step3').style.display='';
+  const typeData=QUEST_TYPES.find(t=>t.id===selType);
+  const targetData=(QUEST_TARGETS[selType]||[]).find(t=>t.id===selTarget);
+  if(!typeData||!targetData) return;
+  const market=getMarketPrice(selType,targetData);
+  const mult=marketPriceMultipliers[selType]||1.0;
+  const trendText=mult>1.10?'<span style="color:#4caf50">↗高騰中</span>':mult<0.90?'<span style="color:#f44336">↘下落中</span>':'<span style="color:#ffd700">→安定</span>';
+  el('marketPrice').innerHTML=`${market} ${trendText}`;
+  if(!el('priceInput').value) el('priceInput').value=market;
+  updatePriceIndicator();
+}
+
+function showQuestLockedMessage(){
+  const nextRank=getNextGuildRank();
+  if(nextRank){
+    logMsg(`<span class="w">🔒 このクエストは${nextRank.name}（評判${nextRank.minRep}）で解放されます</span>`);
+  }
+}
+function selectType(id){selType=id;selTarget=null;el('priceInput').value='';renderQuestCreator();}
+function selectTarget(id){selTarget=id;el('priceInput').value='';renderQuestCreator();}
+
+function updatePriceIndicator(){
+  // Extract numeric value from marketPrice (may contain HTML)
+  const marketText=el('marketPrice').textContent||el('marketPrice').innerText||'0';
+  const market=parseInt(marketText.match(/\d+/)?.[0])||1;
+  const price=parseInt(el('priceInput').value)||0;
+  const ratio=price/market;
+  const ind=el('priceIndicator');
+  let text='',cls='';
+  if(ratio>=1.5){text='⚡ 即日受注（高確率）';cls='pi-fast';}
+  else if(ratio>=1.2){text='🟢 1~2日で受注';cls='pi-fast';}
+  else if(ratio>=1.0){text='🟡 数日以内に受注';cls='pi-normal';}
+  else if(ratio>=0.8){text='🟠 受注まで時間がかかる';cls='pi-slow';}
+  else if(ratio>=0.5){text='🔴 1週間以上かも';cls='pi-unlikely';}
+  else{text='❌ ほぼ受注されない';cls='pi-unlikely';}
+  ind.innerHTML=`<span class="${cls}">${text}</span> <span style="font-size:9px;color:#666">(×${ratio.toFixed(2)})</span>`;
+}
+
+function postQuest(){
+  if(!selType||!selTarget) return;
+  const price=parseInt(el('priceInput').value)||0;
+  if(price<=0||gold<price) return;
+  const typeData=QUEST_TYPES.find(t=>t.id===selType);
+  const targetData=(QUEST_TARGETS[selType]||[]).find(t=>t.id===selTarget);
+  const market=getMarketPrice(selType,targetData);
+
+  gold-=price;
+  playSFX('click');
+
+  quests.push({
+    id:questIdCounter++,type:selType,target:selTarget,targetData,
+    questName:`${typeData.emoji}${typeData.name}: ${targetData.name}`,
+    reward:price,marketPrice:market,baseDays:typeData.baseDays,
+    postedDay:day,status:'posted',activeDaysLeft:0,advName:'',
+  });
+  reputation+=1;
+  achievementStats.totalQuestsPosted++;
+  logMsg(`<span class="q">📋 クエスト掲載「${typeData.name}: ${targetData.name}」報酬${price}G（前払い）</span>`);
+  selType=null;selTarget=null;el('priceInput').value='';
+  checkAchievements();
+  renderQuestCreator();updateAll();saveGame();
+}
+
+function cancelQuest(id){
+  const q=quests.find(x=>x.id===id);
+  if(q&&q.status==='posted'){
+    gold+=q.reward;
+    logMsg(`<span class="w">↩ クエスト取り下げ。${q.reward}G返金</span>`);
+  }
+  quests=quests.filter(x=>x.id!==id);
+  updateAll();saveGame();
+}
+
+// === Farm Functions ===
+function processFarm(){
+  const season=getCurrentSeason();
+  farmPlots.forEach(p=>{
+    if(p.state==='planted'||p.state==='growing'){
+      const elapsed=day-p.plantedDay;
+      if(elapsed>=1&&p.state==='planted') p.state='growing';
+      
+      // Check if crop can survive current season
+      const seed=SEEDS.find(s=>s.id===p.seedId);
+      if(seed&&season.id==='winter'&&!seed.seasons.includes('winter')){
+        // Winter kills non-winter crops
+        logMsg(`<span class="w">❄️ 冬の寒さで${seed.name}が枯れてしまった...</span>`);
+        p.state='wild';
+        p.seedId=null;
+        p.plantedDay=0;
+        p.growDays=0;
+        p.waterCount=0;
+        p.wateredToday=false;
+        return;
+      }
+      
+      if(elapsed>=p.growDays) p.state='ready';
+    }
+    p.wateredToday=false;
+  });
+}
+
+function processPaddy(){
+  paddyPlots.forEach(p=>{
+    if(p.state==='growing'){
+      const elapsed=day-p.plantedDay;
+      if(elapsed>=6){
+        p.state='ready';
+      }
+    }
+  });
+}
+
+function processRanch(){
+  animals.forEach(a=>{
+    const spec=ANIMALS.find(s=>s.id===a.type);
+    if(!a.fedToday){
+      a.happiness=Math.max(0,a.happiness-20);
+      if(a.happiness<=0){
+        logMsg(`<span class="w">😢 ${spec.emoji}${spec.name}が不機嫌に...</span>`);
+      }
+    } else {
+      a.happiness=Math.min(100,a.happiness+10);
+      a.daysSinceProduct++;
+      if(a.happiness>=50&&a.daysSinceProduct>=spec.productDays){
+        const prodQty=1;
+        addMat(spec.product,prodQty);
+        a.daysSinceProduct=0;
+        playSFX('harvest');
+        logMsg(`<span class="a">${spec.emoji} ${MAT_NAMES[spec.product]}×${prodQty}を生産！</span>`);
+      }
+    }
+    a.fedToday=false;
+  });
+}
+
+function processCrafting(){
+  craftingJobs.forEach(job=>{
+    job.daysLeft--;
+    if(job.daysLeft<=0){
+      // Crafting complete - add to inventory instead of immediate sale
+      if(!inventory[job.recipe.name]){
+        inventory[job.recipe.name]={qty:0,sellPrice:job.recipe.sellPrice};
+      }
+      inventory[job.recipe.name].qty+=job.recipe.productQty;
+      
+      playSFX('coin');
+      const facName=job.facility==='smithy'?'⚒️鍛冶屋':'⚗️醸造所';
+      logMsg(`<span class="f">${facName} ${job.recipe.emoji}${job.recipe.name}完成！在庫+${job.recipe.productQty} (売値${job.recipe.sellPrice}G)</span>`);
+      reputation+=job.recipe.time;
+    }
+  });
+  craftingJobs=craftingJobs.filter(j=>j.daysLeft>0);
+}
+
+function switchFarmTab(tab){
+  currentFarmTab=tab;
+  document.querySelectorAll('.farm-subtab').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.farm-area').forEach(a=>a.classList.add('hidden'));
+  if(tab==='field') el('farmFieldArea').classList.remove('hidden');
+  if(tab==='paddy') el('farmPaddyArea').classList.remove('hidden');
+  if(tab==='ranch') el('farmRanchArea').classList.remove('hidden');
+  renderFarm();
+}
+
+function renderFarm(){
+  if(currentFarmTab==='field') renderFarmField();
+  if(currentFarmTab==='paddy') renderFarmPaddy();
+  if(currentFarmTab==='ranch') renderFarmRanch();
+}
+
+function renderFarmField(){
+  const area=el('farmFieldArea');
+  const season=getCurrentSeason();
+  const isWinter=season.id==='winter';
+  const w=getWeather();
+  
+  let h='';
+  
+  // Weather info
+  if(weather==='rainy'){
+    h+=`<div style="background:#1a3a5a;border:1px solid #64b5f6;border-radius:6px;padding:8px;margin-bottom:8px;font-size:10px;color:#64b5f6">
+      🌧️ 雨の日: 水やり不要（自動で水やりされます）
+    </div>`;
+  } else if(weather==='storm'){
+    h+=`<div style="background:#3a1a5a;border:1px solid #9575cd;border-radius:6px;padding:8px;margin-bottom:8px;font-size:10px;color:#ce93d8">
+      ⛈️ 嵐: 作物がダメージを受ける可能性があります
+    </div>`;
+  }
+  
+  // Season warning for winter
+  if(isWinter){
+    h+=`<div style="background:#1a3a5a;border:1px solid #3a5a7a;border-radius:6px;padding:8px;margin-bottom:8px;font-size:10px;color:#87ceeb">
+      ❄️ 冬季は畑作業が制限されます。キャベツのみ栽培可能です。
+    </div>`;
+  }
+  
+  h+='<div class="farm-field-grid">';
+  
+  for(let i=0;i<TOTAL_FARM_PLOTS;i++){
+    const plot=farmPlots[i];
+    
+    if(plot.state==='locked'){
+      const cost=FARM_UNLOCK_COSTS[i];
+      h+=`<div class="farm-plot locked" onclick="unlockPlot(${i})">
+        <div class="farm-plot-emoji">🔒</div>
+        <div class="farm-plot-name">未開拓</div>
+        <div class="farm-lock-cost">${cost}Gで解放</div>
+      </div>`;
+      continue;
+    }
+    
+    const seed=plot.seedId?SEEDS.find(s=>s.id===plot.seedId):null;
+    const elapsed=day-plot.plantedDay;
+    let emoji,statusText='',cls=plot.state;
+    let progressHtml='', waterHtml='', actionsHtml='';
+    
+    if(plot.state==='wild'){
+      emoji='🪨🌵🪨';
+      statusText='荒れ地';
+      if(!isWinter){
+        actionsHtml=`<button class="farm-act-btn" onclick="farmTill(${i})" ${stamina>=10?'':'disabled'}>🪓 耕す (10⚡)</button>`;
+      } else {
+        actionsHtml=`<div style="font-size:9px;color:#87ceeb">❄️ 冬季凍結</div>`;
+      }
+    } else if(plot.state==='tilled'){
+      emoji=''; // clean soil shown by background
+      statusText='耕した土';
+      const availableSeeds=SEEDS.filter(s=>s.seasons.includes(season.id));
+      if(availableSeeds.length>0){
+        actionsHtml=`<div style="font-size:9px;color:#8a7a60;margin-bottom:4px">種を選んで植える:</div><div class="farm-plot-actions">`;
+        availableSeeds.forEach(s=>{
+          const canPlant=stamina>=5&&gold>=s.cost;
+          actionsHtml+=`<button class="farm-act-btn" onclick="farmPlant(${i},'${s.id}')" ${canPlant?'':'disabled'}>${s.emoji}${s.name}(${s.cost}G)</button>`;
+        });
+        actionsHtml+='</div>';
+      } else {
+        actionsHtml=`<div style="font-size:9px;color:#8a7a60">この季節に植えられる作物なし</div>`;
+      }
+    } else if(plot.state==='planted'||plot.state==='growing'){
+      const pct=Math.min(100,(elapsed/plot.growDays)*100);
+      emoji=plot.state==='planted'?'🌱':'🌿';
+      statusText=`${seed?seed.name:''} あと${Math.max(0,plot.growDays-elapsed)}日`;
+      progressHtml=`<div class="farm-plot-progress"><div class="farm-plot-progress-fill" style="width:${pct}%"></div></div>`;
+      waterHtml=plot.wateredToday
+        ?`<div class="farm-plot-water">💧 水やり済み</div>`
+        :`<div class="farm-plot-water">💧 水 ${plot.waterCount}回</div>`;
+      if(!plot.wateredToday){
+        actionsHtml=`<button class="farm-act-btn" onclick="farmWater(${i})" ${stamina>=5?'':'disabled'}>💧 水やり (5⚡)</button>`;
+      }
+    } else if(plot.state==='ready'){
+      emoji=seed?seed.emoji:'🥕';
+      statusText=`${seed?seed.name:''} 収穫可能！`;
+      waterHtml=`<div class="farm-plot-water">💧 水やり ${plot.waterCount}回 → 収穫量UP</div>`;
+      actionsHtml=`<button class="farm-act-btn" onclick="farmHarvest(${i})" ${stamina>=5?'':'disabled'}>✂️ 収穫 (5⚡)</button>`;
+    }
+    
+    h+=`<div class="farm-plot ${cls}">
+      <div class="farm-plot-emoji">${emoji}</div>
+      <div class="farm-plot-name">${statusText}</div>
+      ${waterHtml}${progressHtml}
+      <div class="farm-plot-actions">${actionsHtml}</div>
+    </div>`;
+  }
+  
+  h+='</div>';
+  area.innerHTML=h;
+}
+
+function unlockPlot(i){
+  const cost=FARM_UNLOCK_COSTS[i];
+  if(gold<cost) return;
+  gold-=cost;
+  farmPlots[i]={state:'wild',seedId:null,plantedDay:0,growDays:0,waterCount:0,wateredToday:false};
+  playSFX('coin');
+  logMsg(`<span class="a">🔓 畑を解放！(${cost}G)</span>`);
+  updateAll();saveGame();
+}
+
+function farmTill(i){
+  if(stamina<10||farmPlots[i].state!=='wild') return;
+  stamina-=10;
+  farmPlots[i].state='tilled';
+  playSFX('click');
+  logMsg(`<span class="a">🪓 畑を耕した</span>`);
+  updateAll();saveGame();
+}
+
+function farmPlant(i,seedId){
+  if(stamina<5||farmPlots[i].state!=='tilled') return;
+  const seed=SEEDS.find(s=>s.id===seedId);
+  if(!seed||gold<seed.cost) return;
+  
+  // Check if seed can be planted in current season
+  const season=getCurrentSeason();
+  if(!seed.seasons.includes(season.id)){
+    logMsg(`<span class="w">⚠️ ${seed.name}は${season.name}には植えられません</span>`);
+    return;
+  }
+  
+  stamina-=5;
+  gold-=seed.cost;
+  farmPlots[i].state='planted';
+  farmPlots[i].seedId=seed.id;
+  farmPlots[i].plantedDay=day;
+  farmPlots[i].growDays=seed.growDays;
+  farmPlots[i].waterCount=0;
+  farmPlots[i].wateredToday=false;
+  playSFX('click');
+  logMsg(`<span class="a">🌱 ${seed.name}を植えた（${seed.growDays}日で収穫）</span>`);
+  updateAll();saveGame();
+}
+
+function farmWater(i){
+  const p=farmPlots[i];
+  if(stamina<5||p.wateredToday||(p.state!=='planted'&&p.state!=='growing')) return;
+  
+  // Skip if rainy day (auto-watered)
+  if(weather==='rainy'){
+    logMsg(`<span class="w">🌧️ 雨が降っているので水やり不要です</span>`);
+    return;
+  }
+  
+  stamina-=5;
+  p.wateredToday=true;
+  p.waterCount=(p.waterCount||0)+1;
+  if(p.state==='planted') p.state='growing';
+  playSFX('water');
+  logMsg(`<span class="a">💧 水やりした（${p.waterCount}回目）</span>`);
+  updateAll();saveGame();
+}
+
+function farmHarvest(i){
+  const p=farmPlots[i];
+  if(stamina<5||p.state!=='ready') return;
+  const seed=SEEDS.find(s=>s.id===p.seedId);
+  if(!seed) return;
+  stamina-=5;
+  // Base yield + bonus from watering (each water adds +1)
+  let qty=rng(seed.yield[0],seed.yield[1]);
+  const waterBonus=Math.min(p.waterCount||0, seed.growDays); // max bonus = growDays
+  qty+=waterBonus;
+  addMat(seed.mat,qty);
+  playSFX('harvest');
+  achievementStats.totalHarvests++;
+  logMsg(`<span class="a">✂️ ${seed.name}×${qty}を収穫！（水ボーナス+${waterBonus}）</span>`);
+  p.state='wild';p.seedId=null;p.plantedDay=0;p.growDays=0;p.waterCount=0;p.wateredToday=false;
+  reputation+=1;
+  checkAchievements();
+  updateAll();saveGame();
+}
+
+const TOTAL_PADDY_PLOTS=6;
+const PADDY_UNLOCK_COSTS=[0,0,80,80,150,150];
+
+function renderFarmPaddy(){
+  const area=el('farmPaddyArea');
+  let h='<div class="paddy-grid">';
+  
+  while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
+  
+  for(let i=0;i<TOTAL_PADDY_PLOTS;i++){
+    const plot=paddyPlots[i];
+    
+    if(plot.state==='locked'){
+      const cost=PADDY_UNLOCK_COSTS[i];
+      h+=`<div class="paddy-plot empty" onclick="unlockPaddy(${i})">
+        <div class="farm-plot-emoji">🔒</div>
+        <div class="farm-plot-name">未開拓</div>
+        <div class="farm-lock-cost">${cost}Gで解放</div>
+      </div>`;
+      continue;
+    }
+    
+    let emoji,statusText='',cls='paddy-plot',actionsHtml='',progressHtml='';
+    
+    if(plot.state==='empty'){
+      cls+=' empty';emoji='🟫';statusText='空き地';
+      actionsHtml=`<button class="farm-act-btn" onclick="paddyAction('flood',${i})" ${stamina>=5?'':'disabled'}>💧 水を張る (5⚡)</button>`;
+    } else if(plot.state==='flooded'){
+      emoji='💧';statusText='水張り済';
+      actionsHtml=`<button class="farm-act-btn" onclick="paddyAction('plant',${i})" ${stamina>=5?'':'disabled'}>🌾 田植え (5⚡)</button>`;
+    } else if(plot.state==='growing'){
+      const elapsed=day-plot.plantedDay;
+      const pct=Math.min(100,(elapsed/6)*100);
+      emoji='🌾';statusText=`稲 あと${Math.max(0,6-elapsed)}日`;cls+=' growing';
+      progressHtml=`<div class="farm-plot-progress"><div class="farm-plot-progress-fill" style="width:${pct}%"></div></div>`;
+    } else if(plot.state==='ready'){
+      emoji='🌾';statusText='収穫可能！';cls+=' ready';
+      actionsHtml=`<button class="farm-act-btn" onclick="paddyAction('harvest',${i})" ${stamina>=5?'':'disabled'}>✂️ 収穫 (5⚡)</button>`;
+    }
+    
+    h+=`<div class="${cls}">
+      <div class="farm-plot-emoji">${emoji}</div>
+      <div class="farm-plot-name">${statusText}</div>
+      ${progressHtml}
+      <div class="farm-plot-actions">${actionsHtml}</div>
+    </div>`;
+  }
+  
+  h+='</div>';
+  area.innerHTML=h;
+}
+
+function unlockPaddy(i){
+  const cost=PADDY_UNLOCK_COSTS[i];
+  if(gold<cost) return;
+  gold-=cost;
+  paddyPlots[i]={state:'empty',plantedDay:0};
+  playSFX('coin');
+  logMsg(`<span class="a">🔓 水田を解放！(${cost}G)</span>`);
+  updateAll();saveGame();
+}
+
+function renderFarmRanch(){
+  const area=el('farmRanchArea');
+  area.innerHTML='<div class="ranch-grid" id="ranchGrid"></div>';
+  const grid=el('ranchGrid');grid.innerHTML='';
+  animals.forEach((a,i)=>{
+    const spec=ANIMALS.find(s=>s.id===a.type);
+    const happyPct=(a.happiness/100)*100;
+    const canFeed=!a.fedToday&&stamina>=5&&Object.entries(spec.feedCost).every(([m,q])=>(materials[m]||0)>=q);
+    const feedLabel=Object.entries(spec.feedCost).map(([m,q])=>`${MAT_NAMES[m]}×${q}`).join(', ');
+    
+    // Satiety/hunger icon
+    let satietyIcon='';
+    let satietyText='';
+    if(a.fedToday){
+      satietyIcon='🍽️';
+      satietyText='満腹';
+    } else {
+      satietyIcon='😋';
+      satietyText='空腹';
+    }
+    
+    // Happiness emoji
+    let happinessEmoji='';
+    if(a.happiness>=80){
+      happinessEmoji='😊';
+    } else if(a.happiness>=50){
+      happinessEmoji='😐';
+    } else if(a.happiness>=20){
+      happinessEmoji='😟';
+    } else {
+      happinessEmoji='😢';
+    }
+    
+    // Product readiness indicator
+    let productIndicator='';
+    const readyForProduct=a.happiness>=50&&a.daysSinceProduct>=spec.productDays;
+    if(readyForProduct&&a.fedToday){
+      productIndicator='<div style="font-size:10px;color:#4caf50;margin-top:2px">✨ 明日生産可能！</div>';
+    } else if(a.daysSinceProduct>=spec.productDays){
+      productIndicator='<div style="font-size:10px;color:#ff9800;margin-top:2px">⚠️ 給餌が必要</div>';
+    }
+    
+    grid.innerHTML+=`<div class="animal-card" style="position:relative">
+      <div style="position:absolute;top:8px;right:8px;font-size:20px">${satietyIcon}</div>
+      <div class="animal-emoji">${spec.emoji}</div>
+      <div class="animal-info">
+        <div class="animal-name">${spec.name} <span style="font-size:16px">${happinessEmoji}</span></div>
+        <div class="animal-status" style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:10px">${satietyText}</span>
+          <span style="color:#8a7a60">|</span>
+          <span style="font-size:10px">生産: ${MAT_NAMES[spec.product]} (${a.daysSinceProduct}/${spec.productDays}日)</span>
+        </div>
+        ${productIndicator}
+        <div class="animal-happiness">幸福度: ${a.happiness}% ${happinessEmoji}
+          <div class="happy-bar"><div class="happy-fill" style="width:${happyPct}%;${a.happiness<50?'background:#ff5722':''}"></div></div>
+        </div>
+      </div>
+      <button class="animal-btn" onclick="feedAnimal(${i})" ${canFeed?'':'disabled'} style="${a.fedToday?'background:#4caf50':''}">
+        ${a.fedToday?'✓ 給餌済':'🥕 給餌 (⚡5)'}
+      </button>
+    </div>`;
+  });
+  // Buy animals
+  ANIMALS.forEach(spec=>{
+    const canBuy=gold>=spec.cost&&stamina>=0;
+    grid.innerHTML+=`<div class="buy-animal" onclick="${canBuy?`buyAnimal('${spec.id}')`:''}" ${canBuy?'':'style="opacity:0.5"'}>
+      <div style="font-size:24px">${spec.emoji}</div>
+      <div style="font-size:11px;margin-top:4px">${spec.name}を購入 ${spec.cost}G</div>
+      <div style="font-size:9px;color:#8a7a60">餌: ${Object.entries(spec.feedCost).map(([m,q])=>`${MAT_NAMES[m]}×${q}`).join(', ')}</div>
+    </div>`;
+  });
+}
+
+
+
+
+
+function closeActionMenu(){
+  el('actionMenuBg').classList.add('hidden');
+  el('actionMenu').classList.add('hidden');
+  actionMenuTarget=null;
+}
+
+
+
+function paddyAction(action,idx){
+  const plot=paddyPlots[idx];
+  if(action==='flood'){
+    if(stamina<5) return;
+    stamina-=5;
+    plot.state='flooded';
+    playSFX('water');
+    logMsg(`<span class="a">💧 水田に水を張った</span>`);
+  } else if(action==='plant'){
+    if(stamina<5) return;
+    stamina-=5;
+    plot.state='growing';
+    plot.plantedDay=day;
+    playSFX('click');
+    logMsg(`<span class="a">🌾 田植え完了（6日で収穫）</span>`);
+  } else if(action==='harvest'){
+    if(stamina<5) return;
+    stamina-=5;
+    const qty=rng(4,7);
+    addMat('rice',qty);
+    plot.state='empty';
+    plot.plantedDay=0;
+    playSFX('harvest');
+    achievementStats.totalHarvests++;
+    logMsg(`<span class="a">🌾 米×${qty}を収穫！</span>`);
+    reputation+=2;
+    checkAchievements();
+  }
+  updateAll();
+  saveGame();
+}
+
+function buyAnimal(type){
+  const spec=ANIMALS.find(a=>a.id===type);
+  if(!spec||gold<spec.cost) return;
+  gold-=spec.cost;
+  animals.push({type:type,fedToday:false,lastProduct:0,happiness:50,daysSinceProduct:0});
+  achievementStats.totalAnimals++;
+  playSFX('coin');
+  logMsg(`<span class="a">${spec.emoji} ${spec.name}を購入！</span>`);
+  checkAchievements();
+  updateAll();
+  saveGame();
+}
+
+function feedAnimal(idx){
+  const a=animals[idx];
+  const spec=ANIMALS.find(s=>s.id===a.type);
+  if(a.fedToday||stamina<5) return;
+  if(!Object.entries(spec.feedCost).every(([m,q])=>(materials[m]||0)>=q)) return;
+  stamina-=5;
+  Object.entries(spec.feedCost).forEach(([m,q])=>materials[m]-=q);
+  a.fedToday=true;
+  a.happiness=Math.min(100,a.happiness+10);
+  playSFX('click');
+  logMsg(`<span class="a">${spec.emoji} 給餌完了</span>`);
+  updateAll();
+  saveGame();
+}
+
+function startCrafting(facility,recipeIdx){
+  const recipes=facility==='smithy'?SMITHY_RECIPES:BREWERY_RECIPES;
+  if(recipeIdx>=recipes.length) return;
+  const recipe=recipes[recipeIdx];
+  
+  // Check materials
+  if(!Object.entries(recipe.mats).every(([m,q])=>(materials[m]||0)>=q)) return;
+  
+  // Consume materials
+  Object.entries(recipe.mats).forEach(([m,q])=>materials[m]-=q);
+  
+  // Start crafting job
+  craftingJobs.push({
+    facility:facility,
+    recipe:recipe,
+    startDay:day,
+    daysLeft:recipe.time
+  });
+  
+  playSFX('build');
+  const facName=facility==='smithy'?'⚒️鍛冶屋':'⚗️醸造所';
+  logMsg(`<span class="f">${facName} ${recipe.emoji}${recipe.name}の製作開始（${recipe.time}日後完成）</span>`);
+  
+  updateAll();
+  saveGame();
+}
+
+// === Swipe Detection ===
+let touchStartX=0,touchEndX=0;
+function setupSwipe(){
+  const farmTab=el('tab-farm');
+  farmTab.addEventListener('touchstart',e=>{touchStartX=e.changedTouches[0].screenX;},{passive:true});
+  farmTab.addEventListener('touchend',e=>{
+    touchEndX=e.changedTouches[0].screenX;
+    const delta=touchStartX-touchEndX;
+    if(Math.abs(delta)<50) return;
+    if(delta>0){
+      // Swipe left
+      if(currentFarmTab==='field') switchFarmTabProg('paddy');
+      else if(currentFarmTab==='paddy') switchFarmTabProg('ranch');
+    } else {
+      // Swipe right
+      if(currentFarmTab==='ranch') switchFarmTabProg('paddy');
+      else if(currentFarmTab==='paddy') switchFarmTabProg('field');
+    }
+  },{passive:true});
+}
+
+function switchFarmTabProg(tab){
+  currentFarmTab=tab;
+  document.querySelectorAll('.farm-subtab').forEach(t=>t.classList.remove('active'));
+  if(tab==='field') document.querySelectorAll('.farm-subtab')[0].classList.add('active');
+  if(tab==='paddy') document.querySelectorAll('.farm-subtab')[1].classList.add('active');
+  if(tab==='ranch') document.querySelectorAll('.farm-subtab')[2].classList.add('active');
+  document.querySelectorAll('.farm-area').forEach(a=>a.classList.add('hidden'));
+  if(tab==='field') el('farmFieldArea').classList.remove('hidden');
+  if(tab==='paddy') el('farmPaddyArea').classList.remove('hidden');
+  if(tab==='ranch') el('farmRanchArea').classList.remove('hidden');
+  renderFarm();
+}
+
+// === Facilities ===
+function buildFacility(id){
+  const f=FACILITIES.find(x=>x.id===id);
+  const nextLv=facilities[id];
+  if(nextLv>=f.levels.length) return;
+  const data=f.levels[nextLv];
+  if(gold<data.cost) return;
+  for(const[mat,qty] of Object.entries(data.mats)) if((materials[mat]||0)<qty) return;
+  gold-=data.cost;
+  for(const[mat,qty] of Object.entries(data.mats)) materials[mat]-=qty;
+  facilities[id]=nextLv+1;
+  reputation+=10*(nextLv+1);
+  achievementStats.totalBuilds++;
+  playSFX('build');
+  logMsg(`<span class="f">🏗️ ${data.name}を建設！</span>`);
+  checkAchievements();
+  updateAll();saveGame();
+}
+
+// === Cooking (instant, no minigame) ===
+function canCook(){
+  if(facilities.tavern<=0) return[];
+  return COOK_RECIPES.filter(r=>Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q));
+}
+
+function startCook(idx){
+  const available=canCook();
+  if(idx>=available.length) return;
+  const recipe=available[idx];
+
+  // Consume ingredients
+  for(const[m,q] of Object.entries(recipe.mats)) materials[m]-=q;
+
+  // Add to inventory
+  const sellPrice=recipe.income;
+  if(!inventory[recipe.name]){
+    inventory[recipe.name]={qty:0,sellPrice:sellPrice};
+  }
+  inventory[recipe.name].qty++;
+  inventory[recipe.name].sellPrice=sellPrice;
+
+  achievementStats.totalCooks++;
+  playSFX('cook');
+  logMsg(`<span class="c">🍳 ${recipe.name}を調理 → 在庫+1 (売値${sellPrice}G)</span>`);
+  reputation+=1;
+  checkAchievements();
+  updateAll();saveGame();
+}
+
+// === Render ===
+function updateAll(){
+  el('gold').textContent=gold;
+  el('stamina').textContent=stamina;
+  el('staminaNum').textContent=stamina;
+  el('staminaFill').style.width=(stamina/100*100)+'%';
+  
+  // Update season display
+  if(day>0){
+    const season=getCurrentSeason();
+    const dayInSeason=getDayInSeason();
+    el('seasonDisplay').innerHTML=`<span style="color:${season.color}">${season.emoji}${season.name} ${dayInSeason}日目</span>`;
+    
+    // Update weather display
+    const w=getWeather();
+    el('weatherDisplay').innerHTML=`<span style="color:${w.color}">${w.emoji}${w.name}</span>`;
+  }
+  
+  // Update guild rank display
+  const guildRank=getGuildRank();
+  const nextRank=getNextGuildRank();
+  el('guildRankName').textContent=guildRank.name;
+  el('guildRepValue').textContent=reputation;
+  if(nextRank){
+    const needed=nextRank.minRep-reputation;
+    el('guildRankProgress').innerHTML=`次のランクまで: <span style="color:#ffd700">${needed}</span> (${nextRank.name})`;
+  } else {
+    el('guildRankProgress').innerHTML=`<span style="color:#ffd700">最高ランク到達！</span>`;
+  }
+  
+  renderQuestBoard();renderFarm();renderTavern();renderSmithy();renderFacilities();renderStorage();renderTown();
+}
+
+function renderQuestBoard(){
+  const board=el('questBoard');board.innerHTML='';
+  const active=quests.filter(q=>q.status!=='done');
+  const done=quests.filter(q=>q.status==='done').slice(-3);
+  if(!active.length&&!done.length){board.innerHTML='<div style="font-size:10px;color:#555;padding:8px">クエストなし</div>';return;}
+  [...active,...done].forEach(q=>{
+    const cls=q.status==='posted'?'qs-posted':q.status==='active'?'qs-active':'qs-done';
+    let txt='';
+    let advInfo='';
+    let resultInfo='';
+    
+    if(q.status==='posted'){
+      txt='掲載中';
+    } else if(q.status==='active'){
+      const adv=q.adventurer;
+      txt=`遂行中(あと${q.activeDaysLeft}日)`;
+      advInfo=`<div class="quest-detail" style="margin-top:4px">
+        ${adv.rank.emoji}${adv.name} (${adv.rank.name} ${adv.specialty.emoji}${adv.specialty.name})
+        ${q.specialtyBonus?' <span style="color:#4caf50">⚡得意</span>':''}
+      </div>`;
+    } else {
+      // Done - always successful
+      txt='✅ 完了';
+      
+      if(q.adventurer){
+        const adv=q.adventurer;
+        advInfo=`<div class="quest-detail" style="margin-top:4px">
+          ${adv.rank.emoji}${adv.name} (${adv.rank.name})
+        </div>`;
+      }
+    }
+    
+    board.innerHTML+=`<div class="quest-card">
+      <div class="quest-top"><span class="quest-name">${q.questName}</span><span class="quest-status ${cls}">${txt}</span></div>
+      ${advInfo}
+      <div class="quest-reward">報酬: ${q.reward}G <span style="font-size:9px;color:#8a7a60">(掲載時相場${q.marketPrice}G)</span>${q.status==='posted'?' 💰前払い済':''}</div>
+      ${resultInfo}
+      ${q.status==='posted'?`<div class="quest-detail">掲載${day-q.postedDay}日目</div><button class="btn btn-red btn-sm" onclick="cancelQuest(${q.id})" style="margin-top:4px">取り下げ（返金）</button>`:''}
+    </div>`;
+  });
+}
+
+function renderFacilities(){
+  // Render non-tavern, non-smithy, non-brewery facilities (inn, stable, etc.)
+  const list=el('facilityList');list.innerHTML='';
+  FACILITIES.forEach(f=>{
+    if(f.id==='tavern'||f.id==='smithy'||f.id==='brewery') return; // Skip - they have their own tabs
+    const lv=facilities[f.id];
+    if(lv===0) return;
+    const d=f.levels[lv-1];
+    list.innerHTML+=`<div class="facility-card">
+      <div class="facility-top"><span class="facility-name">${f.emoji} ${d.name}</span><span class="facility-level">Lv.${lv}</span></div>
+      <div class="facility-stat">${f.desc}</div>
+      ${d.income?`<div class="facility-income">💰 1人あたり${d.income}G/日</div>`:''}
+      ${d.questSpeedup?`<div class="facility-stat" style="color:#64b5f6">⚡ クエスト${d.questSpeedup}日短縮</div>`:''}
+    </div>`;
+  });
+  
+  // Build list - only show non-tavern/smithy/brewery facilities
+  const bList=el('buildList');bList.innerHTML='';
+  FACILITIES.forEach(f=>{
+    if(f.id==='tavern'||f.id==='smithy'||f.id==='brewery') return; // Skip
+    const lv=facilities[f.id];
+    if(lv>=f.levels.length) return;
+    const next=f.levels[lv];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    bList.innerHTML+=`<div class="facility-card">
+      <div class="facility-top"><span class="facility-name">${f.emoji} ${next.name}${lv>0?' (升級)':''}</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+      <div class="facility-stat">${f.desc}</div><div class="facility-stat">素材: ${matsStr}</div>
+      <button class="btn btn-green btn-sm" onclick="buildFacility('${f.id}')" ${can?'':'disabled'}>建設</button>
+    </div>`;
+  });
+}
+
+function renderTavern(){
+  const content=el('tavernContent');
+  const lv=facilities.tavern||0;
+  
+  if(lv===0){
+    // Not built yet - show build option
+    const f=FACILITIES.find(x=>x.id==='tavern');
+    const next=f.levels[0];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    content.innerHTML=`
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:48px;margin-bottom:10px">🍳</div>
+        <div style="font-size:14px;color:#c0a870;margin-bottom:8px">食堂は未建設です</div>
+        <div style="font-size:11px;color:#8a7a60;margin-bottom:12px">素材を使って料理を作り、冒険者に提供できます</div>
+        <div class="facility-card">
+          <div class="facility-top"><span class="facility-name">🍺 ${next.name}</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+          <div class="facility-stat">${f.desc}</div>
+          <div class="facility-stat">素材: ${matsStr}</div>
+          <button class="btn btn-green btn-full" onclick="buildFacility('tavern')" ${can?'':'disabled'}>建設する</button>
+        </div>
+      </div>`;
+    return;
+  }
+  
+  // Tavern is built - show status and cooking
+  const d=FACILITIES.find(f=>f.id==='tavern').levels[lv-1];
+  let html=`
+    <div class="facility-card">
+      <div class="facility-top"><span class="facility-name">🍺 ${d.name}</span><span class="facility-level">Lv.${lv}</span></div>
+      <div class="facility-stat">毎日、冒険者に食事を提供</div>
+      <div class="facility-income">💰 1人あたり${d.income}G/日</div>
+    </div>`;
+  
+  // Show food inventory
+  const foodInv=Object.entries(inventory).filter(([name,_])=>COOK_RECIPES.some(r=>r.name===name));
+  if(foodInv.length>0){
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#4caf50;font-weight:bold;margin-bottom:8px">📦 料理在庫 (自動販売)</div>';
+    foodInv.forEach(([name,data])=>{
+      if(data.qty>0){
+        html+=`<div style="margin:4px 0;padding:6px;background:#2a2318;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:11px">${COOK_RECIPES.find(r=>r.name===name)?.emoji||'🍽️'} ${name}</div>
+          <div>
+            <span style="font-size:11px;color:#ffd700">×${data.qty}</span>
+            <span style="font-size:9px;color:#8a7a60;margin-left:6px">${data.sellPrice}G/個</span>
+          </div>
+        </div>`;
+      }
+    });
+    html+='<div style="font-size:9px;color:#8a7a60;margin-top:6px">💡 冒険者が出発時と宿泊中に自動購入します</div>';
+    html+='</div>';
+  }
+  
+  // Upgrade option
+  const f=FACILITIES.find(x=>x.id==='tavern');
+  if(lv<f.levels.length){
+    const next=f.levels[lv];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    html+=`<div class="facility-card">
+      <div class="facility-top"><span class="facility-name">🍺 ${next.name} (升級)</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+      <div class="facility-stat">素材: ${matsStr}</div>
+      <button class="btn btn-green btn-sm" onclick="buildFacility('tavern')" ${can?'':'disabled'}>升級する</button>
+    </div>`;
+  }
+  
+  // Cooking section
+  const avail=canCook();
+  if(avail.length>0){
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#ff8a65;font-weight:bold;margin-bottom:8px">🍳 調理メニュー:</div>';
+    avail.forEach((r,i)=>{
+      const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+      html+=`<div style="margin:6px 0;padding:8px;background:#2a2318;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:bold">${r.emoji} ${r.name}</div>
+            <div style="font-size:10px;color:#8a7a60;margin-top:2px">素材: ${matsStr}</div>
+          </div>
+          <button class="btn btn-orange btn-sm" onclick="startCook(${i})">調理</button>
+        </div>
+        <div style="font-size:9px;color:#4caf50;margin-top:4px">💰 売値: ${r.income}G</div>
+      </div>`;
+    });
+    html+='</div>';
+  } else if(avail.length===0){
+    html+='<div style="margin-top:12px;text-align:center;padding:20px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:36px;margin-bottom:8px">🥘</div>';
+    html+='<div style="font-size:12px;color:#8a7a60">調理できる素材がありません</div>';
+    html+='<div style="font-size:10px;color:#666;margin-top:4px">クエストで素材を集めましょう</div>';
+    html+='</div>';
+  }
+  
+  content.innerHTML=html;
+}
+
+function renderSmithy(){
+  const content=el('smithyContent');
+  const lv=facilities.smithy||0;
+  
+  if(lv===0){
+    // Not built yet
+    const f=FACILITIES.find(x=>x.id==='smithy');
+    const next=f.levels[0];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    content.innerHTML=`
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:48px;margin-bottom:10px">⚒️</div>
+        <div style="font-size:14px;color:#c0a870;margin-bottom:8px">鍛冶屋は未建設です</div>
+        <div style="font-size:11px;color:#8a7a60;margin-bottom:12px">武器とポーションを製作して販売できます</div>
+        <div class="facility-card">
+          <div class="facility-top"><span class="facility-name">⚒️ ${next.name}</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+          <div class="facility-stat">${f.desc}</div>
+          <div class="facility-stat">素材: ${matsStr}</div>
+          <button class="btn btn-green btn-full" onclick="buildFacility('smithy')" ${can?'':'disabled'}>建設する</button>
+        </div>
+      </div>`;
+    return;
+  }
+  
+  // Smithy is built
+  const d=FACILITIES.find(f=>f.id==='smithy').levels[lv-1];
+  let html=`
+    <div class="facility-card">
+      <div class="facility-top"><span class="facility-name">⚒️ ${d.name}</span><span class="facility-level">Lv.${lv}</span></div>
+      <div class="facility-stat">武器を鍛造して販売</div>
+    </div>`;
+  
+  // Upgrade option
+  const f=FACILITIES.find(x=>x.id==='smithy');
+  if(lv<f.levels.length){
+    const next=f.levels[lv];
+    const matsStr=Object.entries(next.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const can=gold>=next.cost&&Object.entries(next.mats).every(([m,q])=>(materials[m]||0)>=q);
+    html+=`<div class="facility-card">
+      <div class="facility-top"><span class="facility-name">⚒️ ${next.name} (升級)</span><span style="font-size:10px;color:#ffd700">${next.cost}G</span></div>
+      <div class="facility-stat">素材: ${matsStr}</div>
+      <button class="btn btn-green btn-sm" onclick="buildFacility('smithy')" ${can?'':'disabled'}>升級する</button>
+    </div>`;
+  }
+  
+  // Show weapon/potion inventory
+  const weaponInv=Object.entries(inventory).filter(([name,_])=>SMITHY_RECIPES.some(r=>r.name===name));
+  const potionInv=Object.entries(inventory).filter(([name,_])=>BREWERY_RECIPES.some(r=>r.name===name));
+  
+  if(weaponInv.length>0||potionInv.length>0){
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#4caf50;font-weight:bold;margin-bottom:8px">📦 製品在庫 (自動販売)</div>';
+    
+    if(weaponInv.length>0){
+      html+='<div style="font-size:11px;color:#c0a870;margin:4px 0">⚔️ 武器:</div>';
+      weaponInv.forEach(([name,data])=>{
+        if(data.qty>0){
+          html+=`<div style="margin:2px 0;padding:4px;background:#2a2318;border-radius:4px;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:10px">${SMITHY_RECIPES.find(r=>r.name===name)?.emoji||'⚔️'} ${name}</div>
+            <div>
+              <span style="font-size:11px;color:#ffd700">×${data.qty}</span>
+              <span style="font-size:9px;color:#8a7a60;margin-left:6px">${data.sellPrice}G/個</span>
+            </div>
+          </div>`;
+        }
+      });
+    }
+    
+    if(potionInv.length>0){
+      html+='<div style="font-size:11px;color:#c0a870;margin:8px 0 4px 0">🧪 ポーション:</div>';
+      potionInv.forEach(([name,data])=>{
+        if(data.qty>0){
+          html+=`<div style="margin:2px 0;padding:4px;background:#2a2318;border-radius:4px;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:10px">${BREWERY_RECIPES.find(r=>r.name===name)?.emoji||'🧪'} ${name}</div>
+            <div>
+              <span style="font-size:11px;color:#ffd700">×${data.qty}</span>
+              <span style="font-size:9px;color:#8a7a60;margin-left:6px">${data.sellPrice}G/個</span>
+            </div>
+          </div>`;
+        }
+      });
+    }
+    
+    html+='<div style="font-size:9px;color:#8a7a60;margin-top:6px">💡 冒険者が出発時に自動購入<br>⚔️ 武器→クエスト日数-1 | 🧪 ポーション→成功率+10%</div>';
+    html+='</div>';
+  }
+  
+  // Show active crafting jobs
+  const activeS=craftingJobs.filter(j=>j.facility==='smithy');
+  if(activeS.length>0){
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#ff8a65;font-weight:bold;margin-bottom:8px">⚒️ 製作中:</div>';
+    activeS.forEach(job=>{
+      html+=`<div style="margin:4px 0;padding:6px;background:#2a2318;border-radius:6px">
+        <div style="font-size:12px">${job.recipe.emoji} ${job.recipe.name}</div>
+        <div style="font-size:10px;color:#8a7a60">あと${job.daysLeft}日で完成</div>
+      </div>`;
+    });
+    html+='</div>';
+  }
+  
+  // Show smithy recipes
+  html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+  html+='<div style="font-size:12px;color:#c0a870;font-weight:bold;margin-bottom:8px">⚔️ 武器製作:</div>';
+  SMITHY_RECIPES.forEach((r,i)=>{
+    const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const canCraft=Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
+    html+=`<div style="margin:6px 0;padding:8px;background:#2a2318;border-radius:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:bold">${r.emoji} ${r.name}</div>
+          <div style="font-size:10px;color:#8a7a60;margin-top:2px">素材: ${matsStr}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="startCrafting('smithy',${i})" ${canCraft?'':'disabled'}>製作</button>
+      </div>
+      <div style="font-size:9px;color:#4caf50;margin-top:4px">⏱️ ${r.time}日 → 💰 +${r.sellPrice}G</div>
+    </div>`;
+  });
+  html+='</div>';
+  
+  // Show brewery recipes if brewery is built
+  const brewLv=facilities.brewery||0;
+  if(brewLv>0){
+    const activeB=craftingJobs.filter(j=>j.facility==='brewery');
+    if(activeB.length>0){
+      html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+      html+='<div style="font-size:12px;color:#ff8a65;font-weight:bold;margin-bottom:8px">⚗️ 醸造中:</div>';
+      activeB.forEach(job=>{
+        html+=`<div style="margin:4px 0;padding:6px;background:#2a2318;border-radius:6px">
+          <div style="font-size:12px">${job.recipe.emoji} ${job.recipe.name}</div>
+          <div style="font-size:10px;color:#8a7a60">あと${job.daysLeft}日で完成</div>
+        </div>`;
+      });
+      html+='</div>';
+    }
+    
+    html+='<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">';
+    html+='<div style="font-size:12px;color:#c0a870;font-weight:bold;margin-bottom:8px">⚗️ ポーション醸造:</div>';
+    BREWERY_RECIPES.forEach((r,i)=>{
+      const matsStr=Object.entries(r.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+      const canCraft=Object.entries(r.mats).every(([m,q])=>(materials[m]||0)>=q);
+      html+=`<div style="margin:6px 0;padding:8px;background:#2a2318;border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:bold">${r.emoji} ${r.name}</div>
+            <div style="font-size:10px;color:#8a7a60;margin-top:2px">素材: ${matsStr}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="startCrafting('brewery',${i})" ${canCraft?'':'disabled'}>醸造</button>
+        </div>
+        <div style="font-size:9px;color:#4caf50;margin-top:4px">⏱️ ${r.time}日 → 💰 +${r.sellPrice}G</div>
+      </div>`;
+    });
+    html+='</div>';
+  } else {
+    // Show brewery build option
+    const brewF=FACILITIES.find(x=>x.id==='brewery');
+    const brewNext=brewF.levels[0];
+    const brewMatsStr=Object.entries(brewNext.mats).map(([m,q])=>`${MAT_NAMES[m]||m}×${q}`).join(', ');
+    const brewCan=gold>=brewNext.cost&&Object.entries(brewNext.mats).every(([m,q])=>(materials[m]||0)>=q);
+    html+=`<div style="margin-top:12px;padding:10px;background:#1a1510;border:1px solid #3a3020;border-radius:8px">
+      <div style="font-size:12px;color:#c0a870;font-weight:bold;margin-bottom:8px">⚗️ ポーション醸造</div>
+      <div style="font-size:10px;color:#8a7a60;margin-bottom:8px">醸造所を建設するとポーションを作れます</div>
+      <div class="facility-card" style="margin:0">
+        <div class="facility-top"><span class="facility-name">⚗️ ${brewNext.name}</span><span style="font-size:10px;color:#ffd700">${brewNext.cost}G</span></div>
+        <div class="facility-stat">素材: ${brewMatsStr}</div>
+        <button class="btn btn-green btn-sm" onclick="buildFacility('brewery')" ${brewCan?'':'disabled'}>建設する</button>
+      </div>
+    </div>`;
+  }
+  
+  content.innerHTML=html;
+}
+
+function renderStorage(){
+  const total=getTotalMaterials();
+  const capacity=getStorageCapacity();
+  const pct=(total/capacity)*100;
+  const almostFull=pct>=80;
+  
+  const g=el('matGrid');g.innerHTML='';let has=false;
+  Object.entries(materials).sort().forEach(([id,qty])=>{
+    if(qty<=0) return;has=true;
+    g.innerHTML+=`<div class="mat-item">${MAT_NAMES[id]||id} <span class="mat-qty">×${qty}</span></div>`;
+  });
+  if(!has) g.innerHTML='<span style="font-size:10px;color:#555">素材なし</span>';
+  
+  // Upgrade display (placed below materials)
+  const upgradeSection=`<div style="background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:8px;margin-top:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-size:11px;color:#c0a870;font-weight:bold">📦 倉庫容量</span>
+      <span style="font-size:12px;color:${almostFull?'#ff9800':'#4caf50'};font-weight:bold">${total}/${capacity}</span>
+    </div>
+    <div style="background:#333;border-radius:4px;height:12px;overflow:hidden">
+      <div style="height:100%;background:${almostFull?'linear-gradient(90deg,#ff9800,#ff5722)':'linear-gradient(90deg,#4caf50,#8bc34a)'};border-radius:4px;width:${pct}%;transition:width 0.3s"></div>
+    </div>
+    ${almostFull?`<div style="font-size:9px;color:#ff9800;margin-top:4px">⚠️ 倉庫がほぼ満杯です！</div>`:''}
+    ${storageLevel<STORAGE_CAPACITIES.length-1?`<div style="margin-top:6px">
+      <button class="btn btn-green btn-sm" onclick="upgradeStorage()" ${canUpgradeStorage()?'':'disabled'}>
+        📦 倉庫拡張 Lv.${storageLevel+1} (${STORAGE_UPGRADE_COSTS[storageLevel]}G → 容量${STORAGE_CAPACITIES[storageLevel+1]})
+      </button>
+    </div>`:`<div style="font-size:9px;color:#8a7a60;margin-top:4px">倉庫は最大レベルです</div>`}
+  </div>`;
+  
+  // Remove any old upgrade section first
+  const panel=el('tab-storage').querySelector('.panel');
+  const oldUpgrade=panel.querySelector('div[style*="margin-top:8px"]');
+  if(oldUpgrade) oldUpgrade.remove();
+  
+  // Insert upgrade section after mat-grid
+  panel.insertAdjacentHTML('beforeend',upgradeSection);
+}
+
+function renderTown(){
+  drawTownCanvas();
+  el('townGrid').innerHTML=`
+    <div class="town-stat"><div class="ts-val">${gold}</div><div class="ts-label">💰 所持金</div></div>
+    <div class="town-stat"><div class="ts-val">${Math.floor(reputation)}</div><div class="ts-label">⭐ 評判</div></div>
+    <div class="town-stat"><div class="ts-val">${totalAdventurers}</div><div class="ts-label">👥 冒険者総数</div></div>`;
+  
+  // Achievements
+  const achList=el('achievementsList');
+  const unlockedCount=Object.keys(achievements).length;
+  const totalCount=ACHIEVEMENTS.length;
+  achList.innerHTML=`<div style="font-size:11px;color:#ffd700;margin-bottom:6px">🏆 ${unlockedCount}/${totalCount} 解除済み</div><div class="achievement-grid">`;
+  ACHIEVEMENTS.forEach(ach=>{
+    const unlocked=!!achievements[ach.id];
+    const cls=unlocked?'unlocked':'locked';
+    achList.innerHTML+=`<div class="achievement-card ${cls}">
+      <div class="achievement-emoji">${unlocked?ach.emoji:'🔒'}</div>
+      <div class="achievement-info">
+        <div class="achievement-name">${unlocked?ach.name:'???'}</div>
+        <div class="achievement-desc">${unlocked?ach.desc:'未解除'}</div>
+      </div>
+    </div>`;
+  });
+  achList.innerHTML+='</div>';
+  
+  let reportHtml=`
+    <div style="font-size:11px;margin:4px 0">📅 Day ${day}</div>
+    <div style="font-size:11px;color:#4caf50">📈 日収入: ${dailyIncome}G</div>
+    <div style="font-size:11px;color:#f44336">📉 日支出: ${dailyExpense}G</div>
+    <div style="font-size:11px;color:#ffd700;font-weight:bold">💰 純利益: ${dailyIncome-dailyExpense}G</div>`;
+  
+  // Add graph if we have historical data
+  if(dailyStats.length>0){
+    reportHtml+=`<div style="margin-top:12px">
+      <div style="font-size:11px;color:#c0a870;font-weight:bold;margin-bottom:6px">📊 収支推移（直近10日分）</div>
+      ${renderStatsGraph()}
+    </div>`;
+  }
+  
+  el('report').innerHTML=reportHtml;
+}
+
+function drawTownCanvas(){
+  const canvas=el('townCanvas');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  const w=canvas.width;
+  const h=canvas.height;
+  
+  // Clear background - sky gradient
+  const grad=ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'#87ceeb');
+  grad.addColorStop(0.6,'#e0f6ff');
+  grad.addColorStop(1,'#7cb342');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,w,h);
+  
+  // Ground
+  ctx.fillStyle='#6d4c41';
+  ctx.fillRect(0,h*0.7,w,h*0.3);
+  
+  // Grass texture
+  ctx.fillStyle='#8bc34a';
+  ctx.fillRect(0,h*0.7,w,h*0.05);
+  
+  // Road
+  ctx.fillStyle='#8d6e63';
+  ctx.fillRect(0,h*0.75,w,h*0.1);
+  ctx.fillStyle='#7a5847';
+  for(let i=0;i<10;i++){
+    ctx.fillRect(i*(w/10)+w/20-5,h*0.78,10,4);
+  }
+  
+  // Draw buildings based on facility levels
+  const innLv=facilities.inn||0;
+  const tavLv=facilities.tavern||0;
+  const stableLv=facilities.stable||0;
+  const smithyLv=facilities.smithy||0;
+  const breweryLv=facilities.brewery||0;
+  
+  // Row 1: Inn, Tavern, Stable
+  // Inn position: left side
+  if(innLv>0){
+    drawBuilding(ctx,30,h*0.35,70,80,innLv,'#d7ccc8','#5d4037','🏨');
+  } else {
+    drawEmptyPlot(ctx,30,h*0.50,70,50,'宿屋');
+  }
+  
+  // Tavern position: center-left
+  if(tavLv>0){
+    drawBuilding(ctx,120,h*0.38,70,75,tavLv,'#ffccbc','#bf360c','🍺');
+  } else {
+    drawEmptyPlot(ctx,120,h*0.52,70,45,'食堂');
+  }
+  
+  // Stable position: center
+  if(stableLv>0){
+    drawBuilding(ctx,210,h*0.40,65,70,stableLv,'#ffe0b2','#6d4c41','🐴');
+  } else {
+    drawEmptyPlot(ctx,210,h*0.54,65,40,'厩舎');
+  }
+  
+  // Row 2: Smithy, Brewery
+  // Smithy position: center-right
+  if(smithyLv>0){
+    drawBuilding(ctx,295,h*0.42,65,65,smithyLv,'#b0bec5','#37474f','⚒️');
+  } else {
+    drawEmptyPlot(ctx,295,h*0.56,65,38,'鍛冶屋');
+  }
+  
+  // Brewery position: right side
+  if(breweryLv>0){
+    drawBuilding(ctx,380,h*0.44,60,60,breweryLv,'#ce93d8','#4a148c','⚗️');
+  } else {
+    drawEmptyPlot(ctx,380,h*0.58,60,35,'醸造所');
+  }
+  
+  // Draw some decorative elements
+  // Trees
+  drawTree(ctx,20,h*0.55);
+  drawTree(ctx,w-30,h*0.52);
+  
+  // Clouds
+  drawCloud(ctx,50,30);
+  drawCloud(ctx,w-80,50);
+  
+  // Adventurers walking
+  if(adventurersInTown>0){
+    for(let i=0;i<Math.min(3,adventurersInTown);i++){
+      drawAdventurer(ctx,120+i*80,h*0.72);
+    }
+  }
+}
+
+function drawBuilding(ctx,x,y,w,h,level,color,roofColor,emoji){
+  // Building body
+  ctx.fillStyle=color;
+  ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='#3e2723';
+  ctx.lineWidth=2;
+  ctx.strokeRect(x,y,w,h);
+  
+  // Windows based on level
+  const windowRows=level;
+  ctx.fillStyle='#fff9c4';
+  for(let r=0;r<windowRows;r++){
+    for(let c=0;c<2;c++){
+      const wx=x+15+c*40;
+      const wy=y+15+r*25;
+      ctx.fillRect(wx,wy,15,15);
+      ctx.strokeStyle='#5d4037';
+      ctx.lineWidth=1;
+      ctx.strokeRect(wx,wy,15,15);
+    }
+  }
+  
+  // Roof - triangle
+  ctx.fillStyle=roofColor;
+  ctx.beginPath();
+  ctx.moveTo(x-10,y);
+  ctx.lineTo(x+w/2,y-30);
+  ctx.lineTo(x+w+10,y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle='#3e2723';
+  ctx.lineWidth=2;
+  ctx.stroke();
+  
+  // Emoji sign
+  ctx.font='28px Arial';
+  ctx.fillText(emoji,x+w/2-14,y-8);
+  
+  // Door
+  ctx.fillStyle='#4e342e';
+  ctx.fillRect(x+w/2-12,y+h-30,24,30);
+  ctx.strokeStyle='#3e2723';
+  ctx.strokeRect(x+w/2-12,y+h-30,24,30);
+}
+
+function drawEmptyPlot(ctx,x,y,w,h,label){
+  // Empty plot with dashed border
+  ctx.strokeStyle='#8d6e63';
+  ctx.lineWidth=2;
+  ctx.setLineDash([5,5]);
+  ctx.strokeRect(x,y,w,h);
+  ctx.setLineDash([]);
+  
+  // Label
+  ctx.fillStyle='#6d4c41';
+  ctx.font='12px Arial';
+  ctx.textAlign='center';
+  ctx.fillText(label,x+w/2,y+h/2);
+  ctx.textAlign='left';
+}
+
+function drawTree(ctx,x,y){
+  // Trunk
+  ctx.fillStyle='#5d4037';
+  ctx.fillRect(x-5,y,10,25);
+  
+  // Leaves - simple circles
+  ctx.fillStyle='#66bb6a';
+  ctx.beginPath();
+  ctx.arc(x,y-5,15,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x-10,y+5,12,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+10,y+5,12,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawCloud(ctx,x,y){
+  ctx.fillStyle='rgba(255,255,255,0.8)';
+  ctx.beginPath();
+  ctx.arc(x,y,15,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+20,y,20,0,Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x+40,y,15,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawAdventurer(ctx,x,y){
+  // Simple stick figure adventurer
+  ctx.strokeStyle='#5d4037';
+  ctx.lineWidth=2;
+  
+  // Head
+  ctx.fillStyle='#ffccbc';
+  ctx.beginPath();
+  ctx.arc(x,y-20,5,0,Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(x,y-15);
+  ctx.lineTo(x,y);
+  ctx.stroke();
+  
+  // Arms
+  ctx.beginPath();
+  ctx.moveTo(x-7,y-10);
+  ctx.lineTo(x+7,y-10);
+  ctx.stroke();
+  
+  // Legs
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x-5,y+12);
+  ctx.moveTo(x,y);
+  ctx.lineTo(x+5,y+12);
+  ctx.stroke();
+}
+
+function renderStatsGraph(){
+  if(dailyStats.length===0) return '';
+  
+  // Calculate min/max for scaling
+  const allValues=dailyStats.flatMap(s=>[s.income,s.expense,Math.abs(s.net)]);
+  const maxValue=Math.max(...allValues,1);
+  
+  const graphHeight=120;
+  const graphWidth=400;
+  const barWidth=Math.floor(graphWidth/dailyStats.length)-4;
+  
+  let html=`<div style="background:#1a1510;border:1px solid #3a3020;border-radius:6px;padding:10px">`;
+  
+  // Legend
+  html+=`<div style="display:flex;gap:12px;justify-content:center;font-size:9px;margin-bottom:8px">
+    <div><span style="display:inline-block;width:12px;height:12px;background:#4caf50;border-radius:2px;margin-right:3px"></span>収入</div>
+    <div><span style="display:inline-block;width:12px;height:12px;background:#f44336;border-radius:2px;margin-right:3px"></span>支出</div>
+    <div><span style="display:inline-block;width:12px;height:12px;background:#ffd700;border-radius:2px;margin-right:3px"></span>純利益</div>
+  </div>`;
+  
+  // Graph container
+  html+=`<div style="display:flex;align-items:flex-end;justify-content:space-around;height:${graphHeight}px;background:#0a0a08;border-radius:4px;padding:8px;gap:2px">`;
+  
+  dailyStats.forEach((stat,i)=>{
+    const incomeHeight=Math.floor((stat.income/maxValue)*graphHeight*0.8);
+    const expenseHeight=Math.floor((stat.expense/maxValue)*graphHeight*0.8);
+    const netHeight=Math.floor((Math.abs(stat.net)/maxValue)*graphHeight*0.8);
+    const netColor=stat.net>=0?'#ffd700':'#ff5722';
+    
+    html+=`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;position:relative">
+      <div style="display:flex;gap:1px;align-items:flex-end;height:${graphHeight-20}px">
+        <div style="width:${Math.max(barWidth/3,2)}px;height:${incomeHeight}px;background:#4caf50;border-radius:2px 2px 0 0" title="Day ${stat.day}: 収入${stat.income}G"></div>
+        <div style="width:${Math.max(barWidth/3,2)}px;height:${expenseHeight}px;background:#f44336;border-radius:2px 2px 0 0" title="Day ${stat.day}: 支出${stat.expense}G"></div>
+        <div style="width:${Math.max(barWidth/3,2)}px;height:${netHeight}px;background:${netColor};border-radius:2px 2px 0 0" title="Day ${stat.day}: 純利益${stat.net}G"></div>
+      </div>
+      <div style="font-size:8px;color:#8a7a60">D${stat.day}</div>
+    </div>`;
+  });
+  
+  html+=`</div>`;
+  
+  // Summary stats
+  const totalIncome=dailyStats.reduce((sum,s)=>sum+s.income,0);
+  const totalExpense=dailyStats.reduce((sum,s)=>sum+s.expense,0);
+  const totalNet=totalIncome-totalExpense;
+  const avgNet=Math.floor(totalNet/dailyStats.length);
+  
+  html+=`<div style="margin-top:8px;font-size:9px;color:#8a7a60;text-align:center">
+    累計: <span style="color:#4caf50">+${totalIncome}G</span> 
+    <span style="color:#f44336">-${totalExpense}G</span> = 
+    <span style="color:${totalNet>=0?'#ffd700':'#ff5722'};font-weight:bold">${totalNet>=0?'+':''}${totalNet}G</span>
+    (平均 ${avgNet>=0?'+':''}${avgNet}G/日)
+  </div>`;
+  
+  html+=`</div>`;
+  
+  return html;
+}
+
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
+  const tabs=document.querySelectorAll('.tab');
+  const tabNames=['guild','farm','tavern','smithy','storage','facility','town'];
+  const idx=tabNames.indexOf(name);
+  if(idx>=0&&tabs[idx]) tabs[idx].classList.add('active');
+  el('tab-'+name).classList.add('active');
+}
+
+// === Adventurer System ===
+const ADVENTURER_NAMES=['アルト','ベル','カイン','ダリア','エリカ','フィン','ギル','ハナ','イリス','ジーク','カイト','リン','ミラ','ノエル','オスカー','ペトラ','クイン','ロゼ','セス','ティナ'];
+const ADVENTURER_RANKS=[
+  {id:'F',name:'F級',emoji:'🔰',mult:1.0},
+  {id:'E',name:'E級',emoji:'⚪',mult:1.1},
+  {id:'D',name:'D級',emoji:'🟢',mult:1.2},
+  {id:'C',name:'C級',emoji:'🔵',mult:1.3},
+  {id:'B',name:'B級',emoji:'🟣',mult:1.5},
+  {id:'A',name:'A級',emoji:'🟠',mult:1.8},
+  {id:'S',name:'S級',emoji:'🔴',mult:2.2},
+];
+
+function generateAdventurer(){
+  // Rank probability: F=40%, E=25%, D=15%, C=10%, B=5%, A=3%, S=2%
+  const roll=Math.random()*100;
+  let rank;
+  if(roll<40) rank=ADVENTURER_RANKS[0]; // F
+  else if(roll<65) rank=ADVENTURER_RANKS[1]; // E
+  else if(roll<80) rank=ADVENTURER_RANKS[2]; // D
+  else if(roll<90) rank=ADVENTURER_RANKS[3]; // C
+  else if(roll<95) rank=ADVENTURER_RANKS[4]; // B
+  else if(roll<98) rank=ADVENTURER_RANKS[5]; // A
+  else rank=ADVENTURER_RANKS[6]; // S
+  
+  // Specialty: matches quest types
+  const specialties=[
+    {id:'mine',name:'採掘師',emoji:'⛏️'},
+    {id:'herb',name:'薬草採取',emoji:'🌿'},
+    {id:'hunt',name:'戦士',emoji:'⚔️'},
+    {id:'explore',name:'探検家',emoji:'🏛️'},
+    {id:'lumber',name:'伐採士',emoji:'🪓'},
+    {id:'fish',name:'釣り師',emoji:'🎣'},
+  ];
+  const specialty=specialties[rng(0,specialties.length-1)];
+  
+  return {
+    name:ADVENTURER_NAMES[rng(0,ADVENTURER_NAMES.length-1)],
+    rank:rank,
+    specialty:specialty
+  };
+}
+
+function randomName(){return ADVENTURER_NAMES[rng(0,ADVENTURER_NAMES.length-1)]}
+function addMat(id,qty){
+  const current=getTotalMaterials();
+  const capacity=getStorageCapacity();
+  const newTotal=current+qty;
+  
+  if(newTotal>capacity){
+    const canAdd=Math.max(0,capacity-current);
+    if(canAdd>0){
+      materials[id]=(materials[id]||0)+canAdd;
+      logMsg(`<span class="w">⚠️ 倉庫が満杯！${MAT_NAMES[id]}×${qty-canAdd}を入れられませんでした</span>`);
+    } else {
+      logMsg(`<span class="w">⚠️ 倉庫が満杯！${MAT_NAMES[id]}×${qty}を入れられませんでした</span>`);
+    }
+  } else {
+    materials[id]=(materials[id]||0)+qty;
+  }
+}
+function getStorageCapacity(){return STORAGE_CAPACITIES[storageLevel]||100}
+function getTotalMaterials(){return Object.values(materials).reduce((sum,qty)=>sum+qty,0)}
+function canUpgradeStorage(){
+  return storageLevel<STORAGE_CAPACITIES.length-1&&gold>=STORAGE_UPGRADE_COSTS[storageLevel];
+}
+function upgradeStorage(){
+  if(!canUpgradeStorage()) return;
+  const cost=STORAGE_UPGRADE_COSTS[storageLevel];
+  gold-=cost;
+  storageLevel++;
+  playSFX('build');
+  logMsg(`<span class="f">📦 倉庫を拡張！容量${getStorageCapacity()}に増加</span>`);
+  updateAll();
+  saveGame();
+}
+function rng(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+function el(id){return document.getElementById(id)}
+function hide(id){el(id).classList.add('hidden')}
+function logMsg(m){const a=el('log');a.innerHTML+=m+'<br>';a.scrollTop=a.scrollHeight}
+
+// === Tutorial System ===
+
+</script>
+</body>
+</html>
