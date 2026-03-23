@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スライム合成 - Slime Fusion</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+
+    #game-container {
+      max-width: 460px;
+      width: 100%;
+    }
+
+    #header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #16213e;
+      border-radius: 10px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    #grid-container {
+      background: #0f3460;
+      padding: 10px;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      position: relative;
+      touch-action: none;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      position: relative;
+    }
+
+    .grid-cell {
+      aspect-ratio: 1;
+      background: #16213e;
+      border-radius: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slime {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 2px solid transparent;
+    }
+
+    .slime.selected {
+      border: 2px solid #fff;
+      box-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+
+    .slime.moving {
+      transition: all 0.2s ease;
+    }
+
+    .slime-emoji {
+      font-size: 32px;
+      margin-bottom: 2px;
+    }
+
+    .slime-level {
+      font-size: 10px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    #team-container {
+      background: #16213e;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+
+    #team-title {
+      font-size: 14px;
+      color: #aaa;
+      margin-bottom: 10px;
+    }
+
+    #team-slots {
+      display: flex;
+      justify-content: space-around;
+      gap: 10px;
+    }
+
+    .team-slot {
+      flex: 1;
+      aspect-ratio: 1;
+      background: #0f3460;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed #444;
+    }
+
+    .team-slot.filled {
+      border: 2px solid #666;
+    }
+
+    .team-slot-mini {
+      font-size: 24px;
+    }
+
+    #battle-button {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #e94560, #c72f47);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 20px;
+      transition: transform 0.1s;
+    }
+
+    #battle-button:active {
+      transform: scale(0.98);
+    }
+
+    #battle-button:disabled {
+      background: #444;
+      cursor: not-allowed;
+    }
+
+    #battle-area {
+      background: #16213e;
+      padding: 20px;
+      border-radius: 10px;
+      display: none;
+    }
+
+    #battle-area.active {
+      display: block;
+    }
+
+    .battle-row {
+      margin-bottom: 15px;
+    }
+
+    .battle-label {
+      font-size: 12px;
+      color: #aaa;
+      margin-bottom: 5px;
+    }
+
+    .combatant {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .combatant-icon {
+      font-size: 24px;
+    }
+
+    .combatant-info {
+      flex: 1;
+    }
+
+    .combatant-name {
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .hp-bar {
+      width: 100%;
+      height: 8px;
+      background: #0f3460;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 3px;
+    }
+
+    .hp-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4ecca3, #45b393);
+      transition: width 0.3s ease;
+    }
+
+    .combatant.attacking {
+      animation: attack-pulse 0.3s ease;
+    }
+
+    @keyframes attack-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+
+    #battle-log {
+      background: #0f3460;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      max-height: 100px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    .log-entry {
+      margin-bottom: 3px;
+      opacity: 0.8;
+    }
+
+    #game-over-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    #game-over-screen.active {
+      display: flex;
+    }
+
+    #game-over-content {
+      background: #16213e;
+      padding: 30px;
+      border-radius: 15px;
+      text-align: center;
+      max-width: 80%;
+    }
+
+    #game-over-title {
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+
+    #final-score {
+      font-size: 24px;
+      color: #4ecca3;
+      margin-bottom: 20px;
+    }
+
+    #restart-button {
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #4ecca3, #45b393);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .color-green { background: linear-gradient(135deg, #4ecca3, #45b393); }
+    .color-red { background: linear-gradient(135deg, #e94560, #c72f47); }
+    .color-blue { background: linear-gradient(135deg, #3498db, #2980b9); }
+    .color-yellow { background: linear-gradient(135deg, #f39c12, #e67e22); }
+    .color-purple { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="header">
+      <div class="stat">
+        <div class="stat-label">スコア</div>
+        <div class="stat-value" id="score">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">ウェーブ</div>
+        <div class="stat-value" id="wave">1</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">最高レベル</div>
+        <div class="stat-value" id="max-level">1</div>
+      </div>
+    </div>
+
+    <div id="grid-container">
+      <div id="grid"></div>
+    </div>
+
+    <div id="team-container">
+      <div id="team-title">バトルチーム (最大3体)</div>
+      <div id="team-slots">
+        <div class="team-slot" data-slot="0"></div>
+        <div class="team-slot" data-slot="1"></div>
+        <div class="team-slot" data-slot="2"></div>
+      </div>
+    </div>
+
+    <button id="battle-button" disabled>⚔️ バトル</button>
+
+    <div id="battle-area">
+      <div class="battle-row">
+        <div class="battle-label">味方チーム</div>
+        <div id="player-team"></div>
+      </div>
+      <div class="battle-row">
+        <div class="battle-label">敵</div>
+        <div id="enemy-team"></div>
+      </div>
+      <div id="battle-log"></div>
+    </div>
+  </div>
+
+  <div id="game-over-screen">
+    <div id="game-over-content">
+      <div id="game-over-title">ゲームオーバー</div>
+      <div id="final-score"></div>
+      <button id="restart-button">もう一度</button>
+    </div>
+  </div>
+
+  <script>
+    const GRID_SIZE = 4;
+    const ELEMENTS = {
+      green: { name: '自然', color: 'green', hpMult: 1, atkMult: 1 },
+      red: { name: '炎', color: 'red', hpMult: 0.8, atkMult: 1.4 },
+      blue: { name: '水', color: 'blue', hpMult: 1.5, atkMult: 0.7 },
+      yellow: { name: '雷', color: 'yellow', hpMult: 1, atkMult: 1.1 },
+      purple: { name: '闇', color: 'purple', hpMult: 1.2, atkMult: 1.2 }
+    };
+
+    const ELEMENT_COMBOS = {
+      'green-green': 'green',
+      'red-red': 'red',
+      'blue-blue': 'blue',
+      'yellow-yellow': 'yellow',
+      'purple-purple': 'purple',
+      'red-blue': 'purple',
+      'blue-red': 'purple',
+      'green-yellow': 'yellow',
+      'yellow-green': 'yellow',
+      'red-green': 'red',
+      'green-red': 'red',
+      'blue-yellow': 'green',
+      'yellow-blue': 'green'
+    };
+
+    let grid = [];
+    let score = 0;
+    let wave = 1;
+    let team = [];
+    let inBattle = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    function init() {
+      grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+      score = 0;
+      wave = 1;
+      team = [];
+      inBattle = false;
+      
+      addRandomSlime();
+      addRandomSlime();
+      
+      renderGrid();
+      updateUI();
+      setupEventListeners();
+    }
+
+    function createSlime(level, element) {
+      const elem = ELEMENTS[element];
+      const baseHP = Math.pow(2, level) * 10;
+      const baseATK = Math.pow(2, level) * 3;
+      
+      return {
+        level,
+        element,
+        maxHP: Math.floor(baseHP * elem.hpMult),
+        hp: Math.floor(baseHP * elem.hpMult),
+        atk: Math.floor(baseATK * elem.atkMult),
+        emoji: level === 1 ? '●' : level <= 3 ? '○' : level <= 5 ? '◉' : level <= 7 ? '◎' : '◈'
+      };
+    }
+
+    function addRandomSlime() {
+      const emptyCells = [];
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          if (!grid[r][c]) emptyCells.push([r, c]);
+        }
+      }
+      
+      if (emptyCells.length === 0) return false;
+      
+      const [r, c] = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+      const level = Math.random() < 0.9 ? 1 : 2;
+      const elements = Object.keys(ELEMENTS);
+      const element = elements[Math.floor(Math.random() * elements.length)];
+      
+      grid[r][c] = createSlime(level, element);
+      return true;
+    }
+
+    function renderGrid() {
+      const gridEl = document.getElementById('grid');
+      gridEl.innerHTML = '';
+      
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'grid-cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          
+          const slime = grid[r][c];
+          if (slime) {
+            const slimeEl = document.createElement('div');
+            slimeEl.className = `slime color-${slime.element}`;
+            if (team.some(t => t.r === r && t.c === c)) {
+              slimeEl.classList.add('selected');
+            }
+            slimeEl.innerHTML = `
+              <div class="slime-emoji">${slime.emoji}</div>
+              <div class="slime-level">Lv${slime.level}</div>
+            `;
+            slimeEl.addEventListener('click', () => toggleTeamSelect(r, c));
+            cell.appendChild(slimeEl);
+          }
+          
+          gridEl.appendChild(cell);
+        }
+      }
+    }
+
+    function toggleTeamSelect(r, c) {
+      if (inBattle) return;
+      
+      const slime = grid[r][c];
+      if (!slime) return;
+      
+      const index = team.findIndex(t => t.r === r && t.c === c);
+      
+      if (index !== -1) {
+        team.splice(index, 1);
+      } else if (team.length < 3) {
+        team.push({ r, c });
+      }
+      
+      updateTeamUI();
+      renderGrid();
+    }
+
+    function updateTeamUI() {
+      const slots = document.querySelectorAll('.team-slot');
+      slots.forEach((slot, i) => {
+        if (team[i]) {
+          const slime = grid[team[i].r][team[i].c];
+          slot.className = `team-slot filled color-${slime.element}`;
+          slot.innerHTML = `
+            <div class="team-slot-mini">${slime.emoji}</div>
+            <div style="font-size:10px">Lv${slime.level}</div>
+          `;
+        } else {
+          slot.className = 'team-slot';
+          slot.innerHTML = '';
+        }
+      });
+      
+      document.getElementById('battle-button').disabled = team.length === 0;
+    }
+
+    function move(direction) {
+      if (inBattle) return;
+      
+      let moved = false;
+      const newGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+      
+      if (direction === 'left' || direction === 'right') {
+        for (let r = 0; r < GRID_SIZE; r++) {
+          const row = direction === 'left' 
+            ? grid[r].filter(s => s)
+            : grid[r].filter(s => s).reverse();
+          
+          const merged = [];
+          for (let i = 0; i < row.length; i++) {
+            if (i < row.length - 1 && row[i].level === row[i+1].level) {
+              const combo = [row[i].element, row[i+1].element].sort().join('-');
+              const newElement = ELEMENT_COMBOS[combo] || row[i].element;
+              merged.push(createSlime(row[i].level + 1, newElement));
+              i++;
+              moved = true;
+              score += Math.pow(2, row[i].level) * 10;
+            } else {
+              merged.push(row[i]);
+            }
+          }
+          
+          if (direction === 'left') {
+            for (let c = 0; c < merged.length; c++) {
+              newGrid[r][c] = merged[c];
+            }
+          } else {
+            for (let c = 0; c < merged.length; c++) {
+              newGrid[r][GRID_SIZE - 1 - c] = merged[c];
+            }
+          }
+          
+          if (merged.length !== row.length || 
+              row.some((s, i) => !merged[i] || s.level !== merged[i].level)) {
+            moved = true;
+          }
+        }
+      } else {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const col = [];
+          for (let r = 0; r < GRID_SIZE; r++) {
+            if (grid[r][c]) col.push(grid[r][c]);
+          }
+          
+          if (direction === 'down') col.reverse();
+          
+          const merged = [];
+          for (let i = 0; i < col.length; i++) {
+            if (i < col.length - 1 && col[i].level === col[i+1].level) {
+              const combo = [col[i].element, col[i+1].element].sort().join('-');
+              const newElement = ELEMENT_COMBOS[combo] || col[i].element;
+              merged.push(createSlime(col[i].level + 1, newElement));
+              i++;
+              moved = true;
+              score += Math.pow(2, col[i].level) * 10;
+            } else {
+              merged.push(col[i]);
+            }
+          }
+          
+          if (direction === 'up') {
+            for (let r = 0; r < merged.length; r++) {
+              newGrid[r][c] = merged[r];
+            }
+          } else {
+            for (let r = 0; r < merged.length; r++) {
+              newGrid[GRID_SIZE - 1 - r][c] = merged[r];
+            }
+          }
+          
+          if (merged.length !== col.length ||
+              col.some((s, i) => !merged[i] || s.level !== merged[i].level)) {
+            moved = true;
+          }
+        }
+      }
+      
+      if (moved) {
+        grid = newGrid;
+        team = [];
+        
+        if (!addRandomSlime()) {
+          checkGameOver();
+        }
+        
+        renderGrid();
+        updateUI();
+      }
+    }
+
+    function checkGameOver() {
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE - 1; c++) {
+          if (grid[r][c] && grid[r][c+1] && grid[r][c].level === grid[r][c+1].level) {
+            return;
+          }
+        }
+      }
+      
+      for (let c = 0; c < GRID_SIZE; c++) {
+        for (let r = 0; r < GRID_SIZE - 1; r++) {
+          if (grid[r][c] && grid[r+1][c] && grid[r][c].level === grid[r+1][c].level) {
+            return;
+          }
+        }
+      }
+      
+      gameOver();
+    }
+
+    function startBattle() {
+      if (team.length === 0) return;
+      
+      inBattle = true;
+      document.getElementById('battle-area').classList.add('active');
+      document.getElementById('battle-button').style.display = 'none';
+      
+      const playerTeam = team.map(t => {
+        const slime = grid[t.r][t.c];
+        return { ...slime, hp: slime.maxHP };
+      });
+      
+      const enemyCount = Math.min(3, Math.floor(wave / 2) + 1);
+      const enemyTeam = [];
+      for (let i = 0; i < enemyCount; i++) {
+        const level = Math.max(1, Math.floor(wave / 2) + Math.floor(Math.random() * 2));
+        const elements = Object.keys(ELEMENTS);
+        const element = elements[Math.floor(Math.random() * elements.length)];
+        enemyTeam.push(createSlime(level, element));
+      }
+      
+      runBattle(playerTeam, enemyTeam);
+    }
+
+    function runBattle(playerTeam, enemyTeam) {
+      const playerEl = document.getElementById('player-team');
+      const enemyEl = document.getElementById('enemy-team');
+      const logEl = document.getElementById('battle-log');
+      
+      logEl.innerHTML = '<div class="log-entry">バトル開始！</div>';
+      
+      function renderCombatants() {
+        playerEl.innerHTML = playerTeam.map((s, i) => `
+          <div class="combatant" id="player-${i}">
+            <div class="combatant-icon">${s.emoji}</div>
+            <div class="combatant-info">
+              <div class="combatant-name">Lv${s.level} ${ELEMENTS[s.element].name}</div>
+              <div class="hp-bar">
+                <div class="hp-fill" style="width:${(s.hp/s.maxHP)*100}%"></div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+        
+        enemyEl.innerHTML = enemyTeam.map((s, i) => `
+          <div class="combatant" id="enemy-${i}">
+            <div class="combatant-icon">${s.emoji}</div>
+            <div class="combatant-info">
+              <div class="combatant-name">敵Lv${s.level} ${ELEMENTS[s.element].name}</div>
+              <div class="hp-bar">
+                <div class="hp-fill" style="width:${(s.hp/s.maxHP)*100}%"></div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      renderCombatants();
+      
+      let turn = 0;
+      const interval = setInterval(() => {
+        const attackers = [...playerTeam.filter(s => s.hp > 0), ...enemyTeam.filter(s => s.hp > 0)];
+        if (attackers.length === 0) {
+          clearInterval(interval);
+          return;
+        }
+        
+        const attacker = attackers[turn % attackers.length];
+        const isPlayer = playerTeam.includes(attacker);
+        const targets = isPlayer ? enemyTeam.filter(s => s.hp > 0) : playerTeam.filter(s => s.hp > 0);
+        
+        if (targets.length === 0) {
+          clearInterval(interval);
+          endBattle(playerTeam.some(s => s.hp > 0));
+          return;
+        }
+        
+        const target = targets[Math.floor(Math.random() * targets.length)];
+        const damage = attacker.atk;
+        target.hp = Math.max(0, target.hp - damage);
+        
+        const attackerIdx = isPlayer ? playerTeam.indexOf(attacker) : enemyTeam.indexOf(attacker);
+        const attackerEl = document.getElementById(`${isPlayer ? 'player' : 'enemy'}-${attackerIdx}`);
+        if (attackerEl) {
+          attackerEl.classList.add('attacking');
+          setTimeout(() => attackerEl.classList.remove('attacking'), 300);
+        }
+        
+        logEl.innerHTML = `<div class="log-entry">${ELEMENTS[attacker.element].name}が${damage}ダメージ！</div>` + logEl.innerHTML;
+        
+        renderCombatants();
+        turn++;
+      }, 800);
+    }
+
+    function endBattle(playerWon) {
+      inBattle = false;
+      document.getElementById('battle-area').classList.remove('active');
+      document.getElementById('battle-button').style.display = 'block';
+      
+      if (playerWon) {
+        score += wave * 100;
+        wave++;
+        updateUI();
+      } else {
+        team.forEach(t => {
+          grid[t.r][t.c] = null;
+        });
+        
+        if (!addRandomSlime()) {
+          gameOver();
+        }
+      }
+      
+      team = [];
+      renderGrid();
+      updateUI();
+    }
+
+    function gameOver() {
+      document.getElementById('game-over-screen').classList.add('active');
+      document.getElementById('final-score').textContent = `スコア: ${score}`;
+    }
+
+    function updateUI() {
+      document.getElementById('score').textContent = score;
+      document.getElementById('wave').textContent = wave;
+      
+      let maxLevel = 1;
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          if (grid[r][c]) {
+            maxLevel = Math.max(maxLevel, grid[r][c].level);
+          }
+        }
+      }
+      document.getElementById('max-level').textContent = maxLevel;
+      
+      updateTeamUI();
+    }
+
+    function setupEventListeners() {
+      document.addEventListener('keydown', e => {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          const dir = e.key.replace('Arrow', '').toLowerCase();
+          move(dir);
+        }
+      });
+      
+      const gridContainer = document.getElementById('grid-container');
+      
+      gridContainer.addEventListener('touchstart', e => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+      
+      gridContainer.addEventListener('touchend', e => {
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        
+        const dx = touchEndX - touchStartX;
+        const dy = touchEndY - touchStartY;
+        
+        if (Math.abs(dx) < 30 && Math.abs(dy) < 30) return;
+        
+        if (Math.abs(dx) > Math.abs(dy)) {
+          move(dx > 0 ? 'right' : 'left');
+        } else {
+          move(dy > 0 ? 'down' : 'up');
+        }
+      }, { passive: true });
+      
+      document.getElementById('battle-button').addEventListener('click', startBattle);
+      
+      document.getElementById('restart-button').addEventListener('click', () => {
+        document.getElementById('game-over-screen').classList.remove('active');
+        init();
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
