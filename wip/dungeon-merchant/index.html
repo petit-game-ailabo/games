@@ -749,20 +749,62 @@ function processQuests(){
     } else if(q.status==='active'){
       q.activeDaysLeft--;
       if(q.activeDaysLeft<=0){
-        q.status='done';
+        // Calculate success rate based on adventurer rank and quest difficulty
         const target=q.targetData;
+        const adv=q.adventurer;
+        
+        // Base success rate from rank (F=60%, E=70%, D=75%, C=80%, B=85%, A=90%, S=95%)
+        let successRate=0.60+(adv.rank.mult-1.0)*0.5;
+        
+        // Specialty bonus: +15% if specialty matches
+        if(q.specialtyBonus) successRate+=0.15;
+        
+        // Quest difficulty modifier (based on cost multiplier)
         if(target){
-          // Rank affects yield: higher rank = better results
-          const baseQty=rng(target.qty[0],target.qty[1]);
-          const rankBonus=Math.floor(baseQty*(q.adventurer.rank.mult-1.0));
-          const qty=baseQty+rankBonus;
-          
-          addMat(target.mat,qty);
-          playSFX('quest');
-          
-          const bonusText=rankBonus>0?` (+${rankBonus}ランクボーナス)`:'';
-          logMsg(`<span class="a">✅ ${q.adventurer.rank.emoji}${q.advName}が帰還！${MAT_NAMES[target.mat]||target.mat}×${qty}を納品${bonusText}</span>`);
+          const difficulty=target.costMult;
+          if(difficulty>=3.0) successRate-=0.15; // Very hard quests
+          else if(difficulty>=2.0) successRate-=0.10; // Hard quests
+          else if(difficulty>=1.5) successRate-=0.05; // Medium quests
         }
+        
+        // Clamp to 10%-99% range
+        successRate=Math.max(0.10,Math.min(0.99,successRate));
+        
+        const success=Math.random()<successRate;
+        q.status='done';
+        q.success=success;
+        
+        if(success){
+          // Success: full rewards
+          if(target){
+            const baseQty=rng(target.qty[0],target.qty[1]);
+            const rankBonus=Math.floor(baseQty*(adv.rank.mult-1.0));
+            const qty=baseQty+rankBonus;
+            
+            addMat(target.mat,qty);
+            playSFX('quest');
+            
+            const bonusText=rankBonus>0?` (+${rankBonus}ランクボーナス)`:'';
+            logMsg(`<span class="a">✅ ${adv.rank.emoji}${adv.name}が帰還！${MAT_NAMES[target.mat]||target.mat}×${qty}を納品${bonusText}</span>`);
+          }
+        } else {
+          // Failure: partial reward returned (30-50% based on rank)
+          const returnRate=0.30+(adv.rank.mult-1.0)*0.15;
+          const returnAmount=Math.floor(q.reward*returnRate);
+          gold+=returnAmount;
+          dailyIncome+=returnAmount;
+          
+          // Partial materials on failure (20-40% of minimum)
+          if(target){
+            const partialQty=Math.max(1,Math.floor(target.qty[0]*0.3));
+            addMat(target.mat,partialQty);
+            logMsg(`<span class="w">❌ ${adv.rank.emoji}${adv.name}がクエスト失敗... ${MAT_NAMES[target.mat]||target.mat}×${partialQty}のみ入手、${returnAmount}G返金</span>`);
+          } else {
+            logMsg(`<span class="w">❌ ${adv.rank.emoji}${adv.name}がクエスト失敗... ${returnAmount}G返金</span>`);
+          }
+          playSFX('click');
+        }
+        
         adventurersInTown++;
       }
     }
@@ -1431,6 +1473,7 @@ function renderQuestBoard(){
     const cls=q.status==='posted'?'qs-posted':q.status==='active'?'qs-active':'qs-done';
     let txt='';
     let advInfo='';
+    let resultInfo='';
     
     if(q.status==='posted'){
       txt='掲載中';
@@ -1442,12 +1485,22 @@ function renderQuestBoard(){
         ${q.specialtyBonus?' <span style="color:#4caf50">⚡得意</span>':''}
       </div>`;
     } else {
-      txt='完了';
+      // Done - show success or failure
+      if(q.success){
+        txt='✅ 成功';
+      } else {
+        txt='❌ 失敗';
+      }
+      
       if(q.adventurer){
         const adv=q.adventurer;
         advInfo=`<div class="quest-detail" style="margin-top:4px">
           ${adv.rank.emoji}${adv.name} (${adv.rank.name})
         </div>`;
+      }
+      
+      if(q.success===false){
+        resultInfo=`<div class="quest-detail" style="color:#ff9800;margin-top:2px">一部報酬返金済</div>`;
       }
     }
     
@@ -1455,6 +1508,7 @@ function renderQuestBoard(){
       <div class="quest-top"><span class="quest-name">${q.questName}</span><span class="quest-status ${cls}">${txt}</span></div>
       ${advInfo}
       <div class="quest-reward">報酬: ${q.reward}G (相場${q.marketPrice}G)${q.status==='posted'?' 💰前払い済':''}</div>
+      ${resultInfo}
       ${q.status==='posted'?`<div class="quest-detail">掲載${day-q.postedDay}日目</div><button class="btn btn-red btn-sm" onclick="cancelQuest(${q.id})" style="margin-top:4px">取り下げ（返金）</button>`:''}
     </div>`;
   });
