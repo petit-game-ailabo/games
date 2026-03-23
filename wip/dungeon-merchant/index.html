@@ -417,6 +417,61 @@ function updateWeather(){
   }
 }
 
+// === Market Price System ===
+function updateMarketPrices(){
+  // Update market price multipliers for each quest type daily
+  // Base fluctuation: 0.80 to 1.20 (±20%)
+  // Trends persist slightly (70% keep direction, 30% random)
+  
+  QUEST_TYPES.forEach(qType=>{
+    const prevMult=marketPriceMultipliers[qType.id]||1.0;
+    
+    // 70% chance to continue trend direction, 30% chance to reverse
+    const trendContinue=Math.random()<0.70;
+    const prevDirection=prevMult>=1.0?1:-1;
+    const direction=trendContinue?prevDirection:(Math.random()<0.5?1:-1);
+    
+    // Fluctuation amount: 0.05 to 0.15 per day
+    const change=(Math.random()*0.10+0.05)*direction;
+    let newMult=prevMult+change;
+    
+    // Clamp to 0.80 - 1.20 range
+    newMult=Math.max(0.80,Math.min(1.20,newMult));
+    
+    marketPriceMultipliers[qType.id]=newMult;
+  });
+  
+  // Log significant price changes (>10%)
+  const changes=QUEST_TYPES.filter(qt=>{
+    const mult=marketPriceMultipliers[qt.id]||1.0;
+    return Math.abs(mult-1.0)>0.10;
+  });
+  
+  if(changes.length>0){
+    const high=changes.filter(qt=>marketPriceMultipliers[qt.id]>1.10);
+    const low=changes.filter(qt=>marketPriceMultipliers[qt.id]<0.90);
+    
+    if(high.length>0){
+      const names=high.map(qt=>qt.name).join('、');
+      logMsg(`<span class="q">📈 市場高騰: ${names}の相場が上昇中</span>`);
+    }
+    if(low.length>0){
+      const names=low.map(qt=>qt.name).join('、');
+      logMsg(`<span class="w">📉 市場下落: ${names}の相場が下落中</span>`);
+    }
+  }
+}
+
+function getMarketPrice(questType,targetData){
+  const baseType=QUEST_TYPES.find(t=>t.id===questType);
+  if(!baseType||!targetData) return 0;
+  
+  const basePrice=Math.floor(baseType.baseCost*targetData.costMult);
+  const multiplier=marketPriceMultipliers[questType]||1.0;
+  
+  return Math.floor(basePrice*multiplier);
+}
+
 function getCurrentSeason(){
   if(day<=0) return SEASONS[0]; // Default to spring
   const dayInCycle=(day-1)%28; // 0-27
@@ -527,6 +582,7 @@ let currentFarmTab='field';
 let actionMenuTarget=null;
 let craftingJobs=[]; // {facility:'smithy'|'brewery', recipe, startDay, daysLeft}
 let weather='sunny'; // current weather: 'sunny', 'rainy', 'storm'
+let marketPriceMultipliers={}; // {questType: multiplier} - daily price fluctuation
 
 // === Audio System ===
 let audioCtx=null;
@@ -752,7 +808,7 @@ function playSFX(type){
 function saveGame(){
   const state={gold,day,reputation,stamina,materials,quests:quests.map(q=>({...q,targetData:undefined})),
     facilities,adventurersInTown,totalAdventurers,questIdCounter,cookedToday,
-    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats,craftingJobs,weather};
+    farmPlots,paddyPlots,animals,currentFarmTab,tutorialCompleted,achievements,achievementStats,craftingJobs,weather,marketPriceMultipliers};
   state.questsMeta=quests.map(q=>({type:q.type,target:q.target}));
   try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}
 }
@@ -776,6 +832,7 @@ function loadGame(){
     achievementStats=s.achievementStats||{totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
     craftingJobs=s.craftingJobs||[];
     weather=s.weather||'sunny';
+    marketPriceMultipliers=s.marketPriceMultipliers||{};
     // Initialize plots if needed
     while(farmPlots.length<TOTAL_FARM_PLOTS) farmPlots.push({state:'locked'});
     while(paddyPlots.length<TOTAL_PADDY_PLOTS) paddyPlots.push({state:'locked',plantedDay:0});
@@ -832,6 +889,9 @@ function newGame(){
   achievements={};achievementStats={totalQuestsPosted:0,totalEarned:0,totalBuilds:0,totalHarvests:0,totalCooks:0,totalAnimals:0,totalQuestSuccess:0,day:0,reputation:0};
   craftingJobs=[];
   weather='sunny';
+  marketPriceMultipliers={};
+  // Initialize market prices to 1.0 (neutral)
+  QUEST_TYPES.forEach(qt=>marketPriceMultipliers[qt.id]=1.0);
   FACILITIES.forEach(f=>facilities[f.id]=0);
   farmPlots=[];paddyPlots=[];animals=[];currentFarmTab='field';
   for(let i=0;i<TOTAL_FARM_PLOTS;i++){
@@ -863,6 +923,9 @@ function nextDay(){
   
   // Update weather
   updateWeather();
+  
+  // Update market prices
+  updateMarketPrices();
   
   processQuests();
   processFacilities();
@@ -1018,7 +1081,11 @@ function getQuestSpeedup(){
 // === Quest Creator ===
 function renderQuestCreator(){
   const g=el('questTypeGrid');g.innerHTML='';
-  QUEST_TYPES.forEach(t=>{g.innerHTML+=`<div class="option-btn${selType===t.id?' selected':''}" onclick="selectType('${t.id}')">${t.emoji} ${t.name}</div>`;});
+  QUEST_TYPES.forEach(t=>{
+    const mult=marketPriceMultipliers[t.id]||1.0;
+    const indicator=mult>1.10?'📈':mult<0.90?'📉':'';
+    g.innerHTML+=`<div class="option-btn${selType===t.id?' selected':''}" onclick="selectType('${t.id}')">${t.emoji} ${t.name} ${indicator}</div>`;
+  });
   if(!selType){el('step2').style.display='none';el('step3').style.display='none';return;}
   el('step2').style.display='';
   const tg=el('questTargetGrid');tg.innerHTML='';
@@ -1028,8 +1095,10 @@ function renderQuestCreator(){
   const typeData=QUEST_TYPES.find(t=>t.id===selType);
   const targetData=(QUEST_TARGETS[selType]||[]).find(t=>t.id===selTarget);
   if(!typeData||!targetData) return;
-  const market=Math.floor(typeData.baseCost*targetData.costMult);
-  el('marketPrice').textContent=market;
+  const market=getMarketPrice(selType,targetData);
+  const mult=marketPriceMultipliers[selType]||1.0;
+  const trendText=mult>1.10?'<span style="color:#4caf50">↗高騰中</span>':mult<0.90?'<span style="color:#f44336">↘下落中</span>':'<span style="color:#ffd700">→安定</span>';
+  el('marketPrice').innerHTML=`${market} ${trendText}`;
   if(!el('priceInput').value) el('priceInput').value=market;
   updatePriceIndicator();
 }
@@ -1037,7 +1106,9 @@ function selectType(id){selType=id;selTarget=null;el('priceInput').value='';rend
 function selectTarget(id){selTarget=id;el('priceInput').value='';renderQuestCreator();}
 
 function updatePriceIndicator(){
-  const market=parseInt(el('marketPrice').textContent)||1;
+  // Extract numeric value from marketPrice (may contain HTML)
+  const marketText=el('marketPrice').textContent||el('marketPrice').innerText||'0';
+  const market=parseInt(marketText.match(/\d+/)?.[0])||1;
   const price=parseInt(el('priceInput').value)||0;
   const ratio=price/market;
   const ind=el('priceIndicator');
@@ -1057,7 +1128,7 @@ function postQuest(){
   if(price<=0||gold<price) return;
   const typeData=QUEST_TYPES.find(t=>t.id===selType);
   const targetData=(QUEST_TARGETS[selType]||[]).find(t=>t.id===selTarget);
-  const market=Math.floor(typeData.baseCost*targetData.costMult);
+  const market=getMarketPrice(selType,targetData);
 
   gold-=price;
   playSFX('click');
@@ -1757,7 +1828,7 @@ function renderQuestBoard(){
     board.innerHTML+=`<div class="quest-card">
       <div class="quest-top"><span class="quest-name">${q.questName}</span><span class="quest-status ${cls}">${txt}</span></div>
       ${advInfo}
-      <div class="quest-reward">報酬: ${q.reward}G (相場${q.marketPrice}G)${q.status==='posted'?' 💰前払い済':''}</div>
+      <div class="quest-reward">報酬: ${q.reward}G <span style="font-size:9px;color:#8a7a60">(掲載時相場${q.marketPrice}G)</span>${q.status==='posted'?' 💰前払い済':''}</div>
       ${resultInfo}
       ${q.status==='posted'?`<div class="quest-detail">掲載${day-q.postedDay}日目</div><button class="btn btn-red btn-sm" onclick="cancelQuest(${q.id})" style="margin-top:4px">取り下げ（返金）</button>`:''}
     </div>`;
