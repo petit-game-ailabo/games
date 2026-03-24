@@ -971,16 +971,39 @@ class Game {
         customer.eatTimer += deltaTime;
         if (customer.eatTimer >= 2) {
           const quality = this.calculateQuality();
-          customer.satisfied = quality > 0.5;
-          customer.faceElement.textContent = customer.satisfied ? '😋' : '😐';
+          
+          // 満足度を4段階に分類
+          let face = '😐';
+          let tipMultiplier = 1.0;
+          customer.satisfied = false;
+          
+          if (quality >= 0.8) {
+            face = '😋'; // 大満足
+            tipMultiplier = 1.3;
+            customer.satisfied = true;
+          } else if (quality >= 0.6) {
+            face = '😊'; // 満足
+            tipMultiplier = 1.1;
+            customer.satisfied = true;
+          } else if (quality >= 0.4) {
+            face = '😐'; // 普通
+            tipMultiplier = 0.95;
+          } else {
+            face = '😞'; // 不満
+            tipMultiplier = 0.8;
+          }
+          
+          customer.faceElement.textContent = face;
           
           const basePrice = 800;
-          const tipMultiplier = customer.satisfied ? 1.2 : 0.9;
           customer.paid = Math.floor(basePrice * tipMultiplier);
           this.money += customer.paid;
           
           if (customer.satisfied) {
             this.reputation = Math.min(100, this.reputation + 1);
+          } else if (quality < 0.4) {
+            // 不満な客は評判を下げる
+            this.reputation = Math.max(0, this.reputation - 1);
           }
           
           customer.state = 'LEAVING';
