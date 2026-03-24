@@ -178,6 +178,7 @@ body {
   height: 16px;
   transition: left 0.5s linear, top 0.5s linear;
   z-index: 10;
+  cursor: pointer;
 }
 
 .customer-body {
@@ -186,6 +187,7 @@ body {
   border-radius: 50%;
   border: 1px solid rgba(0,0,0,0.3);
   margin: 2px;
+  pointer-events: none;
 }
 
 .customer-face {
@@ -195,6 +197,7 @@ body {
   transform: translateX(-50%);
   font-size: 12px;
   line-height: 1;
+  pointer-events: none;
 }
 
 .customer-bubble {
@@ -886,6 +889,12 @@ class Game {
     el.appendChild(body);
     el.appendChild(face);
     
+    // クリック/タップで感想を表示
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.showCustomerFeedback(customer);
+    });
+    
     customer.element = el;
     customer.faceElement = face;
     
@@ -1072,6 +1081,66 @@ class Game {
     setTimeout(() => {
       if (bubble.parentNode) bubble.remove();
     }, 1500);
+  }
+
+  showCustomerFeedback(customer) {
+    if (!customer || !customer.element) return;
+    
+    let feedback = '';
+    
+    // 状態によってメッセージを変える
+    if (customer.state === 'WALKING_STREET' || customer.state === 'ENTERING') {
+      const messages = ['いい匂いがする！', 'ラーメン食べたい！', 'ここが評判の店か'];
+      feedback = messages[Math.floor(Math.random() * messages.length)];
+    } else if (customer.state === 'SITTING' || customer.state === 'EATING') {
+      // 品質に応じた感想
+      const quality = this.calculateQuality();
+      
+      if (quality >= 0.8) {
+        const positiveFeedback = [
+          'スープのコクが最高！',
+          '麺がモチモチで美味しい！',
+          'こだわりを感じる一杯！',
+          '贅沢な味わい…！',
+          'また来よう！'
+        ];
+        feedback = positiveFeedback[Math.floor(Math.random() * positiveFeedback.length)];
+      } else if (quality >= 0.5) {
+        const neutralFeedback = [
+          'まあまあかな',
+          '普通に美味しい',
+          '悪くないね',
+          'もう少し何か欲しい'
+        ];
+        feedback = neutralFeedback[Math.floor(Math.random() * neutralFeedback.length)];
+      } else {
+        const negativeFeedback = [
+          'うーん…普通かな',
+          '期待しすぎたかも',
+          'もっと美味しい店あるな',
+          'ちょっと物足りない'
+        ];
+        feedback = negativeFeedback[Math.floor(Math.random() * negativeFeedback.length)];
+      }
+      
+      // 設備による追加コメント
+      if (this.furniture.some(f => f.type === 'noodleMachine')) {
+        if (Math.random() < 0.3) feedback += '\n（麺がいい感じ！）';
+      }
+      if (this.furniture.some(f => f.type === 'plant')) {
+        if (Math.random() < 0.2) feedback += '\n（雰囲気いいね）';
+      }
+    } else if (customer.state === 'LEAVING' || customer.state === 'EXITING') {
+      if (customer.satisfied) {
+        feedback = 'ごちそうさま！😋';
+      } else {
+        feedback = 'ごちそうさま';
+      }
+    } else {
+      feedback = '...';
+    }
+    
+    this.showBubble(customer, feedback);
   }
 
   removeCustomer(customer) {
