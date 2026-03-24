@@ -1,41 +1,59 @@
 const { test, expect } = require('@playwright/test');
 
-test('客タイプが4種類表示されることを確認', async ({ page }) => {
-  await page.goto('http://localhost:8000/');
-  await page.waitForLoadState('networkidle');
+test('ダシ素材の購入とスープ研究が機能する', async ({ page }) => {
+  await page.goto('http://localhost:8080/index.html');
   
-  // タイトル画面で「はじめから」をクリック
-  await page.waitForSelector('button:has-text("はじめから")', { state: 'visible' });
-  await page.click('button:has-text("はじめから")');
+  // 配置タブに移動
+  await page.click('button[data-tab="layout"]');
+  await page.waitForTimeout(500);
   
-  // 営業開始
-  await page.waitForSelector('button:has-text("営業開始")', { state: 'visible' });
-  await page.click('button:has-text("営業開始")');
+  // 豚骨ダシを購入（初期所持金10000円、豚骨500円）
+  const porkDashiBtn = page.locator('[data-item="dashi-pork"]');
+  await expect(porkDashiBtn).toBeVisible();
   
-  // 客が出現するまで待機（10秒）
-  await page.waitForTimeout(10000);
+  // 購入前は unlocked ではない（まだ購入していない）
+  await expect(porkDashiBtn).not.toHaveClass(/unlocked/);
   
-  // スクリーンショット撮影
-  await page.screenshot({ path: 'test-customer-types.png', fullPage: true });
+  // 購入ボタンをクリック
+  await porkDashiBtn.click();
   
-  // 客要素が存在することを確認
-  const customers = await page.locator('.customer').count();
-  console.log(`客の数: ${customers}`);
-  expect(customers).toBeGreaterThan(0);
+  // アラート処理
+  page.on('dialog', async dialog => {
+    const message = dialog.message();
+    console.log('Alert:', message);
+    await dialog.accept();
+  });
   
-  // 客の色分けを確認（DOMに色が設定されているか）
-  const customerBodies = await page.locator('.customer-body').all();
-  const colors = [];
-  for (const body of customerBodies) {
-    const bg = await body.evaluate(el => getComputedStyle(el).backgroundColor);
-    colors.push(bg);
-  }
-  console.log('客の色:', colors);
+  await page.waitForTimeout(500);
   
-  // 客をクリックしてフィードバック表示
-  if (customerBodies.length > 0) {
-    await customerBodies[0].click();
-    await page.waitForTimeout(1000);
-    await page.screenshot({ path: 'test-customer-feedback.png', fullPage: true });
-  }
+  // 購入後は unlocked になる
+  await expect(porkDashiBtn).toHaveClass(/unlocked/);
+  
+  // 所持金が9500円に減っている
+  const moneyDisplay = page.locator('#moneyDisplay');
+  await expect(moneyDisplay).toHaveText('9500');
+  
+  // スープタブに移動
+  await page.click('button[data-tab="soup"]');
+  await page.waitForTimeout(500);
+  
+  // ダシセレクターに豚骨が表示される
+  const porkDashiSelector = page.locator('[data-dashi="dashi-pork"]');
+  await expect(porkDashiSelector).toBeVisible();
+  await expect(porkDashiSelector).not.toHaveClass(/locked/);
+  
+  // 豚骨をクリックして選択
+  await porkDashiSelector.click();
+  await page.waitForTimeout(300);
+  
+  // 選択状態になる
+  await expect(porkDashiSelector).toHaveClass(/selected/);
+  
+  // スープステータスが更新される（豚骨: コク+30, キレ+5, 香り+5, 濃さ+30）
+  const kokBar = page.locator('#kokBar');
+  const kokText = await kokBar.textContent();
+  expect(parseInt(kokText)).toBeGreaterThan(0);
+  
+  // スクリーンショット
+  await page.screenshot({ path: 'test-soup-system.png', fullPage: true });
 });
