@@ -529,8 +529,18 @@ const COMBOS = [
   { items: ['fridge', 'noodleMachine'], name: '鮮度抜群', bonus: 0.10 }
 ];
 
+// Game State Machine
+const GameState = {
+  TITLE: 'TITLE',
+  PREPARING: 'PREPARING',  // Before opening (can edit layout, menu)
+  OPEN: 'OPEN',           // Customers coming
+  CLOSING: 'CLOSING',     // No new customers, finishing existing ones
+  DAY_SUMMARY: 'DAY_SUMMARY'
+};
+
 class Game {
   constructor() {
+    this.state = GameState.TITLE;
     this.day = 1;
     this.money = 5000;
     this.reputation = 0;
@@ -546,7 +556,6 @@ class Game {
       totalRevenue: 0,
       satisfiedCustomers: 0
     };
-    this.dayActive = false;
     this.dayTime = 0;
     this.speedMultiplier = 1;
     this.currentTab = 'operations';
@@ -715,7 +724,7 @@ class Game {
   }
 
   startDay() {
-    this.dayActive = true;
+    this.setState(GameState.OPEN);
     this.dayTime = 0;
     this.customers = [];
     this.pedestrianTimer = 0;
@@ -723,7 +732,16 @@ class Game {
   }
 
   endDay() {
-    this.dayActive = false;
+    this.setState(GameState.CLOSING);
+    this.renderTabContent();
+    
+    // Wait for remaining customers to finish
+    setTimeout(() => {
+      this.finishDay();
+    }, 1000);
+  }
+
+  finishDay() {
     // Finalize customers still in shop: count served ones
     this.customers.forEach(c => {
       if (c.paid && c.paid > 0) c.state = 'EXITED';
@@ -737,8 +755,41 @@ class Game {
     // Seat occupancy is handled dynamically by findEmptySeat(), no persistent state to reset
     this.saveGame();
   }
+  
+  setState(newState) {
+    console.log(`State transition: ${this.state} → ${newState}`);
+    this.state = newState;
+    this.onStateChange();
+  }
+  
+  onStateChange() {
+    // Handle state-specific UI updates
+    switch (this.state) {
+      case GameState.TITLE:
+        document.getElementById('title-screen').style.display = 'flex';
+        break;
+      case GameState.PREPARING:
+        document.getElementById('title-screen').style.display = 'none';
+        this.updateUI();
+        this.renderTabContent();
+        break;
+      case GameState.OPEN:
+        this.updateUI();
+        this.renderTabContent();
+        break;
+      case GameState.CLOSING:
+        this.updateUI();
+        this.renderTabContent();
+        break;
+      case GameState.DAY_SUMMARY:
+        // Modal already shown by showDaySummary()
+        break;
+    }
+  }
 
   showDaySummary() {
+    this.setState(GameState.DAY_SUMMARY);
+    
     const todayRevenue = this.customers.reduce((sum, c) => sum + (c.paid || 0), 0);
     const todayCustomers = this.customers.filter(c => c.paid && c.paid > 0).length;
     const todaySatisfied = this.customers.filter(c => c.satisfied).length;
@@ -771,8 +822,8 @@ class Game {
     // Seat occupancy is managed dynamically in findEmptySeat()
     const modal = document.getElementById('day-summary-modal');
     modal.classList.remove('active');
-    this.updateUI();
-    this.renderTabContent();
+    
+    this.setState(GameState.PREPARING);
   }
 
   startGameLoop() {
@@ -791,29 +842,40 @@ class Game {
   }
 
   update(deltaTime) {
+    // Only update game logic when in OPEN or CLOSING state
+    if (this.state !== GameState.OPEN && this.state !== GameState.CLOSING) {
+      return;
+    }
+    
     const scaledDelta = deltaTime * this.speedMultiplier;
     this.dayTime += scaledDelta;
     
     // Day ends after 60 seconds at 1x
-    if (this.dayTime >= 60) {
+    if (this.state === GameState.OPEN && this.dayTime >= 60) {
       this.endDay();
       return;
     }
     
-    // Spawn pedestrians
-    this.pedestrianTimer += scaledDelta;
-    const spawnRate = this.getSpawnRate();
-    if (this.pedestrianTimer >= spawnRate) {
-      this.pedestrianTimer = 0;
-      this.spawnPedestrian();
+    // Spawn pedestrians (only when OPEN, not CLOSING)
+    if (this.state === GameState.OPEN) {
+      this.pedestrianTimer += scaledDelta;
+      const spawnRate = this.getSpawnRate();
+      if (this.pedestrianTimer >= spawnRate) {
+        this.pedestrianTimer = 0;
+        this.spawnPedestrian();
+      }
     }
     
     // Update customers
     this.customers.forEach(c => this.updateCustomer(c, scaledDelta));
     
-    // Remove exited customers (keep for end-of-day stats but remove from active processing)
-    // Only filter out fully gone customers (no element, no paid record)
-    
+    // In CLOSING state, check if all customers have left
+    if (this.state === GameState.CLOSING) {
+      const allGone = this.customers.every(c => c.state === 'EXITED' || !c.element);
+      if (allGone) {
+        this.finishDay();
+      }
+    }
   }
 
   getSpawnRate() {
@@ -1121,14 +1183,20 @@ class Game {
     
     switch (this.currentTab) {
       case 'operations':
+        let stateText = '準備中';
+        if (this.state === GameState.OPEN) stateText = '営業中';
+        if (this.state === GameState.CLOSING) stateText = '閉店準備中';
+        
         content.innerHTML = `
           <div>
             <div style="margin-bottom: 12px;">
-              <strong>営業時間:</strong> ${this.dayActive ? Math.floor(this.dayTime) + '秒' : '休業中'}
+              <strong>状態:</strong> ${stateText}
+              ${this.state === GameState.OPEN || this.state === GameState.CLOSING ? 
+                ` (${Math.floor(this.dayTime)}秒経過)` : ''}
             </div>
-            ${!this.dayActive ? `
+            ${this.state === GameState.PREPARING ? `
               <button onclick="game.startDay()">営業開始</button>
-            ` : `
+            ` : this.state === GameState.OPEN ? `
               <button onclick="game.endDay()">営業終了</button>
               <div style="margin-top: 12px;">
                 <strong>速度:</strong>
@@ -1136,7 +1204,9 @@ class Game {
                 <button onclick="game.setSpeed(2)" ${this.speedMultiplier === 2 ? 'disabled' : ''}>2x</button>
                 <button onclick="game.setSpeed(3)" ${this.speedMultiplier === 3 ? 'disabled' : ''}>3x</button>
               </div>
-            `}
+            ` : this.state === GameState.CLOSING ? `
+              <div style="color: #666; font-size: 13px;">残りのお客様の対応中...</div>
+            ` : ''}
           </div>
         `;
         break;
@@ -1316,17 +1386,13 @@ class Game {
     this.discoveredCombos = save.discoveredCombos;
     this.stats = save.stats;
     
-    document.getElementById('title-screen').style.display = 'none';
+    this.setState(GameState.PREPARING);
     this.renderFurniture();
-    this.updateUI();
-    this.renderTabContent();
   }
 
   startNew() {
     localStorage.removeItem('ramenStandSave');
-    document.getElementById('title-screen').style.display = 'none';
-    this.updateUI();
-    this.renderTabContent();
+    this.setState(GameState.PREPARING);
   }
 }
 
