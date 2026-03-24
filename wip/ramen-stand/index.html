@@ -51,7 +51,7 @@ body {
 #shop-view {
   position: relative;
   width: 100%;
-  height: 460px;
+  height: 304px;
   background: #f5f0e8;
   border: 4px solid #654321;
   margin-top: 4px;
@@ -63,7 +63,7 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 368px;
+  height: 228px;
   background: linear-gradient(135deg, #e8dcc8 0%, #f0e6d2 100%);
   border-bottom: 2px solid #8b7355;
 }
@@ -73,14 +73,14 @@ body {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 92px;
+  height: 76px;
   background: linear-gradient(to bottom, #555 0%, #666 50%, #555 100%);
   border-top: 2px solid #777;
 }
 
 .street-line {
   position: absolute;
-  bottom: 46px;
+  bottom: 38px;
   left: 0;
   width: 100%;
   height: 2px;
@@ -99,7 +99,7 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 368px;
+  height: 228px;
   pointer-events: none;
   display: none;
 }
@@ -125,7 +125,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 16px;
   transition: opacity 0.2s;
   border-radius: 4px;
 }
@@ -196,7 +196,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 16px;
   z-index: 15;
   pointer-events: none;
   transition: none;
@@ -587,9 +587,9 @@ button.toggle-btn.active {
 </div>
 
 <script>
-const GRID_WIDTH = 5;
+const GRID_WIDTH = 6;
 const GRID_HEIGHT = 4;
-const TILE_SIZE = 92;
+const TILE_SIZE = 76;
 const STREET_ROW = 3;
 
 const FURNITURE_TYPES = {
@@ -664,15 +664,21 @@ const COMBOS = [
 
 // Initial layout (pre-placed furniture)
 const INITIAL_FURNITURE = [
+  // Row 0 (kitchen)
   { type: 'soupPot', x: 0, y: 0 },
   { type: 'soupStove', x: 1, y: 0 },
   { type: 'noodleBoiler', x: 2, y: 0 },
   { type: 'platingStation', x: 3, y: 0 },
   { type: 'freezer', x: 4, y: 0 },
-  { type: 'dishwashingSink', x: 0, y: 1 },
+  { type: 'dishwashingSink', x: 5, y: 0 },
+  // Row 1 (middle) - empty for staff movement
+  // Row 2 (counter seats - full row)
   { type: 'counter', x: 0, y: 2 },
   { type: 'counter', x: 1, y: 2 },
-  { type: 'counter', x: 2, y: 2 }
+  { type: 'counter', x: 2, y: 2 },
+  { type: 'counter', x: 3, y: 2 },
+  { type: 'counter', x: 4, y: 2 },
+  { type: 'counter', x: 5, y: 2 }
 ];
 
 class Game {
@@ -1273,7 +1279,7 @@ class Game {
 
       case 'WORKING':
         staff.workTimer += deltaTime;
-        if (staff.workTimer >= 1.5) {
+        if (staff.workTimer >= 0.8) {
           staff.workTimer = 0;
           this.removeWorkBubble(staff);
           if (staff.type === 'cook') {
@@ -1289,7 +1295,7 @@ class Game {
 
       case 'COLLECTING':
         staff.workTimer += deltaTime;
-        if (staff.workTimer >= 1.0) {
+        if (staff.workTimer >= 0.5) {
           staff.workTimer = 0;
           this.removeWorkBubble(staff);
           // Pick up the dish
@@ -1308,7 +1314,7 @@ class Game {
 
       case 'CLEANING':
         staff.workTimer += deltaTime;
-        if (staff.workTimer >= 1.0) {
+        if (staff.workTimer >= 0.5) {
           staff.workTimer = 0;
           staff.carryingDish = false;
           this.removeWorkBubble(staff);
@@ -1327,7 +1333,7 @@ class Game {
 
       case 'PLACING_FOOD':
         staff.workTimer += deltaTime;
-        if (staff.workTimer >= 1.0) {
+        if (staff.workTimer >= 0.5) {
           staff.workTimer = 0;
           this.removeWorkBubble(staff);
           // Place food on handoff queue
@@ -1344,7 +1350,7 @@ class Game {
 
       case 'PICKING_UP_FOOD':
         staff.workTimer += deltaTime;
-        if (staff.workTimer >= 0.5) {
+        if (staff.workTimer >= 0.3) {
           staff.workTimer = 0;
           this.removeWorkBubble(staff);
           // Remove food icon from handoff counter
@@ -1377,7 +1383,7 @@ class Game {
     const dx = targetPixel.x - staff.x;
     const dy = targetPixel.y - staff.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const speed = 120; // px/sec
+    const speed = 250; // px/sec
 
     if (dist < 2) {
       staff.x = targetPixel.x;
@@ -1590,9 +1596,28 @@ class Game {
       return;
     }
     
+    // Find adjacent tile to equipment (cook works next to equipment, not on it)
     const curGrid = this.pixelToGrid(staff.x, staff.y);
-    const path = this.findPath(curGrid.x, curGrid.y, equip.x, equip.y, true);
-    staff.path = path;
+    const grid = this.buildOccupancyGrid();
+    const adjacentTiles = [
+      {x: equip.x - 1, y: equip.y}, {x: equip.x + 1, y: equip.y},
+      {x: equip.x, y: equip.y - 1}, {x: equip.x, y: equip.y + 1}
+    ].filter(t => t.x >= 0 && t.x < GRID_WIDTH && t.y >= 0 && t.y < GRID_HEIGHT - 1 && !grid[t.y][t.x]);
+    
+    let bestPath = null;
+    for (const adj of adjacentTiles) {
+      const path = this._bfs(grid, curGrid.x, curGrid.y, adj.x, adj.y);
+      if (path && (!bestPath || path.length < bestPath.length)) {
+        bestPath = path;
+      }
+    }
+    
+    if (!bestPath) {
+      // Fallback: use findPath with allowEndBlocked
+      bestPath = this.findPath(curGrid.x, curGrid.y, equip.x, equip.y, true);
+    }
+    
+    staff.path = bestPath;
     staff.pathIndex = 0;
     staff.state = 'MOVING';
   }
@@ -1742,10 +1767,10 @@ class Game {
       id: 'c' + this.nextCustomerId++,
       state: 'WALKING_STREET',
       x: -20,
-      y: 368 + 20,
+      y: TILE_SIZE * (GRID_HEIGHT - 1) + 20,
       targetX: 460,
-      targetY: 368 + 20,
-      speed: 40 + Math.random() * 20,
+      targetY: TILE_SIZE * (GRID_HEIGHT - 1) + 20,
+      speed: 80 + Math.random() * 30,
       type: this.getCustomerType(),
       moveTimer: 0,
       eatTimer: 0,
@@ -1827,7 +1852,7 @@ class Game {
           setTimeout(() => {
             customer.state = 'ENTERING';
             customer.targetX = 200;
-            customer.targetY = 240;
+            customer.targetY = TILE_SIZE * 1.5;
           }, 500);
         }
         
@@ -1850,7 +1875,7 @@ class Game {
             this.showBubble(customer, '😐');
             customer.state = 'LEAVING';
             customer.targetX = 200;
-            customer.targetY = 240;
+            customer.targetY = TILE_SIZE * 1.5;
             this.reputation = Math.max(0, this.reputation - 1);
           }
         }
@@ -1919,14 +1944,14 @@ class Game {
             customer.seat = null;
           }
           customer.targetX = 200;
-          customer.targetY = 240;
+          customer.targetY = TILE_SIZE * 1.5;
           this.reputation = Math.max(0, this.reputation - 2);
         }
         break;
         
       case 'EATING':
         customer.eatTimer += deltaTime;
-        if (customer.eatTimer >= 2) {
+        if (customer.eatTimer >= 1.2) {
           const quality = this.calculateQuality();
           
           // 満足度を4段階に分類
@@ -1974,7 +1999,7 @@ class Game {
             customer.seat = null;
           }
           customer.targetX = 200;
-          customer.targetY = 240;
+          customer.targetY = TILE_SIZE * 1.5;
         }
         break;
         
@@ -1983,7 +2008,7 @@ class Game {
         if (this.isAtTarget(customer)) {
           customer.state = 'EXITING';
           customer.targetX = -20;
-          customer.targetY = 368 + 20;
+          customer.targetY = TILE_SIZE * (GRID_HEIGHT - 1) + 20;
         }
         break;
         
@@ -2512,8 +2537,29 @@ class Game {
       });
     });
     
+    // Add initial staff - 1 cook in the middle row
+    this.staff.push({
+      id: 's0',
+      type: 'cook',
+      homeX: 2,
+      homeY: 1,
+      x: 2 * TILE_SIZE + TILE_SIZE / 2 - 16,
+      y: 1 * TILE_SIZE + TILE_SIZE / 2 - 16,
+      state: 'IDLE',
+      path: [],
+      pathIndex: 0,
+      currentOrder: null,
+      workTimer: 0,
+      cookingStep: 0,
+      element: null,
+      carryingDish: false,
+      workBubble: null
+    });
+    this.nextStaffId = 1;
+    
     document.getElementById('title-screen').style.display = 'none';
     this.renderFurniture();
+    this.renderStaff();
     this.checkCombos();
     this.updateUI();
     this.renderTabContent();
