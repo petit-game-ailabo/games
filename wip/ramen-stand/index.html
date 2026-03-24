@@ -51,7 +51,7 @@ body {
 #shop-view {
   position: relative;
   width: 100%;
-  height: 304px;
+  height: 440px;
   background: #f5f0e8;
   border: 4px solid #654321;
   margin-top: 4px;
@@ -63,7 +63,7 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 228px;
+  height: 400px;
   background: linear-gradient(135deg, #e8dcc8 0%, #f0e6d2 100%);
   border-bottom: 2px solid #8b7355;
 }
@@ -73,14 +73,14 @@ body {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 76px;
+  height: 40px;
   background: linear-gradient(to bottom, #555 0%, #666 50%, #555 100%);
   border-top: 2px solid #777;
 }
 
 .street-line {
   position: absolute;
-  bottom: 38px;
+  bottom: 20px;
   left: 0;
   width: 100%;
   height: 2px;
@@ -99,7 +99,7 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 228px;
+  height: 400px;
   pointer-events: none;
   display: none;
 }
@@ -117,6 +117,15 @@ body {
 
 .grid-cell:hover {
   background: rgba(139, 115, 85, 0.2);
+}
+
+.grid-cell.outside {
+  background: rgba(0, 0, 0, 0.15);
+  cursor: not-allowed;
+}
+
+.grid-cell.outside:hover {
+  background: rgba(0, 0, 0, 0.15);
 }
 
 /* Furniture */
@@ -188,6 +197,13 @@ body {
   border: 2px solid #2e7d32;
 }
 
+/* Wall */
+.wall {
+  position: absolute;
+  background: #888;
+  border: 1px solid #666;
+}
+
 /* Staff */
 .staff {
   position: absolute;
@@ -235,19 +251,19 @@ body {
 /* Customer */
 .customer {
   position: absolute;
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   transition: left 0.5s linear, top 0.5s linear;
   z-index: 10;
   cursor: pointer;
 }
 
 .customer-body {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   border: 1px solid rgba(0,0,0,0.3);
-  margin: 2px;
+  margin: 1px;
   pointer-events: none;
 }
 
@@ -256,7 +272,7 @@ body {
   top: -8px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1;
   pointer-events: none;
 }
@@ -587,10 +603,10 @@ button.toggle-btn.active {
 </div>
 
 <script>
-const GRID_WIDTH = 6;
-const GRID_HEIGHT = 4;
-const TILE_SIZE = 76;
-const STREET_ROW = 3;
+const GRID_WIDTH = 12;
+const GRID_HEIGHT = 11; // 10 playable + 1 street
+const TILE_SIZE = 40;   // was 76
+const STREET_ROW = 10;  // last row is street
 
 const FURNITURE_TYPES = {
   // 座席 (Seats)
@@ -662,23 +678,30 @@ const COMBOS = [
   { items: ['freezer', 'soupPot'], name: '鮮度抜群', bonus: 0.10 }
 ];
 
-// Initial layout (pre-placed furniture)
+// Store expansion costs per level
+const STORE_LEVELS = {
+  1: { cost: 0, label: '6×3', interiorCols: [3,8], interiorRows: [3,5] },
+  2: { cost: 5000, label: '8×5', interiorCols: [2,9], interiorRows: [2,6] },
+  3: { cost: 15000, label: '10×7', interiorCols: [1,10], interiorRows: [1,7] }
+};
+
+// Initial layout (pre-placed furniture) — adjusted for new grid
 const INITIAL_FURNITURE = [
-  // Row 0 (kitchen)
-  { type: 'soupPot', x: 0, y: 0 },
-  { type: 'soupStove', x: 1, y: 0 },
-  { type: 'noodleBoiler', x: 2, y: 0 },
-  { type: 'platingStation', x: 3, y: 0 },
-  { type: 'freezer', x: 4, y: 0 },
-  { type: 'dishwashingSink', x: 5, y: 0 },
-  // Row 1 (middle) - empty for staff movement
-  // Row 2 (counter seats - full row)
-  { type: 'counter', x: 0, y: 2 },
-  { type: 'counter', x: 1, y: 2 },
-  { type: 'counter', x: 2, y: 2 },
-  { type: 'counter', x: 3, y: 2 },
-  { type: 'counter', x: 4, y: 2 },
-  { type: 'counter', x: 5, y: 2 }
+  // Row 3 (kitchen - top of store)
+  { type: 'soupPot', x: 3, y: 3 },
+  { type: 'soupStove', x: 4, y: 3 },
+  { type: 'noodleBoiler', x: 5, y: 3 },
+  { type: 'platingStation', x: 6, y: 3 },
+  { type: 'freezer', x: 7, y: 3 },
+  { type: 'dishwashingSink', x: 8, y: 3 },
+  // Row 4 (middle) - empty for staff movement
+  // Row 5 (counter seats - bottom of store)
+  { type: 'counter', x: 3, y: 5 },
+  { type: 'counter', x: 4, y: 5 },
+  { type: 'counter', x: 5, y: 5 },
+  { type: 'counter', x: 6, y: 5 },
+  { type: 'counter', x: 7, y: 5 },
+  { type: 'counter', x: 8, y: 5 }
 ];
 
 class Game {
@@ -692,7 +715,9 @@ class Game {
     this.customers = [];
     this.orderQueue = [];
     this.dirtyDishes = [];
-    this.handoffQueue = []; // Array of { customer: customerRef, placedTime: timestamp }
+    this.handoffQueue = [];
+    this.walls = [];
+    this.storeLevel = 1;
     this.unlockedResearch = [];
     this.activeRecipes = ['醤油ラーメン'];
     this.availableRecipes = ['醤油ラーメン'];
@@ -716,6 +741,72 @@ class Game {
     this.removalMode = false;
   }
 
+  // Generate walls for a given store level
+  generateWalls(level) {
+    const walls = [];
+    if (level === 1) {
+      // Top wall: (2,2) to (9,2)
+      for (let x = 2; x <= 9; x++) walls.push({x, y: 2});
+      // Bottom wall: (2,6) to (4,6) and (7,6) to (9,6), entrance at (5,6) and (6,6)
+      for (let x = 2; x <= 4; x++) walls.push({x, y: 6});
+      for (let x = 7; x <= 9; x++) walls.push({x, y: 6});
+      // Left wall: (2,3) to (2,5)
+      for (let y = 3; y <= 5; y++) walls.push({x: 2, y});
+      // Right wall: (9,3) to (9,5)
+      for (let y = 3; y <= 5; y++) walls.push({x: 9, y});
+    } else if (level === 2) {
+      // Top wall: (1,1) to (10,1)
+      for (let x = 1; x <= 10; x++) walls.push({x, y: 1});
+      // Bottom wall: (1,7) to (4,7) and (7,7) to (10,7)
+      for (let x = 1; x <= 4; x++) walls.push({x, y: 7});
+      for (let x = 7; x <= 10; x++) walls.push({x, y: 7});
+      // Left wall: (1,2) to (1,6)
+      for (let y = 2; y <= 6; y++) walls.push({x: 1, y});
+      // Right wall: (10,2) to (10,6)
+      for (let y = 2; y <= 6; y++) walls.push({x: 10, y});
+    } else if (level === 3) {
+      // Top wall: (0,0) to (11,0)
+      for (let x = 0; x <= 11; x++) walls.push({x, y: 0});
+      // Bottom wall: (0,8) to (4,8) and (7,8) to (11,8)
+      for (let x = 0; x <= 4; x++) walls.push({x, y: 8});
+      for (let x = 7; x <= 11; x++) walls.push({x, y: 8});
+      // Left wall: (0,1) to (0,7)
+      for (let y = 1; y <= 7; y++) walls.push({x: 0, y});
+      // Right wall: (11,1) to (11,7)
+      for (let y = 1; y <= 7; y++) walls.push({x: 11, y});
+    }
+    return walls;
+  }
+
+  // Check if a tile is inside the store (not a wall, not outside)
+  isInsideStore(x, y) {
+    const level = this.storeLevel;
+    let minCol, maxCol, minRow, maxRow;
+    if (level === 1) { minCol=3; maxCol=8; minRow=3; maxRow=5; }
+    else if (level === 2) { minCol=2; maxCol=9; minRow=2; maxRow=6; }
+    else if (level === 3) { minCol=1; maxCol=10; minRow=1; maxRow=7; }
+    else { return false; }
+    return x >= minCol && x <= maxCol && y >= minRow && y <= maxRow;
+  }
+
+  // Check if a tile is a wall
+  isWall(x, y) {
+    return this.walls.some(w => w.x === x && w.y === y);
+  }
+
+  // Get entrance Y for current store level
+  getEntranceY() {
+    if (this.storeLevel === 1) return 6;
+    if (this.storeLevel === 2) return 7;
+    if (this.storeLevel === 3) return 8;
+    return 6;
+  }
+
+  // Get entrance X positions (center)
+  getEntranceXCenter() {
+    return 5.5; // always center at columns 5-6
+  }
+
   init() {
     this.createGrid();
     this.renderTabs();
@@ -735,6 +826,10 @@ class Game {
       for (let x = 0; x < GRID_WIDTH; x++) {
         const cell = document.createElement('div');
         cell.className = 'grid-cell';
+        const inside = this.isInsideStore(x, y);
+        if (!inside) {
+          cell.classList.add('outside');
+        }
         cell.style.left = x * TILE_SIZE + 'px';
         cell.style.top = y * TILE_SIZE + 'px';
         cell.style.width = TILE_SIZE + 'px';
@@ -742,14 +837,26 @@ class Game {
         cell.dataset.x = x;
         cell.dataset.y = y;
         
-        if (y === GRID_HEIGHT - 2) {
-          cell.style.background = 'rgba(100, 100, 200, 0.2)'; // Entrance area
-        }
-        
         cell.addEventListener('click', (e) => this.handleGridClick(x, y));
         overlay.appendChild(cell);
       }
     }
+  }
+
+  renderWalls() {
+    const interior = document.getElementById('shop-interior');
+    // Remove existing wall elements
+    interior.querySelectorAll('.wall').forEach(el => el.remove());
+    
+    this.walls.forEach(w => {
+      const el = document.createElement('div');
+      el.className = 'wall';
+      el.style.left = w.x * TILE_SIZE + 'px';
+      el.style.top = w.y * TILE_SIZE + 'px';
+      el.style.width = TILE_SIZE + 'px';
+      el.style.height = TILE_SIZE + 'px';
+      interior.appendChild(el);
+    });
   }
 
   handleGridClick(x, y) {
@@ -786,18 +893,24 @@ class Game {
       }
     }
     
+    // Check if inside store
+    if (!this.isInsideStore(x, y)) {
+      this.showNotification('店内にしか置けません！');
+      return;
+    }
+    
+    // Check if it's a wall
+    if (this.isWall(x, y)) {
+      this.showNotification('壁には置けません！');
+      return;
+    }
+    
     // Staff placement mode
     if (this.selectedStaff) {
       const staffType = STAFF_TYPES[this.selectedStaff];
       
       if (this.money < staffType.cost) {
         this.showNotification('お金が足りません！');
-        return;
-      }
-      
-      // Check bounds
-      if (x >= GRID_WIDTH || y >= GRID_HEIGHT - 1) {
-        this.showNotification('ここには置けません！');
         return;
       }
       
@@ -856,9 +969,15 @@ class Game {
         const checkX = x + dx;
         const checkY = y + dy;
         
-        // Check bounds
-        if (checkX >= GRID_WIDTH || checkY >= GRID_HEIGHT - 1) {
-          this.showNotification('ここには置けません！');
+        // Check if inside store
+        if (!this.isInsideStore(checkX, checkY)) {
+          this.showNotification('店内にしか置けません！');
+          return;
+        }
+        
+        // Check wall
+        if (this.isWall(checkX, checkY)) {
+          this.showNotification('壁には置けません！');
           return;
         }
         
@@ -1152,7 +1271,7 @@ class Game {
 
   // ========== BFS Pathfinding ==========
   buildOccupancyGrid() {
-    // Grid rows 0..2 (playable area), cols 0..4
+    // Grid rows 0..9 (playable area), cols 0..11
     const grid = [];
     for (let y = 0; y < GRID_HEIGHT - 1; y++) {
       grid[y] = [];
@@ -1160,6 +1279,12 @@ class Game {
         grid[y][x] = false; // false = passable
       }
     }
+    // Mark wall tiles as impassable
+    this.walls.forEach(w => {
+      if (w.y >= 0 && w.y < GRID_HEIGHT - 1 && w.x >= 0 && w.x < GRID_WIDTH) {
+        grid[w.y][w.x] = true;
+      }
+    });
     // Mark furniture tiles as impassable
     this.furniture.forEach(f => {
       const ft = FURNITURE_TYPES[f.type];
@@ -1740,9 +1865,6 @@ class Game {
     staff._afterSinkArrival = true;
   }
 
-  // Override the generic onStaffArrived for server-specific transitions
-  onStaffArrivedOriginal() {} // placeholder
-
   getSpawnRate() {
     // More frequent during lunch rush (middle of day)
     const dayProgress = this.dayTime / 60;
@@ -1762,14 +1884,15 @@ class Game {
 
   spawnPedestrian() {
     const attractRate = 0.1 + (this.reputation / 1000);
+    const streetY = TILE_SIZE * STREET_ROW + TILE_SIZE / 2;
     
     const customer = {
       id: 'c' + this.nextCustomerId++,
       state: 'WALKING_STREET',
       x: -20,
-      y: TILE_SIZE * (GRID_HEIGHT - 1) + 20,
-      targetX: 460,
-      targetY: TILE_SIZE * (GRID_HEIGHT - 1) + 20,
+      y: streetY,
+      targetX: 500,
+      targetY: streetY,
       speed: 80 + Math.random() * 30,
       type: this.getCustomerType(),
       moveTimer: 0,
@@ -1845,19 +1968,22 @@ class Game {
       case 'WALKING_STREET':
         this.moveToTarget(customer, deltaTime);
         
-        // Check if attracted
-        if (customer.attracted && customer.x > 100 && customer.x < 200 && !customer.noticeShown) {
+        // Check if attracted — entrance is at center of grid
+        const entrancePixelX = this.getEntranceXCenter() * TILE_SIZE;
+        if (customer.attracted && customer.x > entrancePixelX - 40 && customer.x < entrancePixelX + 40 && !customer.noticeShown) {
           customer.noticeShown = true;
           this.showBubble(customer, '!');
+          // Target: entrance gap position
+          const entranceY = this.getEntranceY();
           setTimeout(() => {
             customer.state = 'ENTERING';
-            customer.targetX = 200;
-            customer.targetY = TILE_SIZE * 1.5;
+            customer.targetX = entrancePixelX;
+            customer.targetY = entranceY * TILE_SIZE + TILE_SIZE / 2;
           }, 500);
         }
         
         // Exit if not attracted
-        if (customer.x >= 460) {
+        if (customer.x >= 500) {
           this.removeCustomer(customer);
         }
         break;
@@ -1869,13 +1995,14 @@ class Game {
           if (seat) {
             customer.seat = seat;
             customer.state = 'FINDING_SEAT';
-            customer.targetX = seat.x * TILE_SIZE + TILE_SIZE / 2 - 8;
-            customer.targetY = seat.y * TILE_SIZE + TILE_SIZE / 2 - 8;
+            customer.targetX = seat.x * TILE_SIZE + TILE_SIZE / 2 - 6;
+            customer.targetY = seat.y * TILE_SIZE + TILE_SIZE / 2 - 6;
           } else {
             this.showBubble(customer, '😐');
             customer.state = 'LEAVING';
-            customer.targetX = 200;
-            customer.targetY = TILE_SIZE * 1.5;
+            const entranceY = this.getEntranceY();
+            customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
+            customer.targetY = entranceY * TILE_SIZE + TILE_SIZE / 2;
             this.reputation = Math.max(0, this.reputation - 1);
           }
         }
@@ -1905,7 +2032,6 @@ class Game {
             customer.waitingFoodTimer = 0;
           } else {
             // No cook: auto-serve after delay (backward compatible)
-            // Stay in SITTING, food appears after 4 seconds total
           }
         }
         if (!this.staff.some(s => s.type === 'cook')) {
@@ -1943,8 +2069,9 @@ class Game {
             customer.seat.occupied = false;
             customer.seat = null;
           }
-          customer.targetX = 200;
-          customer.targetY = TILE_SIZE * 1.5;
+          const entranceY = this.getEntranceY();
+          customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
+          customer.targetY = entranceY * TILE_SIZE + TILE_SIZE / 2;
           this.reputation = Math.max(0, this.reputation - 2);
         }
         break;
@@ -1998,8 +2125,9 @@ class Game {
             customer.seat.occupied = false;
             customer.seat = null;
           }
-          customer.targetX = 200;
-          customer.targetY = TILE_SIZE * 1.5;
+          const entranceY2 = this.getEntranceY();
+          customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
+          customer.targetY = entranceY2 * TILE_SIZE + TILE_SIZE / 2;
         }
         break;
         
@@ -2007,8 +2135,9 @@ class Game {
         this.moveToTarget(customer, deltaTime);
         if (this.isAtTarget(customer)) {
           customer.state = 'EXITING';
+          const streetY = TILE_SIZE * STREET_ROW + TILE_SIZE / 2;
           customer.targetX = -20;
-          customer.targetY = TILE_SIZE * (GRID_HEIGHT - 1) + 20;
+          customer.targetY = streetY;
         }
         break;
         
@@ -2196,6 +2325,28 @@ class Game {
     }, 2000);
   }
 
+  // Store expansion
+  expandStore() {
+    const nextLevel = this.storeLevel + 1;
+    if (nextLevel > 3) {
+      this.showNotification('最大レベルです！');
+      return;
+    }
+    const cost = STORE_LEVELS[nextLevel].cost;
+    if (this.money < cost) {
+      this.showNotification('お金が足りません！');
+      return;
+    }
+    this.money -= cost;
+    this.storeLevel = nextLevel;
+    this.walls = this.generateWalls(nextLevel);
+    this.renderWalls();
+    this.createGrid(); // Rebuild grid overlay
+    this.updateUI();
+    this.renderTabContent();
+    this.showNotification('✨ 店舗を拡張しました！ Lv' + nextLevel);
+  }
+
   renderTabs() {
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(tab => {
@@ -2244,7 +2395,8 @@ class Game {
           seats: '座席',
           kitchen: '厨房',
           other: 'その他',
-          staff: '店員'
+          staff: '店員',
+          store: '店舗'
         };
         
         const subTabsHtml = Object.keys(categories).map(cat => 
@@ -2253,7 +2405,26 @@ class Game {
         
         let itemsHtml = '';
         
-        if (this.currentSubTab === 'staff') {
+        if (this.currentSubTab === 'store') {
+          // Store expansion UI
+          const levelInfo = STORE_LEVELS[this.storeLevel];
+          let expansionBtn = '';
+          if (this.storeLevel < 3) {
+            const nextLevel = this.storeLevel + 1;
+            const nextInfo = STORE_LEVELS[nextLevel];
+            const canAfford = this.money >= nextInfo.cost;
+            expansionBtn = `<button onclick="game.expandStore()" ${!canAfford ? 'disabled' : ''}>拡張 Lv${nextLevel} (${nextInfo.label}) — ${nextInfo.cost}円</button>`;
+          } else {
+            expansionBtn = '<div style="color: #4caf50; font-weight: bold;">✓ 最大レベル</div>';
+          }
+          itemsHtml = `
+            <div class="info-section">
+              <div class="info-title">店舗レベル: ${this.storeLevel}</div>
+              <div>現在のサイズ: ${levelInfo.label}</div>
+              <div style="margin-top: 8px;">${expansionBtn}</div>
+            </div>
+          `;
+        } else if (this.currentSubTab === 'staff') {
           // Staff items
           itemsHtml = Object.keys(STAFF_TYPES).map(key => {
             const s = STAFF_TYPES[key];
@@ -2290,11 +2461,11 @@ class Game {
               ${this.removalMode ? '✓ 撤去モード' : '撤去モード'}
             </button>
             <div style="font-size: 11px; color: #666; margin-top: 4px;">
-              ${this.removalMode ? 'タップして家具/店員を撤去（50%返金）' : this.currentSubTab === 'staff' ? '店員を選んで配置' : '家具を選んで配置'}
+              ${this.removalMode ? 'タップして家具/店員を撤去（50%返金）' : this.currentSubTab === 'staff' ? '店員を選んで配置' : this.currentSubTab === 'store' ? '店舗の拡張' : '家具を選んで配置'}
             </div>
           </div>
           <div class="sub-tabs">${subTabsHtml}</div>
-          <div class="furniture-list">${itemsHtml}</div>
+          ${this.currentSubTab === 'store' ? itemsHtml : `<div class="furniture-list">${itemsHtml}</div>`}
         `;
         break;
         
@@ -2470,7 +2641,8 @@ class Game {
       availableRecipes: this.availableRecipes,
       discoveredCombos: this.discoveredCombos,
       stats: this.stats,
-      nextStaffId: this.nextStaffId
+      nextStaffId: this.nextStaffId,
+      storeLevel: this.storeLevel
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -2491,6 +2663,10 @@ class Game {
     this.discoveredCombos = save.discoveredCombos;
     this.stats = save.stats;
     this.nextStaffId = save.nextStaffId || 0;
+    this.storeLevel = save.storeLevel || 1;
+    
+    // Regenerate walls from store level
+    this.walls = this.generateWalls(this.storeLevel);
     
     // Restore staff
     this.staff = [];
@@ -2518,6 +2694,8 @@ class Game {
     }
     
     document.getElementById('title-screen').style.display = 'none';
+    this.createGrid();
+    this.renderWalls();
     this.renderFurniture();
     this.renderStaff();
     this.updateUI();
@@ -2526,6 +2704,10 @@ class Game {
 
   startNew() {
     localStorage.removeItem('ramenStandSave');
+    
+    // Set initial store level and walls
+    this.storeLevel = 1;
+    this.walls = this.generateWalls(1);
     
     // Place initial furniture
     INITIAL_FURNITURE.forEach((f, idx) => {
@@ -2537,14 +2719,14 @@ class Game {
       });
     });
     
-    // Add initial staff - 1 cook in the middle row
+    // Add initial staff - 1 cook in the middle of the store
     this.staff.push({
       id: 's0',
       type: 'cook',
-      homeX: 2,
-      homeY: 1,
-      x: 2 * TILE_SIZE + TILE_SIZE / 2 - 16,
-      y: 1 * TILE_SIZE + TILE_SIZE / 2 - 16,
+      homeX: 5,
+      homeY: 4,
+      x: 5 * TILE_SIZE + TILE_SIZE / 2 - 16,
+      y: 4 * TILE_SIZE + TILE_SIZE / 2 - 16,
       state: 'IDLE',
       path: [],
       pathIndex: 0,
@@ -2558,6 +2740,8 @@ class Game {
     this.nextStaffId = 1;
     
     document.getElementById('title-screen').style.display = 'none';
+    this.createGrid();
+    this.renderWalls();
     this.renderFurniture();
     this.renderStaff();
     this.checkCombos();
