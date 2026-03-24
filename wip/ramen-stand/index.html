@@ -101,21 +101,25 @@ body {
   width: 100%;
   height: 400px;
   pointer-events: none;
-  display: none;
 }
 
 .grid-overlay.active {
-  display: block;
   pointer-events: all;
 }
 
 .grid-cell {
   position: absolute;
-  border: 1px solid rgba(139, 115, 85, 0.3);
-  cursor: pointer;
+  border: 1px solid rgba(139, 115, 85, 0.15);
+  pointer-events: none;
 }
 
-.grid-cell:hover {
+.grid-overlay.active .grid-cell {
+  border: 1px solid rgba(139, 115, 85, 0.4);
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.grid-overlay.active .grid-cell:hover {
   background: rgba(139, 115, 85, 0.2);
 }
 
@@ -722,6 +726,8 @@ class Game {
     this.activeRecipes = ['醤油ラーメン'];
     this.availableRecipes = ['醤油ラーメン'];
     this.discoveredCombos = [];
+    this.waitingQueue = [];
+    this.waitingQueueCheckTimer = 0;
     this.stats = {
       totalCustomers: 0,
       totalRevenue: 0,
@@ -1096,6 +1102,8 @@ class Game {
     this.orderQueue = [];
     this.dirtyDishes = [];
     this.handoffQueue = [];
+    this.waitingQueue = [];
+    this.waitingQueueCheckTimer = 0;
     this.pedestrianTimer = 0;
     this.dailyStats = { revenue: 0, customers: 0, satisfied: 0 };
     
@@ -1146,6 +1154,7 @@ class Game {
     
     // Clean up handoff queue and icons
     this.handoffQueue = [];
+    this.waitingQueue = [];
     document.querySelectorAll('.handoff-food-icon').forEach(el => el.remove());
     
     // Clean up staff work bubbles
@@ -1193,6 +1202,7 @@ class Game {
     this.orderQueue = [];
     this.dirtyDishes = [];
     this.handoffQueue = [];
+    this.waitingQueue = [];
     
     // Remove any remaining customer elements
     const customerEls = document.querySelectorAll('.customer');
@@ -1267,8 +1277,102 @@ class Game {
       this.dirtyDishes = this.dirtyDishes.filter(d => !d.done);
     }
     
+    // Check waiting queue periodically (every 0.5s)
+    this.waitingQueueCheckTimer += scaledDelta;
+    if (this.waitingQueueCheckTimer >= 0.5) {
+      this.waitingQueueCheckTimer = 0;
+      this.checkWaitingQueue();
+    }
+    
     // Remove exited customers
     this.customers = this.customers.filter(c => c.state !== 'EXITED' || c.element);
+  }
+
+  checkWaitingQueue() {
+    if (this.waitingQueue.length === 0) return;
+    const front = this.waitingQueue[0];
+    const seat = front.groupSize > 1 ? this.findGroupSeat(front.groupSize) : this.findEmptySeat();
+    if (seat) {
+      this.waitingQueue.shift();
+      front.seat = seat;
+      front.state = 'FINDING_SEAT';
+      front.targetX = seat.x * TILE_SIZE + TILE_SIZE / 2 - 6;
+      front.targetY = seat.y * TILE_SIZE + TILE_SIZE / 2 - 6;
+      this.calculateCustomerPath(front);
+      this.repositionWaitingQueue();
+    }
+  }
+
+  repositionWaitingQueue() {
+    const entranceX = this.getEntranceXCenter() * TILE_SIZE;
+    const entranceY = this.getEntranceY();
+    this.waitingQueue.forEach((c, idx) => {
+      c.targetX = entranceX;
+      c.targetY = entranceY * TILE_SIZE + TILE_SIZE * (idx + 1);
+    });
+  }
+
+  // Customer grid-based pathfinding
+  calculateCustomerPath(customer) {
+    // Convert current pixel position to grid
+    const curGX = Math.round(customer.x / TILE_SIZE);
+    const curGY = Math.round(customer.y / TILE_SIZE);
+    const tarGX = Math.round(customer.targetX / TILE_SIZE);
+    const tarGY = Math.round(customer.targetY / TILE_SIZE);
+    
+    if (curGX === tarGX && curGY === tarGY) {
+      customer.path = null;
+      return;
+    }
+    
+    // Build grid for customer pathfinding (customers can walk through entrance)
+    const grid = this.buildOccupancyGrid();
+    // Also allow the entrance row tiles and street row
+    const entranceY = this.getEntranceY();
+    // Entrance gap is at columns 5 and 6
+    if (entranceY >= 0 && entranceY < GRID_HEIGHT - 1) {
+      grid[entranceY][5] = false;
+      grid[entranceY][6] = false;
+    }
+    
+    // BFS
+    const path = this._bfs(grid, curGX, curGY, tarGX, tarGY);
+    if (path && path.length > 0) {
+      customer.path = path;
+      customer.pathIndex = 0;
+    } else {
+      customer.path = null; // fallback to direct movement
+    }
+  }
+
+  moveCustomerAlongPath(customer, deltaTime) {
+    if (!customer.path || customer.pathIndex >= customer.path.length) {
+      customer.path = null;
+      return;
+    }
+    
+    const target = customer.path[customer.pathIndex];
+    const targetPX = target.x * TILE_SIZE + TILE_SIZE / 2 - 6;
+    const targetPY = target.y * TILE_SIZE + TILE_SIZE / 2 - 6;
+    const dx = targetPX - customer.x;
+    const dy = targetPY - customer.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist < 3) {
+      customer.x = targetPX;
+      customer.y = targetPY;
+      customer.pathIndex++;
+      if (customer.pathIndex >= customer.path.length) {
+        customer.path = null;
+      }
+    } else {
+      const move = customer.speed * deltaTime;
+      customer.x += (dx / dist) * Math.min(move, dist);
+      customer.y += (dy / dist) * Math.min(move, dist);
+    }
+    
+    customer.element.style.left = customer.x + 'px';
+    customer.element.style.top = customer.y + 'px';
   }
 
   // ========== BFS Pathfinding ==========
@@ -2009,7 +2113,19 @@ class Game {
         break;
         
       case 'ENTERING':
-        this.moveToTarget(customer, deltaTime);
+        // Auto bubble on entering (30% chance, once)
+        if (!customer.enterBubbleShown) {
+          customer.enterBubbleShown = true;
+          if (Math.random() < 0.3) {
+            const enterMsgs = ['いい匂い！', 'ラーメン食べたい！', 'ここが評判の店か', 'お腹すいた〜'];
+            this.showBubble(customer, enterMsgs[Math.floor(Math.random() * enterMsgs.length)]);
+          }
+        }
+        if (customer.path && customer.path.length > 0) {
+          this.moveCustomerAlongPath(customer, deltaTime);
+        } else {
+          this.moveToTarget(customer, deltaTime);
+        }
         if (this.isAtTarget(customer)) {
           let seat = null;
           if (customer.groupSize > 1) {
@@ -2022,20 +2138,51 @@ class Game {
             customer.state = 'FINDING_SEAT';
             customer.targetX = seat.x * TILE_SIZE + TILE_SIZE / 2 - 6;
             customer.targetY = seat.y * TILE_SIZE + TILE_SIZE / 2 - 6;
+            // Calculate path for customer to seat
+            this.calculateCustomerPath(customer);
           } else {
-            const noSeatMsg = customer.groupSize > 1 ? '席がない…' : '😐';
-            this.showBubble(customer, noSeatMsg);
-            customer.state = 'LEAVING';
-            const entranceY = this.getEntranceY();
-            customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
-            customer.targetY = entranceY * TILE_SIZE + TILE_SIZE / 2;
-            this.reputation = Math.max(0, this.reputation - 1);
+            // No seat available — join waiting queue
+            if (this.waitingQueue.length < 5) {
+              customer.state = 'WAITING_IN_LINE';
+              customer.waitTimer = 0;
+              this.waitingQueue.push(customer);
+              this.repositionWaitingQueue();
+              this.showBubble(customer, '待ってます…');
+            } else {
+              this.showBubble(customer, '混みすぎ…');
+              customer.state = 'LEAVING';
+              const entranceY = this.getEntranceY();
+              customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
+              customer.targetY = entranceY * TILE_SIZE + TILE_SIZE / 2;
+              customer.path = null;
+              this.reputation = Math.max(0, this.reputation - 1);
+            }
           }
         }
         break;
         
-      case 'FINDING_SEAT':
+      case 'WAITING_IN_LINE':
         this.moveToTarget(customer, deltaTime);
+        customer.waitTimer += deltaTime;
+        if (customer.waitTimer >= 15) {
+          this.showBubble(customer, '待てない…');
+          this.waitingQueue = this.waitingQueue.filter(c => c !== customer);
+          this.repositionWaitingQueue();
+          customer.state = 'LEAVING';
+          const streetY3 = TILE_SIZE * STREET_ROW + TILE_SIZE / 2;
+          customer.targetX = -20;
+          customer.targetY = streetY3;
+          customer.path = null;
+          this.reputation = Math.max(0, this.reputation - 1);
+        }
+        break;
+        
+      case 'FINDING_SEAT':
+        if (customer.path && customer.path.length > 0) {
+          this.moveCustomerAlongPath(customer, deltaTime);
+        } else {
+          this.moveToTarget(customer, deltaTime);
+        }
         if (this.isAtTarget(customer)) {
           customer.state = 'SITTING';
           customer.eatTimer = 0;
@@ -2103,12 +2250,29 @@ class Game {
           const entranceY = this.getEntranceY();
           customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
           customer.targetY = entranceY * TILE_SIZE + TILE_SIZE / 2;
+          this.calculateCustomerPath(customer);
           this.reputation = Math.max(0, this.reputation - 2);
         }
         break;
         
       case 'EATING':
         customer.eatTimer += deltaTime;
+        // Auto-show eating bubble (40% chance, once, partway through)
+        if (!customer.eatBubbleShown && customer.eatTimer >= 0.5) {
+          customer.eatBubbleShown = true;
+          if (Math.random() < 0.4) {
+            const quality = this.calculateQuality();
+            let eatMsgs;
+            if (quality >= 0.7) {
+              eatMsgs = ['うまい！', '最高！', 'スープが絶品！', '麺がいい！', 'これはハマる！'];
+            } else if (quality >= 0.4) {
+              eatMsgs = ['ふむふむ', '悪くない', 'まあまあかな'];
+            } else {
+              eatMsgs = ['うーん…', '普通かな', 'もう少し…'];
+            }
+            this.showBubble(customer, eatMsgs[Math.floor(Math.random() * eatMsgs.length)]);
+          }
+        }
         if (customer.eatTimer >= 1.2) {
           const quality = this.calculateQuality();
           
@@ -2164,16 +2328,33 @@ class Game {
           const entranceY2 = this.getEntranceY();
           customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
           customer.targetY = entranceY2 * TILE_SIZE + TILE_SIZE / 2;
+          // Calculate path for leaving
+          this.calculateCustomerPath(customer);
         }
         break;
         
       case 'LEAVING':
-        this.moveToTarget(customer, deltaTime);
+        // Auto-show goodbye bubble (once)
+        if (!customer.leaveBubbleShown) {
+          customer.leaveBubbleShown = true;
+          if (customer.paid > 0) {
+            const leaveMsgs = customer.satisfied 
+              ? ['ごちそうさま！😋', 'また来ます！', '美味しかった！', 'ごちそうさまでした！']
+              : ['ごちそうさま', 'まあまあだった', 'ごちそうさまでした'];
+            this.showBubble(customer, leaveMsgs[Math.floor(Math.random() * leaveMsgs.length)]);
+          }
+        }
+        if (customer.path && customer.path.length > 0) {
+          this.moveCustomerAlongPath(customer, deltaTime);
+        } else {
+          this.moveToTarget(customer, deltaTime);
+        }
         if (this.isAtTarget(customer)) {
           customer.state = 'EXITING';
           const streetY = TILE_SIZE * STREET_ROW + TILE_SIZE / 2;
           customer.targetX = -20;
           customer.targetY = streetY;
+          customer.path = null;
         }
         break;
         
@@ -2227,14 +2408,23 @@ class Game {
   }
 
   findGroupSeat(groupSize) {
+    // For table/tatami: if anyone is sitting there, the whole furniture is occupied (相席NG)
+    const occupiedFurniture = new Set();
+    this.customers.forEach(c => {
+      if (c.seat && c.seat.furniture) {
+        const ft = c.seat.furniture.type;
+        if (ft === 'table' || ft === 'tatami') {
+          occupiedFurniture.add(c.seat.furniture);
+        }
+      }
+    });
+    
     // Find table or tatami furniture that has enough capacity and is completely empty
     const groupFurniture = this.furniture.filter(f => {
       const type = FURNITURE_TYPES[f.type];
       if (type.seats < groupSize) return false;
       if (f.type !== 'table' && f.type !== 'tatami') return false;
-      // Check all seats are empty (no customer using this furniture)
-      const isOccupied = this.customers.some(c => c.seat && c.seat.furniture === f);
-      return !isOccupied;
+      return !occupiedFurniture.has(f);
     });
     
     if (groupFurniture.length === 0) return null;
@@ -2251,7 +2441,7 @@ class Game {
   }
 
   findEmptySeat() {
-    const seats = [];
+    let seats = [];
     this.furniture.forEach(f => {
       const type = FURNITURE_TYPES[f.type];
       if (type.seats > 0) {
@@ -2274,7 +2464,33 @@ class Game {
       }
     });
     
+    // For table/tatami: if anyone is sitting there, the whole furniture is occupied (相席NG)
+    const occupiedFurniture = new Set();
+    this.customers.forEach(c => {
+      if (c.seat && c.seat.furniture) {
+        const ft = c.seat.furniture.type;
+        if (ft === 'table' || ft === 'tatami') {
+          occupiedFurniture.add(c.seat.furniture);
+        }
+      }
+    });
+    seats = seats.filter(s => {
+      if (s.furniture && (s.furniture.type === 'table' || s.furniture.type === 'tatami')) {
+        return !occupiedFurniture.has(s.furniture);
+      }
+      return true;
+    });
+    
     const empty = seats.filter(s => !s.occupied);
+    
+    // Sort seats to prefer counter > table > tatami for solo customers
+    const seatPriority = { counter: 0, table: 1, tatami: 2 };
+    empty.sort((a, b) => {
+      const pa = seatPriority[a.furniture.type] || 99;
+      const pb = seatPriority[b.furniture.type] || 99;
+      return pa - pb;
+    });
+    
     return empty.length > 0 ? empty[0] : null;
   }
 
@@ -2424,7 +2640,12 @@ class Game {
   renderTabContent() {
     const content = document.getElementById('tab-content');
     const overlay = document.getElementById('grid-overlay');
-    overlay.classList.remove('active');
+    // Only add 'active' (enables pointer events) when in layout tab
+    if (this.currentTab === 'layout') {
+      overlay.classList.add('active');
+    } else {
+      overlay.classList.remove('active');
+    }
     
     switch (this.currentTab) {
       case 'operations':
@@ -2449,7 +2670,6 @@ class Game {
         break;
         
       case 'layout':
-        overlay.classList.add('active');
         
         const categories = {
           seats: '座席',
