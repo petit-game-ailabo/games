@@ -523,11 +523,11 @@ const TARE_TYPES = {
 };
 
 const NOODLE_TYPES = {
-  thin: { name: '極細ストレート', match: 'kire', unlocked: true },
-  medium: { name: '中細ストレート', match: 'balanced', unlocked: true },
-  thickWavy: { name: '太麺ちぢれ', match: 'koku', cost: 10 },
-  extraThick: { name: '極太麺', match: 'kosa', cost: 15 },
-  wholeGrain: { name: '全粒粉麺', match: 'kaori', cost: 25 }
+  thin: { name: '極細ストレート', match: 'kire', desc: 'キレ重視', unlocked: true },
+  medium: { name: '中細ストレート', match: 'balanced', desc: 'バランス型', unlocked: true },
+  thickWavy: { name: '太麺ちぢれ', match: 'koku', desc: 'コク重視', cost: 10 },
+  extraThick: { name: '極太麺', match: 'kosa', desc: '濃さ重視', cost: 15 },
+  wholeGrain: { name: '全粒粉麺', match: 'kaori', desc: '香り重視', cost: 25 }
 };
 
 const RESEARCH_TREE = [
@@ -1196,6 +1196,23 @@ class Game {
       if (comboData) quality += comboData.bonus;
     });
     
+    // Soup recipe bonuses
+    const params = this.calculateSoupParams(this.currentSoupRecipe.ingredients);
+    const totalParams = params.koku + params.kire + params.kaori + params.kosa;
+    
+    // Higher total params = better quality (diminishing returns)
+    if (totalParams > 50) quality += 0.05;
+    if (totalParams > 100) quality += 0.05;
+    if (totalParams > 150) quality += 0.05;
+    
+    // Tare variety bonus
+    if (this.unlockedTare.length > 1) quality += 0.02;
+    
+    // Noodle machine + unlocked noodle types bonus
+    if (this.furniture.some(f => f.type === 'noodleMachine') && this.unlockedNoodles.length > 2) {
+      quality += 0.05;
+    }
+    
     return Math.min(1, quality);
   }
 
@@ -1355,7 +1372,8 @@ class Game {
           return `
             <div class="furniture-item ${!unlocked ? 'disabled' : ''} ${selected ? 'selected' : ''}"
                  onclick="${unlocked ? `game.selectTare('${key}')` : ''}">
-              <div style="font-size: 13px;">${tare.name}</div>
+              <div style="font-size: 16px;">${selected ? '✓' : ''}</div>
+              <div style="font-size: 13px; font-weight: ${selected ? 'bold' : 'normal'};">${tare.name}</div>
               ${!unlocked ? `<div style="font-size: 10px; color: #999;">${tare.cost}pt</div>` : ''}
             </div>
           `;
@@ -1368,7 +1386,9 @@ class Game {
           return `
             <div class="furniture-item ${!unlocked ? 'disabled' : ''} ${selected ? 'selected' : ''}"
                  onclick="${unlocked ? `game.selectNoodle('${key}')` : ''}">
-              <div style="font-size: 13px;">${noodle.name}</div>
+              <div style="font-size: 16px;">${selected ? '✓' : ''}</div>
+              <div style="font-size: 13px; font-weight: ${selected ? 'bold' : 'normal'};">${noodle.name}</div>
+              <div style="font-size: 10px; color: #666;">${noodle.desc}</div>
               ${!unlocked ? `<div style="font-size: 10px; color: #999;">${noodle.cost}pt</div>` : ''}
             </div>
           `;
@@ -1571,6 +1591,16 @@ class Game {
   
   selectTare(key) {
     this.currentSoupRecipe.tare = key;
+    
+    // Update recipe name based on tare
+    const tareNames = {
+      shoyu: '醤油',
+      miso: '味噌',
+      shio: '塩'
+    };
+    const tareName = tareNames[key] || '醤油';
+    this.currentSoupRecipe.name = tareName + 'ラーメン';
+    
     this.renderTabContent();
   }
   
