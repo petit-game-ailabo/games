@@ -34,9 +34,9 @@ body {
   color: white;
   padding: 12px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
-  font-size: 13px;
+  font-size: 12px;
   border-bottom: 3px solid #3a2817;
 }
 
@@ -457,6 +457,8 @@ button:disabled {
     <div class="status-item">💰 <span id="money">5000</span>円</div>
     <div class="status-item">⭐ <span id="reputation">0</span></div>
     <div class="status-item">🔬 <span id="research">0</span>pt</div>
+    <div class="status-item">🏪 <span id="phase-name">屋台</span></div>
+    <div class="status-item">🪑 <span id="seats">0</span>/<span id="max-seats">4</span></div>
   </div>
 
   <div id="shop-view">
@@ -563,6 +565,7 @@ class Game {
     this.nextCustomerId = 0;
     this.pedestrianTimer = 0;
     this.selectedFurniture = null;
+    this.phase = 1; // フェーズ制: 1=屋台, 2=小店舗, 3=中店舗, 4=大店舗
   }
 
   init() {
@@ -621,6 +624,14 @@ class Game {
       return;
     }
     
+    // Check seat limit based on phase
+    const maxSeats = this.getMaxSeats();
+    const currentSeats = this.getCurrentSeatCount();
+    if (furnitureType.seats > 0 && currentSeats + furnitureType.seats > maxSeats) {
+      this.showNotification(`フェーズ${this.phase}では最大${maxSeats}席までです！`);
+      return;
+    }
+    
     // Check if space is available
     for (let dy = 0; dy < furnitureType.height; dy++) {
       for (let dx = 0; dx < furnitureType.width; dx++) {
@@ -644,6 +655,23 @@ class Game {
     this.checkCombos();
     this.updateUI();
     this.renderTabContent();
+  }
+  
+  getMaxSeats() {
+    const phaseSeats = {
+      1: 4,
+      2: 8,
+      3: 16,
+      4: 24
+    };
+    return phaseSeats[this.phase] || 4;
+  }
+  
+  getCurrentSeatCount() {
+    return this.furniture.reduce((total, f) => {
+      const type = FURNITURE_TYPES[f.type];
+      return total + (type.seats || 0);
+    }, 0);
   }
 
   getFurnitureAt(x, y) {
@@ -1213,6 +1241,12 @@ class Game {
         
       case 'layout':
         overlay.classList.add('active');
+        const phaseNames = {
+          1: '屋台',
+          2: '小店舗',
+          3: '中店舗',
+          4: '大店舗'
+        };
         const furnitureOptions = Object.keys(FURNITURE_TYPES).map(key => {
           const f = FURNITURE_TYPES[key];
           const canUse = !f.research || this.unlockedResearch.includes(f.research);
@@ -1228,6 +1262,7 @@ class Game {
         
         content.innerHTML = `
           <div class="info-section">
+            <div><strong>現在:</strong> ${phaseNames[this.phase]} (席: ${this.getCurrentSeatCount()}/${this.getMaxSeats()})</div>
             <div>家具を選んで、グリッド上をタップして配置</div>
             <div style="font-size: 11px; color: #666;">長押しで撤去</div>
           </div>
@@ -1352,6 +1387,16 @@ class Game {
     document.getElementById('money').textContent = this.money;
     document.getElementById('reputation').textContent = this.reputation;
     document.getElementById('research').textContent = this.researchPoints;
+    
+    const phaseNames = {
+      1: '屋台',
+      2: '小店舗',
+      3: '中店舗',
+      4: '大店舗'
+    };
+    document.getElementById('phase-name').textContent = phaseNames[this.phase] || '屋台';
+    document.getElementById('seats').textContent = this.getCurrentSeatCount();
+    document.getElementById('max-seats').textContent = this.getMaxSeats();
   }
 
   saveGame() {
@@ -1365,7 +1410,8 @@ class Game {
       activeRecipes: this.activeRecipes,
       availableRecipes: this.availableRecipes,
       discoveredCombos: this.discoveredCombos,
-      stats: this.stats
+      stats: this.stats,
+      phase: this.phase
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -1385,6 +1431,7 @@ class Game {
     this.availableRecipes = save.availableRecipes;
     this.discoveredCombos = save.discoveredCombos;
     this.stats = save.stats;
+    this.phase = save.phase || 1;
     
     this.setState(GameState.PREPARING);
     this.renderFurniture();
