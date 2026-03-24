@@ -2440,23 +2440,44 @@ class Game {
     };
   }
 
+  // Generate unique seat positions for multi-tile furniture
+  getSeatPositions(f) {
+    const type = FURNITURE_TYPES[f.type];
+    const positions = [];
+    if (type.width === 1 && type.height === 1) {
+      // Counter: single tile
+      positions.push({ x: f.x, y: f.y });
+    } else {
+      // Table (2×2) / Tatami (2×3): one seat per tile
+      for (let dy = 0; dy < type.height; dy++) {
+        for (let dx = 0; dx < type.width; dx++) {
+          if (positions.length < type.seats) {
+            positions.push({ x: f.x + dx, y: f.y + dy });
+          }
+        }
+      }
+    }
+    return positions;
+  }
+
   findEmptySeat() {
     let seats = [];
     this.furniture.forEach(f => {
       const type = FURNITURE_TYPES[f.type];
       if (type.seats > 0) {
-        for (let i = 0; i < type.seats; i++) {
+        const positions = this.getSeatPositions(f);
+        positions.forEach(pos => {
           seats.push({ 
-            x: f.x + Math.floor(type.width / 2), 
-            y: f.y + Math.floor(type.height / 2), 
+            x: pos.x, 
+            y: pos.y, 
             occupied: false, 
             furniture: f 
           });
-        }
+        });
       }
     });
     
-    // Mark occupied seats
+    // Mark occupied seats by matching exact coordinates + furniture
     this.customers.forEach(c => {
       if (c.seat) {
         const match = seats.find(s => s.x === c.seat.x && s.y === c.seat.y && s.furniture === c.seat.furniture);
@@ -2464,19 +2485,16 @@ class Game {
       }
     });
     
-    // For table/tatami: if anyone is sitting there, the whole furniture is occupied (相席NG)
-    const occupiedFurniture = new Set();
+    // For table/tatami occupied by a GROUP, mark entire furniture as occupied
+    const groupOccupiedFurniture = new Set();
     this.customers.forEach(c => {
-      if (c.seat && c.seat.furniture) {
-        const ft = c.seat.furniture.type;
-        if (ft === 'table' || ft === 'tatami') {
-          occupiedFurniture.add(c.seat.furniture);
-        }
+      if (c.seat && c.seat.furniture && c.seat.isGroupSeat) {
+        groupOccupiedFurniture.add(c.seat.furniture);
       }
     });
     seats = seats.filter(s => {
-      if (s.furniture && (s.furniture.type === 'table' || s.furniture.type === 'tatami')) {
-        return !occupiedFurniture.has(s.furniture);
+      if (s.furniture && groupOccupiedFurniture.has(s.furniture)) {
+        return false;
       }
       return true;
     });
