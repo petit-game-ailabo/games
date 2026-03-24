@@ -506,6 +506,30 @@ const FURNITURE_TYPES = {
   plant: { name: '観葉植物', icon: '🌿', cost: 200, seats: 0, width: 1, height: 1, research: '観葉植物' }
 };
 
+const SOUP_INGREDIENTS = {
+  chicken: { name: '鶏ガラ', koku: 20, kire: 10, kaori: 5, kosa: 15, unlocked: true },
+  pork: { name: '豚骨', koku: 30, kire: 5, kaori: 5, kosa: 30, cost: 10 },
+  niboshi: { name: '煮干し', koku: 10, kire: 25, kaori: 20, kosa: 10, cost: 15 },
+  kelp: { name: '昆布', koku: 5, kire: 15, kaori: 25, kosa: 5, cost: 10 },
+  vegetable: { name: '野菜', koku: 10, kire: 10, kaori: 15, kosa: 5, unlocked: true },
+  bonito: { name: '鰹節', koku: 15, kire: 20, kaori: 30, kosa: 10, cost: 25 },
+  shellfish: { name: '貝類', koku: 20, kire: 15, kaori: 20, kosa: 15, cost: 40 }
+};
+
+const TARE_TYPES = {
+  shoyu: { name: '醤油', unlocked: true },
+  miso: { name: '味噌', cost: 10 },
+  shio: { name: '塩', cost: 15 }
+};
+
+const NOODLE_TYPES = {
+  thin: { name: '極細ストレート', match: 'kire', unlocked: true },
+  medium: { name: '中細ストレート', match: 'balanced', unlocked: true },
+  thickWavy: { name: '太麺ちぢれ', match: 'koku', cost: 10 },
+  extraThick: { name: '極太麺', match: 'kosa', cost: 15 },
+  wholeGrain: { name: '全粒粉麺', match: 'kaori', cost: 25 }
+};
+
 const RESEARCH_TREE = [
   { id: '味噌スープ', name: '味噌スープ', cost: 10, tier: 1, type: 'soup' },
   { id: 'メンマ', name: 'メンマ', cost: 10, tier: 1, type: 'topping' },
@@ -566,6 +590,18 @@ class Game {
     this.pedestrianTimer = 0;
     this.selectedFurniture = null;
     this.phase = 1; // フェーズ制: 1=屋台, 2=小店舗, 3=中店舗, 4=大店舗
+    
+    // Soup research state
+    this.currentSoupRecipe = {
+      ingredients: ['chicken', 'vegetable'],
+      tare: 'shoyu',
+      noodle: 'medium',
+      name: '醤油ラーメン'
+    };
+    this.unlockedIngredients = ['chicken', 'vegetable'];
+    this.unlockedTare = ['shoyu'];
+    this.unlockedNoodles = ['thin', 'medium'];
+    this.savedRecipes = []; // Max 5 recipes
   }
 
   init() {
@@ -754,12 +790,14 @@ class Game {
   startDay() {
     this.setState(GameState.OPEN);
     this.dayTime = 0;
+    this.dayActive = true;
     this.customers = [];
     this.pedestrianTimer = 0;
     this.renderTabContent();
   }
 
   endDay() {
+    this.dayActive = false;
     this.setState(GameState.CLOSING);
     this.renderTabContent();
     
@@ -1290,31 +1328,151 @@ class Game {
         break;
         
       case 'research':
-        const researchList = RESEARCH_TREE.map(r => {
-          const unlocked = this.unlockedResearch.includes(r.id);
-          const canAfford = this.researchPoints >= r.cost;
+        // Soup research UI
+        const currentParams = this.calculateSoupParams(this.currentSoupRecipe.ingredients);
+        
+        const ingredientList = Object.keys(SOUP_INGREDIENTS).map(key => {
+          const ing = SOUP_INGREDIENTS[key];
+          const unlocked = this.unlockedIngredients.includes(key);
+          const selected = this.currentSoupRecipe.ingredients.includes(key);
           return `
-            <div class="research-item ${unlocked ? 'unlocked' : ''}">
-              <div>
-                <div><strong>${r.name}</strong></div>
-                <div style="font-size: 11px; color: #666;">Tier ${r.tier} | ${r.cost}pt</div>
+            <div class="furniture-item ${!unlocked ? 'disabled' : ''} ${selected ? 'selected' : ''}"
+                 onclick="${unlocked ? `game.toggleIngredient('${key}')` : ''}">
+              <div style="font-size: 13px;">${ing.name}</div>
+              <div style="font-size: 10px; color: #666;">
+                コク${ing.koku} キレ${ing.kire}<br>
+                香り${ing.kaori} 濃さ${ing.kosa}
               </div>
-              ${unlocked ? `
-                <div style="color: #4caf50;">✓ 習得済み</div>
-              ` : `
-                <button onclick="game.unlockResearch('${r.id}')" ${!canAfford ? 'disabled' : ''}>
-                  研究する
-                </button>
-              `}
+              ${!unlocked ? `<div style="font-size: 10px; color: #999;">${ing.cost}pt</div>` : ''}
+            </div>
+          `;
+        }).join('');
+        
+        const tareList = Object.keys(TARE_TYPES).map(key => {
+          const tare = TARE_TYPES[key];
+          const unlocked = this.unlockedTare.includes(key);
+          const selected = this.currentSoupRecipe.tare === key;
+          return `
+            <div class="furniture-item ${!unlocked ? 'disabled' : ''} ${selected ? 'selected' : ''}"
+                 onclick="${unlocked ? `game.selectTare('${key}')` : ''}">
+              <div style="font-size: 13px;">${tare.name}</div>
+              ${!unlocked ? `<div style="font-size: 10px; color: #999;">${tare.cost}pt</div>` : ''}
+            </div>
+          `;
+        }).join('');
+        
+        const noodleList = Object.keys(NOODLE_TYPES).map(key => {
+          const noodle = NOODLE_TYPES[key];
+          const unlocked = this.unlockedNoodles.includes(key);
+          const selected = this.currentSoupRecipe.noodle === key;
+          return `
+            <div class="furniture-item ${!unlocked ? 'disabled' : ''} ${selected ? 'selected' : ''}"
+                 onclick="${unlocked ? `game.selectNoodle('${key}')` : ''}">
+              <div style="font-size: 13px;">${noodle.name}</div>
+              ${!unlocked ? `<div style="font-size: 10px; color: #999;">${noodle.cost}pt</div>` : ''}
             </div>
           `;
         }).join('');
         
         content.innerHTML = `
           <div class="info-section">
-            <div>研究ptを使って新しい要素を解放</div>
+            <div class="info-title">🍜 スープ研究</div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+              素材を選んでスープの味を調整しよう
+            </div>
+            
+            <div style="margin-top: 8px;">
+              <div style="font-weight: bold; margin-bottom: 4px;">現在のパラメータ</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px;">
+                <div>🔥 コク: ${currentParams.koku}</div>
+                <div>⚡ キレ: ${currentParams.kire}</div>
+                <div>🌸 香り: ${currentParams.kaori}</div>
+                <div>💧 濃さ: ${currentParams.kosa}</div>
+              </div>
+            </div>
+            
+            <div style="margin-top: 12px;">
+              <input type="text" id="recipe-name" placeholder="レシピ名" 
+                     value="${this.currentSoupRecipe.name}"
+                     style="width: 100%; padding: 8px; border: 2px solid #ccc; border-radius: 4px; margin-bottom: 8px;">
+              <button onclick="game.saveCurrentRecipe()" ${this.savedRecipes.length >= 5 ? 'disabled' : ''}>
+                レシピを保存 (${this.savedRecipes.length}/5)
+              </button>
+            </div>
           </div>
-          <div class="research-list">${researchList}</div>
+          
+          <div class="info-section">
+            <div class="info-title">ダシ素材 (複数選択可)</div>
+            <div class="furniture-list">${ingredientList}</div>
+          </div>
+          
+          <div class="info-section">
+            <div class="info-title">タレ</div>
+            <div class="furniture-list" style="grid-template-columns: 1fr 1fr 1fr;">${tareList}</div>
+          </div>
+          
+          <div class="info-section">
+            <div class="info-title">麺</div>
+            <div class="furniture-list" style="grid-template-columns: 1fr 1fr;">${noodleList}</div>
+          </div>
+          
+          <div class="info-section">
+            <div class="info-title">保存済みレシピ</div>
+            ${this.savedRecipes.length > 0 ? 
+              this.savedRecipes.map((r, i) => `
+                <div style="background: white; padding: 8px; margin-bottom: 4px; border-radius: 4px; border: 2px solid #ccc;">
+                  <strong>${r.name}</strong>
+                  <div style="font-size: 11px; color: #666;">
+                    コク${r.params.koku} キレ${r.params.kire} 
+                    香り${r.params.kaori} 濃さ${r.params.kosa}
+                  </div>
+                  <button onclick="game.loadRecipe(${i})" style="font-size: 11px; padding: 4px 8px;">読み込む</button>
+                  <button onclick="game.deleteRecipe(${i})" style="font-size: 11px; padding: 4px 8px;">削除</button>
+                </div>
+              `).join('') : 
+              '<div style="color: #999; font-size: 12px;">まだ保存していません</div>'
+            }
+          </div>
+          
+          <div class="info-section">
+            <div class="info-title">素材解放</div>
+            <div style="font-size: 11px; color: #666; margin-bottom: 8px;">
+              研究ptを使って新しい素材を解放
+            </div>
+            ${Object.keys(SOUP_INGREDIENTS).map(key => {
+              const ing = SOUP_INGREDIENTS[key];
+              if (ing.unlocked || this.unlockedIngredients.includes(key)) return '';
+              return `
+                <button onclick="game.unlockIngredient('${key}')" 
+                        ${this.researchPoints < ing.cost ? 'disabled' : ''}
+                        style="font-size: 12px; padding: 6px 12px; margin: 2px;">
+                  ${ing.name} (${ing.cost}pt)
+                </button>
+              `;
+            }).join('')}
+            ${Object.keys(TARE_TYPES).map(key => {
+              const tare = TARE_TYPES[key];
+              if (tare.unlocked || this.unlockedTare.includes(key)) return '';
+              return `
+                <button onclick="game.unlockTare('${key}')" 
+                        ${this.researchPoints < tare.cost ? 'disabled' : ''}
+                        style="font-size: 12px; padding: 6px 12px; margin: 2px;">
+                  ${tare.name} (${tare.cost}pt)
+                </button>
+              `;
+            }).join('')}
+            ${Object.keys(NOODLE_TYPES).map(key => {
+              const noodle = NOODLE_TYPES[key];
+              if (noodle.unlocked || this.unlockedNoodles.includes(key)) return '';
+              return `
+                <button onclick="game.unlockNoodle('${key}')" 
+                        ${this.researchPoints < noodle.cost ? 'disabled' : ''}
+                        style="font-size: 12px; padding: 6px 12px; margin: 2px;">
+                  ${noodle.name} (${noodle.cost}pt)
+                </button>
+              `;
+            }).join('')}
+          </div>
         `;
         break;
         
@@ -1376,6 +1534,146 @@ class Game {
     this.updateUI();
     this.renderTabContent();
   }
+  
+  calculateSoupParams(ingredients) {
+    const params = { koku: 0, kire: 0, kaori: 0, kosa: 0 };
+    
+    ingredients.forEach(key => {
+      const ing = SOUP_INGREDIENTS[key];
+      if (ing) {
+        params.koku += ing.koku;
+        params.kire += ing.kire;
+        params.kaori += ing.kaori;
+        params.kosa += ing.kosa;
+      }
+    });
+    
+    return params;
+  }
+  
+  toggleIngredient(key) {
+    const index = this.currentSoupRecipe.ingredients.indexOf(key);
+    
+    if (index >= 0) {
+      // Remove ingredient
+      this.currentSoupRecipe.ingredients.splice(index, 1);
+    } else {
+      // Add ingredient (max 3)
+      if (this.currentSoupRecipe.ingredients.length >= 3) {
+        this.showNotification('素材は最大3つまでです！');
+        return;
+      }
+      this.currentSoupRecipe.ingredients.push(key);
+    }
+    
+    this.renderTabContent();
+  }
+  
+  selectTare(key) {
+    this.currentSoupRecipe.tare = key;
+    this.renderTabContent();
+  }
+  
+  selectNoodle(key) {
+    this.currentSoupRecipe.noodle = key;
+    this.renderTabContent();
+  }
+  
+  saveCurrentRecipe() {
+    if (this.savedRecipes.length >= 5) {
+      this.showNotification('レシピは最大5つまでです！');
+      return;
+    }
+    
+    const nameInput = document.getElementById('recipe-name');
+    const name = nameInput.value.trim() || `レシピ${this.savedRecipes.length + 1}`;
+    
+    const recipe = {
+      name: name,
+      ingredients: [...this.currentSoupRecipe.ingredients],
+      tare: this.currentSoupRecipe.tare,
+      noodle: this.currentSoupRecipe.noodle,
+      params: this.calculateSoupParams(this.currentSoupRecipe.ingredients)
+    };
+    
+    this.savedRecipes.push(recipe);
+    this.showNotification('✨ レシピを保存しました！');
+    this.renderTabContent();
+  }
+  
+  loadRecipe(index) {
+    const recipe = this.savedRecipes[index];
+    if (!recipe) return;
+    
+    this.currentSoupRecipe = {
+      name: recipe.name,
+      ingredients: [...recipe.ingredients],
+      tare: recipe.tare,
+      noodle: recipe.noodle
+    };
+    
+    this.showNotification('レシピを読み込みました');
+    this.renderTabContent();
+  }
+  
+  deleteRecipe(index) {
+    if (!confirm('このレシピを削除しますか？')) return;
+    
+    this.savedRecipes.splice(index, 1);
+    this.showNotification('レシピを削除しました');
+    this.renderTabContent();
+  }
+  
+  unlockIngredient(key) {
+    const ing = SOUP_INGREDIENTS[key];
+    if (!ing || !ing.cost) return;
+    
+    if (this.researchPoints < ing.cost) {
+      this.showNotification('研究ptが足りません！');
+      return;
+    }
+    
+    this.researchPoints -= ing.cost;
+    this.unlockedIngredients.push(key);
+    
+    this.showNotification('✨ ' + ing.name + ' を解放！');
+    this.updateUI();
+    this.renderTabContent();
+  }
+  
+  unlockTare(key) {
+    const tare = TARE_TYPES[key];
+    if (!tare || !tare.cost) return;
+    
+    if (this.researchPoints < tare.cost) {
+      this.showNotification('研究ptが足りません！');
+      return;
+    }
+    
+    this.researchPoints -= tare.cost;
+    this.unlockedTare.push(key);
+    
+    this.showNotification('✨ ' + tare.name + ' を解放！');
+    this.updateUI();
+    this.renderTabContent();
+  }
+  
+  unlockNoodle(key) {
+    const noodle = NOODLE_TYPES[key];
+    if (!noodle || !noodle.cost) return;
+    
+    if (this.researchPoints < noodle.cost) {
+      this.showNotification('研究ptが足りません！');
+      return;
+    }
+    
+    this.researchPoints -= noodle.cost;
+    this.unlockedNoodles.push(key);
+    
+    this.showNotification('✨ ' + noodle.name + ' を解放！');
+    this.updateUI();
+    this.renderTabContent();
+  }
 
   setSpeed(multiplier) {
     this.speedMultiplier = multiplier;
@@ -1411,7 +1709,12 @@ class Game {
       availableRecipes: this.availableRecipes,
       discoveredCombos: this.discoveredCombos,
       stats: this.stats,
-      phase: this.phase
+      phase: this.phase,
+      currentSoupRecipe: this.currentSoupRecipe,
+      unlockedIngredients: this.unlockedIngredients,
+      unlockedTare: this.unlockedTare,
+      unlockedNoodles: this.unlockedNoodles,
+      savedRecipes: this.savedRecipes
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -1432,6 +1735,13 @@ class Game {
     this.discoveredCombos = save.discoveredCombos;
     this.stats = save.stats;
     this.phase = save.phase || 1;
+    
+    // Load soup research data
+    if (save.currentSoupRecipe) this.currentSoupRecipe = save.currentSoupRecipe;
+    if (save.unlockedIngredients) this.unlockedIngredients = save.unlockedIngredients;
+    if (save.unlockedTare) this.unlockedTare = save.unlockedTare;
+    if (save.unlockedNoodles) this.unlockedNoodles = save.unlockedNoodles;
+    if (save.savedRecipes) this.savedRecipes = save.savedRecipes;
     
     this.setState(GameState.PREPARING);
     this.renderFurniture();
