@@ -739,6 +739,7 @@ class Game {
     this.selectedFurniture = null;
     this.selectedStaff = null;
     this.removalMode = false;
+    this.dailyStats = { revenue: 0, customers: 0, satisfied: 0 };
   }
 
   // Generate walls for a given store level
@@ -1096,6 +1097,7 @@ class Game {
     this.dirtyDishes = [];
     this.handoffQueue = [];
     this.pedestrianTimer = 0;
+    this.dailyStats = { revenue: 0, customers: 0, satisfied: 0 };
     
     // Remove any handoff food icons
     document.querySelectorAll('.handoff-food-icon').forEach(el => el.remove());
@@ -1159,9 +1161,9 @@ class Game {
   }
 
   showDaySummary() {
-    const todayRevenue = this.customers.reduce((sum, c) => sum + (c.paid || 0), 0);
-    const todayCustomers = this.customers.filter(c => c.paid > 0).length;
-    const todaySatisfied = this.customers.filter(c => c.satisfied).length;
+    const todayRevenue = this.dailyStats.revenue;
+    const todayCustomers = this.dailyStats.customers;
+    const todaySatisfied = this.dailyStats.satisfied;
     
     this.stats.totalCustomers += todayCustomers;
     this.stats.totalRevenue += todayRevenue;
@@ -1544,7 +1546,7 @@ class Game {
     } else if (staff.state === 'DELIVERING') {
       // Cook delivered food to customer
       if (staff.currentOrder) {
-        staff.currentOrder.foodDelivered = true;
+        staff.currentOrder.mealsDelivered = (staff.currentOrder.mealsDelivered || 0) + 1;
         staff.currentOrder = null;
       }
       // Return home
@@ -1631,7 +1633,7 @@ class Game {
     
     if (!bestPath) {
       // Can't reach, just deliver directly
-      customer.foodDelivered = true;
+      customer.mealsDelivered = (customer.mealsDelivered || 0) + 1;
       staff.currentOrder = null;
       this.staffGoHome(staff);
       return;
@@ -1798,7 +1800,7 @@ class Game {
     
     if (!bestPath) {
       // Can't reach customer, just deliver directly
-      customer.foodDelivered = true;
+      customer.mealsDelivered = (customer.mealsDelivered || 0) + 1;
       staff.currentOrder = null;
       this.staffGoHome(staff);
       return;
@@ -1904,16 +1906,28 @@ class Game {
       paid: 0,
       foodDelivered: false,
       waitingFoodTimer: 0,
-      dirtyDish: false
+      dirtyDish: false,
+      groupSize: 1,
+      mealsOrdered: 1,
+      mealsDelivered: 0
     };
+    
+    // Set group size for family/friends
+    if (customer.type === 'family') {
+      customer.groupSize = 2 + Math.floor(Math.random() * 3); // 2-4
+      customer.mealsOrdered = customer.groupSize;
+    } else if (customer.type === 'friends') {
+      customer.groupSize = 2 + Math.floor(Math.random() * 2); // 2-3
+      customer.mealsOrdered = customer.groupSize;
+    }
     
     this.customers.push(customer);
     this.createCustomerElement(customer);
   }
 
   getCustomerType() {
-    const types = ['regular', 'student', 'businessman', 'foodie'];
-    const weights = [50, 20, 20, 10];
+    const types = ['regular', 'student', 'businessman', 'foodie', 'family', 'friends'];
+    const weights = [40, 15, 15, 10, 12, 8];
     const total = weights.reduce((a, b) => a + b, 0);
     let random = Math.random() * total;
     
@@ -1936,13 +1950,19 @@ class Game {
       regular: '#6b9bd1',
       student: '#4caf50',
       businessman: '#1565c0',
-      foodie: '#d32f2f'
+      foodie: '#d32f2f',
+      family: '#e91e63',
+      friends: '#ff9800'
     };
     body.style.background = colors[customer.type];
     
     const face = document.createElement('div');
     face.className = 'customer-face';
-    face.textContent = '😀';
+    const faceEmojis = {
+      regular: '😀', student: '😀', businessman: '😀', foodie: '😀',
+      family: '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}', friends: '\u{1F46B}'
+    };
+    face.textContent = faceEmojis[customer.type] || '😀';
     
     el.appendChild(body);
     el.appendChild(face);
@@ -1991,14 +2011,20 @@ class Game {
       case 'ENTERING':
         this.moveToTarget(customer, deltaTime);
         if (this.isAtTarget(customer)) {
-          const seat = this.findEmptySeat();
+          let seat = null;
+          if (customer.groupSize > 1) {
+            seat = this.findGroupSeat(customer.groupSize);
+          } else {
+            seat = this.findEmptySeat();
+          }
           if (seat) {
             customer.seat = seat;
             customer.state = 'FINDING_SEAT';
             customer.targetX = seat.x * TILE_SIZE + TILE_SIZE / 2 - 6;
             customer.targetY = seat.y * TILE_SIZE + TILE_SIZE / 2 - 6;
           } else {
-            this.showBubble(customer, '😐');
+            const noSeatMsg = customer.groupSize > 1 ? '席がない…' : '😐';
+            this.showBubble(customer, noSeatMsg);
             customer.state = 'LEAVING';
             const entranceY = this.getEntranceY();
             customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
@@ -2021,13 +2047,16 @@ class Game {
         customer.eatTimer += deltaTime;
         if (customer.eatTimer > 1 && !customer.orderPlaced) {
           customer.orderPlaced = true;
-          this.showBubble(customer, '🍜注文');
+          const orderLabel = customer.groupSize > 1 ? `🍜×${customer.groupSize}注文` : '🍜注文';
+          this.showBubble(customer, orderLabel);
           
           // Check if there are cooks
           const hasCook = this.staff.some(s => s.type === 'cook');
           if (hasCook) {
-            // Add to order queue, transition to WAITING_FOOD
-            this.orderQueue.push(customer);
+            // Add groupSize orders to queue
+            for (let i = 0; i < (customer.mealsOrdered || 1); i++) {
+              this.orderQueue.push(customer);
+            }
             customer.state = 'WAITING_FOOD';
             customer.waitingFoodTimer = 0;
           } else {
@@ -2039,6 +2068,7 @@ class Game {
           if (customer.eatTimer >= 4 && !customer.bowlShown) {
             customer.bowlShown = true;
             this.showBubble(customer, '🍜');
+            customer.mealsDelivered = customer.mealsOrdered || 1;
             customer.state = 'EATING';
             customer.eatTimer = 0;
           }
@@ -2053,8 +2083,9 @@ class Game {
           customer.faceElement.textContent = '😊';
         }
         
-        // Check if food has been delivered by cook
-        if (customer.foodDelivered) {
+        // Check if all meals have been delivered
+        if ((customer.mealsDelivered || 0) >= (customer.mealsOrdered || 1)) {
+          customer.foodDelivered = true;
           this.showBubble(customer, '🍜');
           customer.state = 'EATING';
           customer.eatTimer = 0;
@@ -2105,8 +2136,13 @@ class Game {
           customer.faceElement.textContent = face;
           
           const basePrice = 800;
-          customer.paid = Math.floor(basePrice * tipMultiplier);
+          customer.paid = Math.floor(basePrice * tipMultiplier * (customer.groupSize || 1));
           this.money += customer.paid;
+          
+          // Update daily stats
+          this.dailyStats.revenue += customer.paid;
+          this.dailyStats.customers += (customer.groupSize || 1);
+          if (customer.satisfied) this.dailyStats.satisfied += (customer.groupSize || 1);
           
           if (customer.satisfied) {
             this.reputation = Math.min(100, this.reputation + 1);
@@ -2188,6 +2224,30 @@ class Game {
     const dy = customer.targetY - customer.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     return dist < 5;
+  }
+
+  findGroupSeat(groupSize) {
+    // Find table or tatami furniture that has enough capacity and is completely empty
+    const groupFurniture = this.furniture.filter(f => {
+      const type = FURNITURE_TYPES[f.type];
+      if (type.seats < groupSize) return false;
+      if (f.type !== 'table' && f.type !== 'tatami') return false;
+      // Check all seats are empty (no customer using this furniture)
+      const isOccupied = this.customers.some(c => c.seat && c.seat.furniture === f);
+      return !isOccupied;
+    });
+    
+    if (groupFurniture.length === 0) return null;
+    
+    const chosen = groupFurniture[0];
+    const type = FURNITURE_TYPES[chosen.type];
+    return {
+      x: chosen.x + Math.floor(type.width / 2),
+      y: chosen.y + Math.floor(type.height / 2),
+      occupied: false,
+      furniture: chosen,
+      isGroupSeat: true
+    };
   }
 
   findEmptySeat() {
@@ -2799,7 +2859,7 @@ Game.prototype.onStaffArrived = function(staff) {
   // Server delivered food to customer
   if (staff.state === 'DELIVERING_FOOD') {
     if (staff.currentOrder) {
-      staff.currentOrder.foodDelivered = true;
+      staff.currentOrder.mealsDelivered = (staff.currentOrder.mealsDelivered || 0) + 1;
       staff.currentOrder = null;
     }
     this.staffGoHome(staff);
@@ -2819,7 +2879,7 @@ Game.prototype.onStaffArrived = function(staff) {
     }
   } else if (staff.state === 'DELIVERING') {
     if (staff.currentOrder) {
-      staff.currentOrder.foodDelivered = true;
+      staff.currentOrder.mealsDelivered = (staff.currentOrder.mealsDelivered || 0) + 1;
       staff.currentOrder = null;
     }
     this.staffGoHome(staff);
