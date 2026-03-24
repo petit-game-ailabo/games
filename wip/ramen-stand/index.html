@@ -473,6 +473,69 @@ body {
   margin-top: 20px;
   width: 100%;
 }
+
+/* Recipe Card */
+.recipe-card {
+  background: white;
+  border: 2px solid #d35400;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.recipe-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.recipe-card-name {
+  font-weight: bold;
+  font-size: 16px;
+  color: #d35400;
+}
+
+.recipe-card-stats {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.recipe-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.recipe-card-actions button {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.recipe-load-btn {
+  background: #3498db;
+  color: white;
+}
+
+.recipe-menu-btn {
+  background: #27ae60;
+  color: white;
+}
+
+.recipe-menu-btn.active {
+  background: #16a085;
+}
+
+.recipe-delete-btn {
+  background: #e74c3c;
+  color: white;
+  flex: 0.5;
+}
 </style>
 </head>
 <body>
@@ -872,6 +935,18 @@ body {
 
       <h3 style="margin-top: 20px;">🌿 トッピング</h3>
       <div class="topping-selector" id="toppingSelector"></div>
+
+      <button id="saveRecipeBtn" style="margin-top: 20px; padding: 12px 20px; width: 100%; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">📝 レシピ保存</button>
+
+      <h3 style="margin-top: 30px;">📋 保存済みレシピ</h3>
+      <div id="savedRecipes"></div>
+
+      <h3 style="margin-top: 30px;">💰 価格設定</h3>
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+        <label style="font-weight: bold;">ラーメン価格:</label>
+        <input type="number" id="ramenPrice" value="800" min="100" step="50" style="padding: 8px; border: 2px solid #d35400; border-radius: 4px; width: 100px;">
+        <span>円</span>
+      </div>
     </div>
   </div>
 
@@ -959,6 +1034,9 @@ const state = {
     selectedMen: 'men-medium',
     selectedToppings: []
   },
+  recipes: [],
+  activeMenuRecipe: null,
+  ramenPrice: 800,
   business: {
     isOpen: false,
     startTime: 0,
@@ -1218,6 +1296,93 @@ function updateBusinessTime() {
   if (progress >= 1) {
     closeBusiness();
   }
+}
+
+// ===== Recipe System =====
+function saveRecipe() {
+  const name = prompt('レシピ名を入力してください:');
+  if (!name || name.trim() === '') return;
+  
+  const recipe = {
+    id: Date.now(),
+    name: name.trim(),
+    dashi: [...state.soup.selectedDashi],
+    tare: state.soup.selectedTare,
+    men: state.soup.selectedMen,
+    toppings: [...state.soup.selectedToppings]
+  };
+  
+  state.recipes.push(recipe);
+  renderSavedRecipes();
+  alert(`レシピ「${name}」を保存しました！`);
+}
+
+function loadRecipe(recipeId) {
+  const recipe = state.recipes.find(r => r.id === recipeId);
+  if (!recipe) return;
+  
+  state.soup.selectedDashi = [...recipe.dashi];
+  state.soup.selectedTare = recipe.tare;
+  state.soup.selectedMen = recipe.men;
+  state.soup.selectedToppings = [...recipe.toppings];
+  
+  renderDashiSelector();
+  renderTareSelector();
+  renderMenSelector();
+  renderToppingSelector();
+  updateSoupStats();
+  
+  alert(`レシピ「${recipe.name}」を読み込みました！`);
+}
+
+function setMenuRecipe(recipeId) {
+  state.activeMenuRecipe = recipeId;
+  renderSavedRecipes();
+  alert('メニューに設定しました！');
+}
+
+function deleteRecipe(recipeId) {
+  if (!confirm('このレシピを削除しますか？')) return;
+  
+  state.recipes = state.recipes.filter(r => r.id !== recipeId);
+  if (state.activeMenuRecipe === recipeId) {
+    state.activeMenuRecipe = null;
+  }
+  renderSavedRecipes();
+}
+
+function renderSavedRecipes() {
+  const container = document.getElementById('savedRecipes');
+  if (state.recipes.length === 0) {
+    container.innerHTML = '<p style="color: #999; font-size: 12px;">まだレシピがありません</p>';
+    return;
+  }
+  
+  container.innerHTML = state.recipes.map(recipe => {
+    const dashiNames = recipe.dashi.map(key => state.dashi[key].emoji).join('');
+    const tareName = state.tare[recipe.tare].emoji;
+    const menName = state.men[recipe.men].emoji;
+    const toppingNames = recipe.toppings.map(key => state.topping[key].emoji).join('');
+    
+    const isActiveMenu = state.activeMenuRecipe === recipe.id;
+    
+    return `
+      <div class="recipe-card">
+        <div class="recipe-card-header">
+          <span class="recipe-card-name">${recipe.name}</span>
+          ${isActiveMenu ? '<span style="color: #27ae60; font-weight: bold; font-size: 12px;">★ メニュー</span>' : ''}
+        </div>
+        <div class="recipe-card-stats">
+          ${dashiNames} ${tareName} ${menName} ${toppingNames}
+        </div>
+        <div class="recipe-card-actions">
+          <button class="recipe-load-btn" onclick="loadRecipe(${recipe.id})">読込</button>
+          <button class="recipe-menu-btn ${isActiveMenu ? 'active' : ''}" onclick="setMenuRecipe(${recipe.id})">メニュー</button>
+          <button class="recipe-delete-btn" onclick="deleteRecipe(${recipe.id})">削除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 // ===== Business Logic =====
@@ -1576,6 +1741,12 @@ document.getElementById('continueBtn').addEventListener('click', () => {
   updateHeader();
 });
 
+document.getElementById('saveRecipeBtn').addEventListener('click', saveRecipe);
+
+document.getElementById('ramenPrice').addEventListener('input', (e) => {
+  state.ramenPrice = parseInt(e.target.value) || 800;
+});
+
 // ===== Initialize =====
 updateHeader();
 renderGrid();
@@ -1584,7 +1755,9 @@ renderDashiSelector();
 renderTareSelector();
 renderMenSelector();
 renderToppingSelector();
+renderSavedRecipes();
 updateSoupStats();
+document.getElementById('ramenPrice').value = state.ramenPrice;
 </script>
 </body>
 </html>
