@@ -724,13 +724,23 @@ class Game {
 
   endDay() {
     this.dayActive = false;
+    // Finalize customers still in shop: count served ones
+    this.customers.forEach(c => {
+      if (c.paid && c.paid > 0) c.state = 'EXITED';
+    });
     this.showDaySummary();
+    // Remove ALL customer elements from DOM
+    this.customers.forEach(c => {
+      if (c.element && c.element.parentNode) c.element.remove();
+      c.element = null;
+    });
+    // Seat occupancy is handled dynamically by findEmptySeat(), no persistent state to reset
     this.saveGame();
   }
 
   showDaySummary() {
     const todayRevenue = this.customers.reduce((sum, c) => sum + (c.paid || 0), 0);
-    const todayCustomers = this.customers.filter(c => c.state === 'EXITED').length;
+    const todayCustomers = this.customers.filter(c => c.paid && c.paid > 0).length;
     const todaySatisfied = this.customers.filter(c => c.satisfied).length;
     
     this.stats.totalCustomers += todayCustomers;
@@ -755,6 +765,10 @@ class Game {
 
   nextDay() {
     this.day++;
+    this.customers = [];
+    this.dayTime = 0;
+    this.pedestrianTimer = 0;
+    // Seat occupancy is managed dynamically in findEmptySeat()
     const modal = document.getElementById('day-summary-modal');
     modal.classList.remove('active');
     this.updateUI();
@@ -797,8 +811,9 @@ class Game {
     // Update customers
     this.customers.forEach(c => this.updateCustomer(c, scaledDelta));
     
-    // Remove exited customers
-    this.customers = this.customers.filter(c => c.state !== 'EXITED' || c.element);
+    // Remove exited customers (keep for end-of-day stats but remove from active processing)
+    // Only filter out fully gone customers (no element, no paid record)
+    
   }
 
   getSpawnRate() {
@@ -1039,7 +1054,7 @@ class Game {
   }
 
   calculateQuality() {
-    let quality = 0.5;
+    let quality = 0.6; // Base quality (enough for basic satisfaction)
     
     // Furniture bonuses
     if (this.furniture.some(f => f.type === 'noodleMachine')) quality += 0.1;
