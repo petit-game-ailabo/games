@@ -34,7 +34,7 @@ body {
   color: white;
   padding: 12px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   font-size: 13px;
   border-bottom: 3px solid #3a2817;
@@ -51,7 +51,7 @@ body {
 #shop-view {
   position: relative;
   width: 100%;
-  height: 340px;
+  height: 460px;
   background: #f5f0e8;
   border: 4px solid #654321;
   margin-top: 4px;
@@ -63,7 +63,7 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 280px;
+  height: 368px;
   background: linear-gradient(135deg, #e8dcc8 0%, #f0e6d2 100%);
   border-bottom: 2px solid #8b7355;
 }
@@ -73,14 +73,14 @@ body {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 60px;
+  height: 92px;
   background: linear-gradient(to bottom, #555 0%, #666 50%, #555 100%);
   border-top: 2px solid #777;
 }
 
 .street-line {
   position: absolute;
-  bottom: 30px;
+  bottom: 46px;
   left: 0;
   width: 100%;
   height: 2px;
@@ -99,7 +99,7 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 280px;
+  height: 368px;
   pointer-events: none;
   display: none;
 }
@@ -125,50 +125,54 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 24px;
   transition: opacity 0.2s;
+  border-radius: 4px;
 }
 
 .furniture.counter {
   background: #8b4513;
   border: 2px solid #654321;
-  border-radius: 4px;
 }
 
 .furniture.table {
   background: #a0826d;
   border: 2px solid #654321;
-  border-radius: 4px;
 }
 
-.furniture.noodle-machine {
+.furniture.tatami {
+  background: #d4c4a8;
+  border: 2px solid #8b7355;
+}
+
+.furniture.platingStation,
+.furniture.dishwashingSink,
+.furniture.noodleBoiler,
+.furniture.soupPot,
+.furniture.freezer,
+.furniture.soupStove {
   background: #c0c0c0;
   border: 2px solid #888;
-  border-radius: 4px;
 }
 
-.furniture.soup-pot {
-  background: #2f2f2f;
-  border: 2px solid #000;
-  border-radius: 4px;
-}
-
-.furniture.fridge {
-  background: #e8e8e8;
+.furniture.sideStove,
+.furniture.gyozaGrill,
+.furniture.iceMaker,
+.furniture.noodleMachine,
+.furniture.charsiuOven,
+.furniture.riceCooker {
+  background: #e0e0e0;
   border: 2px solid #aaa;
-  border-radius: 4px;
 }
 
 .furniture.sign {
   background: #d32f2f;
   border: 2px solid #b71c1c;
-  border-radius: 4px;
 }
 
 .furniture.plant {
   background: #4caf50;
   border: 2px solid #2e7d32;
-  border-radius: 4px;
 }
 
 /* Customer */
@@ -212,6 +216,7 @@ body {
   font-size: 10px;
   white-space: nowrap;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  z-index: 20;
 }
 
 /* Tabs */
@@ -232,11 +237,36 @@ body {
   cursor: pointer;
   border-right: 1px solid #654321;
   font-weight: bold;
+  white-space: nowrap;
 }
 
 .tab.active {
   background: #654321;
   border-bottom: 3px solid #d4af37;
+}
+
+/* Sub-tabs */
+.sub-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.sub-tab {
+  flex: 1;
+  padding: 8px;
+  background: #ddd;
+  border: 2px solid #aaa;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.sub-tab.active {
+  background: #d4af37;
+  border-color: #654321;
 }
 
 /* Tab content */
@@ -270,6 +300,15 @@ button:disabled {
   background: #999;
   color: #666;
   cursor: not-allowed;
+}
+
+button.toggle-btn {
+  background: #ccc;
+}
+
+button.toggle-btn.active {
+  background: #ff6b6b;
+  color: white;
 }
 
 /* Modal */
@@ -459,7 +498,6 @@ button:disabled {
     <div class="status-item">Day <span id="day">1</span></div>
     <div class="status-item">💰 <span id="money">5000</span>円</div>
     <div class="status-item">⭐ <span id="reputation">0</span></div>
-    <div class="status-item">⭐ <span id="reputation-display">0</span></div>
   </div>
 
   <div id="shop-view">
@@ -492,19 +530,36 @@ button:disabled {
 </div>
 
 <script>
-const GRID_WIDTH = 8;
-const GRID_HEIGHT = 6;
-const TILE_SIZE = 40;
-const STREET_ROW = 5;
+const GRID_WIDTH = 5;
+const GRID_HEIGHT = 4;
+const TILE_SIZE = 92;
+const STREET_ROW = 3;
 
 const FURNITURE_TYPES = {
-  counter: { name: 'カウンター席', icon: '🪑', cost: 200, seats: 1, width: 1, height: 1 },
-  table: { name: 'テーブル席', icon: '🪑🪑', cost: 500, seats: 2, width: 2, height: 1 },
-  noodleMachine: { name: '製麺機', icon: '🍜', cost: 1000, seats: 0, width: 1, height: 1 },
-  soupPot: { name: 'スープ釜', icon: '🍲', cost: 800, seats: 0, width: 1, height: 1 },
-  fridge: { name: '冷蔵庫', icon: '❄️', cost: 600, seats: 0, width: 1, height: 1 },
-  sign: { name: '看板', icon: '📋', cost: 300, seats: 0, width: 1, height: 1 },
-  plant: { name: '観葉植物', icon: '🌿', cost: 200, seats: 0, width: 1, height: 1 }
+  // 座席 (Seats)
+  counter: { name: 'カウンター席', icon: '🪑', cost: 200, seats: 1, width: 1, height: 1, category: 'seats' },
+  table: { name: 'テーブル席', icon: '🪑🪑', cost: 800, seats: 4, width: 2, height: 2, category: 'seats' },
+  tatami: { name: '座敷席', icon: '🛋️', cost: 1500, seats: 6, width: 2, height: 3, category: 'seats' },
+  
+  // 厨房 (Kitchen) - 必須設備
+  platingStation: { name: '盛り付け台', icon: '🍽️', cost: 300, seats: 0, width: 1, height: 1, category: 'kitchen', essential: true },
+  dishwashingSink: { name: '洗い場', icon: '🚰', cost: 500, seats: 0, width: 1, height: 1, category: 'kitchen', essential: true },
+  noodleBoiler: { name: 'ゆで麺機', icon: '🍜', cost: 800, seats: 0, width: 1, height: 1, category: 'kitchen', essential: true },
+  soupPot: { name: 'スープ鍋', icon: '🍲', cost: 600, seats: 0, width: 1, height: 1, category: 'kitchen', essential: true },
+  freezer: { name: '冷凍冷蔵庫', icon: '❄️', cost: 1000, seats: 0, width: 1, height: 1, category: 'kitchen', essential: true },
+  soupStove: { name: 'スープ用ガステーブル', icon: '🔥', cost: 500, seats: 0, width: 1, height: 1, category: 'kitchen', essential: true },
+  
+  // 厨房 - 追加設備
+  sideStove: { name: 'サイド用ガステーブル', icon: '🍳', cost: 1500, seats: 0, width: 1, height: 1, category: 'kitchen' },
+  gyozaGrill: { name: '餃子焼き機', icon: '🥟', cost: 2000, seats: 0, width: 1, height: 1, category: 'kitchen' },
+  iceMaker: { name: '製氷機', icon: '🧊', cost: 1200, seats: 0, width: 1, height: 1, category: 'kitchen' },
+  noodleMachine: { name: '製麺機', icon: '🔧', cost: 3000, seats: 0, width: 1, height: 1, category: 'kitchen' },
+  charsiuOven: { name: 'チャーシュー窯', icon: '🥩', cost: 2500, seats: 0, width: 1, height: 1, category: 'kitchen' },
+  riceCooker: { name: '炊飯器', icon: '🍚', cost: 800, seats: 0, width: 1, height: 1, category: 'kitchen' },
+  
+  // その他 (Other)
+  sign: { name: '看板', icon: '📋', cost: 300, seats: 0, width: 1, height: 1, category: 'other' },
+  plant: { name: '観葉植物', icon: '🌿', cost: 200, seats: 0, width: 1, height: 1, category: 'other' }
 };
 
 // 商品研究: 料理素材の解放のみ（お金で購入）。家具は配置タブから直接購入。
@@ -524,11 +579,24 @@ const RESEARCH_TREE = [
 ];
 
 const COMBOS = [
-  { items: ['noodleMachine', 'soupPot'], name: 'こだわり麺', bonus: 0.15 },
-  { items: ['counter', 'noodleMachine'], name: 'ライブ感', bonus: 0.10 },
-  { items: ['table', 'plant'], name: '癒し空間', bonus: 0.10 },
-  { items: ['sign', 'entrance'], name: '目立つ店', bonus: 0.20 },
-  { items: ['fridge', 'noodleMachine'], name: '鮮度抜群', bonus: 0.10 }
+  { items: ['soupPot', 'noodleBoiler'], name: '効率キッチン', bonus: 0.15 },
+  { items: ['counter', 'platingStation'], name: 'ライブ感', bonus: 0.10 },
+  { items: ['table', 'plant'], name: '癒し空間', bonus: 0.20 },
+  { items: ['noodleMachine', 'noodleBoiler'], name: 'こだわり麺', bonus: 0.20 },
+  { items: ['freezer', 'soupPot'], name: '鮮度抜群', bonus: 0.10 }
+];
+
+// Initial layout (pre-placed furniture)
+const INITIAL_FURNITURE = [
+  { type: 'soupPot', x: 0, y: 0 },
+  { type: 'soupStove', x: 1, y: 0 },
+  { type: 'noodleBoiler', x: 2, y: 0 },
+  { type: 'platingStation', x: 3, y: 0 },
+  { type: 'freezer', x: 4, y: 0 },
+  { type: 'dishwashingSink', x: 0, y: 1 },
+  { type: 'counter', x: 0, y: 2 },
+  { type: 'counter', x: 1, y: 2 },
+  { type: 'counter', x: 2, y: 2 }
 ];
 
 class Game {
@@ -552,10 +620,12 @@ class Game {
     this.dayTime = 0;
     this.speedMultiplier = 1;
     this.currentTab = 'operations';
+    this.currentSubTab = 'seats';
     this.lastTimestamp = 0;
     this.nextCustomerId = 0;
     this.pedestrianTimer = 0;
     this.selectedFurniture = null;
+    this.removalMode = false;
   }
 
   init() {
@@ -563,15 +633,6 @@ class Game {
     this.renderTabs();
     this.updateUI();
     this.startGameLoop();
-    
-    // Add starting furniture
-    this.furniture.push({
-      type: 'counter',
-      x: 3,
-      y: 2,
-      id: 'f0'
-    });
-    this.renderFurniture();
     
     // Check for saved game
     const saved = localStorage.getItem('ramenStandSave');
@@ -604,6 +665,25 @@ class Game {
   }
 
   handleGridClick(x, y) {
+    // Removal mode
+    if (this.removalMode) {
+      const furniture = this.getFurnitureAt(x, y);
+      if (furniture) {
+        const furnitureType = FURNITURE_TYPES[furniture.type];
+        const refund = Math.floor(furnitureType.cost * 0.5);
+        this.money += refund;
+        this.furniture = this.furniture.filter(f => f.id !== furniture.id);
+        this.renderFurniture();
+        this.updateUI();
+        this.showNotification(`${furnitureType.name}を撤去！\n${refund}円返金`);
+        return;
+      } else {
+        this.showNotification('ここには何もありません');
+        return;
+      }
+    }
+    
+    // Placement mode
     if (!this.selectedFurniture) return;
     
     const furnitureType = FURNITURE_TYPES[this.selectedFurniture];
@@ -614,10 +694,20 @@ class Game {
       return;
     }
     
-    // Check if space is available
+    // Check if space is available for multi-tile furniture
     for (let dy = 0; dy < furnitureType.height; dy++) {
       for (let dx = 0; dx < furnitureType.width; dx++) {
-        if (this.getFurnitureAt(x + dx, y + dy)) {
+        const checkX = x + dx;
+        const checkY = y + dy;
+        
+        // Check bounds
+        if (checkX >= GRID_WIDTH || checkY >= GRID_HEIGHT - 1) {
+          this.showNotification('ここには置けません！');
+          return;
+        }
+        
+        // Check if occupied
+        if (this.getFurnitureAt(checkX, checkY)) {
           this.showNotification('ここには置けません！');
           return;
         }
@@ -662,30 +752,6 @@ class Game {
       el.textContent = type.icon;
       el.dataset.id = f.id;
       
-      // Long press to delete
-      let pressTimer;
-      el.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        pressTimer = setTimeout(() => {
-          if (confirm(type.name + 'を撤去しますか？')) {
-            this.furniture = this.furniture.filter(item => item.id !== f.id);
-            this.renderFurniture();
-            this.updateUI();
-          }
-        }, 800);
-      });
-      el.addEventListener('touchend', () => clearTimeout(pressTimer));
-      el.addEventListener('mousedown', (e) => {
-        pressTimer = setTimeout(() => {
-          if (confirm(type.name + 'を撤去しますか？')) {
-            this.furniture = this.furniture.filter(item => item.id !== f.id);
-            this.renderFurniture();
-            this.updateUI();
-          }
-        }, 800);
-      });
-      el.addEventListener('mouseup', () => clearTimeout(pressTimer));
-      
       interior.appendChild(el);
     });
   }
@@ -727,13 +793,21 @@ class Game {
 
   endDay() {
     this.dayActive = false;
+    
+    // Clean up customer elements from DOM
+    this.customers.forEach(c => {
+      if (c.element && c.element.parentNode) {
+        c.element.remove();
+      }
+    });
+    
     this.showDaySummary();
     this.saveGame();
   }
 
   showDaySummary() {
     const todayRevenue = this.customers.reduce((sum, c) => sum + (c.paid || 0), 0);
-    const todayCustomers = this.customers.filter(c => c.state === 'EXITED').length;
+    const todayCustomers = this.customers.filter(c => c.paid > 0).length;
     const todaySatisfied = this.customers.filter(c => c.satisfied).length;
     
     this.stats.totalCustomers += todayCustomers;
@@ -758,6 +832,14 @@ class Game {
 
   nextDay() {
     this.day++;
+    
+    // Clear customers array
+    this.customers = [];
+    
+    // Remove any remaining customer elements
+    const customerEls = document.querySelectorAll('.customer');
+    customerEls.forEach(el => el.remove());
+    
     const modal = document.getElementById('day-summary-modal');
     modal.classList.remove('active');
     this.updateUI();
@@ -835,9 +917,9 @@ class Game {
       id: 'c' + this.nextCustomerId++,
       state: 'WALKING_STREET',
       x: -20,
-      y: 280 + 20,
+      y: 368 + 20,
       targetX: 460,
-      targetY: 280 + 20,
+      targetY: 368 + 20,
       speed: 40 + Math.random() * 20,
       type: this.getCustomerType(),
       moveTimer: 0,
@@ -1019,7 +1101,7 @@ class Game {
         if (this.isAtTarget(customer)) {
           customer.state = 'EXITING';
           customer.targetX = -20;
-          customer.targetY = 280 + 20;
+          customer.targetY = 368 + 20;
         }
         break;
         
@@ -1059,8 +1141,14 @@ class Game {
     this.furniture.forEach(f => {
       const type = FURNITURE_TYPES[f.type];
       if (type.seats > 0) {
+        // For multi-tile furniture, each seat is centered on the furniture
         for (let i = 0; i < type.seats; i++) {
-          seats.push({ x: f.x, y: f.y, occupied: false, furniture: f });
+          seats.push({ 
+            x: f.x + Math.floor(type.width / 2), 
+            y: f.y + Math.floor(type.height / 2), 
+            occupied: false, 
+            furniture: f 
+          });
         }
       }
     });
@@ -1068,7 +1156,7 @@ class Game {
     // Mark occupied seats
     this.customers.forEach(c => {
       if (c.seat) {
-        const match = seats.find(s => s.x === c.seat.x && s.y === c.seat.y);
+        const match = seats.find(s => s.x === c.seat.x && s.y === c.seat.y && s.furniture === c.seat.furniture);
         if (match) match.occupied = true;
       }
     });
@@ -1083,7 +1171,7 @@ class Game {
     // Furniture bonuses
     if (this.furniture.some(f => f.type === 'noodleMachine')) quality += 0.1;
     if (this.furniture.some(f => f.type === 'soupPot')) quality += 0.1;
-    if (this.furniture.some(f => f.type === 'fridge')) quality += 0.05;
+    if (this.furniture.some(f => f.type === 'freezer')) quality += 0.05;
     if (this.furniture.some(f => f.type === 'plant')) quality += 0.05;
     
     // Combo bonuses
@@ -1227,24 +1315,43 @@ class Game {
         
       case 'layout':
         overlay.classList.add('active');
-        const furnitureOptions = Object.keys(FURNITURE_TYPES).map(key => {
-          const f = FURNITURE_TYPES[key];
-          const canUse = true; // All furniture available from start
-          return `
-            <div class="furniture-item ${!canUse ? 'disabled' : ''} ${this.selectedFurniture === key ? 'selected' : ''}"
-                 onclick="${canUse ? `game.selectFurniture('${key}')` : ''}">
-              <div style="font-size: 24px;">${f.icon}</div>
-              <div>${f.name}</div>
-              <div style="font-size: 11px; color: #666;">${f.cost}円</div>
-            </div>
-          `;
-        }).join('');
+        
+        const categories = {
+          seats: '座席',
+          kitchen: '厨房',
+          other: 'その他'
+        };
+        
+        const subTabsHtml = Object.keys(categories).map(cat => 
+          `<div class="sub-tab ${this.currentSubTab === cat ? 'active' : ''}" onclick="game.setSubTab('${cat}')">${categories[cat]}</div>`
+        ).join('');
+        
+        const furnitureOptions = Object.keys(FURNITURE_TYPES)
+          .filter(key => FURNITURE_TYPES[key].category === this.currentSubTab)
+          .map(key => {
+            const f = FURNITURE_TYPES[key];
+            const canUse = !f.essential; // Essential items are pre-placed
+            return `
+              <div class="furniture-item ${!canUse ? 'disabled' : ''} ${this.selectedFurniture === key ? 'selected' : ''}"
+                   onclick="${canUse ? `game.selectFurniture('${key}')` : ''}">
+                <div style="font-size: 24px;">${f.icon}</div>
+                <div>${f.name}</div>
+                <div style="font-size: 11px; color: #666;">${f.cost}円</div>
+                ${f.essential ? '<div style="font-size: 10px; color: #999;">(初期配置済み)</div>' : ''}
+              </div>
+            `;
+          }).join('');
         
         content.innerHTML = `
           <div class="info-section">
-            <div>家具を選んで、グリッド上をタップして配置</div>
-            <div style="font-size: 11px; color: #666;">長押しで撤去</div>
+            <button class="toggle-btn ${this.removalMode ? 'active' : ''}" onclick="game.toggleRemovalMode()">
+              ${this.removalMode ? '✓ 撤去モード' : '撤去モード'}
+            </button>
+            <div style="font-size: 11px; color: #666; margin-top: 4px;">
+              ${this.removalMode ? 'タップして家具を撤去（50%返金）' : '家具を選んで配置'}
+            </div>
           </div>
+          <div class="sub-tabs">${subTabsHtml}</div>
           <div class="furniture-list">${furnitureOptions}</div>
         `;
         break;
@@ -1323,8 +1430,21 @@ class Game {
     }
   }
 
+  setSubTab(tab) {
+    this.currentSubTab = tab;
+    this.selectedFurniture = null; // Clear selection when switching tabs
+    this.renderTabContent();
+  }
+
   selectFurniture(type) {
     this.selectedFurniture = type;
+    this.removalMode = false; // Turn off removal mode when selecting furniture
+    this.renderTabContent();
+  }
+
+  toggleRemovalMode() {
+    this.removalMode = !this.removalMode;
+    this.selectedFurniture = null; // Clear furniture selection in removal mode
     this.renderTabContent();
   }
 
@@ -1370,8 +1490,6 @@ class Game {
     document.getElementById('day').textContent = this.day;
     document.getElementById('money').textContent = this.money;
     document.getElementById('reputation').textContent = this.reputation;
-    const repDisplay = document.getElementById('reputation-display');
-    if (repDisplay) repDisplay.textContent = this.reputation;
   }
 
   saveGame() {
@@ -1414,7 +1532,20 @@ class Game {
 
   startNew() {
     localStorage.removeItem('ramenStandSave');
+    
+    // Place initial furniture
+    INITIAL_FURNITURE.forEach((f, idx) => {
+      this.furniture.push({
+        type: f.type,
+        x: f.x,
+        y: f.y,
+        id: 'f' + idx
+      });
+    });
+    
     document.getElementById('title-screen').style.display = 'none';
+    this.renderFurniture();
+    this.checkCombos(); // Check for initial combos
     this.updateUI();
     this.renderTabContent();
   }

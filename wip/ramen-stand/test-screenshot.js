@@ -1,34 +1,48 @@
-const { chromium } = require('playwright');
+const puppeteer = require('puppeteer');
+const path = require('path');
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  
   const page = await browser.newPage();
+  await page.setViewport({ width: 460, height: 900 });
   
-  await page.goto('file://' + __dirname + '/index.html');
+  const htmlPath = 'file://' + path.resolve(__dirname, 'index.html');
+  await page.goto(htmlPath);
   
-  // 営業タブに移動
-  await page.click('text=営業');
-  await page.waitForTimeout(500);
+  // タイトル画面で「はじめから」をクリック
+  await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const btn = buttons.find(b => b.textContent.includes('はじめから'));
+    if (btn) btn.click();
+  });
+  await sleep(1000);
   
-  // 営業開始
-  await page.click('#startBusinessBtn');
+  // 「営業開始」をクリック
+  await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const btn = buttons.find(b => b.textContent.includes('営業開始'));
+    if (btn) btn.click();
+  });
+  await sleep(15000); // 客が来て食事して表情が変わるまで待つ
   
-  // 複数の客が来るまで待つ（最大20秒）
-  for (let i = 0; i < 20; i++) {
-    await page.waitForTimeout(1000);
-    const customers = await page.$$('.customer');
-    console.log(`${i+1}秒: ${customers.length}人`);
-    if (customers.length >= 2) {
-      console.log(`複数の客が来ました！`);
-      break;
-    }
-  }
+  // スクリーンショット撮影
+  await page.screenshot({ path: 'test-result.png', fullPage: true });
   
-  await page.waitForTimeout(1000);
+  console.log('Screenshot saved to test-result.png');
   
-  // スクリーンショット
-  await page.screenshot({ path: 'customer-types-test.png', fullPage: true });
+  // 客の表情を確認
+  const emotions = await page.evaluate(() => {
+    const customers = Array.from(document.querySelectorAll('.customer-face'));
+    return customers.map(c => c.textContent);
+  });
+  console.log('Customer emotions:', emotions);
   
   await browser.close();
-  console.log('スクリーンショット保存: customer-types-test.png');
 })();
