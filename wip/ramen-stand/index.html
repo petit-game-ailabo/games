@@ -397,12 +397,14 @@ button:disabled {
   padding: 16px 24px;
   border: 3px solid #d4af37;
   border-radius: 12px;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: bold;
   box-shadow: 0 8px 16px rgba(0,0,0,0.4);
   z-index: 2000;
   display: none;
   text-align: center;
+  white-space: pre-line;
+  max-width: 80%;
 }
 
 #notification.active {
@@ -1002,7 +1004,7 @@ class Game {
   }
 
   getCustomerType() {
-    const types = ['regular', 'student', 'businessman', 'foodie'];
+    const types = ['regular', 'student', 'businessman', 'family'];
     const weights = [50, 20, 20, 10];
     const total = weights.reduce((a, b) => a + b, 0);
     let random = Math.random() * total;
@@ -1025,10 +1027,10 @@ class Game {
   generateCustomerPreferences(type) {
     // Generate taste preferences for each customer type
     const basePreferences = {
-      regular: { koku: 0.3, kire: 0.2, kaori: 0.2, kosa: 0.3 },
-      student: { koku: 0.4, kire: 0.1, kaori: 0.1, kosa: 0.4 }, // Heavy, rich
-      businessman: { koku: 0.2, kire: 0.4, kaori: 0.3, kosa: 0.1 }, // Light, clean
-      foodie: { koku: 0.25, kire: 0.25, kaori: 0.35, kaori: 0.15 } // Balanced, aroma focus
+      regular: { koku: 0.3, kire: 0.2, kaori: 0.2, kosa: 0.3 }, // サラリーマン: こだわりなし
+      student: { koku: 0.4, kire: 0.1, kaori: 0.1, kosa: 0.4 }, // 学生: 量重視、濃い味
+      businessman: { koku: 0.2, kire: 0.4, kaori: 0.3, kosa: 0.1 }, // ビジネスマン: あっさり、キレ重視
+      family: { koku: 0.25, kire: 0.2, kaori: 0.25, kosa: 0.2 } // 家族連れ: マイルド、バランス型
     };
     
     const base = basePreferences[type] || basePreferences.regular;
@@ -1054,7 +1056,7 @@ class Game {
       regular: '#6b9bd1',
       student: '#4caf50',
       businessman: '#1565c0',
-      foodie: '#d32f2f'
+      family: '#ff9800'
     };
     body.style.background = colors[customer.type];
     
@@ -1064,6 +1066,12 @@ class Game {
     
     el.appendChild(body);
     el.appendChild(face);
+    
+    // Add click handler for customer feedback
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.showCustomerFeedback(customer);
+    });
     
     customer.element = el;
     customer.faceElement = face;
@@ -1141,6 +1149,7 @@ class Game {
         customer.eatTimer += deltaTime;
         if (customer.eatTimer >= 2) {
           const quality = this.calculateQualityForCustomer(customer);
+          customer.qualityScore = quality; // Store for later feedback
           customer.satisfied = quality > 0.5;
           
           // Set face based on satisfaction level
@@ -1312,6 +1321,94 @@ class Game {
     setTimeout(() => {
       if (bubble.parentNode) bubble.remove();
     }, 1500);
+  }
+
+  showCustomerFeedback(customer) {
+    if (!customer.element) return;
+    
+    let feedbackText = '';
+    const typeNames = {
+      regular: 'サラリーマン',
+      student: '学生',
+      businessman: 'ビジネスマン',
+      family: '家族連れ'
+    };
+    const typeName = typeNames[customer.type] || '客';
+    
+    // Before eating: show type and preferences
+    if (customer.state === 'WALKING_STREET' || customer.state === 'ENTERING' || 
+        customer.state === 'FINDING_SEAT' || customer.state === 'SITTING') {
+      const prefs = [];
+      const maxPref = Math.max(customer.preferences.koku, customer.preferences.kire, 
+                               customer.preferences.kaori, customer.preferences.kosa);
+      if (customer.preferences.koku === maxPref) prefs.push('コク');
+      if (customer.preferences.kire === maxPref) prefs.push('キレ');
+      if (customer.preferences.kaori === maxPref) prefs.push('香り');
+      if (customer.preferences.kosa === maxPref) prefs.push('濃さ');
+      
+      feedbackText = `【${typeName}】\n${prefs.join('・')}重視`;
+    }
+    
+    // After eating: show detailed feedback
+    else if (customer.state === 'EATING' || customer.state === 'LEAVING' || customer.state === 'EXITING') {
+      if (!customer.qualityScore) {
+        customer.qualityScore = this.calculateQualityForCustomer(customer);
+      }
+      
+      const score = customer.qualityScore;
+      const soupParams = this.calculateSoupParams(this.currentSoupRecipe.ingredients);
+      
+      // Generate specific feedback based on match
+      const feedbackLines = [];
+      
+      if (score > 0.8) {
+        feedbackLines.push('最高の一杯でした！');
+        // Highlight what matched well
+        if (customer.preferences.koku > 0.3 && soupParams.koku > 50) {
+          feedbackLines.push('コクが絶品！');
+        }
+        if (customer.preferences.kire > 0.3 && soupParams.kire > 50) {
+          feedbackLines.push('キレが最高！');
+        }
+        if (customer.preferences.kaori > 0.3 && soupParams.kaori > 50) {
+          feedbackLines.push('香りが素晴らしい！');
+        }
+      } else if (score > 0.5) {
+        feedbackLines.push('美味しかったです');
+        // Give a hint for improvement
+        if (customer.preferences.koku > 0.3 && soupParams.koku < 40) {
+          feedbackLines.push('もう少しコクがあると◎');
+        }
+        if (customer.preferences.kire > 0.3 && soupParams.kire < 40) {
+          feedbackLines.push('キレが欲しいかも');
+        }
+        if (customer.preferences.kaori > 0.3 && soupParams.kaori < 40) {
+          feedbackLines.push('香りが弱いかな');
+        }
+      } else if (score > 0.3) {
+        feedbackLines.push('まあまあですね...');
+        // Point out mismatch
+        if (customer.preferences.kosa < 0.2 && soupParams.kosa > 60) {
+          feedbackLines.push('ちょっと濃すぎる');
+        }
+        if (customer.preferences.koku > 0.4 && soupParams.koku < 30) {
+          feedbackLines.push('コクが物足りない');
+        }
+      } else {
+        feedbackLines.push('う〜ん...');
+        feedbackLines.push('好みじゃなかった');
+      }
+      
+      feedbackText = `【${typeName}】\n${feedbackLines.join('\n')}`;
+      
+      if (customer.paid) {
+        feedbackText += `\n(${customer.paid}円)`;
+      }
+    }
+    
+    if (feedbackText) {
+      this.showNotification(feedbackText);
+    }
   }
 
   removeCustomer(customer) {
