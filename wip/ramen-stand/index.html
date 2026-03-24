@@ -530,6 +530,17 @@ const NOODLE_TYPES = {
   wholeGrain: { name: '全粒粉麺', match: 'kaori', desc: '香り重視', cost: 25 }
 };
 
+const TOPPING_TYPES = {
+  negi: { name: 'ネギ', icon: '🧅', koku: 2, kire: 3, kaori: 5, kosa: 0, cost: 50, unlocked: true },
+  nori: { name: '海苔', icon: '🟢', koku: 1, kire: 2, kaori: 8, kosa: 0, cost: 50, unlocked: true },
+  menma: { name: 'メンマ', icon: '🎋', koku: 5, kire: 0, kaori: 3, kosa: 2, cost: 100, research: 10 },
+  chashu: { name: 'チャーシュー', icon: '🥩', koku: 15, kire: 0, kaori: 5, kosa: 8, cost: 200, research: 25 },
+  ajitama: { name: '味玉', icon: '🥚', koku: 8, kire: 0, kaori: 2, kosa: 5, cost: 150, research: 50 },
+  butter: { name: 'バター', icon: '🧈', koku: 10, kire: 0, kaori: 5, kosa: 10, cost: 150, research: 100 },
+  corn: { name: 'コーン', icon: '🌽', koku: 3, kire: 0, kaori: 8, kosa: 2, cost: 100, research: 100 },
+  kimchi: { name: 'キムチ', icon: '🥬', koku: 5, kire: 8, kaori: 10, kosa: 5, cost: 150, research: 150 }
+};
+
 const RESEARCH_TREE = [
   { id: '味噌スープ', name: '味噌スープ', cost: 10, tier: 1, type: 'soup' },
   { id: 'メンマ', name: 'メンマ', cost: 10, tier: 1, type: 'topping' },
@@ -596,11 +607,13 @@ class Game {
       ingredients: ['chicken', 'vegetable'],
       tare: 'shoyu',
       noodle: 'medium',
+      toppings: ['negi', 'nori'], // Max 4 toppings
       name: '醤油ラーメン'
     };
     this.unlockedIngredients = ['chicken', 'vegetable'];
     this.unlockedTare = ['shoyu'];
     this.unlockedNoodles = ['thin', 'medium'];
+    this.unlockedToppings = ['negi', 'nori'];
     this.savedRecipes = []; // Max 5 recipes
   }
 
@@ -1437,6 +1450,29 @@ class Game {
           </div>
           
           <div class="info-section">
+            <div class="info-title">トッピング (最大4つ)</div>
+            <div class="furniture-list" style="grid-template-columns: 1fr 1fr;">
+              ${Object.keys(TOPPING_TYPES).map(key => {
+                const topping = TOPPING_TYPES[key];
+                const unlocked = this.unlockedToppings.includes(key);
+                const selected = this.currentSoupRecipe.toppings && this.currentSoupRecipe.toppings.includes(key);
+                return `
+                  <div class="furniture-item ${!unlocked ? 'disabled' : ''} ${selected ? 'selected' : ''}"
+                       onclick="${unlocked ? `game.toggleTopping('${key}')` : ''}">
+                    <div style="font-size: 20px;">${topping.icon}</div>
+                    <div style="font-size: 13px;">${topping.name}</div>
+                    <div style="font-size: 10px; color: #666;">
+                      コク${topping.koku > 0 ? '+' + topping.koku : topping.koku}
+                      香り${topping.kaori > 0 ? '+' + topping.kaori : topping.kaori}
+                    </div>
+                    ${!unlocked ? `<div style="font-size: 10px; color: #999;">${topping.research}pt</div>` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+          
+          <div class="info-section">
             <div class="info-title">保存済みレシピ</div>
             ${this.savedRecipes.length > 0 ? 
               this.savedRecipes.map((r, i) => `
@@ -1489,6 +1525,17 @@ class Game {
                         ${this.researchPoints < noodle.cost ? 'disabled' : ''}
                         style="font-size: 12px; padding: 6px 12px; margin: 2px;">
                   ${noodle.name} (${noodle.cost}pt)
+                </button>
+              `;
+            }).join('')}
+            ${Object.keys(TOPPING_TYPES).map(key => {
+              const topping = TOPPING_TYPES[key];
+              if (topping.unlocked || this.unlockedToppings.includes(key)) return '';
+              return `
+                <button onclick="game.unlockTopping('${key}')" 
+                        ${this.researchPoints < topping.research ? 'disabled' : ''}
+                        style="font-size: 12px; padding: 6px 12px; margin: 2px;">
+                  ${topping.icon} ${topping.name} (${topping.research}pt)
                 </button>
               `;
             }).join('')}
@@ -1568,6 +1615,19 @@ class Game {
       }
     });
     
+    // Add topping effects
+    if (this.currentSoupRecipe.toppings) {
+      this.currentSoupRecipe.toppings.forEach(key => {
+        const topping = TOPPING_TYPES[key];
+        if (topping) {
+          params.koku += topping.koku;
+          params.kire += topping.kire;
+          params.kaori += topping.kaori;
+          params.kosa += topping.kosa;
+        }
+      });
+    }
+    
     return params;
   }
   
@@ -1623,6 +1683,7 @@ class Game {
       ingredients: [...this.currentSoupRecipe.ingredients],
       tare: this.currentSoupRecipe.tare,
       noodle: this.currentSoupRecipe.noodle,
+      toppings: this.currentSoupRecipe.toppings ? [...this.currentSoupRecipe.toppings] : [],
       params: this.calculateSoupParams(this.currentSoupRecipe.ingredients)
     };
     
@@ -1639,7 +1700,8 @@ class Game {
       name: recipe.name,
       ingredients: [...recipe.ingredients],
       tare: recipe.tare,
-      noodle: recipe.noodle
+      noodle: recipe.noodle,
+      toppings: recipe.toppings ? [...recipe.toppings] : []
     };
     
     this.showNotification('レシピを読み込みました');
@@ -1704,6 +1766,45 @@ class Game {
     this.updateUI();
     this.renderTabContent();
   }
+  
+  toggleTopping(key) {
+    if (!this.currentSoupRecipe.toppings) {
+      this.currentSoupRecipe.toppings = [];
+    }
+    
+    const index = this.currentSoupRecipe.toppings.indexOf(key);
+    
+    if (index >= 0) {
+      // Remove topping
+      this.currentSoupRecipe.toppings.splice(index, 1);
+    } else {
+      // Add topping (max 4)
+      if (this.currentSoupRecipe.toppings.length >= 4) {
+        this.showNotification('トッピングは最大4つまでです！');
+        return;
+      }
+      this.currentSoupRecipe.toppings.push(key);
+    }
+    
+    this.renderTabContent();
+  }
+  
+  unlockTopping(key) {
+    const topping = TOPPING_TYPES[key];
+    if (!topping || !topping.research) return;
+    
+    if (this.researchPoints < topping.research) {
+      this.showNotification('研究ptが足りません！');
+      return;
+    }
+    
+    this.researchPoints -= topping.research;
+    this.unlockedToppings.push(key);
+    
+    this.showNotification('✨ ' + topping.name + ' を解放！');
+    this.updateUI();
+    this.renderTabContent();
+  }
 
   setSpeed(multiplier) {
     this.speedMultiplier = multiplier;
@@ -1744,6 +1845,7 @@ class Game {
       unlockedIngredients: this.unlockedIngredients,
       unlockedTare: this.unlockedTare,
       unlockedNoodles: this.unlockedNoodles,
+      unlockedToppings: this.unlockedToppings,
       savedRecipes: this.savedRecipes
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
@@ -1767,10 +1869,17 @@ class Game {
     this.phase = save.phase || 1;
     
     // Load soup research data
-    if (save.currentSoupRecipe) this.currentSoupRecipe = save.currentSoupRecipe;
+    if (save.currentSoupRecipe) {
+      this.currentSoupRecipe = save.currentSoupRecipe;
+      // Backward compatibility: add toppings array if missing
+      if (!this.currentSoupRecipe.toppings) {
+        this.currentSoupRecipe.toppings = ['negi', 'nori'];
+      }
+    }
     if (save.unlockedIngredients) this.unlockedIngredients = save.unlockedIngredients;
     if (save.unlockedTare) this.unlockedTare = save.unlockedTare;
     if (save.unlockedNoodles) this.unlockedNoodles = save.unlockedNoodles;
+    if (save.unlockedToppings) this.unlockedToppings = save.unlockedToppings;
     if (save.savedRecipes) this.savedRecipes = save.savedRecipes;
     
     this.setState(GameState.PREPARING);
