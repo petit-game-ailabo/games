@@ -175,6 +175,50 @@ body {
   border: 2px solid #2e7d32;
 }
 
+/* Staff */
+.staff {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  z-index: 15;
+  pointer-events: none;
+  transition: none;
+}
+
+.staff-work-bubble {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  animation: staffBounce 0.5s ease-in-out infinite alternate;
+  z-index: 16;
+  pointer-events: none;
+}
+
+@keyframes staffBounce {
+  0% { transform: translateX(-50%) translateY(0); }
+  100% { transform: translateX(-50%) translateY(-4px); }
+}
+
+/* Dirty dish */
+.dirty-dish {
+  position: absolute;
+  font-size: 16px;
+  z-index: 8;
+  pointer-events: none;
+  animation: dishPulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes dishPulse {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
 /* Customer */
 .customer {
   position: absolute;
@@ -562,6 +606,22 @@ const FURNITURE_TYPES = {
   plant: { name: '観葉植物', icon: '🌿', cost: 200, seats: 0, width: 1, height: 1, category: 'other' }
 };
 
+// Staff types
+const STAFF_TYPES = {
+  cook: { name: '料理人', icon: '\u{1F468}\u200D\u{1F373}', cost: 1000, width: 1, height: 1 },
+  server: { name: '接客係', icon: '\u{1F9D1}\u200D\u{1F373}', cost: 800, width: 1, height: 1 }
+};
+
+// Cooking recipes: equipment steps for each ramen type
+const COOKING_RECIPES = {
+  '醤油ラーメン': ['freezer', 'soupPot', 'soupStove', 'noodleBoiler', 'platingStation'],
+  '味噌スープラーメン': ['freezer', 'soupPot', 'soupStove', 'noodleBoiler', 'platingStation'],
+  '塩スープラーメン': ['freezer', 'soupPot', 'soupStove', 'noodleBoiler', 'platingStation'],
+  '豚骨スープラーメン': ['freezer', 'soupPot', 'soupStove', 'noodleBoiler', 'platingStation'],
+  '煮干しスープラーメン': ['freezer', 'soupPot', 'soupStove', 'noodleBoiler', 'platingStation'],
+  '貝類スープラーメン': ['freezer', 'soupPot', 'soupStove', 'noodleBoiler', 'platingStation']
+};
+
 // 商品研究: 料理素材の解放のみ（お金で購入）。家具は配置タブから直接購入。
 const RESEARCH_TREE = [
   { id: '味噌スープ', name: '味噌スープ', cost: 500, tier: 1, type: 'soup' },
@@ -606,7 +666,10 @@ class Game {
     this.reputation = 0;
     this.researchPoints = 0;
     this.furniture = [];
+    this.staff = [];
     this.customers = [];
+    this.orderQueue = [];
+    this.dirtyDishes = [];
     this.unlockedResearch = [];
     this.activeRecipes = ['醤油ラーメン'];
     this.availableRecipes = ['醤油ラーメン'];
@@ -623,8 +686,10 @@ class Game {
     this.currentSubTab = 'seats';
     this.lastTimestamp = 0;
     this.nextCustomerId = 0;
+    this.nextStaffId = 0;
     this.pedestrianTimer = 0;
     this.selectedFurniture = null;
+    this.selectedStaff = null;
     this.removalMode = false;
   }
 
@@ -667,6 +732,21 @@ class Game {
   handleGridClick(x, y) {
     // Removal mode
     if (this.removalMode) {
+      // Check staff first
+      const staffHere = this.getStaffAt(x, y);
+      if (staffHere) {
+        const staffType = STAFF_TYPES[staffHere.type];
+        const refund = Math.floor(staffType.cost * 0.5);
+        this.money += refund;
+        if (staffHere.element && staffHere.element.parentNode) {
+          staffHere.element.remove();
+        }
+        this.staff = this.staff.filter(s => s.id !== staffHere.id);
+        this.updateUI();
+        this.showNotification(`${staffType.name}を撤去！\n${refund}円返金`);
+        return;
+      }
+      
       const furniture = this.getFurnitureAt(x, y);
       if (furniture) {
         const furnitureType = FURNITURE_TYPES[furniture.type];
@@ -683,7 +763,60 @@ class Game {
       }
     }
     
-    // Placement mode
+    // Staff placement mode
+    if (this.selectedStaff) {
+      const staffType = STAFF_TYPES[this.selectedStaff];
+      
+      if (this.money < staffType.cost) {
+        this.showNotification('お金が足りません！');
+        return;
+      }
+      
+      // Check bounds
+      if (x >= GRID_WIDTH || y >= GRID_HEIGHT - 1) {
+        this.showNotification('ここには置けません！');
+        return;
+      }
+      
+      // Check if occupied by furniture
+      if (this.getFurnitureAt(x, y)) {
+        this.showNotification('ここには置けません！');
+        return;
+      }
+      
+      // Check if occupied by another staff
+      if (this.getStaffAt(x, y)) {
+        this.showNotification('ここには置けません！');
+        return;
+      }
+      
+      this.money -= staffType.cost;
+      const staffObj = {
+        id: 's' + this.nextStaffId++,
+        type: this.selectedStaff,
+        homeX: x,
+        homeY: y,
+        x: x * TILE_SIZE + TILE_SIZE / 2 - 16,
+        y: y * TILE_SIZE + TILE_SIZE / 2 - 16,
+        state: 'IDLE',
+        path: [],
+        pathIndex: 0,
+        currentOrder: null,
+        workTimer: 0,
+        cookingStep: 0,
+        element: null,
+        carryingDish: false,
+        workBubble: null
+      };
+      
+      this.staff.push(staffObj);
+      this.createStaffElement(staffObj);
+      this.updateUI();
+      this.renderTabContent();
+      return;
+    }
+    
+    // Furniture placement mode
     if (!this.selectedFurniture) return;
     
     const furnitureType = FURNITURE_TYPES[this.selectedFurniture];
@@ -706,8 +839,14 @@ class Game {
           return;
         }
         
-        // Check if occupied
+        // Check if occupied by furniture
         if (this.getFurnitureAt(checkX, checkY)) {
+          this.showNotification('ここには置けません！');
+          return;
+        }
+        
+        // Check if occupied by staff
+        if (this.getStaffAt(checkX, checkY)) {
           this.showNotification('ここには置けません！');
           return;
         }
@@ -729,11 +868,25 @@ class Game {
     this.renderTabContent();
   }
 
+  getStaffAt(x, y) {
+    return this.staff.find(s => s.homeX === x && s.homeY === y);
+  }
+
   getFurnitureAt(x, y) {
     return this.furniture.find(f => {
       const type = FURNITURE_TYPES[f.type];
       return x >= f.x && x < f.x + type.width && y >= f.y && y < f.y + type.height;
     });
+  }
+
+  createStaffElement(staffObj) {
+    const el = document.createElement('div');
+    el.className = 'staff';
+    el.style.left = staffObj.x + 'px';
+    el.style.top = staffObj.y + 'px';
+    el.textContent = STAFF_TYPES[staffObj.type].icon;
+    staffObj.element = el;
+    document.getElementById('shop-interior').appendChild(el);
   }
 
   renderFurniture() {
@@ -753,6 +906,16 @@ class Game {
       el.dataset.id = f.id;
       
       interior.appendChild(el);
+    });
+  }
+
+  renderStaff() {
+    const interior = document.getElementById('shop-interior');
+    // Remove existing staff elements
+    interior.querySelectorAll('.staff').forEach(el => el.remove());
+    
+    this.staff.forEach(s => {
+      this.createStaffElement(s);
     });
   }
 
@@ -787,7 +950,31 @@ class Game {
     this.dayActive = true;
     this.dayTime = 0;
     this.customers = [];
+    this.orderQueue = [];
+    this.dirtyDishes = [];
     this.pedestrianTimer = 0;
+    
+    // Reset staff states
+    this.staff.forEach(s => {
+      s.state = 'IDLE';
+      s.path = [];
+      s.pathIndex = 0;
+      s.currentOrder = null;
+      s.workTimer = 0;
+      s.cookingStep = 0;
+      s.carryingDish = false;
+      s.x = s.homeX * TILE_SIZE + TILE_SIZE / 2 - 16;
+      s.y = s.homeY * TILE_SIZE + TILE_SIZE / 2 - 16;
+      if (s.element) {
+        s.element.style.left = s.x + 'px';
+        s.element.style.top = s.y + 'px';
+      }
+      if (s.workBubble && s.workBubble.parentNode) {
+        s.workBubble.remove();
+        s.workBubble = null;
+      }
+    });
+    
     this.renderTabContent();
   }
 
@@ -798,6 +985,22 @@ class Game {
     this.customers.forEach(c => {
       if (c.element && c.element.parentNode) {
         c.element.remove();
+      }
+    });
+    
+    // Clean up dirty dishes
+    this.dirtyDishes.forEach(d => {
+      if (d.element && d.element.parentNode) {
+        d.element.remove();
+      }
+    });
+    this.dirtyDishes = [];
+    
+    // Clean up staff work bubbles
+    this.staff.forEach(s => {
+      if (s.workBubble && s.workBubble.parentNode) {
+        s.workBubble.remove();
+        s.workBubble = null;
       }
     });
     
@@ -835,10 +1038,15 @@ class Game {
     
     // Clear customers array
     this.customers = [];
+    this.orderQueue = [];
+    this.dirtyDishes = [];
     
     // Remove any remaining customer elements
     const customerEls = document.querySelectorAll('.customer');
     customerEls.forEach(el => el.remove());
+    
+    // Remove dirty dish elements
+    document.querySelectorAll('.dirty-dish').forEach(el => el.remove());
     
     const modal = document.getElementById('day-summary-modal');
     modal.classList.remove('active');
@@ -889,9 +1097,438 @@ class Game {
     // Update customers
     this.customers.forEach(c => this.updateCustomer(c, scaledDelta));
     
+    // Update staff
+    this.staff.forEach(s => this.updateStaff(s, scaledDelta));
+    
+    // Auto-clean dirty dishes if no server (backward compat)
+    const hasServer = this.staff.some(s => s.type === 'server');
+    if (!hasServer) {
+      this.dirtyDishes.forEach(d => {
+        d.timer += scaledDelta;
+        if (d.timer >= 3) {
+          if (d.element && d.element.parentNode) d.element.remove();
+          d.done = true;
+        }
+      });
+      this.dirtyDishes = this.dirtyDishes.filter(d => !d.done);
+    }
+    
     // Remove exited customers
     this.customers = this.customers.filter(c => c.state !== 'EXITED' || c.element);
   }
+
+  // ========== BFS Pathfinding ==========
+  buildOccupancyGrid() {
+    // Grid rows 0..2 (playable area), cols 0..4
+    const grid = [];
+    for (let y = 0; y < GRID_HEIGHT - 1; y++) {
+      grid[y] = [];
+      for (let x = 0; x < GRID_WIDTH; x++) {
+        grid[y][x] = false; // false = passable
+      }
+    }
+    // Mark furniture tiles as impassable
+    this.furniture.forEach(f => {
+      const ft = FURNITURE_TYPES[f.type];
+      for (let dy = 0; dy < ft.height; dy++) {
+        for (let dx = 0; dx < ft.width; dx++) {
+          const gy = f.y + dy;
+          const gx = f.x + dx;
+          if (gy >= 0 && gy < GRID_HEIGHT - 1 && gx >= 0 && gx < GRID_WIDTH) {
+            grid[gy][gx] = true; // blocked
+          }
+        }
+      }
+    });
+    return grid;
+  }
+
+  findPath(startX, startY, endX, endY, allowEndBlocked) {
+    const grid = this.buildOccupancyGrid();
+    
+    // If end tile is blocked and we allow it (for reaching equipment), find adjacent
+    const targetIsBlocked = endY >= 0 && endY < GRID_HEIGHT - 1 && endX >= 0 && endX < GRID_WIDTH && grid[endY][endX];
+    
+    if (targetIsBlocked && allowEndBlocked) {
+      // Find path to an adjacent passable tile
+      const adjacentTiles = [
+        {x: endX - 1, y: endY}, {x: endX + 1, y: endY},
+        {x: endX, y: endY - 1}, {x: endX, y: endY + 1}
+      ].filter(t => t.x >= 0 && t.x < GRID_WIDTH && t.y >= 0 && t.y < GRID_HEIGHT - 1 && !grid[t.y][t.x]);
+      
+      // Try each adjacent tile, return shortest path
+      let bestPath = null;
+      for (const adj of adjacentTiles) {
+        const path = this._bfs(grid, startX, startY, adj.x, adj.y);
+        if (path && (!bestPath || path.length < bestPath.length)) {
+          bestPath = path;
+        }
+      }
+      return bestPath || [{x: endX, y: endY}]; // fallback: teleport
+    }
+    
+    // Normal BFS
+    if (startX === endX && startY === endY) return [];
+    
+    // Allow start tile even if blocked (staff is standing on it)
+    const path = this._bfs(grid, startX, startY, endX, endY);
+    return path || [{x: endX, y: endY}]; // fallback: teleport
+  }
+
+  _bfs(grid, sx, sy, ex, ey) {
+    if (sx === ex && sy === ey) return [];
+    
+    const rows = GRID_HEIGHT - 1;
+    const cols = GRID_WIDTH;
+    const visited = Array.from({length: rows}, () => Array(cols).fill(false));
+    const parent = Array.from({length: rows}, () => Array(cols).fill(null));
+    
+    // Allow walking on start tile
+    visited[sy][sx] = true;
+    const queue = [{x: sx, y: sy}];
+    const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+    
+    while (queue.length > 0) {
+      const cur = queue.shift();
+      if (cur.x === ex && cur.y === ey) {
+        // Reconstruct path
+        const path = [];
+        let c = {x: ex, y: ey};
+        while (c.x !== sx || c.y !== sy) {
+          path.unshift({x: c.x, y: c.y});
+          c = parent[c.y][c.x];
+        }
+        return path;
+      }
+      for (const d of dirs) {
+        const nx = cur.x + d.x;
+        const ny = cur.y + d.y;
+        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && !visited[ny][nx] && !grid[ny][nx]) {
+          visited[ny][nx] = true;
+          parent[ny][nx] = {x: cur.x, y: cur.y};
+          queue.push({x: nx, y: ny});
+        }
+      }
+    }
+    return null; // no path
+  }
+
+  gridToPixel(gx, gy) {
+    return {
+      x: gx * TILE_SIZE + TILE_SIZE / 2 - 16,
+      y: gy * TILE_SIZE + TILE_SIZE / 2 - 16
+    };
+  }
+
+  pixelToGrid(px, py) {
+    return {
+      x: Math.round((px + 16 - TILE_SIZE / 2) / TILE_SIZE),
+      y: Math.round((py + 16 - TILE_SIZE / 2) / TILE_SIZE)
+    };
+  }
+
+  // ========== Staff Update ==========
+  updateStaff(staff, deltaTime) {
+    if (!staff.element) return;
+
+    switch (staff.state) {
+      case 'IDLE':
+        if (staff.type === 'cook') {
+          this.cookIdleCheck(staff);
+        } else if (staff.type === 'server') {
+          this.serverIdleCheck(staff);
+        }
+        break;
+
+      case 'MOVING':
+        this.moveStaffAlongPath(staff, deltaTime);
+        break;
+
+      case 'WORKING':
+        staff.workTimer += deltaTime;
+        if (staff.workTimer >= 1.5) {
+          staff.workTimer = 0;
+          this.removeWorkBubble(staff);
+          if (staff.type === 'cook') {
+            this.cookNextStep(staff);
+          }
+        }
+        break;
+
+      case 'DELIVERING':
+        // Moving to customer to deliver
+        this.moveStaffAlongPath(staff, deltaTime);
+        break;
+
+      case 'COLLECTING':
+        staff.workTimer += deltaTime;
+        if (staff.workTimer >= 1.0) {
+          staff.workTimer = 0;
+          this.removeWorkBubble(staff);
+          // Pick up the dish
+          staff.carryingDish = true;
+          if (staff.targetDish) {
+            if (staff.targetDish.element && staff.targetDish.element.parentNode) {
+              staff.targetDish.element.remove();
+            }
+            staff.targetDish.done = true;
+            this.dirtyDishes = this.dirtyDishes.filter(d => !d.done);
+          }
+          // Go to dishwashing sink
+          this.serverGoToSink(staff);
+        }
+        break;
+
+      case 'CLEANING':
+        staff.workTimer += deltaTime;
+        if (staff.workTimer >= 1.0) {
+          staff.workTimer = 0;
+          staff.carryingDish = false;
+          this.removeWorkBubble(staff);
+          // Return home
+          this.staffGoHome(staff);
+        }
+        break;
+
+      case 'RETURNING':
+        this.moveStaffAlongPath(staff, deltaTime);
+        break;
+    }
+  }
+
+  moveStaffAlongPath(staff, deltaTime) {
+    if (staff.path.length === 0 || staff.pathIndex >= staff.path.length) {
+      // Arrived
+      this.onStaffArrived(staff);
+      return;
+    }
+
+    const target = staff.path[staff.pathIndex];
+    const targetPixel = this.gridToPixel(target.x, target.y);
+    const dx = targetPixel.x - staff.x;
+    const dy = targetPixel.y - staff.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const speed = 120; // px/sec
+
+    if (dist < 2) {
+      staff.x = targetPixel.x;
+      staff.y = targetPixel.y;
+      staff.pathIndex++;
+      if (staff.pathIndex >= staff.path.length) {
+        this.onStaffArrived(staff);
+      }
+    } else {
+      const move = speed * deltaTime;
+      staff.x += (dx / dist) * Math.min(move, dist);
+      staff.y += (dy / dist) * Math.min(move, dist);
+    }
+
+    staff.element.style.left = staff.x + 'px';
+    staff.element.style.top = staff.y + 'px';
+  }
+
+  onStaffArrived(staff) {
+    if (staff.state === 'MOVING') {
+      // Cook arrived at equipment station
+      if (staff.type === 'cook') {
+        staff.state = 'WORKING';
+        staff.workTimer = 0;
+        // Show work bubble
+        const recipe = staff.currentRecipe;
+        if (recipe && staff.cookingStep < recipe.length) {
+          const equipType = recipe[staff.cookingStep];
+          const ft = FURNITURE_TYPES[equipType];
+          if (ft) this.showWorkBubble(staff, ft.icon);
+        }
+      }
+    } else if (staff.state === 'DELIVERING') {
+      // Cook delivered food to customer
+      if (staff.currentOrder) {
+        staff.currentOrder.foodDelivered = true;
+        staff.currentOrder = null;
+      }
+      // Return home
+      this.staffGoHome(staff);
+    } else if (staff.state === 'RETURNING') {
+      // Arrived home
+      staff.state = 'IDLE';
+      const homePixel = this.gridToPixel(staff.homeX, staff.homeY);
+      staff.x = homePixel.x;
+      staff.y = homePixel.y;
+      staff.element.style.left = staff.x + 'px';
+      staff.element.style.top = staff.y + 'px';
+    } else if (staff.type === 'server' && staff.state === 'MOVING') {
+      // Server arrived at dirty dish
+      staff.state = 'COLLECTING';
+      staff.workTimer = 0;
+      this.showWorkBubble(staff, '🧹');
+    }
+  }
+
+  showWorkBubble(staff, emoji) {
+    this.removeWorkBubble(staff);
+    const bubble = document.createElement('div');
+    bubble.className = 'staff-work-bubble';
+    bubble.textContent = emoji;
+    staff.element.appendChild(bubble);
+    staff.workBubble = bubble;
+  }
+
+  removeWorkBubble(staff) {
+    if (staff.workBubble && staff.workBubble.parentNode) {
+      staff.workBubble.remove();
+    }
+    staff.workBubble = null;
+  }
+
+  staffGoHome(staff) {
+    const curGrid = this.pixelToGrid(staff.x, staff.y);
+    const path = this.findPath(curGrid.x, curGrid.y, staff.homeX, staff.homeY, false);
+    staff.path = path;
+    staff.pathIndex = 0;
+    staff.state = 'RETURNING';
+  }
+
+  // ========== Cook Logic ==========
+  cookIdleCheck(staff) {
+    if (this.orderQueue.length === 0) return;
+    
+    // Take first order
+    const order = this.orderQueue.shift();
+    staff.currentOrder = order;
+    staff.cookingStep = 0;
+    
+    // Determine recipe
+    const recipeName = this.activeRecipes.length > 0 ? this.activeRecipes[Math.floor(Math.random() * this.activeRecipes.length)] : '醤油ラーメン';
+    const steps = COOKING_RECIPES[recipeName] || COOKING_RECIPES['醤油ラーメン'];
+    
+    // Filter steps to only equipment that exists on the grid
+    staff.currentRecipe = [];
+    staff.skippedSteps = 0;
+    for (const equipType of steps) {
+      const equip = this.furniture.find(f => f.type === equipType);
+      if (equip) {
+        staff.currentRecipe.push(equipType);
+      } else {
+        staff.skippedSteps++;
+      }
+    }
+    
+    // Start cooking sequence
+    this.cookGoToNextEquipment(staff);
+  }
+
+  cookGoToNextEquipment(staff) {
+    if (staff.cookingStep >= staff.currentRecipe.length) {
+      // Done cooking, deliver to customer
+      this.cookDeliverFood(staff);
+      return;
+    }
+    
+    const equipType = staff.currentRecipe[staff.cookingStep];
+    const equip = this.furniture.find(f => f.type === equipType);
+    
+    if (!equip) {
+      // Skip
+      staff.cookingStep++;
+      this.cookGoToNextEquipment(staff);
+      return;
+    }
+    
+    const curGrid = this.pixelToGrid(staff.x, staff.y);
+    const path = this.findPath(curGrid.x, curGrid.y, equip.x, equip.y, true);
+    staff.path = path;
+    staff.pathIndex = 0;
+    staff.state = 'MOVING';
+  }
+
+  cookNextStep(staff) {
+    staff.cookingStep++;
+    this.cookGoToNextEquipment(staff);
+  }
+
+  cookDeliverFood(staff) {
+    const customer = staff.currentOrder;
+    if (!customer || !customer.seat) {
+      // Customer left, return home
+      staff.currentOrder = null;
+      this.staffGoHome(staff);
+      return;
+    }
+    
+    // Find adjacent tile to customer's seat
+    const seatX = customer.seat.x;
+    const seatY = customer.seat.y;
+    const curGrid = this.pixelToGrid(staff.x, staff.y);
+    
+    // Try to path to an adjacent tile of the seat
+    const grid = this.buildOccupancyGrid();
+    const adjacentTiles = [
+      {x: seatX - 1, y: seatY}, {x: seatX + 1, y: seatY},
+      {x: seatX, y: seatY - 1}, {x: seatX, y: seatY + 1}
+    ].filter(t => t.x >= 0 && t.x < GRID_WIDTH && t.y >= 0 && t.y < GRID_HEIGHT - 1 && !grid[t.y][t.x]);
+    
+    let bestPath = null;
+    for (const adj of adjacentTiles) {
+      const path = this._bfs(grid, curGrid.x, curGrid.y, adj.x, adj.y);
+      if (path && (!bestPath || path.length < bestPath.length)) {
+        bestPath = path;
+      }
+    }
+    
+    if (!bestPath) {
+      // Can't reach customer, just deliver directly
+      customer.foodDelivered = true;
+      staff.currentOrder = null;
+      this.staffGoHome(staff);
+      return;
+    }
+    
+    staff.path = bestPath;
+    staff.pathIndex = 0;
+    staff.state = 'DELIVERING';
+  }
+
+  // ========== Server Logic ==========
+  serverIdleCheck(staff) {
+    if (this.dirtyDishes.length === 0) return;
+    
+    // Find nearest unclaimed dirty dish
+    const unclaimed = this.dirtyDishes.filter(d => !d.claimed && !d.done);
+    if (unclaimed.length === 0) return;
+    
+    const dish = unclaimed[0];
+    dish.claimed = true;
+    staff.targetDish = dish;
+    
+    const curGrid = this.pixelToGrid(staff.x, staff.y);
+    const path = this.findPath(curGrid.x, curGrid.y, dish.gridX, dish.gridY, true);
+    staff.path = path;
+    staff.pathIndex = 0;
+    staff.state = 'MOVING';
+  }
+
+  serverGoToSink(staff) {
+    const sink = this.furniture.find(f => f.type === 'dishwashingSink');
+    if (!sink) {
+      // No sink, just go home
+      staff.carryingDish = false;
+      this.staffGoHome(staff);
+      return;
+    }
+    
+    const curGrid = this.pixelToGrid(staff.x, staff.y);
+    const path = this.findPath(curGrid.x, curGrid.y, sink.x, sink.y, true);
+    staff.path = path;
+    staff.pathIndex = 0;
+    staff.state = 'MOVING';
+    
+    // Override onArrived for cleaning
+    staff._afterSinkArrival = true;
+  }
+
+  // Override the generic onStaffArrived for server-specific transitions
+  onStaffArrivedOriginal() {} // placeholder
 
   getSpawnRate() {
     // More frequent during lunch rush (middle of day)
@@ -928,7 +1565,10 @@ class Game {
       element: null,
       seat: null,
       satisfied: false,
-      paid: 0
+      paid: 0,
+      foodDelivered: false,
+      waitingFoodTimer: 0,
+      dirtyDish: false
     };
     
     this.customers.push(customer);
@@ -1039,13 +1679,60 @@ class Game {
         
       case 'SITTING':
         customer.eatTimer += deltaTime;
-        if (customer.eatTimer > 2 && customer.eatTimer < 4 && !customer.bowlShown) {
-          customer.bowlShown = true;
-          this.showBubble(customer, '🍜');
+        if (customer.eatTimer > 1 && !customer.orderPlaced) {
+          customer.orderPlaced = true;
+          this.showBubble(customer, '🍜注文');
+          
+          // Check if there are cooks
+          const hasCook = this.staff.some(s => s.type === 'cook');
+          if (hasCook) {
+            // Add to order queue, transition to WAITING_FOOD
+            this.orderQueue.push(customer);
+            customer.state = 'WAITING_FOOD';
+            customer.waitingFoodTimer = 0;
+          } else {
+            // No cook: auto-serve after delay (backward compatible)
+            // Stay in SITTING, food appears after 4 seconds total
+          }
         }
-        if (customer.eatTimer >= 4) {
+        if (!this.staff.some(s => s.type === 'cook')) {
+          // Backward compatible: no cook, auto food at 4 sec
+          if (customer.eatTimer >= 4 && !customer.bowlShown) {
+            customer.bowlShown = true;
+            this.showBubble(customer, '🍜');
+            customer.state = 'EATING';
+            customer.eatTimer = 0;
+          }
+        }
+        break;
+      
+      case 'WAITING_FOOD':
+        customer.waitingFoodTimer += deltaTime;
+        // Show waiting animation periodically
+        if (!customer.waitBubbleShown && customer.waitingFoodTimer > 1) {
+          customer.waitBubbleShown = true;
+          customer.faceElement.textContent = '😊';
+        }
+        
+        // Check if food has been delivered by cook
+        if (customer.foodDelivered) {
+          this.showBubble(customer, '🍜');
           customer.state = 'EATING';
           customer.eatTimer = 0;
+        }
+        
+        // Timeout: if waiting too long (20s), get frustrated and leave
+        if (customer.waitingFoodTimer >= 20 && !customer.foodDelivered) {
+          customer.faceElement.textContent = '😠';
+          this.showBubble(customer, '遅い！');
+          customer.state = 'LEAVING';
+          if (customer.seat) {
+            customer.seat.occupied = false;
+            customer.seat = null;
+          }
+          customer.targetX = 200;
+          customer.targetY = 240;
+          this.reputation = Math.max(0, this.reputation - 2);
         }
         break;
         
@@ -1084,13 +1771,20 @@ class Game {
           if (customer.satisfied) {
             this.reputation = Math.min(100, this.reputation + 1);
           } else if (quality < 0.4) {
-            // 不満な客は評判を下げる
             this.reputation = Math.max(0, this.reputation - 1);
           }
           
+          // Leave dirty dish if server exists
+          const hasServer = this.staff.some(s => s.type === 'server');
+          if (hasServer && customer.seat) {
+            this.spawnDirtyDish(customer.seat.x, customer.seat.y);
+          }
+          
           customer.state = 'LEAVING';
-          customer.seat.occupied = false;
-          customer.seat = null;
+          if (customer.seat) {
+            customer.seat.occupied = false;
+            customer.seat = null;
+          }
           customer.targetX = 200;
           customer.targetY = 240;
         }
@@ -1112,6 +1806,24 @@ class Game {
         }
         break;
     }
+  }
+
+  spawnDirtyDish(gridX, gridY) {
+    const el = document.createElement('div');
+    el.className = 'dirty-dish';
+    el.style.left = (gridX * TILE_SIZE + TILE_SIZE / 2 - 10) + 'px';
+    el.style.top = (gridY * TILE_SIZE + TILE_SIZE / 2 - 10) + 'px';
+    el.textContent = '🍜💨';
+    document.getElementById('shop-interior').appendChild(el);
+    
+    this.dirtyDishes.push({
+      gridX: gridX,
+      gridY: gridY,
+      element: el,
+      timer: 0,
+      claimed: false,
+      done: false
+    });
   }
 
   moveToTarget(customer, deltaTime) {
@@ -1141,7 +1853,6 @@ class Game {
     this.furniture.forEach(f => {
       const type = FURNITURE_TYPES[f.type];
       if (type.seats > 0) {
-        // For multi-tile furniture, each seat is centered on the furniture
         for (let i = 0; i < type.seats; i++) {
           seats.push({ 
             x: f.x + Math.floor(type.width / 2), 
@@ -1199,12 +1910,13 @@ class Game {
     
     let feedback = '';
     
-    // 状態によってメッセージを変える
     if (customer.state === 'WALKING_STREET' || customer.state === 'ENTERING') {
       const messages = ['いい匂いがする！', 'ラーメン食べたい！', 'ここが評判の店か'];
       feedback = messages[Math.floor(Math.random() * messages.length)];
+    } else if (customer.state === 'WAITING_FOOD') {
+      const messages = ['まだかな…', 'いい匂いがしてきた！', '楽しみ♪'];
+      feedback = messages[Math.floor(Math.random() * messages.length)];
     } else if (customer.state === 'SITTING' || customer.state === 'EATING') {
-      // 品質に応じた感想
       const quality = this.calculateQuality();
       
       if (quality >= 0.8) {
@@ -1234,7 +1946,6 @@ class Game {
         feedback = negativeFeedback[Math.floor(Math.random() * negativeFeedback.length)];
       }
       
-      // 設備による追加コメント
       if (this.furniture.some(f => f.type === 'noodleMachine')) {
         if (Math.random() < 0.3) feedback += '\n（麺がいい感じ！）';
       }
@@ -1319,28 +2030,46 @@ class Game {
         const categories = {
           seats: '座席',
           kitchen: '厨房',
-          other: 'その他'
+          other: 'その他',
+          staff: '店員'
         };
         
         const subTabsHtml = Object.keys(categories).map(cat => 
           `<div class="sub-tab ${this.currentSubTab === cat ? 'active' : ''}" onclick="game.setSubTab('${cat}')">${categories[cat]}</div>`
         ).join('');
         
-        const furnitureOptions = Object.keys(FURNITURE_TYPES)
-          .filter(key => FURNITURE_TYPES[key].category === this.currentSubTab)
-          .map(key => {
-            const f = FURNITURE_TYPES[key];
-            const canUse = !f.essential; // Essential items are pre-placed
+        let itemsHtml = '';
+        
+        if (this.currentSubTab === 'staff') {
+          // Staff items
+          itemsHtml = Object.keys(STAFF_TYPES).map(key => {
+            const s = STAFF_TYPES[key];
             return `
-              <div class="furniture-item ${!canUse ? 'disabled' : ''} ${this.selectedFurniture === key ? 'selected' : ''}"
-                   onclick="${canUse ? `game.selectFurniture('${key}')` : ''}">
-                <div style="font-size: 24px;">${f.icon}</div>
-                <div>${f.name}</div>
-                <div style="font-size: 11px; color: #666;">${f.cost}円</div>
-                ${f.essential ? '<div style="font-size: 10px; color: #999;">(初期配置済み)</div>' : ''}
+              <div class="furniture-item ${this.selectedStaff === key ? 'selected' : ''}"
+                   onclick="game.selectStaffType('${key}')">
+                <div style="font-size: 24px;">${s.icon}</div>
+                <div>${s.name}</div>
+                <div style="font-size: 11px; color: #666;">${s.cost}円</div>
               </div>
             `;
           }).join('');
+        } else {
+          itemsHtml = Object.keys(FURNITURE_TYPES)
+            .filter(key => FURNITURE_TYPES[key].category === this.currentSubTab)
+            .map(key => {
+              const f = FURNITURE_TYPES[key];
+              const canUse = !f.essential;
+              return `
+                <div class="furniture-item ${!canUse ? 'disabled' : ''} ${this.selectedFurniture === key ? 'selected' : ''}"
+                     onclick="${canUse ? `game.selectFurniture('${key}')` : ''}">
+                  <div style="font-size: 24px;">${f.icon}</div>
+                  <div>${f.name}</div>
+                  <div style="font-size: 11px; color: #666;">${f.cost}円</div>
+                  ${f.essential ? '<div style="font-size: 10px; color: #999;">(初期配置済み)</div>' : ''}
+                </div>
+              `;
+            }).join('');
+        }
         
         content.innerHTML = `
           <div class="info-section">
@@ -1348,11 +2077,11 @@ class Game {
               ${this.removalMode ? '✓ 撤去モード' : '撤去モード'}
             </button>
             <div style="font-size: 11px; color: #666; margin-top: 4px;">
-              ${this.removalMode ? 'タップして家具を撤去（50%返金）' : '家具を選んで配置'}
+              ${this.removalMode ? 'タップして家具/店員を撤去（50%返金）' : this.currentSubTab === 'staff' ? '店員を選んで配置' : '家具を選んで配置'}
             </div>
           </div>
           <div class="sub-tabs">${subTabsHtml}</div>
-          <div class="furniture-list">${furnitureOptions}</div>
+          <div class="furniture-list">${itemsHtml}</div>
         `;
         break;
         
@@ -1405,12 +2134,21 @@ class Game {
         break;
         
       case 'info':
+        const staffInfo = this.staff.length > 0 
+          ? this.staff.map(s => `<div>${STAFF_TYPES[s.type].icon} ${STAFF_TYPES[s.type].name} (${s.homeX},${s.homeY})</div>`).join('')
+          : '<div style="color: #999;">まだ雇っていません</div>';
+        
         content.innerHTML = `
           <div class="info-section">
             <div class="info-title">統計</div>
             <div>総客数: ${this.stats.totalCustomers}人</div>
             <div>総売上: ${this.stats.totalRevenue}円</div>
             <div>満足客: ${this.stats.satisfiedCustomers}人</div>
+          </div>
+          
+          <div class="info-section">
+            <div class="info-title">店員</div>
+            ${staffInfo}
           </div>
           
           <div class="info-section">
@@ -1432,19 +2170,29 @@ class Game {
 
   setSubTab(tab) {
     this.currentSubTab = tab;
-    this.selectedFurniture = null; // Clear selection when switching tabs
+    this.selectedFurniture = null;
+    this.selectedStaff = null;
     this.renderTabContent();
   }
 
   selectFurniture(type) {
     this.selectedFurniture = type;
-    this.removalMode = false; // Turn off removal mode when selecting furniture
+    this.selectedStaff = null;
+    this.removalMode = false;
+    this.renderTabContent();
+  }
+
+  selectStaffType(type) {
+    this.selectedStaff = type;
+    this.selectedFurniture = null;
+    this.removalMode = false;
     this.renderTabContent();
   }
 
   toggleRemovalMode() {
     this.removalMode = !this.removalMode;
-    this.selectedFurniture = null; // Clear furniture selection in removal mode
+    this.selectedFurniture = null;
+    this.selectedStaff = null;
     this.renderTabContent();
   }
 
@@ -1471,7 +2219,6 @@ class Game {
     this.money -= research.cost;
     this.unlockedResearch.push(id);
     
-    // Add to available recipes if it's a soup or topping
     if (research.type === 'soup') {
       this.availableRecipes.push(research.name + 'ラーメン');
     }
@@ -1499,11 +2246,18 @@ class Game {
       reputation: this.reputation,
       researchPoints: this.researchPoints,
       furniture: this.furniture,
+      staff: this.staff.map(s => ({
+        id: s.id,
+        type: s.type,
+        homeX: s.homeX,
+        homeY: s.homeY
+      })),
       unlockedResearch: this.unlockedResearch,
       activeRecipes: this.activeRecipes,
       availableRecipes: this.availableRecipes,
       discoveredCombos: this.discoveredCombos,
-      stats: this.stats
+      stats: this.stats,
+      nextStaffId: this.nextStaffId
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -1523,9 +2277,36 @@ class Game {
     this.availableRecipes = save.availableRecipes;
     this.discoveredCombos = save.discoveredCombos;
     this.stats = save.stats;
+    this.nextStaffId = save.nextStaffId || 0;
+    
+    // Restore staff
+    this.staff = [];
+    if (save.staff && Array.isArray(save.staff)) {
+      save.staff.forEach(sd => {
+        const staffObj = {
+          id: sd.id,
+          type: sd.type,
+          homeX: sd.homeX,
+          homeY: sd.homeY,
+          x: sd.homeX * TILE_SIZE + TILE_SIZE / 2 - 16,
+          y: sd.homeY * TILE_SIZE + TILE_SIZE / 2 - 16,
+          state: 'IDLE',
+          path: [],
+          pathIndex: 0,
+          currentOrder: null,
+          workTimer: 0,
+          cookingStep: 0,
+          element: null,
+          carryingDish: false,
+          workBubble: null
+        };
+        this.staff.push(staffObj);
+      });
+    }
     
     document.getElementById('title-screen').style.display = 'none';
     this.renderFurniture();
+    this.renderStaff();
     this.updateUI();
     this.renderTabContent();
   }
@@ -1545,11 +2326,81 @@ class Game {
     
     document.getElementById('title-screen').style.display = 'none';
     this.renderFurniture();
-    this.checkCombos(); // Check for initial combos
+    this.checkCombos();
     this.updateUI();
     this.renderTabContent();
   }
 }
+
+// Fix onStaffArrived to handle server MOVING→sink transition
+const origOnStaffArrived = Game.prototype.onStaffArrived;
+Game.prototype.onStaffArrived = function(staff) {
+  if (staff.type === 'server' && staff.state === 'MOVING') {
+    if (staff._afterSinkArrival) {
+      // Arrived at sink for cleaning (redirected from serverGoToSink)
+      // This won't trigger because state is still MOVING from serverGoToSink
+    }
+    // Server arrived at dirty dish location
+    staff.state = 'COLLECTING';
+    staff.workTimer = 0;
+    this.showWorkBubble(staff, '🧹');
+    return;
+  }
+  
+  if (staff.type === 'server' && staff._afterSinkArrival) {
+    staff._afterSinkArrival = false;
+    staff.state = 'CLEANING';
+    staff.workTimer = 0;
+    this.showWorkBubble(staff, '🚰');
+    return;
+  }
+  
+  if (staff.state === 'MOVING') {
+    if (staff.type === 'cook') {
+      staff.state = 'WORKING';
+      staff.workTimer = 0;
+      const recipe = staff.currentRecipe;
+      if (recipe && staff.cookingStep < recipe.length) {
+        const equipType = recipe[staff.cookingStep];
+        const ft = FURNITURE_TYPES[equipType];
+        if (ft) this.showWorkBubble(staff, ft.icon);
+      }
+    }
+  } else if (staff.state === 'DELIVERING') {
+    if (staff.currentOrder) {
+      staff.currentOrder.foodDelivered = true;
+      staff.currentOrder = null;
+    }
+    this.staffGoHome(staff);
+  } else if (staff.state === 'RETURNING') {
+    staff.state = 'IDLE';
+    const homePixel = this.gridToPixel(staff.homeX, staff.homeY);
+    staff.x = homePixel.x;
+    staff.y = homePixel.y;
+    if (staff.element) {
+      staff.element.style.left = staff.x + 'px';
+      staff.element.style.top = staff.y + 'px';
+    }
+  }
+};
+
+// Also fix serverGoToSink to properly set state to MOVING (for sink arrival)
+const origServerGoToSink = Game.prototype.serverGoToSink;
+Game.prototype.serverGoToSink = function(staff) {
+  const sink = this.furniture.find(f => f.type === 'dishwashingSink');
+  if (!sink) {
+    staff.carryingDish = false;
+    this.staffGoHome(staff);
+    return;
+  }
+  
+  const curGrid = this.pixelToGrid(staff.x, staff.y);
+  const path = this.findPath(curGrid.x, curGrid.y, sink.x, sink.y, true);
+  staff.path = path;
+  staff.pathIndex = 0;
+  staff.state = 'MOVING';
+  staff._afterSinkArrival = true;
+};
 
 const game = new Game();
 game.init();
