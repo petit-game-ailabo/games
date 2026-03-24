@@ -977,6 +977,7 @@ class Game {
   spawnPedestrian() {
     const attractRate = 0.1 + (this.reputation / 1000);
     
+    const customerTypeData = this.getCustomerType();
     const customer = {
       id: 'c' + this.nextCustomerId++,
       state: 'WALKING_STREET',
@@ -985,7 +986,8 @@ class Game {
       targetX: 460,
       targetY: 280 + 20,
       speed: 40 + Math.random() * 20,
-      type: this.getCustomerType(),
+      type: customerTypeData.type,
+      preferences: customerTypeData.preferences,
       moveTimer: 0,
       eatTimer: 0,
       attracted: Math.random() < attractRate,
@@ -1007,9 +1009,37 @@ class Game {
     
     for (let i = 0; i < types.length; i++) {
       random -= weights[i];
-      if (random <= 0) return types[i];
+      if (random <= 0) {
+        return {
+          type: types[i],
+          preferences: this.generateCustomerPreferences(types[i])
+        };
+      }
     }
-    return types[0];
+    return {
+      type: types[0],
+      preferences: this.generateCustomerPreferences(types[0])
+    };
+  }
+  
+  generateCustomerPreferences(type) {
+    // Generate taste preferences for each customer type
+    const basePreferences = {
+      regular: { koku: 0.3, kire: 0.2, kaori: 0.2, kosa: 0.3 },
+      student: { koku: 0.4, kire: 0.1, kaori: 0.1, kosa: 0.4 }, // Heavy, rich
+      businessman: { koku: 0.2, kire: 0.4, kaori: 0.3, kosa: 0.1 }, // Light, clean
+      foodie: { koku: 0.25, kire: 0.25, kaori: 0.35, kaori: 0.15 } // Balanced, aroma focus
+    };
+    
+    const base = basePreferences[type] || basePreferences.regular;
+    
+    // Add slight randomization (±20%)
+    return {
+      koku: Math.max(0, base.koku + (Math.random() - 0.5) * 0.4),
+      kire: Math.max(0, base.kire + (Math.random() - 0.5) * 0.4),
+      kaori: Math.max(0, base.kaori + (Math.random() - 0.5) * 0.4),
+      kosa: Math.max(0, base.kosa + (Math.random() - 0.5) * 0.4)
+    };
   }
 
   createCustomerElement(customer) {
@@ -1110,17 +1140,29 @@ class Game {
       case 'EATING':
         customer.eatTimer += deltaTime;
         if (customer.eatTimer >= 2) {
-          const quality = this.calculateQuality();
+          const quality = this.calculateQualityForCustomer(customer);
           customer.satisfied = quality > 0.5;
-          customer.faceElement.textContent = customer.satisfied ? '😋' : '😐';
+          
+          // Set face based on satisfaction level
+          if (quality > 0.8) {
+            customer.faceElement.textContent = '😋'; // Very satisfied
+          } else if (quality > 0.5) {
+            customer.faceElement.textContent = '😊'; // Satisfied
+          } else if (quality > 0.3) {
+            customer.faceElement.textContent = '😐'; // Neutral
+          } else {
+            customer.faceElement.textContent = '😞'; // Dissatisfied
+          }
           
           const basePrice = 800;
-          const tipMultiplier = customer.satisfied ? 1.2 : 0.9;
+          const tipMultiplier = 0.7 + (quality * 0.6); // 0.7x to 1.3x based on quality
           customer.paid = Math.floor(basePrice * tipMultiplier);
           this.money += customer.paid;
           
           if (customer.satisfied) {
             this.reputation = Math.min(100, this.reputation + 1);
+          } else {
+            this.reputation = Math.max(0, this.reputation - 1);
           }
           
           customer.state = 'LEAVING';
@@ -1227,6 +1269,38 @@ class Game {
     }
     
     return Math.min(1, quality);
+  }
+  
+  calculateQualityForCustomer(customer) {
+    // Start with base quality from furniture/combos
+    let baseQuality = this.calculateQuality();
+    
+    // Get soup parameters
+    const soupParams = this.calculateSoupParams(this.currentSoupRecipe.ingredients);
+    
+    // Normalize soup params (0-1 scale, assuming max value ~200 per param)
+    const normalizedSoup = {
+      koku: Math.min(1, soupParams.koku / 100),
+      kire: Math.min(1, soupParams.kire / 100),
+      kaori: Math.min(1, soupParams.kaori / 100),
+      kosa: Math.min(1, soupParams.kosa / 100)
+    };
+    
+    // Calculate match score (how well soup matches customer preferences)
+    // Using dot product of preference vector and soup vector
+    const matchScore = 
+      (customer.preferences.koku * normalizedSoup.koku) +
+      (customer.preferences.kire * normalizedSoup.kire) +
+      (customer.preferences.kaori * normalizedSoup.kaori) +
+      (customer.preferences.kosa * normalizedSoup.kosa);
+    
+    // Normalize match score (max possible is ~1.0 if perfectly aligned)
+    const normalizedMatch = Math.min(1, matchScore);
+    
+    // Combine base quality (60%) with taste match (40%)
+    const finalQuality = (baseQuality * 0.6) + (normalizedMatch * 0.4);
+    
+    return Math.min(1, finalQuality);
   }
 
   showBubble(customer, text) {
