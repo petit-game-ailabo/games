@@ -1,915 +1,1323 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>ラーメン屋台 🍜</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-    body {
-      font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
-      background: #fdf6e3;
-      color: #333;
-      max-width: 460px;
-      margin: 0 auto;
-      overflow-x: hidden;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    #app {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .top-bar {
-      background: linear-gradient(135deg, #8b6914 0%, #6b5210 100%);
-      color: #fdf6e3;
-      padding: 12px 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    }
-    .top-bar-item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .main-content {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-    }
-    .night-mode {
-      background: linear-gradient(135deg, #2c1810 0%, #1a0f08 100%);
-      color: #ffd89b;
-    }
-    .night-mode .top-bar {
-      background: linear-gradient(135deg, #1a0f08 0%, #0d0604 100%);
-    }
-    button {
-      background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      padding: 14px 24px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(255,94,98,0.3);
-      transition: transform 0.1s, box-shadow 0.1s;
-      width: 100%;
-      margin: 8px 0;
-    }
-    button:active {
-      transform: scale(0.97);
-      box-shadow: 0 2px 8px rgba(255,94,98,0.2);
-    }
-    button.secondary {
-      background: linear-gradient(135deg, #b8860b 0%, #8b6914 100%);
-      box-shadow: 0 4px 12px rgba(184,134,11,0.3);
-    }
-    button:disabled {
-      background: #ccc;
-      color: #666;
-      box-shadow: none;
-      cursor: not-allowed;
-    }
-    .title-screen {
-      text-align: center;
-      padding: 40px 20px;
-    }
-    .title-screen h1 {
-      font-size: 36px;
-      margin: 20px 0;
-      color: #8b6914;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-    }
-    .title-screen .ramen-icon {
-      font-size: 80px;
-      animation: bounce 2s infinite;
-    }
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
-    }
-    .recipe-builder {
-      background: white;
-      border-radius: 16px;
-      padding: 16px;
-      margin: 12px 0;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-    }
-    .recipe-builder h3 {
-      color: #8b6914;
-      margin-bottom: 12px;
-    }
-    .ingredient-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin: 12px 0;
-    }
-    .ingredient-btn {
-      background: white;
-      border: 2px solid #ddd;
-      border-radius: 8px;
-      padding: 12px 8px;
-      font-size: 20px;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-    }
-    .ingredient-btn span {
-      font-size: 11px;
-      color: #666;
-    }
-    .ingredient-btn.selected {
-      background: #fff3cd;
-      border-color: #ff9966;
-      box-shadow: 0 0 0 2px #ff9966;
-    }
-    .ingredient-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-    .recipe-list {
-      margin-top: 16px;
-    }
-    .recipe-item {
-      background: #f8f8f8;
-      border-radius: 12px;
-      padding: 12px;
-      margin: 8px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border: 2px solid transparent;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .recipe-item:hover {
-      background: #fff3cd;
-      border-color: #ff9966;
-    }
-    .recipe-item.active {
-      background: #fff3cd;
-      border-color: #ff5e62;
-      box-shadow: 0 0 0 2px #ff5e62;
-    }
-    .customer {
-      background: white;
-      border-radius: 12px;
-      padding: 16px;
-      margin: 12px 0;
-      animation: slideIn 0.5s ease-out;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    @keyframes slideIn {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-    .customer-emoji {
-      font-size: 48px;
-    }
-    .customer-info {
-      flex: 1;
-    }
-    .speech-bubble {
-      background: #f0f0f0;
-      border-radius: 12px;
-      padding: 8px 12px;
-      margin: 8px 0;
-      position: relative;
-      font-size: 14px;
-    }
-    .summary-card {
-      background: white;
-      border-radius: 16px;
-      padding: 20px;
-      margin: 16px 0;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-      text-align: center;
-    }
-    .summary-card h2 {
-      color: #8b6914;
-      margin-bottom: 16px;
-    }
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid #eee;
-    }
-    .stat-row:last-child {
-      border-bottom: none;
-    }
-    .shop-grid {
-      display: grid;
-      gap: 12px;
-      margin: 16px 0;
-    }
-    .shop-item {
-      background: white;
-      border-radius: 12px;
-      padding: 16px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .shop-item.owned {
-      background: #e8f5e9;
-    }
-    .price-slider {
-      width: 100%;
-      margin: 16px 0;
-    }
-    .price-display {
-      text-align: center;
-      font-size: 24px;
-      font-weight: bold;
-      color: #ff5e62;
-      margin: 8px 0;
-    }
-    .lantern {
-      font-size: 32px;
-      animation: glow 2s infinite alternate;
-    }
-    @keyframes glow {
-      from { opacity: 0.7; }
-      to { opacity: 1; }
-    }
-    .coin-animation {
-      position: fixed;
-      font-size: 24px;
-      animation: coinFly 1s ease-out forwards;
-      pointer-events: none;
-      z-index: 1000;
-    }
-    @keyframes coinFly {
-      0% { transform: translate(0, 0) scale(1); opacity: 1; }
-      100% { transform: translate(0, -100px) scale(1.5); opacity: 0; }
-    }
-    .serving-area {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .stall-center {
-      text-align: center;
-      font-size: 64px;
-      padding: 20px;
-      background: linear-gradient(135deg, #fff3cd 0%, #ffe4a3 100%);
-      border-radius: 16px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-    }
-    .served-count {
-      text-align: center;
-      font-size: 18px;
-      color: #8b6914;
-      font-weight: bold;
-      padding: 12px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    input[type="range"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 100%;
-      height: 8px;
-      border-radius: 4px;
-      background: #ddd;
-      outline: none;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: #ff5e62;
-      cursor: pointer;
-    }
-    input[type="range"]::-moz-range-thumb {
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: #ff5e62;
-      cursor: pointer;
-      border: none;
-    }
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: #999;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ラーメン屋台物語</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: 'Arial', 'Hiragino Sans', sans-serif;
+  background: #2a2a2a;
+  color: #333;
+  overflow-x: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  max-width: 460px;
+  margin: 0 auto;
+  background: #f5f0e8;
+  min-height: 100vh;
+}
+
+/* Status Bar */
+#status-bar {
+  background: linear-gradient(135deg, #8b4513, #654321);
+  color: white;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 13px;
+  border-bottom: 3px solid #3a2817;
+}
+
+.status-item {
+  background: rgba(0,0,0,0.2);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+/* Shop View */
+#shop-view {
+  position: relative;
+  width: 100%;
+  height: 340px;
+  background: #f5f0e8;
+  border: 4px solid #654321;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+#shop-interior {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 280px;
+  background: linear-gradient(135deg, #e8dcc8 0%, #f0e6d2 100%);
+  border-bottom: 2px solid #8b7355;
+}
+
+#shop-street {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background: linear-gradient(to bottom, #555 0%, #666 50%, #555 100%);
+  border-top: 2px solid #777;
+}
+
+.street-line {
+  position: absolute;
+  bottom: 30px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    #fff 0px,
+    #fff 20px,
+    transparent 20px,
+    transparent 40px
+  );
+}
+
+/* Grid overlay */
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 280px;
+  pointer-events: none;
+  display: none;
+}
+
+.grid-overlay.active {
+  display: block;
+  pointer-events: all;
+}
+
+.grid-cell {
+  position: absolute;
+  border: 1px solid rgba(139, 115, 85, 0.3);
+  cursor: pointer;
+}
+
+.grid-cell:hover {
+  background: rgba(139, 115, 85, 0.2);
+}
+
+/* Furniture */
+.furniture {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: opacity 0.2s;
+}
+
+.furniture.counter {
+  background: #8b4513;
+  border: 2px solid #654321;
+  border-radius: 4px;
+}
+
+.furniture.table {
+  background: #a0826d;
+  border: 2px solid #654321;
+  border-radius: 4px;
+}
+
+.furniture.noodle-machine {
+  background: #c0c0c0;
+  border: 2px solid #888;
+  border-radius: 4px;
+}
+
+.furniture.soup-pot {
+  background: #2f2f2f;
+  border: 2px solid #000;
+  border-radius: 4px;
+}
+
+.furniture.fridge {
+  background: #e8e8e8;
+  border: 2px solid #aaa;
+  border-radius: 4px;
+}
+
+.furniture.sign {
+  background: #d32f2f;
+  border: 2px solid #b71c1c;
+  border-radius: 4px;
+}
+
+.furniture.plant {
+  background: #4caf50;
+  border: 2px solid #2e7d32;
+  border-radius: 4px;
+}
+
+/* Customer */
+.customer {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  transition: left 0.5s linear, top 0.5s linear;
+  z-index: 10;
+}
+
+.customer-body {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.3);
+  margin: 2px;
+}
+
+.customer-face {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.customer-bubble {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 2px 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Tabs */
+#tabs {
+  display: flex;
+  background: #654321;
+  border-top: 3px solid #3a2817;
+  overflow-x: auto;
+}
+
+.tab {
+  flex: 1;
+  padding: 12px 8px;
+  background: #8b4513;
+  border: none;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  border-right: 1px solid #654321;
+  font-weight: bold;
+}
+
+.tab.active {
+  background: #654321;
+  border-bottom: 3px solid #d4af37;
+}
+
+/* Tab content */
+#tab-content {
+  padding: 12px;
+  min-height: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Buttons */
+button {
+  padding: 10px 16px;
+  margin: 4px;
+  border: 2px solid #654321;
+  background: #d4af37;
+  color: #333;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+button:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+button:disabled {
+  background: #999;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* Modal */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.7);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.active {
+  display: flex;
+}
+
+.modal-content {
+  background: #f5f0e8;
+  padding: 20px;
+  border-radius: 12px;
+  max-width: 90%;
+  max-height: 80%;
+  overflow-y: auto;
+  border: 4px solid #654321;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 16px;
+  color: #654321;
+  text-align: center;
+}
+
+/* Furniture list */
+.furniture-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.furniture-item {
+  background: white;
+  padding: 10px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 12px;
+}
+
+.furniture-item.selected {
+  border-color: #d4af37;
+  background: #fff9e6;
+}
+
+.furniture-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Research items */
+.research-list {
+  display: grid;
+  gap: 8px;
+}
+
+.research-item {
+  background: white;
+  padding: 12px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.research-item.unlocked {
+  background: #e8f5e9;
+  border-color: #4caf50;
+}
+
+/* Recipe list */
+.recipe-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recipe-item {
+  background: white;
+  padding: 12px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+}
+
+.recipe-item.active {
+  border-color: #d4af37;
+  background: #fff9e6;
+}
+
+/* Info section */
+.info-section {
+  background: white;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  border: 2px solid #ccc;
+}
+
+.info-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #654321;
+}
+
+/* Notification */
+#notification {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 16px 24px;
+  border: 3px solid #d4af37;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+  z-index: 2000;
+  display: none;
+  text-align: center;
+}
+
+#notification.active {
+  display: block;
+  animation: popIn 0.3s ease-out;
+}
+
+@keyframes popIn {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* Title screen */
+#title-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #8b4513, #654321);
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+#title-screen h1 {
+  font-size: 32px;
+  margin-bottom: 40px;
+  text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
+}
+
+#title-screen button {
+  margin: 10px;
+  min-width: 200px;
+}
+</style>
 </head>
 <body>
-  <div id="app"></div>
-  <script>
-    // Game State
-    const BASES = {
-      soy: { name: '醤油', emoji: '🟤', score: 10, price: 0 },
-      miso: { name: '味噌', emoji: '🟠', score: 12, price: 3000 },
-      salt: { name: '塩', emoji: '⚪', score: 8, price: 2000 },
-      tonkotsu: { name: '豚骨', emoji: '🦴', score: 15, price: 5000 }
+
+<div id="title-screen">
+  <h1>🍜 ラーメン屋台物語</h1>
+  <button onclick="game.startNew()">はじめから</button>
+  <button onclick="game.loadGame()" id="continue-btn">つづきから</button>
+</div>
+
+<div id="app">
+  <div id="status-bar">
+    <div class="status-item">Day <span id="day">1</span></div>
+    <div class="status-item">💰 <span id="money">5000</span>円</div>
+    <div class="status-item">⭐ <span id="reputation">0</span></div>
+    <div class="status-item">🔬 <span id="research">0</span>pt</div>
+  </div>
+
+  <div id="shop-view">
+    <div id="shop-interior"></div>
+    <div id="shop-street">
+      <div class="street-line"></div>
+    </div>
+    <div class="grid-overlay" id="grid-overlay"></div>
+  </div>
+
+  <div id="tabs">
+    <button class="tab active" data-tab="operations">営業</button>
+    <button class="tab" data-tab="layout">配置</button>
+    <button class="tab" data-tab="menu">メニュー</button>
+    <button class="tab" data-tab="research">研究</button>
+    <button class="tab" data-tab="info">情報</button>
+  </div>
+
+  <div id="tab-content"></div>
+</div>
+
+<div id="notification"></div>
+
+<div class="modal" id="day-summary-modal">
+  <div class="modal-content">
+    <div class="modal-title">本日の営業終了</div>
+    <div id="summary-content"></div>
+    <button onclick="game.nextDay()">次の日へ</button>
+  </div>
+</div>
+
+<script>
+const GRID_WIDTH = 8;
+const GRID_HEIGHT = 6;
+const TILE_SIZE = 40;
+const STREET_ROW = 5;
+
+const FURNITURE_TYPES = {
+  counter: { name: 'カウンター席', icon: '🪑', cost: 200, seats: 1, width: 1, height: 1 },
+  table: { name: 'テーブル席', icon: '🪑🪑', cost: 500, seats: 2, width: 2, height: 1 },
+  noodleMachine: { name: '製麺機', icon: '🍜', cost: 1000, seats: 0, width: 1, height: 1, research: '製麺機' },
+  soupPot: { name: 'スープ釜', icon: '🍲', cost: 800, seats: 0, width: 1, height: 1, research: 'スープ釜' },
+  fridge: { name: '冷蔵庫', icon: '❄️', cost: 600, seats: 0, width: 1, height: 1, research: '冷蔵庫' },
+  sign: { name: '看板', icon: '📋', cost: 300, seats: 0, width: 1, height: 1, research: '看板' },
+  plant: { name: '観葉植物', icon: '🌿', cost: 200, seats: 0, width: 1, height: 1, research: '観葉植物' }
+};
+
+const RESEARCH_TREE = [
+  { id: '味噌スープ', name: '味噌スープ', cost: 10, tier: 1, type: 'soup' },
+  { id: 'メンマ', name: 'メンマ', cost: 10, tier: 1, type: 'topping' },
+  { id: '看板', name: '看板', cost: 10, tier: 1, type: 'furniture' },
+  { id: '塩スープ', name: '塩スープ', cost: 25, tier: 2, type: 'soup' },
+  { id: 'チャーシュー', name: 'チャーシュー', cost: 25, tier: 2, type: 'topping' },
+  { id: 'テーブル席', name: 'テーブル席', cost: 25, tier: 2, type: 'furniture' },
+  { id: '観葉植物', name: '観葉植物', cost: 25, tier: 2, type: 'furniture' },
+  { id: '豚骨スープ', name: '豚骨スープ', cost: 50, tier: 3, type: 'soup' },
+  { id: '味玉', name: '味玉', cost: 50, tier: 3, type: 'topping' },
+  { id: '製麺機', name: '製麺機', cost: 50, tier: 3, type: 'furniture' },
+  { id: 'バター', name: 'バター', cost: 100, tier: 4, type: 'topping' },
+  { id: 'コーン', name: 'コーン', cost: 100, tier: 4, type: 'topping' },
+  { id: 'スープ釜', name: 'スープ釜', cost: 100, tier: 4, type: 'furniture' },
+  { id: '冷蔵庫', name: '冷蔵庫', cost: 100, tier: 4, type: 'furniture' }
+];
+
+const COMBOS = [
+  { items: ['noodleMachine', 'soupPot'], name: 'こだわり麺', bonus: 0.15 },
+  { items: ['counter', 'noodleMachine'], name: 'ライブ感', bonus: 0.10 },
+  { items: ['table', 'plant'], name: '癒し空間', bonus: 0.10 },
+  { items: ['sign', 'entrance'], name: '目立つ店', bonus: 0.20 },
+  { items: ['fridge', 'noodleMachine'], name: '鮮度抜群', bonus: 0.10 }
+];
+
+class Game {
+  constructor() {
+    this.day = 1;
+    this.money = 5000;
+    this.reputation = 0;
+    this.researchPoints = 0;
+    this.furniture = [];
+    this.customers = [];
+    this.unlockedResearch = [];
+    this.activeRecipes = ['醤油ラーメン'];
+    this.availableRecipes = ['醤油ラーメン'];
+    this.discoveredCombos = [];
+    this.stats = {
+      totalCustomers: 0,
+      totalRevenue: 0,
+      satisfiedCustomers: 0
     };
+    this.dayActive = false;
+    this.dayTime = 0;
+    this.speedMultiplier = 1;
+    this.currentTab = 'operations';
+    this.lastTimestamp = 0;
+    this.nextCustomerId = 0;
+    this.pedestrianTimer = 0;
+    this.selectedFurniture = null;
+  }
 
-    const TOPPINGS = {
-      chashu: { name: 'チャーシュー', emoji: '🥩', score: 8, price: 1000 },
-      egg: { name: '味玉', emoji: '🥚', score: 6, price: 800 },
-      menma: { name: 'メンマ', emoji: '🎋', score: 4, price: 0 },
-      negi: { name: 'ネギ', emoji: '🌿', score: 3, price: 0 },
-      nori: { name: 'のり', emoji: '🟩', score: 3, price: 0 },
-      moyashi: { name: 'もやし', emoji: '🌱', score: 2, price: 500 },
-      corn: { name: 'コーン', emoji: '🌽', score: 5, price: 600 },
-      butter: { name: 'バター', emoji: '🧈', score: 7, price: 1500 }
-    };
+  init() {
+    this.createGrid();
+    this.renderTabs();
+    this.updateUI();
+    this.startGameLoop();
+    
+    // Add starting furniture
+    this.furniture.push({
+      type: 'counter',
+      x: 3,
+      y: 2,
+      id: 'f0'
+    });
+    this.renderFurniture();
+    
+    // Check for saved game
+    const saved = localStorage.getItem('ramenStandSave');
+    document.getElementById('continue-btn').disabled = !saved;
+  }
 
-    const SYNERGIES = [
-      { combo: ['miso', 'butter'], bonus: 10 },
-      { combo: ['miso', 'corn'], bonus: 8 },
-      { combo: ['tonkotsu', 'chashu'], bonus: 10 },
-      { combo: ['tonkotsu', 'egg'], bonus: 8 },
-      { combo: ['salt', 'negi'], bonus: 6 },
-      { combo: ['soy', 'menma'], bonus: 6 },
-      { combo: ['soy', 'nori'], bonus: 5 }
-    ];
-
-    const CUSTOMER_TYPES = [
-      { name: 'サラリーマン', emoji: '👨‍💼', budget: 800, pref: null, tip: 0.1 },
-      { name: '学生', emoji: '👩‍🎓', budget: 500, pref: null, tip: 0 },
-      { name: 'グルメ', emoji: '👨‍🍳', budget: 1500, pref: 'specific', tip: 0.3 },
-      { name: '常連', emoji: '👴', budget: 1000, pref: 'loyal', tip: 0.5 }
-    ];
-
-    let gameState = {
-      day: 1,
-      money: 5000,
-      reputation: 0,
-      unlockedBases: ['soy'],
-      unlockedToppings: ['negi', 'menma', 'nori'],
-      savedRecipes: [],
-      currentRecipe: { base: null, toppings: [] },
-      phase: 'title', // title, morning, serving, summary, night
-      todayMenu: [],
-      todayPrice: 500,
-      todayCustomers: [],
-      todayStats: { served: 0, sales: 0, tips: 0, repChange: 0 }
-    };
-
-    function saveGame() {
-      localStorage.setItem('ramenStand', JSON.stringify(gameState));
-    }
-
-    function loadGame() {
-      const saved = localStorage.getItem('ramenStand');
-      if (saved) {
-        gameState = JSON.parse(saved);
-      }
-    }
-
-    function resetGame() {
-      localStorage.removeItem('ramenStand');
-      location.reload();
-    }
-
-    function calculateTaste(recipe) {
-      if (!recipe.base) return 0;
-      let score = BASES[recipe.base].score;
-      recipe.toppings.forEach(t => {
-        score += TOPPINGS[t].score;
-      });
-      // Check synergies
-      const ingredients = [recipe.base, ...recipe.toppings];
-      SYNERGIES.forEach(syn => {
-        if (syn.combo.every(ing => ingredients.includes(ing))) {
-          score += syn.bonus;
-        }
-      });
-      return score;
-    }
-
-    function getRecipeName(recipe) {
-      if (!recipe.base) return '未設定';
-      const baseName = BASES[recipe.base].name;
-      const toppingNames = recipe.toppings.map(t => TOPPINGS[t].name).join('');
-      return `${baseName}${toppingNames}ラーメン`;
-    }
-
-    function generateCustomers() {
-      const baseCount = 5;
-      const repBonus = Math.floor(gameState.reputation / 10);
-      const count = Math.min(20, baseCount + repBonus);
-      const customers = [];
-      
-      for (let i = 0; i < count; i++) {
-        let typeIndex = 0;
-        if (gameState.reputation >= 75) {
-          typeIndex = Math.floor(Math.random() * 4);
-        } else if (gameState.reputation >= 50) {
-          typeIndex = Math.floor(Math.random() * 3);
-        } else if (gameState.reputation >= 10) {
-          typeIndex = Math.floor(Math.random() * 2);
+  createGrid() {
+    const overlay = document.getElementById('grid-overlay');
+    overlay.innerHTML = '';
+    
+    for (let y = 0; y < GRID_HEIGHT - 1; y++) {
+      for (let x = 0; x < GRID_WIDTH; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'grid-cell';
+        cell.style.left = x * TILE_SIZE + 'px';
+        cell.style.top = y * TILE_SIZE + 'px';
+        cell.style.width = TILE_SIZE + 'px';
+        cell.style.height = TILE_SIZE + 'px';
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+        
+        if (y === GRID_HEIGHT - 2) {
+          cell.style.background = 'rgba(100, 100, 200, 0.2)'; // Entrance area
         }
         
-        const type = CUSTOMER_TYPES[typeIndex];
-        const bases = gameState.unlockedBases.length > 0 ? gameState.unlockedBases : Object.keys(BASES);
-        const prefBase = bases[Math.floor(Math.random() * bases.length)];
-        
-        customers.push({
-          type: type.name,
-          emoji: type.emoji,
-          budget: type.budget,
-          preferredBase: prefBase,
-          tipRate: type.tip,
-          served: false
-        });
+        cell.addEventListener('click', (e) => this.handleGridClick(x, y));
+        overlay.appendChild(cell);
       }
-      
-      return customers;
     }
+  }
 
-    function serveCustomer(customer) {
-      // Find matching recipe
-      let bestMatch = null;
-      let bestTaste = 0;
+  handleGridClick(x, y) {
+    if (!this.selectedFurniture) return;
+    
+    const furnitureType = FURNITURE_TYPES[this.selectedFurniture];
+    
+    // Check if can afford
+    if (this.money < furnitureType.cost) {
+      this.showNotification('お金が足りません！');
+      return;
+    }
+    
+    // Check if space is available
+    for (let dy = 0; dy < furnitureType.height; dy++) {
+      for (let dx = 0; dx < furnitureType.width; dx++) {
+        if (this.getFurnitureAt(x + dx, y + dy)) {
+          this.showNotification('ここには置けません！');
+          return;
+        }
+      }
+    }
+    
+    // Place furniture
+    this.money -= furnitureType.cost;
+    this.furniture.push({
+      type: this.selectedFurniture,
+      x: x,
+      y: y,
+      id: 'f' + Date.now()
+    });
+    
+    this.renderFurniture();
+    this.checkCombos();
+    this.updateUI();
+    this.renderTabContent();
+  }
+
+  getFurnitureAt(x, y) {
+    return this.furniture.find(f => {
+      const type = FURNITURE_TYPES[f.type];
+      return x >= f.x && x < f.x + type.width && y >= f.y && y < f.y + type.height;
+    });
+  }
+
+  renderFurniture() {
+    const interior = document.getElementById('shop-interior');
+    const existing = interior.querySelectorAll('.furniture');
+    existing.forEach(el => el.remove());
+    
+    this.furniture.forEach(f => {
+      const type = FURNITURE_TYPES[f.type];
+      const el = document.createElement('div');
+      el.className = 'furniture ' + f.type;
+      el.style.left = f.x * TILE_SIZE + 'px';
+      el.style.top = f.y * TILE_SIZE + 'px';
+      el.style.width = type.width * TILE_SIZE + 'px';
+      el.style.height = type.height * TILE_SIZE + 'px';
+      el.textContent = type.icon;
+      el.dataset.id = f.id;
       
-      gameState.todayMenu.forEach(recipe => {
-        if (recipe.base === customer.preferredBase && gameState.todayPrice <= customer.budget) {
-          const taste = calculateTaste(recipe);
-          if (taste > bestTaste) {
-            bestTaste = taste;
-            bestMatch = recipe;
+      // Long press to delete
+      let pressTimer;
+      el.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        pressTimer = setTimeout(() => {
+          if (confirm(type.name + 'を撤去しますか？')) {
+            this.furniture = this.furniture.filter(item => item.id !== f.id);
+            this.renderFurniture();
+            this.updateUI();
           }
-        }
+        }, 800);
       });
+      el.addEventListener('touchend', () => clearTimeout(pressTimer));
+      el.addEventListener('mousedown', (e) => {
+        pressTimer = setTimeout(() => {
+          if (confirm(type.name + 'を撤去しますか？')) {
+            this.furniture = this.furniture.filter(item => item.id !== f.id);
+            this.renderFurniture();
+            this.updateUI();
+          }
+        }, 800);
+      });
+      el.addEventListener('mouseup', () => clearTimeout(pressTimer));
       
-      if (!bestMatch) {
-        // No exact base match - serve any recipe within budget
-        gameState.todayMenu.forEach(recipe => {
-          if (gameState.todayPrice <= customer.budget) {
-            const taste = calculateTaste(recipe);
-            if (taste > bestTaste) {
-              bestTaste = taste;
-              bestMatch = recipe;
+      interior.appendChild(el);
+    });
+  }
+
+  checkCombos() {
+    COMBOS.forEach(combo => {
+      if (this.discoveredCombos.includes(combo.name)) return;
+      
+      // Check adjacency
+      let found = false;
+      this.furniture.forEach(f1 => {
+        this.furniture.forEach(f2 => {
+          if (f1.id === f2.id) return;
+          if (combo.items.includes(f1.type) && combo.items.includes(f2.type)) {
+            const dx = Math.abs(f1.x - f2.x);
+            const dy = Math.abs(f1.y - f2.y);
+            if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+              found = true;
             }
           }
         });
-      }
+      });
       
-      if (!bestMatch && gameState.todayMenu.length > 0) {
-        // Still no match (too expensive) - serve anyway at reduced satisfaction
-        bestMatch = gameState.todayMenu[0];
-        bestTaste = calculateTaste(bestMatch) * 0.5;
+      if (found) {
+        this.discoveredCombos.push(combo.name);
+        this.showNotification('✨ コンボ発見！ ' + combo.name);
       }
-      
-      if (bestMatch) {
-        const basePrice = gameState.todayPrice;
-        const tip = Math.floor(basePrice * customer.tipRate * (bestTaste / 30));
-        const total = basePrice + tip;
-        
-        gameState.money += total;
-        gameState.todayStats.served++;
-        gameState.todayStats.sales += basePrice;
-        gameState.todayStats.tips += tip;
-        
-        // Reputation changes
-        const priceRatio = gameState.todayPrice / customer.budget;
-        let repChange = 1;
-        if (priceRatio < 0.7) repChange += 1; // Fair price
-        if (bestTaste > 30) repChange += 1; // Great taste
-        if (bestMatch.base === customer.preferredBase) repChange += 1; // Perfect match
-        
-        gameState.todayStats.repChange += repChange;
-        
-        customer.served = true;
-        customer.satisfied = true;
-        customer.payment = total;
-        
-        return true;
-      } else {
-        // Customer leaves
-        gameState.todayStats.repChange -= 1;
-        customer.served = true;
-        customer.satisfied = false;
-        return false;
-      }
-    }
+    });
+  }
 
-    function unlockItem(type, id) {
-      const item = type === 'base' ? BASES[id] : TOPPINGS[id];
-      if (gameState.money >= item.price) {
-        gameState.money -= item.price;
-        if (type === 'base') {
-          gameState.unlockedBases.push(id);
-        } else {
-          gameState.unlockedToppings.push(id);
+  startDay() {
+    this.dayActive = true;
+    this.dayTime = 0;
+    this.customers = [];
+    this.pedestrianTimer = 0;
+    this.renderTabContent();
+  }
+
+  endDay() {
+    this.dayActive = false;
+    this.showDaySummary();
+    this.saveGame();
+  }
+
+  showDaySummary() {
+    const todayRevenue = this.customers.reduce((sum, c) => sum + (c.paid || 0), 0);
+    const todayCustomers = this.customers.filter(c => c.state === 'EXITED').length;
+    const todaySatisfied = this.customers.filter(c => c.satisfied).length;
+    
+    this.stats.totalCustomers += todayCustomers;
+    this.stats.totalRevenue += todayRevenue;
+    this.stats.satisfiedCustomers += todaySatisfied;
+    
+    const content = document.getElementById('summary-content');
+    content.innerHTML = `
+      <div class="info-section">
+        <div>来客数: ${todayCustomers}人</div>
+        <div>売上: ${todayRevenue}円</div>
+        <div>満足度: ${todaySatisfied}/${todayCustomers}人</div>
+        <div>獲得研究pt: ${todayCustomers}pt</div>
+      </div>
+    `;
+    
+    this.researchPoints += todayCustomers;
+    
+    const modal = document.getElementById('day-summary-modal');
+    modal.classList.add('active');
+  }
+
+  nextDay() {
+    this.day++;
+    const modal = document.getElementById('day-summary-modal');
+    modal.classList.remove('active');
+    this.updateUI();
+    this.renderTabContent();
+  }
+
+  startGameLoop() {
+    const loop = (timestamp) => {
+      if (!this.lastTimestamp) this.lastTimestamp = timestamp;
+      const deltaTime = (timestamp - this.lastTimestamp) / 1000;
+      this.lastTimestamp = timestamp;
+      
+      if (this.dayActive) {
+        this.update(deltaTime);
+      }
+      
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  update(deltaTime) {
+    const scaledDelta = deltaTime * this.speedMultiplier;
+    this.dayTime += scaledDelta;
+    
+    // Day ends after 60 seconds at 1x
+    if (this.dayTime >= 60) {
+      this.endDay();
+      return;
+    }
+    
+    // Spawn pedestrians
+    this.pedestrianTimer += scaledDelta;
+    const spawnRate = this.getSpawnRate();
+    if (this.pedestrianTimer >= spawnRate) {
+      this.pedestrianTimer = 0;
+      this.spawnPedestrian();
+    }
+    
+    // Update customers
+    this.customers.forEach(c => this.updateCustomer(c, scaledDelta));
+    
+    // Remove exited customers
+    this.customers = this.customers.filter(c => c.state !== 'EXITED' || c.element);
+  }
+
+  getSpawnRate() {
+    // More frequent during lunch rush (middle of day)
+    const dayProgress = this.dayTime / 60;
+    let baseRate = 3;
+    
+    if (dayProgress > 0.4 && dayProgress < 0.6) {
+      baseRate = 1.5; // Lunch rush
+    }
+    
+    // Sign bonus
+    if (this.furniture.some(f => f.type === 'sign')) {
+      baseRate *= 0.8;
+    }
+    
+    return baseRate;
+  }
+
+  spawnPedestrian() {
+    const attractRate = 0.1 + (this.reputation / 1000);
+    
+    const customer = {
+      id: 'c' + this.nextCustomerId++,
+      state: 'WALKING_STREET',
+      x: -20,
+      y: 280 + 20,
+      targetX: 460,
+      targetY: 280 + 20,
+      speed: 40 + Math.random() * 20,
+      type: this.getCustomerType(),
+      moveTimer: 0,
+      eatTimer: 0,
+      attracted: Math.random() < attractRate,
+      element: null,
+      seat: null,
+      satisfied: false,
+      paid: 0
+    };
+    
+    this.customers.push(customer);
+    this.createCustomerElement(customer);
+  }
+
+  getCustomerType() {
+    const types = ['regular', 'student', 'businessman', 'foodie'];
+    const weights = [50, 20, 20, 10];
+    const total = weights.reduce((a, b) => a + b, 0);
+    let random = Math.random() * total;
+    
+    for (let i = 0; i < types.length; i++) {
+      random -= weights[i];
+      if (random <= 0) return types[i];
+    }
+    return types[0];
+  }
+
+  createCustomerElement(customer) {
+    const el = document.createElement('div');
+    el.className = 'customer';
+    el.style.left = customer.x + 'px';
+    el.style.top = customer.y + 'px';
+    
+    const body = document.createElement('div');
+    body.className = 'customer-body';
+    const colors = {
+      regular: '#6b9bd1',
+      student: '#4caf50',
+      businessman: '#1565c0',
+      foodie: '#d32f2f'
+    };
+    body.style.background = colors[customer.type];
+    
+    const face = document.createElement('div');
+    face.className = 'customer-face';
+    face.textContent = '😀';
+    
+    el.appendChild(body);
+    el.appendChild(face);
+    
+    customer.element = el;
+    customer.faceElement = face;
+    
+    document.getElementById('shop-view').appendChild(el);
+  }
+
+  updateCustomer(customer, deltaTime) {
+    if (!customer.element) return;
+    
+    customer.moveTimer += deltaTime;
+    
+    switch (customer.state) {
+      case 'WALKING_STREET':
+        this.moveToTarget(customer, deltaTime);
+        
+        // Check if attracted
+        if (customer.attracted && customer.x > 100 && customer.x < 200 && !customer.noticeShown) {
+          customer.noticeShown = true;
+          this.showBubble(customer, '!');
+          setTimeout(() => {
+            customer.state = 'ENTERING';
+            customer.targetX = 200;
+            customer.targetY = 240;
+          }, 500);
         }
-        saveGame();
-        render();
-      }
-    }
-
-    // Render functions
-    function render() {
-      const app = document.getElementById('app');
-      
-      if (gameState.phase === 'title') {
-        app.innerHTML = `
-          <div class="title-screen">
-            <div class="ramen-icon">🍜</div>
-            <h1>ラーメン屋台</h1>
-            <p>レシピを開発して評判の屋台を目指そう！</p>
-            <button onclick="startGame()">はじめる</button>
-            ${localStorage.getItem('ramenStand') ? '<button class="secondary" onclick="resetGame()">はじめから</button>' : ''}
-          </div>
-        `;
-      } else {
-        const isNight = gameState.phase === 'night';
-        app.innerHTML = `
-          <div class="top-bar">
-            <div class="top-bar-item">📅 ${gameState.day}日目</div>
-            <div class="top-bar-item">💰 ${gameState.money.toLocaleString()}円</div>
-            <div class="top-bar-item">⭐ ${gameState.reputation}/100</div>
-          </div>
-          <div class="main-content ${isNight ? 'night-mode' : ''}">
-            ${renderPhase()}
-          </div>
-        `;
-      }
-    }
-
-    function renderPhase() {
-      switch (gameState.phase) {
-        case 'morning':
-          return renderMorning();
-        case 'serving':
-          return renderServing();
-        case 'summary':
-          return renderSummary();
-        case 'night':
-          return renderNight();
-        default:
-          return '';
-      }
-    }
-
-    function renderMorning() {
-      return `
-        <h2 style="text-align:center; color:#8b6914; margin-bottom:20px;">🌅 朝の準備</h2>
         
-        <div class="recipe-builder">
-          <h3>レシピを作る</h3>
-          <div>
-            <h4 style="margin:12px 0 8px 0; color:#666;">スープ（1つ選択）</h4>
-            <div class="ingredient-grid">
-              ${Object.entries(BASES).map(([id, base]) => `
-                <button class="ingredient-btn ${gameState.currentRecipe.base === id ? 'selected' : ''}"
-                        ${!gameState.unlockedBases.includes(id) ? 'disabled' : ''}
-                        onclick="selectBase('${id}')">
-                  ${base.emoji}<br><span>${base.name}</span>
-                </button>
-              `).join('')}
-            </div>
-          </div>
-          
-          <div>
-            <h4 style="margin:12px 0 8px 0; color:#666;">トッピング（3つまで）</h4>
-            <div class="ingredient-grid">
-              ${Object.entries(TOPPINGS).map(([id, topping]) => `
-                <button class="ingredient-btn ${gameState.currentRecipe.toppings.includes(id) ? 'selected' : ''}"
-                        ${!gameState.unlockedToppings.includes(id) ? 'disabled' : ''}
-                        onclick="toggleTopping('${id}')">
-                  ${topping.emoji}<br><span>${topping.name}</span>
-                </button>
-              `).join('')}
-            </div>
-          </div>
-          
-          <button onclick="saveRecipe()" ${!gameState.currentRecipe.base || gameState.savedRecipes.length >= 5 ? 'disabled' : ''}>
-            レシピを保存 (${gameState.savedRecipes.length}/5)
-          </button>
-        </div>
+        // Exit if not attracted
+        if (customer.x >= 460) {
+          this.removeCustomer(customer);
+        }
+        break;
         
-        <div class="recipe-builder">
-          <h3>今日のメニュー</h3>
-          ${gameState.savedRecipes.length === 0 ? 
-            '<p class="empty-state">レシピを保存してメニューに追加しよう</p>' :
-            gameState.savedRecipes.map((recipe, i) => `
-              <div class="recipe-item ${gameState.todayMenu.includes(recipe) ? 'active' : ''}"
-                   onclick="toggleMenu(${i})">
-                <div>
-                  <div style="font-weight:bold;">${getRecipeName(recipe)}</div>
-                  <div style="font-size:12px; color:#666;">
-                    ${BASES[recipe.base].emoji} ${recipe.toppings.map(t => TOPPINGS[t].emoji).join(' ')}
-                  </div>
-                </div>
-                <div style="font-size:20px;">
-                  ${gameState.todayMenu.includes(recipe) ? '✅' : '⭕'}
-                </div>
-              </div>
-            `).join('')
+      case 'ENTERING':
+        this.moveToTarget(customer, deltaTime);
+        if (this.isAtTarget(customer)) {
+          const seat = this.findEmptySeat();
+          if (seat) {
+            customer.seat = seat;
+            customer.state = 'FINDING_SEAT';
+            customer.targetX = seat.x * TILE_SIZE + TILE_SIZE / 2 - 8;
+            customer.targetY = seat.y * TILE_SIZE + TILE_SIZE / 2 - 8;
+          } else {
+            this.showBubble(customer, '😐');
+            customer.state = 'LEAVING';
+            customer.targetX = 200;
+            customer.targetY = 240;
+            this.reputation = Math.max(0, this.reputation - 1);
           }
-        </div>
+        }
+        break;
         
-        <div class="recipe-builder">
-          <h3>価格設定</h3>
-          <div class="price-display">${gameState.todayPrice}円</div>
-          <input type="range" class="price-slider" min="100" max="1000" step="50" 
-                 value="${gameState.todayPrice}" 
-                 oninput="updatePrice(this.value)">
-          <div style="display:flex; justify-content:space-between; font-size:12px; color:#666;">
-            <span>100円</span>
-            <span>1000円</span>
-          </div>
-        </div>
+      case 'FINDING_SEAT':
+        this.moveToTarget(customer, deltaTime);
+        if (this.isAtTarget(customer)) {
+          customer.state = 'SITTING';
+          customer.eatTimer = 0;
+          customer.faceElement.textContent = '😊';
+        }
+        break;
         
-        <button onclick="startDay()" ${gameState.todayMenu.length === 0 ? 'disabled' : ''}>
-          開店！
-        </button>
-      `;
+      case 'SITTING':
+        customer.eatTimer += deltaTime;
+        if (customer.eatTimer > 2 && customer.eatTimer < 4 && !customer.bowlShown) {
+          customer.bowlShown = true;
+          this.showBubble(customer, '🍜');
+        }
+        if (customer.eatTimer >= 4) {
+          customer.state = 'EATING';
+          customer.eatTimer = 0;
+        }
+        break;
+        
+      case 'EATING':
+        customer.eatTimer += deltaTime;
+        if (customer.eatTimer >= 2) {
+          const quality = this.calculateQuality();
+          customer.satisfied = quality > 0.5;
+          customer.faceElement.textContent = customer.satisfied ? '😋' : '😐';
+          
+          const basePrice = 800;
+          const tipMultiplier = customer.satisfied ? 1.2 : 0.9;
+          customer.paid = Math.floor(basePrice * tipMultiplier);
+          this.money += customer.paid;
+          
+          if (customer.satisfied) {
+            this.reputation = Math.min(100, this.reputation + 1);
+          }
+          
+          customer.state = 'LEAVING';
+          customer.seat.occupied = false;
+          customer.seat = null;
+          customer.targetX = 200;
+          customer.targetY = 240;
+        }
+        break;
+        
+      case 'LEAVING':
+        this.moveToTarget(customer, deltaTime);
+        if (this.isAtTarget(customer)) {
+          customer.state = 'EXITING';
+          customer.targetX = -20;
+          customer.targetY = 280 + 20;
+        }
+        break;
+        
+      case 'EXITING':
+        this.moveToTarget(customer, deltaTime);
+        if (customer.x <= -20) {
+          this.removeCustomer(customer);
+        }
+        break;
     }
+  }
 
-    function renderServing() {
-      const currentCustomer = gameState.todayCustomers.find(c => !c.served);
+  moveToTarget(customer, deltaTime) {
+    const dx = customer.targetX - customer.x;
+    const dy = customer.targetY - customer.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist > 1) {
+      const move = customer.speed * deltaTime;
+      customer.x += (dx / dist) * move;
+      customer.y += (dy / dist) * move;
       
-      return `
-        <h2 style="text-align:center; color:#8b6914; margin-bottom:20px;">🏪 営業中</h2>
-        
-        <div class="served-count">
-          接客: ${gameState.todayStats.served} / ${gameState.todayCustomers.length}人
-        </div>
-        
-        <div class="stall-center">
-          🍜
-        </div>
-        
-        ${currentCustomer ? `
-          <div class="customer">
-            <div class="customer-emoji">${currentCustomer.emoji}</div>
-            <div class="customer-info">
-              <div style="font-weight:bold;">${currentCustomer.type}</div>
-              <div class="speech-bubble">
-                ${BASES[currentCustomer.preferredBase].name}ラーメンください！
-              </div>
+      customer.element.style.left = customer.x + 'px';
+      customer.element.style.top = customer.y + 'px';
+    }
+  }
+
+  isAtTarget(customer) {
+    const dx = customer.targetX - customer.x;
+    const dy = customer.targetY - customer.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist < 5;
+  }
+
+  findEmptySeat() {
+    const seats = [];
+    this.furniture.forEach(f => {
+      const type = FURNITURE_TYPES[f.type];
+      if (type.seats > 0) {
+        for (let i = 0; i < type.seats; i++) {
+          seats.push({ x: f.x, y: f.y, occupied: false, furniture: f });
+        }
+      }
+    });
+    
+    // Mark occupied seats
+    this.customers.forEach(c => {
+      if (c.seat) {
+        const match = seats.find(s => s.x === c.seat.x && s.y === c.seat.y);
+        if (match) match.occupied = true;
+      }
+    });
+    
+    const empty = seats.filter(s => !s.occupied);
+    return empty.length > 0 ? empty[0] : null;
+  }
+
+  calculateQuality() {
+    let quality = 0.5;
+    
+    // Furniture bonuses
+    if (this.furniture.some(f => f.type === 'noodleMachine')) quality += 0.1;
+    if (this.furniture.some(f => f.type === 'soupPot')) quality += 0.1;
+    if (this.furniture.some(f => f.type === 'fridge')) quality += 0.05;
+    if (this.furniture.some(f => f.type === 'plant')) quality += 0.05;
+    
+    // Combo bonuses
+    this.discoveredCombos.forEach(combo => {
+      const comboData = COMBOS.find(c => c.name === combo);
+      if (comboData) quality += comboData.bonus;
+    });
+    
+    return Math.min(1, quality);
+  }
+
+  showBubble(customer, text) {
+    const bubble = document.createElement('div');
+    bubble.className = 'customer-bubble';
+    bubble.textContent = text;
+    customer.element.appendChild(bubble);
+    
+    setTimeout(() => {
+      if (bubble.parentNode) bubble.remove();
+    }, 1500);
+  }
+
+  removeCustomer(customer) {
+    if (customer.element && customer.element.parentNode) {
+      customer.element.remove();
+    }
+    customer.element = null;
+    customer.state = 'EXITED';
+  }
+
+  showNotification(text) {
+    const notif = document.getElementById('notification');
+    notif.textContent = text;
+    notif.classList.add('active');
+    
+    setTimeout(() => {
+      notif.classList.remove('active');
+    }, 2000);
+  }
+
+  renderTabs() {
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        this.currentTab = tab.dataset.tab;
+        this.renderTabContent();
+      });
+    });
+    
+    this.renderTabContent();
+  }
+
+  renderTabContent() {
+    const content = document.getElementById('tab-content');
+    const overlay = document.getElementById('grid-overlay');
+    overlay.classList.remove('active');
+    
+    switch (this.currentTab) {
+      case 'operations':
+        content.innerHTML = `
+          <div>
+            <div style="margin-bottom: 12px;">
+              <strong>営業時間:</strong> ${this.dayActive ? Math.floor(this.dayTime) + '秒' : '休業中'}
             </div>
+            ${!this.dayActive ? `
+              <button onclick="game.startDay()">営業開始</button>
+            ` : `
+              <button onclick="game.endDay()">営業終了</button>
+              <div style="margin-top: 12px;">
+                <strong>速度:</strong>
+                <button onclick="game.setSpeed(1)" ${this.speedMultiplier === 1 ? 'disabled' : ''}>1x</button>
+                <button onclick="game.setSpeed(2)" ${this.speedMultiplier === 2 ? 'disabled' : ''}>2x</button>
+                <button onclick="game.setSpeed(3)" ${this.speedMultiplier === 3 ? 'disabled' : ''}>3x</button>
+              </div>
+            `}
           </div>
-          <button onclick="serveNextCustomer()">提供する</button>
-        ` : `
-          <div class="empty-state">
-            ${gameState.todayStats.served > 0 ? '本日の営業が終了しました' : '準備中...'}
-          </div>
-          <button onclick="endDay()">閉店</button>
-        `}
-      `;
-    }
-
-    function renderSummary() {
-      return `
-        <div class="summary-card">
-          <h2>📊 本日の結果</h2>
-          <div class="stat-row">
-            <span>接客数</span>
-            <span>${gameState.todayStats.served}人</span>
-          </div>
-          <div class="stat-row">
-            <span>売上</span>
-            <span>${gameState.todayStats.sales.toLocaleString()}円</span>
-          </div>
-          <div class="stat-row">
-            <span>チップ</span>
-            <span>${gameState.todayStats.tips.toLocaleString()}円</span>
-          </div>
-          <div class="stat-row">
-            <span>評判変化</span>
-            <span style="color:${gameState.todayStats.repChange >= 0 ? 'green' : 'red'};">
-              ${gameState.todayStats.repChange >= 0 ? '+' : ''}${gameState.todayStats.repChange}
-            </span>
-          </div>
-          <div class="stat-row">
-            <span>所持金</span>
-            <span style="font-weight:bold; font-size:20px; color:#ff5e62;">
-              ${gameState.money.toLocaleString()}円
-            </span>
-          </div>
-        </div>
+        `;
+        break;
         
-        ${getReputationMilestone()}
+      case 'layout':
+        overlay.classList.add('active');
+        const furnitureOptions = Object.keys(FURNITURE_TYPES).map(key => {
+          const f = FURNITURE_TYPES[key];
+          const canUse = !f.research || this.unlockedResearch.includes(f.research);
+          return `
+            <div class="furniture-item ${!canUse ? 'disabled' : ''} ${this.selectedFurniture === key ? 'selected' : ''}"
+                 onclick="${canUse ? `game.selectFurniture('${key}')` : ''}">
+              <div style="font-size: 24px;">${f.icon}</div>
+              <div>${f.name}</div>
+              <div style="font-size: 11px; color: #666;">${f.cost}円</div>
+            </div>
+          `;
+        }).join('');
         
-        <button onclick="goToNight()">夜の市場へ</button>
-      `;
-    }
-
-    function getReputationMilestone() {
-      const milestones = [
-        { rep: 10, msg: '🎓 学生さんが来るようになった！' },
-        { rep: 25, msg: '📰 メディアに取り上げられた！' },
-        { rep: 50, msg: '👨‍🍳 グルメな客が来始めた！' },
-        { rep: 75, msg: '🔥 行列ができている！' },
-        { rep: 100, msg: '🏆 伝説の屋台になった！' }
-      ];
-      
-      const achieved = milestones.find(m => 
-        gameState.reputation >= m.rep && 
-        gameState.reputation - gameState.todayStats.repChange < m.rep
-      );
-      
-      if (achieved) {
-        return `<div style="background:#fff3cd; padding:16px; border-radius:12px; margin:16px 0; text-align:center; font-weight:bold;">
-          ${achieved.msg}
-        </div>`;
-      }
-      return '';
-    }
-
-    function renderNight() {
-      return `
-        <div style="text-align:center; margin:20px 0;">
-          <div class="lantern">🏮</div>
-          <h2 style="color:#ffd89b; margin:12px 0;">夜の市場</h2>
-        </div>
-        
-        <div class="recipe-builder" style="background:#3a2a1a; color:#ffd89b;">
-          <h3 style="color:#ffd89b;">スープの素を購入</h3>
-          <div class="shop-grid">
-            ${Object.entries(BASES).map(([id, base]) => {
-              const owned = gameState.unlockedBases.includes(id);
-              return `
-                <div class="shop-item ${owned ? 'owned' : ''}">
-                  <div>
-                    <span style="font-size:24px;">${base.emoji}</span>
-                    <span style="margin-left:8px; font-weight:bold;">${base.name}</span>
-                  </div>
-                  ${owned ? 
-                    '<span style="color:#4caf50;">✓ 所有</span>' :
-                    `<button class="secondary" style="width:auto; margin:0; padding:8px 16px;" 
-                            onclick="unlockItem('base', '${id}')"
-                            ${gameState.money < base.price ? 'disabled' : ''}>
-                      ${base.price.toLocaleString()}円
-                    </button>`
-                  }
-                </div>
-              `;
-            }).join('')}
+        content.innerHTML = `
+          <div class="info-section">
+            <div>家具を選んで、グリッド上をタップして配置</div>
+            <div style="font-size: 11px; color: #666;">長押しで撤去</div>
           </div>
-        </div>
+          <div class="furniture-list">${furnitureOptions}</div>
+        `;
+        break;
         
-        <div class="recipe-builder" style="background:#3a2a1a; color:#ffd89b;">
-          <h3 style="color:#ffd89b;">トッピングを購入</h3>
-          <div class="shop-grid">
-            ${Object.entries(TOPPINGS).map(([id, topping]) => {
-              const owned = gameState.unlockedToppings.includes(id);
-              return `
-                <div class="shop-item ${owned ? 'owned' : ''}">
-                  <div>
-                    <span style="font-size:24px;">${topping.emoji}</span>
-                    <span style="margin-left:8px; font-weight:bold;">${topping.name}</span>
-                  </div>
-                  ${owned ? 
-                    '<span style="color:#4caf50;">✓ 所有</span>' :
-                    `<button class="secondary" style="width:auto; margin:0; padding:8px 16px;" 
-                            onclick="unlockItem('topping', '${id}')"
-                            ${gameState.money < topping.price ? 'disabled' : ''}>
-                      ${topping.price.toLocaleString()}円
-                    </button>`
-                  }
-                </div>
-              `;
-            }).join('')}
+      case 'menu':
+        const recipeList = this.availableRecipes.map(r => {
+          const isActive = this.activeRecipes.includes(r);
+          return `
+            <div class="recipe-item ${isActive ? 'active' : ''}" onclick="game.toggleRecipe('${r}')">
+              <div><strong>${r}</strong></div>
+              <div style="font-size: 11px; color: #666;">${isActive ? '提供中' : 'タップで提供'}</div>
+            </div>
+          `;
+        }).join('');
+        
+        content.innerHTML = `
+          <div class="info-section">
+            <div>提供するメニューを選択（最大3つ）</div>
           </div>
-        </div>
+          <div class="recipe-list">${recipeList}</div>
+        `;
+        break;
         
-        <button onclick="nextDay()">次の日へ</button>
-      `;
+      case 'research':
+        const researchList = RESEARCH_TREE.map(r => {
+          const unlocked = this.unlockedResearch.includes(r.id);
+          const canAfford = this.researchPoints >= r.cost;
+          return `
+            <div class="research-item ${unlocked ? 'unlocked' : ''}">
+              <div>
+                <div><strong>${r.name}</strong></div>
+                <div style="font-size: 11px; color: #666;">Tier ${r.tier} | ${r.cost}pt</div>
+              </div>
+              ${unlocked ? `
+                <div style="color: #4caf50;">✓ 習得済み</div>
+              ` : `
+                <button onclick="game.unlockResearch('${r.id}')" ${!canAfford ? 'disabled' : ''}>
+                  研究する
+                </button>
+              `}
+            </div>
+          `;
+        }).join('');
+        
+        content.innerHTML = `
+          <div class="info-section">
+            <div>研究ptを使って新しい要素を解放</div>
+          </div>
+          <div class="research-list">${researchList}</div>
+        `;
+        break;
+        
+      case 'info':
+        content.innerHTML = `
+          <div class="info-section">
+            <div class="info-title">統計</div>
+            <div>総客数: ${this.stats.totalCustomers}人</div>
+            <div>総売上: ${this.stats.totalRevenue}円</div>
+            <div>満足客: ${this.stats.satisfiedCustomers}人</div>
+          </div>
+          
+          <div class="info-section">
+            <div class="info-title">発見したコンボ</div>
+            ${this.discoveredCombos.length > 0 ? 
+              this.discoveredCombos.map(c => `<div>✨ ${c}</div>`).join('') : 
+              '<div style="color: #999;">まだ発見していません</div>'
+            }
+          </div>
+        `;
+        break;
     }
+  }
 
-    // Game actions
-    function startGame() {
-      loadGame();
-      gameState.phase = 'morning';
-      render();
+  selectFurniture(type) {
+    this.selectedFurniture = type;
+    this.renderTabContent();
+  }
+
+  toggleRecipe(recipe) {
+    if (this.activeRecipes.includes(recipe)) {
+      this.activeRecipes = this.activeRecipes.filter(r => r !== recipe);
+    } else if (this.activeRecipes.length < 3) {
+      this.activeRecipes.push(recipe);
+    } else {
+      this.showNotification('最大3つまでです！');
     }
+    this.renderTabContent();
+  }
 
-    function selectBase(baseId) {
-      gameState.currentRecipe.base = baseId;
-      render();
+  unlockResearch(id) {
+    const research = RESEARCH_TREE.find(r => r.id === id);
+    if (!research) return;
+    
+    if (this.researchPoints < research.cost) {
+      this.showNotification('研究ptが足りません！');
+      return;
     }
-
-    function toggleTopping(toppingId) {
-      const idx = gameState.currentRecipe.toppings.indexOf(toppingId);
-      if (idx >= 0) {
-        gameState.currentRecipe.toppings.splice(idx, 1);
-      } else if (gameState.currentRecipe.toppings.length < 3) {
-        gameState.currentRecipe.toppings.push(toppingId);
-      }
-      render();
+    
+    this.researchPoints -= research.cost;
+    this.unlockedResearch.push(id);
+    
+    // Add to available recipes if it's a soup or topping
+    if (research.type === 'soup') {
+      this.availableRecipes.push(research.name + 'ラーメン');
     }
+    
+    this.showNotification('✨ ' + research.name + ' を習得！');
+    this.updateUI();
+    this.renderTabContent();
+  }
 
-    function saveRecipe() {
-      if (gameState.currentRecipe.base && gameState.savedRecipes.length < 5) {
-        gameState.savedRecipes.push({
-          base: gameState.currentRecipe.base,
-          toppings: [...gameState.currentRecipe.toppings]
-        });
-        gameState.currentRecipe = { base: null, toppings: [] };
-        saveGame();
-        render();
-      }
-    }
+  setSpeed(multiplier) {
+    this.speedMultiplier = multiplier;
+    this.renderTabContent();
+  }
 
-    function toggleMenu(index) {
-      const recipe = gameState.savedRecipes[index];
-      const idx = gameState.todayMenu.indexOf(recipe);
-      if (idx >= 0) {
-        gameState.todayMenu.splice(idx, 1);
-      } else {
-        gameState.todayMenu.push(recipe);
-      }
-      render();
-    }
+  updateUI() {
+    document.getElementById('day').textContent = this.day;
+    document.getElementById('money').textContent = this.money;
+    document.getElementById('reputation').textContent = this.reputation;
+    document.getElementById('research').textContent = this.researchPoints;
+  }
 
-    function updatePrice(value) {
-      gameState.todayPrice = parseInt(value);
-      render();
-    }
+  saveGame() {
+    const save = {
+      day: this.day,
+      money: this.money,
+      reputation: this.reputation,
+      researchPoints: this.researchPoints,
+      furniture: this.furniture,
+      unlockedResearch: this.unlockedResearch,
+      activeRecipes: this.activeRecipes,
+      availableRecipes: this.availableRecipes,
+      discoveredCombos: this.discoveredCombos,
+      stats: this.stats
+    };
+    localStorage.setItem('ramenStandSave', JSON.stringify(save));
+  }
 
-    function startDay() {
-      if (gameState.todayMenu.length === 0) return;
-      gameState.todayCustomers = generateCustomers();
-      gameState.todayStats = { served: 0, sales: 0, tips: 0, repChange: 0 };
-      gameState.phase = 'serving';
-      saveGame();
-      render();
-    }
+  loadGame() {
+    const saved = localStorage.getItem('ramenStandSave');
+    if (!saved) return;
+    
+    const save = JSON.parse(saved);
+    this.day = save.day;
+    this.money = save.money;
+    this.reputation = save.reputation;
+    this.researchPoints = save.researchPoints;
+    this.furniture = save.furniture;
+    this.unlockedResearch = save.unlockedResearch;
+    this.activeRecipes = save.activeRecipes;
+    this.availableRecipes = save.availableRecipes;
+    this.discoveredCombos = save.discoveredCombos;
+    this.stats = save.stats;
+    
+    document.getElementById('title-screen').style.display = 'none';
+    this.renderFurniture();
+    this.updateUI();
+    this.renderTabContent();
+  }
 
-    function serveNextCustomer() {
-      const customer = gameState.todayCustomers.find(c => !c.served);
-      if (!customer) return;
-      
-      const success = serveCustomer(customer);
-      
-      // Show animation
-      if (success) {
-        showCoinAnimation();
-      }
-      
-      saveGame();
-      
-      // Short delay before next customer
-      setTimeout(() => {
-        render();
-      }, 500);
-    }
+  startNew() {
+    localStorage.removeItem('ramenStandSave');
+    document.getElementById('title-screen').style.display = 'none';
+    this.updateUI();
+    this.renderTabContent();
+  }
+}
 
-    function showCoinAnimation() {
-      const coin = document.createElement('div');
-      coin.className = 'coin-animation';
-      coin.textContent = '💰';
-      coin.style.left = Math.random() * (window.innerWidth - 50) + 'px';
-      coin.style.top = window.innerHeight / 2 + 'px';
-      document.body.appendChild(coin);
-      setTimeout(() => coin.remove(), 1000);
-    }
+const game = new Game();
+game.init();
+</script>
 
-    function endDay() {
-      gameState.reputation = Math.max(0, Math.min(100, gameState.reputation + gameState.todayStats.repChange));
-      gameState.phase = 'summary';
-      saveGame();
-      render();
-    }
-
-    function goToNight() {
-      gameState.phase = 'night';
-      render();
-    }
-
-    function nextDay() {
-      gameState.day++;
-      gameState.todayMenu = [];
-      gameState.phase = 'morning';
-      saveGame();
-      render();
-    }
-
-    // Initialize
-    loadGame();
-    render();
-  </script>
 </body>
 </html>
