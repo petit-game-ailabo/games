@@ -1315,6 +1315,8 @@ class Game {
     this.waitingQueue.forEach((c, idx) => {
       c.targetX = entranceX;
       c.targetY = entranceY * TILE_SIZE + TILE_SIZE * (idx + 1);
+      // Calculate path to avoid walking through walls
+      this.calculateCustomerPath(c);
     });
   }
 
@@ -2168,7 +2170,11 @@ class Game {
         break;
         
       case 'WAITING_IN_LINE':
-        this.moveToTarget(customer, deltaTime);
+        if (customer.path && customer.path.length > 0) {
+          this.moveCustomerAlongPath(customer, deltaTime);
+        } else {
+          this.moveToTarget(customer, deltaTime);
+        }
         customer.waitTimer += deltaTime;
         if (customer.waitTimer >= 15) {
           this.showBubble(customer, '待てない…');
