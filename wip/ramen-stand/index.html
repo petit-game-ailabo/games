@@ -1016,7 +1016,7 @@ button.toggle-btn.active {
 
 <div id="app">
   <div id="status-bar">
-    <div class="status-item">Day <span id="day">1</span></div>
+    <div class="status-item">Day <span id="day">1</span> <span id="weather-label" style="font-size:10px;"></span></div>
     <div class="status-item">💰 <span id="money">5000</span>円</div>
     <div class="status-item" style="display:flex;align-items:center;justify-content:space-between;">⭐ <span id="reputation">0</span> <span id="mute-btn" onclick="game.toggleMute()" style="cursor:pointer;font-size:16px;margin-left:6px;">🔊</span></div>
   </div>
@@ -1405,8 +1405,19 @@ const RESEARCH_TREE = [
   { id: 'バター', name: 'バター', cost: 600, tier: 3, type: 'topping' },
   { id: '煮干しスープ', name: '煮干しスープ', cost: 1000, tier: 3, type: 'soup' },
   { id: '鰹節', name: '鰹節', cost: 1500, tier: 4, type: 'topping' },
-  { id: '貝類スープ', name: '貝類スープ', cost: 3000, tier: 4, type: 'soup' }
+  { id: '貝類スープ', name: '貝類スープ', cost: 3000, tier: 4, type: 'soup' },
+  // サイドメニュー研究
+  { id: 'ライス', name: 'ライス', cost: 500, tier: 1, type: 'side', requires: 'riceCooker' },
+  { id: '餃子', name: '餃子', cost: 1500, tier: 2, type: 'side', requires: 'gyozaGrill' },
+  { id: 'チャーハン', name: 'チャーハン', cost: 1200, tier: 2, type: 'side', requires: 'sideStove' },
 ];
+
+// === サイドメニュー定義 ===
+const SIDE_MENUS = {
+  gyoza:      { name: '餃子',       cost: 40,  price: 300, requires: 'gyozaGrill',  unlock: '餃子',       icon: '🥟' },
+  fried_rice: { name: 'チャーハン', cost: 50,  price: 350, requires: 'sideStove',   unlock: 'チャーハン', icon: '🍳' },
+  rice:       { name: 'ライス',     cost: 15,  price: 150, requires: 'riceCooker',  unlock: 'ライス',     icon: '🍚' },
+};
 
 const COMBOS = [
   { items: ['soupPot', 'noodleBoiler'], name: '効率キッチン', bonus: 0.15 },
@@ -1450,6 +1461,7 @@ const EVENTS = [
   { id: 'tv_coverage', name: 'テレビ取材！', desc: 'テレビで紹介されました！\n5日間客足+80%', icon: '📺', duration: 5, effect: 'customerBoost', value: 1.8, weight: 3, minReputation: 30 },
   { id: 'food_festival', name: 'ラーメンフェスティバル', desc: '近隣でラーメンフェス開催！\n2日間客足+30%', icon: '🎉', duration: 2, effect: 'customerBoost', value: 1.3, weight: 8 },
   { id: 'lucky_day', name: 'ラッキーデー！', desc: 'なんだかいい日！\n今日の評判UP量が2倍', icon: '🍀', duration: 1, effect: 'reputationBoost', value: 2.0, weight: 8 },
+  { id: 'rival', name: 'ライバル店出現！', desc: '近くにライバル店がオープン！\n5日間客足-30%', icon: '⚔️', duration: 5, effect: 'customerReduction', value: 0.7, weight: 6, minReputation: 20 },
 ];
 
 // Tier gating: require at least 1 research from the previous tier to unlock next tier
@@ -1550,6 +1562,20 @@ class Game {
     this.eventTriggeredToday = false;
     this.eventLog = []; // recent event history for display
     this.dayHistory = []; // 日次履歴 [{ day, revenue, cost, profit, customers, satisfied, topMenu, timePeriodSales }]
+    
+    // 第5弾: 食材在庫
+    this.ingredients = {};
+    this.lastPurchaseCost = 0;
+    
+    // 第5弾: 4軸評判
+    this.reputationAxes = { taste: 0, service: 0, atmosphere: 0, value: 0 };
+    
+    // 第6弾: サイドメニュートグル
+    this.sideMenuActive = {}; // { gyoza: true, ... }
+    
+    // 第6弾: 季節・天気
+    this.season = 'spring';
+    this.weather = 'sunny';
   }
 
   // ========== 固定費・ランニングコスト ==========
@@ -1574,6 +1600,207 @@ class Game {
       utilityCost,
       total: rent + staffCost + utilityCost
     };
+  }
+
+  // ========== 食材仕入れシステム ==========
+
+  purchaseIngredients() {
+    const activeRecipes = this.recipes.filter(r => r.active !== false);
+    const needed = {};
+    activeRecipes.forEach(r => {
+      const servings = 10;
+      needed[r.soup] = (needed[r.soup] || 0) + servings;
+      needed[r.noodle] = (needed[r.noodle] || 0) + servings;
+      if (r.toppings) {
+        r.toppings.forEach(t => {
+          needed[t] = (needed[t] || 0) + servings;
+        });
+      }
+    });
+    // Side menu ingredients
+    Object.entries(SIDE_MENUS).forEach(([key, side]) => {
+      if (this.sideMenuActive[key]) {
+        needed['side_' + key] = (needed['side_' + key] || 0) + 10;
+      }
+    });
+    
+    let purchaseCost = 0;
+    Object.entries(needed).forEach(([key, qty]) => {
+      const current = this.ingredients[key] || 0;
+      const toBuy = Math.max(0, qty - current);
+      if (toBuy > 0) {
+        const unitCost = this.getIngredientCost(key);
+        purchaseCost += unitCost * toBuy;
+        this.ingredients[key] = current + toBuy;
+      }
+    });
+    
+    this.money -= purchaseCost;
+    this.lastPurchaseCost = purchaseCost;
+    return purchaseCost;
+  }
+
+  getIngredientCost(key) {
+    if (key.startsWith('side_')) {
+      const sideKey = key.replace('side_', '');
+      return SIDE_MENUS[sideKey] ? SIDE_MENUS[sideKey].cost : 0;
+    }
+    if (SOUP_BASES[key]) return SOUP_BASES[key].cost;
+    if (NOODLE_TYPES[key]) return NOODLE_TYPES[key].cost;
+    if (TOPPINGS[key]) return TOPPINGS[key].cost;
+    return 0;
+  }
+
+  consumeIngredients(recipe) {
+    if (!recipe) return true;
+    // Decrement stock for the ordered recipe
+    const keys = [recipe.soup, recipe.noodle, ...(recipe.toppings || [])];
+    // Check if in stock
+    for (const k of keys) {
+      if ((this.ingredients[k] || 0) <= 0) return false;
+    }
+    keys.forEach(k => { this.ingredients[k] = (this.ingredients[k] || 0) - 1; });
+    return true;
+  }
+
+  consumeSideIngredient(sideKey) {
+    const k = 'side_' + sideKey;
+    if ((this.ingredients[k] || 0) <= 0) return false;
+    this.ingredients[k]--;
+    return true;
+  }
+
+  getIngredientSummary() {
+    const items = [];
+    Object.entries(this.ingredients).forEach(([key, qty]) => {
+      if (qty > 0) {
+        let name = key;
+        if (key.startsWith('side_')) {
+          const sideKey = key.replace('side_', '');
+          name = SIDE_MENUS[sideKey] ? SIDE_MENUS[sideKey].name : key;
+        } else if (SOUP_BASES[key]) name = SOUP_BASES[key].name + 'スープ';
+        else if (NOODLE_TYPES[key]) name = NOODLE_TYPES[key].name;
+        else if (TOPPINGS[key]) name = TOPPINGS[key].name;
+        items.push(`${name}×${qty}`);
+      }
+    });
+    return items.join(', ') || 'なし';
+  }
+
+  // ========== 4軸評判システム ==========
+
+  updateReputation(customer, recipe) {
+    const quality = this.calculateQuality(customer);
+    // 味: based on recipe quality
+    this.reputationAxes.taste += (quality > 0.7 ? 1 : quality > 0.4 ? 0 : -1);
+    // 接客: based on wait time and staff
+    const waitPenalty = customer.waitingFoodTimer > 10 ? -1 : 0;
+    const serverBonus = this.staff.filter(s => s.type === 'server').length > 0 ? 1 : 0;
+    this.reputationAxes.service += waitPenalty + serverBonus;
+    // 雰囲気: based on plants/decor count
+    const plants = this.furniture.filter(f => f.type === 'plant').length;
+    this.reputationAxes.atmosphere = Math.min(50, plants * 5);
+    // コスパ: price vs quality
+    if (recipe) {
+      const priceRatio = recipe.price / (quality * 1000 + 100);
+      this.reputationAxes.value += priceRatio < 0.5 ? 1 : priceRatio > 1 ? -1 : 0;
+    }
+    // Cap all at 0-100
+    Object.keys(this.reputationAxes).forEach(k => {
+      this.reputationAxes[k] = Math.max(0, Math.min(100, this.reputationAxes[k]));
+    });
+    // Overall reputation is average of axes
+    this.reputation = Math.round(Object.values(this.reputationAxes).reduce((a, b) => a + b, 0) / 4);
+  }
+
+  renderReputationBars() {
+    const labels = { taste: '味', service: '接客', atmosphere: '雰囲気', value: 'コスパ' };
+    return Object.entries(this.reputationAxes).map(([key, val]) => {
+      const filled = Math.round(val / 10);
+      const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+      return `<div style="font-size:12px;font-family:monospace;">${labels[key]}: ${bar} ${val}</div>`;
+    }).join('');
+  }
+
+  // ========== スタッフ成長システム ==========
+
+  addStaffExp(staff, amount) {
+    if (!staff) return;
+    staff.exp = (staff.exp || 0) + amount;
+    staff.level = staff.level || 1;
+    if (staff.exp >= staff.level * 100) {
+      staff.exp = 0;
+      staff.level++;
+      this.showNotification(`${STAFF_TYPES[staff.type].name} Lv${staff.level}にアップ！`);
+    }
+  }
+
+  getStaffSpeedMultiplier(staff) {
+    const level = staff.level || 1;
+    return 1 + (level - 1) * 0.1;
+  }
+
+  getStaffWorkReduction(staff) {
+    const level = staff.level || 1;
+    return 1 - (level * 0.05);
+  }
+
+  // ========== 季節・天気システム ==========
+
+  updateSeason() {
+    const seasonOrder = ['spring', 'summer', 'autumn', 'winter'];
+    this.season = seasonOrder[Math.floor((this.day - 1) / 30) % 4];
+  }
+
+  updateWeather() {
+    const chances = {
+      spring: { sunny: 60, rainy: 30, snowy: 10 },
+      summer: { sunny: 70, rainy: 30, snowy: 0 },
+      autumn: { sunny: 50, rainy: 40, snowy: 10 },
+      winter: { sunny: 40, rainy: 20, snowy: 40 }
+    };
+    const c = chances[this.season] || chances.spring;
+    const total = Object.values(c).reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (const [weather, weight] of Object.entries(c)) {
+      r -= weight;
+      if (r <= 0) { this.weather = weather; return; }
+    }
+    this.weather = 'sunny';
+  }
+
+  getWeatherCustomerMultiplier() {
+    switch (this.weather) {
+      case 'rainy': return 0.8;
+      case 'snowy': return 0.7;
+      default: return 1.0;
+    }
+  }
+
+  getWeatherLabel() {
+    const seasonLabels = { spring: '🌸春', summer: '☀️夏', autumn: '🍂秋', winter: '❄️冬' };
+    const weatherLabels = { sunny: '☀️晴れ', rainy: '🌧️雨', snowy: '❄️雪' };
+    return `${seasonLabels[this.season] || '春'} / ${weatherLabels[this.weather] || '晴れ'}`;
+  }
+
+  getSeasonSoupPreference() {
+    // Returns bonus soup preferences per season
+    switch (this.season) {
+      case 'summer': return { preferred: ['shio'], bonus: 1.5 }; // 夏は塩ラーメン人気
+      case 'winter': return { preferred: ['tonkotsu', 'miso'], bonus: 1.3 }; // 冬は濃厚系
+      default: return { preferred: [], bonus: 1.0 };
+    }
+  }
+
+  // ========== サイドメニュー ==========
+
+  getAvailableSides() {
+    return Object.entries(SIDE_MENUS).filter(([key, side]) => {
+      if (!this.unlockedResearch.includes(side.unlock)) return false;
+      if (!this.furniture.some(f => f.type === side.requires)) return false;
+      if (!this.sideMenuActive[key]) return false;
+      return true;
+    }).map(([key, side]) => ({ key, ...side }));
   }
 
   // ========== グリッドサイズ管理 ==========
@@ -2127,7 +2354,9 @@ class Game {
         cookingStep: 0,
         element: null,
         carryingDish: false,
-        workBubble: null
+        workBubble: null,
+        exp: 0,
+        level: 1
       };
       
       this.staff.push(staffObj);
@@ -2276,6 +2505,14 @@ class Game {
   startDay() {
     soundMgr.playDayStart();
     soundMgr.startBGM();
+    
+    // Update season and weather
+    this.updateSeason();
+    this.updateWeather();
+    
+    // Purchase ingredients
+    this.purchaseIngredients();
+    
     this.dayActive = true;
     this.dayTime = 0;
     this.customers = [];
@@ -2423,7 +2660,8 @@ class Game {
       <div class="info-section">
         <div>来客数: ${todayCustomers}人</div>
         <div>売上: ${todayRevenue}円</div>
-        ${totalCost > 0 ? `<div>原価: ${totalCost}円</div><div>粗利: ${profit}円</div>` : ''}
+        <div>🌤️ ${this.getWeatherLabel()}</div>
+        ${totalCost > 0 ? `<div>原価: ${totalCost}円</div><div>仕入れ: ${this.lastPurchaseCost}円</div><div>粗利: ${profit}円</div>` : ''}
         <div style="margin-top:6px;border-top:1px solid #eee;padding-top:6px;">
           <div style="font-size:12px;color:#666;">── 固定費 ──</div>
           <div style="font-size:12px;">🏠 家賃: ${running.rent}円</div>
@@ -2953,10 +3191,11 @@ class Game {
         break;
 
       case 'WORKING':
-        staff.workTimer += deltaTime;
+        staff.workTimer += deltaTime * (1 / this.getStaffWorkReduction(staff));
         if (staff.workTimer >= 0.8) {
           staff.workTimer = 0;
           this.removeWorkBubble(staff);
+          this.addStaffExp(staff, 10);
           if (staff.type === 'cook') {
             this.cookNextStep(staff);
           }
@@ -2993,6 +3232,7 @@ class Game {
           staff.workTimer = 0;
           staff.carryingDish = false;
           this.removeWorkBubble(staff);
+          this.addStaffExp(staff, 10);
           // Return home
           this.staffGoHome(staff);
         }
@@ -3011,6 +3251,7 @@ class Game {
         if (staff.workTimer >= 0.5) {
           staff.workTimer = 0;
           this.removeWorkBubble(staff);
+          this.addStaffExp(staff, 10);
           // Place food on handoff queue
           if (staff.currentOrder) {
             this.handoffQueue.push({ customer: staff.currentOrder, placedTime: Date.now() });
@@ -3058,7 +3299,7 @@ class Game {
     const dx = targetPixel.x - staff.x;
     const dy = targetPixel.y - staff.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const speed = 250; // px/sec
+    const speed = 250 * this.getStaffSpeedMultiplier(staff); // px/sec (level scaled)
 
     if (dist < 2) {
       staff.x = targetPixel.x;
@@ -3448,6 +3689,12 @@ class Game {
       baseRate = baseRate / customerReduction; // reduction value like 0.7 means fewer customers
     }
     
+    // Weather effect on spawn rate
+    const weatherMult = this.getWeatherCustomerMultiplier();
+    if (weatherMult < 1) {
+      baseRate = baseRate / weatherMult;
+    }
+    
     return baseRate;
   }
 
@@ -3647,6 +3894,13 @@ class Game {
         }
         
         this.moveToTarget(customer, deltaTime);
+        
+        // Auto bubble for street walkers (once only, ~10% over walking duration)
+        if (!customer.streetBubbleShown && Math.random() < 0.002) {
+          customer.streetBubbleShown = true;
+          const msgs = ['いい匂い…', 'ラーメン食べたいな', 'お腹すいた…', 'ここ評判いいのかな'];
+          this.showBubble(customer, msgs[Math.floor(Math.random() * msgs.length)]);
+        }
         
         // Check if attracted — entrance is at center of grid
         const entrancePixelX = this.getEntranceXCenter() * TILE_SIZE;
@@ -3863,11 +4117,28 @@ class Game {
           customer.orderPlaced = true;
           // レシピベースの価格計算: 提供中レシピからランダムに割り当て
           const activeRecipeList = this.getActiveRecipes();
-          if (activeRecipeList.length > 0) {
-            customer.orderedRecipe = activeRecipeList[Math.floor(Math.random() * activeRecipeList.length)];
+          // Filter recipes that have ingredients in stock
+          const availableRecipes = activeRecipeList.filter(r => {
+            const keys = [r.soup, r.noodle, ...(r.toppings || [])];
+            return keys.every(k => (this.ingredients[k] || 0) > 0);
+          });
+          const recipePool = availableRecipes.length > 0 ? availableRecipes : activeRecipeList;
+          if (recipePool.length > 0) {
+            customer.orderedRecipe = recipePool[Math.floor(Math.random() * recipePool.length)];
+            // Consume ingredients
+            this.consumeIngredients(customer.orderedRecipe);
+          }
+          // 30% chance to also order a side menu
+          const availableSides = this.getAvailableSides();
+          if (availableSides.length > 0 && Math.random() < 0.3) {
+            const side = availableSides[Math.floor(Math.random() * availableSides.length)];
+            if (this.consumeSideIngredient(side.key)) {
+              customer.orderedSide = side;
+            }
           }
           const orderRecipeName = customer.orderedRecipe ? customer.orderedRecipe.name : '🍜';
-          this.showBubble(customer, orderRecipeName);
+          const sideLabel = customer.orderedSide ? ` + ${customer.orderedSide.icon}` : '';
+          this.showBubble(customer, orderRecipeName + sideLabel);
           // Only play sound for leader or solo
           if (!customer.groupId || customer.groupIndex === 0) {
             soundMgr.playOrder();
@@ -3987,7 +4258,11 @@ class Game {
           customer.faceElement.textContent = face;
           
           // レシピベースの売価を使用（レシピ未割り当ての場合はフォールバック350円）
-          const recipePrice = customer.orderedRecipe ? customer.orderedRecipe.price : 350;
+          let recipePrice = customer.orderedRecipe ? customer.orderedRecipe.price : 350;
+          // サイドメニュー代を追加
+          if (customer.orderedSide) {
+            recipePrice += customer.orderedSide.price;
+          }
           // イベントによるチップブーストと原価増加を適用
           const tipEventMultiplier = this.getEventMultiplier('tipBoost');
           // Each person pays individually, seatPenalty reduces by 15%
@@ -4001,11 +4276,8 @@ class Game {
           this.dailyStats.customers += 1;
           if (customer.satisfied) this.dailyStats.satisfied += 1;
           
-          if (customer.satisfied) {
-            this.reputation = Math.min(100, this.reputation + 1);
-          } else if (quality < 0.4) {
-            this.reputation = Math.max(0, this.reputation - 1);
-          }
+          // 4軸評判更新
+          this.updateReputation(customer, customer.orderedRecipe);
           
           // Leave dirty dish if any staff exists (servers or cooks can clean)
           const hasStaff = this.staff.length > 0;
@@ -4101,14 +4373,17 @@ class Game {
   }
 
   findGroupSeat(groupSize) {
-    // For table/tatami: if anyone is sitting there, the whole furniture is occupied (相席NG)
-    const occupiedFurniture = new Set();
+    // Build set of unavailable furniture (any customer sitting OR dirty dish present)
+    const unavailableFurniture = new Set();
     this.customers.forEach(c => {
       if (c.seat && c.seat.furniture) {
-        const ft = c.seat.furniture.type;
-        if (ft === 'table' || ft === 'tatami') {
-          occupiedFurniture.add(c.seat.furniture);
-        }
+        unavailableFurniture.add(c.seat.furniture);
+      }
+    });
+    this.dirtyDishes.forEach(d => {
+      if (!d.done) {
+        const furn = this.getFurnitureAt(d.gridX, d.gridY);
+        if (furn) unavailableFurniture.add(furn);
       }
     });
     
@@ -4117,7 +4392,7 @@ class Game {
       const type = FURNITURE_TYPES[f.type];
       if (type.seats < groupSize) return false;
       if (f.type !== 'table' && f.type !== 'tatami') return false;
-      return !occupiedFurniture.has(f);
+      return !unavailableFurniture.has(f);
     });
     
     if (groupFurniture.length === 0) return null;
@@ -4170,33 +4445,30 @@ class Game {
       }
     });
     
-    // Mark occupied seats by matching exact coordinates + furniture
+    // Build set of fully unavailable furniture (any customer sitting OR dirty dish present)
+    const unavailableFurniture = new Set();
+    // Mark furniture with any customer sitting
     this.customers.forEach(c => {
-      if (c.seat) {
-        const match = seats.find(s => s.x === c.seat.x && s.y === c.seat.y && s.furniture === c.seat.furniture);
-        if (match) match.occupied = true;
+      if (c.seat && c.seat.furniture) {
+        unavailableFurniture.add(c.seat.furniture);
       }
     });
-    
-    // For table/tatami occupied by a GROUP, mark entire furniture as occupied
-    const groupOccupiedFurniture = new Set();
-    this.customers.forEach(c => {
-      if (c.seat && c.seat.furniture && c.seat.isGroupSeat) {
-        groupOccupiedFurniture.add(c.seat.furniture);
+    // Mark furniture with dirty dishes on any of its tiles
+    this.dirtyDishes.forEach(d => {
+      if (!d.done) {
+        const furn = this.getFurnitureAt(d.gridX, d.gridY);
+        if (furn) unavailableFurniture.add(furn);
       }
     });
+    // Filter out ALL seats belonging to unavailable furniture
     seats = seats.filter(s => {
-      if (s.furniture && groupOccupiedFurniture.has(s.furniture)) {
-        return false;
-      }
+      if (s.furniture && unavailableFurniture.has(s.furniture)) return false;
       return true;
     });
     
     // Filter out seats in excludeSeats (for group assignment rounds)
-    // and seats with dirty dishes on them
     seats = seats.filter(s => {
       if (excludeSeats.some(es => es.x === s.x && es.y === s.y)) return false;
-      if (this.dirtyDishes.some(d => d.gridX === s.x && d.gridY === s.y && !d.done)) return false;
       return true;
     });
     
@@ -4420,6 +4692,14 @@ class Game {
             ` : ''}
             ${!this.dayActive ? `
               <div style="margin-bottom:8px;background:white;padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;">
+                <strong>🌤️ 天気:</strong> ${this.getWeatherLabel()}
+                ${this.weather !== 'sunny' ? `<span style="color:#d32f2f;"> (客足${this.weather === 'rainy' ? '-20%' : '-30%'})</span>` : ''}
+              </div>
+              <div style="margin-bottom:8px;background:white;padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;">
+                <strong>📦 仕入れ状況:</strong> ${this.getIngredientSummary()}<br>
+                <strong>仕入れ費用:</strong> ${this.lastPurchaseCost}円
+              </div>
+              <div style="margin-bottom:8px;background:white;padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;">
                 <strong>💸 本日の固定費:</strong> ${(() => { const rc = this.calculateRunningCosts(); return `${rc.total}円 (家賃${rc.rent} + 人件費${rc.staffCost} + 光熱費${rc.utilityCost})`; })()}
               </div>
               ${(() => {
@@ -4580,6 +4860,19 @@ class Game {
             ${equip.hasCharsiuOven ? ' | 🥩 チャーシュー窯 OK' : ''}
           </div>
         `;
+        // サイドメニューセクション
+        const sideMenuHtml = Object.entries(SIDE_MENUS).map(([key, side]) => {
+          const unlocked = this.unlockedResearch.includes(side.unlock);
+          const hasEquip = this.furniture.some(f => f.type === side.requires);
+          const active = this.sideMenuActive[key] || false;
+          if (!unlocked) return `<div style="font-size:12px;color:#999;">${side.icon} ${side.name} — 🔒 未研究</div>`;
+          if (!hasEquip) return `<div style="font-size:12px;color:#999;">${side.icon} ${side.name} — ⚠️ ${side.requires}が必要</div>`;
+          return `<div style="font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+            <span>${side.icon} ${side.name} (原価${side.cost}円 / 売価${side.price}円)</span>
+            <button onclick="game.toggleSideMenu('${key}')" style="font-size:11px;">${active ? '提供中 ✓' : 'OFF'}</button>
+          </div>`;
+        }).join('');
+        
         content.innerHTML = `
           ${menuWarningHtml}
           <div class="info-section">
@@ -4588,6 +4881,11 @@ class Game {
             <button onclick="game.openRecipeModal()" style="margin-top:8px;width:100%;">＋ 新しいラーメンを作る</button>
           </div>
           ${recipeCards}
+          <div class="info-section" style="margin-top:12px;">
+            <div class="info-title">🥟 サイドメニュー</div>
+            ${sideMenuHtml}
+            <div style="font-size:10px;color:#888;margin-top:4px;">※ 客が30%の確率でサイドメニューも注文します</div>
+          </div>
         `;
         break;
         
@@ -4636,7 +4934,7 @@ class Game {
         
       case 'info':
         const staffInfo = this.staff.length > 0 
-          ? this.staff.map(s => `<div>${STAFF_TYPES[s.type].icon} ${STAFF_TYPES[s.type].name} (${s.homeX},${s.homeY})</div>`).join('')
+          ? this.staff.map(s => `<div>${STAFF_TYPES[s.type].icon} ${STAFF_TYPES[s.type].name} Lv${s.level || 1} (EXP:${s.exp || 0}/${(s.level || 1) * 100}) (${s.homeX},${s.homeY})</div>`).join('')
           : '<div style="color: #999;">まだ雇っていません</div>';
         
         const achieveCards = ACHIEVEMENTS.map(a => {
@@ -4651,6 +4949,17 @@ class Game {
         const achieveTotal = ACHIEVEMENTS.length;
         
         content.innerHTML = `
+          <div class="info-section">
+            <div class="info-title">⭐ 評判詳細 (総合: ${this.reputation})</div>
+            ${this.renderReputationBars()}
+          </div>
+          
+          <div class="info-section">
+            <div class="info-title">🌤️ 季節・天気</div>
+            <div>${this.getWeatherLabel()}</div>
+            <div style="font-size:11px;color:#666;">季節は30日ごとに変化します</div>
+          </div>
+          
           <div class="info-section">
             <div class="info-title">🏅 実績 (${achieveCount}/${achieveTotal})</div>
             <div class="achievement-grid">${achieveCards}</div>
@@ -4768,6 +5077,12 @@ class Game {
     }
     // Sync activeRecipes list for backward compat
     this.activeRecipes = this.recipes.filter(r => r.active).map(r => r.name);
+    this.saveGame();
+    this.renderTabContent();
+  }
+
+  toggleSideMenu(key) {
+    this.sideMenuActive[key] = !this.sideMenuActive[key];
     this.saveGame();
     this.renderTabContent();
   }
@@ -5083,6 +5398,8 @@ class Game {
     document.getElementById('day').textContent = this.day;
     document.getElementById('money').textContent = this.money;
     document.getElementById('reputation').textContent = this.reputation;
+    const weatherEl = document.getElementById('weather-label');
+    if (weatherEl) weatherEl.textContent = this.getWeatherLabel();
     this.checkAchievements();
   }
 
@@ -5097,7 +5414,9 @@ class Game {
         id: s.id,
         type: s.type,
         homeX: s.homeX,
-        homeY: s.homeY
+        homeY: s.homeY,
+        exp: s.exp || 0,
+        level: s.level || 1
       })),
       unlockedResearch: this.unlockedResearch,
       activeRecipes: this.activeRecipes,
@@ -5114,7 +5433,12 @@ class Game {
       achievements: this.achievements,
       activeEvents: this.activeEvents,
       eventLog: this.eventLog,
-      dayHistory: this.dayHistory
+      dayHistory: this.dayHistory,
+      ingredients: this.ingredients,
+      reputationAxes: this.reputationAxes,
+      sideMenuActive: this.sideMenuActive,
+      season: this.season,
+      weather: this.weather
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -5160,6 +5484,13 @@ class Game {
     // 日次履歴復元
     this.dayHistory = save.dayHistory || [];
     
+    // 新機能プロパティ復元
+    this.ingredients = save.ingredients || {};
+    this.reputationAxes = save.reputationAxes || { taste: 0, service: 0, atmosphere: 0, value: 0 };
+    this.sideMenuActive = save.sideMenuActive || {};
+    this.season = save.season || 'spring';
+    this.weather = save.weather || 'sunny';
+    
     // Regenerate walls from store level
     this.walls = this.generateWalls(this.storeLevel);
     
@@ -5182,7 +5513,9 @@ class Game {
           cookingStep: 0,
           element: null,
           carryingDish: false,
-          workBubble: null
+          workBubble: null,
+          exp: sd.exp || 0,
+          level: sd.level || 1
         };
         this.staff.push(staffObj);
       });
@@ -5235,7 +5568,9 @@ class Game {
       cookingStep: 0,
       element: null,
       carryingDish: false,
-      workBubble: null
+      workBubble: null,
+      exp: 0,
+      level: 1
     });
     this.nextStaffId = 1;
     
