@@ -963,6 +963,15 @@ const COMBOS = [
   { items: ['freezer', 'soupPot'], name: '鮮度抜群', bonus: 0.10 }
 ];
 
+// Tier gating: require at least 1 research from the previous tier to unlock next tier
+function isTierAvailable(tier, unlockedResearch) {
+  if (tier <= 1) return true;
+  return unlockedResearch.some(id => {
+    const r = RESEARCH_TREE.find(res => res.id === id);
+    return r && r.tier === tier - 1;
+  });
+}
+
 // Store expansion costs per level
 const STORE_LEVELS = {
   1: { cost: 0, label: '6×3', interiorCols: [3,8], interiorRows: [3,5] },
@@ -3343,31 +3352,45 @@ class Game {
         break;
         
       case 'research':
-        const researchList = RESEARCH_TREE.map(r => {
-          const unlocked = this.unlockedResearch.includes(r.id);
-          const canAfford = this.money >= r.cost;
-          return `
-            <div class="research-item ${unlocked ? 'unlocked' : ''}">
-              <div>
-                <div><strong>${r.name}</strong></div>
-                <div style="font-size: 11px; color: #666;">${r.cost}円</div>
+        // Group by tier for display
+        const maxTier = Math.max(...RESEARCH_TREE.map(r => r.tier));
+        let researchHtml = '';
+        for (let tier = 1; tier <= maxTier; tier++) {
+          const tierItems = RESEARCH_TREE.filter(r => r.tier === tier);
+          const tierAvailable = isTierAvailable(tier, this.unlockedResearch);
+          const tierLabel = `Tier ${tier}`;
+          researchHtml += `<div style="font-weight:bold; font-size:13px; color:#654321; margin:8px 0 4px; border-bottom:1px solid #ddd; padding-bottom:4px;">${tierLabel}${!tierAvailable ? ' 🔒' : ''}</div>`;
+          researchHtml += tierItems.map(r => {
+            const unlocked = this.unlockedResearch.includes(r.id);
+            const canAfford = this.money >= r.cost;
+            const typeIcon = r.type === 'soup' ? '🍲' : '🥬';
+            const typeLabel = r.type === 'soup' ? 'スープ' : 'トッピング';
+            return `
+              <div class="research-item ${unlocked ? 'unlocked' : ''}">
+                <div>
+                  <div><strong>${typeIcon} ${r.name}</strong> <span style="font-size:10px;color:#888;">${typeLabel}</span></div>
+                  <div style="font-size: 11px; color: #666;">${r.cost}円</div>
+                </div>
+                ${unlocked ? `
+                  <div style="color: #4caf50;">✓ 習得済み</div>
+                ` : !tierAvailable ? `
+                  <div style="color: #999; font-size: 12px;">前のTierを研究してください</div>
+                ` : `
+                  <button onclick="game.unlockResearch('${r.id}')" ${!canAfford ? 'disabled' : ''}>
+                    開発する (${r.cost}円)
+                  </button>
+                `}
               </div>
-              ${unlocked ? `
-                <div style="color: #4caf50;">✓ 習得済み</div>
-              ` : `
-                <button onclick="game.unlockResearch('${r.id}')" ${!canAfford ? 'disabled' : ''}>
-                  開発する (${r.cost}円)
-                </button>
-              `}
-            </div>
-          `;
-        }).join('');
+            `;
+          }).join('');
+        }
         
         content.innerHTML = `
           <div class="info-section">
             <div>お金を使って新メニュー素材を開発</div>
+            <div style="font-size:11px; color:#888; margin-top:4px;">前のTierを1つ以上習得すると次のTierが解放されます</div>
           </div>
-          <div class="research-list">${researchList}</div>
+          <div class="research-list">${researchHtml}</div>
         `;
         break;
         
@@ -3488,6 +3511,12 @@ class Game {
   unlockResearch(id) {
     const research = RESEARCH_TREE.find(r => r.id === id);
     if (!research) return;
+    
+    // Tier制限チェック
+    if (!isTierAvailable(research.tier, this.unlockedResearch)) {
+      this.showNotification('前のTierを先に研究してください！');
+      return;
+    }
     
     if (this.money < research.cost) {
       this.showNotification('お金が足りません！');
