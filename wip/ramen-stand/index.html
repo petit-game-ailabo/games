@@ -1554,7 +1554,7 @@ class Game {
     this.selectedFurniture = null;
     this.selectedStaff = null;
     this.removalMode = false;
-    this.dailyStats = { revenue: 0, customers: 0, satisfied: 0 };
+    this.dailyStats = { revenue: 0, customers: 0, satisfied: 0, recipeSales: {}, totalCost: 0 };
     this.achievements = []; // unlocked achievement ids
     this._achieveQueue = []; // pending popups
     this._achieveShowing = false;
@@ -2522,7 +2522,7 @@ class Game {
     this.waitingQueue = [];
     this.waitingQueueCheckTimer = 0;
     this.pedestrianTimer = 0;
-    this.dailyStats = { revenue: 0, customers: 0, satisfied: 0 };
+    this.dailyStats = { revenue: 0, customers: 0, satisfied: 0, recipeSales: {}, totalCost: 0 };
     this.eventTriggeredToday = false;
     
     // Remove any handoff food icons
@@ -2608,30 +2608,16 @@ class Game {
     this.stats.totalRevenue += todayRevenue;
     this.stats.satisfiedCustomers += todaySatisfied;
     
-    // メニュー別売上集計
-    const recipeSales = {};
-    this.customers.forEach(c => {
-      if (c.paid > 0 && c.orderedRecipe) {
-        const name = c.orderedRecipe.name;
-        if (!recipeSales[name]) recipeSales[name] = { count: 0, revenue: 0 };
-        recipeSales[name].count += 1;
-        recipeSales[name].revenue += c.paid;
-      }
-    });
+    // メニュー別売上集計（dailyStatsから取得 — customers配列は退店済み客が消えるため）
+    const recipeSales = this.dailyStats.recipeSales;
     const recipeSalesHtml = Object.keys(recipeSales).length > 0
       ? Object.entries(recipeSales).map(([name, data]) => 
           `<div style="font-size:12px;">🍜 ${name}: ${data.count}杯 / ${data.revenue}円</div>`
         ).join('')
       : '';
     
-    // 原価合計の計算
-    let totalCost = 0;
-    this.customers.forEach(c => {
-      if (c.paid > 0 && c.orderedRecipe) {
-        const params = this.getRecipeParams(c.orderedRecipe);
-        totalCost += params.cost;
-      }
-    });
+    // 原価合計（dailyStatsから取得）
+    const totalCost = this.dailyStats.totalCost;
     const profit = todayRevenue - totalCost;
     
     // 固定費・ランニングコスト計算
@@ -4275,6 +4261,16 @@ class Game {
           this.dailyStats.revenue += customer.paid;
           this.dailyStats.customers += 1;
           if (customer.satisfied) this.dailyStats.satisfied += 1;
+          
+          // Track recipe sales in dailyStats (not from customers array which gets cleaned)
+          if (customer.orderedRecipe) {
+            const rName = customer.orderedRecipe.name;
+            if (!this.dailyStats.recipeSales[rName]) this.dailyStats.recipeSales[rName] = { count: 0, revenue: 0 };
+            this.dailyStats.recipeSales[rName].count += 1;
+            this.dailyStats.recipeSales[rName].revenue += customer.paid;
+            const rParams = this.getRecipeParams(customer.orderedRecipe);
+            this.dailyStats.totalCost += rParams.cost;
+          }
           
           // 4軸評判更新
           this.updateReputation(customer, customer.orderedRecipe);
