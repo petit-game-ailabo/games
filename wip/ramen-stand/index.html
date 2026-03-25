@@ -1602,90 +1602,12 @@ class Game {
     };
   }
 
-  // ========== 食材仕入れシステム ==========
-
-  purchaseIngredients() {
-    const activeRecipes = this.recipes.filter(r => r.active !== false);
-    const needed = {};
-    activeRecipes.forEach(r => {
-      const servings = 10;
-      needed[r.soup] = (needed[r.soup] || 0) + servings;
-      needed[r.noodle] = (needed[r.noodle] || 0) + servings;
-      if (r.toppings) {
-        r.toppings.forEach(t => {
-          needed[t] = (needed[t] || 0) + servings;
-        });
-      }
-    });
-    // Side menu ingredients
-    Object.entries(SIDE_MENUS).forEach(([key, side]) => {
-      if (this.sideMenuActive[key]) {
-        needed['side_' + key] = (needed['side_' + key] || 0) + 10;
-      }
-    });
-    
-    let purchaseCost = 0;
-    Object.entries(needed).forEach(([key, qty]) => {
-      const current = this.ingredients[key] || 0;
-      const toBuy = Math.max(0, qty - current);
-      if (toBuy > 0) {
-        const unitCost = this.getIngredientCost(key);
-        purchaseCost += unitCost * toBuy;
-        this.ingredients[key] = current + toBuy;
-      }
-    });
-    
-    this.money -= purchaseCost;
-    this.lastPurchaseCost = purchaseCost;
-    return purchaseCost;
-  }
-
-  getIngredientCost(key) {
-    if (key.startsWith('side_')) {
-      const sideKey = key.replace('side_', '');
-      return SIDE_MENUS[sideKey] ? SIDE_MENUS[sideKey].cost : 0;
-    }
-    if (SOUP_BASES[key]) return SOUP_BASES[key].cost;
-    if (NOODLE_TYPES[key]) return NOODLE_TYPES[key].cost;
-    if (TOPPINGS[key]) return TOPPINGS[key].cost;
-    return 0;
-  }
-
-  consumeIngredients(recipe) {
-    if (!recipe) return true;
-    // Decrement stock for the ordered recipe
-    const keys = [recipe.soup, recipe.noodle, ...(recipe.toppings || [])];
-    // Check if in stock
-    for (const k of keys) {
-      if ((this.ingredients[k] || 0) <= 0) return false;
-    }
-    keys.forEach(k => { this.ingredients[k] = (this.ingredients[k] || 0) - 1; });
-    return true;
-  }
-
-  consumeSideIngredient(sideKey) {
-    const k = 'side_' + sideKey;
-    if ((this.ingredients[k] || 0) <= 0) return false;
-    this.ingredients[k]--;
-    return true;
-  }
-
-  getIngredientSummary() {
-    const items = [];
-    Object.entries(this.ingredients).forEach(([key, qty]) => {
-      if (qty > 0) {
-        let name = key;
-        if (key.startsWith('side_')) {
-          const sideKey = key.replace('side_', '');
-          name = SIDE_MENUS[sideKey] ? SIDE_MENUS[sideKey].name : key;
-        } else if (SOUP_BASES[key]) name = SOUP_BASES[key].name + 'スープ';
-        else if (NOODLE_TYPES[key]) name = NOODLE_TYPES[key].name;
-        else if (TOPPINGS[key]) name = TOPPINGS[key].name;
-        items.push(`${name}×${qty}`);
-      }
-    });
-    return items.join(', ') || 'なし';
-  }
+  // ========== 食材仕入れ（無効化 — シンプル運用）==========
+  purchaseIngredients() { this.lastPurchaseCost = 0; return 0; }
+  getIngredientCost(key) { return 0; }
+  consumeIngredients(recipe) { return true; }
+  consumeSideIngredient(sideKey) { return true; }
+  getIngredientSummary() { return ''; }
 
   // ========== 4軸評判システム ==========
 
@@ -2514,6 +2436,7 @@ class Game {
     this.purchaseIngredients();
     
     this.dayActive = true;
+    this.dayEnding = false;
     this.dayTime = 0;
     this.customers = [];
     this.orderQueue = [];
@@ -2763,24 +2686,38 @@ class Game {
     const timerEl = document.getElementById('day-timer');
     if (timerEl) {
       const remaining = Math.max(0, Math.ceil(60 - this.dayTime));
-      timerEl.textContent = remaining + '秒 ' + this.getTimePeriodLabel();
+      timerEl.textContent = this.dayEnding ? '閉店準備中…' : remaining + '秒 ' + this.getTimePeriodLabel();
     }
 
     // Apply time-of-day visual changes
     this.applyTimePeriodVisuals();
     
-    // Day ends after 60 seconds at 1x
-    if (this.dayTime >= 60) {
-      this.endDay();
-      return;
+    // After 60 seconds: stop spawning new customers, but keep running until everyone leaves and dishes cleaned
+    if (this.dayTime >= 60 && !this.dayEnding) {
+      this.dayEnding = true; // Flag: no new customers
     }
     
-    // Spawn pedestrians
-    this.pedestrianTimer += scaledDelta;
-    const spawnRate = this.getSpawnRate();
-    if (this.pedestrianTimer >= spawnRate) {
-      this.pedestrianTimer = 0;
-      this.spawnPedestrian();
+    // Auto end day when: time is up AND no customers inside AND no dirty dishes
+    if (this.dayEnding) {
+      const customersInside = this.customers.some(c => 
+        c.state !== 'WALKING_STREET' && c.state !== 'EXITING' && c.state !== 'EXITED'
+      );
+      const hasDirtyDishes = this.dirtyDishes.some(d => !d.done);
+      const staffBusy = this.staff.some(s => s.state !== 'IDLE');
+      if (!customersInside && !hasDirtyDishes && !staffBusy) {
+        this.endDay();
+        return;
+      }
+    }
+    
+    // Spawn pedestrians (only if day hasn't ended)
+    if (!this.dayEnding) {
+      this.pedestrianTimer += scaledDelta;
+      const spawnRate = this.getSpawnRate();
+      if (this.pedestrianTimer >= spawnRate) {
+        this.pedestrianTimer = 0;
+        this.spawnPedestrian();
+      }
     }
     
     // Update customers
@@ -3655,10 +3592,10 @@ class Game {
     const period = this.getTimePeriod();
     let baseRate;
     switch (period) {
-      case 'morning': baseRate = 3.5; break;   // 朝: まばら
-      case 'lunch':   baseRate = 1.5; break;   // 昼: ランチラッシュ
-      case 'evening': baseRate = 2.5; break;   // 夜: やや落ち着く
-      default: baseRate = 3;
+      case 'morning': baseRate = 2.5; break;   // 朝: まばら
+      case 'lunch':   baseRate = 1.0; break;   // 昼: ランチラッシュ
+      case 'evening': baseRate = 1.8; break;   // 夜: やや落ち着く
+      default: baseRate = 2.0;
     }
     
     // Sign bonus
@@ -3686,7 +3623,7 @@ class Game {
 
   spawnPedestrian() {
     // 基本集客率 + 評判ボーナス + 価格影響
-    let attractRate = 0.1 + (this.reputation / 1000);
+    let attractRate = 0.2 + (this.reputation / 500);
     // 提供中レシピの平均売価で集客率を調整
     const activeList = this.getActiveRecipes();
     if (activeList.length > 0) {
@@ -3702,7 +3639,7 @@ class Game {
     
     // Family/friends: spawn individual customers as a group
     if (type === 'family' || type === 'friends') {
-      const groupSize = type === 'family' ? 2 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2);
+      const groupSize = type === 'family' ? 2 + Math.floor(Math.random() * 5) : 2 + Math.floor(Math.random() * 3);
       const groupId = 'g' + this.nextGroupId++;
       const groupMembers = [];
       
@@ -3712,7 +3649,7 @@ class Game {
           state: 'WALKING_STREET',
           x: -20 - (i * 15),
           y: streetY + (i % 2 === 0 ? 0 : (i % 4 === 1 ? -5 : 5)),
-          targetX: 500,
+          targetX: this.gridWidth * TILE_SIZE + 40,
           targetY: streetY,
           speed: speed,
           type: type,
@@ -3745,7 +3682,7 @@ class Game {
         state: 'WALKING_STREET',
         x: -20,
         y: streetY,
-        targetX: 500,
+        targetX: this.gridWidth * TILE_SIZE + 40,
         targetY: streetY,
         speed: speed,
         type: type,
@@ -3873,7 +3810,7 @@ class Game {
             this.removeCustomer(customer);
           }
           // Exit if walked off screen
-          if (customer.x >= 500) {
+          if (customer.x >= this.gridWidth * TILE_SIZE + 20) {
             this.removeCustomer(customer);
           }
           break;
@@ -3882,7 +3819,7 @@ class Game {
         this.moveToTarget(customer, deltaTime);
         
         // Auto bubble for street walkers (once only, ~10% over walking duration)
-        if (!customer.streetBubbleShown && Math.random() < 0.002) {
+        if (!customer.streetBubbleShown && Math.random() < 0.008) {
           customer.streetBubbleShown = true;
           const msgs = ['いい匂い…', 'ラーメン食べたいな', 'お腹すいた…', 'ここ評判いいのかな'];
           this.showBubble(customer, msgs[Math.floor(Math.random() * msgs.length)]);
@@ -3910,7 +3847,7 @@ class Game {
         }
         
         // Exit if not attracted
-        if (customer.x >= 500) {
+        if (customer.x >= this.gridWidth * TILE_SIZE + 20) {
           this.removeCustomer(customer);
           // Also remove group members walking off screen
           if (customer.groupMembers) {
@@ -4515,7 +4452,7 @@ class Game {
     return Math.max(0, Math.min(1, quality));
   }
 
-  showBubble(customer, text) {
+  showBubble(customer, text, duration = 3000) {
     const bubble = document.createElement('div');
     bubble.className = 'customer-bubble';
     bubble.textContent = text;
@@ -4523,7 +4460,7 @@ class Game {
     
     setTimeout(() => {
       if (bubble.parentNode) bubble.remove();
-    }, 1500);
+    }, duration);
   }
 
   showCustomerFeedback(customer) {
