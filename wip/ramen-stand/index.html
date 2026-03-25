@@ -1073,7 +1073,7 @@ button.toggle-btn.active {
 const GRID_WIDTH = 12;
 const GRID_HEIGHT = 11; // 10 playable + 1 street
 const TILE_SIZE = 40;   // was 76
-const STREET_ROW = 10;  // last row is street
+// STREET_ROW removed — use game.streetRow (dynamic getter)
 
 const FURNITURE_TYPES = {
   // 座席 (Seats)
@@ -1231,7 +1231,7 @@ class SoundManager {
     try {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = this.muted ? 0 : 0.3;
+      this.masterGain.gain.value = this.muted ? 0 : 1.0;
       this.masterGain.connect(this.ctx.destination);
       return true;
     } catch(e) { return false; }
@@ -1240,7 +1240,7 @@ class SoundManager {
   toggleMute() {
     this.muted = !this.muted;
     if (this.masterGain) {
-      this.masterGain.gain.value = this.muted ? 0 : 0.3;
+      this.masterGain.gain.value = this.muted ? 0 : 1.0;
     }
     if (this.muted) this.stopBGM();
     return this.muted;
@@ -1255,7 +1255,7 @@ class SoundManager {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(880, t);
     osc.frequency.setValueAtTime(1100, t + 0.15);
-    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.setValueAtTime(0.5, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
     osc.connect(gain); gain.connect(this.masterGain);
     osc.start(t); osc.stop(t + 0.4);
@@ -1269,7 +1269,7 @@ class SoundManager {
     const gain = this.ctx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(1320, t);
-    gain.gain.setValueAtTime(0.15, t);
+    gain.gain.setValueAtTime(0.5, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.7);
     osc.connect(gain); gain.connect(this.masterGain);
     osc.start(t); osc.stop(t + 0.7);
@@ -1284,7 +1284,7 @@ class SoundManager {
       const gain = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(2000 + i * 500, t + i * 0.06);
-      gain.gain.setValueAtTime(0.1, t + i * 0.06);
+      gain.gain.setValueAtTime(0.4, t + i * 0.06);
       gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.06 + 0.2);
       osc.connect(gain); gain.connect(this.masterGain);
       osc.start(t + i * 0.06); osc.stop(t + i * 0.06 + 0.2);
@@ -1300,7 +1300,7 @@ class SoundManager {
       const gain = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, t + i * 0.12);
-      gain.gain.setValueAtTime(0.15, t + i * 0.12);
+      gain.gain.setValueAtTime(0.5, t + i * 0.12);
       gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.12 + 0.35);
       osc.connect(gain); gain.connect(this.masterGain);
       osc.start(t + i * 0.12); osc.stop(t + i * 0.12 + 0.4);
@@ -1316,7 +1316,7 @@ class SoundManager {
       const gain = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, t + i * 0.15);
-      gain.gain.setValueAtTime(0.18, t + i * 0.15);
+      gain.gain.setValueAtTime(0.5, t + i * 0.15);
       gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.15 + 0.3);
       osc.connect(gain); gain.connect(this.masterGain);
       osc.start(t + i * 0.15); osc.stop(t + i * 0.15 + 0.35);
@@ -1332,7 +1332,7 @@ class SoundManager {
       const gain = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, t + i * 0.2);
-      gain.gain.setValueAtTime(0.18, t + i * 0.2);
+      gain.gain.setValueAtTime(0.5, t + i * 0.2);
       gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.2 + 0.4);
       osc.connect(gain); gain.connect(this.masterGain);
       osc.start(t + i * 0.2); osc.stop(t + i * 0.2 + 0.45);
@@ -2611,9 +2611,10 @@ class Game {
       } else {
         // Try individual seats
         const seats = [];
+        const assignedSeats = [];
         for (let i = 0; i < gSize; i++) {
-          const s = this.findEmptySeat();
-          if (s) { s.occupied = true; seats.push(s); }
+          const s = this.findEmptySeat(assignedSeats);
+          if (s) { s.occupied = true; assignedSeats.push(s); seats.push(s); }
         }
         if (seats.length === gSize) {
           this.waitingQueue.shift();
@@ -3725,10 +3726,12 @@ class Game {
             } else {
               // Try individual counter seats for each member
               const seats = [];
+              const assignedSeats = [];
               for (let i = 0; i < gSize; i++) {
-                const seat = this.findEmptySeat();
+                const seat = this.findEmptySeat(assignedSeats);
                 if (seat) {
                   seat.occupied = true;
+                  assignedSeats.push(seat);
                   seats.push(seat);
                 }
               }
@@ -4150,7 +4153,7 @@ class Game {
     return positions;
   }
 
-  findEmptySeat() {
+  findEmptySeat(excludeSeats = []) {
     let seats = [];
     this.furniture.forEach(f => {
       const type = FURNITURE_TYPES[f.type];
@@ -4186,6 +4189,14 @@ class Game {
       if (s.furniture && groupOccupiedFurniture.has(s.furniture)) {
         return false;
       }
+      return true;
+    });
+    
+    // Filter out seats in excludeSeats (for group assignment rounds)
+    // and seats with dirty dishes on them
+    seats = seats.filter(s => {
+      if (excludeSeats.some(es => es.x === s.x && es.y === s.y)) return false;
+      if (this.dirtyDishes.some(d => d.gridX === s.x && d.gridY === s.y && !d.done)) return false;
       return true;
     });
     
@@ -4328,7 +4339,7 @@ class Game {
   // Store expansion
   expandStore() {
     const nextLevel = this.storeLevel + 1;
-    if (nextLevel > 3) {
+    if (nextLevel > 6) {
       this.showNotification('最大レベルです！');
       return;
     }
@@ -4461,7 +4472,7 @@ class Game {
           // Store expansion UI
           const levelInfo = STORE_LEVELS[this.storeLevel];
           let expansionBtn = '';
-          if (this.storeLevel < 3) {
+          if (this.storeLevel < 6) {
             const nextLevel = this.storeLevel + 1;
             const nextInfo = STORE_LEVELS[nextLevel];
             const canAfford = this.money >= nextInfo.cost;
