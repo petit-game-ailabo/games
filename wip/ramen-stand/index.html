@@ -2978,26 +2978,31 @@ class Game {
   }
 
   calculateQuality(customer) {
-    let quality = 0.5;
-    
-    // Furniture bonuses
-    if (this.furniture.some(f => f.type === 'noodleMachine')) quality += 0.1;
-    if (this.furniture.some(f => f.type === 'soupPot')) quality += 0.1;
-    if (this.furniture.some(f => f.type === 'freezer')) quality += 0.05;
-    if (this.furniture.some(f => f.type === 'plant')) quality += 0.05;
-    
+    let quality = 0.3; // レシピなしの場合のベース品質
+
+    // レシピパラメータベースの品質計算（メイン要素）
+    if (customer && customer.orderedRecipe) {
+      const params = this.getRecipeParams(customer.orderedRecipe);
+      const totalParams = params.kire + params.koku + params.aroma;
+      // 20点満点で正規化（キレ+コク+香り合計、各最大10）
+      quality = Math.min(1, totalParams / 20);
+    }
+
+    // 設備ボーナス（パラメータ補助として小さめに）
+    if (this.furniture.some(f => f.type === 'noodleMachine')) quality += 0.05;
+    if (this.furniture.some(f => f.type === 'plant')) quality += 0.03;
+
     // Combo bonuses
     this.discoveredCombos.forEach(combo => {
       const comboData = COMBOS.find(c => c.name === combo);
       if (comboData) quality += comboData.bonus;
     });
-    
+
     // 調理でスキップされたステップのペナルティ（設備不足による品質低下）
     if (customer && customer.cookingSkippedSteps > 0) {
-      // 1ステップスキップごとに-0.08（最大5ステップで-0.40）
       quality -= customer.cookingSkippedSteps * 0.08;
     }
-    
+
     return Math.max(0, Math.min(1, quality));
   }
 
