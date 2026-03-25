@@ -3833,6 +3833,25 @@ class Game {
     
     customer.moveTimer += deltaTime;
     
+    // Safety: detect stuck customers (same state for 20+ seconds)
+    if (!customer._stuckTimer) customer._stuckTimer = 0;
+    if (!customer._lastState) customer._lastState = customer.state;
+    if (customer.state === customer._lastState) {
+      customer._stuckTimer += deltaTime;
+      if (customer._stuckTimer > 20 && customer.state !== 'WALKING_STREET' && customer.state !== 'EXITING') {
+        // Force exit
+        customer.state = 'EXITING';
+        customer.targetX = -20;
+        customer.targetY = customer.y;
+        customer.path = null;
+        customer._stuckTimer = 0;
+        return;
+      }
+    } else {
+      customer._stuckTimer = 0;
+      customer._lastState = customer.state;
+    }
+    
     switch (customer.state) {
       case 'WALKING_STREET':
         // Group followers: follow leader with offset
@@ -3912,9 +3931,38 @@ class Game {
         break;
         
       case 'ENTERING':
-        // Group followers wait for leader to find seats
+        // Group followers: sync with leader's state
         if (customer.groupId && customer.groupIndex > 0) {
-          // Follow leader movement
+          const leader = customer.groupMembers ? customer.groupMembers[0] : null;
+          if (leader) {
+            // If leader has moved to a different state, follower should too
+            if (leader.state === 'FINDING_SEAT' || leader.state === 'SITTING' || 
+                leader.state === 'WAITING_FOOD' || leader.state === 'EATING') {
+              // Follower should already have seat assigned by leader
+              if (customer.seat) {
+                customer.state = 'FINDING_SEAT';
+                customer.targetX = customer.seat.x * TILE_SIZE + TILE_SIZE / 2 - 6;
+                customer.targetY = customer.seat.y * TILE_SIZE + TILE_SIZE / 2 - 6;
+                this.calculateCustomerPath(customer);
+              } else {
+                // No seat assigned, just follow leader
+                customer.state = leader.state;
+              }
+              break;
+            } else if (leader.state === 'LEAVING' || leader.state === 'EXITING' || leader.state === 'EXITED') {
+              customer.state = 'LEAVING';
+              const ey = this.getEntranceY();
+              customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
+              customer.targetY = ey * TILE_SIZE + TILE_SIZE / 2;
+              customer.path = null;
+              break;
+            } else if (leader.state === 'WAITING_IN_LINE') {
+              customer.state = 'WAITING_IN_LINE';
+              customer.waitTimer = 0;
+              break;
+            }
+          }
+          // Follow leader movement toward entrance
           if (customer.path && customer.path.length > 0) {
             this.moveCustomerAlongPath(customer, deltaTime);
           } else {
