@@ -795,6 +795,8 @@ class Game {
     this.unlockedResearch = [];
     this.activeRecipes = ['醤油ラーメン'];
     this.availableRecipes = ['醤油ラーメン'];
+    this.recipes = [];
+    this.nextRecipeId = 1;
     this.discoveredCombos = [];
     this.waitingQueue = [];
     this.waitingQueueCheckTimer = 0;
@@ -816,6 +818,128 @@ class Game {
     this.selectedStaff = null;
     this.removalMode = false;
     this.dailyStats = { revenue: 0, customers: 0, satisfied: 0 };
+  }
+
+  // ========== レシピ管理 ==========
+
+  // デフォルトの醤油ラーメンレシピを作成
+  createDefaultRecipe() {
+    return {
+      id: 'recipe_' + this.nextRecipeId++,
+      name: '醤油ラーメン',
+      soup: 'shoyu',
+      noodle: 'medium',
+      toppings: ['negi'],
+      price: 250,
+      priceStrategy: 'balanced',
+      active: true
+    };
+  }
+
+  // レシピを新規作成
+  createRecipe(name, soupKey, noodleKey, toppingKeys, priceStrategy) {
+    const params = calculateRecipeParams(soupKey, noodleKey, toppingKeys);
+    const price = calculatePrice(params.cost, priceStrategy || 'balanced');
+    const recipe = {
+      id: 'recipe_' + this.nextRecipeId++,
+      name: name,
+      soup: soupKey,
+      noodle: noodleKey,
+      toppings: toppingKeys.slice(),
+      price: price,
+      priceStrategy: priceStrategy || 'balanced',
+      active: true
+    };
+    this.recipes.push(recipe);
+    return recipe;
+  }
+
+  // レシピを更新（パラメータ再計算含む）
+  updateRecipe(recipeId, updates) {
+    const recipe = this.recipes.find(r => r.id === recipeId);
+    if (!recipe) return null;
+    if (updates.name !== undefined) recipe.name = updates.name;
+    if (updates.soup !== undefined) recipe.soup = updates.soup;
+    if (updates.noodle !== undefined) recipe.noodle = updates.noodle;
+    if (updates.toppings !== undefined) recipe.toppings = updates.toppings.slice();
+    if (updates.priceStrategy !== undefined) recipe.priceStrategy = updates.priceStrategy;
+    if (updates.active !== undefined) recipe.active = updates.active;
+    // 価格再計算
+    const params = this.getRecipeParams(recipe);
+    recipe.price = calculatePrice(params.cost, recipe.priceStrategy);
+    return recipe;
+  }
+
+  // レシピを削除
+  deleteRecipe(recipeId) {
+    this.recipes = this.recipes.filter(r => r.id !== recipeId);
+  }
+
+  // レシピのパラメータを取得（計算済み）
+  getRecipeParams(recipe) {
+    return calculateRecipeParams(recipe.soup, recipe.noodle, recipe.toppings);
+  }
+
+  // 有効なレシピ一覧を取得
+  getActiveRecipes() {
+    return this.recipes.filter(r => r.active);
+  }
+
+  // 提供可能なレシピかチェック（設備の存在確認）
+  canServeRecipe(recipe) {
+    // トッピングのrequiresチェック
+    for (const tk of recipe.toppings) {
+      const topping = TOPPINGS[tk];
+      if (topping && topping.requires) {
+        if (!this.furniture.some(f => f.type === topping.requires)) {
+          return { ok: false, reason: `${topping.name}には${FURNITURE_TYPES[topping.requires].name}が必要です` };
+        }
+      }
+    }
+    // スープの解放チェック
+    const soupBase = SOUP_BASES[recipe.soup];
+    if (soupBase && soupBase.unlock && !this.unlockedResearch.includes(soupBase.unlock)) {
+      return { ok: false, reason: `${soupBase.name}スープは未研究です` };
+    }
+    // トッピングの解放チェック
+    for (const tk of recipe.toppings) {
+      const topping = TOPPINGS[tk];
+      if (topping && topping.unlock && !this.unlockedResearch.includes(topping.unlock)) {
+        return { ok: false, reason: `${topping.name}は未研究です` };
+      }
+    }
+    return { ok: true };
+  }
+
+  // セーブデータからレシピを復元（旧セーブ互換）
+  migrateRecipes(save) {
+    if (save.recipes && save.recipes.length > 0) {
+      this.recipes = save.recipes;
+      this.nextRecipeId = save.nextRecipeId || (this.recipes.length + 1);
+    } else {
+      // 旧セーブデータ: デフォルトレシピを自動生成
+      this.recipes = [this.createDefaultRecipe()];
+      // 旧availableRecipesからも追加
+      if (save.availableRecipes) {
+        const soupNameToKey = {};
+        for (const [key, val] of Object.entries(SOUP_BASES)) {
+          soupNameToKey[val.name + 'スープラーメン'] = key;
+        }
+        for (const recipeName of save.availableRecipes) {
+          if (recipeName === '醤油ラーメン') continue; // 既にデフォルトで追加済み
+          const soupKey = soupNameToKey[recipeName];
+          if (soupKey) {
+            this.createRecipe(recipeName, soupKey, 'medium', ['negi'], 'balanced');
+          }
+        }
+      }
+      // 旧activeRecipes の状態を反映
+      if (save.activeRecipes) {
+        this.recipes.forEach(r => {
+          r.active = save.activeRecipes.includes(r.name);
+        });
+      }
+    }
   }
 
   // Generate walls for a given store level
@@ -3006,6 +3130,11 @@ class Game {
     
     if (research.type === 'soup') {
       this.availableRecipes.push(research.name + 'ラーメン');
+      // 新スープ解放時にデフォルトレシピを自動作成
+      const soupKey = Object.keys(SOUP_BASES).find(k => SOUP_BASES[k].unlock === research.id);
+      if (soupKey) {
+        this.createRecipe(research.name + 'ラーメン', soupKey, 'medium', ['negi'], 'balanced');
+      }
     }
     
     this.showNotification('✨ ' + research.name + ' を習得！');
@@ -3043,7 +3172,9 @@ class Game {
       discoveredCombos: this.discoveredCombos,
       stats: this.stats,
       nextStaffId: this.nextStaffId,
-      storeLevel: this.storeLevel
+      storeLevel: this.storeLevel,
+      recipes: this.recipes,
+      nextRecipeId: this.nextRecipeId
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -3065,6 +3196,9 @@ class Game {
     this.stats = save.stats;
     this.nextStaffId = save.nextStaffId || 0;
     this.storeLevel = save.storeLevel || 1;
+    
+    // レシピ復元（旧セーブ互換のマイグレーション付き）
+    this.migrateRecipes(save);
     
     // Regenerate walls from store level
     this.walls = this.generateWalls(this.storeLevel);
@@ -3105,6 +3239,9 @@ class Game {
 
   startNew() {
     localStorage.removeItem('ramenStandSave');
+    
+    // デフォルトレシピ作成
+    this.recipes = [this.createDefaultRecipe()];
     
     // Set initial store level and walls
     this.storeLevel = 1;
