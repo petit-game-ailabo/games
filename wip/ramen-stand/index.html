@@ -1086,9 +1086,15 @@ class Game {
     this.recipes = this.recipes.filter(r => r.id !== recipeId);
   }
 
-  // レシピのパラメータを取得（計算済み）
+  // レシピのパラメータを取得（計算済み + 設備ボーナス反映）
   getRecipeParams(recipe) {
-    return calculateRecipeParams(recipe.soup, recipe.noodle, recipe.toppings);
+    const params = calculateRecipeParams(recipe.soup, recipe.noodle, recipe.toppings);
+    // 製麺機があれば麺コスト半額
+    if (this.furniture.some(f => f.type === 'noodleMachine')) {
+      const noodleCost = NOODLE_TYPES[recipe.noodle]?.cost || 0;
+      params.cost -= Math.floor(noodleCost / 2);
+    }
+    return params;
   }
 
   // 有効なレシピ一覧を取得
@@ -1096,8 +1102,39 @@ class Game {
     return this.recipes.filter(r => r.active);
   }
 
+  // 設備容量を取得
+  getEquipmentCapacity() {
+    const soupPotCount = this.furniture.filter(f => f.type === 'soupPot').length;
+    const hasCharsiuOven = this.furniture.some(f => f.type === 'charsiuOven');
+    const hasNoodleMachine = this.furniture.some(f => f.type === 'noodleMachine');
+    const hasNoodleBoiler = this.furniture.some(f => f.type === 'noodleBoiler');
+    return { soupPotCount, hasCharsiuOven, hasNoodleMachine, hasNoodleBoiler };
+  }
+
+  // 提供中レシピが使うスープ種類数を取得（除外recipeId指定可）
+  getActiveSoupTypes(excludeId) {
+    const soups = new Set();
+    this.recipes.filter(r => r.active && r.id !== excludeId).forEach(r => soups.add(r.soup));
+    return soups;
+  }
+
   // 提供可能なレシピかチェック（設備の存在確認）
   canServeRecipe(recipe) {
+    // ゆで麺機チェック
+    if (!this.furniture.some(f => f.type === 'noodleBoiler')) {
+      return { ok: false, reason: 'ゆで麺機がありません' };
+    }
+    // スープ鍋の存在チェック
+    const soupPotCount = this.furniture.filter(f => f.type === 'soupPot').length;
+    if (soupPotCount === 0) {
+      return { ok: false, reason: 'スープ鍋がありません' };
+    }
+    // スープ鍋の容量チェック（1鍋=1種類のスープ）
+    const activeSoups = this.getActiveSoupTypes(recipe.id);
+    activeSoups.add(recipe.soup);
+    if (activeSoups.size > soupPotCount) {
+      return { ok: false, reason: `スープ鍋が足りません（${activeSoups.size}種のスープに鍋${soupPotCount}個）` };
+    }
     // トッピングのrequiresチェック
     for (const tk of recipe.toppings) {
       const topping = TOPPINGS[tk];
@@ -3285,9 +3322,20 @@ class Game {
         }).join('');
         
         const activeCount = this.recipes.filter(r => r.active).length;
+        const equip = this.getEquipmentCapacity();
+        const activeSoupCount = this.getActiveSoupTypes().size;
+        const equipStatusHtml = `
+          <div style="font-size:11px; color:#666; margin-top:6px; border-top:1px solid #ddd; padding-top:6px;">
+            🍲 スープ鍋: ${activeSoupCount}/${equip.soupPotCount}種 使用中
+            ${!equip.hasNoodleBoiler ? ' | <span style="color:#d32f2f;">⚠️ ゆで麺機なし</span>' : ' | 🍜 ゆで麺機 OK'}
+            ${equip.hasNoodleMachine ? ' | 🔧 製麺機 (麺コスト半額)' : ''}
+            ${equip.hasCharsiuOven ? ' | 🥩 チャーシュー窯 OK' : ''}
+          </div>
+        `;
         content.innerHTML = `
           <div class="info-section">
             <div>レシピを管理（提供ON: ${activeCount}/3）</div>
+            ${equipStatusHtml}
             <button onclick="game.openRecipeModal()" style="margin-top:8px;width:100%;">＋ 新しいラーメンを作る</button>
           </div>
           ${recipeCards}
@@ -3514,7 +3562,14 @@ class Game {
     const s = this._recipeModalState;
     if (!s) return;
 
-    const params = calculateRecipeParams(s.soup, s.noodle, s.toppings);
+    const rawParams = calculateRecipeParams(s.soup, s.noodle, s.toppings);
+    // 製麺機ボーナス
+    const hasNoodleMachine = this.furniture.some(f => f.type === 'noodleMachine');
+    const params = { ...rawParams };
+    if (hasNoodleMachine) {
+      const noodleCost = NOODLE_TYPES[s.noodle]?.cost || 0;
+      params.cost -= Math.floor(noodleCost / 2);
+    }
     const price = calculatePrice(params.cost, s.strategy);
     const profit = price - params.cost;
 
@@ -3596,7 +3651,7 @@ class Game {
 
       <div class="recipe-cost-section">
         <div style="font-weight:bold; margin-bottom:4px; color:#654321;">原価: ${params.cost}円</div>
-        <div style="font-size:11px; color:#888;">スープ${SOUP_BASES[s.soup].cost} + 麺${NOODLE_TYPES[s.noodle].cost} + 具${params.cost - SOUP_BASES[s.soup].cost - NOODLE_TYPES[s.noodle].cost}円</div>
+        <div style="font-size:11px; color:#888;">スープ${SOUP_BASES[s.soup].cost} + 麺${NOODLE_TYPES[s.noodle].cost}${hasNoodleMachine ? `(-${Math.floor(NOODLE_TYPES[s.noodle].cost/2)}製麺機)` : ''} + 具${rawParams.cost - SOUP_BASES[s.soup].cost - NOODLE_TYPES[s.noodle].cost}円</div>
       </div>
 
       <div class="recipe-field">
