@@ -1455,7 +1455,7 @@ const ACHIEVEMENTS = [
 const EVENTS = [
   { id: 'tabelog', name: '食べログに載った！', desc: '口コミサイトで紹介されました！\n3日間客足+50%', icon: '📱', duration: 3, effect: 'customerBoost', value: 1.5, weight: 10 },
   { id: 'ingredient_surge', name: '食材高騰！', desc: '市場価格が上昇中…\n3日間原価+20%', icon: '📈', duration: 3, effect: 'costIncrease', value: 1.2, weight: 10 },
-  { id: 'regular_customer', name: '常連さん来店！', desc: '特別な常連さんが来店！\n今日はチップ2倍', icon: '🌟', duration: 1, effect: 'tipBoost', value: 2.0, weight: 12 },
+  { id: 'regular_customer', name: '常連さん来店！', desc: '特別な常連さんが来店！\n今日は評判UP！', icon: '🌟', duration: 1, effect: 'reputationBoost', value: 1.5, weight: 12 },
   { id: 'health_inspection', name: '衛生検査！', desc: '保健所の検査が入りました！', icon: '🔍', duration: 0, effect: 'healthCheck', value: 0, weight: 8 },
   { id: 'rainy_day', name: '雨の日☔', desc: '雨で客足が減少…\n今日は客足-30%', icon: '🌧️', duration: 1, effect: 'customerReduction', value: 0.7, weight: 12 },
   { id: 'tv_coverage', name: 'テレビ取材！', desc: 'テレビで紹介されました！\n5日間客足+80%', icon: '📺', duration: 5, effect: 'customerBoost', value: 1.8, weight: 3, minReputation: 30 },
@@ -1563,9 +1563,7 @@ class Game {
     this.eventLog = []; // recent event history for display
     this.dayHistory = []; // 日次履歴 [{ day, revenue, cost, profit, customers, satisfied, topMenu, timePeriodSales }]
     
-    // 第5弾: 食材在庫
-    this.ingredients = {};
-    this.lastPurchaseCost = 0;
+    this.lastPurchaseCost = 0; // kept for compat
     
     // 第5弾: 4軸評判
     this.reputationAxes = { taste: 0, service: 0, atmosphere: 0, value: 0 };
@@ -2570,7 +2568,7 @@ class Game {
         <div>来客数: ${todayCustomers}人</div>
         <div>売上: ${todayRevenue}円</div>
         <div>🌤️ ${this.getWeatherLabel()}</div>
-        ${totalCost > 0 ? `<div>原価: ${totalCost}円</div><div>仕入れ: ${this.lastPurchaseCost}円</div><div>粗利: ${profit}円</div>` : ''}
+        ${totalCost > 0 ? `<div>原価: ${totalCost}円</div><div>粗利: ${profit}円</div>` : ''}
         <div style="margin-top:6px;border-top:1px solid #eee;padding-top:6px;">
           <div style="font-size:12px;color:#666;">── 固定費 ──</div>
           <div style="font-size:12px;">🏠 家賃: ${running.rent}円</div>
@@ -4040,16 +4038,8 @@ class Game {
           customer.orderPlaced = true;
           // レシピベースの価格計算: 提供中レシピからランダムに割り当て
           const activeRecipeList = this.getActiveRecipes();
-          // Filter recipes that have ingredients in stock
-          const availableRecipes = activeRecipeList.filter(r => {
-            const keys = [r.soup, r.noodle, ...(r.toppings || [])];
-            return keys.every(k => (this.ingredients[k] || 0) > 0);
-          });
-          const recipePool = availableRecipes.length > 0 ? availableRecipes : activeRecipeList;
-          if (recipePool.length > 0) {
-            customer.orderedRecipe = recipePool[Math.floor(Math.random() * recipePool.length)];
-            // Consume ingredients
-            this.consumeIngredients(customer.orderedRecipe);
+          if (activeRecipeList.length > 0) {
+            customer.orderedRecipe = activeRecipeList[Math.floor(Math.random() * activeRecipeList.length)];
           }
           // 30% chance to also order a side menu
           const availableSides = this.getAvailableSides();
@@ -4186,11 +4176,9 @@ class Game {
           if (customer.orderedSide) {
             recipePrice += customer.orderedSide.price;
           }
-          // イベントによるチップブーストと原価増加を適用
-          const tipEventMultiplier = this.getEventMultiplier('tipBoost');
           // Each person pays individually, seatPenalty reduces by 15%
           const seatPenaltyMultiplier = customer.seatPenalty ? 0.85 : 1;
-          customer.paid = Math.floor(recipePrice * tipMultiplier * tipEventMultiplier * seatPenaltyMultiplier);
+          customer.paid = Math.floor(recipePrice * tipMultiplier * seatPenaltyMultiplier);
           this.money += customer.paid;
           soundMgr.playPayment();
           
@@ -4628,10 +4616,7 @@ class Game {
                 <strong>🌤️ 天気:</strong> ${this.getWeatherLabel()}
                 ${this.weather !== 'sunny' ? `<span style="color:#d32f2f;"> (客足${this.weather === 'rainy' ? '-20%' : '-30%'})</span>` : ''}
               </div>
-              <div style="margin-bottom:8px;background:white;padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;">
-                <strong>📦 仕入れ状況:</strong> ${this.getIngredientSummary()}<br>
-                <strong>仕入れ費用:</strong> ${this.lastPurchaseCost}円
-              </div>
+
               <div style="margin-bottom:8px;background:white;padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;">
                 <strong>💸 本日の固定費:</strong> ${(() => { const rc = this.calculateRunningCosts(); return `${rc.total}円 (家賃${rc.rent} + 人件費${rc.staffCost} + 光熱費${rc.utilityCost})`; })()}
               </div>
