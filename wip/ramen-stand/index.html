@@ -1589,13 +1589,41 @@ class Game {
     this.stats.totalRevenue += todayRevenue;
     this.stats.satisfiedCustomers += todaySatisfied;
     
+    // メニュー別売上集計
+    const recipeSales = {};
+    this.customers.forEach(c => {
+      if (c.paid > 0 && c.orderedRecipe) {
+        const name = c.orderedRecipe.name;
+        if (!recipeSales[name]) recipeSales[name] = { count: 0, revenue: 0 };
+        recipeSales[name].count += (c.groupSize || 1);
+        recipeSales[name].revenue += c.paid;
+      }
+    });
+    const recipeSalesHtml = Object.keys(recipeSales).length > 0
+      ? Object.entries(recipeSales).map(([name, data]) => 
+          `<div style="font-size:12px;">🍜 ${name}: ${data.count}杯 / ${data.revenue}円</div>`
+        ).join('')
+      : '';
+    
+    // 原価合計の計算
+    let totalCost = 0;
+    this.customers.forEach(c => {
+      if (c.paid > 0 && c.orderedRecipe) {
+        const params = this.getRecipeParams(c.orderedRecipe);
+        totalCost += params.cost * (c.groupSize || 1);
+      }
+    });
+    const profit = todayRevenue - totalCost;
+    
     const content = document.getElementById('summary-content');
     content.innerHTML = `
       <div class="info-section">
         <div>来客数: ${todayCustomers}人</div>
         <div>売上: ${todayRevenue}円</div>
+        ${totalCost > 0 ? `<div>原価: ${totalCost}円</div><div style="font-weight:bold;color:${profit >= 0 ? '#4caf50' : '#d32f2f'};">利益: ${profit}円</div>` : ''}
         <div>満足度: ${todaySatisfied}/${todayCustomers}人</div>
         <div>評判変動: +${todayCustomers}</div>
+        ${recipeSalesHtml ? `<div style="margin-top:8px;border-top:1px solid #ddd;padding-top:8px;"><strong>メニュー別</strong>${recipeSalesHtml}</div>` : ''}
       </div>
     `;
     
@@ -2406,7 +2434,16 @@ class Game {
   }
 
   spawnPedestrian() {
-    const attractRate = 0.1 + (this.reputation / 1000);
+    // 基本集客率 + 評判ボーナス + 価格影響
+    let attractRate = 0.1 + (this.reputation / 1000);
+    // 提供中レシピの平均売価で集客率を調整
+    const activeList = this.getActiveRecipes();
+    if (activeList.length > 0) {
+      const avgPrice = activeList.reduce((sum, r) => sum + r.price, 0) / activeList.length;
+      // 250円を基準: 安いほど集客UP、高いほどDOWN
+      const priceFactor = 1 + (250 - avgPrice) / 1000; // 例: 150円→+0.1, 350円→-0.1
+      attractRate *= Math.max(0.3, Math.min(1.5, priceFactor));
+    }
     const streetY = TILE_SIZE * STREET_ROW + TILE_SIZE / 2;
     
     const customer = {
@@ -2615,7 +2652,13 @@ class Game {
         customer.eatTimer += deltaTime;
         if (customer.eatTimer > 1 && !customer.orderPlaced) {
           customer.orderPlaced = true;
-          const orderLabel = customer.groupSize > 1 ? `🍜×${customer.groupSize}注文` : '🍜注文';
+          // レシピベースの価格計算: 提供中レシピからランダムに割り当て
+          const activeRecipeList = this.getActiveRecipes();
+          if (activeRecipeList.length > 0) {
+            customer.orderedRecipe = activeRecipeList[Math.floor(Math.random() * activeRecipeList.length)];
+          }
+          const orderRecipeName = customer.orderedRecipe ? customer.orderedRecipe.name : '🍜';
+          const orderLabel = customer.groupSize > 1 ? `${orderRecipeName}×${customer.groupSize}` : orderRecipeName;
           this.showBubble(customer, orderLabel);
           
           // Check if there are cooks
@@ -2720,8 +2763,9 @@ class Game {
           
           customer.faceElement.textContent = face;
           
-          const basePrice = 800;
-          customer.paid = Math.floor(basePrice * tipMultiplier * (customer.groupSize || 1));
+          // レシピベースの売価を使用（レシピ未割り当ての場合はフォールバック250円）
+          const recipePrice = customer.orderedRecipe ? customer.orderedRecipe.price : 250;
+          customer.paid = Math.floor(recipePrice * tipMultiplier * (customer.groupSize || 1));
           this.money += customer.paid;
           
           // Update daily stats
