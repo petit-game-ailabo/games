@@ -902,6 +902,30 @@ const TOPPINGS = {
   katsuobushi:{ name: '鰹節',         cost: 40, kire: 2, koku: 1, aroma: 2, unlock: '鰹節' },
 };
 
+// 動的調理ステップ生成: レシピの素材から必要設備を自動決定
+function generateCookingSteps(recipe) {
+  const steps = [];
+  // 1. 冷蔵庫から材料取り出し（常に最初）
+  steps.push('freezer');
+  // 2. スープ準備
+  steps.push('soupPot');
+  steps.push('soupStove');
+  // 3. 製麺機がレシピに関わる場合（オプション追加ステップ）
+  // → 実際の設備有無チェックはcookTakeOrder側で行う
+  steps.push('noodleMachine');
+  // 4. 麺茹で
+  steps.push('noodleBoiler');
+  // 5. トッピング用特殊設備
+  if (recipe && recipe.toppings) {
+    if (recipe.toppings.includes('chashu')) {
+      steps.push('charsiuOven');
+    }
+  }
+  // 6. 盛り付け（常に最後）
+  steps.push('platingStation');
+  return steps;
+}
+
 // レシピパラメータ計算ユーティリティ
 function calculateRecipeParams(soupKey, noodleKey, toppingKeys) {
   const soup = SOUP_BASES[soupKey];
@@ -2277,9 +2301,9 @@ class Game {
     staff.currentOrder = order;
     staff.cookingStep = 0;
     
-    // Determine recipe
-    const recipeName = this.activeRecipes.length > 0 ? this.activeRecipes[Math.floor(Math.random() * this.activeRecipes.length)] : '醤油ラーメン';
-    const steps = COOKING_RECIPES[recipeName] || COOKING_RECIPES['醤油ラーメン'];
+    // 動的調理ステップ生成: 客が注文したレシピから自動決定
+    const orderedRecipe = order ? order.orderedRecipe : null;
+    const steps = generateCookingSteps(orderedRecipe);
     
     // Filter steps to only equipment that exists on the grid
     staff.currentRecipe = [];
@@ -2289,7 +2313,10 @@ class Game {
       if (equip) {
         staff.currentRecipe.push(equipType);
       } else {
-        staff.skippedSteps++;
+        // noodleMachineはオプション設備なのでスキップしてもペナルティなし
+        if (equipType !== 'noodleMachine') {
+          staff.skippedSteps++;
+        }
       }
     }
     
