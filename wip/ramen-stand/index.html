@@ -2957,7 +2957,7 @@ class Game {
     const entranceY = this.getEntranceY();
     // Entrance gap is at center 2 columns of the store
     const info = STORE_LEVELS[this.storeLevel];
-    if (info && entranceY >= 0 && entranceY < this.gridHeight - 1) {
+    if (info && entranceY >= 0 && entranceY < this.gridHeight) {
       const [minCol, maxCol] = info.interiorCols;
       const entranceLeft = Math.floor((minCol + maxCol) / 2);
       const entranceRight = entranceLeft + 1;
@@ -3007,9 +3007,9 @@ class Game {
 
   // ========== BFS Pathfinding ==========
   buildOccupancyGrid() {
-    // Grid rows 0..9 (playable area), cols 0..11
+    // Include ALL rows including street row for customer pathfinding
     const grid = [];
-    for (let y = 0; y < this.gridHeight - 1; y++) {
+    for (let y = 0; y < this.gridHeight; y++) {
       grid[y] = [];
       for (let x = 0; x < this.gridWidth; x++) {
         grid[y][x] = false; // false = passable
@@ -3017,7 +3017,7 @@ class Game {
     }
     // Mark wall tiles as impassable
     this.walls.forEach(w => {
-      if (w.y >= 0 && w.y < this.gridHeight - 1 && w.x >= 0 && w.x < this.gridWidth) {
+      if (w.y >= 0 && w.y < this.gridHeight && w.x >= 0 && w.x < this.gridWidth) {
         grid[w.y][w.x] = true;
       }
     });
@@ -3028,7 +3028,7 @@ class Game {
         for (let dx = 0; dx < ft.width; dx++) {
           const gy = f.y + dy;
           const gx = f.x + dx;
-          if (gy >= 0 && gy < this.gridHeight - 1 && gx >= 0 && gx < this.gridWidth) {
+          if (gy >= 0 && gy < this.gridHeight && gx >= 0 && gx < this.gridWidth) {
             grid[gy][gx] = true; // blocked
           }
         }
@@ -3041,14 +3041,14 @@ class Game {
     const grid = this.buildOccupancyGrid();
     
     // If end tile is blocked and we allow it (for reaching equipment), find adjacent
-    const targetIsBlocked = endY >= 0 && endY < this.gridHeight - 1 && endX >= 0 && endX < this.gridWidth && grid[endY][endX];
+    const targetIsBlocked = endY >= 0 && endY < this.gridHeight && endX >= 0 && endX < this.gridWidth && grid[endY][endX];
     
     if (targetIsBlocked && allowEndBlocked) {
       // Find path to an adjacent passable tile
       const adjacentTiles = [
         {x: endX - 1, y: endY}, {x: endX + 1, y: endY},
         {x: endX, y: endY - 1}, {x: endX, y: endY + 1}
-      ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight - 1 && !grid[t.y][t.x]);
+      ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight && !grid[t.y][t.x]);
       
       // Try each adjacent tile, return shortest path
       let bestPath = null;
@@ -3072,7 +3072,7 @@ class Game {
   _bfs(grid, sx, sy, ex, ey) {
     if (sx === ex && sy === ey) return [];
     
-    const rows = this.gridHeight - 1;
+    const rows = this.gridHeight;
     const cols = this.gridWidth;
     const visited = Array.from({length: rows}, () => Array(cols).fill(false));
     const parent = Array.from({length: rows}, () => Array(cols).fill(null));
@@ -3358,7 +3358,7 @@ class Game {
     const adjacentTiles = [
       {x: seatX - 1, y: seatY}, {x: seatX + 1, y: seatY},
       {x: seatX, y: seatY - 1}, {x: seatX, y: seatY + 1}
-    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight - 1 && !grid[t.y][t.x]);
+    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight && !grid[t.y][t.x]);
     
     let bestPath = null;
     for (const adj of adjacentTiles) {
@@ -3469,7 +3469,7 @@ class Game {
     const adjacentTiles = [
       {x: equip.x - 1, y: equip.y}, {x: equip.x + 1, y: equip.y},
       {x: equip.x, y: equip.y - 1}, {x: equip.x, y: equip.y + 1}
-    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight - 1 && !grid[t.y][t.x]);
+    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight && !grid[t.y][t.x]);
     
     let bestPath = null;
     for (const adj of adjacentTiles) {
@@ -3533,7 +3533,7 @@ class Game {
     const adjacentTiles = [
       {x: seatX - 1, y: seatY}, {x: seatX + 1, y: seatY},
       {x: seatX, y: seatY - 1}, {x: seatX, y: seatY + 1}
-    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight - 1 && !grid[t.y][t.x]);
+    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight && !grid[t.y][t.x]);
     
     let bestPath = null;
     for (const adj of adjacentTiles) {
