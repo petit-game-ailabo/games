@@ -658,6 +658,76 @@ const COOKING_RECIPES = {
   '貝類スープラーメン': ['freezer', 'soupPot', 'soupStove', 'noodleBoiler', 'platingStation']
 };
 
+// === 第3弾: 商品開発システム用データ定義 ===
+
+// スープベース定義: kire(キレ), koku(コク), aroma(香り)は0-5のパラメータ
+const SOUP_BASES = {
+  shoyu:    { name: '醤油',   cost: 50,  kire: 3, koku: 1, aroma: 2, unlock: null },
+  miso:     { name: '味噌',   cost: 80,  kire: 1, koku: 4, aroma: 2, unlock: '味噌スープ' },
+  shio:     { name: '塩',     cost: 40,  kire: 4, koku: 1, aroma: 1, unlock: '塩スープ' },
+  tonkotsu: { name: '豚骨',   cost: 120, kire: 1, koku: 5, aroma: 3, unlock: '豚骨スープ' },
+  niboshi:  { name: '煮干し', cost: 100, kire: 3, koku: 3, aroma: 4, unlock: '煮干しスープ' },
+  kai:      { name: '貝類',   cost: 150, kire: 2, koku: 4, aroma: 5, unlock: '貝類スープ' },
+};
+
+// 麺タイプ定義: パラメータは加算値（スープに足す）
+const NOODLE_TYPES = {
+  thin:   { name: '細麺',     cost: 30, kire: 1,  koku: 0 },
+  medium: { name: '中太麺',   cost: 30, kire: 0,  koku: 1 },
+  thick:  { name: '太麺',     cost: 40, kire: -1, koku: 2 },
+  curly:  { name: 'ちぢれ麺', cost: 35, kire: 0,  koku: 1 },
+};
+
+// トッピング定義: requires は必要な設備キー（FURNITURE_TYPES）
+const TOPPINGS = {
+  negi:       { name: 'ネギ',         cost: 10, kire: 1, koku: 0, aroma: 0, unlock: null },
+  nori:       { name: '海苔',         cost: 15, kire: 0, koku: 0, aroma: 1, unlock: null },
+  menma:      { name: 'メンマ',       cost: 20, kire: 1, koku: 1, aroma: 0, unlock: 'メンマ' },
+  chashu:     { name: 'チャーシュー', cost: 60, kire: 0, koku: 2, aroma: 1, unlock: 'チャーシュー', requires: 'charsiuOven' },
+  tamago:     { name: '味玉',         cost: 30, kire: 0, koku: 2, aroma: 0, unlock: '味玉' },
+  moyashi:    { name: 'もやし',       cost: 10, kire: 1, koku: 0, aroma: 0, unlock: 'もやし' },
+  corn:       { name: 'コーン',       cost: 15, kire: 0, koku: 1, aroma: 0, unlock: 'コーン' },
+  butter:     { name: 'バター',       cost: 25, kire: -1, koku: 3, aroma: 1, unlock: 'バター' },
+  katsuobushi:{ name: '鰹節',         cost: 40, kire: 2, koku: 1, aroma: 2, unlock: '鰹節' },
+};
+
+// レシピパラメータ計算ユーティリティ
+function calculateRecipeParams(soupKey, noodleKey, toppingKeys) {
+  const soup = SOUP_BASES[soupKey];
+  const noodle = NOODLE_TYPES[noodleKey];
+  let kire = soup.kire + noodle.kire;
+  let koku = soup.koku + noodle.koku;
+  let aroma = soup.aroma;
+  let cost = soup.cost + noodle.cost;
+  for (const tk of toppingKeys) {
+    const t = TOPPINGS[tk];
+    if (t) {
+      kire += t.kire;
+      koku += t.koku;
+      aroma += t.aroma;
+      cost += t.cost;
+    }
+  }
+  return {
+    kire: Math.max(0, Math.min(10, kire)),
+    koku: Math.max(0, Math.min(10, koku)),
+    aroma: Math.max(0, Math.min(10, aroma)),
+    cost
+  };
+}
+
+// 売価計算ユーティリティ（原価率ベース）
+function calculatePrice(cost, strategy) {
+  switch(strategy) {
+    case 'cheap':    return Math.ceil(cost / 0.95); // 原価率95%
+    case 'balanced': return Math.ceil(cost / 0.80); // 原価率80%
+    case 'premium':  return Math.ceil(cost / 0.70); // 原価率70%
+    default:         return Math.ceil(cost / 0.80);
+  }
+}
+
+// === 既存データ定義 ===
+
 // 商品研究: 料理素材の解放のみ（お金で購入）。家具は配置タブから直接購入。
 const RESEARCH_TREE = [
   { id: '味噌スープ', name: '味噌スープ', cost: 500, tier: 1, type: 'soup' },
