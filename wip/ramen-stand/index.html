@@ -506,6 +506,210 @@ button.toggle-btn.active {
   color: #654321;
 }
 
+/* Recipe Modal */
+.recipe-modal-content {
+  background: #f5f0e8;
+  padding: 16px;
+  border-radius: 12px;
+  width: 95%;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  border: 4px solid #654321;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+}
+
+.recipe-modal-title {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  color: #654321;
+  text-align: center;
+}
+
+.recipe-field {
+  margin-bottom: 10px;
+}
+
+.recipe-field label {
+  display: block;
+  font-weight: bold;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: #654321;
+}
+
+.recipe-field input[type="text"],
+.recipe-field select {
+  width: 100%;
+  padding: 8px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+}
+
+.recipe-field select:disabled {
+  opacity: 0.5;
+}
+
+.topping-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.topping-chip {
+  padding: 6px 8px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+  user-select: none;
+}
+
+.topping-chip.selected {
+  border-color: #d4af37;
+  background: #fff9e6;
+}
+
+.topping-chip.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.topping-chip .topping-cost {
+  font-size: 10px;
+  color: #888;
+}
+
+.param-bar-container {
+  margin-bottom: 6px;
+}
+
+.param-bar-label {
+  font-size: 12px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.param-bar-track {
+  height: 14px;
+  background: #e0e0e0;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.param-bar-fill {
+  height: 100%;
+  border-radius: 7px;
+  transition: width 0.3s;
+}
+
+.param-bar-fill.kire { background: linear-gradient(90deg, #42a5f5, #1565c0); }
+.param-bar-fill.koku { background: linear-gradient(90deg, #ff7043, #d32f2f); }
+.param-bar-fill.aroma { background: linear-gradient(90deg, #66bb6a, #2e7d32); }
+
+.recipe-cost-section {
+  background: white;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.price-strategy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.price-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.price-option.selected {
+  border-color: #d4af37;
+  background: #fff9e6;
+}
+
+.recipe-modal-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.recipe-modal-buttons button {
+  flex: 1;
+}
+
+.recipe-card {
+  background: white;
+  padding: 10px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.recipe-card.active {
+  border-color: #d4af37;
+  background: #fff9e6;
+}
+
+.recipe-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.recipe-card-name {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.recipe-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.recipe-card-actions button {
+  padding: 4px 8px;
+  font-size: 11px;
+  margin: 0;
+}
+
+.recipe-card-details {
+  font-size: 11px;
+  color: #666;
+}
+
+.recipe-card-params {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.recipe-card-warn {
+  color: #d32f2f;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
 /* Notification */
 #notification {
   position: fixed;
@@ -597,6 +801,13 @@ button.toggle-btn.active {
 </div>
 
 <div id="notification"></div>
+
+<div class="modal" id="recipe-modal">
+  <div class="recipe-modal-content">
+    <div class="recipe-modal-title" id="recipe-modal-title">🍜 新しいラーメンを作る</div>
+    <div id="recipe-modal-body"></div>
+  </div>
+</div>
 
 <div class="modal" id="day-summary-modal">
   <div class="modal-content">
@@ -2995,21 +3206,42 @@ class Game {
         break;
         
       case 'menu':
-        const recipeList = this.availableRecipes.map(r => {
-          const isActive = this.activeRecipes.includes(r);
+        const recipeCards = this.recipes.map(r => {
+          const p = this.getRecipeParams(r);
+          const serveCheck = this.canServeRecipe(r);
+          const toppingNames = r.toppings.map(tk => TOPPINGS[tk]?.name || tk).join(', ') || 'なし';
           return `
-            <div class="recipe-item ${isActive ? 'active' : ''}" onclick="game.toggleRecipe('${r}')">
-              <div><strong>${r}</strong></div>
-              <div style="font-size: 11px; color: #666;">${isActive ? '提供中' : 'タップで提供'}</div>
+            <div class="recipe-card ${r.active ? 'active' : ''}">
+              <div class="recipe-card-header">
+                <div class="recipe-card-name">🍜 ${this._escapeHtml(r.name)} ${r.active ? '<span style="color:#4caf50;font-size:11px;">提供中</span>' : ''}</div>
+                <div class="recipe-card-actions">
+                  <button onclick="game.toggleRecipeActive('${r.id}')">${r.active ? 'OFF' : 'ON'}</button>
+                  <button onclick="game.openRecipeModal('${r.id}')">編集</button>
+                  ${this.recipes.length > 1 ? `<button onclick="game.confirmDeleteRecipe('${r.id}')" style="background:#ff6b6b;color:#fff;">✕</button>` : ''}
+                </div>
+              </div>
+              <div class="recipe-card-details">
+                ${SOUP_BASES[r.soup]?.name || '?'}スープ / ${NOODLE_TYPES[r.noodle]?.name || '?'} / ${toppingNames}
+              </div>
+              <div class="recipe-card-params">
+                <span style="color:#1565c0;">キレ${p.kire}</span>
+                <span style="color:#d32f2f;">コク${p.koku}</span>
+                <span style="color:#2e7d32;">香り${p.aroma}</span>
+                <span>原価${p.cost}円</span>
+                <span style="font-weight:bold;">売価${r.price}円</span>
+              </div>
+              ${!serveCheck.ok ? `<div class="recipe-card-warn">⚠️ ${serveCheck.reason}</div>` : ''}
             </div>
           `;
         }).join('');
         
+        const activeCount = this.recipes.filter(r => r.active).length;
         content.innerHTML = `
           <div class="info-section">
-            <div>提供するメニューを選択（最大3つ）</div>
+            <div>レシピを管理（提供ON: ${activeCount}/3）</div>
+            <button onclick="game.openRecipeModal()" style="margin-top:8px;width:100%;">＋ 新しいラーメンを作る</button>
           </div>
-          <div class="recipe-list">${recipeList}</div>
+          ${recipeCards}
         `;
         break;
         
@@ -3116,6 +3348,46 @@ class Game {
     this.renderTabContent();
   }
 
+  toggleRecipeActive(recipeId) {
+    const recipe = this.recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    if (recipe.active) {
+      recipe.active = false;
+    } else {
+      const activeCount = this.recipes.filter(r => r.active).length;
+      if (activeCount >= 3) {
+        this.showNotification('提供は最大3つまで！');
+        return;
+      }
+      // Check if recipe can be served
+      const check = this.canServeRecipe(recipe);
+      if (!check.ok) {
+        this.showNotification(check.reason);
+        return;
+      }
+      recipe.active = true;
+    }
+    // Sync activeRecipes list for backward compat
+    this.activeRecipes = this.recipes.filter(r => r.active).map(r => r.name);
+    this.saveGame();
+    this.renderTabContent();
+  }
+
+  confirmDeleteRecipe(recipeId) {
+    const recipe = this.recipes.find(r => r.id === recipeId);
+    if (!recipe) return;
+    if (this.recipes.length <= 1) {
+      this.showNotification('最後のレシピは削除できません！');
+      return;
+    }
+    this.deleteRecipe(recipeId);
+    // Sync activeRecipes
+    this.activeRecipes = this.recipes.filter(r => r.active).map(r => r.name);
+    this.saveGame();
+    this.showNotification('レシピを削除しました');
+    this.renderTabContent();
+  }
+
   unlockResearch(id) {
     const research = RESEARCH_TREE.find(r => r.id === id);
     if (!research) return;
@@ -3145,6 +3417,214 @@ class Game {
   setSpeed(multiplier) {
     this.speedMultiplier = multiplier;
     this.renderTabContent();
+  }
+
+  // ========== ラーメン構成モーダル ==========
+
+  openRecipeModal(editRecipeId) {
+    const modal = document.getElementById('recipe-modal');
+    const title = document.getElementById('recipe-modal-title');
+    const body = document.getElementById('recipe-modal-body');
+
+    // Determine editing state
+    let recipe = null;
+    if (editRecipeId) {
+      recipe = this.recipes.find(r => r.id === editRecipeId);
+    }
+    const isEdit = !!recipe;
+    title.textContent = isEdit ? '🍜 レシピを編集' : '🍜 新しいラーメンを作る';
+
+    // Current values
+    const curName = recipe ? recipe.name : '';
+    const curSoup = recipe ? recipe.soup : 'shoyu';
+    const curNoodle = recipe ? recipe.noodle : 'medium';
+    const curToppings = recipe ? recipe.toppings.slice() : [];
+    const curStrategy = recipe ? recipe.priceStrategy : 'balanced';
+
+    // Store editing state
+    this._recipeModalState = {
+      editId: editRecipeId || null,
+      name: curName,
+      soup: curSoup,
+      noodle: curNoodle,
+      toppings: curToppings,
+      strategy: curStrategy
+    };
+
+    this._renderRecipeModalBody();
+    modal.classList.add('active');
+  }
+
+  closeRecipeModal() {
+    document.getElementById('recipe-modal').classList.remove('active');
+    this._recipeModalState = null;
+  }
+
+  _renderRecipeModalBody() {
+    const body = document.getElementById('recipe-modal-body');
+    const s = this._recipeModalState;
+    if (!s) return;
+
+    const params = calculateRecipeParams(s.soup, s.noodle, s.toppings);
+    const price = calculatePrice(params.cost, s.strategy);
+    const profit = price - params.cost;
+
+    // Soup options (only unlocked)
+    const soupOptions = Object.entries(SOUP_BASES)
+      .filter(([k, v]) => !v.unlock || this.unlockedResearch.includes(v.unlock))
+      .map(([k, v]) => `<option value="${k}" ${s.soup === k ? 'selected' : ''}>${v.name} (${v.cost}円)</option>`)
+      .join('');
+
+    // Noodle options
+    const noodleOptions = Object.entries(NOODLE_TYPES)
+      .map(([k, v]) => `<option value="${k}" ${s.noodle === k ? 'selected' : ''}>${v.name} (${v.cost}円)</option>`)
+      .join('');
+
+    // Topping chips
+    const toppingChips = Object.entries(TOPPINGS).map(([k, t]) => {
+      const unlocked = !t.unlock || this.unlockedResearch.includes(t.unlock);
+      const equipOk = !t.requires || this.furniture.some(f => f.type === t.requires);
+      const available = unlocked;
+      const selected = s.toppings.includes(k);
+      let cls = 'topping-chip';
+      if (selected) cls += ' selected';
+      if (!available) cls += ' locked';
+      let warn = '';
+      if (!unlocked) warn = '(未研究)';
+      else if (!equipOk) warn = `(${FURNITURE_TYPES[t.requires]?.name || '設備'}不足)`;
+      return `<div class="${cls}" onclick="game._toggleTopping('${k}', ${available})" title="${t.name}">
+        ${t.name} ${warn}<br><span class="topping-cost">${t.cost}円</span>
+      </div>`;
+    }).join('');
+
+    // Price strategies
+    const strategies = [
+      { key: 'cheap', label: '安さで勝負', ratio: '95%' },
+      { key: 'balanced', label: 'ちょうどいい', ratio: '80%' },
+      { key: 'premium', label: 'ちょっとお高め', ratio: '70%' }
+    ];
+    const strategyHtml = strategies.map(st => {
+      const p = calculatePrice(params.cost, st.key);
+      const pr = p - params.cost;
+      return `<div class="price-option ${s.strategy === st.key ? 'selected' : ''}" onclick="game._setStrategy('${st.key}')">
+        <strong>${st.label}</strong> ${p}円 (原価率${st.ratio}) → 利益${pr}円/杯
+      </div>`;
+    }).join('');
+
+    body.innerHTML = `
+      <div class="recipe-field">
+        <label>レシピ名</label>
+        <input type="text" id="recipe-name-input" value="${this._escapeHtml(s.name)}" placeholder="例: こだわり醤油ラーメン" oninput="game._recipeModalState.name=this.value">
+      </div>
+      <div class="recipe-field">
+        <label>スープ</label>
+        <select onchange="game._setSoup(this.value)">${soupOptions}</select>
+      </div>
+      <div class="recipe-field">
+        <label>麺</label>
+        <select onchange="game._setNoodle(this.value)">${noodleOptions}</select>
+      </div>
+      <div class="recipe-field">
+        <label>トッピング</label>
+        <div class="topping-grid">${toppingChips}</div>
+      </div>
+
+      <div style="margin: 10px 0; padding: 8px; background: white; border: 2px solid #ccc; border-radius: 6px;">
+        <div style="font-weight:bold; font-size:13px; margin-bottom:6px; color:#654321;">パラメータ</div>
+        <div class="param-bar-container">
+          <div class="param-bar-label"><span>キレ</span><span>${params.kire}/10</span></div>
+          <div class="param-bar-track"><div class="param-bar-fill kire" style="width:${params.kire * 10}%"></div></div>
+        </div>
+        <div class="param-bar-container">
+          <div class="param-bar-label"><span>コク</span><span>${params.koku}/10</span></div>
+          <div class="param-bar-track"><div class="param-bar-fill koku" style="width:${params.koku * 10}%"></div></div>
+        </div>
+        <div class="param-bar-container">
+          <div class="param-bar-label"><span>香り</span><span>${params.aroma}/10</span></div>
+          <div class="param-bar-track"><div class="param-bar-fill aroma" style="width:${params.aroma * 10}%"></div></div>
+        </div>
+      </div>
+
+      <div class="recipe-cost-section">
+        <div style="font-weight:bold; margin-bottom:4px; color:#654321;">原価: ${params.cost}円</div>
+        <div style="font-size:11px; color:#888;">スープ${SOUP_BASES[s.soup].cost} + 麺${NOODLE_TYPES[s.noodle].cost} + 具${params.cost - SOUP_BASES[s.soup].cost - NOODLE_TYPES[s.noodle].cost}円</div>
+      </div>
+
+      <div class="recipe-field">
+        <label>価格設定</label>
+        <div class="price-strategy-options">${strategyHtml}</div>
+      </div>
+
+      <div style="background: #e8f5e9; padding: 8px; border-radius: 6px; text-align: center; font-weight: bold;">
+        売価: ${price}円 / 利益: ${profit}円/杯
+      </div>
+
+      <div class="recipe-modal-buttons">
+        <button onclick="game.closeRecipeModal()" style="background:#ccc;">キャンセル</button>
+        <button onclick="game._saveRecipeFromModal()">保存</button>
+      </div>
+    `;
+  }
+
+  _escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  _setSoup(key) {
+    if (this._recipeModalState) {
+      this._recipeModalState.soup = key;
+      this._renderRecipeModalBody();
+    }
+  }
+
+  _setNoodle(key) {
+    if (this._recipeModalState) {
+      this._recipeModalState.noodle = key;
+      this._renderRecipeModalBody();
+    }
+  }
+
+  _toggleTopping(key, available) {
+    if (!available || !this._recipeModalState) return;
+    const s = this._recipeModalState;
+    const idx = s.toppings.indexOf(key);
+    if (idx >= 0) {
+      s.toppings.splice(idx, 1);
+    } else {
+      s.toppings.push(key);
+    }
+    this._renderRecipeModalBody();
+  }
+
+  _setStrategy(key) {
+    if (this._recipeModalState) {
+      this._recipeModalState.strategy = key;
+      this._renderRecipeModalBody();
+    }
+  }
+
+  _saveRecipeFromModal() {
+    const s = this._recipeModalState;
+    if (!s) return;
+    const name = s.name.trim() || (SOUP_BASES[s.soup].name + 'ラーメン');
+
+    if (s.editId) {
+      this.updateRecipe(s.editId, {
+        name: name,
+        soup: s.soup,
+        noodle: s.noodle,
+        toppings: s.toppings,
+        priceStrategy: s.strategy
+      });
+      this.showNotification('レシピを更新しました！');
+    } else {
+      this.createRecipe(name, s.soup, s.noodle, s.toppings, s.strategy);
+      this.showNotification('新レシピを作成しました！');
+    }
+
+    this.closeRecipeModal();
+    this.renderTabContent();
+    this.saveGame();
   }
 
   updateUI() {
