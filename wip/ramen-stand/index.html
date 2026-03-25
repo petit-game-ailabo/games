@@ -1897,6 +1897,7 @@ class Game {
     soundMgr.stopBGM();
     soundMgr.playDayEnd();
     this.dayActive = false;
+    this.resetTimePeriodVisuals();
     
     // Clean up customer elements from DOM
     this.customers.forEach(c => {
@@ -2023,6 +2024,48 @@ class Game {
     requestAnimationFrame(loop);
   }
 
+  getTimePeriod() {
+    if (this.dayTime < 20) return 'morning';
+    if (this.dayTime < 40) return 'lunch';
+    return 'evening';
+  }
+
+  getTimePeriodLabel() {
+    switch (this.getTimePeriod()) {
+      case 'morning': return '🌅 朝';
+      case 'lunch':   return '☀️ 昼';
+      case 'evening':  return '🌙 夜';
+    }
+  }
+
+  applyTimePeriodVisuals() {
+    const interior = document.getElementById('shop-interior');
+    const street = document.getElementById('shop-street');
+    if (!interior) return;
+    const period = this.getTimePeriod();
+    switch (period) {
+      case 'morning':
+        interior.style.background = 'linear-gradient(135deg, #f5e6c8 0%, #faf0d7 100%)';
+        if (street) street.style.background = 'linear-gradient(to bottom, #666 0%, #777 50%, #666 100%)';
+        break;
+      case 'lunch':
+        interior.style.background = 'linear-gradient(135deg, #e8dcc8 0%, #f0e6d2 100%)';
+        if (street) street.style.background = 'linear-gradient(to bottom, #555 0%, #666 50%, #555 100%)';
+        break;
+      case 'evening':
+        interior.style.background = 'linear-gradient(135deg, #c4a882 0%, #d4b896 100%)';
+        if (street) street.style.background = 'linear-gradient(to bottom, #333 0%, #444 50%, #333 100%)';
+        break;
+    }
+  }
+
+  resetTimePeriodVisuals() {
+    const interior = document.getElementById('shop-interior');
+    const street = document.getElementById('shop-street');
+    if (interior) interior.style.background = 'linear-gradient(135deg, #e8dcc8 0%, #f0e6d2 100%)';
+    if (street) street.style.background = 'linear-gradient(to bottom, #555 0%, #666 50%, #555 100%)';
+  }
+
   update(deltaTime) {
     const scaledDelta = deltaTime * this.speedMultiplier;
     this.dayTime += scaledDelta;
@@ -2031,8 +2074,11 @@ class Game {
     const timerEl = document.getElementById('day-timer');
     if (timerEl) {
       const remaining = Math.max(0, Math.ceil(60 - this.dayTime));
-      timerEl.textContent = remaining + '秒';
+      timerEl.textContent = remaining + '秒 ' + this.getTimePeriodLabel();
     }
+
+    // Apply time-of-day visual changes
+    this.applyTimePeriodVisuals();
     
     // Day ends after 60 seconds at 1x
     if (this.dayTime >= 60) {
@@ -2772,12 +2818,14 @@ class Game {
   }
 
   getSpawnRate() {
-    // More frequent during lunch rush (middle of day)
-    const dayProgress = this.dayTime / 60;
-    let baseRate = 3;
-    
-    if (dayProgress > 0.4 && dayProgress < 0.6) {
-      baseRate = 1.5; // Lunch rush
+    // Time-period based spawn rate
+    const period = this.getTimePeriod();
+    let baseRate;
+    switch (period) {
+      case 'morning': baseRate = 3.5; break;   // 朝: まばら
+      case 'lunch':   baseRate = 1.5; break;   // 昼: ランチラッシュ
+      case 'evening': baseRate = 2.5; break;   // 夜: やや落ち着く
+      default: baseRate = 3;
     }
     
     // Sign bonus
@@ -2840,7 +2888,24 @@ class Game {
 
   getCustomerType() {
     const types = ['regular', 'student', 'businessman', 'foodie', 'family', 'friends'];
-    const weights = [40, 15, 15, 10, 12, 8];
+    // 時間帯ごとの客層ウェイト
+    let weights;
+    switch (this.getTimePeriod()) {
+      case 'morning':
+        // 朝: サラリーマン多め、学生少なめ
+        weights = [30, 8, 30, 5, 15, 12];
+        break;
+      case 'lunch':
+        // 昼: 学生・ファミリー・友達グループ増加
+        weights = [25, 25, 15, 8, 18, 9];
+        break;
+      case 'evening':
+        // 夜: 食通・友達多め、ファミリー減少
+        weights = [25, 10, 15, 25, 8, 17];
+        break;
+      default:
+        weights = [40, 15, 15, 10, 12, 8];
+    }
     const total = weights.reduce((a, b) => a + b, 0);
     let random = Math.random() * total;
     
@@ -3503,8 +3568,16 @@ class Game {
         content.innerHTML = `
           <div>
             <div style="margin-bottom: 12px;">
-              <strong>営業時間:</strong> <span id="day-timer">${this.dayActive ? Math.ceil(60 - this.dayTime) + '秒' : '休業中'}</span>
+              <strong>営業時間:</strong> <span id="day-timer">${this.dayActive ? Math.ceil(60 - this.dayTime) + '秒 ' + this.getTimePeriodLabel() : '休業中'}</span>
             </div>
+            ${this.dayActive ? `
+              <div style="margin-bottom: 8px; font-size: 12px; color: #666; background: white; padding: 6px 10px; border-radius: 6px; border: 1px solid #ddd;">
+                <strong>時間帯の特徴:</strong><br>
+                🌅 朝 (0-20秒): サラリーマン多め・客足少なめ<br>
+                ☀️ 昼 (20-40秒): ランチラッシュ！学生・家族増加<br>
+                🌙 夜 (40-60秒): 食通が増える・客足やや減少
+              </div>
+            ` : ''}
             ${!this.dayActive ? `
               <button onclick="game.startDay()">営業開始</button>
             ` : `
