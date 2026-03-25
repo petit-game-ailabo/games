@@ -793,6 +793,155 @@ button.toggle-btn.active {
   margin-top: 2px;
 }
 
+/* Day History Chart */
+.chart-container {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 8px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+.chart-canvas {
+  width: 100%;
+  height: 160px;
+  display: block;
+}
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chart-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.analytics-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+.analytics-card-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #8b4513;
+}
+.analytics-card-label {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+/* Tutorial */
+.tutorial-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+  z-index: 2800;
+  align-items: center;
+  justify-content: center;
+}
+
+.tutorial-overlay.active {
+  display: flex;
+}
+
+.tutorial-box {
+  background: #f5f0e8;
+  border: 4px solid #d4af37;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 85%;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  text-align: center;
+  animation: tutorialPop 0.3s ease-out;
+}
+
+@keyframes tutorialPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.tutorial-step-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.tutorial-step-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #654321;
+  margin-bottom: 8px;
+}
+
+.tutorial-step-desc {
+  font-size: 14px;
+  color: #555;
+  margin-bottom: 16px;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.tutorial-step-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.tutorial-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ccc;
+}
+
+.tutorial-dot.active {
+  background: #d4af37;
+}
+
+.tutorial-dot.done {
+  background: #4caf50;
+}
+
+.tutorial-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.tutorial-buttons button {
+  min-width: 80px;
+}
+
+.tutorial-skip-btn {
+  background: #ccc !important;
+  color: #666 !important;
+  font-size: 12px !important;
+  border-color: #aaa !important;
+}
+
 /* Notification */
 #notification {
   position: fixed;
@@ -897,6 +1046,16 @@ button.toggle-btn.active {
     <div class="modal-title">本日の営業終了</div>
     <div id="summary-content"></div>
     <button onclick="game.nextDay()">次の日へ</button>
+  </div>
+</div>
+
+<div class="tutorial-overlay" id="tutorial-overlay">
+  <div class="tutorial-box">
+    <div class="tutorial-step-icon" id="tutorial-icon"></div>
+    <div class="tutorial-step-title" id="tutorial-title"></div>
+    <div class="tutorial-step-indicator" id="tutorial-dots"></div>
+    <div class="tutorial-step-desc" id="tutorial-desc"></div>
+    <div class="tutorial-buttons" id="tutorial-buttons"></div>
   </div>
 </div>
 
@@ -1364,6 +1523,7 @@ class Game {
     this.activeEvents = []; // { id, name, icon, remainingDays, effect, value }
     this.eventTriggeredToday = false;
     this.eventLog = []; // recent event history for display
+    this.dayHistory = []; // 日次履歴 [{ day, revenue, cost, profit, customers, satisfied, topMenu, timePeriodSales }]
   }
 
   // ========== レシピ管理 ==========
@@ -1996,6 +2156,18 @@ class Game {
     });
     const profit = todayRevenue - totalCost;
     
+    // 日次履歴に記録（直近30日分）
+    const topMenu = Object.entries(recipeSales).sort((a, b) => b[1].count - a[1].count)[0];
+    this.dayHistory.push({
+      day: this.day,
+      revenue: todayRevenue,
+      cost: totalCost,
+      profit: profit,
+      customers: todayCustomers,
+      satisfied: todaySatisfied
+    });
+    if (this.dayHistory.length > 30) this.dayHistory.shift();
+
     const content = document.getElementById('summary-content');
     content.innerHTML = `
       <div class="info-section">
@@ -3947,6 +4119,21 @@ class Game {
           </div>
           
           <div class="info-section">
+            <div class="info-title">📊 売上推移</div>
+            ${this.dayHistory.length >= 2 ? `
+              <div class="chart-container">
+                <canvas id="history-chart" class="chart-canvas" width="420" height="160"></canvas>
+                <div class="chart-legend">
+                  <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#4caf50;"></span>売上</div>
+                  <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#2196f3;"></span>利益</div>
+                  <div class="chart-legend-item"><span class="chart-legend-dot" style="background:#ff9800;"></span>来客</div>
+                </div>
+              </div>
+            ` : '<div style="color:#999;font-size:12px;">2日目以降にグラフが表示されます</div>'}
+            ${this.renderAnalyticsCards()}
+          </div>
+          
+          <div class="info-section">
             <div class="info-title">統計</div>
             <div>総客数: ${this.stats.totalCustomers}人</div>
             <div>総売上: ${this.stats.totalRevenue}円</div>
@@ -4385,7 +4572,8 @@ class Game {
       nextRecipeId: this.nextRecipeId,
       achievements: this.achievements,
       activeEvents: this.activeEvents,
-      eventLog: this.eventLog
+      eventLog: this.eventLog,
+      dayHistory: this.dayHistory
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -4417,6 +4605,9 @@ class Game {
     // イベント復元
     this.activeEvents = save.activeEvents || [];
     this.eventLog = save.eventLog || [];
+    
+    // 日次履歴復元
+    this.dayHistory = save.dayHistory || [];
     
     // Regenerate walls from store level
     this.walls = this.generateWalls(this.storeLevel);
@@ -4503,6 +4694,9 @@ class Game {
     this.checkCombos();
     this.updateUI();
     this.renderTabContent();
+    
+    // チュートリアルを表示（新規ゲーム開始時のみ）
+    this.showTutorial();
   }
 }
 
@@ -4607,6 +4801,265 @@ Game.prototype.serverGoToSink = function(staff) {
   staff.pathIndex = 0;
   staff.state = 'MOVING';
   staff._afterSinkArrival = true;
+};
+
+// ========== 日次グラフ・統計システム ==========
+
+Game.prototype.renderAnalyticsCards = function() {
+  const h = this.dayHistory;
+  if (h.length === 0) return '';
+  
+  const totalRevenue = h.reduce((s, d) => s + d.revenue, 0);
+  const totalProfit = h.reduce((s, d) => s + d.profit, 0);
+  const totalCustomers = h.reduce((s, d) => s + d.customers, 0);
+  const totalSatisfied = h.reduce((s, d) => s + d.satisfied, 0);
+  const avgRevenue = Math.round(totalRevenue / h.length);
+  const avgCustomers = Math.round(totalCustomers / h.length * 10) / 10;
+  const bestDay = h.reduce((best, d) => d.revenue > best.revenue ? d : best, h[0]);
+  const satisfactionRate = totalCustomers > 0 ? Math.round(totalSatisfied / totalCustomers * 100) : 0;
+  
+  return `<div class="analytics-grid">
+    <div class="analytics-card">
+      <div class="analytics-card-value">${avgRevenue}円</div>
+      <div class="analytics-card-label">平均売上/日</div>
+    </div>
+    <div class="analytics-card">
+      <div class="analytics-card-value">${avgCustomers}人</div>
+      <div class="analytics-card-label">平均来客/日</div>
+    </div>
+    <div class="analytics-card">
+      <div class="analytics-card-value">Day ${bestDay.day}</div>
+      <div class="analytics-card-label">最高売上日 (${bestDay.revenue}円)</div>
+    </div>
+    <div class="analytics-card">
+      <div class="analytics-card-value">${satisfactionRate}%</div>
+      <div class="analytics-card-label">満足度</div>
+    </div>
+  </div>`;
+};
+
+Game.prototype.drawHistoryChart = function() {
+  const canvas = document.getElementById('history-chart');
+  if (!canvas || this.dayHistory.length < 2) return;
+  
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  
+  const W = rect.width;
+  const H = rect.height;
+  const pad = { top: 10, right: 10, bottom: 24, left: 44 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  
+  const data = this.dayHistory;
+  const n = data.length;
+  
+  // Compute scales
+  const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
+  const minProfit = Math.min(...data.map(d => d.profit), 0);
+  const maxProfit = Math.max(...data.map(d => d.profit), 1);
+  const maxY = Math.max(maxRevenue, maxProfit);
+  const minY = Math.min(0, minProfit);
+  const rangeY = maxY - minY || 1;
+  
+  const maxCustomers = Math.max(...data.map(d => d.customers), 1);
+  
+  const xStep = plotW / (n - 1);
+  
+  function toX(i) { return pad.left + i * xStep; }
+  function toY(v) { return pad.top + plotH - ((v - minY) / rangeY) * plotH; }
+  function toCY(v) { return pad.top + plotH - (v / maxCustomers) * plotH; }
+  
+  // Clear
+  ctx.clearRect(0, 0, W, H);
+  
+  // Grid lines
+  ctx.strokeStyle = '#e0e0e0';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (plotH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(W - pad.right, y);
+    ctx.stroke();
+  }
+  
+  // Zero line if needed
+  if (minY < 0) {
+    const zeroY = toY(0);
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, zeroY);
+    ctx.lineTo(W - pad.right, zeroY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  
+  // Y-axis labels
+  ctx.fillStyle = '#888';
+  ctx.font = '10px Arial';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const val = minY + (rangeY / 4) * (4 - i);
+    const y = pad.top + (plotH / 4) * i;
+    ctx.fillText(val >= 1000 ? Math.round(val / 1000) + 'k' : Math.round(val), pad.left - 4, y + 3);
+  }
+  
+  // X-axis labels
+  ctx.textAlign = 'center';
+  const labelStep = Math.max(1, Math.floor(n / 6));
+  for (let i = 0; i < n; i += labelStep) {
+    ctx.fillText('D' + data[i].day, toX(i), H - 4);
+  }
+  // Always show last day
+  if ((n - 1) % labelStep !== 0) {
+    ctx.fillText('D' + data[n - 1].day, toX(n - 1), H - 4);
+  }
+  
+  // Draw line helper
+  function drawLine(points, color, width) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    points.forEach((p, i) => i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]));
+    ctx.stroke();
+  }
+  
+  // Draw fill area under revenue
+  const revPoints = data.map((d, i) => [toX(i), toY(d.revenue)]);
+  ctx.fillStyle = 'rgba(76, 175, 80, 0.1)';
+  ctx.beginPath();
+  ctx.moveTo(revPoints[0][0], toY(0));
+  revPoints.forEach(p => ctx.lineTo(p[0], p[1]));
+  ctx.lineTo(revPoints[n - 1][0], toY(0));
+  ctx.closePath();
+  ctx.fill();
+  
+  // Revenue line
+  drawLine(revPoints, '#4caf50', 2);
+  
+  // Profit line
+  const profPoints = data.map((d, i) => [toX(i), toY(d.profit)]);
+  drawLine(profPoints, '#2196f3', 2);
+  
+  // Customer line (right axis)
+  const custPoints = data.map((d, i) => [toX(i), toCY(d.customers)]);
+  ctx.setLineDash([4, 3]);
+  drawLine(custPoints, '#ff9800', 1.5);
+  ctx.setLineDash([]);
+  
+  // Dots
+  revPoints.forEach(p => { ctx.fillStyle = '#4caf50'; ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, Math.PI * 2); ctx.fill(); });
+  profPoints.forEach(p => { ctx.fillStyle = '#2196f3'; ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, Math.PI * 2); ctx.fill(); });
+  custPoints.forEach(p => { ctx.fillStyle = '#ff9800'; ctx.beginPath(); ctx.arc(p[0], p[1], 2.5, 0, Math.PI * 2); ctx.fill(); });
+};
+
+// Info tab の描画後にチャートを描画する
+const _origRenderTabContent = Game.prototype.renderTabContent;
+Game.prototype.renderTabContent = function() {
+  _origRenderTabContent.call(this);
+  if (this.currentTab === 'info') {
+    requestAnimationFrame(() => this.drawHistoryChart());
+  }
+};
+
+// ========== チュートリアルシステム ==========
+const TUTORIAL_STEPS = [
+  {
+    icon: '🍜',
+    title: 'ラーメン物語へようこそ！',
+    desc: 'あなたはラーメン屋の店主です。\n美味しいラーメンを作って\nお店を繁盛させましょう！'
+  },
+  {
+    icon: '▶️',
+    title: '1. 営業開始してみよう',
+    desc: '「営業」タブの「営業開始」ボタンを押すと\n1日の営業が始まります。\n\n道を歩く人がお店に入ってきて\nラーメンを注文します。'
+  },
+  {
+    icon: '🪑',
+    title: '2. 席を増やしてみよう',
+    desc: '「配置」タブで席や設備を購入できます。\n\nカウンター席・テーブル席・座敷席を\n増やしてたくさんのお客さんを\n迎えましょう！'
+  },
+  {
+    icon: '🍲',
+    title: '3. メニューを開発しよう',
+    desc: '「商品研究」タブで新しいスープや\nトッピングを解放できます。\n\n「メニュー」タブでレシピを作成し、\nスープ・麺・トッピングを組み合わせて\nオリジナルラーメンを作りましょう！'
+  },
+  {
+    icon: '⭐',
+    title: '4. 評判を上げよう',
+    desc: '美味しいラーメン → お客さんが満足\n→ 評判UP → もっとお客さんが来る！\n\n設備コンボや看板を活用して\nさらなる高みを目指しましょう！\n\nがんばってください！🍜'
+  }
+];
+
+Game.prototype.tutorialStep = 0;
+Game.prototype.tutorialShown = false;
+
+Game.prototype.showTutorial = function() {
+  this.tutorialStep = 0;
+  this.tutorialShown = true;
+  this._renderTutorialStep();
+  document.getElementById('tutorial-overlay').classList.add('active');
+};
+
+Game.prototype.closeTutorial = function() {
+  document.getElementById('tutorial-overlay').classList.remove('active');
+};
+
+Game.prototype._renderTutorialStep = function() {
+  const step = TUTORIAL_STEPS[this.tutorialStep];
+  const total = TUTORIAL_STEPS.length;
+  
+  document.getElementById('tutorial-icon').textContent = step.icon;
+  document.getElementById('tutorial-title').textContent = step.title;
+  document.getElementById('tutorial-desc').textContent = step.desc;
+  
+  // Dots
+  const dotsHtml = TUTORIAL_STEPS.map((_, i) => {
+    let cls = 'tutorial-dot';
+    if (i < this.tutorialStep) cls += ' done';
+    if (i === this.tutorialStep) cls += ' active';
+    return `<div class="${cls}"></div>`;
+  }).join('');
+  document.getElementById('tutorial-dots').innerHTML = dotsHtml;
+  
+  // Buttons
+  const isFirst = this.tutorialStep === 0;
+  const isLast = this.tutorialStep === total - 1;
+  let btnsHtml = '';
+  if (!isLast) {
+    btnsHtml += `<button class="tutorial-skip-btn" onclick="game.closeTutorial()">スキップ</button>`;
+  }
+  if (!isFirst) {
+    btnsHtml += `<button onclick="game.tutorialPrev()" style="background:#ccc;">← 戻る</button>`;
+  }
+  if (isLast) {
+    btnsHtml += `<button onclick="game.closeTutorial()">はじめる！</button>`;
+  } else {
+    btnsHtml += `<button onclick="game.tutorialNext()">次へ →</button>`;
+  }
+  document.getElementById('tutorial-buttons').innerHTML = btnsHtml;
+};
+
+Game.prototype.tutorialNext = function() {
+  if (this.tutorialStep < TUTORIAL_STEPS.length - 1) {
+    this.tutorialStep++;
+    this._renderTutorialStep();
+  }
+};
+
+Game.prototype.tutorialPrev = function() {
+  if (this.tutorialStep > 0) {
+    this.tutorialStep--;
+    this._renderTutorialStep();
+  }
 };
 
 const game = new Game();
