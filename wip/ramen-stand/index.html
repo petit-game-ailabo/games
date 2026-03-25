@@ -1868,6 +1868,10 @@ class Game {
 
   cookDeliverFood(staff) {
     const customer = staff.currentOrder;
+    // 調理でスキップしたステップ数を客に記録（品質計算に反映）
+    if (customer) {
+      customer.cookingSkippedSteps = staff.skippedSteps || 0;
+    }
     if (!customer || !customer.seat) {
       // Customer left, return home
       staff.currentOrder = null;
@@ -2273,7 +2277,7 @@ class Game {
         if (!customer.eatBubbleShown && customer.eatTimer >= 0.5) {
           customer.eatBubbleShown = true;
           if (Math.random() < 0.4) {
-            const quality = this.calculateQuality();
+            const quality = this.calculateQuality(customer);
             let eatMsgs;
             if (quality >= 0.7) {
               eatMsgs = ['うまい！', '最高！', 'スープが絶品！', '麺がいい！', 'これはハマる！'];
@@ -2286,7 +2290,7 @@ class Game {
           }
         }
         if (customer.eatTimer >= 1.2) {
-          const quality = this.calculateQuality();
+          const quality = this.calculateQuality(customer);
           
           // 満足度を4段階に分類
           let face = '😐';
@@ -2524,7 +2528,7 @@ class Game {
     return empty.length > 0 ? empty[0] : null;
   }
 
-  calculateQuality() {
+  calculateQuality(customer) {
     let quality = 0.5;
     
     // Furniture bonuses
@@ -2539,7 +2543,13 @@ class Game {
       if (comboData) quality += comboData.bonus;
     });
     
-    return Math.min(1, quality);
+    // 調理でスキップされたステップのペナルティ（設備不足による品質低下）
+    if (customer && customer.cookingSkippedSteps > 0) {
+      // 1ステップスキップごとに-0.08（最大5ステップで-0.40）
+      quality -= customer.cookingSkippedSteps * 0.08;
+    }
+    
+    return Math.max(0, Math.min(1, quality));
   }
 
   showBubble(customer, text) {
@@ -2565,7 +2575,7 @@ class Game {
       const messages = ['まだかな…', 'いい匂いがしてきた！', '楽しみ♪'];
       feedback = messages[Math.floor(Math.random() * messages.length)];
     } else if (customer.state === 'SITTING' || customer.state === 'EATING') {
-      const quality = this.calculateQuality();
+      const quality = this.calculateQuality(customer);
       
       if (quality >= 0.8) {
         const positiveFeedback = [
