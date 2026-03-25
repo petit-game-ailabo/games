@@ -1223,51 +1223,38 @@ class Game {
     }
   }
 
-  // Generate walls for a given store level
+  // Generate walls for a given store level (自動生成: STORE_LEVELSのinteriorCols/Rowsから計算)
   generateWalls(level) {
+    const info = STORE_LEVELS[level];
+    if (!info) return [];
+    const [minCol, maxCol] = info.interiorCols;
+    const [minRow, maxRow] = info.interiorRows;
     const walls = [];
-    if (level === 1) {
-      // Top wall: (2,2) to (9,2)
-      for (let x = 2; x <= 9; x++) walls.push({x, y: 2});
-      // Bottom wall: (2,6) to (4,6) and (7,6) to (9,6), entrance at (5,6) and (6,6)
-      for (let x = 2; x <= 4; x++) walls.push({x, y: 6});
-      for (let x = 7; x <= 9; x++) walls.push({x, y: 6});
-      // Left wall: (2,3) to (2,5)
-      for (let y = 3; y <= 5; y++) walls.push({x: 2, y});
-      // Right wall: (9,3) to (9,5)
-      for (let y = 3; y <= 5; y++) walls.push({x: 9, y});
-    } else if (level === 2) {
-      // Top wall: (1,1) to (10,1)
-      for (let x = 1; x <= 10; x++) walls.push({x, y: 1});
-      // Bottom wall: (1,7) to (4,7) and (7,7) to (10,7)
-      for (let x = 1; x <= 4; x++) walls.push({x, y: 7});
-      for (let x = 7; x <= 10; x++) walls.push({x, y: 7});
-      // Left wall: (1,2) to (1,6)
-      for (let y = 2; y <= 6; y++) walls.push({x: 1, y});
-      // Right wall: (10,2) to (10,6)
-      for (let y = 2; y <= 6; y++) walls.push({x: 10, y});
-    } else if (level === 3) {
-      // Top wall: (0,0) to (11,0)
-      for (let x = 0; x <= 11; x++) walls.push({x, y: 0});
-      // Bottom wall: (0,8) to (4,8) and (7,8) to (11,8)
-      for (let x = 0; x <= 4; x++) walls.push({x, y: 8});
-      for (let x = 7; x <= 11; x++) walls.push({x, y: 8});
-      // Left wall: (0,1) to (0,7)
-      for (let y = 1; y <= 7; y++) walls.push({x: 0, y});
-      // Right wall: (11,1) to (11,7)
-      for (let y = 1; y <= 7; y++) walls.push({x: 11, y});
+
+    // 上壁
+    for (let x = minCol - 1; x <= maxCol + 1; x++) walls.push({ x, y: minRow - 1 });
+    // 下壁（入口以外）— 入口は下壁の中央2マスを開放
+    const entranceLeft = Math.floor((minCol + maxCol) / 2);
+    const entranceRight = entranceLeft + 1;
+    for (let x = minCol - 1; x <= maxCol + 1; x++) {
+      if (x !== entranceLeft && x !== entranceRight) {
+        walls.push({ x, y: maxRow + 1 });
+      }
     }
+    // 左壁
+    for (let y = minRow; y <= maxRow; y++) walls.push({ x: minCol - 1, y });
+    // 右壁
+    for (let y = minRow; y <= maxRow; y++) walls.push({ x: maxCol + 1, y });
+
     return walls;
   }
 
-  // Check if a tile is inside the store (not a wall, not outside)
+  // Check if a tile is inside the store (自動判定: STORE_LEVELSから計算)
   isInsideStore(x, y) {
-    const level = this.storeLevel;
-    let minCol, maxCol, minRow, maxRow;
-    if (level === 1) { minCol=3; maxCol=8; minRow=3; maxRow=5; }
-    else if (level === 2) { minCol=2; maxCol=9; minRow=2; maxRow=6; }
-    else if (level === 3) { minCol=1; maxCol=10; minRow=1; maxRow=7; }
-    else { return false; }
+    const info = STORE_LEVELS[this.storeLevel];
+    if (!info) return false;
+    const [minCol, maxCol] = info.interiorCols;
+    const [minRow, maxRow] = info.interiorRows;
     return x >= minCol && x <= maxCol && y >= minRow && y <= maxRow;
   }
 
@@ -1276,17 +1263,19 @@ class Game {
     return this.walls.some(w => w.x === x && w.y === y);
   }
 
-  // Get entrance Y for current store level
+  // Get entrance Y for current store level (自動計算: interiorRowsの下壁+1)
   getEntranceY() {
-    if (this.storeLevel === 1) return 6;
-    if (this.storeLevel === 2) return 7;
-    if (this.storeLevel === 3) return 8;
-    return 6;
+    const info = STORE_LEVELS[this.storeLevel];
+    if (!info) return 6;
+    return info.interiorRows[1] + 1;
   }
 
-  // Get entrance X positions (center)
+  // Get entrance X positions center (自動計算: interiorColsの中央)
   getEntranceXCenter() {
-    return 5.5; // always center at columns 5-6
+    const info = STORE_LEVELS[this.storeLevel];
+    if (!info) return 5.5;
+    const [minCol, maxCol] = info.interiorCols;
+    return (Math.floor((minCol + maxCol) / 2) + Math.floor((minCol + maxCol) / 2) + 1) / 2;
   }
 
   init() {
