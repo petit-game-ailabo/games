@@ -2720,12 +2720,33 @@ class Game {
     
     // Auto end day when: time is up AND no customers inside AND no dirty dishes
     if (this.dayEnding) {
-      const customersInside = this.customers.some(c => 
-        c.state !== 'WALKING_STREET' && c.state !== 'EXITING' && c.state !== 'EXITED'
+      // Check if all customers have finished (seated customers done eating, etc.)
+      const busyCustomers = this.customers.some(c => 
+        c.state === 'SITTING' || c.state === 'WAITING_FOOD' || c.state === 'EATING' || 
+        c.state === 'FINDING_SEAT' || c.state === 'ENTERING'
       );
       const hasDirtyDishes = this.dirtyDishes.some(d => !d.done);
       const staffBusy = this.staff.some(s => s.state !== 'IDLE');
-      if (!customersInside && !hasDirtyDishes && !staffBusy) {
+      
+      // Force dismiss waiting queue during closing
+      if (this.waitingQueue.length > 0) {
+        this.waitingQueue.forEach(c => {
+          if (c.groupMembers) {
+            c.groupMembers.forEach(m => { m.state = 'EXITING'; m.targetX = -20; m.targetY = m.y; });
+          } else {
+            c.state = 'EXITING'; c.targetX = -20; c.targetY = c.y;
+          }
+        });
+        this.waitingQueue = [];
+      }
+      
+      if (!busyCustomers && !hasDirtyDishes && !staffBusy) {
+        this.endDay();
+        return;
+      }
+      
+      // Safety timeout: force end after 30 extra seconds
+      if (this.dayTime >= 90) {
         this.endDay();
         return;
       }
@@ -3664,7 +3685,12 @@ class Game {
     
     // Family/friends: spawn individual customers as a group
     if (type === 'family' || type === 'friends') {
-      const groupSize = type === 'family' ? 2 + Math.floor(Math.random() * 5) : 2 + Math.floor(Math.random() * 3);
+      // Limit group size to total available seats in the store
+      const totalSeats = this.furniture.reduce((sum, f) => sum + (FURNITURE_TYPES[f.type] ? FURNITURE_TYPES[f.type].seats : 0), 0);
+      const maxGroup = Math.max(2, totalSeats);
+      let groupSize = type === 'family' ? 2 + Math.floor(Math.random() * 5) : 2 + Math.floor(Math.random() * 3);
+      if (groupSize > maxGroup) groupSize = maxGroup;
+      if (groupSize < 2) return; // Not enough seats for any group
       const groupId = 'g' + this.nextGroupId++;
       const groupMembers = [];
       
