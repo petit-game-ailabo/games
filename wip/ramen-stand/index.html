@@ -1059,6 +1059,14 @@ button.toggle-btn.active {
   </div>
 </div>
 
+<div class="modal" id="ranking-modal">
+  <div class="modal-content">
+    <div class="modal-title">📊 週間ラーメンランキング</div>
+    <div id="ranking-content"></div>
+    <button onclick="game.closeRanking()">閉じる</button>
+  </div>
+</div>
+
 <div class="tutorial-overlay" id="tutorial-overlay">
   <div class="tutorial-box">
     <div class="tutorial-step-icon" id="tutorial-icon"></div>
@@ -1482,31 +1490,32 @@ const RUNNING_COSTS = {
 
 // Store expansion costs per level
 const STORE_LEVELS = {
-  1: { cost: 0, label: '6×3', gridWidth: 12, gridHeight: 11, interiorCols: [3,8], interiorRows: [3,5] },
-  2: { cost: 5000, label: '8×5', gridWidth: 12, gridHeight: 11, interiorCols: [2,9], interiorRows: [2,6] },
-  3: { cost: 15000, label: '10×7', gridWidth: 12, gridHeight: 11, interiorCols: [1,10], interiorRows: [1,7] },
-  4: { cost: 40000, label: '14×10', gridWidth: 20, gridHeight: 18, interiorCols: [3,16], interiorRows: [2,11] },
-  5: { cost: 100000, label: '20×15', gridWidth: 26, gridHeight: 23, interiorCols: [3,22], interiorRows: [2,16] },
-  6: { cost: 250000, label: '30×20', gridWidth: 36, gridHeight: 28, interiorCols: [3,32], interiorRows: [2,21] },
+  // Row 0: top wall, Row 1..interiorRows[1]: interior, interiorRows[1]+1: bottom wall (entrance gap), gridHeight-1: street
+  1: { cost: 0, label: '6×3', gridWidth: 12, gridHeight: 6, interiorCols: [3,8], interiorRows: [1,3] },
+  2: { cost: 5000, label: '8×5', gridWidth: 12, gridHeight: 8, interiorCols: [2,9], interiorRows: [1,5] },
+  3: { cost: 15000, label: '10×7', gridWidth: 12, gridHeight: 10, interiorCols: [1,10], interiorRows: [1,7] },
+  4: { cost: 40000, label: '14×10', gridWidth: 18, gridHeight: 13, interiorCols: [2,15], interiorRows: [1,10] },
+  5: { cost: 100000, label: '20×15', gridWidth: 24, gridHeight: 18, interiorCols: [2,21], interiorRows: [1,15] },
+  6: { cost: 250000, label: '30×20', gridWidth: 34, gridHeight: 23, interiorCols: [2,31], interiorRows: [1,20] },
 };
 
-// Initial layout (pre-placed furniture) — adjusted for new grid
+// Initial layout (pre-placed furniture) — Row 1: kitchen (back), Row 2: staff, Row 3: counter (near entrance)
 const INITIAL_FURNITURE = [
-  // Row 3 (kitchen - top of store)
-  { type: 'soupPot', x: 3, y: 3 },
-  { type: 'soupStove', x: 4, y: 3 },
-  { type: 'noodleBoiler', x: 5, y: 3 },
-  { type: 'platingStation', x: 6, y: 3 },
-  { type: 'freezer', x: 7, y: 3 },
-  { type: 'dishwashingSink', x: 8, y: 3 },
-  // Row 4 (middle) - empty for staff movement
-  // Row 5 (counter seats - bottom of store)
-  { type: 'counter', x: 3, y: 5 },
-  { type: 'counter', x: 4, y: 5 },
-  { type: 'counter', x: 5, y: 5 },
-  { type: 'counter', x: 6, y: 5 },
-  { type: 'counter', x: 7, y: 5 },
-  { type: 'counter', x: 8, y: 5 }
+  // Row 1 (kitchen - back of store)
+  { type: 'soupPot', x: 3, y: 1 },
+  { type: 'soupStove', x: 4, y: 1 },
+  { type: 'noodleBoiler', x: 5, y: 1 },
+  { type: 'platingStation', x: 6, y: 1 },
+  { type: 'freezer', x: 7, y: 1 },
+  { type: 'dishwashingSink', x: 8, y: 1 },
+  // Row 2 (middle) - staff movement
+  // Row 3 (counter seats - near entrance)
+  { type: 'counter', x: 3, y: 3 },
+  { type: 'counter', x: 4, y: 3 },
+  { type: 'counter', x: 5, y: 3 },
+  { type: 'counter', x: 6, y: 3 },
+  { type: 'counter', x: 7, y: 3 },
+  { type: 'counter', x: 8, y: 3 }
 ];
 
 class Game {
@@ -1562,6 +1571,9 @@ class Game {
     this.eventTriggeredToday = false;
     this.eventLog = []; // recent event history for display
     this.dayHistory = []; // 日次履歴 [{ day, revenue, cost, profit, customers, satisfied, topMenu, timePeriodSales }]
+    
+    // 週間ランキング用
+    this.weeklyStats = { revenue: 0, customers: 0, lostCustomers: 0, lostReasons: {} };
     
     this.lastPurchaseCost = 0; // kept for compat
     
@@ -2596,6 +2608,12 @@ class Game {
   }
 
   nextDay() {
+    // Accumulate weekly stats before incrementing day
+    this.weeklyStats.revenue += this.dailyStats.revenue;
+    this.weeklyStats.customers += this.dailyStats.customers;
+    
+    const showRanking = (this.day % 7 === 0);
+    
     this.day++;
     
     // Clear customers array
@@ -2617,6 +2635,11 @@ class Game {
     modal.classList.remove('active');
     this.updateUI();
     this.renderTabContent();
+    
+    // Show weekly ranking every 7 days
+    if (showRanking) {
+      this.showWeeklyRanking();
+    }
   }
 
   startGameLoop() {
@@ -2932,10 +2955,14 @@ class Game {
     const grid = this.buildOccupancyGrid();
     // Also allow the entrance row tiles and street row
     const entranceY = this.getEntranceY();
-    // Entrance gap is at columns 5 and 6
-    if (entranceY >= 0 && entranceY < this.gridHeight - 1) {
-      grid[entranceY][5] = false;
-      grid[entranceY][6] = false;
+    // Entrance gap is at center 2 columns of the store
+    const info = STORE_LEVELS[this.storeLevel];
+    if (info && entranceY >= 0 && entranceY < this.gridHeight - 1) {
+      const [minCol, maxCol] = info.interiorCols;
+      const entranceLeft = Math.floor((minCol + maxCol) / 2);
+      const entranceRight = entranceLeft + 1;
+      if (entranceLeft >= 0 && entranceLeft < this.gridWidth) grid[entranceY][entranceLeft] = false;
+      if (entranceRight >= 0 && entranceRight < this.gridWidth) grid[entranceY][entranceRight] = false;
     }
     
     // BFS
@@ -3937,6 +3964,8 @@ class Game {
                   this.showBubble(customer, '待ってます…');
                 } else {
                   this.showBubble(customer, '混みすぎ…');
+                  this.weeklyStats.lostCustomers += customer.groupMembers.length;
+                  this.weeklyStats.lostReasons['席不足'] = (this.weeklyStats.lostReasons['席不足'] || 0) + customer.groupMembers.length;
                   customer.groupMembers.forEach(m => {
                     m.state = 'LEAVING';
                     const ey = this.getEntranceY();
@@ -3967,6 +3996,8 @@ class Game {
                 this.showBubble(customer, '待ってます…');
               } else {
                 this.showBubble(customer, '混みすぎ…');
+                this.weeklyStats.lostCustomers += 1;
+                this.weeklyStats.lostReasons['席不足'] = (this.weeklyStats.lostReasons['席不足'] || 0) + 1;
                 customer.state = 'LEAVING';
                 const entranceY = this.getEntranceY();
                 customer.targetX = this.getEntranceXCenter() * TILE_SIZE;
@@ -4004,6 +4035,9 @@ class Game {
         customer.waitTimer += deltaTime;
         if (customer.waitTimer >= 15) {
           this.showBubble(customer, '待てない…');
+          const leaveCount = (customer.groupMembers || [customer]).length;
+          this.weeklyStats.lostCustomers += leaveCount;
+          this.weeklyStats.lostReasons['待ち時間'] = (this.weeklyStats.lostReasons['待ち時間'] || 0) + leaveCount;
           this.waitingQueue = this.waitingQueue.filter(c => c !== customer);
           this.repositionWaitingQueue();
           // Leave with all group members
@@ -4627,7 +4661,7 @@ class Game {
                 ${!canStart ? '<div style="color:#d32f2f;margin-top:8px;font-size:13px;">❗ ' + menuCheck.reason + '<br><span style="font-size:11px;color:#666;">スープ鍋を配置タブから追加購入するか、提供メニューを減らしてください</span></div>' : ''}`;
               })()}
             ` : `
-              <button onclick="game.endDay()">営業終了</button>
+              <button onclick="game.endDay()" style="background:#d32f2f;color:white;border-color:#b71c1c;">🔴 営業終了</button>
               <div style="margin-top: 12px;">
                 <strong>速度:</strong>
                 <button onclick="game.setSpeed(1)" ${this.speedMultiplier === 1 ? 'disabled' : ''}>1x</button>
@@ -5321,6 +5355,99 @@ class Game {
     this.checkAchievements();
   }
 
+  showWeeklyRanking() {
+    const playerRevenue = this.weeklyStats.revenue;
+    const playerName = 'あなたの店';
+    
+    // Generate 3 rival shops with revenues based on player's performance
+    const rivals = [
+      { name: '麺屋 一番星', revenue: Math.floor(playerRevenue * (0.6 + Math.random() * 0.8)) },
+      { name: 'らーめん道場', revenue: Math.floor(playerRevenue * (0.5 + Math.random() * 0.9)) },
+      { name: '中華そば 風来坊', revenue: Math.floor(playerRevenue * (0.4 + Math.random() * 1.0)) },
+    ];
+    
+    const allShops = [
+      { name: playerName, revenue: playerRevenue, isPlayer: true },
+      ...rivals.map(r => ({ ...r, isPlayer: false }))
+    ];
+    allShops.sort((a, b) => b.revenue - a.revenue);
+    
+    const rankEmojis = ['🥇', '🥈', '🥉', '4️⃣'];
+    let rankHtml = allShops.map((shop, i) => {
+      const highlight = shop.isPlayer ? 'background:#fff9e6;border:2px solid #d4af37;font-weight:bold;' : 'border:1px solid #ddd;';
+      return `<div style="padding:8px;margin:4px 0;border-radius:6px;${highlight}display:flex;justify-content:space-between;align-items:center;">
+        <span>${rankEmojis[i]} ${shop.name}</span>
+        <span>${shop.revenue.toLocaleString()}円</span>
+      </div>`;
+    }).join('');
+    
+    // Lost customer analysis
+    let analysisHtml = '';
+    const lostTotal = this.weeklyStats.lostCustomers;
+    if (lostTotal > 0) {
+      const reasons = Object.entries(this.weeklyStats.lostReasons)
+        .sort((a, b) => b[1] - a[1])
+        .map(([reason, count]) => `<div style="font-size:12px;">・${reason}: ${count}人</div>`)
+        .join('');
+      
+      analysisHtml = `
+        <div style="margin-top:12px;padding:8px;background:#fff0f0;border-radius:6px;border:1px solid #ffcdd2;">
+          <div style="font-weight:bold;color:#d32f2f;">⚠️ 逃した客: ${lostTotal}人</div>
+          ${reasons}
+        </div>
+      `;
+    }
+    
+    // Advice based on lostReasons and reputationAxes
+    let adviceHtml = '<div style="margin-top:12px;padding:8px;background:#e8f5e9;border-radius:6px;border:1px solid #c8e6c9;">';
+    adviceHtml += '<div style="font-weight:bold;color:#2e7d32;">💡 アドバイス</div>';
+    
+    const advices = [];
+    if ((this.weeklyStats.lostReasons['席不足'] || 0) > 3) {
+      advices.push('席が足りません！テーブル席や座敷席を追加しましょう。');
+    }
+    if ((this.weeklyStats.lostReasons['待ち時間'] || 0) > 2) {
+      advices.push('待ち時間が長すぎます。料理人を増やすか、受け渡し台を設置しましょう。');
+    }
+    if (this.reputationAxes.taste < 20) {
+      advices.push('味の評判が低いです。レシピを改良してキレ・コク・香りを上げましょう。');
+    }
+    if (this.reputationAxes.service < 20) {
+      advices.push('接客の評判が低いです。接客係を雇いましょう。');
+    }
+    if (this.reputationAxes.atmosphere < 15) {
+      advices.push('雰囲気の評判が低いです。観葉植物を置いてみましょう。');
+    }
+    if (this.reputationAxes.value < 20) {
+      advices.push('コスパの評判が低いです。価格設定を見直しましょう。');
+    }
+    if (advices.length === 0) {
+      advices.push('順調です！この調子で営業を続けましょう！');
+    }
+    
+    adviceHtml += advices.map(a => `<div style="font-size:12px;margin-top:4px;">・${a}</div>`).join('');
+    adviceHtml += '</div>';
+    
+    // Weekly summary
+    const summaryHtml = `
+      <div style="margin-bottom:12px;padding:8px;background:white;border-radius:6px;border:1px solid #ddd;">
+        <div style="font-size:13px;font-weight:bold;color:#654321;">📅 週間まとめ (Day ${this.day - 7}〜${this.day - 1})</div>
+        <div style="font-size:12px;margin-top:4px;">売上合計: ${playerRevenue.toLocaleString()}円</div>
+        <div style="font-size:12px;">来客合計: ${this.weeklyStats.customers}人</div>
+      </div>
+    `;
+    
+    document.getElementById('ranking-content').innerHTML = summaryHtml + rankHtml + analysisHtml + adviceHtml;
+    document.getElementById('ranking-modal').classList.add('active');
+    
+    // Reset weekly stats
+    this.weeklyStats = { revenue: 0, customers: 0, lostCustomers: 0, lostReasons: {} };
+  }
+
+  closeRanking() {
+    document.getElementById('ranking-modal').classList.remove('active');
+  }
+
   saveGame() {
     const save = {
       day: this.day,
@@ -5356,7 +5483,8 @@ class Game {
       reputationAxes: this.reputationAxes,
       sideMenuActive: this.sideMenuActive,
       season: this.season,
-      weather: this.weather
+      weather: this.weather,
+      weeklyStats: this.weeklyStats
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -5408,6 +5536,7 @@ class Game {
     this.sideMenuActive = save.sideMenuActive || {};
     this.season = save.season || 'spring';
     this.weather = save.weather || 'sunny';
+    this.weeklyStats = save.weeklyStats || { revenue: 0, customers: 0, lostCustomers: 0, lostReasons: {} };
     
     // Regenerate walls from store level
     this.walls = this.generateWalls(this.storeLevel);
@@ -5470,14 +5599,14 @@ class Game {
       });
     });
     
-    // Add initial staff - 1 cook in the middle of the store
+    // Add initial staff - 1 cook in the middle of the store (row 2)
     this.staff.push({
       id: 's0',
       type: 'cook',
       homeX: 5,
-      homeY: 4,
+      homeY: 2,
       x: 5 * TILE_SIZE + TILE_SIZE / 2 - 16,
-      y: 4 * TILE_SIZE + TILE_SIZE / 2 - 16,
+      y: 2 * TILE_SIZE + TILE_SIZE / 2 - 16,
       state: 'IDLE',
       path: [],
       pathIndex: 0,
