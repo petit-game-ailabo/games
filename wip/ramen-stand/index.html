@@ -1271,6 +1271,18 @@ const ACHIEVEMENTS = [
   { id: 'day_30',          icon: '📅', name: 'ベテラン店主',     desc: '30日間営業した',                 check: g => g.day >= 30 },
 ];
 
+// === イベントシステム定義 ===
+const EVENTS = [
+  { id: 'tabelog', name: '食べログに載った！', desc: '口コミサイトで紹介されました！\n3日間客足+50%', icon: '📱', duration: 3, effect: 'customerBoost', value: 1.5, weight: 10 },
+  { id: 'ingredient_surge', name: '食材高騰！', desc: '市場価格が上昇中…\n3日間原価+20%', icon: '📈', duration: 3, effect: 'costIncrease', value: 1.2, weight: 10 },
+  { id: 'regular_customer', name: '常連さん来店！', desc: '特別な常連さんが来店！\n今日はチップ2倍', icon: '🌟', duration: 1, effect: 'tipBoost', value: 2.0, weight: 12 },
+  { id: 'health_inspection', name: '衛生検査！', desc: '保健所の検査が入りました！', icon: '🔍', duration: 0, effect: 'healthCheck', value: 0, weight: 8 },
+  { id: 'rainy_day', name: '雨の日☔', desc: '雨で客足が減少…\n今日は客足-30%', icon: '🌧️', duration: 1, effect: 'customerReduction', value: 0.7, weight: 12 },
+  { id: 'tv_coverage', name: 'テレビ取材！', desc: 'テレビで紹介されました！\n5日間客足+80%', icon: '📺', duration: 5, effect: 'customerBoost', value: 1.8, weight: 3, minReputation: 30 },
+  { id: 'food_festival', name: 'ラーメンフェスティバル', desc: '近隣でラーメンフェス開催！\n2日間客足+30%', icon: '🎉', duration: 2, effect: 'customerBoost', value: 1.3, weight: 8 },
+  { id: 'lucky_day', name: 'ラッキーデー！', desc: 'なんだかいい日！\n今日の評判UP量が2倍', icon: '🍀', duration: 1, effect: 'reputationBoost', value: 2.0, weight: 8 },
+];
+
 // Tier gating: require at least 1 research from the previous tier to unlock next tier
 function isTierAvailable(tier, unlockedResearch) {
   if (tier <= 1) return true;
@@ -1349,6 +1361,9 @@ class Game {
     this.achievements = []; // unlocked achievement ids
     this._achieveQueue = []; // pending popups
     this._achieveShowing = false;
+    this.activeEvents = []; // { id, name, icon, remainingDays, effect, value }
+    this.eventTriggeredToday = false;
+    this.eventLog = []; // recent event history for display
   }
 
   // ========== レシピ管理 ==========
@@ -1413,6 +1428,11 @@ class Game {
     if (this.furniture.some(f => f.type === 'noodleMachine')) {
       const noodleCost = NOODLE_TYPES[recipe.noodle]?.cost || 0;
       params.cost -= Math.floor(noodleCost / 2);
+    }
+    // イベントによる原価増加を適用
+    const costMultiplier = this.getEventMultiplier('costIncrease');
+    if (costMultiplier !== 1.0) {
+      params.cost = Math.ceil(params.cost * costMultiplier);
     }
     return params;
   }
@@ -1865,6 +1885,7 @@ class Game {
     this.waitingQueueCheckTimer = 0;
     this.pedestrianTimer = 0;
     this.dailyStats = { revenue: 0, customers: 0, satisfied: 0 };
+    this.eventTriggeredToday = false;
     
     // Remove any handoff food icons
     document.querySelectorAll('.handoff-food-icon').forEach(el => el.remove());
@@ -1889,6 +1910,15 @@ class Game {
         s.workBubble = null;
       }
     });
+    
+    // Tick down active events and remove expired ones
+    this.activeEvents = this.activeEvents.filter(e => {
+      e.remainingDays--;
+      return e.remainingDays > 0;
+    });
+    
+    // Try to trigger a random event (30% chance per day, max 1 per day)
+    this.tryTriggerEvent();
     
     this.renderTabContent();
   }
@@ -1975,10 +2005,13 @@ class Game {
         <div>満足度: ${todaySatisfied}/${todayCustomers}人</div>
         <div>評判変動: +${todayCustomers}</div>
         ${recipeSalesHtml ? `<div style="margin-top:8px;border-top:1px solid #ddd;padding-top:8px;"><strong>メニュー別</strong>${recipeSalesHtml}</div>` : ''}
+        ${this.activeEvents.length > 0 ? `<div style="margin-top:8px;border-top:1px solid #ddd;padding-top:8px;"><strong>📢 イベント効果</strong>${this.activeEvents.map(e => `<div style="font-size:12px;">${e.icon} ${e.name} (残り${e.remainingDays}日)</div>`).join('')}</div>` : ''}
       </div>
     `;
     
-    this.reputation += todayCustomers;
+    // イベントによる評判UP量ブースト
+    const repBoost = this.getEventMultiplier('reputationBoost');
+    this.reputation += Math.floor(todayCustomers * repBoost);
     this.checkAchievements();
     
     const modal = document.getElementById('day-summary-modal');
@@ -2148,6 +2181,102 @@ class Game {
       // Calculate path to avoid walking through walls
       this.calculateCustomerPath(c);
     });
+  }
+
+  // ========== イベントシステム ==========
+  tryTriggerEvent() {
+    if (this.eventTriggeredToday) return;
+    // 30% chance per day (increases slightly with day count)
+    const chance = Math.min(0.5, 0.25 + this.day * 0.005);
+    if (Math.random() > chance) return;
+    
+    // Don't trigger same event if already active
+    const activeIds = new Set(this.activeEvents.map(e => e.id));
+    
+    // Filter eligible events
+    const eligible = EVENTS.filter(e => {
+      if (activeIds.has(e.id)) return false;
+      if (e.minReputation && this.reputation < e.minReputation) return false;
+      return true;
+    });
+    if (eligible.length === 0) return;
+    
+    // Weighted random selection
+    const totalWeight = eligible.reduce((sum, e) => sum + e.weight, 0);
+    let roll = Math.random() * totalWeight;
+    let chosen = eligible[0];
+    for (const e of eligible) {
+      roll -= e.weight;
+      if (roll <= 0) { chosen = e; break; }
+    }
+    
+    this.eventTriggeredToday = true;
+    
+    // Apply the event
+    const activeEvent = {
+      id: chosen.id,
+      name: chosen.name,
+      icon: chosen.icon,
+      remainingDays: chosen.duration,
+      effect: chosen.effect,
+      value: chosen.value
+    };
+    
+    // Health check is instant (no duration)
+    if (chosen.effect === 'healthCheck') {
+      this.applyHealthCheck();
+    }
+    
+    if (chosen.duration > 0) {
+      this.activeEvents.push(activeEvent);
+    }
+    
+    // Log the event
+    this.eventLog.unshift({ day: this.day, name: chosen.name, icon: chosen.icon });
+    if (this.eventLog.length > 10) this.eventLog.pop();
+    
+    // Show event notification modal
+    this.showEventNotification(chosen);
+  }
+  
+  showEventNotification(event) {
+    const notif = document.getElementById('notification');
+    notif.innerHTML = `<div style="font-size:28px;">${event.icon}</div><div style="font-size:16px;font-weight:bold;">${event.name}</div><div style="font-size:12px;margin-top:4px;white-space:pre-line;">${event.desc}</div>`;
+    notif.classList.add('active');
+    setTimeout(() => {
+      notif.classList.remove('active');
+      notif.textContent = '';
+    }, 3000);
+  }
+  
+  applyHealthCheck() {
+    // 洗い場があれば評判UP、なければDOWN
+    const hasSink = this.furniture.some(f => f.type === 'dishwashingSink');
+    const sinkCount = this.furniture.filter(f => f.type === 'dishwashingSink').length;
+    if (hasSink && sinkCount >= 1) {
+      const bonus = Math.min(5, sinkCount * 2);
+      this.reputation = Math.min(100, this.reputation + bonus);
+      this.showNotification(`✅ 衛生検査合格！ 評判+${bonus}`);
+    } else {
+      const penalty = 5;
+      this.reputation = Math.max(0, this.reputation - penalty);
+      this.showNotification(`❌ 衛生検査不合格… 評判-${penalty}\n洗い場を設置しましょう！`);
+    }
+  }
+  
+  // Get active event multiplier for a given effect type
+  getEventMultiplier(effectType) {
+    let multiplier = 1.0;
+    for (const e of this.activeEvents) {
+      if (e.effect === effectType) {
+        multiplier *= e.value;
+      }
+    }
+    return multiplier;
+  }
+  
+  hasActiveEvent(effectType) {
+    return this.activeEvents.some(e => e.effect === effectType);
   }
 
   // Customer grid-based pathfinding
@@ -2833,6 +2962,15 @@ class Game {
       baseRate *= 0.8;
     }
     
+    // Event effects on customer spawn rate
+    const customerBoost = this.getEventMultiplier('customerBoost');
+    const customerReduction = this.getEventMultiplier('customerReduction');
+    // Lower rate = more customers, so divide by boost and multiply by reduction inverse
+    baseRate = baseRate / customerBoost;
+    if (customerReduction < 1) {
+      baseRate = baseRate / customerReduction; // reduction value like 0.7 means fewer customers
+    }
+    
     return baseRate;
   }
 
@@ -3186,7 +3324,9 @@ class Game {
           
           // レシピベースの売価を使用（レシピ未割り当ての場合はフォールバック250円）
           const recipePrice = customer.orderedRecipe ? customer.orderedRecipe.price : 250;
-          customer.paid = Math.floor(recipePrice * tipMultiplier * (customer.groupSize || 1));
+          // イベントによるチップブーストと原価増加を適用
+          const tipEventMultiplier = this.getEventMultiplier('tipBoost');
+          customer.paid = Math.floor(recipePrice * tipMultiplier * tipEventMultiplier * (customer.groupSize || 1));
           this.money += customer.paid;
           soundMgr.playPayment();
           
@@ -3578,6 +3718,12 @@ class Game {
                 🌙 夜 (40-60秒): 食通が増える・客足やや減少
               </div>
             ` : ''}
+            ${this.activeEvents.length > 0 ? `
+              <div style="margin-bottom:8px;background:white;padding:6px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;">
+                <strong>📢 発生中のイベント:</strong><br>
+                ${this.activeEvents.map(e => `${e.icon} ${e.name} (残り${e.remainingDays}日)`).join('<br>')}
+              </div>
+            ` : ''}
             ${!this.dayActive ? `
               <button onclick="game.startDay()">営業開始</button>
             ` : `
@@ -3810,6 +3956,14 @@ class Game {
           <div class="info-section">
             <div class="info-title">店員</div>
             ${staffInfo}
+          </div>
+          
+          <div class="info-section">
+            <div class="info-title">📢 最近のイベント</div>
+            ${this.eventLog.length > 0 ? 
+              this.eventLog.map(e => `<div style="font-size:12px;">${e.icon} Day${e.day}: ${e.name}</div>`).join('') :
+              '<div style="color: #999;">まだイベントは発生していません</div>'
+            }
           </div>
           
           <div class="info-section">
@@ -4229,7 +4383,9 @@ class Game {
       storeLevel: this.storeLevel,
       recipes: this.recipes,
       nextRecipeId: this.nextRecipeId,
-      achievements: this.achievements
+      achievements: this.achievements,
+      activeEvents: this.activeEvents,
+      eventLog: this.eventLog
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -4257,6 +4413,10 @@ class Game {
     
     // 実績復元
     this.achievements = save.achievements || [];
+    
+    // イベント復元
+    this.activeEvents = save.activeEvents || [];
+    this.eventLog = save.eventLog || [];
     
     // Regenerate walls from store level
     this.walls = this.generateWalls(this.storeLevel);
