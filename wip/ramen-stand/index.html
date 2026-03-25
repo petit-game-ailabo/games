@@ -51,7 +51,7 @@ body {
 #shop-view {
   position: relative;
   width: 100%;
-  height: 440px;
+  min-height: 440px;
   background: #f5f0e8;
   border: 4px solid #654321;
   margin-top: 4px;
@@ -63,7 +63,7 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 400px;
+  min-height: 400px;
   background: linear-gradient(135deg, #e8dcc8 0%, #f0e6d2 100%);
   border-bottom: 2px solid #8b7355;
 }
@@ -1453,9 +1453,9 @@ function isTierAvailable(tier, unlockedResearch) {
 
 // Store expansion costs per level
 const STORE_LEVELS = {
-  1: { cost: 0, label: '6×3', interiorCols: [3,8], interiorRows: [3,5] },
-  2: { cost: 5000, label: '8×5', interiorCols: [2,9], interiorRows: [2,6] },
-  3: { cost: 15000, label: '10×7', interiorCols: [1,10], interiorRows: [1,7] }
+  1: { cost: 0, label: '6×3', gridWidth: 12, gridHeight: 11, interiorCols: [3,8], interiorRows: [3,5] },
+  2: { cost: 5000, label: '8×5', gridWidth: 12, gridHeight: 11, interiorCols: [2,9], interiorRows: [2,6] },
+  3: { cost: 15000, label: '10×7', gridWidth: 12, gridHeight: 11, interiorCols: [1,10], interiorRows: [1,7] }
 };
 
 // Initial layout (pre-placed furniture) — adjusted for new grid
@@ -1491,6 +1491,8 @@ class Game {
     this.handoffQueue = [];
     this.walls = [];
     this.storeLevel = 1;
+    this.gridWidth = GRID_WIDTH;
+    this.gridHeight = GRID_HEIGHT;
     this.unlockedResearch = [];
     this.activeRecipes = ['醤油ラーメン'];
     this.availableRecipes = ['醤油ラーメン'];
@@ -1524,6 +1526,32 @@ class Game {
     this.eventTriggeredToday = false;
     this.eventLog = []; // recent event history for display
     this.dayHistory = []; // 日次履歴 [{ day, revenue, cost, profit, customers, satisfied, topMenu, timePeriodSales }]
+  }
+
+  // ========== グリッドサイズ管理 ==========
+
+  get streetRow() { return this.gridHeight - 1; }
+
+  updateGridSize(level) {
+    const info = STORE_LEVELS[level];
+    this.gridWidth = info.gridWidth || GRID_WIDTH;
+    this.gridHeight = info.gridHeight || GRID_HEIGHT;
+    // Update DOM sizes
+    const interior = document.getElementById('shop-interior');
+    const street = document.getElementById('shop-street');
+    const shopView = document.getElementById('shop-view');
+    if (interior) {
+      interior.style.width = (this.gridWidth * TILE_SIZE) + 'px';
+      interior.style.height = ((this.gridHeight - 1) * TILE_SIZE) + 'px';
+    }
+    if (street) {
+      street.style.width = (this.gridWidth * TILE_SIZE) + 'px';
+      street.style.top = ((this.gridHeight - 1) * TILE_SIZE) + 'px';
+      street.style.height = TILE_SIZE + 'px';
+    }
+    if (shopView) {
+      shopView.style.height = (this.gridHeight * TILE_SIZE) + 'px';
+    }
   }
 
   // ========== レシピ管理 ==========
@@ -1760,8 +1788,8 @@ class Game {
     const overlay = document.getElementById('grid-overlay');
     overlay.innerHTML = '';
     
-    for (let y = 0; y < GRID_HEIGHT - 1; y++) {
-      for (let x = 0; x < GRID_WIDTH; x++) {
+    for (let y = 0; y < this.gridHeight - 1; y++) {
+      for (let x = 0; x < this.gridWidth; x++) {
         const cell = document.createElement('div');
         cell.className = 'grid-cell';
         const inside = this.isInsideStore(x, y);
@@ -2469,7 +2497,7 @@ class Game {
     // Also allow the entrance row tiles and street row
     const entranceY = this.getEntranceY();
     // Entrance gap is at columns 5 and 6
-    if (entranceY >= 0 && entranceY < GRID_HEIGHT - 1) {
+    if (entranceY >= 0 && entranceY < this.gridHeight - 1) {
       grid[entranceY][5] = false;
       grid[entranceY][6] = false;
     }
@@ -2518,15 +2546,15 @@ class Game {
   buildOccupancyGrid() {
     // Grid rows 0..9 (playable area), cols 0..11
     const grid = [];
-    for (let y = 0; y < GRID_HEIGHT - 1; y++) {
+    for (let y = 0; y < this.gridHeight - 1; y++) {
       grid[y] = [];
-      for (let x = 0; x < GRID_WIDTH; x++) {
+      for (let x = 0; x < this.gridWidth; x++) {
         grid[y][x] = false; // false = passable
       }
     }
     // Mark wall tiles as impassable
     this.walls.forEach(w => {
-      if (w.y >= 0 && w.y < GRID_HEIGHT - 1 && w.x >= 0 && w.x < GRID_WIDTH) {
+      if (w.y >= 0 && w.y < this.gridHeight - 1 && w.x >= 0 && w.x < this.gridWidth) {
         grid[w.y][w.x] = true;
       }
     });
@@ -2537,7 +2565,7 @@ class Game {
         for (let dx = 0; dx < ft.width; dx++) {
           const gy = f.y + dy;
           const gx = f.x + dx;
-          if (gy >= 0 && gy < GRID_HEIGHT - 1 && gx >= 0 && gx < GRID_WIDTH) {
+          if (gy >= 0 && gy < this.gridHeight - 1 && gx >= 0 && gx < this.gridWidth) {
             grid[gy][gx] = true; // blocked
           }
         }
@@ -2550,14 +2578,14 @@ class Game {
     const grid = this.buildOccupancyGrid();
     
     // If end tile is blocked and we allow it (for reaching equipment), find adjacent
-    const targetIsBlocked = endY >= 0 && endY < GRID_HEIGHT - 1 && endX >= 0 && endX < GRID_WIDTH && grid[endY][endX];
+    const targetIsBlocked = endY >= 0 && endY < this.gridHeight - 1 && endX >= 0 && endX < this.gridWidth && grid[endY][endX];
     
     if (targetIsBlocked && allowEndBlocked) {
       // Find path to an adjacent passable tile
       const adjacentTiles = [
         {x: endX - 1, y: endY}, {x: endX + 1, y: endY},
         {x: endX, y: endY - 1}, {x: endX, y: endY + 1}
-      ].filter(t => t.x >= 0 && t.x < GRID_WIDTH && t.y >= 0 && t.y < GRID_HEIGHT - 1 && !grid[t.y][t.x]);
+      ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight - 1 && !grid[t.y][t.x]);
       
       // Try each adjacent tile, return shortest path
       let bestPath = null;
@@ -2581,8 +2609,8 @@ class Game {
   _bfs(grid, sx, sy, ex, ey) {
     if (sx === ex && sy === ey) return [];
     
-    const rows = GRID_HEIGHT - 1;
-    const cols = GRID_WIDTH;
+    const rows = this.gridHeight - 1;
+    const cols = this.gridWidth;
     const visited = Array.from({length: rows}, () => Array(cols).fill(false));
     const parent = Array.from({length: rows}, () => Array(cols).fill(null));
     
@@ -2864,7 +2892,7 @@ class Game {
     const adjacentTiles = [
       {x: seatX - 1, y: seatY}, {x: seatX + 1, y: seatY},
       {x: seatX, y: seatY - 1}, {x: seatX, y: seatY + 1}
-    ].filter(t => t.x >= 0 && t.x < GRID_WIDTH && t.y >= 0 && t.y < GRID_HEIGHT - 1 && !grid[t.y][t.x]);
+    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight - 1 && !grid[t.y][t.x]);
     
     let bestPath = null;
     for (const adj of adjacentTiles) {
@@ -2975,7 +3003,7 @@ class Game {
     const adjacentTiles = [
       {x: equip.x - 1, y: equip.y}, {x: equip.x + 1, y: equip.y},
       {x: equip.x, y: equip.y - 1}, {x: equip.x, y: equip.y + 1}
-    ].filter(t => t.x >= 0 && t.x < GRID_WIDTH && t.y >= 0 && t.y < GRID_HEIGHT - 1 && !grid[t.y][t.x]);
+    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight - 1 && !grid[t.y][t.x]);
     
     let bestPath = null;
     for (const adj of adjacentTiles) {
@@ -3039,7 +3067,7 @@ class Game {
     const adjacentTiles = [
       {x: seatX - 1, y: seatY}, {x: seatX + 1, y: seatY},
       {x: seatX, y: seatY - 1}, {x: seatX, y: seatY + 1}
-    ].filter(t => t.x >= 0 && t.x < GRID_WIDTH && t.y >= 0 && t.y < GRID_HEIGHT - 1 && !grid[t.y][t.x]);
+    ].filter(t => t.x >= 0 && t.x < this.gridWidth && t.y >= 0 && t.y < this.gridHeight - 1 && !grid[t.y][t.x]);
     
     let bestPath = null;
     for (const adj of adjacentTiles) {
@@ -3157,7 +3185,7 @@ class Game {
       const priceFactor = 1 + (250 - avgPrice) / 1000; // 例: 150円→+0.1, 350円→-0.1
       attractRate *= Math.max(0.3, Math.min(1.5, priceFactor));
     }
-    const streetY = TILE_SIZE * STREET_ROW + TILE_SIZE / 2;
+    const streetY = TILE_SIZE * this.streetRow + TILE_SIZE / 2;
     
     const customer = {
       id: 'c' + this.nextCustomerId++,
@@ -3357,7 +3385,7 @@ class Game {
           this.waitingQueue = this.waitingQueue.filter(c => c !== customer);
           this.repositionWaitingQueue();
           customer.state = 'LEAVING';
-          const streetY3 = TILE_SIZE * STREET_ROW + TILE_SIZE / 2;
+          const streetY3 = TILE_SIZE * this.streetRow + TILE_SIZE / 2;
           customer.targetX = -20;
           customer.targetY = streetY3;
           customer.path = null;
@@ -3550,7 +3578,7 @@ class Game {
         }
         if (this.isAtTarget(customer)) {
           customer.state = 'EXITING';
-          const streetY = TILE_SIZE * STREET_ROW + TILE_SIZE / 2;
+          const streetY = TILE_SIZE * this.streetRow + TILE_SIZE / 2;
           customer.targetX = -20;
           customer.targetY = streetY;
           customer.path = null;
@@ -3843,6 +3871,7 @@ class Game {
     }
     this.money -= cost;
     this.storeLevel = nextLevel;
+    this.updateGridSize(nextLevel);
     this.walls = this.generateWalls(nextLevel);
     this.renderWalls();
     this.createGrid(); // Rebuild grid overlay
@@ -4568,6 +4597,8 @@ class Game {
       stats: this.stats,
       nextStaffId: this.nextStaffId,
       storeLevel: this.storeLevel,
+      gridWidth: this.gridWidth,
+      gridHeight: this.gridHeight,
       recipes: this.recipes,
       nextRecipeId: this.nextRecipeId,
       achievements: this.achievements,
@@ -4595,6 +4626,9 @@ class Game {
     this.stats = save.stats;
     this.nextStaffId = save.nextStaffId || 0;
     this.storeLevel = save.storeLevel || 1;
+    this.gridWidth = save.gridWidth || GRID_WIDTH;
+    this.gridHeight = save.gridHeight || GRID_HEIGHT;
+    this.updateGridSize(this.storeLevel);
     
     // レシピ復元（旧セーブ互換のマイグレーション付き）
     this.migrateRecipes(save);
@@ -4654,6 +4688,7 @@ class Game {
     
     // Set initial store level and walls
     this.storeLevel = 1;
+    this.updateGridSize(1);
     this.walls = this.generateWalls(1);
     
     // Place initial furniture
