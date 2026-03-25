@@ -710,6 +710,89 @@ button.toggle-btn.active {
   margin-top: 4px;
 }
 
+/* Achievement popup */
+.achievement-popup {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #ffd700, #f5c518);
+  color: #333;
+  padding: 12px 20px;
+  border: 3px solid #b8860b;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: bold;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+  z-index: 2500;
+  text-align: center;
+  animation: achieveSlide 0.4s ease-out;
+  max-width: 90%;
+}
+
+.achievement-popup .achieve-icon {
+  font-size: 24px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.achievement-popup .achieve-name {
+  font-size: 15px;
+}
+
+.achievement-popup .achieve-desc {
+  font-size: 11px;
+  color: #555;
+  font-weight: normal;
+  margin-top: 2px;
+}
+
+@keyframes achieveSlide {
+  0% { transform: translateX(-50%) translateY(-30px); opacity: 0; }
+  100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+/* Achievement list in info tab */
+.achievement-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.achieve-card {
+  background: white;
+  padding: 8px;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 11px;
+}
+
+.achieve-card.unlocked {
+  background: #fff9e6;
+  border-color: #d4af37;
+}
+
+.achieve-card.locked {
+  opacity: 0.5;
+}
+
+.achieve-card .achieve-card-icon {
+  font-size: 22px;
+}
+
+.achieve-card .achieve-card-name {
+  font-weight: bold;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.achieve-card .achieve-card-desc {
+  color: #888;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
 /* Notification */
 #notification {
   position: fixed;
@@ -1039,6 +1122,22 @@ class SoundManager {
     }
   }
 
+  // 実績解放 (C5→E5→G5→C6 ファンファーレ)
+  playAchievement() {
+    if (!this._ensureCtx() || this.muted) return;
+    const t = this.ctx.currentTime;
+    [523, 659, 784, 1047].forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + i * 0.12);
+      gain.gain.setValueAtTime(0.15, t + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.12 + 0.35);
+      osc.connect(gain); gain.connect(this.masterGain);
+      osc.start(t + i * 0.12); osc.stop(t + i * 0.12 + 0.4);
+    });
+  }
+
   // 営業開始チャイム (C5→E5→G5 上昇)
   playDayStart() {
     if (!this._ensureCtx() || this.muted) return;
@@ -1148,6 +1247,30 @@ const COMBOS = [
   { items: ['freezer', 'soupPot'], name: '鮮度抜群', bonus: 0.10 }
 ];
 
+// === 実績・アチーブメント定義 ===
+const ACHIEVEMENTS = [
+  { id: 'first_serve',     icon: '🍜', name: '初めての一杯',     desc: '初めてラーメンを提供した',       check: g => g.stats.totalCustomers >= 1 },
+  { id: 'serve_10',        icon: '🔟', name: '常連の予感',       desc: '累計10杯提供',                  check: g => g.stats.totalCustomers >= 10 },
+  { id: 'serve_50',        icon: '🎯', name: '繁盛店への道',     desc: '累計50杯提供',                  check: g => g.stats.totalCustomers >= 50 },
+  { id: 'serve_100',       icon: '💯', name: '百杯達成！',       desc: '累計100杯提供',                 check: g => g.stats.totalCustomers >= 100 },
+  { id: 'serve_500',       icon: '🏆', name: '伝説のラーメン屋', desc: '累計500杯提供',                 check: g => g.stats.totalCustomers >= 500 },
+  { id: 'revenue_5000',    icon: '💰', name: '初めての利益',     desc: '累計売上5,000円達成',            check: g => g.stats.totalRevenue >= 5000 },
+  { id: 'revenue_50000',   icon: '💎', name: '繁盛店',           desc: '累計売上50,000円達成',           check: g => g.stats.totalRevenue >= 50000 },
+  { id: 'revenue_200000',  icon: '👑', name: 'ラーメン王',       desc: '累計売上200,000円達成',          check: g => g.stats.totalRevenue >= 200000 },
+  { id: 'rep_25',          icon: '⭐', name: 'ちょっと有名',     desc: '評判25達成',                    check: g => g.reputation >= 25 },
+  { id: 'rep_50',          icon: '🌟', name: '人気店',           desc: '評判50達成',                    check: g => g.reputation >= 50 },
+  { id: 'rep_100',         icon: '✨', name: '超人気店',         desc: '評判100達成（MAX）',             check: g => g.reputation >= 100 },
+  { id: 'all_soups',       icon: '🍲', name: 'スープマスター',   desc: '全スープを研究した',             check: g => ['味噌スープ','塩スープ','豚骨スープ','煮干しスープ','貝類スープ'].every(s => g.unlockedResearch.includes(s)) },
+  { id: 'all_toppings',    icon: '🥬', name: 'トッピング博士',   desc: '全トッピングを研究した',          check: g => ['メンマ','チャーシュー','味玉','もやし','コーン','バター','鰹節'].every(s => g.unlockedResearch.includes(s)) },
+  { id: 'combo_first',     icon: '🔗', name: 'コンボ発見！',     desc: '初めてコンボを発見した',          check: g => g.discoveredCombos.length >= 1 },
+  { id: 'combo_all',       icon: '🔥', name: 'コンボマスター',   desc: '全コンボを発見した',             check: g => g.discoveredCombos.length >= COMBOS.length },
+  { id: 'store_lv2',       icon: '🏗️', name: '店舗拡張',         desc: '店舗をLv2に拡張した',            check: g => g.storeLevel >= 2 },
+  { id: 'store_lv3',       icon: '🏛️', name: '大型店舗',         desc: '店舗をLv3に拡張した',            check: g => g.storeLevel >= 3 },
+  { id: 'recipes_3',       icon: '📖', name: 'メニュー充実',     desc: '3つ以上のレシピを作成した',       check: g => g.recipes.length >= 3 },
+  { id: 'staff_5',         icon: '👥', name: '大所帯',           desc: 'スタッフを5人以上雇用した',       check: g => g.staff.length >= 5 },
+  { id: 'day_30',          icon: '📅', name: 'ベテラン店主',     desc: '30日間営業した',                 check: g => g.day >= 30 },
+];
+
 // Tier gating: require at least 1 research from the previous tier to unlock next tier
 function isTierAvailable(tier, unlockedResearch) {
   if (tier <= 1) return true;
@@ -1223,6 +1346,9 @@ class Game {
     this.selectedStaff = null;
     this.removalMode = false;
     this.dailyStats = { revenue: 0, customers: 0, satisfied: 0 };
+    this.achievements = []; // unlocked achievement ids
+    this._achieveQueue = []; // pending popups
+    this._achieveShowing = false;
   }
 
   // ========== レシピ管理 ==========
@@ -1852,6 +1978,7 @@ class Game {
     `;
     
     this.reputation += todayCustomers;
+    this.checkAchievements();
     
     const modal = document.getElementById('day-summary-modal');
     modal.classList.add('active');
@@ -3583,7 +3710,23 @@ class Game {
           ? this.staff.map(s => `<div>${STAFF_TYPES[s.type].icon} ${STAFF_TYPES[s.type].name} (${s.homeX},${s.homeY})</div>`).join('')
           : '<div style="color: #999;">まだ雇っていません</div>';
         
+        const achieveCards = ACHIEVEMENTS.map(a => {
+          const unlocked = this.achievements.includes(a.id);
+          return `<div class="achieve-card ${unlocked ? 'unlocked' : 'locked'}">
+            <div class="achieve-card-icon">${unlocked ? a.icon : '❓'}</div>
+            <div class="achieve-card-name">${unlocked ? a.name : '???'}</div>
+            <div class="achieve-card-desc">${unlocked ? a.desc : '未達成'}</div>
+          </div>`;
+        }).join('');
+        const achieveCount = this.achievements.length;
+        const achieveTotal = ACHIEVEMENTS.length;
+        
         content.innerHTML = `
+          <div class="info-section">
+            <div class="info-title">🏅 実績 (${achieveCount}/${achieveTotal})</div>
+            <div class="achievement-grid">${achieveCards}</div>
+          </div>
+          
           <div class="info-section">
             <div class="info-title">統計</div>
             <div>総客数: ${this.stats.totalCustomers}人</div>
@@ -3950,10 +4093,45 @@ class Game {
     this.saveGame();
   }
 
+  // ========== 実績システム ==========
+  checkAchievements() {
+    for (const a of ACHIEVEMENTS) {
+      if (this.achievements.includes(a.id)) continue;
+      if (a.check(this)) {
+        this.achievements.push(a.id);
+        this._achieveQueue.push(a);
+        this._showNextAchievement();
+      }
+    }
+  }
+
+  _showNextAchievement() {
+    if (this._achieveShowing || this._achieveQueue.length === 0) return;
+    this._achieveShowing = true;
+    const a = this._achieveQueue.shift();
+    soundMgr.playAchievement();
+
+    const el = document.createElement('div');
+    el.className = 'achievement-popup';
+    el.innerHTML = `
+      <div class="achieve-icon">${a.icon}</div>
+      <div class="achieve-name">🏅 ${a.name}</div>
+      <div class="achieve-desc">${a.desc}</div>
+    `;
+    document.body.appendChild(el);
+
+    setTimeout(() => {
+      if (el.parentNode) el.remove();
+      this._achieveShowing = false;
+      this._showNextAchievement();
+    }, 2500);
+  }
+
   updateUI() {
     document.getElementById('day').textContent = this.day;
     document.getElementById('money').textContent = this.money;
     document.getElementById('reputation').textContent = this.reputation;
+    this.checkAchievements();
   }
 
   saveGame() {
@@ -3977,7 +4155,8 @@ class Game {
       nextStaffId: this.nextStaffId,
       storeLevel: this.storeLevel,
       recipes: this.recipes,
-      nextRecipeId: this.nextRecipeId
+      nextRecipeId: this.nextRecipeId,
+      achievements: this.achievements
     };
     localStorage.setItem('ramenStandSave', JSON.stringify(save));
   }
@@ -4002,6 +4181,9 @@ class Game {
     
     // レシピ復元（旧セーブ互換のマイグレーション付き）
     this.migrateRecipes(save);
+    
+    // 実績復元
+    this.achievements = save.achievements || [];
     
     // Regenerate walls from store level
     this.walls = this.generateWalls(this.storeLevel);
