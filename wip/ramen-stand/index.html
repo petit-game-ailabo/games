@@ -778,7 +778,7 @@ button.toggle-btn.active {
   <div id="status-bar">
     <div class="status-item">Day <span id="day">1</span></div>
     <div class="status-item">💰 <span id="money">5000</span>円</div>
-    <div class="status-item">⭐ <span id="reputation">0</span></div>
+    <div class="status-item" style="display:flex;align-items:center;justify-content:space-between;">⭐ <span id="reputation">0</span> <span id="mute-btn" onclick="game.toggleMute()" style="cursor:pointer;font-size:16px;margin-left:6px;">🔊</span></div>
   </div>
 
   <div id="shop-view">
@@ -960,6 +960,167 @@ function calculatePrice(cost, strategy) {
     default:         return Math.ceil(cost / 0.80);
   }
 }
+
+// === サウンドシステム (Web Audio API シンセ) ===
+class SoundManager {
+  constructor() {
+    this.ctx = null;
+    this.masterGain = null;
+    this.muted = false;
+    this.bgmPlaying = false;
+    this._bgmTimeout = null;
+  }
+
+  _ensureCtx() {
+    if (this.ctx && this.ctx.state !== 'closed') {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return true;
+    }
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.value = this.muted ? 0 : 0.3;
+      this.masterGain.connect(this.ctx.destination);
+      return true;
+    } catch(e) { return false; }
+  }
+
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.masterGain) {
+      this.masterGain.gain.value = this.muted ? 0 : 0.3;
+    }
+    if (this.muted) this.stopBGM();
+    return this.muted;
+  }
+
+  // ピンポーン (注文時)
+  playOrder() {
+    if (!this._ensureCtx() || this.muted) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.setValueAtTime(1100, t + 0.15);
+    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+    osc.connect(gain); gain.connect(this.masterGain);
+    osc.start(t); osc.stop(t + 0.4);
+  }
+
+  // チーン (調理完了)
+  playCookDone() {
+    if (!this._ensureCtx() || this.muted) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1320, t);
+    gain.gain.setValueAtTime(0.15, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.7);
+    osc.connect(gain); gain.connect(this.masterGain);
+    osc.start(t); osc.stop(t + 0.7);
+  }
+
+  // チャリン (お会計)
+  playPayment() {
+    if (!this._ensureCtx() || this.muted) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(2000 + i * 500, t + i * 0.06);
+      gain.gain.setValueAtTime(0.1, t + i * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.06 + 0.2);
+      osc.connect(gain); gain.connect(this.masterGain);
+      osc.start(t + i * 0.06); osc.stop(t + i * 0.06 + 0.2);
+    }
+  }
+
+  // 営業開始チャイム (C5→E5→G5 上昇)
+  playDayStart() {
+    if (!this._ensureCtx() || this.muted) return;
+    const t = this.ctx.currentTime;
+    [523, 659, 784].forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + i * 0.15);
+      gain.gain.setValueAtTime(0.18, t + i * 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.15 + 0.3);
+      osc.connect(gain); gain.connect(this.masterGain);
+      osc.start(t + i * 0.15); osc.stop(t + i * 0.15 + 0.35);
+    });
+  }
+
+  // 営業終了チャイム (G5→E5→C5 下降)
+  playDayEnd() {
+    if (!this._ensureCtx() || this.muted) return;
+    const t = this.ctx.currentTime;
+    [784, 659, 523].forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + i * 0.2);
+      gain.gain.setValueAtTime(0.18, t + i * 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.01, t + i * 0.2 + 0.4);
+      osc.connect(gain); gain.connect(this.masterGain);
+      osc.start(t + i * 0.2); osc.stop(t + i * 0.2 + 0.45);
+    });
+  }
+
+  // BGM: 和風ペンタトニックのゆったりループ
+  startBGM() {
+    if (!this._ensureCtx() || this.muted || this.bgmPlaying) return;
+    this.bgmPlaying = true;
+    this._bgmLoop();
+  }
+
+  stopBGM() {
+    this.bgmPlaying = false;
+    if (this._bgmTimeout) { clearTimeout(this._bgmTimeout); this._bgmTimeout = null; }
+  }
+
+  _bgmLoop() {
+    if (!this.bgmPlaying || !this.ctx || this.muted) { this.bgmPlaying = false; return; }
+    const t = this.ctx.currentTime;
+    // 和風ペンタトニック旋律 (D4 F4 G4 A4 C5 A4 G4 F4)
+    const melody = [294, 349, 392, 440, 523, 440, 392, 349];
+    const beatLen = 0.35;
+
+    melody.forEach((freq, i) => {
+      // メロディ (triangle波: 柔らかい音)
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t + i * beatLen);
+      gain.gain.setValueAtTime(0.035, t + i * beatLen);
+      gain.gain.setValueAtTime(0.035, t + i * beatLen + beatLen * 0.6);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * beatLen + beatLen * 0.9);
+      osc.connect(gain); gain.connect(this.masterGain);
+      osc.start(t + i * beatLen); osc.stop(t + i * beatLen + beatLen);
+
+      // ベース音 (1オクターブ下、偶数拍のみ)
+      if (i % 2 === 0) {
+        const bass = this.ctx.createOscillator();
+        const bGain = this.ctx.createGain();
+        bass.type = 'sine';
+        bass.frequency.setValueAtTime(freq / 2, t + i * beatLen);
+        bGain.gain.setValueAtTime(0.02, t + i * beatLen);
+        bGain.gain.exponentialRampToValueAtTime(0.001, t + i * beatLen + beatLen * 1.8);
+        bass.connect(bGain); bGain.connect(this.masterGain);
+        bass.start(t + i * beatLen); bass.stop(t + i * beatLen + beatLen * 2);
+      }
+    });
+
+    const loopMs = melody.length * beatLen * 1000 + 300;
+    this._bgmTimeout = setTimeout(() => this._bgmLoop(), loopMs);
+  }
+}
+
+const soundMgr = new SoundManager();
 
 // === 既存データ定義 ===
 
@@ -1566,6 +1727,8 @@ class Game {
   }
 
   startDay() {
+    soundMgr.playDayStart();
+    soundMgr.startBGM();
     this.dayActive = true;
     this.dayTime = 0;
     this.customers = [];
@@ -1605,6 +1768,8 @@ class Game {
   }
 
   endDay() {
+    soundMgr.stopBGM();
+    soundMgr.playDayEnd();
     this.dayActive = false;
     
     // Clean up customer elements from DOM
@@ -2362,6 +2527,7 @@ class Game {
   }
 
   cookDeliverFood(staff) {
+    soundMgr.playCookDone();
     const customer = staff.currentOrder;
     // 調理でスキップしたステップ数を客に記録（品質計算に反映）
     if (customer) {
@@ -2722,6 +2888,7 @@ class Game {
           const orderRecipeName = customer.orderedRecipe ? customer.orderedRecipe.name : '🍜';
           const orderLabel = customer.groupSize > 1 ? `${orderRecipeName}×${customer.groupSize}` : orderRecipeName;
           this.showBubble(customer, orderLabel);
+          soundMgr.playOrder();
           
           // Check if there are cooks
           const hasCook = this.staff.some(s => s.type === 'cook');
@@ -2829,6 +2996,7 @@ class Game {
           const recipePrice = customer.orderedRecipe ? customer.orderedRecipe.price : 250;
           customer.paid = Math.floor(recipePrice * tipMultiplier * (customer.groupSize || 1));
           this.money += customer.paid;
+          soundMgr.playPayment();
           
           // Update daily stats
           this.dailyStats.revenue += customer.paid;
@@ -3554,6 +3722,12 @@ class Game {
     this.showNotification('✨ ' + research.name + ' を習得！');
     this.updateUI();
     this.renderTabContent();
+  }
+
+  toggleMute() {
+    const muted = soundMgr.toggleMute();
+    const btn = document.getElementById('mute-btn');
+    if (btn) btn.textContent = muted ? '🔇' : '🔊';
   }
 
   setSpeed(multiplier) {
