@@ -3146,6 +3146,28 @@ class Game {
   updateStaff(staff, deltaTime) {
     if (!staff.element) return;
 
+    // Safety: detect stuck staff (same state for 15+ seconds, except IDLE)
+    if (!staff._stuckTimer) staff._stuckTimer = 0;
+    if (!staff._lastState) staff._lastState = staff.state;
+    if (staff.state === staff._lastState && staff.state !== 'IDLE') {
+      staff._stuckTimer += deltaTime;
+      if (staff._stuckTimer > 15) {
+        // Force reset to IDLE and go home
+        staff.state = 'IDLE';
+        staff.currentOrder = null;
+        staff.path = [];
+        staff.pathIndex = 0;
+        staff.carryingDish = false;
+        staff._stuckTimer = 0;
+        this.removeWorkBubble(staff);
+        this.staffGoHome(staff);
+        return;
+      }
+    } else {
+      staff._stuckTimer = 0;
+      staff._lastState = staff.state;
+    }
+
     switch (staff.state) {
       case 'IDLE':
         if (staff.type === 'cook') {
