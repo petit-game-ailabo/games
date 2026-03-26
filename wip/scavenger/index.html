@@ -74,6 +74,29 @@ body{background:#1a1a2e;color:#eee;font-family:'Hiragino Sans','Yu Gothic UI',sa
 .modal{background:#16213e;border:1px solid #0f3460;border-radius:12px;padding:20px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto}
 .modal h3{color:#e94560;margin-bottom:12px}
 .hidden{display:none !important}
+/* Combat System CSS */
+.combat-screen{background:#1a1a2e;padding:16px;border-radius:8px}
+.enemy-display{text-align:center;margin-bottom:16px}
+.enemy-icon-large{font-size:48px;margin-bottom:4px}
+.combat-hp-bar{height:12px;background:#333;border-radius:6px;overflow:hidden;margin:4px 0}
+.combat-hp-fill{height:100%;transition:width .3s}
+.combat-hp-fill.enemy{background:#e94560}
+.combat-hp-fill.player{background:#4caf50}
+.encounter-panel{text-align:center;padding:20px}
+.encounter-options{display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+.timing-bar{position:relative;height:40px;background:#222;border-radius:4px;margin:20px 0;overflow:hidden;cursor:pointer}
+.timing-indicator{position:absolute;width:4px;height:40px;background:#fff;top:0}
+.timing-hitzone{position:absolute;height:40px;background:rgba(76,175,80,.3);top:0}
+.dodge-prompt{text-align:center;font-size:24px;color:#ff9800;animation:pulse .5s infinite;cursor:pointer;padding:20px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.combat-info{text-align:center;margin-top:12px;font-size:13px;color:#888}
+.combat-msg{text-align:center;font-size:16px;margin:12px 0;min-height:24px}
+.loot-screen{text-align:center;padding:16px}
+.loot-item{display:inline-flex;flex-direction:column;align-items:center;gap:4px;padding:12px;margin:4px;background:#1a1a2e;border:1px solid #0f3460;border-radius:8px;cursor:pointer;transition:border-color .2s}
+.loot-item:hover,.loot-item:active{border-color:#e94560}
+.loot-item .loot-icon{font-size:32px}
+.loot-item .loot-name{font-size:12px}
+.loot-item .loot-value{font-size:11px;color:#4caf50}
 </style>
 </head>
 <body>
@@ -113,6 +136,12 @@ function playSound(type){
     case'sell':o.frequency.setValueAtTime(523,t);o.frequency.setValueAtTime(659,t+.08);o.frequency.setValueAtTime(784,t+.16);g.gain.setValueAtTime(.12,t);g.gain.linearRampToValueAtTime(0,t+.3);o.start(t);o.stop(t+.3);break;
     case'trap':o.type='sawtooth';o.frequency.setValueAtTime(150,t);g.gain.setValueAtTime(.2,t);g.gain.linearRampToValueAtTime(0,t+.3);o.start(t);o.stop(t+.3);break;
     case'heal':o.type='sine';o.frequency.setValueAtTime(523,t);o.frequency.linearRampToValueAtTime(1047,t+.3);g.gain.setValueAtTime(.1,t);g.gain.linearRampToValueAtTime(0,t+.4);o.start(t);o.stop(t+.4);break;
+    case'combat_hit':o.type='square';o.frequency.setValueAtTime(800,t);o.frequency.linearRampToValueAtTime(200,t+.08);g.gain.setValueAtTime(.2,t);g.gain.linearRampToValueAtTime(0,t+.1);o.start(t);o.stop(t+.1);break;
+    case'combat_miss':o.type='sine';o.frequency.setValueAtTime(600,t);o.frequency.linearRampToValueAtTime(100,t+.2);g.gain.setValueAtTime(.08,t);g.gain.linearRampToValueAtTime(0,t+.25);o.start(t);o.stop(t+.25);break;
+    case'enemy_attack':o.type='sawtooth';o.frequency.setValueAtTime(80,t);g.gain.setValueAtTime(.15,t);g.gain.linearRampToValueAtTime(0,t+.2);o.start(t);o.stop(t+.2);break;
+    case'dodge':o.type='sine';o.frequency.setValueAtTime(1200,t);g.gain.setValueAtTime(.1,t);g.gain.linearRampToValueAtTime(0,t+.08);o.start(t);o.stop(t+.08);break;
+    case'enemy_defeat':{o.type='sine';o.frequency.setValueAtTime(523,t);o.frequency.setValueAtTime(659,t+.1);o.frequency.setValueAtTime(784,t+.2);o.frequency.setValueAtTime(1047,t+.3);g.gain.setValueAtTime(.15,t);g.gain.linearRampToValueAtTime(0,t+.5);o.start(t);o.stop(t+.5);break;}
+    case'player_hurt':o.type='sawtooth';o.frequency.setValueAtTime(100,t);o.frequency.linearRampToValueAtTime(60,t+.3);g.gain.setValueAtTime(.15,t);g.gain.linearRampToValueAtTime(0,t+.35);o.start(t);o.stop(t+.35);break;
   }
 }
 
@@ -154,6 +183,15 @@ const UPGRADES=[
   {id:'rope',name:'ロープ',desc:'追加の部屋を解放',cost:1500,type:'rope'},
 ];
 
+// ===== ENEMIES =====
+const ENEMIES={
+  strayDog:{name:'野犬',icon:'🐺',hp:30,attack:8,speed:1.5,loot:['bandage','cannedfood'],level:1},
+  scavenger:{name:'スカベンジャー',icon:'👤',hp:50,attack:12,speed:1.2,loot:['knife','ammo','bolt','flashlight'],level:2},
+  bandit:{name:'武装盗賊',icon:'🔫',hp:70,attack:18,speed:1.0,loot:['rifle','medkit','compass','ammo'],level:3},
+  soldier:{name:'武装兵',icon:'🎖️',hp:100,attack:25,speed:0.8,loot:['rifle','electronics','radio','medkit'],level:4},
+  boss:{name:'研究所警備ロボ',icon:'🤖',hp:150,attack:30,speed:0.6,loot:['goldbar','electronics','document','safe'],level:5},
+};
+
 // ===== GAME STATE =====
 let state={
   money:0,hp:100,maxHp:100,
@@ -171,6 +209,12 @@ let state={
   roomSpots:[],
   roomsVisited:0,
 };
+
+// ===== COMBAT STATE (not persisted) =====
+let combatState=null; // {enemy, enemyHp, phase:'encounter'|'attack'|'defend'|'loot'|'result'}
+let combatAnimFrame=null;
+let combatIndicatorPos=0;
+let combatIndicatorDir=1;
 
 let currentTab='base';
 let selectedInventoryItem=null; // {id} of item selected in grid
@@ -333,6 +377,7 @@ function resizeGrid(newW,newH){
 
 // ===== EXPLORE TAB =====
 function renderExplore(){
+  if(combatState){renderCombat();return;}
   if(state.exploring){renderRoom();return;}
   let h='<div class="panel"><h3>🔍 エリア選択</h3></div>';
   for(const a of AREAS){
@@ -397,20 +442,32 @@ function generateRoom(){
   const spotEmojis=['📦','🗑️','🚪','🧱','💼','🗄️'];
   for(let i=0;i<Math.min(spotCount,3);i++){
     spots.push({emoji:spotEmojis[Math.floor(Math.random()*spotEmojis.length)],searched:false,result:null});
-    // Pre-determine result
+    // Pre-determine result: 30% nothing, 40% item, 30% enemy encounter
     const r=Math.random();
-    const trapChance=a.trapChance*(state.upgrades.includes('detector')?.7:1);
-    if(r<trapChance){
-      spots[i].result={type:'trap',damage:10+Math.floor(Math.random()*21)};
-    } else if(r<trapChance+.15){
+    if(r<0.30){
       spots[i].result={type:'empty'};
-    } else {
-      // Pick an item based on area loot table
+    } else if(r<0.70){
       const itemKey=pickLootItem(a);
       spots[i].result={type:'item',itemKey};
+    } else {
+      // Enemy encounter based on area level
+      const enemyKey=pickEnemy(a.level);
+      spots[i].result={type:'encounter',enemyKey};
     }
   }
   state.roomSpots=spots;
+}
+
+function pickEnemy(areaLevel){
+  const eligible=Object.entries(ENEMIES).filter(([k,e])=>e.level<=areaLevel+1);
+  if(eligible.length===0) return 'strayDog';
+  // Weight toward enemies closer to area level
+  const weighted=[];
+  for(const[key,e]of eligible){
+    const w=e.level<=areaLevel?2:1; // enemies at or below area level are more common
+    for(let i=0;i<w;i++) weighted.push(key);
+  }
+  return weighted[Math.floor(Math.random()*weighted.length)];
 }
 
 function pickLootItem(area){
@@ -470,23 +527,14 @@ function searchSpot(idx){
   if(spot.searched)return;
   spot.searched=true;
   const result=spot.result;
-  if(result.type==='trap'){
-    const dmg=state.upgrades.includes('armor')?Math.floor(result.damage*.5):result.damage;
-    state.hp=Math.max(0,state.hp-dmg);
-    playSound('trap');
-    notify(`⚠️ トラップ！ ${dmg}ダメージ！`);
-    if(state.hp<=0){
-      handleDeath();return;
-    }
-    updateStatusBar();
+  if(result.type==='empty'){
+    notify('何もなかった…');
     render();
-  } else if(result.type==='empty'){
-    notify('何も見つからなかった…');
-    render();
-  } else {
-    // Found item - show preview
+  } else if(result.type==='item'){
     playSound('pickup');
     showItemFound(result.itemKey);
+  } else if(result.type==='encounter'){
+    startEncounter(result.enemyKey);
   }
 }
 
@@ -559,6 +607,355 @@ function returnToBase(){
   saveGame();
   switchTab('base');
   notify('🏠 拠点に帰還！');
+}
+
+// ===== COMBAT SYSTEM =====
+function inventoryHasItem(itemKey){
+  for(let y=0;y<state.gridH;y++)
+    for(let x=0;x<state.gridW;x++)
+      if(state.grid[y][x]&&state.grid[y][x].itemKey===itemKey) return true;
+  return false;
+}
+
+function removeOneInventoryItem(itemKey){
+  // Find and remove one instance of itemKey from grid
+  for(let y=0;y<state.gridH;y++){
+    for(let x=0;x<state.gridW;x++){
+      if(state.grid[y][x]&&state.grid[y][x].itemKey===itemKey){
+        const id=state.grid[y][x].id;
+        removeItem(id);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function getEquippedWeapon(){
+  const hasRifle=inventoryHasItem('rifle');
+  const hasAmmo=inventoryHasItem('ammo');
+  const hasKnife=inventoryHasItem('knife');
+  if(hasRifle&&hasAmmo) return{name:'ライフル',icon:'🎯',damage:30,hitZone:0.35,usesAmmo:true};
+  if(hasKnife) return{name:'ナイフ',icon:'🔪',damage:15,hitZone:0.20,usesAmmo:false};
+  return{name:'素手',icon:'✊',damage:5,hitZone:0.15,usesAmmo:false};
+}
+
+function startEncounter(enemyKey){
+  const template=ENEMIES[enemyKey];
+  playSound('trap');
+  combatState={
+    enemyKey,
+    enemy:{...template},
+    enemyHp:template.hp,
+    phase:'encounter',
+    msg:''
+  };
+  renderCombat();
+}
+
+function renderCombat(){
+  if(!combatState)return;
+  const cs=combatState;
+  const enemy=cs.enemy;
+  
+  let h='<div class="combat-screen">';
+  
+  if(cs.phase==='encounter'){
+    h+=`<div class="encounter-panel">
+      <div class="enemy-display">
+        <div class="enemy-icon-large">${enemy.icon}</div>
+        <div style="font-size:20px;font-weight:bold;margin:8px 0">${enemy.icon} ${enemy.name} が現れた！</div>
+        <div style="font-size:14px;color:#888">Lv${enemy.level} | HP:${enemy.hp} | ATK:${enemy.attack}</div>
+      </div>
+      <div class="encounter-options">
+        <button class="btn" onclick="combatChoose('fight')">🔫 戦う</button>
+        <button class="btn" onclick="combatChoose('hide')">🤫 隠れる</button>
+        <button class="btn btn-danger" onclick="combatChoose('flee')">🏃 逃げる</button>
+      </div>
+    </div>`;
+  } else if(cs.phase==='attack'||cs.phase==='defend'||cs.phase==='result'){
+    const weapon=getEquippedWeapon();
+    const enemyHpPct=Math.max(0,cs.enemyHp/enemy.hp*100);
+    const playerHpPct=Math.max(0,state.hp/state.maxHp*100);
+    
+    h+=`<div class="enemy-display">
+      <div class="enemy-icon-large">${enemy.icon}</div>
+      <div style="font-size:16px;font-weight:bold">${enemy.name}</div>
+      <div style="font-size:12px;color:#888;margin-bottom:4px">HP: ${Math.max(0,cs.enemyHp)}/${enemy.hp}</div>
+      <div class="combat-hp-bar"><div class="combat-hp-fill enemy" style="width:${enemyHpPct}%"></div></div>
+    </div>`;
+    h+=`<div style="margin:8px 0">
+      <div style="font-size:14px">❤️ あなた HP: ${state.hp}/${state.maxHp}</div>
+      <div class="combat-hp-bar"><div class="combat-hp-fill player" style="width:${playerHpPct}%"></div></div>
+    </div>`;
+    
+    h+=`<div class="combat-msg">${cs.msg||''}</div>`;
+    
+    if(cs.phase==='attack'){
+      h+=`<div class="timing-bar" id="timing-bar" onclick="combatAttackTap()">
+        <div class="timing-hitzone" id="timing-hitzone"></div>
+        <div class="timing-indicator" id="timing-indicator"></div>
+      </div>`;
+      h+=`<div style="text-align:center;font-size:16px;color:#ff9800">🎯 タップして攻撃！</div>`;
+      h+=`<div class="combat-info">装備: ${weapon.icon} ${weapon.name} | ダメージ: ${weapon.damage}</div>`;
+    } else if(cs.phase==='defend'){
+      h+=`<div class="dodge-prompt" id="dodge-btn" onclick="combatDodgeTap()">⚡ タップで回避！</div>`;
+    } else if(cs.phase==='result'){
+      h+=`<div style="text-align:center;margin-top:12px">
+        <button class="btn" onclick="combatContinue()">続ける</button>
+      </div>`;
+    }
+  } else if(cs.phase==='loot'){
+    h+=renderLootScreen();
+  }
+  
+  h+='</div>';
+  mc().innerHTML=h;
+  
+  if(cs.phase==='attack'){
+    startTimingBar();
+  }
+}
+
+function combatChoose(choice){
+  if(!combatState)return;
+  if(choice==='fight'){
+    combatState.phase='attack';
+    combatState.msg='';
+    renderCombat();
+  } else if(choice==='hide'){
+    const baseChance=0.40;
+    const bonus=state.upgrades.includes('detector')?0.30:0;
+    const success=Math.random()<(baseChance+bonus);
+    if(success){
+      playSound('dodge');
+      notify('🤫 うまく隠れた！敵は去っていった。');
+      combatState=null;
+      render();
+    } else {
+      // Failed hide: enemy gets free attack, then combat starts
+      const enemy=combatState.enemy;
+      let dmg=enemy.attack;
+      if(state.upgrades.includes('armor')) dmg=Math.floor(dmg*0.5);
+      state.hp=Math.max(0,state.hp-dmg);
+      playSound('player_hurt');
+      if(state.hp<=0){combatState=null;handleDeath();return;}
+      updateStatusBar();
+      combatState.phase='attack';
+      combatState.msg=`隠れるのに失敗！${enemy.icon}の攻撃で ${dmg} ダメージ！`;
+      renderCombat();
+    }
+  } else if(choice==='flee'){
+    playSound('combat_miss');
+    notify('🏃 逃げた！この部屋を諦めた。');
+    combatState=null;
+    // Skip current room
+    if(state.currentRoom+1<state.totalRooms){
+      state.currentRoom++;
+      state.roomsVisited++;
+      generateRoom();
+      render();
+    } else {
+      returnToBase();
+    }
+  }
+}
+
+let timingBarAnimId=null;
+
+function startTimingBar(){
+  if(timingBarAnimId){cancelAnimationFrame(timingBarAnimId);timingBarAnimId=null;}
+  const bar=document.getElementById('timing-bar');
+  const indicator=document.getElementById('timing-indicator');
+  const hitzone=document.getElementById('timing-hitzone');
+  if(!bar||!indicator||!hitzone)return;
+  
+  const weapon=getEquippedWeapon();
+  const barWidth=bar.offsetWidth;
+  const hzWidth=barWidth*weapon.hitZone;
+  const hzLeft=(barWidth-hzWidth)/2;
+  hitzone.style.width=hzWidth+'px';
+  hitzone.style.left=hzLeft+'px';
+  
+  const enemy=combatState.enemy;
+  const speed=(enemy.speed||1)*300; // pixels per second
+  combatIndicatorPos=0;
+  combatIndicatorDir=1;
+  let lastTime=null;
+  
+  function animate(time){
+    if(!combatState||combatState.phase!=='attack'){return;}
+    if(!lastTime)lastTime=time;
+    const dt=(time-lastTime)/1000;
+    lastTime=time;
+    
+    combatIndicatorPos+=combatIndicatorDir*speed*dt;
+    if(combatIndicatorPos>=barWidth-4){combatIndicatorPos=barWidth-4;combatIndicatorDir=-1;}
+    if(combatIndicatorPos<=0){combatIndicatorPos=0;combatIndicatorDir=1;}
+    
+    indicator.style.left=combatIndicatorPos+'px';
+    timingBarAnimId=requestAnimationFrame(animate);
+  }
+  timingBarAnimId=requestAnimationFrame(animate);
+}
+
+function combatAttackTap(){
+  if(!combatState||combatState.phase!=='attack')return;
+  if(timingBarAnimId){cancelAnimationFrame(timingBarAnimId);timingBarAnimId=null;}
+  
+  const bar=document.getElementById('timing-bar');
+  if(!bar)return;
+  const barWidth=bar.offsetWidth;
+  const weapon=getEquippedWeapon();
+  const hzWidth=barWidth*weapon.hitZone;
+  const hzLeft=(barWidth-hzWidth)/2;
+  const hzRight=hzLeft+hzWidth;
+  
+  const pos=combatIndicatorPos;
+  const hit=pos>=hzLeft&&pos<=hzRight;
+  
+  if(hit){
+    // Consume ammo if rifle
+    if(weapon.usesAmmo){removeOneInventoryItem('ammo');}
+    combatState.enemyHp-=weapon.damage;
+    playSound('combat_hit');
+    combatState.msg=`🎯 命中！ ${weapon.damage} ダメージ！`;
+    
+    if(combatState.enemyHp<=0){
+      // Enemy defeated
+      playSound('enemy_defeat');
+      combatState.msg=`🎉 ${combatState.enemy.name} を倒した！`;
+      combatState.phase='result';
+      combatState.victory=true;
+      renderCombat();
+      return;
+    }
+  } else {
+    // If using rifle, still consume ammo on miss
+    if(weapon.usesAmmo){removeOneInventoryItem('ammo');}
+    playSound('combat_miss');
+    combatState.msg='💨 外れた！';
+  }
+  
+  // Move to defense phase
+  combatState.phase='defend';
+  combatState.dodgeTimeout=null;
+  renderCombat();
+  
+  // Start dodge timer
+  combatState.dodgeTimeout=setTimeout(()=>{
+    if(combatState&&combatState.phase==='defend'){
+      combatDodgeFail();
+    }
+  },800);
+}
+
+function combatDodgeTap(){
+  if(!combatState||combatState.phase!=='defend')return;
+  if(combatState.dodgeTimeout){clearTimeout(combatState.dodgeTimeout);combatState.dodgeTimeout=null;}
+  playSound('dodge');
+  combatState.msg='⚡ 回避成功！';
+  combatState.phase='attack';
+  renderCombat();
+}
+
+function combatDodgeFail(){
+  if(!combatState||combatState.phase!=='defend')return;
+  const enemy=combatState.enemy;
+  let dmg=enemy.attack;
+  if(state.upgrades.includes('armor')) dmg=Math.floor(dmg*0.5);
+  state.hp=Math.max(0,state.hp-dmg);
+  playSound('player_hurt');
+  updateStatusBar();
+  
+  if(state.hp<=0){
+    combatState=null;
+    handleDeath();
+    return;
+  }
+  
+  combatState.msg=`${enemy.icon} の攻撃！ ${dmg} ダメージ！`;
+  combatState.phase='attack';
+  renderCombat();
+}
+
+function combatContinue(){
+  if(!combatState)return;
+  if(combatState.victory){
+    // Generate loot
+    const enemy=combatState.enemy;
+    const lootCount=1+Math.floor(Math.random()*3); // 1-3 items
+    const lootItems=[];
+    for(let i=0;i<lootCount;i++){
+      const key=enemy.loot[Math.floor(Math.random()*enemy.loot.length)];
+      lootItems.push(key);
+    }
+    combatState.lootItems=lootItems;
+    combatState.phase='loot';
+    renderCombat();
+  } else {
+    combatState=null;
+    render();
+  }
+}
+
+function renderLootScreen(){
+  const cs=combatState;
+  const items=cs.lootItems||[];
+  let h='<div class="loot-screen">';
+  h+=`<h3 style="color:#ff9800;margin-bottom:12px">🏆 戦利品</h3>`;
+  if(items.length===0){
+    h+='<p style="color:#888">何も見つからなかった</p>';
+  } else {
+    h+='<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">';
+    for(let i=0;i<items.length;i++){
+      const item=ITEMS[items[i]];
+      if(!item)continue;
+      const shape=item.shape;
+      const maxX=Math.max(...shape.map(c=>c[0]))+1;
+      const maxY=Math.max(...shape.map(c=>c[1]))+1;
+      const shapeSet=new Set(shape.map(c=>c[0]+','+c[1]));
+      h+=`<div class="loot-item" onclick="pickupLootItem(${i})">
+        <div class="loot-icon">${item.icon}</div>
+        <div class="loot-name" style="color:${rarityColor(item.rarity)}">${item.name}</div>
+        <div class="loot-value">${item.value}円</div>
+        <div class="item-shape-preview" style="grid-template-columns:repeat(${maxX},16px)">`;
+      for(let sy=0;sy<maxY;sy++){
+        for(let sx=0;sx<maxX;sx++){
+          const filled=shapeSet.has(sx+','+sy);
+          h+=`<div class="shape-cell" style="background:${filled?rarityColor(item.rarity):'transparent'};width:16px;height:16px"></div>`;
+        }
+      }
+      h+=`</div></div>`;
+    }
+    h+='</div>';
+  }
+  h+=`<div style="margin-top:16px">
+    <button class="btn btn-danger" onclick="skipLoot()">スキップ</button>
+  </div>`;
+  h+='</div>';
+  return h;
+}
+
+function pickupLootItem(idx){
+  if(!combatState||!combatState.lootItems)return;
+  const items=combatState.lootItems;
+  if(idx<0||idx>=items.length)return;
+  const itemKey=items[idx];
+  items.splice(idx,1);
+  // Use existing pickup flow
+  playSound('pickup');
+  pendingItem={itemKey,rotation:0};
+  pendingRotation=0;
+  selectedInventoryItem=null;
+  // If no more loot, end combat after placing
+  if(items.length===0) combatState.lastLoot=true;
+  switchTab('bag',true);
+}
+
+function skipLoot(){
+  combatState=null;
+  render();
 }
 
 // ===== BAG TAB =====
@@ -661,7 +1058,14 @@ function attachGridListeners(){
           placeItem(pendingItem.itemKey,shape,x,y);
           playSound('place');
           pendingItem=null;
-          if(state.exploring){switchTab('explore');}
+          if(combatState&&combatState.phase==='loot'){
+            if(combatState.lootItems&&combatState.lootItems.length>0){
+              switchTab('explore');
+            } else {
+              combatState=null;
+              switchTab('explore');
+            }
+          } else if(state.exploring){switchTab('explore');}
           else{render();}
           saveGame();
         } else {
@@ -722,7 +1126,14 @@ function rotatePending(){
 
 function cancelPending(){
   pendingItem=null;
-  if(state.exploring) switchTab('explore');
+  if(combatState&&combatState.phase==='loot'){
+    if(combatState.lootItems&&combatState.lootItems.length>0){
+      switchTab('explore');
+    } else {
+      combatState=null;
+      switchTab('explore');
+    }
+  } else if(state.exploring) switchTab('explore');
   else render();
 }
 
