@@ -4672,10 +4672,28 @@ class Game {
       return;
     }
     this.money -= cost;
+    
+    // Calculate how many rows to shift (new interior is taller, entrance moves down)
+    const oldInfo = STORE_LEVELS[this.storeLevel];
+    const newInfo = STORE_LEVELS[nextLevel];
+    const rowShift = newInfo.interiorRows[1] - oldInfo.interiorRows[1]; // How many rows the bottom moved down
+    
+    // Shift all existing furniture down by rowShift
+    if (rowShift > 0) {
+      this.furniture.forEach(f => { f.y += rowShift; });
+      // Shift all staff home positions and current positions
+      this.staff.forEach(s => {
+        s.homeY += rowShift;
+        s.y += rowShift * TILE_SIZE;
+      });
+    }
+    
     this.storeLevel = nextLevel;
     this.updateGridSize(nextLevel);
     this.walls = this.generateWalls(nextLevel);
     this.renderWalls();
+    this.renderFurniture();
+    this.renderStaff();
     this.createGrid(); // Rebuild grid overlay
     this.updateUI();
     this.renderTabContent();
