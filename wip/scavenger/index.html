@@ -85,8 +85,7 @@ body{background:#1a1a2e;color:#eee;font-family:'Hiragino Sans','Yu Gothic UI',sa
 .encounter-panel{text-align:center;padding:20px}
 .encounter-options{display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap}
 .timing-bar{position:relative;height:40px;background:#222;border-radius:4px;margin:20px 0;overflow:hidden;cursor:pointer}
-.timing-indicator{position:absolute;width:4px;height:40px;background:#fff;top:0}
-.timing-hitzone{position:absolute;height:40px;background:rgba(76,175,80,.3);top:0}
+.timing-indicator-old{display:none}
 .dodge-prompt{text-align:center;font-size:24px;color:#ff9800;animation:pulse .5s infinite;cursor:pointer;padding:20px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .combat-info{text-align:center;margin-top:12px;font-size:13px;color:#888}
@@ -97,6 +96,35 @@ body{background:#1a1a2e;color:#eee;font-family:'Hiragino Sans','Yu Gothic UI',sa
 .loot-item .loot-icon{font-size:32px}
 .loot-item .loot-name{font-size:12px}
 .loot-item .loot-value{font-size:11px;color:#4caf50}
+/* Combat Improvements */
+.combat-flash{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:200;animation:flashFade .3s forwards}
+.combat-flash.red{background:rgba(233,69,96,.3)}
+.combat-flash.green{background:rgba(76,175,80,.3)}
+@keyframes flashFade{0%{opacity:1}100%{opacity:0}}
+.float-damage{position:fixed;left:50%;transform:translateX(-50%);font-weight:bold;font-size:22px;z-index:201;pointer-events:none;animation:floatUp 1s forwards;text-shadow:0 0 8px rgba(0,0,0,.8)}
+@keyframes floatUp{0%{opacity:1;transform:translateX(-50%) translateY(0)}100%{opacity:0;transform:translateX(-50%) translateY(-60px)}}
+.enemy-shake{animation:shake .3s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+.combat-log{background:#0a0a1a;border:1px solid #0f3460;border-radius:6px;padding:8px;margin:8px 0;max-height:100px;overflow-y:auto;font-size:12px;color:#aaa;text-align:left}
+.combat-log div{padding:2px 0;border-bottom:1px solid #111}
+.combat-log div:last-child{border-bottom:none}
+.combo-display{color:#ff9800;font-size:18px;font-weight:bold;text-align:center;margin:4px 0;text-shadow:0 0 10px rgba(255,152,0,.6)}
+.healing-panel{background:#1a2a1a;border:1px solid #4caf50;border-radius:8px;padding:12px;margin:8px 0;text-align:center}
+.healing-panel h4{color:#4caf50;margin-bottom:8px;font-size:14px}
+.heal-option{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;margin:4px 0;background:#16213e;border:1px solid #0f3460;border-radius:6px;cursor:pointer;transition:all .2s;font-size:14px}
+.heal-option:hover,.heal-option:active{border-color:#4caf50;background:#1a3a2a}
+.heal-option.disabled{opacity:.3;cursor:default}
+.hp-prominent{font-size:20px;font-weight:bold;text-align:center;margin:4px 0}
+.timing-indicator{position:absolute;width:8px;height:40px;background:#fff;top:0;border-radius:2px;box-shadow:0 0 6px rgba(255,255,255,.8)}
+.timing-hitzone{position:absolute;height:40px;background:rgba(76,175,80,.3);top:0;box-shadow:inset 0 0 12px rgba(76,175,80,.5),0 0 8px rgba(76,175,80,.3)}
+.loot-grid-container{display:flex;flex-direction:column;align-items:center;gap:12px;margin:12px 0}
+.loot-grid-section{text-align:center}
+.loot-grid-section h4{margin-bottom:6px;font-size:14px}
+.loot-grid{display:inline-grid;gap:1px;background:#0a0a1a;padding:1px;border-radius:4px;border:2px solid #ff9800}
+.loot-grid .cell{width:40px;height:40px;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;position:relative;transition:background .15s}
+.loot-grid .cell.occupied{border:2px solid}
+.loot-grid .cell.loot-selected{outline:2px solid #fff;outline-offset:-2px;z-index:1;background:rgba(255,152,0,.2)}
+.loot-instructions{color:#888;font-size:12px;margin:8px 0;text-align:center}
 </style>
 </head>
 <body>
@@ -211,10 +239,11 @@ let state={
 };
 
 // ===== COMBAT STATE (not persisted) =====
-let combatState=null; // {enemy, enemyHp, phase:'encounter'|'attack'|'defend'|'loot'|'result'}
+let combatState=null; // {enemy, enemyHp, phase:'encounter'|'attack'|'defend'|'heal'|'loot'|'lootgrid'|'result', combatLog:[], combo:0}
 let combatAnimFrame=null;
 let combatIndicatorPos=0;
 let combatIndicatorDir=1;
+let lootGridState=null; // {grid:[][], gridW:4, gridH:3, selectedItem:null}
 
 let currentTab='base';
 let selectedInventoryItem=null; // {id} of item selected in grid
@@ -640,6 +669,46 @@ function getEquippedWeapon(){
   return{name:'素手',icon:'✊',damage:5,hitZone:0.15,usesAmmo:false};
 }
 
+// ===== COMBAT VISUAL FEEDBACK =====
+function showFloatDamage(text,color,offsetY){
+  const el=document.createElement('div');
+  el.className='float-damage';
+  el.textContent=text;
+  el.style.color=color;
+  el.style.top=(offsetY||40)+'%';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),1000);
+}
+
+function showCombatFlash(color){
+  const el=document.createElement('div');
+  el.className='combat-flash '+color;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),300);
+}
+
+function shakeEnemy(){
+  const icon=document.querySelector('.enemy-icon-large');
+  if(icon){icon.classList.remove('enemy-shake');void icon.offsetWidth;icon.classList.add('enemy-shake');}
+}
+
+function addCombatLog(msg){
+  if(!combatState)return;
+  if(!combatState.combatLog) combatState.combatLog=[];
+  combatState.combatLog.push(msg);
+  if(combatState.combatLog.length>5) combatState.combatLog.shift();
+}
+
+function renderCombatLogHTML(){
+  if(!combatState||!combatState.combatLog||combatState.combatLog.length===0) return '';
+  let h='<div class="combat-log">';
+  for(const entry of combatState.combatLog){
+    h+=`<div>> ${entry}</div>`;
+  }
+  h+='</div>';
+  return h;
+}
+
 function startEncounter(enemyKey){
   const template=ENEMIES[enemyKey];
   playSound('trap');
@@ -648,7 +717,9 @@ function startEncounter(enemyKey){
     enemy:{...template},
     enemyHp:template.hp,
     phase:'encounter',
-    msg:''
+    msg:'',
+    combatLog:[],
+    combo:0
   };
   renderCombat();
 }
@@ -673,7 +744,7 @@ function renderCombat(){
         <button class="btn btn-danger" onclick="combatChoose('flee')">🏃 逃げる</button>
       </div>
     </div>`;
-  } else if(cs.phase==='attack'||cs.phase==='defend'||cs.phase==='result'){
+  } else if(cs.phase==='attack'||cs.phase==='defend'||cs.phase==='heal'||cs.phase==='result'){
     const weapon=getEquippedWeapon();
     const enemyHpPct=Math.max(0,cs.enemyHp/enemy.hp*100);
     const playerHpPct=Math.max(0,state.hp/state.maxHp*100);
@@ -684,12 +755,20 @@ function renderCombat(){
       <div style="font-size:12px;color:#888;margin-bottom:4px">HP: ${Math.max(0,cs.enemyHp)}/${enemy.hp}</div>
       <div class="combat-hp-bar"><div class="combat-hp-fill enemy" style="width:${enemyHpPct}%"></div></div>
     </div>`;
-    h+=`<div style="margin:8px 0">
-      <div style="font-size:14px">❤️ あなた HP: ${state.hp}/${state.maxHp}</div>
+    // Prominent HP display
+    h+=`<div class="hp-prominent" style="color:${state.hp<state.maxHp*0.3?'#e94560':state.hp<state.maxHp*0.6?'#ff9800':'#4caf50'}">❤️ ${state.hp} / ${state.maxHp}</div>`;
+    h+=`<div style="margin:4px 0">
       <div class="combat-hp-bar"><div class="combat-hp-fill player" style="width:${playerHpPct}%"></div></div>
     </div>`;
+    // Combo display
+    if(cs.combo>=2){
+      h+=`<div class="combo-display">🔥 COMBO x${cs.combo}！ (+${Math.floor((cs.combo-1)*10)}% DMG)</div>`;
+    }
     
     h+=`<div class="combat-msg">${cs.msg||''}</div>`;
+    
+    // Combat log
+    h+=renderCombatLogHTML();
     
     if(cs.phase==='attack'){
       h+=`<div class="timing-bar" id="timing-bar" onclick="combatAttackTap()">
@@ -697,16 +776,19 @@ function renderCombat(){
         <div class="timing-indicator" id="timing-indicator"></div>
       </div>`;
       h+=`<div style="text-align:center;font-size:16px;color:#ff9800">🎯 タップして攻撃！</div>`;
-      h+=`<div class="combat-info">装備: ${weapon.icon} ${weapon.name} | ダメージ: ${weapon.damage}</div>`;
+      h+=`<div class="combat-info">装備: ${weapon.icon} ${weapon.name} | ダメージ: ${weapon.damage}${cs.combo>=2?' (x'+((1+(cs.combo-1)*0.1).toFixed(1))+')':''}</div>`;
     } else if(cs.phase==='defend'){
       h+=`<div class="dodge-prompt" id="dodge-btn" onclick="combatDodgeTap()">⚡ タップで回避！</div>`;
+    } else if(cs.phase==='heal'){
+      // Healing panel between rounds
+      h+=renderHealingPanel();
     } else if(cs.phase==='result'){
       h+=`<div style="text-align:center;margin-top:12px">
         <button class="btn" onclick="combatContinue()">続ける</button>
       </div>`;
     }
-  } else if(cs.phase==='loot'){
-    h+=renderLootScreen();
+  } else if(cs.phase==='loot'||cs.phase==='lootgrid'){
+    h+=renderLootGridScreen();
   }
   
   h+='</div>';
@@ -715,6 +797,56 @@ function renderCombat(){
   if(cs.phase==='attack'){
     startTimingBar();
   }
+  if(cs.phase==='lootgrid'){
+    attachLootGridListeners();
+  }
+}
+
+function renderHealingPanel(){
+  const hasBandage=inventoryHasItem('bandage');
+  const hasMedkit=inventoryHasItem('medkit');
+  const hpFull=state.hp>=state.maxHp;
+  
+  let h='<div class="healing-panel">';
+  h+=`<h4>💉 回復チャンス</h4>`;
+  if(hasBandage){
+    const bandageClick=hpFull?'':"combatHeal('bandage')";
+    h+='<div class="heal-option'+(hpFull?' disabled':'')+'" onclick="'+bandageClick+'">🩹 包帯を使う <span style="color:#4caf50">+20 HP</span></div>';
+  }
+  if(hasMedkit){
+    const medkitClick=hpFull?'':"combatHeal('medkit')";
+    h+='<div class="heal-option'+(hpFull?' disabled':'')+'" onclick="'+medkitClick+'">💊 医療キットを使う <span style="color:#4caf50">+50 HP</span></div>';
+  }
+  if(!hasBandage && !hasMedkit){
+    h+=`<div style="color:#888;font-size:13px;padding:4px">回復アイテムなし</div>`;
+  }
+  h+=`<div class="heal-option" onclick="combatSkipHeal()" style="border-color:#ff9800">➡️ 次の攻撃へ</div>`;
+  h+='</div>';
+  return h;
+}
+
+function combatHeal(itemKey){
+  if(!combatState||combatState.phase!=='heal')return;
+  const item=ITEMS[itemKey];
+  if(!item||!item.heal)return;
+  if(state.hp>=state.maxHp){notify('HPは満タンです');return;}
+  if(!removeOneInventoryItem(itemKey)){notify('アイテムがありません');return;}
+  const healed=Math.min(item.heal,state.maxHp-state.hp);
+  state.hp=Math.min(state.maxHp,state.hp+item.heal);
+  playSound('heal');
+  showFloatDamage(`+${healed} HP!`,'#4caf50',50);
+  addCombatLog(`${item.icon} ${item.name}を使用！HP +${healed} 回復！`);
+  combatState.msg=`${item.icon} で ${healed} HP回復！`;
+  updateStatusBar();
+  // Stay in heal phase so they can use another item
+  renderCombat();
+}
+
+function combatSkipHeal(){
+  if(!combatState||combatState.phase!=='heal')return;
+  combatState.phase='attack';
+  combatState.msg='';
+  renderCombat();
 }
 
 function combatChoose(choice){
@@ -743,6 +875,9 @@ function combatChoose(choice){
       updateStatusBar();
       combatState.phase='attack';
       combatState.msg=`隠れるのに失敗！${enemy.icon}の攻撃で ${dmg} ダメージ！`;
+      addCombatLog(`隠れるのに失敗！${dmg}ダメージを受けた！`);
+      showCombatFlash('red');
+      showFloatDamage(`-${dmg} HP!`,'#ff9800',55);
       renderCombat();
     }
   } else if(choice==='flee'){
@@ -778,7 +913,7 @@ function startTimingBar(){
   hitzone.style.left=hzLeft+'px';
   
   const enemy=combatState.enemy;
-  const speed=(enemy.speed||1)*300; // pixels per second
+  const speed=(enemy.speed||1)*380; // pixels per second (faster for excitement)
   combatIndicatorPos=0;
   combatIndicatorDir=1;
   let lastTime=null;
@@ -790,7 +925,7 @@ function startTimingBar(){
     lastTime=time;
     
     combatIndicatorPos+=combatIndicatorDir*speed*dt;
-    if(combatIndicatorPos>=barWidth-4){combatIndicatorPos=barWidth-4;combatIndicatorDir=-1;}
+    if(combatIndicatorPos>=barWidth-8){combatIndicatorPos=barWidth-8;combatIndicatorDir=-1;}
     if(combatIndicatorPos<=0){combatIndicatorPos=0;combatIndicatorDir=1;}
     
     indicator.style.left=combatIndicatorPos+'px';
@@ -817,9 +952,18 @@ function combatAttackTap(){
   if(hit){
     // Consume ammo if rifle
     if(weapon.usesAmmo){removeOneInventoryItem('ammo');}
-    combatState.enemyHp-=weapon.damage;
+    // Combo system
+    combatState.combo=(combatState.combo||0)+1;
+    const comboMultiplier=1+(combatState.combo-1)*0.1;
+    const actualDmg=Math.floor(weapon.damage*comboMultiplier);
+    combatState.enemyHp-=actualDmg;
     playSound('combat_hit');
-    combatState.msg=`🎯 命中！ ${weapon.damage} ダメージ！`;
+    showCombatFlash('green');
+    showFloatDamage(`+${actualDmg} DMG!`,'#e94560',30);
+    setTimeout(shakeEnemy,50);
+    const comboText=combatState.combo>=2?` COMBO x${combatState.combo}！`:'';
+    combatState.msg=`🎯 命中！ ${actualDmg} ダメージ！${comboText}`;
+    addCombatLog(`あなたの攻撃！${weapon.name}で${actualDmg}ダメージ！${comboText}`);
     
     if(combatState.enemyHp<=0){
       // Enemy defeated
@@ -827,14 +971,18 @@ function combatAttackTap(){
       combatState.msg=`🎉 ${combatState.enemy.name} を倒した！`;
       combatState.phase='result';
       combatState.victory=true;
+      addCombatLog(`${combatState.enemy.name}を倒した！`);
       renderCombat();
       return;
     }
   } else {
     // If using rifle, still consume ammo on miss
     if(weapon.usesAmmo){removeOneInventoryItem('ammo');}
+    combatState.combo=0; // Reset combo on miss
     playSound('combat_miss');
+    showFloatDamage('MISS!','#888',30);
     combatState.msg='💨 外れた！';
+    addCombatLog('あなたの攻撃！MISS...');
   }
   
   // Move to defense phase
@@ -855,7 +1003,9 @@ function combatDodgeTap(){
   if(combatState.dodgeTimeout){clearTimeout(combatState.dodgeTimeout);combatState.dodgeTimeout=null;}
   playSound('dodge');
   combatState.msg='⚡ 回避成功！';
-  combatState.phase='attack';
+  addCombatLog(`${combatState.enemy.name}の攻撃！回避成功！`);
+  // Go to heal phase
+  combatState.phase='heal';
   renderCombat();
 }
 
@@ -866,6 +1016,8 @@ function combatDodgeFail(){
   if(state.upgrades.includes('armor')) dmg=Math.floor(dmg*0.5);
   state.hp=Math.max(0,state.hp-dmg);
   playSound('player_hurt');
+  showCombatFlash('red');
+  showFloatDamage(`-${dmg} HP!`,'#ff9800',55);
   updateStatusBar();
   
   if(state.hp<=0){
@@ -875,23 +1027,48 @@ function combatDodgeFail(){
   }
   
   combatState.msg=`${enemy.icon} の攻撃！ ${dmg} ダメージ！`;
-  combatState.phase='attack';
+  addCombatLog(`${enemy.name}の攻撃！${dmg}ダメージを受けた！`);
+  // Go to heal phase
+  combatState.phase='heal';
   renderCombat();
 }
 
 function combatContinue(){
   if(!combatState)return;
   if(combatState.victory){
-    // Generate loot
+    // Generate loot into a 4x3 grid (Tarkov-style)
     const enemy=combatState.enemy;
-    const lootCount=1+Math.floor(Math.random()*3); // 1-3 items
-    const lootItems=[];
-    for(let i=0;i<lootCount;i++){
+    const lootCount=2+Math.floor(Math.random()*3); // 2-4 items
+    const lootW=4,lootH=3;
+    const lootGrid=[];
+    for(let y=0;y<lootH;y++){lootGrid[y]=[];for(let x=0;x<lootW;x++)lootGrid[y][x]=null;}
+    
+    let placed=0;
+    for(let i=0;i<lootCount&&placed<lootCount;i++){
       const key=enemy.loot[Math.floor(Math.random()*enemy.loot.length)];
-      lootItems.push(key);
+      const item=ITEMS[key];
+      if(!item)continue;
+      const shape=item.shape;
+      // Try to place in loot grid
+      let didPlace=false;
+      for(let gy=0;gy<lootH&&!didPlace;gy++){
+        for(let gx=0;gx<lootW&&!didPlace;gx++){
+          let ok=true;
+          for(const[dx,dy]of shape){
+            const nx=gx+dx,ny=gy+dy;
+            if(nx<0||nx>=lootW||ny<0||ny>=lootH||lootGrid[ny][nx]){ok=false;break;}
+          }
+          if(ok){
+            const lid=1000+placed;
+            for(const[dx,dy]of shape){lootGrid[gy+dy][gx+dx]={itemKey:key,id:lid,rarity:item.rarity};}
+            didPlace=true;placed++;
+          }
+        }
+      }
     }
-    combatState.lootItems=lootItems;
-    combatState.phase='loot';
+    
+    lootGridState={grid:lootGrid,gridW:lootW,gridH:lootH,selectedItem:null};
+    combatState.phase='lootgrid';
     renderCombat();
   } else {
     combatState=null;
@@ -899,61 +1076,195 @@ function combatContinue(){
   }
 }
 
-function renderLootScreen(){
-  const cs=combatState;
-  const items=cs.lootItems||[];
+function renderLootGridScreen(){
   let h='<div class="loot-screen">';
-  h+=`<h3 style="color:#ff9800;margin-bottom:12px">🏆 戦利品</h3>`;
-  if(items.length===0){
-    h+='<p style="color:#888">何も見つからなかった</p>';
-  } else {
-    h+='<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">';
-    for(let i=0;i<items.length;i++){
-      const item=ITEMS[items[i]];
-      if(!item)continue;
-      const shape=item.shape;
-      const maxX=Math.max(...shape.map(c=>c[0]))+1;
-      const maxY=Math.max(...shape.map(c=>c[1]))+1;
-      const shapeSet=new Set(shape.map(c=>c[0]+','+c[1]));
-      h+=`<div class="loot-item" onclick="pickupLootItem(${i})">
-        <div class="loot-icon">${item.icon}</div>
-        <div class="loot-name" style="color:${rarityColor(item.rarity)}">${item.name}</div>
-        <div class="loot-value">${item.value}円</div>
-        <div class="item-shape-preview" style="grid-template-columns:repeat(${maxX},16px)">`;
-      for(let sy=0;sy<maxY;sy++){
-        for(let sx=0;sx<maxX;sx++){
-          const filled=shapeSet.has(sx+','+sy);
-          h+=`<div class="shape-cell" style="background:${filled?rarityColor(item.rarity):'transparent'};width:16px;height:16px"></div>`;
+  h+=`<h3 style="color:#ff9800;margin-bottom:8px">🏆 戦利品！</h3>`;
+  h+=`<div class="loot-instructions">アイテムをタップして選択 → あなたの鞄をタップして配置</div>`;
+  
+  if(lootGridState){
+    // Enemy loot grid
+    h+=`<div class="loot-grid-section"><h4 style="color:#ff9800">敵の所持品</h4>`;
+    h+=`<div class="loot-grid" id="enemy-loot-grid" style="grid-template-columns:repeat(${lootGridState.gridW},40px)">`;
+    for(let y=0;y<lootGridState.gridH;y++){
+      for(let x=0;x<lootGridState.gridW;x++){
+        const cell=lootGridState.grid[y][x];
+        let cls='cell';
+        let content='';
+        if(cell){
+          cls+=' occupied rarity-'+cell.rarity;
+          const item=ITEMS[cell.itemKey];
+          content=item?item.icon:'';
+          if(lootGridState.selectedItem&&lootGridState.selectedItem===cell.id) cls+=' loot-selected';
         }
+        h+=`<div class="${cls}" data-lx="${x}" data-ly="${y}">${content}</div>`;
       }
-      h+=`</div></div>`;
     }
-    h+='</div>';
+    h+=`</div></div>`;
+    
+    // Player backpack grid
+    h+=`<div class="loot-grid-section" style="margin-top:12px"><h4 style="color:#4caf50">あなたの鞄</h4>`;
+    h+=`<div class="grid" id="player-loot-grid" style="grid-template-columns:repeat(${state.gridW},40px)">`;
+    for(let y=0;y<state.gridH;y++){
+      for(let x=0;x<state.gridW;x++){
+        const cell=state.grid[y][x];
+        let cls='cell';
+        let content='';
+        if(cell){
+          cls+=' occupied rarity-'+cell.rarity;
+          const item=ITEMS[cell.itemKey];
+          content=item?item.icon:'';
+        }
+        h+=`<div class="${cls}" data-px="${x}" data-py="${y}">${content}</div>`;
+      }
+    }
+    h+=`</div></div>`;
+    
+    // Selected item info
+    if(lootGridState.selectedItem){
+      const selCell=findLootGridItem(lootGridState.selectedItem);
+      if(selCell){
+        const item=ITEMS[selCell.itemKey];
+        const shape=item.shape;
+        h+=`<div style="text-align:center;margin-top:8px;font-size:13px">
+          <span style="color:${rarityColor(item.rarity)}">${item.icon} ${item.name}</span> — ${item.value}円
+          <button class="btn btn-small" onclick="rotateLootItem()" style="margin-left:8px">🔄</button>
+        </div>`;
+      }
+    }
   }
-  h+=`<div style="margin-top:16px">
-    <button class="btn btn-danger" onclick="skipLoot()">スキップ</button>
+  
+  h+=`<div style="margin-top:12px">
+    <button class="btn" onclick="finishLooting()">完了</button>
   </div>`;
   h+='</div>';
   return h;
 }
 
-function pickupLootItem(idx){
-  if(!combatState||!combatState.lootItems)return;
-  const items=combatState.lootItems;
-  if(idx<0||idx>=items.length)return;
-  const itemKey=items[idx];
-  items.splice(idx,1);
-  // Use existing pickup flow
-  playSound('pickup');
-  pendingItem={itemKey,rotation:0};
+function findLootGridItem(id){
+  if(!lootGridState)return null;
+  for(let y=0;y<lootGridState.gridH;y++)
+    for(let x=0;x<lootGridState.gridW;x++)
+      if(lootGridState.grid[y][x]&&lootGridState.grid[y][x].id===id) return lootGridState.grid[y][x];
+  return null;
+}
+
+function attachLootGridListeners(){
+  // Enemy grid clicks
+  const enemyGrid=document.getElementById('enemy-loot-grid');
+  if(enemyGrid){
+    enemyGrid.querySelectorAll('.cell').forEach(cell=>{
+      cell.addEventListener('click',()=>{
+        const lx=+cell.dataset.lx,ly=+cell.dataset.ly;
+        const lc=lootGridState.grid[ly][lx];
+        if(lc){
+          // Select this item
+          lootGridState.selectedItem=lc.id;
+          pendingRotation=0;
+          renderCombat();
+        }
+      });
+    });
+  }
+  
+  // Player grid clicks - place selected loot item
+  const playerGrid=document.getElementById('player-loot-grid');
+  if(playerGrid){
+    let previewCells=[];
+    
+    playerGrid.querySelectorAll('.cell').forEach(cell=>{
+      const px=+cell.dataset.px,py=+cell.dataset.py;
+      
+      cell.addEventListener('mouseenter',()=>{
+        if(!lootGridState||!lootGridState.selectedItem)return;
+        clearLootPreview();
+        const selCell=findLootGridItem(lootGridState.selectedItem);
+        if(!selCell)return;
+        const item=ITEMS[selCell.itemKey];
+        const shape=rotateShape(item.shape,pendingRotation);
+        const ok=canPlace(shape,px,py);
+        for(const[dx,dy]of shape){
+          const nx=px+dx,ny=py+dy;
+          const target=playerGrid.querySelector(`.cell[data-px="${nx}"][data-py="${ny}"]`);
+          if(target){target.classList.add(ok?'preview-ok':'preview-bad');previewCells.push(target);}
+        }
+      });
+      
+      cell.addEventListener('mouseleave',()=>clearLootPreview());
+      
+      cell.addEventListener('click',()=>{
+        if(!lootGridState||!lootGridState.selectedItem)return;
+        const selCell=findLootGridItem(lootGridState.selectedItem);
+        if(!selCell)return;
+        const item=ITEMS[selCell.itemKey];
+        const shape=rotateShape(item.shape,pendingRotation);
+        if(canPlace(shape,px,py)){
+          // Place into player inventory
+          placeItem(selCell.itemKey,shape,px,py);
+          playSound('place');
+          // Remove from loot grid
+          const selId=lootGridState.selectedItem;
+          for(let ly=0;ly<lootGridState.gridH;ly++)
+            for(let lx=0;lx<lootGridState.gridW;lx++)
+              if(lootGridState.grid[ly][lx]&&lootGridState.grid[ly][lx].id===selId) lootGridState.grid[ly][lx]=null;
+          lootGridState.selectedItem=null;
+          pendingRotation=0;
+          saveGame();
+          renderCombat();
+        } else {
+          // Flash red
+          for(const[dx,dy]of shape){
+            const nx=px+dx,ny=py+dy;
+            const t=playerGrid.querySelector(`.cell[data-px="${nx}"][data-py="${ny}"]`);
+            if(t){t.classList.add('preview-bad');previewCells.push(t);}
+          }
+          setTimeout(clearLootPreview,300);
+        }
+      });
+    });
+    
+    function clearLootPreview(){
+      previewCells.forEach(c=>{c.classList.remove('preview-ok','preview-bad');});
+      previewCells=[];
+    }
+    
+    // Touch support for loot grid
+    playerGrid.addEventListener('touchmove',(e)=>{
+      if(!lootGridState||!lootGridState.selectedItem)return;
+      e.preventDefault();
+      const touch=e.touches[0];
+      const el=document.elementFromPoint(touch.clientX,touch.clientY);
+      if(el&&el.classList.contains('cell')&&el.dataset.px!==undefined){
+        clearLootPreview();
+        const tx=+el.dataset.px,ty=+el.dataset.py;
+        const selCell=findLootGridItem(lootGridState.selectedItem);
+        if(!selCell)return;
+        const item=ITEMS[selCell.itemKey];
+        const shape=rotateShape(item.shape,pendingRotation);
+        const ok=canPlace(shape,tx,ty);
+        for(const[dx,dy]of shape){
+          const nx=tx+dx,ny=ty+dy;
+          const target=playerGrid.querySelector(`.cell[data-px="${nx}"][data-py="${ny}"]`);
+          if(target){target.classList.add(ok?'preview-ok':'preview-bad');previewCells.push(target);}
+        }
+      }
+    },{passive:false});
+  }
+}
+
+function rotateLootItem(){
+  pendingRotation=(pendingRotation+1)%4;
+  renderCombat();
+}
+
+function finishLooting(){
+  lootGridState=null;
+  combatState=null;
   pendingRotation=0;
-  selectedInventoryItem=null;
-  // If no more loot, end combat after placing
-  if(items.length===0) combatState.lastLoot=true;
-  switchTab('bag',true);
+  render();
 }
 
 function skipLoot(){
+  lootGridState=null;
   combatState=null;
   render();
 }
