@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>スカベンジャー — 廃墟探索×鞄整理</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#1a1a2e;color:#eee;font-family:'Hiragino Sans','Yu Gothic UI',sans-serif;display:flex;justify-content:center;min-height:100vh;overflow-x:hidden}
+#app{width:100%;max-width:460px;display:flex;flex-direction:column;height:100vh;height:100dvh;position:relative}
+#title-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:20px;padding:20px}
+#title-screen h1{font-size:28px;color:#e94560;text-shadow:0 0 20px rgba(233,69,96,.4)}
+#title-screen p{color:#888;font-size:14px;text-align:center;line-height:1.6}
+.btn{background:#0f3460;color:#eee;border:none;padding:12px 24px;border-radius:8px;font-size:16px;cursor:pointer;transition:background .2s}
+.btn:hover,.btn:active{background:#1a4a8a}
+.btn-danger{background:#e94560}
+.btn-danger:hover,.btn-danger:active{background:#ff6b81}
+.btn-small{padding:8px 14px;font-size:13px}
+.btn-sell{background:#4caf50}
+.btn-sell:hover{background:#66bb6a}
+#status-bar{background:#16213e;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;border-bottom:1px solid #0f3460;display:none}
+#main-content{flex:1;overflow-y:auto;padding:12px;display:none}
+#tab-bar{display:none;background:#16213e;border-top:1px solid #0f3460}
+#tab-bar .tabs{display:flex}
+#tab-bar .tab{flex:1;padding:12px;text-align:center;cursor:pointer;font-size:14px;color:#888;border-top:2px solid transparent;transition:all .2s}
+#tab-bar .tab.active{color:#e94560;border-top-color:#e94560;background:rgba(233,69,96,.1)}
+.panel{background:#16213e;border-radius:8px;padding:12px;margin-bottom:12px}
+.panel h3{color:#e94560;margin-bottom:8px;font-size:15px}
+.grid-container{display:flex;flex-direction:column;align-items:center;gap:8px}
+.grid{display:inline-grid;gap:1px;background:#0a0a1a;padding:1px;border-radius:4px;border:2px solid #0f3460}
+.grid .cell{width:40px;height:40px;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;position:relative;transition:background .15s}
+.grid .cell.occupied{border:2px solid}
+.grid .cell.preview-ok{background:rgba(76,175,80,.3) !important}
+.grid .cell.preview-bad{background:rgba(233,69,96,.3) !important}
+.grid .cell.selected-item{outline:2px solid #fff;outline-offset:-2px;z-index:1}
+.rarity-common{border-color:#aaa !important}
+.rarity-uncommon{border-color:#4caf50 !important}
+.rarity-rare{border-color:#2196f3 !important}
+.rarity-legendary{border-color:#ff9800 !important}
+.item-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.area-card{background:#1a1a2e;border:1px solid #0f3460;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:border-color .2s}
+.area-card:hover,.area-card:active{border-color:#e94560}
+.area-card.locked{opacity:.5;cursor:default}
+.area-card .area-name{font-size:16px;font-weight:bold}
+.area-card .area-info{font-size:12px;color:#888;margin-top:4px}
+.room-view{text-align:center}
+.room-desc{color:#aaa;font-size:14px;margin:12px 0;line-height:1.6}
+.search-spots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.search-spot{width:80px;height:80px;background:#1a1a2e;border:2px dashed #0f3460;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:28px;cursor:pointer;transition:all .2s}
+.search-spot:hover,.search-spot:active{border-color:#e94560;background:#16213e}
+.search-spot.searched{opacity:.3;cursor:default;border-style:solid}
+.item-preview{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px}
+.item-preview .item-icon{font-size:48px}
+.item-preview .item-name{font-size:18px;font-weight:bold}
+.item-preview .item-value{color:#4caf50;font-size:14px}
+.item-shape-preview{display:inline-grid;gap:1px;background:#0a0a1a;padding:1px;border-radius:4px}
+.item-shape-preview .shape-cell{width:24px;height:24px;border-radius:2px}
+.upgrade-item{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#1a1a2e;border-radius:6px;margin-bottom:6px}
+.upgrade-item.owned{opacity:.5}
+.upgrade-item .upgrade-info{flex:1}
+.upgrade-item .upgrade-name{font-size:14px}
+.upgrade-item .upgrade-cost{font-size:12px;color:#ff9800}
+.notification{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#16213e;border:1px solid #e94560;padding:10px 20px;border-radius:8px;font-size:14px;z-index:100;animation:fadeInOut 2s forwards;pointer-events:none}
+@keyframes fadeInOut{0%{opacity:0;transform:translateX(-50%) translateY(-10px)}10%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1}100%{opacity:0}}
+.sell-grid .cell.occupied{cursor:pointer}
+.sell-grid .cell.occupied:active{opacity:.7}
+.hp-bar{height:4px;background:#333;border-radius:2px;margin-top:4px;overflow:hidden}
+.hp-bar-fill{height:100%;background:#e94560;transition:width .3s}
+.room-progress{display:flex;gap:4px;justify-content:center;margin:8px 0}
+.room-dot{width:10px;height:10px;border-radius:50%;background:#333}
+.room-dot.current{background:#e94560}
+.room-dot.visited{background:#4caf50}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+.modal{background:#16213e;border:1px solid #0f3460;border-radius:12px;padding:20px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto}
+.modal h3{color:#e94560;margin-bottom:12px}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="title-screen">
+<h1>🏚️ スカベンジャー</h1>
+<p>廃墟を探索し、アイテムを集めろ。<br>限られた鞄のスペースに<br>テトリスのようにアイテムを詰め込み<br>拠点に持ち帰って売りさばけ。</p>
+<button class="btn" onclick="startGame()">はじめる</button>
+<button class="btn btn-small" onclick="loadAndStart()" id="continue-btn" style="display:none">つづきから</button>
+</div>
+<div id="status-bar">
+<span id="money-display">💰 0円</span>
+<span id="hp-display">❤️ 100/100</span>
+</div>
+<div id="main-content"></div>
+<div id="tab-bar">
+<div class="tabs">
+<div class="tab" data-tab="base" onclick="switchTab('base')">🏠 拠点</div>
+<div class="tab" data-tab="explore" onclick="switchTab('explore')">🔍 探索</div>
+<div class="tab" data-tab="bag" onclick="switchTab('bag')">🎒 鞄</div>
+</div>
+</div>
+</div>
+<script>
+// ===== AUDIO =====
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
+function playSound(type){
+  ensureAudio();
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.connect(g);g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime;
+  switch(type){
+    case'pickup':o.frequency.setValueAtTime(400,t);o.frequency.linearRampToValueAtTime(800,t+.1);g.gain.setValueAtTime(.15,t);g.gain.linearRampToValueAtTime(0,t+.15);o.start(t);o.stop(t+.15);break;
+    case'place':o.frequency.setValueAtTime(600,t);g.gain.setValueAtTime(.1,t);g.gain.linearRampToValueAtTime(0,t+.05);o.start(t);o.stop(t+.05);break;
+    case'sell':o.frequency.setValueAtTime(523,t);o.frequency.setValueAtTime(659,t+.08);o.frequency.setValueAtTime(784,t+.16);g.gain.setValueAtTime(.12,t);g.gain.linearRampToValueAtTime(0,t+.3);o.start(t);o.stop(t+.3);break;
+    case'trap':o.type='sawtooth';o.frequency.setValueAtTime(150,t);g.gain.setValueAtTime(.2,t);g.gain.linearRampToValueAtTime(0,t+.3);o.start(t);o.stop(t+.3);break;
+    case'heal':o.type='sine';o.frequency.setValueAtTime(523,t);o.frequency.linearRampToValueAtTime(1047,t+.3);g.gain.setValueAtTime(.1,t);g.gain.linearRampToValueAtTime(0,t+.4);o.start(t);o.stop(t+.4);break;
+  }
+}
+
+// ===== ITEMS =====
+const ITEMS={
+  bandage:{name:'包帯',icon:'🩹',shape:[[0,0]],value:20,rarity:'common',heal:20},
+  battery:{name:'電池',icon:'🔋',shape:[[0,0]],value:30,rarity:'common'},
+  ammo:{name:'弾薬',icon:'🔫',shape:[[0,0]],value:25,rarity:'common'},
+  knife:{name:'ナイフ',icon:'🔪',shape:[[0,0],[1,0]],value:80,rarity:'common'},
+  flashlight:{name:'懐中電灯',icon:'🔦',shape:[[0,0],[1,0]],value:60,rarity:'common'},
+  cannedfood:{name:'缶詰',icon:'🥫',shape:[[0,0],[1,0]],value:40,rarity:'common'},
+  waterbottle:{name:'水筒',icon:'🧴',shape:[[0,0],[0,1]],value:35,rarity:'common'},
+  bolt:{name:'ボルト',icon:'🔩',shape:[[0,0],[0,1]],value:50,rarity:'common'},
+  medkit:{name:'医療キット',icon:'💊',shape:[[0,0],[1,0],[0,1],[1,1]],value:200,rarity:'uncommon',heal:50},
+  safe:{name:'金庫',icon:'🗄️',shape:[[0,0],[1,0],[0,1],[1,1]],value:500,rarity:'rare'},
+  pipe:{name:'パイプ',icon:'🔧',shape:[[0,0],[1,0],[2,0]],value:60,rarity:'common'},
+  rifle:{name:'ライフル',icon:'🎯',shape:[[0,0],[1,0],[2,0]],value:300,rarity:'uncommon'},
+  toolkit:{name:'工具セット',icon:'🧰',shape:[[0,0],[1,0],[0,1]],value:150,rarity:'uncommon'},
+  electronics:{name:'電子部品',icon:'💎',shape:[[0,0],[1,0],[0,1],[1,1],[2,0]],value:800,rarity:'rare'},
+  goldbar:{name:'金塊',icon:'🥇',shape:[[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]],value:2000,rarity:'legendary'},
+  compass:{name:'コンパス',icon:'🧭',shape:[[0,0]],value:100,rarity:'uncommon'},
+  radio:{name:'無線機',icon:'📻',shape:[[0,0],[1,0],[0,1]],value:250,rarity:'uncommon'},
+  document:{name:'機密文書',icon:'📜',shape:[[0,0],[0,1]],value:400,rarity:'rare'},
+};
+
+const AREAS=[
+  {id:0,name:'廃アパート',level:1,rooms:3,desc:'崩れかけたアパート。比較的安全。',trapChance:0,loot:['bandage','battery','ammo','knife','flashlight','cannedfood','waterbottle','bolt'],lootRarity:{common:1},unlockCost:0},
+  {id:1,name:'廃工場',level:2,rooms:5,desc:'錆びた機械が並ぶ廃工場。',trapChance:.2,loot:['battery','knife','bolt','pipe','cannedfood','compass','toolkit','medkit'],lootRarity:{common:.6,uncommon:.4},unlockCost:500},
+  {id:2,name:'廃病院',level:3,rooms:7,desc:'不気味な廃病院。貴重品が眠る。',trapChance:.3,loot:['medkit','compass','radio','toolkit','rifle','document','safe','bolt'],lootRarity:{common:.3,uncommon:.4,rare:.3},unlockCost:2000},
+  {id:3,name:'軍事基地',level:4,rooms:10,desc:'厳重に封鎖された軍事基地。',trapChance:.4,loot:['rifle','radio','document','safe','electronics','compass','ammo','medkit'],lootRarity:{common:.2,uncommon:.3,rare:.35,legendary:.15},unlockCost:5000},
+  {id:4,name:'地下研究所',level:5,rooms:12,desc:'地下深くの秘密研究所。最高の戦利品が…',trapChance:.5,loot:['electronics','goldbar','document','safe','rifle','radio','medkit','toolkit'],lootRarity:{common:.1,uncommon:.2,rare:.4,legendary:.3},unlockCost:15000},
+];
+
+const UPGRADES=[
+  {id:'bag1',name:'バックパック拡張 Lv2',desc:'6×4 → 8×6',cost:1000,type:'bag'},
+  {id:'bag2',name:'バックパック拡張 Lv3',desc:'8×6 → 10×8',cost:5000,type:'bag'},
+  {id:'armor',name:'防護服',desc:'トラップダメージ -50%',cost:2000,type:'armor'},
+  {id:'detector',name:'探知機',desc:'トラップ回避率 +30%',cost:3000,type:'detector'},
+  {id:'rope',name:'ロープ',desc:'追加の部屋を解放',cost:1500,type:'rope'},
+];
+
+// ===== GAME STATE =====
+let state={
+  money:0,hp:100,maxHp:100,
+  gridW:6,gridH:4,
+  grid:null, // 2D array, null or {itemKey, id, rarity}
+  inventory:[], // [{id,itemKey,cells:[[x,y],...],rotation}]
+  nextItemId:1,
+  unlockedAreas:[0],
+  upgrades:[],
+  stats:{totalEarned:0,itemsSold:0,areasExplored:0},
+  // Exploration state
+  exploring:false,
+  currentArea:null,
+  currentRoom:0,
+  roomSpots:[],
+  roomsVisited:0,
+};
+
+let currentTab='base';
+let selectedInventoryItem=null; // {id} of item selected in grid
+let pendingItem=null; // {itemKey, rotation} item being placed
+let pendingRotation=0;
+
+function initGrid(){
+  state.grid=[];
+  for(let y=0;y<state.gridH;y++){
+    state.grid[y]=[];
+    for(let x=0;x<state.gridW;x++) state.grid[y][x]=null;
+  }
+}
+
+function rotateShape(shape,times){
+  let s=[...shape.map(c=>[...c])];
+  for(let t=0;t<times%4;t++){
+    s=s.map(([x,y])=>[-y,x]);
+    const minX=Math.min(...s.map(c=>c[0]));
+    const minY=Math.min(...s.map(c=>c[1]));
+    s=s.map(([x,y])=>[x-minX,y-minY]);
+  }
+  return s;
+}
+
+function canPlace(shape,gx,gy){
+  for(const[dx,dy]of shape){
+    const nx=gx+dx,ny=gy+dy;
+    if(nx<0||nx>=state.gridW||ny<0||ny>=state.gridH)return false;
+    if(state.grid[ny][nx])return false;
+  }
+  return true;
+}
+
+function placeItem(itemKey,shape,gx,gy){
+  const id=state.nextItemId++;
+  const item=ITEMS[itemKey];
+  const cells=[];
+  for(const[dx,dy]of shape){
+    const nx=gx+dx,ny=gy+dy;
+    state.grid[ny][nx]={itemKey,id,rarity:item.rarity};
+    cells.push([nx,ny]);
+  }
+  state.inventory.push({id,itemKey,cells,rotation:pendingRotation});
+  return id;
+}
+
+function removeItem(id){
+  const inv=state.inventory.find(i=>i.id===id);
+  if(!inv)return null;
+  for(const[x,y]of inv.cells) state.grid[y][x]=null;
+  state.inventory=state.inventory.filter(i=>i.id!==id);
+  return inv;
+}
+
+function notify(msg){
+  const el=document.createElement('div');
+  el.className='notification';el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),2000);
+}
+
+// ===== RENDERING =====
+const mc=()=>document.getElementById('main-content');
+
+function updateStatusBar(){
+  document.getElementById('money-display').textContent=`💰 ${state.money}円`;
+  document.getElementById('hp-display').textContent=`❤️ ${state.hp}/${state.maxHp}`;
+}
+
+function switchTab(tab){
+  if(state.exploring && tab!=='bag' && tab!=='explore')return;
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.classList.toggle('active',t.dataset.tab===tab);
+  });
+  pendingItem=null;selectedInventoryItem=null;
+  render();
+}
+
+function render(){
+  updateStatusBar();
+  switch(currentTab){
+    case'base':renderBase();break;
+    case'explore':renderExplore();break;
+    case'bag':renderBag();break;
+  }
+}
+
+// ===== BASE TAB =====
+function renderBase(){
+  let h='<div class="panel"><h3>🏠 拠点</h3><p style="color:#888;font-size:13px;margin-bottom:8px">アイテムを売却してアップグレードを購入しよう</p></div>';
+  // Sell section - show grid
+  h+='<div class="panel"><h3>💰 売却</h3><p style="color:#888;font-size:12px;margin-bottom:8px">鞄のアイテムをタップして売却</p>';
+  h+=renderGridHTML('sell');
+  h+='</div>';
+  // Upgrades
+  h+='<div class="panel"><h3>🔧 アップグレード</h3>';
+  for(const u of UPGRADES){
+    const owned=state.upgrades.includes(u.id);
+    const canBuy=!owned&&state.money>=u.cost;
+    if(u.id==='bag2'&&!state.upgrades.includes('bag1'))continue;
+    h+=`<div class="upgrade-item ${owned?'owned':''}">
+      <div class="upgrade-info"><div class="upgrade-name">${u.name}</div><div style="font-size:11px;color:#888">${u.desc}</div>
+      ${owned?'<div style="color:#4caf50;font-size:11px">購入済み</div>':'<div class="upgrade-cost">'+u.cost+'円</div>'}
+      </div>${owned?'':'<button class="btn btn-small'+(canBuy?'':'" disabled style="opacity:.4')+'" onclick="buyUpgrade(\''+u.id+'\')">購入</button>'}
+    </div>`;
+  }
+  h+='</div>';
+  mc().innerHTML=h;
+  if(document.querySelector('.sell')){
+    document.querySelectorAll('.sell .cell.occupied').forEach(cell=>{
+      cell.addEventListener('click',()=>{
+        const x=+cell.dataset.x,y=+cell.dataset.y;
+        const g=state.grid[y][x];
+        if(g)sellItem(g.id);
+      });
+    });
+  }
+}
+
+function sellItem(id){
+  const inv=state.inventory.find(i=>i.id===id);
+  if(!inv)return;
+  const item=ITEMS[inv.itemKey];
+  removeItem(id);
+  state.money+=item.value;
+  state.stats.totalEarned+=item.value;
+  state.stats.itemsSold++;
+  playSound('sell');
+  notify(`${item.icon} ${item.name} を ${item.value}円 で売却！`);
+  saveGame();render();
+}
+
+function buyUpgrade(uid){
+  const u=UPGRADES.find(u=>u.id===uid);
+  if(!u||state.upgrades.includes(uid)||state.money<u.cost)return;
+  state.money-=u.cost;
+  state.upgrades.push(uid);
+  if(uid==='bag1'){resizeGrid(8,6)}
+  else if(uid==='bag2'){resizeGrid(10,8)}
+  playSound('pickup');
+  notify(`${u.name} を購入！`);
+  saveGame();render();
+}
+
+function resizeGrid(newW,newH){
+  const oldGrid=state.grid;
+  const oldH=state.gridH,oldW=state.gridW;
+  state.gridW=newW;state.gridH=newH;
+  state.grid=[];
+  for(let y=0;y<newH;y++){
+    state.grid[y]=[];
+    for(let x=0;x<newW;x++){
+      state.grid[y][x]=(y<oldH&&x<oldW)?oldGrid[y][x]:null;
+    }
+  }
+}
+
+// ===== EXPLORE TAB =====
+function renderExplore(){
+  if(state.exploring){renderRoom();return;}
+  let h='<div class="panel"><h3>🔍 エリア選択</h3></div>';
+  for(const a of AREAS){
+    const unlocked=state.unlockedAreas.includes(a.id);
+    const canUnlock=!unlocked&&state.money>=a.unlockCost;
+    if(!unlocked&&a.id>0){
+      const prev=state.unlockedAreas.includes(a.id-1);
+      if(!prev){h+=`<div class="area-card locked"><div class="area-name">🔒 ???</div><div class="area-info">前のエリアをクリアして解放</div></div>`;continue;}
+    }
+    if(unlocked){
+      h+=`<div class="area-card" onclick="startExploration(${a.id})">
+        <div class="area-name">Lv${a.level} ${a.name}</div>
+        <div class="area-info">${a.desc}<br>部屋数: ${a.rooms}${state.upgrades.includes('rope')?'+2':''} | 危険度: ${'⚠️'.repeat(a.level)}</div>
+      </div>`;
+    } else {
+      h+=`<div class="area-card${canUnlock?'':' locked'}" ${canUnlock?`onclick="unlockArea(${a.id})"`:''}> 
+        <div class="area-name">🔒 Lv${a.level} ${a.name}</div>
+        <div class="area-info">${canUnlock?`${a.unlockCost}円 で解放`:`解放に ${a.unlockCost}円 必要`}</div>
+      </div>`;
+    }
+  }
+  mc().innerHTML=h;
+}
+
+function unlockArea(id){
+  const a=AREAS[id];
+  if(state.money<a.unlockCost)return;
+  state.money-=a.unlockCost;
+  state.unlockedAreas.push(id);
+  playSound('pickup');
+  notify(`${a.name} を解放！`);
+  saveGame();render();
+}
+
+function startExploration(areaId){
+  state.exploring=true;
+  state.currentArea=areaId;
+  state.currentRoom=0;
+  state.roomsVisited=0;
+  state.hp=state.maxHp;
+  const a=AREAS[areaId];
+  const totalRooms=a.rooms+(state.upgrades.includes('rope')?2:0);
+  state.totalRooms=totalRooms;
+  generateRoom();
+  render();
+}
+
+const ROOM_DESCS=[
+  ['埃っぽい部屋。床に何か落ちている。','壁に大きな穴が開いた部屋。','薄暗い廊下の奥に小部屋がある。'],
+  ['錆びた機械が唸りを上げている。','コンベアベルトの残骸が散乱。','制御室のモニターが微かに光る。','倉庫の奥に箱が積まれている。','油まみれの作業場。'],
+  ['手術室の残骸。不気味な影が…','薬品棚が倒れた廊下。','地下の霊安室。空気が重い。','ナースステーション跡。書類が散乱。','屋上への階段。風が冷たい。','病室。ベッドが一列に並ぶ。','レントゲン室。機器がまだ動く。'],
+  ['弾薬庫の入口。厳重な鍵。','司令室。地図が壁一面に。','兵舎。ロッカーが並ぶ。','通信室。無線機がノイズを出す。','地下トンネル。足元に注意。','格納庫。車両の残骸。','見張り塔の下。視界良好。','武器庫跡。ほぼ空だが…','訓練場。的に穴。','医務室。清潔感だけが残る。'],
+  ['白い壁の研究室。凍りついた空気。','サーバールーム。青い光が点滅。','実験体の保管庫。見ない方がいい。','所長室。金庫がある。','化学実験室。試薬が散乱。','観測室。深淵を覗く窓。','地下3階。水が溜まっている。','分析室。データ端末が生きている。','非常階段。何かの気配。','生体工学ラボ。培養液の残骸。','最深部の扉。重い鉄扉。','制御中枢。全ての始まり。'],
+];
+
+function generateRoom(){
+  const a=AREAS[state.currentArea];
+  const descs=ROOM_DESCS[state.currentArea]||ROOM_DESCS[0];
+  const desc=descs[state.currentRoom%descs.length];
+  const spotCount=1+Math.floor(Math.random()*2)+(state.currentArea>=2?1:0);
+  const spots=[];
+  const spotEmojis=['📦','🗑️','🚪','🧱','💼','🗄️'];
+  for(let i=0;i<Math.min(spotCount,3);i++){
+    spots.push({emoji:spotEmojis[Math.floor(Math.random()*spotEmojis.length)],searched:false,result:null});
+    // Pre-determine result
+    const r=Math.random();
+    const trapChance=a.trapChance*(state.upgrades.includes('detector')?.7:1);
+    if(r<trapChance){
+      spots[i].result={type:'trap',damage:10+Math.floor(Math.random()*21)};
+    } else if(r<trapChance+.15){
+      spots[i].result={type:'empty'};
+    } else {
+      // Pick an item based on area loot table
+      const itemKey=pickLootItem(a);
+      spots[i].result={type:'item',itemKey};
+    }
+  }
+  state.roomSpots=spots;
+}
+
+function pickLootItem(area){
+  const pool=area.loot;
+  // Weight by rarity matching area rarity distribution
+  const weighted=[];
+  for(const key of pool){
+    const item=ITEMS[key];
+    const weight=area.lootRarity[item.rarity]||0;
+    if(weight>0) weighted.push({key,weight});
+  }
+  if(weighted.length===0) return pool[Math.floor(Math.random()*pool.length)];
+  const total=weighted.reduce((s,w)=>s+w.weight,0);
+  let r=Math.random()*total;
+  for(const w of weighted){r-=w.weight;if(r<=0)return w.key;}
+  return weighted[weighted.length-1].key;
+}
+
+function renderRoom(){
+  const a=AREAS[state.currentArea];
+  const totalRooms=state.totalRooms;
+  const descs=ROOM_DESCS[state.currentArea]||ROOM_DESCS[0];
+  const desc=descs[state.currentRoom%descs.length];
+  
+  let h='<div class="room-view">';
+  h+=`<div class="panel"><h3>${a.name} — 部屋 ${state.currentRoom+1}/${totalRooms}</h3></div>`;
+  // Room progress dots
+  h+='<div class="room-progress">';
+  for(let i=0;i<totalRooms;i++){
+    h+=`<div class="room-dot ${i<state.currentRoom?'visited':i===state.currentRoom?'current':''}"></div>`;
+  }
+  h+='</div>';
+  // HP bar
+  h+=`<div style="margin:8px 0"><div class="hp-bar"><div class="hp-bar-fill" style="width:${state.hp/state.maxHp*100}%"></div></div></div>`;
+  h+=`<div class="room-desc">${desc}</div>`;
+  h+='<div class="search-spots">';
+  state.roomSpots.forEach((s,i)=>{
+    h+=`<div class="search-spot ${s.searched?'searched':''}" onclick="${s.searched?'':'searchSpot('+i+')'}">${s.searched?'✓':s.emoji}</div>`;
+  });
+  h+='</div>';
+  // Next room / return buttons
+  const allSearched=state.roomSpots.every(s=>s.searched);
+  if(allSearched){
+    h+='<div style="margin-top:16px;display:flex;gap:8px;justify-content:center">';
+    if(state.currentRoom+1<totalRooms){
+      h+='<button class="btn" onclick="nextRoom()">次の部屋へ →</button>';
+    }
+    h+='<button class="btn btn-danger" onclick="returnToBase()">帰還する</button>';
+    h+='</div>';
+  }
+  h+='</div>';
+  mc().innerHTML=h;
+}
+
+function searchSpot(idx){
+  const spot=state.roomSpots[idx];
+  if(spot.searched)return;
+  spot.searched=true;
+  const result=spot.result;
+  if(result.type==='trap'){
+    const dmg=state.upgrades.includes('armor')?Math.floor(result.damage*.5):result.damage;
+    state.hp=Math.max(0,state.hp-dmg);
+    playSound('trap');
+    notify(`⚠️ トラップ！ ${dmg}ダメージ！`);
+    if(state.hp<=0){
+      handleDeath();return;
+    }
+    updateStatusBar();
+    render();
+  } else if(result.type==='empty'){
+    notify('何も見つからなかった…');
+    render();
+  } else {
+    // Found item - show preview
+    playSound('pickup');
+    showItemFound(result.itemKey);
+  }
+}
+
+function handleDeath(){
+  // Lose half loot
+  const inv=[...state.inventory];
+  const toRemove=Math.ceil(inv.length/2);
+  for(let i=0;i<toRemove;i++){
+    const idx=Math.floor(Math.random()*state.inventory.length);
+    if(state.inventory[idx]) removeItem(state.inventory[idx].id);
+  }
+  state.hp=1;
+  notify('💀 倒れた… アイテムの半分を失った…');
+  returnToBase();
+}
+
+function showItemFound(itemKey){
+  const item=ITEMS[itemKey];
+  const shape=item.shape;
+  // Calculate shape bounds for preview
+  const maxX=Math.max(...shape.map(c=>c[0]))+1;
+  const maxY=Math.max(...shape.map(c=>c[1]))+1;
+  const shapeSet=new Set(shape.map(c=>c[0]+','+c[1]));
+  
+  let h='<div class="modal-overlay" id="item-modal"><div class="modal"><div class="item-preview">';
+  h+=`<div class="item-icon">${item.icon}</div>`;
+  h+=`<div class="item-name" style="color:${rarityColor(item.rarity)}">${item.name}</div>`;
+  h+=`<div class="item-value">${item.value}円</div>`;
+  h+=`<div class="item-shape-preview" style="grid-template-columns:repeat(${maxX},24px)">`;
+  for(let y=0;y<maxY;y++){
+    for(let x=0;x<maxX;x++){
+      const filled=shapeSet.has(x+','+y);
+      h+=`<div class="shape-cell" style="background:${filled?rarityColor(item.rarity):'transparent'}"></div>`;
+    }
+  }
+  h+='</div>';
+  h+=`<div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn" onclick="pickupItem('${itemKey}')">拾う</button>
+    <button class="btn btn-danger" onclick="leaveItem()">置いていく</button>
+  </div>`;
+  h+='</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend',h);
+}
+
+function leaveItem(){
+  document.getElementById('item-modal')?.remove();
+  render();
+}
+
+function pickupItem(itemKey){
+  document.getElementById('item-modal')?.remove();
+  pendingItem={itemKey,rotation:0};
+  pendingRotation=0;
+  selectedInventoryItem=null;
+  switchTab('bag');
+}
+
+function nextRoom(){
+  state.currentRoom++;
+  state.roomsVisited++;
+  generateRoom();
+  render();
+}
+
+function returnToBase(){
+  state.exploring=false;
+  state.currentArea=null;
+  state.stats.areasExplored++;
+  state.hp=state.maxHp;
+  saveGame();
+  switchTab('base');
+  notify('🏠 拠点に帰還！');
+}
+
+// ===== BAG TAB =====
+function renderBag(){
+  let h='<div class="panel"><h3>🎒 バックパック (${state.gridW}×${state.gridH})</h3></div>';
+  if(pendingItem){
+    const item=ITEMS[pendingItem.itemKey];
+    h+=`<div class="panel" style="text-align:center">
+      <p style="color:#ff9800;font-size:13px">📦 ${item.icon} ${item.name} を配置してください</p>
+      <div style="margin:8px 0">`;
+    // Show shape preview
+    const shape=rotateShape(item.shape,pendingRotation);
+    const maxX=Math.max(...shape.map(c=>c[0]))+1;
+    const maxY=Math.max(...shape.map(c=>c[1]))+1;
+    const shapeSet=new Set(shape.map(c=>c[0]+','+c[1]));
+    h+=`<div class="item-shape-preview" style="grid-template-columns:repeat(${maxX},24px);display:inline-grid;margin:4px">`;
+    for(let y=0;y<maxY;y++) for(let x=0;x<maxX;x++){
+      h+=`<div class="shape-cell" style="background:${shapeSet.has(x+','+y)?rarityColor(item.rarity):'transparent'}"></div>`;
+    }
+    h+=`</div></div>
+      <div class="item-actions">
+        <button class="btn btn-small" onclick="rotatePending()">🔄 回転</button>
+        <button class="btn btn-small btn-danger" onclick="cancelPending()">✕ やめる</button>
+      </div>
+    </div>`;
+  }
+  h+=renderGridHTML('bag');
+  // Item info / actions
+  if(selectedInventoryItem&&!pendingItem){
+    const inv=state.inventory.find(i=>i.id===selectedInventoryItem);
+    if(inv){
+      const item=ITEMS[inv.itemKey];
+      h+=`<div class="panel" style="text-align:center">
+        <p>${item.icon} <span style="color:${rarityColor(item.rarity)}">${item.name}</span> — ${item.value}円</p>
+        <div class="item-actions">`;
+      if(item.heal){
+        h+=`<button class="btn btn-small" onclick="useHealItem(${inv.id})">💚 使用 (+${item.heal}HP)</button>`;
+      }
+      h+=`<button class="btn btn-small btn-sell" onclick="sellItem(${inv.id})">💰 売却</button>`;
+      h+=`<button class="btn btn-small btn-danger" onclick="discardItem(${inv.id})">🗑️ 捨てる</button>`;
+      h+=`</div></div>`;
+    }
+  }
+  // Replace template literal in h
+  h=h.replace('${state.gridW}×${state.gridH}',state.gridW+'×'+state.gridH);
+  mc().innerHTML=h;
+  attachGridListeners();
+}
+
+function renderGridHTML(mode){
+  let h=`<div class="grid-container"><div class="grid ${mode}" style="grid-template-columns:repeat(${state.gridW},40px)">`;
+  for(let y=0;y<state.gridH;y++){
+    for(let x=0;x<state.gridW;x++){
+      const cell=state.grid[y][x];
+      let cls='cell';
+      let content='';
+      let style='';
+      if(cell){
+        cls+=' occupied rarity-'+cell.rarity;
+        const item=ITEMS[cell.itemKey];
+        content=item.icon;
+        if(selectedInventoryItem===cell.id) cls+=' selected-item';
+      }
+      h+=`<div class="${cls}" data-x="${x}" data-y="${y}" style="${style}">${content}</div>`;
+    }
+  }
+  h+='</div></div>';
+  return h;
+}
+
+function attachGridListeners(){
+  const gridEl=document.querySelector('.bag.grid')||document.querySelector('.grid.bag');
+  if(!gridEl)return;
+  let previewCells=[];
+  
+  gridEl.querySelectorAll('.cell').forEach(cell=>{
+    const x=+cell.dataset.x,y=+cell.dataset.y;
+    
+    // Hover preview for pending item
+    cell.addEventListener('mouseenter',()=>{
+      if(!pendingItem)return;
+      clearPreview();
+      const item=ITEMS[pendingItem.itemKey];
+      const shape=rotateShape(item.shape,pendingRotation);
+      const ok=canPlace(shape,x,y);
+      for(const[dx,dy]of shape){
+        const nx=x+dx,ny=y+dy;
+        const target=gridEl.querySelector(`.cell[data-x="${nx}"][data-y="${ny}"]`);
+        if(target){target.classList.add(ok?'preview-ok':'preview-bad');previewCells.push(target);}
+      }
+    });
+    
+    cell.addEventListener('mouseleave',()=>clearPreview());
+    
+    cell.addEventListener('click',()=>{
+      if(pendingItem){
+        const item=ITEMS[pendingItem.itemKey];
+        const shape=rotateShape(item.shape,pendingRotation);
+        if(canPlace(shape,x,y)){
+          placeItem(pendingItem.itemKey,shape,x,y);
+          playSound('place');
+          pendingItem=null;
+          if(state.exploring){switchTab('explore');}
+          else{render();}
+          saveGame();
+        } else {
+          // Show red flash
+          const shape2=rotateShape(item.shape,pendingRotation);
+          for(const[dx,dy]of shape2){
+            const nx=x+dx,ny=y+dy;
+            const t=gridEl.querySelector(`.cell[data-x="${nx}"][data-y="${ny}"]`);
+            if(t){t.classList.add('preview-bad');previewCells.push(t);}
+          }
+          setTimeout(clearPreview,300);
+        }
+      } else {
+        // Select/deselect item in grid
+        const g=state.grid[y][x];
+        if(g){
+          selectedInventoryItem=selectedInventoryItem===g.id?null:g.id;
+          render();
+        } else {
+          selectedInventoryItem=null;
+          render();
+        }
+      }
+    });
+  });
+  
+  function clearPreview(){
+    previewCells.forEach(c=>{c.classList.remove('preview-ok','preview-bad');});
+    previewCells=[];
+  }
+  
+  // Touch support for preview
+  gridEl.addEventListener('touchmove',(e)=>{
+    if(!pendingItem)return;
+    e.preventDefault();
+    const touch=e.touches[0];
+    const el=document.elementFromPoint(touch.clientX,touch.clientY);
+    if(el&&el.classList.contains('cell')){
+      clearPreview();
+      const tx=+el.dataset.x,ty=+el.dataset.y;
+      const item=ITEMS[pendingItem.itemKey];
+      const shape=rotateShape(item.shape,pendingRotation);
+      const ok=canPlace(shape,tx,ty);
+      for(const[dx,dy]of shape){
+        const nx=tx+dx,ny=ty+dy;
+        const target=gridEl.querySelector(`.cell[data-x="${nx}"][data-y="${ny}"]`);
+        if(target){target.classList.add(ok?'preview-ok':'preview-bad');previewCells.push(target);}
+      }
+    }
+  },{passive:false});
+}
+
+function rotatePending(){
+  if(!pendingItem)return;
+  pendingRotation=(pendingRotation+1)%4;
+  render();
+}
+
+function cancelPending(){
+  pendingItem=null;
+  if(state.exploring) switchTab('explore');
+  else render();
+}
+
+function useHealItem(id){
+  const inv=state.inventory.find(i=>i.id===id);
+  if(!inv)return;
+  const item=ITEMS[inv.itemKey];
+  if(!item.heal)return;
+  if(state.hp>=state.maxHp){notify('HPは満タンです');return;}
+  state.hp=Math.min(state.maxHp,state.hp+item.heal);
+  removeItem(id);
+  selectedInventoryItem=null;
+  playSound('heal');
+  notify(`${item.icon} を使用！ HP +${item.heal}`);
+  saveGame();render();
+}
+
+function discardItem(id){
+  removeItem(id);
+  selectedInventoryItem=null;
+  notify('アイテムを捨てた');
+  saveGame();render();
+}
+
+function rarityColor(r){
+  return{common:'#aaa',uncommon:'#4caf50',rare:'#2196f3',legendary:'#ff9800'}[r]||'#aaa';
+}
+
+// ===== SAVE/LOAD =====
+function saveGame(){
+  const data={
+    money:state.money,hp:state.hp,maxHp:state.maxHp,
+    gridW:state.gridW,gridH:state.gridH,
+    grid:state.grid,inventory:state.inventory,
+    nextItemId:state.nextItemId,
+    unlockedAreas:state.unlockedAreas,
+    upgrades:state.upgrades,stats:state.stats,
+  };
+  localStorage.setItem('scavenger_save',JSON.stringify(data));
+}
+
+function loadGame(){
+  const raw=localStorage.getItem('scavenger_save');
+  if(!raw)return false;
+  try{
+    const d=JSON.parse(raw);
+    Object.assign(state,d);
+    return true;
+  }catch(e){return false;}
+}
+
+// ===== INIT =====
+function startGame(){
+  initGrid();
+  showGameUI();
+  saveGame();
+}
+
+function loadAndStart(){
+  if(loadGame()){
+    showGameUI();
+  } else {
+    startGame();
+  }
+}
+
+function showGameUI(){
+  document.getElementById('title-screen').style.display='none';
+  document.getElementById('status-bar').style.display='flex';
+  document.getElementById('main-content').style.display='block';
+  document.getElementById('tab-bar').style.display='block';
+  switchTab('base');
+}
+
+// Check for save on load
+if(localStorage.getItem('scavenger_save')){
+  document.getElementById('continue-btn').style.display='';
+}
+</script>
+</body>
+</html>
