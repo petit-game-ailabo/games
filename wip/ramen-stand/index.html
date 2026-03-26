@@ -1521,7 +1521,7 @@ const INITIAL_FURNITURE = [
 class Game {
   constructor() {
     this.day = 1;
-    this.money = 9999999;
+    this.money = 5000;
     this.reputation = 0;
     this.researchPoints = 0;
     this.furniture = [];
@@ -1632,10 +1632,20 @@ class Game {
     // 雰囲気: based on plants/decor count
     const plants = this.furniture.filter(f => f.type === 'plant').length;
     this.reputationAxes.atmosphere = Math.min(50, plants * 5);
-    // コスパ: price vs quality
+    // コスパ: based on cost ratio (lower price relative to quality = better value)
     if (recipe) {
-      const priceRatio = recipe.price / (quality * 1000 + 100);
-      this.reputationAxes.value += priceRatio < 0.5 ? 1 : priceRatio > 1 ? -1 : 0;
+      const params = this.getRecipeParams(recipe);
+      const costRatio = params.cost / recipe.price; // higher = cheaper for customer
+      // costRatio 0.35 = 安さで勝負, 0.30 = ちょうどいい, 0.25 = お高め
+      if (costRatio >= 0.33) {
+        this.reputationAxes.value += 2; // Great value
+      } else if (costRatio >= 0.28) {
+        this.reputationAxes.value += 1; // Good value
+      } else if (costRatio < 0.22) {
+        this.reputationAxes.value -= 1; // Expensive
+      }
+      // Quality bonus: high quality at any price is still decent value
+      if (quality >= 0.7) this.reputationAxes.value += 1;
     }
     // Cap all at 0-100
     Object.keys(this.reputationAxes).forEach(k => {
@@ -3928,11 +3938,15 @@ class Game {
             customer.state = 'ENTERING';
             customer.targetX = entrancePixelX;
             customer.targetY = entranceY * TILE_SIZE + TILE_SIZE / 2;
+            this.calculateCustomerPath(customer); // Calculate path to entrance
             // Also transition group members
             if (customer.groupMembers) {
               customer.groupMembers.forEach((m, idx) => {
                 if (idx === 0) return; // leader already set
-                // Followers will pick up state change in their WALKING_STREET handler
+                m.state = 'ENTERING';
+                m.targetX = entrancePixelX + (idx % 2 === 0 ? -5 : 5);
+                m.targetY = entranceY * TILE_SIZE + TILE_SIZE / 2;
+                this.calculateCustomerPath(m);
               });
             }
           }, 500);
