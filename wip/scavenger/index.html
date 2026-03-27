@@ -150,6 +150,8 @@ let selectedInvItem=null, selectedLootItem=null, invRotation=0;
 let currentLootBag=null;
 let audioCtx=null;
 let floatingDmgs=[];
+let lastDpadTime=0;
+const DPAD_DEBOUNCE_MS=150;
 
 // ═══════════════════════════════════════
 // AUDIO
@@ -841,15 +843,19 @@ function renderDeadUI(){
 // EVENT HANDLERS
 // ═══════════════════════════════════════
 function attachEvents(){
-  // D-pad
+  // D-pad (debounced, prevents click+touchstart double-fire)
   document.querySelectorAll('[data-dir]').forEach(b=>{
-    const handler=e=>{e.preventDefault();const d=b.dataset.dir;
+    const execDir=()=>{
+      const now=Date.now();
+      if(now-lastDpadTime<DPAD_DEBOUNCE_MS)return;
+      lastDpadTime=now;
+      const d=b.dataset.dir;
       if(d==='up')movePlayer(0,-1);else if(d==='down')movePlayer(0,1);
       else if(d==='left')movePlayer(-1,0);else if(d==='right')movePlayer(1,0);
       else if(d==='wait')waitTurn();
     };
-    b.addEventListener('click',handler);
-    b.addEventListener('touchstart',e=>{e.preventDefault();handler(e);},{passive:false});
+    b.addEventListener('touchstart',e=>{e.preventDefault();execDir();},{passive:false});
+    b.addEventListener('click',e=>{e.preventDefault();execDir();});
   });
   // Bag button
   document.querySelectorAll('[data-action="bag"]').forEach(b=>b.addEventListener('click',toggleBag));
