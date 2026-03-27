@@ -776,6 +776,7 @@ function buyUpgrade(type){
     case'bag':if(player.money>=200&&bagExpansions<3){player.money-=200;bagExpansions++;invW=6;invH=4+bagExpansions;playSound('levelup');}break;
     case'armor':if(player.money>=300&&armorUpgrade<3){player.money-=300;armorUpgrade++;playSound('levelup');}break;
     case'detector':if(player.money>=500&&!hasDetector){player.money-=500;hasDetector=true;playSound('levelup');}break;
+    case'storage':if(player.money>=250&&storageExpansions<3){player.money-=250;storageExpansions++;storageCapacity=20+storageExpansions*10;playSound('levelup');}break;
   }
   render();
 }
@@ -1295,9 +1296,74 @@ function ignoreLootItem(){
 }
 
 function renderBaseUI(){
-  let h=`<div class="base-screen">`;
-  h+=`<h2>🏚️ 拠点</h2>`;
-  h+=`<div class="base-section"><div style="display:flex;justify-content:space-between"><span>💰 ${player.money}G</span><span>❤️ ${player.hp}/${player.maxHp}</span><span>Lv${player.level}</span></div></div>`;
+  let h=`<div class="base-screen" style="padding:0;gap:0">`;
+  h+=`<h2 style="padding:12px 16px 8px">🏚️ 拠点</h2>`;
+  h+=`<div class="base-section" style="margin:0 12px"><div style="display:flex;justify-content:space-between"><span>💰 ${player.money}G</span><span>❤️ ${player.hp}/${player.maxHp}</span><span>Lv${player.level}</span></div></div>`;
+  // Tabs
+  h+=`<div class="base-tabs">`;
+  h+=`<button class="base-tab${baseTab==='home'?' active':''}" data-base-tab="home">🏠 自宅</button>`;
+  h+=`<button class="base-tab${baseTab==='shop'?' active':''}" data-base-tab="shop">🛒 ショップ</button>`;
+  h+=`</div>`;
+  h+=`<div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px">`;
+  if(baseTab==='home'){
+    h+=renderHomeTab();
+  } else {
+    h+=renderShopTab();
+  }
+  h+=`</div>`;
+  h+=`<div style="padding:8px 12px 12px"><button class="base-btn" data-action="enter" style="width:100%">⚔️ 探索開始</button></div>`;
+  h+=`</div>`;
+  return h;
+}
+
+function renderHomeTab(){
+  let h='';
+  // Rest
+  h+=`<div class="home-section">`;
+  h+=`<h3>🛏️ 休憩</h3>`;
+  const hpFull=player.hp>=player.maxHp;
+  h+=`<button class="base-btn" data-action="rest" style="width:100%;font-size:14px;padding:8px;${hpFull?'opacity:.5;cursor:default':''}">`;
+  h+=hpFull?'❤️ HP満タン':'💤 休憩してHP全回復';
+  h+=`</button></div>`;
+  // Storage box
+  const used=getStorageUsed();
+  const pct=Math.round(used/storageCapacity*100);
+  h+=`<div class="home-section">`;
+  h+=`<h3>📦 収納箱</h3>`;
+  h+=`<div class="storage-header"><span>${used}/${storageCapacity}スロット使用</span><div class="storage-bar-bg"><div class="storage-bar-fg" style="width:${pct}%"></div></div></div>`;
+  if(storageBox.length===0){
+    h+=`<div class="storage-empty">収納箱は空です</div>`;
+  }else{
+    h+=`<div class="storage-list">`;
+    for(let i=0;i<storageBox.length;i++){
+      const si=storageBox[i];
+      const item=ITEMS[si.itemId];
+      const rarity=getItemRarity(si.itemId);
+      const cells=getItemCellCount(si.itemId);
+      h+=`<div class="storage-item" style="border-color:${rarity.color}40">`;
+      h+=`<div class="si-info"><span>${item.icon}</span><span>${item.name}</span><span class="si-slots">(${cells}スロット)</span></div>`;
+      h+=`<button data-storage-take="${i}">🎒 鞄へ</button>`;
+      h+=`</div>`;
+    }
+    h+=`</div>`;
+  }
+  h+=`</div>`;
+  // Store from bag section
+  if(inventory.length>0){
+    h+=`<div class="home-section"><h3>🎒 → 📦 鞄から収納</h3><div class="sell-items">`;
+    for(let i=0;i<inventory.length;i++){
+      const it=inventory[i];
+      const item=ITEMS[it.itemId];
+      const cells=getItemCellCount(it.itemId);
+      h+=`<div class="sell-item" data-store="${i}">${item.icon} ${item.name} (${cells}スロット)</div>`;
+    }
+    h+=`</div></div>`;
+  }
+  return h;
+}
+
+function renderShopTab(){
+  let h='';
   // Sell items
   if(inventory.length>0){
     h+=`<div class="base-section"><h3>💰 アイテムを売る</h3><div class="sell-items">`;
@@ -1309,12 +1375,32 @@ function renderBaseUI(){
     h+=`</div></div>`;
   }
   // Shop
-  h+=`<div class="base-section"><h3>🛒 ショップ</h3>`;
+  h+=`<div class="base-section"><h3>🛒 アップグレード</h3>`;
   h+=`<div class="shop-item"><span>🎒 バッグ拡張 (${bagExpansions}/3)</span><button data-buy="bag" ${player.money<200||bagExpansions>=3?'disabled':''}>200G</button></div>`;
   h+=`<div class="shop-item"><span>🛡️ 防護服+${armorUpgrade*5} (${armorUpgrade}/3)</span><button data-buy="armor" ${player.money<300||armorUpgrade>=3?'disabled':''}>300G</button></div>`;
   h+=`<div class="shop-item"><span>📡 探知機 ${hasDetector?'✓':''}</span><button data-buy="detector" ${player.money<500||hasDetector?'disabled':''}>500G</button></div>`;
+  h+=`<div class="shop-item"><span>📦 収納箱拡張 +10 (${storageExpansions}/3)</span><button data-buy="storage" ${player.money<250||storageExpansions>=3?'disabled':''}>250G</button></div>`;
   h+=`</div>`;
-  h+=`<button class="base-btn" data-action="enter">⚔️ 探索開始</button>`;
+  return h;
+}
+
+function renderStoragePlaceUI(){
+  let h=`<div class="storage-place-screen">`;
+  const hpPct=Math.max(0,Math.round(player.hp/player.maxHp*100));
+  h+=`<div class="status-bar">
+<div class="status-row"><span>💰 ${player.money}G</span><span>❤️${player.hp}/${player.maxHp} <span class="hp-bar-wrap"><span class="hp-bar" style="width:${hpPct}%"></span></span></span></div>
+</div>`;
+  h+=`<div class="overlay-header"><span>📦→🎒 収納から鞄へ</span><button data-action="return-to-storage">↩ 戻す</button></div>`;
+  if(selectedLootItem){
+    const slItem=ITEMS[selectedLootItem];
+    const slRarity=getItemRarity(selectedLootItem);
+    const slShape=getRotatedShape(slItem.shape,invRotation);
+    h+=`<div style="padding:4px 12px;color:#f59e0b;display:flex;align-items:center;gap:8px;flex-wrap:wrap">配置: ${slItem.icon} ${slItem.name} `;
+    h+=renderShapeGrid(slShape,14,slRarity.color);
+    h+=`</div>`;
+  }
+  h+=`<button class="rotate-btn" data-action="rotate">回転🔄</button>`;
+  h+=`<div class="inv-section">${renderInvGrid(true)}</div>`;
   h+=`</div>`;
   return h;
 }
@@ -1357,6 +1443,13 @@ function attachEvents(){
   document.querySelectorAll('[data-action="cancel-relocate"]').forEach(b=>b.addEventListener('click',cancelRelocate));
   document.querySelectorAll('[data-action="return-to-floor"]').forEach(b=>b.addEventListener('click',returnItemToFloor));
   document.querySelectorAll('[data-action="enter"]').forEach(b=>b.addEventListener('click',enterDungeon));
+  // Base tabs
+  document.querySelectorAll('[data-base-tab]').forEach(b=>b.addEventListener('click',()=>{baseTab=b.dataset.baseTab;render();}));
+  // Storage
+  document.querySelectorAll('[data-storage-take]').forEach(b=>b.addEventListener('click',()=>takeItemFromStorage(parseInt(b.dataset.storageTake))));
+  document.querySelectorAll('[data-store]').forEach(b=>b.addEventListener('click',()=>storeItemFromBag(parseInt(b.dataset.store))));
+  document.querySelectorAll('[data-action="return-to-storage"]').forEach(b=>b.addEventListener('click',returnItemToStorage));
+  document.querySelectorAll('[data-action="rest"]').forEach(b=>b.addEventListener('click',restAtHome));
   document.querySelectorAll('[data-action="respawn"]').forEach(b=>b.addEventListener('click',()=>{
     // シレン式: 死亡時も基礎ステータスに戻る
     player.level=1;player.exp=0;
@@ -1395,7 +1488,9 @@ function attachEvents(){
     cell.addEventListener('click',()=>{
       if(selectedLootItem){
         previewOrigin={gx,gy};
-        if(relocatingItem){
+        if(gameState==='storage_place'){
+          storagePlaceAttempt(gx,gy);
+        } else if(relocatingItem){
           completeRelocate(gx,gy);
         } else if(gameState==='looting'){
           invLootPlaceAttempt(gx,gy);
