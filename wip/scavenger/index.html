@@ -186,7 +186,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 // CONSTANTS & DATA
 // ═══════════════════════════════════════
 const MW=30,MH=25,VW=13,VH=9,CELL=28,FOV_R=6;
-const WALL=0,FLOOR=1,STAIRS=2,EXIT=3;
+const WALL=0,FLOOR=1,STAIRS=2,EXIT=3,TRAP=4,CONTAINER=5;
 const ENEMY_TYPES={
 rat:{name:'ネズミ',icon:'🐀',hp:15,atk:5,def:0,exp:3,loot:['bandage','battery'],level:1,special:'doubleSpeed'},
 dog:{name:'野犬',icon:'🐺',hp:25,atk:8,def:1,exp:5,loot:['cannedfood','bandage','bolt'],level:1},
@@ -229,6 +229,17 @@ const FLOOR_ITEMS_POOL={
 9:['medkit','rifle','radio','electronics','goldbar'],
 10:['medkit','rifle','radio','document','goldbar'],
 };
+const ROOM_TYPES={
+normal:{name:'通路',desc:''},
+treasure:{name:'宝物庫',desc:'💰 アイテムと敵が多い！'},
+trapped:{name:'罠部屋',desc:'⚠️ 床に罠が仕掛けられている…'},
+storage:{name:'倉庫',desc:'📦 コンテナが並んでいる'},
+};
+const TRAP_TYPES={
+spike:{name:'トゲの罠',icon:'⚠️',dmg:15,sound:'spike'},
+poison:{name:'毒ガス',icon:'☠️',dmg:10,hunger:20,sound:'gas'},
+};
+const CONTAINER_LOOT_CHANCE=0.7; // 70% chance container has loot
 
 // ═══════════════════════════════════════
 // GAME STATE
@@ -237,6 +248,7 @@ let player={x:0,y:0,hp:100,maxHp:100,atk:8,def:2,level:1,exp:0,fullness:100,mone
 let map=[], seen=[], enemies=[], mapItems=[], lootBags=[];
 let inventory=[], invW=6, invH=4;
 let rooms=[];
+let mapTraps=[], mapContainers=[]; // {x,y,type,triggered} for traps, {x,y,opened,loot} for containers
 let gameState='title'; // title, dungeon, base, dead, inventory, looting
 let logMsg='';
 let logHistory=[]; // last 3 log messages
@@ -293,6 +305,9 @@ const DPAD_DEBOUNCE_MS=150;
 let minimapExpanded=false;
 const MINIMAP_CELL=2, MINIMAP_CELL_EX=4;
 let showLevelUpFlash=false;
+let dashState=null; // {dir: [dx,dy], interval: intervalId}
+let dashHoldTimer=null;
+const DASH_HOLD_MS=500;
 
 function pushLog(msg){
   if(!msg)return;
@@ -359,7 +374,7 @@ function playSound(type){
 // MAP GENERATION (BSP)
 // ═══════════════════════════════════════
 function generateMap(floorNum){
-  map=[];seen=[];enemies=[];mapItems=[];lootBags=[];rooms=[];mapCardKeys=[];
+  map=[];seen=[];enemies=[];mapItems=[];lootBags=[];rooms=[];mapCardKeys=[];mapTraps=[];mapContainers=[];
   for(let y=0;y<MH;y++){map[y]=[];seen[y]=[];for(let x=0;x<MW;x++){map[y][x]=WALL;seen[y][x]=false;}}
   // BSP
   const leaves=[];
@@ -371,13 +386,24 @@ function generateMap(floorNum){
     else leaves.push({x,y,w,h});
   }
   splitBSP(1,1,MW-2,MH-2,0);
+  // Assign room types (first=normal for exit, last=normal for stairs, others can be special)
+  const roomTypes=['normal'];
+  for(let i=1;i<leaves.length-1;i++){
+    const r=Math.random();
+    if(r<0.15)roomTypes.push('treasure'); // 15% treasure room
+    else if(r<0.30)roomTypes.push('trapped'); // 15% trapped room
+    else if(r<0.40)roomTypes.push('storage'); // 10% storage room
+    else roomTypes.push('normal');
+  }
+  roomTypes.push('normal');
   // Place rooms in leaves
-  for(const lf of leaves){
+  for(let li=0;li<leaves.length;li++){
+    const lf=leaves[li];
     const rw=Math.min(lf.w-2,4+Math.floor(Math.random()*5));
     const rh=Math.min(lf.h-2,3+Math.floor(Math.random()*4));
     const rx=lf.x+1+Math.floor(Math.random()*(lf.w-rw-2));
     const ry=lf.y+1+Math.floor(Math.random()*(lf.h-rh-2));
-    const room={x:rx,y:ry,w:rw,h:rh,cx:Math.floor(rx+rw/2),cy:Math.floor(ry+rh/2)};
+    const room={x:rx,y:ry,w:rw,h:rh,cx:Math.floor(rx+rw/2),cy:Math.floor(ry+rh/2),type:roomTypes[li]||'normal'};
     rooms.push(room);
     for(let dy=0;dy<rh;dy++)for(let dx=0;dx<rw;dx++)map[ry+dy][rx+dx]=FLOOR;
   }
@@ -396,30 +422,68 @@ function generateMap(floorNum){
   // Player start
   player.x=firstR.x+1;player.y=firstR.y+1;
   if(map[player.y][player.x]===WALL){player.x=firstR.cx;player.y=firstR.cy+1;if(player.y>=MH||map[player.y][player.x]===WALL){player.y=firstR.cy;player.x=firstR.cx+1;}}
-  // Items
+  // Items (more items in treasure rooms)
   const pool=FLOOR_ITEMS_POOL[Math.min(floorNum,10)]||FLOOR_ITEMS_POOL[10];
-  const itemCount=3+Math.floor(Math.random()*6);
-  for(let i=0;i<itemCount;i++){
-    const room=rooms[Math.floor(Math.random()*rooms.length)];
-    const ix=room.x+Math.floor(Math.random()*room.w);
-    const iy=room.y+Math.floor(Math.random()*room.h);
-    if(map[iy][ix]===FLOOR&&!(ix===player.x&&iy===player.y)){
-      const itemId=pool[Math.floor(Math.random()*pool.length)];
-      mapItems.push({x:ix,y:iy,itemId});
+  for(const room of rooms){
+    let itemCount=room.type==='treasure'?(5+Math.floor(Math.random()*4)):(1+Math.floor(Math.random()*3));
+    for(let i=0;i<itemCount;i++){
+      const ix=room.x+Math.floor(Math.random()*room.w);
+      const iy=room.y+Math.floor(Math.random()*room.h);
+      if(map[iy][ix]===FLOOR&&!(ix===player.x&&iy===player.y)&&!mapItems.some(mi=>mi.x===ix&&mi.y===iy)){
+        const itemId=pool[Math.floor(Math.random()*pool.length)];
+        mapItems.push({x:ix,y:iy,itemId});
+      }
     }
   }
-  // Enemies (not in first room)
+  // Enemies (not in first room, more in treasure rooms)
   const ePool=FLOOR_ENEMIES[Math.min(floorNum,10)]||FLOOR_ENEMIES[10];
-  const eCount=3+Math.floor(Math.random()*4);
-  for(let i=0;i<eCount;i++){
-    const rIdx=1+Math.floor(Math.random()*(rooms.length-1));
-    const room=rooms[rIdx]||rooms[rooms.length-1];
-    const ex=room.x+Math.floor(Math.random()*room.w);
-    const ey=room.y+Math.floor(Math.random()*room.h);
-    if(map[ey][ex]===FLOOR&&!(ex===player.x&&ey===player.y)){
-      const type=ePool[Math.floor(Math.random()*ePool.length)];
-      const et=ENEMY_TYPES[type];
-      enemies.push({x:ex,y:ey,type,name:et.name,icon:et.icon,hp:et.hp,maxHp:et.hp,atk:et.atk,def:et.def,exp:et.exp,loot:[...et.loot],special:et.special||null,stolenItem:null,acted:false});
+  for(let ri=1;ri<rooms.length;ri++){
+    const room=rooms[ri];
+    let eCount=room.type==='treasure'?(4+Math.floor(Math.random()*3)):(1+Math.floor(Math.random()*3));
+    for(let i=0;i<eCount;i++){
+      const ex=room.x+Math.floor(Math.random()*room.w);
+      const ey=room.y+Math.floor(Math.random()*room.h);
+      if(map[ey][ex]===FLOOR&&!(ex===player.x&&ey===player.y)&&!enemies.some(e=>e.x===ex&&e.y===ey)){
+        const type=ePool[Math.floor(Math.random()*ePool.length)];
+        const et=ENEMY_TYPES[type];
+        enemies.push({x:ex,y:ey,type,name:et.name,icon:et.icon,hp:et.hp,maxHp:et.hp,atk:et.atk,def:et.def,exp:et.exp,loot:[...et.loot],special:et.special||null,stolenItem:null,acted:false});
+      }
+    }
+  }
+  // Place traps in trapped rooms
+  for(const room of rooms){
+    if(room.type==='trapped'){
+      const trapCount=2+Math.floor(Math.random()*4);
+      for(let i=0;i<trapCount;i++){
+        const tx=room.x+Math.floor(Math.random()*room.w);
+        const ty=room.y+Math.floor(Math.random()*room.h);
+        if(map[ty][tx]===FLOOR&&!(tx===player.x&&ty===player.y)&&!mapTraps.some(t=>t.x===tx&&t.y===ty)){
+          const trapType=Math.random()<0.6?'spike':'poison';
+          mapTraps.push({x:tx,y:ty,type:trapType,triggered:false});
+        }
+      }
+    }
+  }
+  // Place containers in storage rooms
+  for(const room of rooms){
+    if(room.type==='storage'){
+      const containerCount=2+Math.floor(Math.random()*3);
+      for(let i=0;i<containerCount;i++){
+        const cx=room.x+Math.floor(Math.random()*room.w);
+        const cy=room.y+Math.floor(Math.random()*room.h);
+        if(map[cy][cx]===FLOOR&&!(cx===player.x&&cy===player.y)&&!mapContainers.some(c=>c.x===cx&&c.y===cy)){
+          const hasLoot=Math.random()<CONTAINER_LOOT_CHANCE;
+          let loot=[];
+          if(hasLoot){
+            const lootCount=1+Math.floor(Math.random()*3);
+            for(let li=0;li<lootCount;li++){
+              const itemId=pool[Math.floor(Math.random()*pool.length)];
+              loot.push(itemId);
+            }
+          }
+          mapContainers.push({x:cx,y:cy,opened:false,loot});
+        }
+      }
     }
   }
 }
@@ -639,25 +703,36 @@ function playerDeath(){
 // ═══════════════════════════════════════
 // PLAYER ACTIONS
 // ═══════════════════════════════════════
-function movePlayer(dx,dy){
-  if(gameState!=='dungeon')return;
+function movePlayer(dx,dy,dashMode=false){
+  if(gameState!=='dungeon')return false;
   initAudio();
-  logMsg='';
+  if(!dashMode)logMsg='';
   const nx=player.x+dx,ny=player.y+dy;
-  if(nx<0||nx>=MW||ny<0||ny>=MH)return;
-  if(map[ny][nx]===WALL)return;
+  if(nx<0||nx>=MW||ny<0||ny>=MH){stopDash();return false;}
+  if(map[ny][nx]===WALL){stopDash();return false;}
   // Enemy at target?
   const enemy=enemies.find(e=>e.hp>0&&e.x===nx&&e.y===ny);
   if(enemy){
+    stopDash();
     attackEnemy(enemy);
     processTurn();
     render();
-    return;
+    return false;
   }
   player.x=nx;player.y=ny;
-  playSound('move');
+  if(!dashMode)playSound('move');
+  // Check room type and show flavor text
+  const currentRoom=rooms.find(r=>nx>=r.x&&nx<r.x+r.w&&ny>=r.y&&ny<r.y+r.h);
+  if(currentRoom&&currentRoom.type!=='normal'&&ROOM_TYPES[currentRoom.type].desc){
+    const roomInfo=ROOM_TYPES[currentRoom.type];
+    if(!currentRoom.entered){
+      if(!dashMode)pushLog(`${roomInfo.name}: ${roomInfo.desc}`);
+      currentRoom.entered=true;
+    }
+  }
   // Check tile
   if(map[ny][nx]===STAIRS){
+    stopDash();
     player.floor++;
     if(player.floor>stats.maxFloor)stats.maxFloor=player.floor;
     pushLog(`${player.floor}階に降りた`);
@@ -666,9 +741,10 @@ function movePlayer(dx,dy){
     updateFOV();
     processTurn();
     render();
-    return;
+    return false;
   }
   if(map[ny][nx]===EXIT){
+    stopDash();
     gameState='base';
     // シレン式: 拠点に戻ると基礎ステータスに戻る（レベルボーナス消失）
     player.level=1;player.exp=0;
@@ -679,36 +755,111 @@ function movePlayer(dx,dy){
     cardKeys=0;
     pushLog('拠点に帰還した（ステータスリセット）');
     render();
-    return;
+    return false;
   }
   // Card key on floor? Auto-collect
   const ckIdx=mapCardKeys.findIndex(k=>k.x===nx&&k.y===ny);
   if(ckIdx>=0){
     mapCardKeys.splice(ckIdx,1);
     cardKeys++;
-    pushLog(`🔑 カードキーを手に入れた！(合計: ${cardKeys}枚)`);
-    playSound('pickup');
+    if(!dashMode){pushLog(`🔑 カードキーを手に入れた！(合計: ${cardKeys}枚)`);playSound('pickup');}
+  }
+  // Trap on floor?
+  const trapIdx=mapTraps.findIndex(t=>t.x===nx&&t.y===ny);
+  if(trapIdx>=0){
+    const trap=mapTraps[trapIdx];
+    if(!trap.triggered){
+      stopDash();
+      trap.triggered=true;
+      const trapInfo=TRAP_TYPES[trap.type];
+      if(trap.type==='spike'){
+        player.hp-=trapInfo.dmg;
+        addFloatDmg(nx,ny,trapInfo.dmg,'#ef4444');
+        pushLog(`${trapInfo.icon} ${trapInfo.name}を踏んだ！ ${trapInfo.dmg}ダメージ`);
+        playSound('hurt');
+      }else if(trap.type==='poison'){
+        player.hp-=trapInfo.dmg;
+        player.fullness=Math.max(0,player.fullness-trapInfo.hunger);
+        addFloatDmg(nx,ny,trapInfo.dmg,'#a855f7');
+        pushLog(`${trapInfo.icon} ${trapInfo.name}！ ${trapInfo.dmg}ダメージ、満腹度-${trapInfo.hunger}`);
+        playSound('hurt');
+      }
+      processTurn();
+      render();
+      return false;
+    }
+  }
+  // Container on floor?
+  const contIdx=mapContainers.findIndex(c=>c.x===nx&&c.y===ny);
+  if(contIdx>=0){
+    const cont=mapContainers[contIdx];
+    if(!cont.opened){
+      stopDash();
+      openContainer(contIdx);
+      return false;
+    }
   }
   // Item on floor?
   const itemIdx=mapItems.findIndex(i=>i.x===nx&&i.y===ny);
   if(itemIdx>=0){
+    stopDash();
     pickupFloorItem(itemIdx);
+    return false;
   }
   // Loot bag?
   const bagIdx=lootBags.findIndex(b=>b.x===nx&&b.y===ny);
   if(bagIdx>=0){
+    stopDash();
     openLootBag(bagIdx);
+    return false;
   }
-  if(!logMsg||logMsg==='')pushLog('移動');
+  // Branch point detection (for dash auto-stop): count walkable neighbors
+  if(dashMode){
+    const walkable=[[0,1],[0,-1],[1,0],[-1,0]].filter(d=>{
+      const tx=nx+d[0],ty=ny+d[1];
+      if(tx<0||tx>=MW||ty<0||ty>=MH)return false;
+      if(map[ty][tx]===WALL)return false;
+      if(enemies.some(e=>e.hp>0&&e.x===tx&&e.y===ty))return false;
+      return true;
+    }).length;
+    if(walkable>=3){
+      stopDash();
+      pushLog('ダッシュ停止（分岐点）');
+      processTurn();
+      render();
+      return false;
+    }
+  }
+  if(!logMsg||logMsg==='')if(!dashMode)pushLog('移動');
   processTurn();
-  render();
+  if(dashMode)render();
+  else render();
+  return true;
 }
 function waitTurn(){
   if(gameState!=='dungeon')return;
+  stopDash();
   initAudio();
   pushLog('待機');
   processTurn();
   render();
+}
+function startDash(dx,dy){
+  if(gameState!=='dungeon')return;
+  if(dashState)return; // already dashing
+  pushLog('💨 ダッシュ開始');
+  dashState={dir:[dx,dy],interval:setInterval(()=>{
+    if(!dashState||gameState!=='dungeon'){stopDash();return;}
+    const cont=movePlayer(dashState.dir[0],dashState.dir[1],true);
+    if(!cont)stopDash();
+  },150)};
+}
+function stopDash(){
+  if(dashHoldTimer){clearTimeout(dashHoldTimer);dashHoldTimer=null;}
+  if(dashState){
+    clearInterval(dashState.interval);
+    dashState=null;
+  }
 }
 function attackEnemy(e){
   const totalAtk=getPlayerAtk();
@@ -777,6 +928,22 @@ function ignoreFloorItem(){
   pendingFloorItem=null;
   gameState='dungeon';
   render();
+}
+function openContainer(idx){
+  const cont=mapContainers[idx];
+  cont.opened=true;
+  if(cont.loot.length>0){
+    currentLootBag=cont.loot;
+    mapContainers.splice(idx,1);
+    gameState='looting';
+    selectedLootItem=null;
+    selectedInvItem=null;
+    invRotation=0;
+    pushLog(`📦 コンテナを開けた！${cont.loot.length}個のアイテムが入っていた`);
+    playSound('pickup');
+  }else{
+    pushLog('📦 コンテナは空だった…');
+  }
 }
 function openLootBag(idx){
   currentLootBag=lootBags[idx];
@@ -1136,7 +1303,7 @@ function saveGame(){
     baseMaxHp,baseAtk,baseDef,
     storageBox,storageCapacity,storageExpansions,
     cardKeys,totalCardKeys,mapCardKeys,revealNextMap,stats,
-    map,seen,enemies,mapItems,lootBags,rooms,gameState:saveState,
+    map,seen,enemies,mapItems,lootBags,rooms,mapTraps,mapContainers,gameState:saveState,
   }));}catch(e){}
 }
 function loadGame(){
@@ -1150,7 +1317,7 @@ function loadGame(){
     cardKeys=d.cardKeys||0;totalCardKeys=d.totalCardKeys||0;mapCardKeys=d.mapCardKeys||[];revealNextMap=d.revealNextMap||false;
     stats=Object.assign({maxFloor:0,totalKills:0,totalItems:0,totalSales:0,totalRuns:0,totalMoney:0},d.stats||{});
     map=d.map||[];seen=d.seen||[];enemies=d.enemies||[];mapItems=d.mapItems||[];
-    lootBags=d.lootBags||[];rooms=d.rooms||[];
+    lootBags=d.lootBags||[];rooms=d.rooms||[];mapTraps=d.mapTraps||[];mapContainers=d.mapContainers||[];
     gameState=d.gameState||'base';
     if(gameState==='dungeon')updateFOV();
     render();
@@ -1251,6 +1418,12 @@ function renderDungeonUI(){
         if(lb)content+=`<span class="item-icon">🎒</span>`;
         const ck=mapCardKeys.find(k=>k.x===tx&&k.y===ty);
         if(ck)content+=`<span class="item-icon">🔑</span>`;
+        // Containers
+        const cont=mapContainers.find(c=>c.x===tx&&c.y===ty);
+        if(cont)content+=`<span class="item-icon">${cont.opened?'📭':'📦'}</span>`;
+        // Traps (only show if triggered or hasDetector)
+        const trap=mapTraps.find(t=>t.x===tx&&t.y===ty);
+        if(trap&&(trap.triggered||hasDetector))content+=`<span class="item-icon" style="font-size:10px;color:#f59e0b">${TRAP_TYPES[trap.type].icon}</span>`;
       }
       // Float dmg
       const fd=floatingDmgs.filter(f=>f.x===tx&&f.y===ty);
@@ -1805,19 +1978,44 @@ function renderDeadUI(){
 // EVENT HANDLERS
 // ═══════════════════════════════════════
 function attachEvents(){
-  // D-pad (debounced, prevents click+touchstart double-fire)
+  // D-pad (debounced, prevents click+touchstart double-fire, long-press for dash)
   document.querySelectorAll('[data-dir]').forEach(b=>{
-    const execDir=()=>{
+    const getDirVec=(d)=>{
+      if(d==='up')return [0,-1];
+      if(d==='down')return [0,1];
+      if(d==='left')return [-1,0];
+      if(d==='right')return [1,0];
+      return null;
+    };
+    const execDir=(isHold=false)=>{
+      if(dashHoldTimer){clearTimeout(dashHoldTimer);dashHoldTimer=null;}
+      if(isHold){stopDash();return;} // release after hold = already dashing, just stop
       const now=Date.now();
       if(now-lastDpadTime<DPAD_DEBOUNCE_MS)return;
       lastDpadTime=now;
       const d=b.dataset.dir;
-      if(d==='up')movePlayer(0,-1);else if(d==='down')movePlayer(0,1);
-      else if(d==='left')movePlayer(-1,0);else if(d==='right')movePlayer(1,0);
-      else if(d==='wait')waitTurn();
+      if(d==='wait'){waitTurn();return;}
+      const vec=getDirVec(d);
+      if(vec)movePlayer(vec[0],vec[1]);
     };
-    b.addEventListener('touchstart',e=>{e.preventDefault();execDir();},{passive:false});
-    b.addEventListener('click',e=>{e.preventDefault();execDir();});
+    const startHold=()=>{
+      const d=b.dataset.dir;
+      if(d==='wait')return;
+      const vec=getDirVec(d);
+      if(!vec)return;
+      dashHoldTimer=setTimeout(()=>{
+        dashHoldTimer=null;
+        startDash(vec[0],vec[1]);
+      },DASH_HOLD_MS);
+    };
+    const cancelHold=()=>{
+      if(dashHoldTimer){clearTimeout(dashHoldTimer);dashHoldTimer=null;}
+      else if(dashState){stopDash();}
+    };
+    b.addEventListener('pointerdown',e=>{e.preventDefault();startHold();},{passive:false});
+    b.addEventListener('pointerup',e=>{e.preventDefault();execDir(dashState!==null);},{passive:false});
+    b.addEventListener('pointercancel',e=>{e.preventDefault();cancelHold();},{passive:false});
+    b.addEventListener('pointerleave',e=>{e.preventDefault();cancelHold();},{passive:false});
   });
   // Bag button
   document.querySelectorAll('[data-action="bag"]').forEach(b=>b.addEventListener('click',toggleBag));
