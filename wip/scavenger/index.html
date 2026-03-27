@@ -138,6 +138,27 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .item-detail-panel .idp-actions .idp-drop:active{background:#555}
 .item-detail-panel .idp-actions .idp-close{background:#333;border:1px solid #555}
 .item-detail-panel .idp-actions .idp-close:active{background:#444}
+.overlay{padding-bottom:60px}
+.gacha-section{padding:12px}
+.gacha-pull-btn{width:100%;padding:14px;font-size:16px;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;color:#fff;border-radius:8px;cursor:pointer}
+.gacha-pull-btn:disabled{opacity:.4;cursor:default}
+.gacha-result-modal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:30;display:flex;align-items:center;justify-content:center}
+.gacha-result-card{background:#1e1e3a;border:2px solid #7c3aed;border-radius:16px;padding:24px;text-align:center;width:280px}
+.gacha-rarity{font-size:12px;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px}
+.gacha-icon{font-size:48px;margin:12px 0}
+.gacha-name{font-size:18px;font-weight:bold;margin-bottom:4px}
+.gacha-desc{font-size:13px;color:#aaa;margin-bottom:12px}
+.gacha-result-card button{padding:10px 32px;background:#7c3aed;border:none;color:#fff;border-radius:6px;font-size:14px;cursor:pointer}
+.gacha-slots{display:flex;justify-content:center;gap:12px;font-size:36px;margin:12px 0}
+.records-section{background:#12122a;border:1px solid #2a2a4e;border-radius:8px;padding:12px}
+.records-section h3{font-size:14px;color:#888;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.record-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1a1a2e;font-size:13px}
+.record-row:last-child{border-bottom:none}
+.record-label{color:#aaa}
+.record-value{color:#e0e0e0;font-weight:bold;font-size:15px}
+.record-value.highlight{color:#f59e0b}
+.base-explore-btn{padding:14px;font-size:18px;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;border-radius:10px;cursor:pointer;text-align:center;font-weight:bold;letter-spacing:1px;box-shadow:0 2px 8px rgba(124,58,237,.4);transition:transform .1s}
+.base-explore-btn:active{transform:scale(.97);background:linear-gradient(135deg,#6d28d9,#5b21b6)}
 </style>
 </head>
 <body>
@@ -215,7 +236,7 @@ let baseMaxHp=100, baseAtk=8, baseDef=2;
 let storageBox=[]; // [{itemId},...] — simple list, no tetris
 let storageCapacity=20; // slots (each item costs its cell count)
 let storageExpansions=0;
-let baseTab='home'; // 'home' | 'shop'
+let baseTab='home'; // 'home' | 'shop' | 'records'
 let storagePlaceMode=false; // when taking from storage, placing in bag
 let selectedInvItem=null, selectedLootItem=null, invRotation=0;
 let currentLootBag=null;
@@ -223,9 +244,39 @@ let pendingFloorItem=null; // {itemId, mapItemIdx} — item on floor awaiting pi
 let pendingLootItem=null; // {itemId, lootIdx} — loot bag item awaiting preview decision
 let relocatingItem=null; // {itemId, cells, rot, invIdx} — item being relocated (original position for cancel)
 let floorPickupItemId=null; // itemId if current selectedLootItem came from a floor pickup (for return-to-floor)
+let cardKeys=0; // card keys collected this run
+let totalCardKeys=0; // persistent across runs
+let mapCardKeys=[]; // {x,y} positions on map
+let revealNextMap=false; // legendary gacha effect
+let gachaResultModal=null; // current gacha result to display
+// Exploration stats (persistent)
+let stats={maxFloor:0,totalKills:0,totalItems:0,totalSales:0,totalRuns:0,totalMoney:0};
+
+const GACHA_REWARDS=[
+  {name:'強化包帯',icon:'🩹',rarity:'common',type:'item',itemId:'bandage',count:3},
+  {name:'弾薬パック',icon:'🎯',rarity:'common',type:'item',itemId:'ammo',count:3},
+  {name:'携帯食糧',icon:'🥫',rarity:'common',type:'item',itemId:'cannedfood',count:2},
+  {name:'100G',icon:'💰',rarity:'common',type:'money',amount:100},
+  {name:'高性能医療キット',icon:'💊',rarity:'uncommon',type:'item',itemId:'medkit',count:2},
+  {name:'戦術ナイフ',icon:'🗡️',rarity:'uncommon',type:'upgrade',stat:'atk',bonus:2,desc:'基礎攻撃力+2'},
+  {name:'防弾チョッキ',icon:'🦺',rarity:'uncommon',type:'upgrade',stat:'def',bonus:2,desc:'基礎防御力+2'},
+  {name:'500G',icon:'💰',rarity:'uncommon',type:'money',amount:500},
+  {name:'対物ライフル',icon:'🔫',rarity:'rare',type:'item',itemId:'rifle',count:1},
+  {name:'生命の結晶',icon:'💎',rarity:'rare',type:'upgrade',stat:'maxHp',bonus:20,desc:'基礎最大HP+20'},
+  {name:'強化外骨格',icon:'🦾',rarity:'rare',type:'upgrade',stat:'atk',bonus:5,desc:'基礎攻撃力+5'},
+  {name:'1000G',icon:'💰',rarity:'rare',type:'money',amount:1000},
+  {name:'量子コンパス',icon:'🧿',rarity:'legendary',type:'special',effect:'reveal_map',desc:'次の探索でマップ全開放'},
+  {name:'ナノマシン',icon:'🧬',rarity:'legendary',type:'upgrade',stat:'maxHp',bonus:50,desc:'基礎最大HP+50'},
+  {name:'暗殺者の刃',icon:'⚔️',rarity:'legendary',type:'upgrade',stat:'atk',bonus:10,desc:'基礎攻撃力+10'},
+  {name:'5000G',icon:'💰',rarity:'legendary',type:'money',amount:5000},
+];
+const GACHA_RARITY_COLORS={common:'#aaa',uncommon:'#4caf50',rare:'#2196f3',legendary:'#ff9800'};
+
 let audioCtx=null;
 let floatingDmgs=[];
 let overlayDmgFlash=false;
+let baseAmbientNode=null;
+let baseAmbientGain=null;
 let lastDpadTime=0;
 const DPAD_DEBOUNCE_MS=150;
 
@@ -233,6 +284,37 @@ const DPAD_DEBOUNCE_MS=150;
 // AUDIO
 // ═══════════════════════════════════════
 function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
+function startBaseAmbient(){
+  if(!audioCtx)return;
+  stopBaseAmbient();
+  try{
+    baseAmbientGain=audioCtx.createGain();
+    baseAmbientGain.gain.setValueAtTime(0,audioCtx.currentTime);
+    baseAmbientGain.gain.linearRampToValueAtTime(0.04,audioCtx.currentTime+1);
+    baseAmbientGain.connect(audioCtx.destination);
+    // Warm low-frequency hum for "safe haven" feel
+    const o1=audioCtx.createOscillator();
+    o1.type='sine';o1.frequency.setValueAtTime(85,audioCtx.currentTime);
+    o1.connect(baseAmbientGain);o1.start();
+    const o2=audioCtx.createOscillator();
+    o2.type='sine';o2.frequency.setValueAtTime(128,audioCtx.currentTime);
+    const g2=audioCtx.createGain();g2.gain.setValueAtTime(0.5,audioCtx.currentTime);
+    o2.connect(g2);g2.connect(baseAmbientGain);o2.start();
+    baseAmbientNode=[o1,o2,g2];
+  }catch(e){}
+}
+function stopBaseAmbient(){
+  if(baseAmbientNode){
+    try{
+      if(baseAmbientGain){
+        baseAmbientGain.gain.linearRampToValueAtTime(0,audioCtx.currentTime+0.3);
+        setTimeout(()=>{
+          try{baseAmbientNode.forEach(n=>{try{n.stop();}catch(e){}});baseAmbientNode=null;baseAmbientGain=null;}catch(e){}
+        },350);
+      }
+    }catch(e){baseAmbientNode=null;baseAmbientGain=null;}
+  }
+}
 function playSound(type){
   if(!audioCtx)return;
   try{
@@ -256,7 +338,7 @@ function playSound(type){
 // MAP GENERATION (BSP)
 // ═══════════════════════════════════════
 function generateMap(floorNum){
-  map=[];seen=[];enemies=[];mapItems=[];lootBags=[];rooms=[];
+  map=[];seen=[];enemies=[];mapItems=[];lootBags=[];rooms=[];mapCardKeys=[];
   for(let y=0;y<MH;y++){map[y]=[];seen[y]=[];for(let x=0;x<MW;x++){map[y][x]=WALL;seen[y][x]=false;}}
   // BSP
   const leaves=[];
@@ -484,6 +566,8 @@ function playerDeath(){
     const idx=Math.floor(Math.random()*inventory.length);
     inventory.splice(idx,1);
   }
+  // Lose card keys on death
+  cardKeys=0;
   playSound('hurt');
   render();
 }
@@ -510,6 +594,7 @@ function movePlayer(dx,dy){
   // Check tile
   if(map[ny][nx]===STAIRS){
     player.floor++;
+    if(player.floor>stats.maxFloor)stats.maxFloor=player.floor;
     logMsg=`${player.floor}階に降りた`;
     playSound('stairs');
     generateMap(player.floor);
@@ -524,9 +609,20 @@ function movePlayer(dx,dy){
     player.level=1;player.exp=0;
     player.maxHp=baseMaxHp;player.atk=baseAtk;player.def=baseDef;
     player.hp=player.maxHp;player.fullness=100;
+    // Save card keys
+    totalCardKeys+=cardKeys;
+    cardKeys=0;
     logMsg='拠点に帰還した（ステータスリセット）';
     render();
     return;
+  }
+  // Card key on floor? Auto-collect
+  const ckIdx=mapCardKeys.findIndex(k=>k.x===nx&&k.y===ny);
+  if(ckIdx>=0){
+    mapCardKeys.splice(ckIdx,1);
+    cardKeys++;
+    logMsg=`🔑 カードキーを手に入れた！(合計: ${cardKeys}枚)`;
+    playSound('pickup');
   }
   // Item on floor?
   const itemIdx=mapItems.findIndex(i=>i.x===nx&&i.y===ny);
@@ -559,6 +655,7 @@ function attackEnemy(e){
   if(e.hp<=0){
     logMsg=`${e.name}を倒した！ +${e.exp}EXP`;
     player.exp+=e.exp;
+    stats.totalKills++;
     playSound('kill');
     // Consume ammo if rifle used
     if(hasItem('rifle')&&countItem('ammo')>0)consumeItem('ammo');
@@ -570,6 +667,13 @@ function attackEnemy(e){
       lootItems.push(lid);
     }
     lootBags.push({x:e.x,y:e.y,items:lootItems,turnPlaced:player.turnCount});
+    // Card key drop chance: 15% base + 5% per enemy level
+    const eType=ENEMY_TYPES[e.type];
+    const keyChance=0.15+(eType?eType.level*0.05:0);
+    if(Math.random()<keyChance){
+      mapCardKeys.push({x:e.x,y:e.y});
+      logMsg+=` 🔑カードキーが落ちた！`;
+    }
   }
 }
 function addFloatDmg(tx,ty,dmg,color){
@@ -585,6 +689,7 @@ function pickupFloorItem(idx){
   pendingFloorItem=null;
   gameState='inventory';
   invRotation=0;
+  stats.totalItems++;
   logMsg=`${ITEMS[mi.itemId].name}を拾った — 鞄に配置してください`;
   playSound('pickup');
 }
@@ -767,6 +872,8 @@ function sellItem(idx){
   const it=inventory[idx];
   const val=ITEMS[it.itemId].value;
   player.money+=val;
+  stats.totalSales+=val;
+  stats.totalMoney+=val;
   removeInvItem(idx);
   playSound('pickup');
   render();
@@ -849,9 +956,109 @@ function enterDungeon(){
   player.maxHp=baseMaxHp;player.hp=baseMaxHp;
   player.atk=baseAtk;player.def=baseDef;
   player.floor=1;player.fullness=100;player.turnCount=0;
+  cardKeys=0;
+  stats.totalRuns++;
+  if(stats.maxFloor<1)stats.maxFloor=1;
   generateMap(1);updateFOV();
-  gameState='dungeon';logMsg='ダンジョンに入った（Lv1から開始）';
+  // Apply reveal map effect from gacha
+  if(revealNextMap){
+    for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)seen[y][x]=true;
+    revealNextMap=false;
+    logMsg='ダンジョンに入った（Lv1から開始）— 🧿量子コンパス発動！マップ全開放！';
+  }else{
+    logMsg='ダンジョンに入った（Lv1から開始）';
+  }
+  gameState='dungeon';
   render();
+}
+
+// ═══════════════════════════════════════
+// GACHA SYSTEM
+// ═══════════════════════════════════════
+function pullGacha(){
+  if(totalCardKeys<=0)return;
+  totalCardKeys--;
+  const roll=Math.random();
+  let rarity;
+  if(roll<0.05)rarity='legendary';
+  else if(roll<0.20)rarity='rare';
+  else if(roll<0.50)rarity='uncommon';
+  else rarity='common';
+  const pool=GACHA_REWARDS.filter(r=>r.rarity===rarity);
+  const reward=pool[Math.floor(Math.random()*pool.length)];
+  applyGachaReward(reward);
+  showGachaAnimation(reward);
+}
+function applyGachaReward(reward){
+  switch(reward.type){
+    case'item':
+      for(let i=0;i<reward.count;i++){
+        if(canStoreItem(reward.itemId)){
+          storageBox.push({itemId:reward.itemId});
+        }else{
+          logMsg='収納箱がいっぱいです！一部のアイテムが入りません';
+          break;
+        }
+      }
+      break;
+    case'money':
+      player.money+=reward.amount;
+      break;
+    case'upgrade':
+      if(reward.stat==='atk'){baseAtk+=reward.bonus;player.atk=baseAtk;}
+      else if(reward.stat==='def'){baseDef+=reward.bonus;player.def=baseDef;}
+      else if(reward.stat==='maxHp'){baseMaxHp+=reward.bonus;player.maxHp=baseMaxHp;player.hp=Math.min(player.hp+reward.bonus,player.maxHp);}
+      break;
+    case'special':
+      if(reward.effect==='reveal_map')revealNextMap=true;
+      break;
+  }
+}
+function showGachaAnimation(reward){
+  const emojis=['🩹','🔫','💎','🧬','⚔️','💰','🦺','💊','🥫','🎯','🧿','🦾'];
+  gachaResultModal=reward;
+  // Create animation overlay
+  const modal=document.createElement('div');
+  modal.className='gacha-result-modal';
+  modal.innerHTML=`<div class="gacha-result-card" style="border-color:${GACHA_RARITY_COLORS[reward.rarity]}">
+    <div class="gacha-slots"><span id="gs1">?</span><span id="gs2">?</span><span id="gs3">?</span></div>
+    <div class="gacha-rarity" style="color:${GACHA_RARITY_COLORS[reward.rarity]};opacity:0" id="gachaRarityText">${reward.rarity.toUpperCase()}!</div>
+    <div class="gacha-icon" style="opacity:0" id="gachaIcon">${reward.icon}</div>
+    <div class="gacha-name" style="opacity:0" id="gachaName">${reward.name}</div>
+    <div class="gacha-desc" style="opacity:0" id="gachaDesc">${reward.desc||getGachaDesc(reward)}</div>
+    <button style="opacity:0" id="gachaOk">OK</button>
+  </div>`;
+  document.getElementById('app').appendChild(modal);
+  // Animate slots
+  let frame=0;
+  const interval=setInterval(()=>{
+    document.getElementById('gs1').textContent=emojis[Math.floor(Math.random()*emojis.length)];
+    document.getElementById('gs2').textContent=emojis[Math.floor(Math.random()*emojis.length)];
+    document.getElementById('gs3').textContent=emojis[Math.floor(Math.random()*emojis.length)];
+    frame++;
+    if(frame>=15){
+      clearInterval(interval);
+      document.getElementById('gs1').textContent=reward.icon;
+      document.getElementById('gs2').textContent=reward.icon;
+      document.getElementById('gs3').textContent=reward.icon;
+      document.getElementById('gachaRarityText').style.opacity='1';
+      document.getElementById('gachaIcon').style.opacity='1';
+      document.getElementById('gachaName').style.opacity='1';
+      document.getElementById('gachaDesc').style.opacity='1';
+      document.getElementById('gachaOk').style.opacity='1';
+      document.getElementById('gachaOk').addEventListener('click',()=>{
+        modal.remove();
+        gachaResultModal=null;
+        playSound('pickup');
+        render();
+      });
+    }
+  },70);
+}
+function getGachaDesc(reward){
+  if(reward.type==='item')return `${ITEMS[reward.itemId].name} ×${reward.count} を収納箱に追加`;
+  if(reward.type==='money')return `${reward.amount}G を獲得`;
+  return '';
 }
 
 // ═══════════════════════════════════════
@@ -863,6 +1070,7 @@ function saveGame(){
     player,inventory,invW,invH,bagExpansions,armorUpgrade,hasDetector,
     baseMaxHp,baseAtk,baseDef,
     storageBox,storageCapacity,storageExpansions,
+    cardKeys,totalCardKeys,mapCardKeys,revealNextMap,stats,
     map,seen,enemies,mapItems,lootBags,rooms,gameState:saveState,
   }));}catch(e){}
 }
@@ -874,6 +1082,8 @@ function loadGame(){
     bagExpansions=d.bagExpansions||0;armorUpgrade=d.armorUpgrade||0;hasDetector=d.hasDetector||false;
     baseMaxHp=d.baseMaxHp||100;baseAtk=d.baseAtk||8;baseDef=d.baseDef||2;
     storageBox=d.storageBox||[];storageCapacity=d.storageCapacity||20;storageExpansions=d.storageExpansions||0;
+    cardKeys=d.cardKeys||0;totalCardKeys=d.totalCardKeys||0;mapCardKeys=d.mapCardKeys||[];revealNextMap=d.revealNextMap||false;
+    stats=Object.assign({maxFloor:0,totalKills:0,totalItems:0,totalSales:0,totalRuns:0,totalMoney:0},d.stats||{});
     map=d.map||[];seen=d.seen||[];enemies=d.enemies||[];mapItems=d.mapItems||[];
     lootBags=d.lootBags||[];rooms=d.rooms||[];
     gameState=d.gameState||'base';
@@ -886,6 +1096,8 @@ function startNewGame(){
   inventory=[];invW=6;invH=4;bagExpansions=0;armorUpgrade=0;hasDetector=false;
   baseMaxHp=100;baseAtk=8;baseDef=2;
   storageBox=[];storageCapacity=20;storageExpansions=0;
+  cardKeys=0;totalCardKeys=0;mapCardKeys=[];revealNextMap=false;gachaResultModal=null;
+  stats={maxFloor:0,totalKills:0,totalItems:0,totalSales:0,totalRuns:0,totalMoney:0};
   gameState='base';logMsg='';baseTab='home';
   render();
 }
@@ -916,6 +1128,9 @@ function render(){
   app.insertAdjacentHTML('beforeend',html);
   // Attach events
   attachEvents();
+  // Base ambient sound
+  if(gameState==='base'&&audioCtx&&!baseAmbientNode)startBaseAmbient();
+  else if(gameState!=='base'&&gameState!=='storage_place')stopBaseAmbient();
   // Auto-save
   saveGame();
 }
@@ -924,7 +1139,7 @@ function renderDungeonUI(){
   const hpPct=Math.max(0,Math.round(player.hp/player.maxHp*100));
   let h=`<div class="status-bar">
 <div class="status-row"><span>F${player.floor} 💰${player.money}</span><span>❤️${player.hp}/${player.maxHp} <span class="hp-bar-wrap"><span class="hp-bar" style="width:${hpPct}%"></span></span></span><span>🍖${player.fullness}</span></div>
-<div class="status-row"><span>Lv${player.level} ⚔️${getPlayerAtk()} 🛡️${getPlayerDef()}</span><span>T:${player.turnCount}</span></div>
+<div class="status-row"><span>Lv${player.level} ⚔️${getPlayerAtk()} 🛡️${getPlayerDef()}${cardKeys>0?' 🔑×'+cardKeys:''}</span><span>T:${player.turnCount}</span></div>
 </div>`;
   // Map viewport
   h+=`<div class="map-container"><div class="map-viewport" style="width:${VW*CELL}px;height:${VH*CELL}px">`;
@@ -957,6 +1172,8 @@ function renderDungeonUI(){
         if(mi)content+=`<span class="item-icon">${ITEMS[mi.itemId].icon}</span>`;
         const lb=lootBags.find(b=>b.x===tx&&b.y===ty);
         if(lb)content+=`<span class="item-icon">🎒</span>`;
+        const ck=mapCardKeys.find(k=>k.x===tx&&k.y===ty);
+        if(ck)content+=`<span class="item-icon">🔑</span>`;
       }
       // Float dmg
       const fd=floatingDmgs.filter(f=>f.x===tx&&f.y===ty);
@@ -1303,15 +1520,18 @@ function renderBaseUI(){
   h+=`<div class="base-tabs">`;
   h+=`<button class="base-tab${baseTab==='home'?' active':''}" data-base-tab="home">🏠 自宅</button>`;
   h+=`<button class="base-tab${baseTab==='shop'?' active':''}" data-base-tab="shop">🛒 ショップ</button>`;
+  h+=`<button class="base-tab${baseTab==='records'?' active':''}" data-base-tab="records">📊 記録</button>`;
   h+=`</div>`;
   h+=`<div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px">`;
   if(baseTab==='home'){
     h+=renderHomeTab();
-  } else {
+  } else if(baseTab==='shop'){
     h+=renderShopTab();
+  } else if(baseTab==='records'){
+    h+=renderRecordsTab();
   }
   h+=`</div>`;
-  h+=`<div style="padding:8px 12px 12px"><button class="base-btn" data-action="enter" style="width:100%">⚔️ 探索開始</button></div>`;
+  h+=`<div style="padding:8px 12px 12px"><button class="base-explore-btn" data-action="enter" style="width:100%">⚔️ 探索開始</button></div>`;
   h+=`</div>`;
   return h;
 }
@@ -1348,6 +1568,12 @@ function renderHomeTab(){
     h+=`</div>`;
   }
   h+=`</div>`;
+  // Gacha section
+  h+=`<div class="home-section">`;
+  h+=`<h3>🎰 ガチャ</h3>`;
+  h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:14px">🔑 ×${totalCardKeys}</span><span style="font-size:11px;color:#888">カードキー1枚で1回</span></div>`;
+  h+=`<button class="gacha-pull-btn" data-action="gacha" ${totalCardKeys<=0?'disabled':''}>🎰 ガチャを引く</button>`;
+  h+=`</div>`;
   // Store from bag section
   if(inventory.length>0){
     h+=`<div class="home-section"><h3>🎒 → 📦 鞄から収納</h3><div class="sell-items">`;
@@ -1380,6 +1606,30 @@ function renderShopTab(){
   h+=`<div class="shop-item"><span>🛡️ 防護服+${armorUpgrade*5} (${armorUpgrade}/3)</span><button data-buy="armor" ${player.money<300||armorUpgrade>=3?'disabled':''}>300G</button></div>`;
   h+=`<div class="shop-item"><span>📡 探知機 ${hasDetector?'✓':''}</span><button data-buy="detector" ${player.money<500||hasDetector?'disabled':''}>500G</button></div>`;
   h+=`<div class="shop-item"><span>📦 収納箱拡張 +10 (${storageExpansions}/3)</span><button data-buy="storage" ${player.money<250||storageExpansions>=3?'disabled':''}>250G</button></div>`;
+  h+=`</div>`;
+  return h;
+}
+
+function renderRecordsTab(){
+  let h='';
+  h+=`<div class="records-section"><h3>📊 探索統計</h3>`;
+  h+=`<div class="record-row"><span class="record-label">🏔️ 最深階到達</span><span class="record-value highlight">${stats.maxFloor>0?stats.maxFloor+'階':'未探索'}</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">⚔️ 倒した敵数</span><span class="record-value">${stats.totalKills}体</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">📦 拾ったアイテム数</span><span class="record-value">${stats.totalItems}個</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">💰 総売上</span><span class="record-value">${stats.totalSales}G</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">🚀 探索回数</span><span class="record-value">${stats.totalRuns}回</span></div>`;
+  h+=`</div>`;
+  // Current status
+  h+=`<div class="records-section"><h3>🎒 現在のステータス</h3>`;
+  h+=`<div class="record-row"><span class="record-label">基礎HP</span><span class="record-value">${baseMaxHp}</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">基礎攻撃力</span><span class="record-value">${baseAtk}</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">基礎防御力</span><span class="record-value">${baseDef}</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">所持金</span><span class="record-value highlight">${player.money}G</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">鞄サイズ</span><span class="record-value">${invW}×${invH}</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">収納箱容量</span><span class="record-value">${storageCapacity}スロット</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">防護服</span><span class="record-value">+${armorUpgrade*5}</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">探知機</span><span class="record-value">${hasDetector?'✅':'❌'}</span></div>`;
+  h+=`<div class="record-row"><span class="record-label">カードキー</span><span class="record-value">🔑 ×${totalCardKeys}</span></div>`;
   h+=`</div>`;
   return h;
 }
@@ -1450,6 +1700,16 @@ function attachEvents(){
   document.querySelectorAll('[data-store]').forEach(b=>b.addEventListener('click',()=>storeItemFromBag(parseInt(b.dataset.store))));
   document.querySelectorAll('[data-action="return-to-storage"]').forEach(b=>b.addEventListener('click',returnItemToStorage));
   document.querySelectorAll('[data-action="rest"]').forEach(b=>b.addEventListener('click',restAtHome));
+  document.querySelectorAll('[data-action="gacha"]').forEach(b=>b.addEventListener('click',pullGacha));
+  // Close overlay by tapping empty space
+  document.querySelectorAll('.overlay').forEach(ov=>{
+    ov.addEventListener('click',(e)=>{
+      if(e.target===ov||e.target.classList.contains('overlay')){
+        if(gameState==='inventory')toggleBag();
+        else if(gameState==='looting')closeLoot();
+      }
+    });
+  });
   document.querySelectorAll('[data-action="respawn"]').forEach(b=>b.addEventListener('click',()=>{
     // シレン式: 死亡時も基礎ステータスに戻る
     player.level=1;player.exp=0;
