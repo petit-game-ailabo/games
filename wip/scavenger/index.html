@@ -196,6 +196,7 @@ let selectedInvItem=null, selectedLootItem=null, invRotation=0;
 let currentLootBag=null;
 let pendingFloorItem=null; // {itemId, mapItemIdx} — item on floor awaiting pickup/ignore decision
 let pendingLootItem=null; // {itemId, lootIdx} — loot bag item awaiting preview decision
+let relocatingItem=null; // {itemId, cells, rot, invIdx} — item being relocated (original position for cancel)
 let audioCtx=null;
 let floatingDmgs=[];
 let overlayDmgFlash=false;
@@ -634,8 +635,12 @@ function useItem(itemId){
 function rotateItem(){invRotation=(invRotation+1)%4;render();updatePreviewDOM();}
 function toggleBag(){
   initAudio();
-  if(gameState==='dungeon'){gameState='inventory';selectedLootItem=null;selectedInvItem=null;invRotation=0;previewOrigin=null;}
-  else if(gameState==='inventory'||gameState==='looting'||gameState==='loot_preview'){gameState='dungeon';currentLootBag=null;selectedLootItem=null;selectedInvItem=null;pendingLootItem=null;previewOrigin=null;}
+  if(gameState==='dungeon'){gameState='inventory';selectedLootItem=null;selectedInvItem=null;invRotation=0;previewOrigin=null;relocatingItem=null;}
+  else if(gameState==='inventory'||gameState==='looting'||gameState==='loot_preview'){
+    // Cancel any ongoing relocation
+    if(relocatingItem){cancelRelocate();}
+    gameState='dungeon';currentLootBag=null;selectedLootItem=null;selectedInvItem=null;pendingLootItem=null;previewOrigin=null;relocatingItem=null;
+  }
   render();
 }
 function closeLoot(){
@@ -651,8 +656,52 @@ function dropInvItem(idx){
   mapItems.push({x:player.x,y:player.y,itemId:it.itemId});
   removeInvItem(idx);
   selectedInvItem=null;
+  relocatingItem=null;
   processTurn();
   render();
+}
+function startRelocate(idx){
+  const it=inventory[idx];
+  // Save original position for cancel
+  relocatingItem={itemId:it.itemId, cells:[...it.cells.map(c=>[...c])], rot:it.rot, invIdx:idx};
+  // Remove from grid temporarily
+  removeInvItem(idx);
+  // Set as selected loot item for placement
+  selectedLootItem=relocatingItem.itemId;
+  invRotation=0;
+  selectedInvItem=null;
+  previewOrigin=null;
+  logMsg=`${ITEMS[relocatingItem.itemId].name}を移動中...`;
+  render();
+}
+function cancelRelocate(){
+  if(!relocatingItem)return;
+  // Restore item to original position
+  const ri=relocatingItem;
+  inventory.push({itemId:ri.itemId, cells:ri.cells, rot:ri.rot});
+  relocatingItem=null;
+  selectedLootItem=null;
+  invRotation=0;
+  previewOrigin=null;
+  logMsg='移動をキャンセルした';
+  render();
+}
+function completeRelocate(gx,gy){
+  if(!relocatingItem)return false;
+  if(canPlace(relocatingItem.itemId,gx,gy,invRotation)){
+    placeItem(relocatingItem.itemId,gx,gy,invRotation);
+    const itemName=ITEMS[relocatingItem.itemId].name;
+    relocatingItem=null;
+    selectedLootItem=null;
+    invRotation=0;
+    previewOrigin=null;
+    playSound('pickup');
+    logMsg=`${itemName}を再配置した`;
+    processTurn();
+    render();
+    return true;
+  }
+  return false;
 }
 
 // ═══════════════════════════════════════
@@ -816,8 +865,11 @@ function renderInventoryOverlay(){
     const slItem=ITEMS[selectedLootItem];
     const slRarity=getItemRarity(selectedLootItem);
     const slShape=getRotatedShape(slItem.shape,invRotation);
-    h+=`<div style="padding:4px 12px;color:#f59e0b;display:flex;align-items:center;gap:8px">配置: ${slItem.icon} ${slItem.name} `;
+    h+=`<div style="padding:4px 12px;color:#f59e0b;display:flex;align-items:center;gap:8px">${relocatingItem?'移動':'配置'}: ${slItem.icon} ${slItem.name} `;
     h+=renderShapeGrid(slShape,14,slRarity.color);
+    if(relocatingItem){
+      h+=`<button class="rotate-btn" data-action="cancel-relocate" style="margin:0;background:#c62828;border-color:#e53935">✕ キャンセル</button>`;
+    }
     h+=`</div>`;
   }
   h+=`<button class="rotate-btn" data-action="rotate">回転🔄</button>`;
@@ -1042,6 +1094,7 @@ function renderItemDetailPanel(invIdx){
   h+=`</div>`;
   // Action buttons
   h+=`<div class="idp-actions">`;
+  h+=`<button class="idp-use" data-detail-relocate="${invIdx}" style="background:#1565c0">📦 移動</button>`;
   if(item.usable){
     h+=`<button class="idp-use" data-detail-use="${itemId}">✨ 使う</button>`;
   }
@@ -1165,7 +1218,9 @@ function attachEvents(){
   // Detail panel actions
   document.querySelectorAll('[data-detail-use]').forEach(b=>b.addEventListener('click',()=>{selectedInvItem=null;useItem(b.dataset.detailUse);}));
   document.querySelectorAll('[data-detail-drop]').forEach(b=>b.addEventListener('click',()=>{const idx=parseInt(b.dataset.detailDrop);selectedInvItem=null;dropInvItem(idx);}));
+  document.querySelectorAll('[data-detail-relocate]').forEach(b=>b.addEventListener('click',()=>{const idx=parseInt(b.dataset.detailRelocate);startRelocate(idx);}));
   document.querySelectorAll('[data-detail-close]').forEach(b=>b.addEventListener('click',()=>{selectedInvItem=null;render();}));
+  document.querySelectorAll('[data-action="cancel-relocate"]').forEach(b=>b.addEventListener('click',cancelRelocate));
   document.querySelectorAll('[data-action="enter"]').forEach(b=>b.addEventListener('click',enterDungeon));
   document.querySelectorAll('[data-action="respawn"]').forEach(b=>b.addEventListener('click',()=>{
     player.hp=player.maxHp;player.fullness=100;gameState='base';render();
@@ -1202,8 +1257,13 @@ function attachEvents(){
     cell.addEventListener('click',()=>{
       if(selectedLootItem){
         previewOrigin={gx,gy};
-        if(gameState==='looting')invLootPlaceAttempt(gx,gy);
-        else invPlaceAttempt(gx,gy);
+        if(relocatingItem){
+          completeRelocate(gx,gy);
+        } else if(gameState==='looting'){
+          invLootPlaceAttempt(gx,gy);
+        } else {
+          invPlaceAttempt(gx,gy);
+        }
         return;
       }
       // Select/deselect existing item
