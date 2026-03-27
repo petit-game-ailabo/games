@@ -164,11 +164,30 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .record-label{color:#aaa}
 .record-value{color:#e0e0e0;font-weight:bold;font-size:15px}
 .record-value.highlight{color:#f59e0b}
+.achievements-grid{display:flex;flex-direction:column;gap:6px}
+.achievement{display:flex;align-items:center;gap:10px;padding:8px;background:#1a1a2e;border:1px solid #2a2a4e;border-radius:6px;transition:all .2s}
+.achievement.unlocked{border-color:#7c3aed;background:#1e1a3e}
+.achievement.locked{opacity:.5}
+.achievement .ach-icon{font-size:28px;width:40px;text-align:center;flex-shrink:0}
+.achievement .ach-info{flex:1;display:flex;flex-direction:column;gap:2px}
+.achievement .ach-name{font-size:13px;color:#e0e0e0;font-weight:bold}
+.achievement .ach-desc{font-size:11px;color:#888}
 .base-explore-btn{padding:14px;font-size:18px;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;border-radius:10px;cursor:pointer;text-align:center;font-weight:bold;letter-spacing:1px;box-shadow:0 2px 8px rgba(124,58,237,.4);transition:transform .1s}
 .base-explore-btn:active{transform:scale(.97);background:linear-gradient(135deg,#6d28d9,#5b21b6)}
 .minimap-wrap{position:absolute;top:4px;right:4px;z-index:15;cursor:pointer;border:1px solid #3a3a5e;border-radius:4px;overflow:hidden;background:#000;opacity:.85;transition:width .2s,height .2s,opacity .15s}
 .minimap-wrap:active{opacity:1}
 .minimap-wrap.expanded{border-color:#7c3aed;opacity:.95;box-shadow:0 0 8px rgba(124,58,237,.5)}
+.help-btn{position:absolute;top:4px;left:4px;z-index:15;width:36px;height:36px;border:1px solid #3a3a5e;border-radius:50%;background:#222244;color:#e0e0e0;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.85;transition:opacity .15s}
+.help-btn:active{opacity:1;background:#3a3a6e}
+.tutorial-overlay{position:absolute;inset:0;background:rgba(10,10,26,.95);z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+.tutorial-card{background:#1e1e3a;border:2px solid #7c3aed;border-radius:16px;padding:24px;max-width:400px;width:100%;display:flex;flex-direction:column;gap:16px}
+.tutorial-card h2{font-size:22px;color:#a855f7;text-align:center;margin:0}
+.tutorial-section{background:#1a1a2e;border:1px solid #2a2a4e;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.tutorial-section h3{font-size:14px;color:#f59e0b;margin:0 0 4px 0;display:flex;align-items:center;gap:6px}
+.tutorial-tip{font-size:13px;color:#aaa;line-height:1.5}
+.tutorial-tip .key{display:inline-block;padding:2px 8px;background:#222244;border:1px solid #3a3a5e;border-radius:4px;font-weight:bold;color:#e0e0e0;font-size:12px}
+.tutorial-close{padding:12px 32px;font-size:16px;background:#7c3aed;border:none;color:#fff;border-radius:8px;cursor:pointer;align-self:center}
+.tutorial-close:active{background:#6d28d9}
 </style>
 </head>
 <body>
@@ -274,6 +293,22 @@ let revealNextMap=false; // legendary gacha effect
 let gachaResultModal=null; // current gacha result to display
 // Exploration stats (persistent)
 let stats={maxFloor:0,totalKills:0,totalItems:0,totalSales:0,totalRuns:0,totalMoney:0};
+// Achievements (persistent)
+let achievements={};
+const ACHIEVEMENTS={
+  firstKill:{name:'初めての勝利',icon:'⚔️',desc:'最初の敵を倒した',check:()=>stats.totalKills>=1},
+  floor5:{name:'深層探索者',icon:'🏔️',desc:'5階に到達した',check:()=>stats.maxFloor>=5},
+  floor10:{name:'奥地の覇者',icon:'🗻',desc:'10階に到達した',check:()=>stats.maxFloor>=10},
+  goldbar:{name:'大金持ち',icon:'💰',desc:'金塊を持ち帰った',check:()=>false}, // manually set
+  allAreas:{name:'完全探索',icon:'🗺️',desc:'全エリアをクリアした',check:()=>stats.maxFloor>=10},
+  kills50:{name:'スレイヤー',icon:'💀',desc:'50体の敵を倒した',check:()=>stats.totalKills>=50},
+  kills100:{name:'殺戮者',icon:'☠️',desc:'100体の敵を倒した',check:()=>stats.totalKills>=100},
+  items100:{name:'コレクター',icon:'📦',desc:'100個のアイテムを拾った',check:()=>stats.totalItems>=100},
+  sales5000:{name:'商売上手',icon:'💵',desc:'総売上5000G達成',check:()=>stats.totalSales>=5000},
+  runs10:{name:'探索家',icon:'🚀',desc:'10回探索した',check:()=>stats.totalRuns>=10},
+  runs50:{name:'ベテラン',icon:'🎖️',desc:'50回探索した',check:()=>stats.totalRuns>=50},
+  maxUpgrades:{name:'最強装備',icon:'🛡️',desc:'全アップグレードを最大まで購入',check:()=>bagExpansions>=3&&armorUpgrade>=3&&storageExpansions>=3&&hasDetector},
+};
 
 const GACHA_REWARDS=[
   {name:'強化包帯',icon:'🩹',rarity:'common',type:'item',itemId:'bandage',count:3},
@@ -308,6 +343,8 @@ let showLevelUpFlash=false;
 let dashState=null; // {dir: [dx,dy], interval: intervalId}
 let dashHoldTimer=null;
 const DASH_HOLD_MS=500;
+let tutorialSeen=false; // Has the user seen the tutorial?
+let showTutorial=false; // Currently showing tutorial overlay?
 
 function pushLog(msg){
   if(!msg)return;
@@ -735,6 +772,7 @@ function movePlayer(dx,dy,dashMode=false){
     stopDash();
     player.floor++;
     if(player.floor>stats.maxFloor)stats.maxFloor=player.floor;
+    checkAchievements();
     pushLog(`${player.floor}階に降りた`);
     playSound('stairs');
     generateMap(player.floor);
@@ -745,6 +783,8 @@ function movePlayer(dx,dy,dashMode=false){
   }
   if(map[ny][nx]===EXIT){
     stopDash();
+    // Check for goldbar achievement
+    if(hasItem('goldbar'))achievements.goldbar=true;
     gameState='base';
     // シレン式: 拠点に戻ると基礎ステータスに戻る（レベルボーナス消失）
     player.level=1;player.exp=0;
@@ -753,6 +793,7 @@ function movePlayer(dx,dy,dashMode=false){
     // Save card keys
     totalCardKeys+=cardKeys;
     cardKeys=0;
+    checkAchievements();
     pushLog('拠点に帰還した（ステータスリセット）');
     render();
     return false;
@@ -872,6 +913,7 @@ function attackEnemy(e){
     pushLog(`${e.name}を倒した！ +${e.exp}EXP`);
     player.exp+=e.exp;
     stats.totalKills++;
+    checkAchievements();
     playSound('kill');
     // Consume ammo if rifle used
     if(hasItem('rifle')&&countItem('ammo')>0)consumeItem('ammo');
@@ -906,6 +948,7 @@ function pickupFloorItem(idx){
   gameState='inventory';
   invRotation=0;
   stats.totalItems++;
+  checkAchievements();
   pushLog(`${ITEMS[mi.itemId].name}を拾った — 鞄に配置してください`);
   playSound('pickup');
 }
@@ -1106,6 +1149,7 @@ function sellItem(idx){
   player.money+=val;
   stats.totalSales+=val;
   stats.totalMoney+=val;
+  checkAchievements();
   removeInvItem(idx);
   playSound('pickup');
   render();
@@ -1117,6 +1161,7 @@ function buyUpgrade(type){
     case'detector':if(player.money>=500&&!hasDetector){player.money-=500;hasDetector=true;playSound('levelup');}break;
     case'storage':if(player.money>=250&&storageExpansions<3){player.money-=250;storageExpansions++;storageCapacity=20+storageExpansions*10;playSound('levelup');}break;
   }
+  checkAchievements();
   render();
 }
 // ═══════════════════════════════════════
@@ -1191,6 +1236,7 @@ function enterDungeon(){
   cardKeys=0;
   stats.totalRuns++;
   if(stats.maxFloor<1)stats.maxFloor=1;
+  checkAchievements();
   generateMap(1);updateFOV();
   // Apply reveal map effect from gacha
   if(revealNextMap){
@@ -1201,6 +1247,11 @@ function enterDungeon(){
     pushLog('ダンジョンに入った（Lv1から開始）');
   }
   gameState='dungeon';
+  // Show tutorial on first dungeon entry (not first game, but first dungeon)
+  if(!tutorialSeen){
+    showTutorial=true;
+    tutorialSeen=true;
+  }
   render();
 }
 
@@ -1294,6 +1345,27 @@ function getGachaDesc(reward){
 }
 
 // ═══════════════════════════════════════
+// ACHIEVEMENTS
+// ═══════════════════════════════════════
+function checkAchievements(){
+  let newUnlocks=[];
+  for(const achId in ACHIEVEMENTS){
+    if(achievements[achId])continue; // already unlocked
+    const ach=ACHIEVEMENTS[achId];
+    if(ach.check()){
+      achievements[achId]=true;
+      newUnlocks.push(ach);
+    }
+  }
+  if(newUnlocks.length>0){
+    for(const ach of newUnlocks){
+      pushLog(`🏆 実績解除: ${ach.name}`);
+    }
+    saveGame();
+  }
+}
+
+// ═══════════════════════════════════════
 // SAVE / LOAD
 // ═══════════════════════════════════════
 function saveGame(){
@@ -1302,8 +1374,9 @@ function saveGame(){
     player,inventory,invW,invH,bagExpansions,armorUpgrade,hasDetector,
     baseMaxHp,baseAtk,baseDef,
     storageBox,storageCapacity,storageExpansions,
-    cardKeys,totalCardKeys,mapCardKeys,revealNextMap,stats,
+    cardKeys,totalCardKeys,mapCardKeys,revealNextMap,stats,achievements,
     map,seen,enemies,mapItems,lootBags,rooms,mapTraps,mapContainers,gameState:saveState,
+    tutorialSeen,
   }));}catch(e){}
 }
 function loadGame(){
@@ -1316,9 +1389,11 @@ function loadGame(){
     storageBox=d.storageBox||[];storageCapacity=d.storageCapacity||20;storageExpansions=d.storageExpansions||0;
     cardKeys=d.cardKeys||0;totalCardKeys=d.totalCardKeys||0;mapCardKeys=d.mapCardKeys||[];revealNextMap=d.revealNextMap||false;
     stats=Object.assign({maxFloor:0,totalKills:0,totalItems:0,totalSales:0,totalRuns:0,totalMoney:0},d.stats||{});
+    achievements=d.achievements||{};
     map=d.map||[];seen=d.seen||[];enemies=d.enemies||[];mapItems=d.mapItems||[];
     lootBags=d.lootBags||[];rooms=d.rooms||[];mapTraps=d.mapTraps||[];mapContainers=d.mapContainers||[];
     gameState=d.gameState||'base';
+    tutorialSeen=d.tutorialSeen||false;
     if(gameState==='dungeon')updateFOV();
     render();
   }catch(e){pushLog('ロード失敗');}
@@ -1330,7 +1405,9 @@ function startNewGame(){
   storageBox=[];storageCapacity=20;storageExpansions=0;
   cardKeys=0;totalCardKeys=0;mapCardKeys=[];revealNextMap=false;gachaResultModal=null;
   stats={maxFloor:0,totalKills:0,totalItems:0,totalSales:0,totalRuns:0,totalMoney:0};
+  achievements={};
   gameState='base';logMsg='';logHistory=[];baseTab='home';
+  tutorialSeen=false;showTutorial=false;
   render();
 }
 
@@ -1437,6 +1514,8 @@ function renderDungeonUI(){
     h+=`<div class="levelup-flash"></div>`;
     showLevelUpFlash=false;
   }
+  // Help button
+  h+=`<button class="help-btn" data-action="show-help">?</button>`;
   // Minimap
   h+=renderMinimap();
   h+=`</div>`;
@@ -1458,6 +1537,57 @@ function renderDungeonUI(){
   if(gameState==='looting'||gameState==='loot_preview')h+=renderLootOverlay();
   if(gameState==='item_preview')h+=renderItemPreviewModal();
   if(gameState==='loot_preview')h+=renderLootPreviewModal();
+  if(showTutorial)h+=renderTutorialOverlay();
+  return h;
+}
+
+function renderTutorialOverlay(){
+  let h=`<div class="tutorial-overlay"><div class="tutorial-card">`;
+  h+=`<h2>📘 ゲームガイド</h2>`;
+  // Movement
+  h+=`<div class="tutorial-section"><h3>🚶 移動と行動</h3>`;
+  h+=`<div class="tutorial-tip">・十字キー（<span class="key">↑</span><span class="key">↓</span><span class="key">←</span><span class="key">→</span>）で移動<br>`;
+  h+=`・敵に隣接すると自動的に攻撃<br>`;
+  h+=`・<span class="key">●</span>ボタンで待機（1ターン経過）<br>`;
+  h+=`・十字キーを長押し（0.5秒）でダッシュ！<br>`;
+  h+=`（壁・敵・アイテム・分岐点で自動停止）</div>`;
+  h+=`</div>`;
+  // Inventory
+  h+=`<div class="tutorial-section"><h3>🎒 バックパック（テトリス式）</h3>`;
+  h+=`<div class="tutorial-tip">・<span class="key">🎒</span>ボタンでバックパック開閉<br>`;
+  h+=`・アイテムをテトリスのように配置<br>`;
+  h+=`・<span class="key">回転🔄</span>ボタンでアイテムを回転<br>`;
+  h+=`・配置中もターンが進行するので注意！<br>`;
+  h+=`・緑色＝配置可能 / 赤色＝配置不可<br>`;
+  h+=`・アイテムをタップして「移動」で再配置可能</div>`;
+  h+=`</div>`;
+  // Items
+  h+=`<div class="tutorial-section"><h3>💊 アイテム</h3>`;
+  h+=`<div class="tutorial-tip">・床のアイテムを踏むと自動拾得<br>`;
+  h+=`・🩹包帯・💊医療キットでHP回復<br>`;
+  h+=`・🥫缶詰・🧴水筒で満腹度回復<br>`;
+  h+=`・🔪ナイフ・🔫ライフルは鞄に入れると攻撃力UP<br>`;
+  h+=`・🎒ルートバッグ（敵ドロップ）をタップで開く<br>`;
+  h+=`・📦コンテナ・⚠️罠・🔑カードキーもマップに出現</div>`;
+  h+=`</div>`;
+  // Base
+  h+=`<div class="tutorial-section"><h3>🏠 拠点</h3>`;
+  h+=`<div class="tutorial-tip">・△出口マークで拠点に帰還<br>`;
+  h+=`・💤休憩でHP全回復<br>`;
+  h+=`・🛒ショップでアイテムを売却＆アップグレード購入<br>`;
+  h+=`・📦収納箱でアイテムを保管（次の探索に持ち出せる）<br>`;
+  h+=`・🎰ガチャで強化アイテム獲得（カードキー1枚=1回）<br>`;
+  h+=`・📊記録タブで統計＆実績を確認</div>`;
+  h+=`</div>`;
+  // Shiren-style leveling
+  h+=`<div class="tutorial-section"><h3>🔄 シレン式レベルシステム</h3>`;
+  h+=`<div class="tutorial-tip">・探索に入るたびにレベル1からスタート<br>`;
+  h+=`・レベルアップのボーナスはダンジョン内のみ有効<br>`;
+  h+=`・拠点に戻るとレベル＆ステータスがリセット<br>`;
+  h+=`・装備（鞄の武器）・アップグレード購入は永続</div>`;
+  h+=`</div>`;
+  h+=`<button class="tutorial-close" data-action="close-tutorial">わかった！</button>`;
+  h+=`</div></div>`;
   return h;
 }
 
@@ -1931,6 +2061,18 @@ function renderRecordsTab(){
   h+=`<div class="record-row"><span class="record-label">💰 総売上</span><span class="record-value">${stats.totalSales}G</span></div>`;
   h+=`<div class="record-row"><span class="record-label">🚀 探索回数</span><span class="record-value">${stats.totalRuns}回</span></div>`;
   h+=`</div>`;
+  // Achievements
+  const achKeys=Object.keys(ACHIEVEMENTS);
+  const unlocked=achKeys.filter(k=>achievements[k]);
+  h+=`<div class="records-section"><h3>🏆 実績 (${unlocked.length}/${achKeys.length})</h3>`;
+  h+=`<div class="achievements-grid">`;
+  for(const achId of achKeys){
+    const ach=ACHIEVEMENTS[achId];
+    const isUnlocked=achievements[achId];
+    const cls=isUnlocked?'achievement unlocked':'achievement locked';
+    h+=`<div class="${cls}"><div class="ach-icon">${isUnlocked?ach.icon:'🔒'}</div><div class="ach-info"><div class="ach-name">${ach.name}</div><div class="ach-desc">${ach.desc}</div></div></div>`;
+  }
+  h+=`</div></div>`;
   // Current status
   h+=`<div class="records-section"><h3>🎒 現在のステータス</h3>`;
   h+=`<div class="record-row"><span class="record-label">基礎HP</span><span class="record-value">${baseMaxHp}</span></div>`;
@@ -2119,6 +2261,9 @@ function attachEvents(){
   // Loot preview modal buttons
   document.querySelectorAll('[data-action="confirm-loot-pickup"]').forEach(b=>b.addEventListener('click',confirmLootPickup));
   document.querySelectorAll('[data-action="ignore-loot-item"]').forEach(b=>b.addEventListener('click',ignoreLootItem));
+  // Help button
+  document.querySelectorAll('[data-action="show-help"]').forEach(b=>b.addEventListener('click',()=>{showTutorial=true;render();}));
+  document.querySelectorAll('[data-action="close-tutorial"]').forEach(b=>b.addEventListener('click',()=>{showTutorial=false;render();}));
 }
 
 // ═══════════════════════════════════════
