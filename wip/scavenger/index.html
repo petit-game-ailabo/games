@@ -1146,14 +1146,22 @@ function completeRelocate(gx,gy){
 // ═══════════════════════════════════════
 // BASE / SHOP
 // ═══════════════════════════════════════
-function sellItem(idx){
-  const it=inventory[idx];
-  const val=ITEMS[it.itemId].value;
+function sellItem(src,idx){
+  let itemId;
+  if(src==='inv'){
+    const it=inventory[idx];
+    itemId=it.itemId;
+    removeInvItem(idx);
+  }else if(src==='storage'){
+    const si=storageBox[idx];
+    itemId=si.itemId;
+    storageBox.splice(idx,1);
+  }
+  const val=ITEMS[itemId].value;
   player.money+=val;
   stats.totalSales+=val;
   stats.totalMoney+=val;
   checkAchievements();
-  removeInvItem(idx);
   playSound('pickup');
   render();
 }
@@ -1165,6 +1173,44 @@ function buyUpgrade(type){
     case'storage':if(player.money>=250&&storageExpansions<3){player.money-=250;storageExpansions++;storageCapacity=20+storageExpansions*10;playSound('levelup');}break;
   }
   checkAchievements();
+  render();
+}
+function sellAllTrade(){
+  let total=0;
+  for(let i=inventory.length-1;i>=0;i--){
+    const it=inventory[i];
+    if(ITEMS[it.itemId].category==='trade'){
+      total+=ITEMS[it.itemId].value;
+      removeInvItem(i);
+    }
+  }
+  for(let i=storageBox.length-1;i>=0;i--){
+    const si=storageBox[i];
+    if(ITEMS[si.itemId].category==='trade'){
+      total+=ITEMS[si.itemId].value;
+      storageBox.splice(i,1);
+    }
+  }
+  if(total>0){
+    player.money+=total;
+    stats.totalSales+=total;
+    stats.totalMoney+=total;
+    checkAchievements();
+    playSound('pickup');
+  }
+  render();
+}
+function moveAllToStorage(){
+  let moved=0;
+  for(let i=inventory.length-1;i>=0;i--){
+    const it=inventory[i];
+    if(canStoreItem(it.itemId)){
+      storageBox.push({itemId:it.itemId});
+      removeInvItem(i);
+      moved++;
+    }
+  }
+  if(moved>0)playSound('pickup');
   render();
 }
 // ═══════════════════════════════════════
@@ -1418,6 +1464,8 @@ function render(){
   const title=document.getElementById('titleScreen');
   if(gameState==='title'){if(title)title.style.display='flex';return;}
   if(title)title.style.display='none';
+  // Save scroll position
+  const scrollY=app.scrollTop;
   // Build HTML
   let html='';
   if(gameState==='dungeon'||gameState==='inventory'||gameState==='looting'||gameState==='item_preview'||gameState==='loot_preview'){
@@ -1435,6 +1483,8 @@ function render(){
   const children=[...app.children];
   for(const c of children)if(c.id!=='titleScreen')c.remove();
   app.insertAdjacentHTML('beforeend',html);
+  // Restore scroll position
+  app.scrollTop=scrollY;
   // Attach events
   attachEvents();
   // Base ambient sound
@@ -1994,15 +2044,38 @@ function renderHomeTab(){
 
 function renderShopTab(){
   let h='';
-  // Sell items
-  if(inventory.length>0){
-    h+=`<div class="base-section"><h3>💰 アイテムを売る</h3><div class="sell-items">`;
-    for(let i=0;i<inventory.length;i++){
-      const it=inventory[i];
-      const item=ITEMS[it.itemId];
-      h+=`<div class="sell-item" data-sell="${i}">${item.icon} ${item.name} (${item.value}G)</div>`;
+  // Quick actions
+  const hasTradable=inventory.some(it=>ITEMS[it.itemId].category==='trade')||storageBox.some(si=>ITEMS[si.itemId].category==='trade');
+  const hasInv=inventory.length>0;
+  if(hasTradable||hasInv){
+    h+=`<div class="base-section" style="display:flex;gap:8px;flex-wrap:wrap">`;
+    if(hasTradable)h+=`<button data-action="sell-all-trade" class="base-btn" style="flex:1;font-size:13px">💰 換金アイテム一括売却</button>`;
+    if(hasInv)h+=`<button data-action="move-all-storage" class="base-btn" style="flex:1;font-size:13px">📦 バッグ→倉庫一括移動</button>`;
+    h+=`</div>`;
+  }
+  // Sell items (from bag and storage)
+  const hasItems=inventory.length>0||storageBox.length>0;
+  if(hasItems){
+    h+=`<div class="base-section"><h3>💰 アイテムを売る</h3>`;
+    if(inventory.length>0){
+      h+=`<div style="font-size:12px;color:#999;margin-bottom:4px">バックパック:</div><div class="sell-items">`;
+      for(let i=0;i<inventory.length;i++){
+        const it=inventory[i];
+        const item=ITEMS[it.itemId];
+        h+=`<div class="sell-item" data-sell="inv:${i}">${item.icon} ${item.name} (${item.value}G)</div>`;
+      }
+      h+=`</div>`;
     }
-    h+=`</div></div>`;
+    if(storageBox.length>0){
+      h+=`<div style="font-size:12px;color:#999;margin:8px 0 4px">倉庫:</div><div class="sell-items">`;
+      for(let i=0;i<storageBox.length;i++){
+        const si=storageBox[i];
+        const item=ITEMS[si.itemId];
+        h+=`<div class="sell-item" data-sell="storage:${i}">${item.icon} ${item.name} (${item.value}G)</div>`;
+      }
+      h+=`</div>`;
+    }
+    h+=`</div>`;
   }
   // Shop
   h+=`<div class="base-section"><h3>🛒 アップグレード</h3>`;
@@ -2157,9 +2230,15 @@ function attachEvents(){
   // Use items
   document.querySelectorAll('[data-use]').forEach(b=>b.addEventListener('click',()=>useItem(b.dataset.use)));
   // Sell items
-  document.querySelectorAll('[data-sell]').forEach(b=>b.addEventListener('click',()=>sellItem(parseInt(b.dataset.sell))));
+  document.querySelectorAll('[data-sell]').forEach(b=>b.addEventListener('click',()=>{
+    const [src,idx]=b.dataset.sell.split(':');
+    sellItem(src,parseInt(idx));
+  }));
   // Buy
   document.querySelectorAll('[data-buy]').forEach(b=>b.addEventListener('click',()=>buyUpgrade(b.dataset.buy)));
+  // Bulk actions
+  document.querySelectorAll('[data-action="sell-all-trade"]').forEach(b=>b.addEventListener('click',sellAllTrade));
+  document.querySelectorAll('[data-action="move-all-storage"]').forEach(b=>b.addEventListener('click',moveAllToStorage));
   // Inventory grid clicks + preview hover/touch
   document.querySelectorAll('.inv-cell').forEach(cell=>{
     const gx=parseInt(cell.dataset.gx),gy=parseInt(cell.dataset.gy);
