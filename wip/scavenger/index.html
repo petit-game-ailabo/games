@@ -342,9 +342,7 @@ const DPAD_DEBOUNCE_MS=150;
 let minimapExpanded=false;
 const MINIMAP_CELL=2, MINIMAP_CELL_EX=4;
 let showLevelUpFlash=false;
-let dashState=null; // {dir: [dx,dy], interval: intervalId}
-let dashHoldTimer=null;
-const DASH_HOLD_MS=500;
+// Dash feature removed for better UX
 let tutorialSeen=false; // Has the user seen the tutorial?
 let showTutorial=false; // Currently showing tutorial overlay?
 let tutorialPage=0; // Current tutorial page (0-4)
@@ -748,12 +746,12 @@ function movePlayer(dx,dy,dashMode=false){
   initAudio();
   if(!dashMode)logMsg='';
   const nx=player.x+dx,ny=player.y+dy;
-  if(nx<0||nx>=MW||ny<0||ny>=MH){stopDash();return false;}
-  if(map[ny][nx]===WALL){stopDash();return false;}
+  if(nx<0||nx>=MW||ny<0||ny>=MH){return false;}
+  if(map[ny][nx]===WALL){return false;}
   // Enemy at target?
   const enemy=enemies.find(e=>e.hp>0&&e.x===nx&&e.y===ny);
   if(enemy){
-    stopDash();
+    
     attackEnemy(enemy);
     processTurn();
     render();
@@ -772,14 +770,14 @@ function movePlayer(dx,dy,dashMode=false){
   }
   // Check tile
   if(map[ny][nx]===STAIRS){
-    stopDash();
+    
     // Show choice: descend or return to base
     gameState='stairs_choice';
     render();
     return false;
   }
   if(map[ny][nx]===EXIT){
-    stopDash();
+    
     // Check for goldbar achievement
     if(hasItem('goldbar'))achievements.goldbar=true;
     gameState='base';
@@ -807,7 +805,7 @@ function movePlayer(dx,dy,dashMode=false){
   if(trapIdx>=0){
     const trap=mapTraps[trapIdx];
     if(!trap.triggered){
-      stopDash();
+      
       trap.triggered=true;
       const trapInfo=TRAP_TYPES[trap.type];
       if(trap.type==='spike'){
@@ -832,7 +830,7 @@ function movePlayer(dx,dy,dashMode=false){
   if(contIdx>=0){
     const cont=mapContainers[contIdx];
     if(!cont.opened){
-      stopDash();
+      
       openContainer(contIdx);
       return false;
     }
@@ -840,14 +838,14 @@ function movePlayer(dx,dy,dashMode=false){
   // Item on floor?
   const itemIdx=mapItems.findIndex(i=>i.x===nx&&i.y===ny);
   if(itemIdx>=0){
-    stopDash();
+    
     pickupFloorItem(itemIdx);
     return false;
   }
   // Loot bag?
   const bagIdx=lootBags.findIndex(b=>b.x===nx&&b.y===ny);
   if(bagIdx>=0){
-    stopDash();
+    
     openLootBag(bagIdx);
     return false;
   }
@@ -861,7 +859,7 @@ function movePlayer(dx,dy,dashMode=false){
       return true;
     }).length;
     if(walkable>=3){
-      stopDash();
+      
       pushLog('ダッシュ停止（分岐点）');
       processTurn();
       render();
@@ -876,29 +874,13 @@ function movePlayer(dx,dy,dashMode=false){
 }
 function waitTurn(){
   if(gameState!=='dungeon')return;
-  stopDash();
+  
   initAudio();
   pushLog('待機');
   processTurn();
   render();
 }
-function startDash(dx,dy){
-  if(gameState!=='dungeon')return;
-  if(dashState)return; // already dashing
-  pushLog('💨 ダッシュ開始');
-  dashState={dir:[dx,dy],interval:setInterval(()=>{
-    if(!dashState||gameState!=='dungeon'){stopDash();return;}
-    const cont=movePlayer(dashState.dir[0],dashState.dir[1],true);
-    if(!cont)stopDash();
-  },150)};
-}
-function stopDash(){
-  if(dashHoldTimer){clearTimeout(dashHoldTimer);dashHoldTimer=null;}
-  if(dashState){
-    clearInterval(dashState.interval);
-    dashState=null;
-  }
-}
+// Dash functions removed
 function attackEnemy(e){
   const totalAtk=getPlayerAtk();
   const dmg=Math.max(1,totalAtk-e.def+Math.floor(Math.random()*5)-2);
@@ -936,7 +918,7 @@ function addFloatDmg(tx,ty,dmg,color){
   setTimeout(()=>{floatingDmgs=floatingDmgs.filter(f=>Date.now()-f.t<800);render();},800);
 }
 function pickupFloorItem(idx){
-  stopDash(); // Stop dash when picking up item
+   // Stop dash when picking up item
   const mi=mapItems[idx];
   // Skip confirmation — go straight to inventory placement
   selectedLootItem=mi.itemId;
@@ -1086,7 +1068,7 @@ function useItem(itemId){
 function rotateItem(){invRotation=(invRotation+1)%4;render();updatePreviewDOM();}
 function toggleBag(){
   initAudio();
-  stopDash(); // Always stop dash when toggling bag
+   // Always stop dash when toggling bag
   if(gameState==='dungeon'){gameState='inventory';selectedLootItem=null;selectedInvItem=null;invRotation=0;previewOrigin=null;relocatingItem=null;}
   else if(gameState==='inventory'||gameState==='looting'||gameState==='loot_preview'){
     // Cancel any ongoing relocation
@@ -1102,7 +1084,7 @@ function toggleBag(){
   render();
 }
 function closeLoot(){
-  stopDash(); // Always stop dash when closing loot
+   // Always stop dash when closing loot
   // If a loot item was selected but not placed, put it back in the bag
   if(selectedLootItem&&currentLootBag){
     currentLootBag.items.push(selectedLootItem);
@@ -1682,9 +1664,6 @@ function renderInventoryOverlay(){
     h+=`</div>`;
   }
   // Detail panel for selected item
-  if(selectedInvItem!==null&&selectedInvItem<inventory.length){
-    h+=renderItemDetailPanel(selectedInvItem);
-  }
   h+=`<div class="warn-turns">⚠️ ターンは進行中！</div></div>`;
   return h;
 }
@@ -2233,9 +2212,19 @@ function attachEvents(){
         }
         return;
       }
-      // Select/deselect existing item
+      // Tap existing item → start relocating immediately
       const occ=inventory.findIndex(it=>it.cells.some(c=>c[0]===gx&&c[1]===gy));
-      if(occ>=0){selectedInvItem=selectedInvItem===occ?null:occ;render();}
+      if(occ>=0){
+        if(relocatingItem&&relocatingItem.invIdx===occ){
+          // Tapped same item → cancel
+          cancelRelocate();
+          render();
+        }else{
+          // Start relocating
+          startRelocate(occ);
+          render();
+        }
+      }
     });
   });
   // Loot cell clicks — show preview modal first
