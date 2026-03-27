@@ -197,6 +197,7 @@ let currentLootBag=null;
 let pendingFloorItem=null; // {itemId, mapItemIdx} — item on floor awaiting pickup/ignore decision
 let pendingLootItem=null; // {itemId, lootIdx} — loot bag item awaiting preview decision
 let relocatingItem=null; // {itemId, cells, rot, invIdx} — item being relocated (original position for cancel)
+let floorPickupItemId=null; // itemId if current selectedLootItem came from a floor pickup (for return-to-floor)
 let audioCtx=null;
 let floatingDmgs=[];
 let overlayDmgFlash=false;
@@ -560,11 +561,12 @@ function confirmPickupFloorItem(){
   const mi=mapItems[pendingFloorItem.mapItemIdx];
   if(!mi){pendingFloorItem=null;gameState='dungeon';render();return;}
   selectedLootItem=pendingFloorItem.itemId;
+  floorPickupItemId=pendingFloorItem.itemId; // track that this came from the floor
   mapItems.splice(pendingFloorItem.mapItemIdx,1);
   pendingFloorItem=null;
   gameState='inventory';
   invRotation=0;
-  logMsg=`${ITEMS[selectedLootItem].name}を拾った`;
+  logMsg=`${ITEMS[selectedLootItem].name}を拾った — 鞄に配置してください`;
   render();
 }
 function ignoreFloorItem(){
@@ -593,6 +595,7 @@ function invPlaceAttempt(gx,gy){
   if(canPlace(itemId,gx,gy,invRotation)){
     placeItem(itemId,gx,gy,invRotation);
     selectedLootItem=null;
+    floorPickupItemId=null; // successfully placed, clear floor tracker
     invRotation=0;
     playSound('pickup');
     logMsg=`${ITEMS[itemId].name}を配置した`;
@@ -600,6 +603,16 @@ function invPlaceAttempt(gx,gy){
     // Keep bag open after placement (don't switch to dungeon)
     render();
   }
+}
+function returnItemToFloor(){
+  if(!floorPickupItemId)return;
+  mapItems.push({x:player.x,y:player.y,itemId:floorPickupItemId});
+  logMsg=`${ITEMS[floorPickupItemId].name}を床に戻した`;
+  floorPickupItemId=null;
+  selectedLootItem=null;
+  invRotation=0;
+  gameState='dungeon';
+  render();
 }
 function invLootPlaceAttempt(gx,gy){
   if(!selectedLootItem)return;
@@ -639,11 +652,22 @@ function toggleBag(){
   else if(gameState==='inventory'||gameState==='looting'||gameState==='loot_preview'){
     // Cancel any ongoing relocation
     if(relocatingItem){cancelRelocate();}
+    // If a floor item was picked up but not placed, return it to the floor
+    if(floorPickupItemId){
+      mapItems.push({x:player.x,y:player.y,itemId:floorPickupItemId});
+      logMsg=`${ITEMS[floorPickupItemId].name}を床に戻した`;
+      floorPickupItemId=null;
+    }
     gameState='dungeon';currentLootBag=null;selectedLootItem=null;selectedInvItem=null;pendingLootItem=null;previewOrigin=null;relocatingItem=null;
   }
   render();
 }
 function closeLoot(){
+  // If a loot item was selected but not placed, put it back in the bag
+  if(selectedLootItem&&currentLootBag){
+    currentLootBag.items.push(selectedLootItem);
+    selectedLootItem=null;
+  }
   // Put remaining items back as a bag on player's tile
   if(currentLootBag&&currentLootBag.items.length>0){
     currentLootBag.x=player.x;currentLootBag.y=player.y;
@@ -865,10 +889,13 @@ function renderInventoryOverlay(){
     const slItem=ITEMS[selectedLootItem];
     const slRarity=getItemRarity(selectedLootItem);
     const slShape=getRotatedShape(slItem.shape,invRotation);
-    h+=`<div style="padding:4px 12px;color:#f59e0b;display:flex;align-items:center;gap:8px">${relocatingItem?'移動':'配置'}: ${slItem.icon} ${slItem.name} `;
+    h+=`<div style="padding:4px 12px;color:#f59e0b;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${relocatingItem?'移動':'配置'}: ${slItem.icon} ${slItem.name} `;
     h+=renderShapeGrid(slShape,14,slRarity.color);
     if(relocatingItem){
       h+=`<button class="rotate-btn" data-action="cancel-relocate" style="margin:0;background:#c62828;border-color:#e53935">✕ キャンセル</button>`;
+    }
+    if(floorPickupItemId&&!relocatingItem){
+      h+=`<button class="rotate-btn" data-action="return-to-floor" style="margin:0;background:#555;border-color:#777">↩ 床に戻す</button>`;
     }
     h+=`</div>`;
   }
@@ -1221,6 +1248,7 @@ function attachEvents(){
   document.querySelectorAll('[data-detail-relocate]').forEach(b=>b.addEventListener('click',()=>{const idx=parseInt(b.dataset.detailRelocate);startRelocate(idx);}));
   document.querySelectorAll('[data-detail-close]').forEach(b=>b.addEventListener('click',()=>{selectedInvItem=null;render();}));
   document.querySelectorAll('[data-action="cancel-relocate"]').forEach(b=>b.addEventListener('click',cancelRelocate));
+  document.querySelectorAll('[data-action="return-to-floor"]').forEach(b=>b.addEventListener('click',returnItemToFloor));
   document.querySelectorAll('[data-action="enter"]').forEach(b=>b.addEventListener('click',enterDungeon));
   document.querySelectorAll('[data-action="respawn"]').forEach(b=>b.addEventListener('click',()=>{
     player.hp=player.maxHp;player.fullness=100;gameState='base';render();
