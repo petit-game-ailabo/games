@@ -45,6 +45,8 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .inv-grid{display:inline-grid;border:1px solid #3a3a5e;background:#111128;gap:0}
 .inv-cell{width:38px;height:38px;border:1px solid #2a2a4e;position:relative;cursor:pointer}
 .inv-cell.occupied{border-color:#4a4a6e}
+.inv-cell.preview-ok .preview-shape{position:absolute;inset:0;background:rgba(34,197,94,.35);border-radius:2px;pointer-events:none}
+.inv-cell.preview-bad .preview-shape{position:absolute;inset:0;background:rgba(239,68,68,.35);border-radius:2px;pointer-events:none}
 .inv-cell.preview-ok{background:rgba(34,197,94,.25);border-color:#22c55e}
 .inv-cell.preview-bad{background:rgba(239,68,68,.25);border-color:#ef4444}
 .inv-cell .item-in-cell{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;pointer-events:none}
@@ -612,11 +614,11 @@ function useItem(itemId){
   processTurn();
   render();
 }
-function rotateItem(){invRotation=(invRotation+1)%4;render();}
+function rotateItem(){invRotation=(invRotation+1)%4;render();updatePreviewDOM();}
 function toggleBag(){
   initAudio();
-  if(gameState==='dungeon'){gameState='inventory';selectedLootItem=null;selectedInvItem=null;invRotation=0;}
-  else if(gameState==='inventory'||gameState==='looting'||gameState==='loot_preview'){gameState='dungeon';currentLootBag=null;selectedLootItem=null;selectedInvItem=null;pendingLootItem=null;}
+  if(gameState==='dungeon'){gameState='inventory';selectedLootItem=null;selectedInvItem=null;invRotation=0;previewOrigin=null;}
+  else if(gameState==='inventory'||gameState==='looting'||gameState==='loot_preview'){gameState='dungeon';currentLootBag=null;selectedLootItem=null;selectedInvItem=null;pendingLootItem=null;previewOrigin=null;}
   render();
 }
 function closeLoot(){
@@ -868,35 +870,95 @@ function renderLootOverlay(){
   return h;
 }
 
+let previewOrigin=null; // {gx,gy} cell currently being previewed
+
 function renderInvGrid(interactive){
+  // Compute preview cells if we have a selected item and preview origin
+  const previewCells=new Map(); // "gx,gy" -> 'ok'|'bad'
+  if(selectedLootItem&&interactive&&previewOrigin){
+    const shape=getRotatedShape(ITEMS[selectedLootItem].shape,invRotation);
+    const ok=canPlace(selectedLootItem,previewOrigin.gx,previewOrigin.gy,invRotation);
+    for(let r=0;r<shape.length;r++){
+      for(let c=0;c<shape[r].length;c++){
+        if(!shape[r][c])continue;
+        const cx=previewOrigin.gx+c,cy=previewOrigin.gy+r;
+        if(cx>=0&&cx<invW&&cy>=0&&cy<invH){
+          previewCells.set(`${cx},${cy}`,ok?'ok':'bad');
+        }
+      }
+    }
+  }
+
   let h=`<div class="inv-grid" style="grid-template-columns:repeat(${invW},38px)">`;
   for(let gy=0;gy<invH;gy++){
     for(let gx=0;gx<invW;gx++){
       const occ=inventory.findIndex(it=>it.cells.some(c=>c[0]===gx&&c[1]===gy));
       let cls='inv-cell';
       let content='';
+      let inlineStyle='';
       if(occ>=0){
         cls+=' occupied';
         if(selectedInvItem===occ)cls+=' selected';
+        // Rarity-based border color for occupied cells
+        const rarityColor=getItemRarity(inventory[occ].itemId).color;
+        inlineStyle=`border-color:${rarityColor}`;
         // Show icon only on first cell of item
         const it=inventory[occ];
         const isFirst=it.cells[0][0]===gx&&it.cells[0][1]===gy;
         if(isFirst)content=`<span class="item-in-cell">${ITEMS[it.itemId].icon}</span>`;
         else{
-          // Color the cell to show it's part of item
-          const hue=(occ*67)%360;
-          content=`<span class="item-in-cell" style="background:hsla(${hue},40%,30%,.5);border-radius:2px"></span>`;
+          content=`<span class="item-in-cell" style="background:${rarityColor}22;border-radius:2px"></span>`;
         }
       }
-      // Preview for placement
-      if(selectedLootItem&&interactive){
-        // Show preview on hover (we'll handle via click)
+      // Preview overlay
+      const pvKey=`${gx},${gy}`;
+      if(previewCells.has(pvKey)){
+        const pvType=previewCells.get(pvKey);
+        cls+=pvType==='ok'?' preview-ok':' preview-bad';
+        content+=`<span class="preview-shape"></span>`;
       }
-      h+=`<div class="${cls}" data-gx="${gx}" data-gy="${gy}">${content}</div>`;
+      h+=`<div class="${cls}" data-gx="${gx}" data-gy="${gy}" style="${inlineStyle}">${content}</div>`;
     }
   }
   h+=`</div>`;
   return h;
+}
+
+function updatePreviewDOM(){
+  // Lightweight preview update — only touches inv-cell classes, no full re-render
+  if(!selectedLootItem){return;}
+  const cells=document.querySelectorAll('.inv-cell');
+  // Compute which cells are in preview
+  const previewMap=new Map();
+  if(previewOrigin){
+    const shape=getRotatedShape(ITEMS[selectedLootItem].shape,invRotation);
+    const ok=canPlace(selectedLootItem,previewOrigin.gx,previewOrigin.gy,invRotation);
+    for(let r=0;r<shape.length;r++){
+      for(let c=0;c<shape[r].length;c++){
+        if(!shape[r][c])continue;
+        const cx=previewOrigin.gx+c,cy=previewOrigin.gy+r;
+        if(cx>=0&&cx<invW&&cy>=0&&cy<invH){
+          previewMap.set(`${cx},${cy}`,ok?'ok':'bad');
+        }
+      }
+    }
+  }
+  cells.forEach(cell=>{
+    const gx=cell.dataset.gx,gy=cell.dataset.gy;
+    const key=`${gx},${gy}`;
+    // Remove old preview classes and child
+    cell.classList.remove('preview-ok','preview-bad');
+    const oldSpan=cell.querySelector('.preview-shape');
+    if(oldSpan)oldSpan.remove();
+    // Add new preview
+    if(previewMap.has(key)){
+      const pvType=previewMap.get(key);
+      cell.classList.add(pvType==='ok'?'preview-ok':'preview-bad');
+      const span=document.createElement('span');
+      span.className='preview-shape';
+      cell.appendChild(span);
+    }
+  });
 }
 
 function getItemEffectText(itemId){
@@ -1058,12 +1120,29 @@ function attachEvents(){
   document.querySelectorAll('[data-sell]').forEach(b=>b.addEventListener('click',()=>sellItem(parseInt(b.dataset.sell))));
   // Buy
   document.querySelectorAll('[data-buy]').forEach(b=>b.addEventListener('click',()=>buyUpgrade(b.dataset.buy)));
-  // Inventory grid clicks
+  // Inventory grid clicks + preview hover/touch
   document.querySelectorAll('.inv-cell').forEach(cell=>{
+    const gx=parseInt(cell.dataset.gx),gy=parseInt(cell.dataset.gy);
+    // Show placement preview on hover/touch
+    const showPreview=(cx,cy)=>{
+      if(!selectedLootItem)return;
+      if(!previewOrigin||previewOrigin.gx!==cx||previewOrigin.gy!==cy){
+        previewOrigin={gx:cx,gy:cy};
+        updatePreviewDOM();
+      }
+    };
+    cell.addEventListener('pointerenter',()=>showPreview(gx,gy));
+    cell.addEventListener('touchmove',e=>{
+      e.preventDefault();
+      const touch=e.touches[0];
+      const el=document.elementFromPoint(touch.clientX,touch.clientY);
+      if(el&&el.dataset&&el.dataset.gx!==undefined){
+        showPreview(parseInt(el.dataset.gx),parseInt(el.dataset.gy));
+      }
+    },{passive:false});
     cell.addEventListener('click',()=>{
-      const gx=parseInt(cell.dataset.gx),gy=parseInt(cell.dataset.gy);
       if(selectedLootItem){
-        // Placing from loot or pickup
+        previewOrigin={gx,gy};
         if(gameState==='looting')invLootPlaceAttempt(gx,gy);
         else invPlaceAttempt(gx,gy);
         return;
