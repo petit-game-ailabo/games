@@ -26,9 +26,16 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .tile-dim{opacity:.35}
 .tile .entity{position:absolute;font-size:18px;z-index:2}
 .tile .item-icon{position:absolute;font-size:14px;z-index:1}
-.float-dmg{position:absolute;font-size:12px;font-weight:bold;z-index:10;pointer-events:none;animation:floatUp .8s ease-out forwards}
-@keyframes floatUp{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-24px)}}
-.log-bar{padding:4px 8px;font-size:11px;background:#12122a;border-top:1px solid #2a2a4e;min-height:24px;flex-shrink:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.float-dmg{position:absolute;font-size:18px;font-weight:bold;z-index:10;pointer-events:none;animation:floatUp .8s ease-out forwards;text-shadow:0 0 4px rgba(0,0,0,.8)}
+@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1.2)}50%{transform:translateY(-14px) scale(1)}100%{opacity:0;transform:translateY(-28px) scale(.9)}}
+.enemy-hp-bar{position:absolute;bottom:1px;left:3px;right:3px;height:3px;background:rgba(0,0,0,.6);border-radius:1px;z-index:3}
+.enemy-hp-fill{height:100%;border-radius:1px;transition:width .2s}
+@keyframes levelUpFlash{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
+.levelup-flash{position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(168,85,247,.4) 0%,transparent 70%);z-index:18;pointer-events:none;animation:levelUpFlash .8s ease-out forwards}
+.log-bar{padding:4px 8px;font-size:11px;background:#12122a;border-top:1px solid #2a2a4e;min-height:44px;max-height:52px;flex-shrink:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.log-line{white-space:nowrap;text-overflow:ellipsis;overflow:hidden;line-height:1.4}
+.log-line.old{color:#666}
+.log-line.current{color:#e0e0e0}
 .controls{padding:8px;background:#12122a;border-top:1px solid #2a2a4e;flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:16px}
 .dpad{display:grid;grid-template-columns:52px 52px 52px;grid-template-rows:52px 52px;gap:2px}
 .dpad button{width:52px;height:52px;border:1px solid #3a3a5e;background:#222244;color:#e0e0e0;font-size:20px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
@@ -232,6 +239,7 @@ let inventory=[], invW=6, invH=4;
 let rooms=[];
 let gameState='title'; // title, dungeon, base, dead, inventory, looting
 let logMsg='';
+let logHistory=[]; // last 3 log messages
 let bagExpansions=0, armorUpgrade=0, hasDetector=false;
 // Base stats (permanent, persist across dungeon runs)
 let baseMaxHp=100, baseAtk=8, baseDef=2;
@@ -284,6 +292,14 @@ let lastDpadTime=0;
 const DPAD_DEBOUNCE_MS=150;
 let minimapExpanded=false;
 const MINIMAP_CELL=2, MINIMAP_CELL_EX=4;
+let showLevelUpFlash=false;
+
+function pushLog(msg){
+  if(!msg)return;
+  logMsg=msg;
+  logHistory.push(msg);
+  if(logHistory.length>3)logHistory.shift();
+}
 
 // ═══════════════════════════════════════
 // AUDIO
@@ -505,8 +521,9 @@ function processTurn(){
     player.level++;
     player.maxHp+=10;player.hp=Math.min(player.hp+10,player.maxHp);
     player.atk+=2;player.def+=1;
-    logMsg=`レベルアップ！ Lv${player.level}（ダンジョン内のみ有効）`;
+    pushLog(`🎉 レベルアップ！ Lv${player.level}（ダンジョン内のみ有効）`);
     playSound('levelup');
+    showLevelUpFlash=true;
   }
   updateFOV();
 }
@@ -521,7 +538,7 @@ function processEnemies(){
       player.hp-=dmg;
       addFloatDmg(player.x,player.y,dmg,'#e74c3c');
       playSound('hurt');
-      logMsg=`${e.name}から${dmg}ダメージ！`;
+      pushLog(`${e.name}から${dmg}ダメージ！`);
       // Keep bag open but flash the status bar to alert player
       if(gameState==='inventory'||gameState==='looting'){
         overlayDmgFlash=true;
@@ -583,6 +600,7 @@ function playerDeath(){
 function movePlayer(dx,dy){
   if(gameState!=='dungeon')return;
   initAudio();
+  logMsg='';
   const nx=player.x+dx,ny=player.y+dy;
   if(nx<0||nx>=MW||ny<0||ny>=MH)return;
   if(map[ny][nx]===WALL)return;
@@ -600,7 +618,7 @@ function movePlayer(dx,dy){
   if(map[ny][nx]===STAIRS){
     player.floor++;
     if(player.floor>stats.maxFloor)stats.maxFloor=player.floor;
-    logMsg=`${player.floor}階に降りた`;
+    pushLog(`${player.floor}階に降りた`);
     playSound('stairs');
     generateMap(player.floor);
     updateFOV();
@@ -617,7 +635,7 @@ function movePlayer(dx,dy){
     // Save card keys
     totalCardKeys+=cardKeys;
     cardKeys=0;
-    logMsg='拠点に帰還した（ステータスリセット）';
+    pushLog('拠点に帰還した（ステータスリセット）');
     render();
     return;
   }
@@ -626,7 +644,7 @@ function movePlayer(dx,dy){
   if(ckIdx>=0){
     mapCardKeys.splice(ckIdx,1);
     cardKeys++;
-    logMsg=`🔑 カードキーを手に入れた！(合計: ${cardKeys}枚)`;
+    pushLog(`🔑 カードキーを手に入れた！(合計: ${cardKeys}枚)`);
     playSound('pickup');
   }
   // Item on floor?
@@ -639,14 +657,14 @@ function movePlayer(dx,dy){
   if(bagIdx>=0){
     openLootBag(bagIdx);
   }
-  logMsg=logMsg||'移動';
+  if(!logMsg||logMsg==='')pushLog('移動');
   processTurn();
   render();
 }
 function waitTurn(){
   if(gameState!=='dungeon')return;
   initAudio();
-  logMsg='待機';
+  pushLog('待機');
   processTurn();
   render();
 }
@@ -656,9 +674,9 @@ function attackEnemy(e){
   e.hp-=dmg;
   addFloatDmg(e.x,e.y,dmg,'#22c55e');
   playSound('hit');
-  logMsg=`${e.name}に${dmg}ダメージ！`;
+  pushLog(`${e.name}に${dmg}ダメージ！`);
   if(e.hp<=0){
-    logMsg=`${e.name}を倒した！ +${e.exp}EXP`;
+    pushLog(`${e.name}を倒した！ +${e.exp}EXP`);
     player.exp+=e.exp;
     stats.totalKills++;
     playSound('kill');
@@ -695,7 +713,7 @@ function pickupFloorItem(idx){
   gameState='inventory';
   invRotation=0;
   stats.totalItems++;
-  logMsg=`${ITEMS[mi.itemId].name}を拾った — 鞄に配置してください`;
+  pushLog(`${ITEMS[mi.itemId].name}を拾った — 鞄に配置してください`);
   playSound('pickup');
 }
 function confirmPickupFloorItem(){
@@ -708,12 +726,12 @@ function confirmPickupFloorItem(){
   pendingFloorItem=null;
   gameState='inventory';
   invRotation=0;
-  logMsg=`${ITEMS[selectedLootItem].name}を拾った — 鞄に配置してください`;
+  pushLog(`${ITEMS[selectedLootItem].name}を拾った — 鞄に配置してください`);
   render();
 }
 function ignoreFloorItem(){
   if(!pendingFloorItem)return;
-  logMsg=`${ITEMS[pendingFloorItem.itemId].name}を無視した`;
+  pushLog(`${ITEMS[pendingFloorItem.itemId].name}を無視した`);
   pendingFloorItem=null;
   gameState='dungeon';
   render();
@@ -725,7 +743,7 @@ function openLootBag(idx){
   selectedLootItem=null;
   selectedInvItem=null;
   invRotation=0;
-  logMsg='ルートバッグを開いた';
+  pushLog('ルートバッグを開いた');
 }
 
 // ═══════════════════════════════════════
@@ -740,7 +758,7 @@ function invPlaceAttempt(gx,gy){
     floorPickupItemId=null; // successfully placed, clear floor tracker
     invRotation=0;
     playSound('pickup');
-    logMsg=`${ITEMS[itemId].name}を配置した`;
+    pushLog(`${ITEMS[itemId].name}を配置した`);
     processTurn();
     // Keep bag open after placement (don't switch to dungeon)
     render();
@@ -749,7 +767,7 @@ function invPlaceAttempt(gx,gy){
 function returnItemToFloor(){
   if(!floorPickupItemId)return;
   mapItems.push({x:player.x,y:player.y,itemId:floorPickupItemId});
-  logMsg=`${ITEMS[floorPickupItemId].name}を床に戻した`;
+  pushLog(`${ITEMS[floorPickupItemId].name}を床に戻した`);
   floorPickupItemId=null;
   selectedLootItem=null;
   invRotation=0;
@@ -776,11 +794,11 @@ function useItem(itemId){
   if(!item||!item.usable)return;
   if(item.heal){
     player.hp=Math.min(player.hp+item.heal,player.maxHp);
-    logMsg=`${item.name}を使った！ HP+${item.heal}`;
+    pushLog(`${item.name}を使った！ HP+${item.heal}`);
   }
   if(item.food){
     player.fullness=Math.min(player.fullness+item.food,100);
-    logMsg=`${item.name}を使った！ 満腹度+${item.food}`;
+    pushLog(`${item.name}を使った！ 満腹度+${item.food}`);
   }
   consumeItem(itemId);
   playSound('pickup');
@@ -797,7 +815,7 @@ function toggleBag(){
     // If a floor item was picked up but not placed, return it to the floor
     if(floorPickupItemId){
       mapItems.push({x:player.x,y:player.y,itemId:floorPickupItemId});
-      logMsg=`${ITEMS[floorPickupItemId].name}を床に戻した`;
+      pushLog(`${ITEMS[floorPickupItemId].name}を床に戻した`);
       floorPickupItemId=null;
     }
     gameState='dungeon';currentLootBag=null;selectedLootItem=null;selectedInvItem=null;pendingLootItem=null;previewOrigin=null;relocatingItem=null;
@@ -837,7 +855,7 @@ function startRelocate(idx){
   invRotation=0;
   selectedInvItem=null;
   previewOrigin=null;
-  logMsg=`${ITEMS[relocatingItem.itemId].name}を移動中...`;
+  pushLog(`${ITEMS[relocatingItem.itemId].name}を移動中...`);
   render();
 }
 function cancelRelocate(){
@@ -849,7 +867,7 @@ function cancelRelocate(){
   selectedLootItem=null;
   invRotation=0;
   previewOrigin=null;
-  logMsg='移動をキャンセルした';
+  pushLog('移動をキャンセルした');
   render();
 }
 function completeRelocate(gx,gy){
@@ -862,7 +880,7 @@ function completeRelocate(gx,gy){
     invRotation=0;
     previewOrigin=null;
     playSound('pickup');
-    logMsg=`${itemName}を再配置した`;
+    pushLog(`${itemName}を再配置した`);
     processTurn();
     render();
     return true;
@@ -907,12 +925,12 @@ function canStoreItem(itemId){
 }
 function storeItemFromBag(invIdx){
   const it=inventory[invIdx];
-  if(!canStoreItem(it.itemId)){logMsg='収納箱がいっぱいです！';render();return;}
+  if(!canStoreItem(it.itemId)){pushLog('収納箱がいっぱいです！');render();return;}
   storageBox.push({itemId:it.itemId});
   removeInvItem(invIdx);
   selectedInvItem=null;
   playSound('pickup');
-  logMsg=`${ITEMS[it.itemId].name}を収納箱に入れた`;
+  pushLog(`${ITEMS[it.itemId].name}を収納箱に入れた`);
   render();
 }
 function takeItemFromStorage(storIdx){
@@ -923,7 +941,7 @@ function takeItemFromStorage(storIdx){
   storagePlaceMode=true;
   storageBox.splice(storIdx,1);
   gameState='storage_place';
-  logMsg=`${ITEMS[si.itemId].name}を鞄に配置してください`;
+  pushLog(`${ITEMS[si.itemId].name}を鞄に配置してください`);
   render();
 }
 function returnItemToStorage(){
@@ -933,14 +951,14 @@ function returnItemToStorage(){
   storagePlaceMode=false;
   invRotation=0;
   gameState='base';
-  logMsg='アイテムを収納箱に戻した';
+  pushLog('アイテムを収納箱に戻した');
   render();
 }
 function storagePlaceAttempt(gx,gy){
   if(!selectedLootItem||!storagePlaceMode)return;
   if(canPlace(selectedLootItem,gx,gy,invRotation)){
     placeItem(selectedLootItem,gx,gy,invRotation);
-    logMsg=`${ITEMS[selectedLootItem].name}を鞄に入れた`;
+    pushLog(`${ITEMS[selectedLootItem].name}を鞄に入れた`);
     selectedLootItem=null;
     storagePlaceMode=false;
     invRotation=0;
@@ -952,7 +970,7 @@ function storagePlaceAttempt(gx,gy){
 function restAtHome(){
   player.hp=player.maxHp;
   playSound('pickup');
-  logMsg='自宅で休憩した — HP全回復！';
+  pushLog('自宅で休憩した — HP全回復！');
   render();
 }
 function enterDungeon(){
@@ -969,9 +987,9 @@ function enterDungeon(){
   if(revealNextMap){
     for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)seen[y][x]=true;
     revealNextMap=false;
-    logMsg='ダンジョンに入った（Lv1から開始）— 🧿量子コンパス発動！マップ全開放！';
+    pushLog('ダンジョンに入った（Lv1から開始）— 🧿量子コンパス発動！マップ全開放！');
   }else{
-    logMsg='ダンジョンに入った（Lv1から開始）';
+    pushLog('ダンジョンに入った（Lv1から開始）');
   }
   gameState='dungeon';
   render();
@@ -1001,7 +1019,7 @@ function applyGachaReward(reward){
         if(canStoreItem(reward.itemId)){
           storageBox.push({itemId:reward.itemId});
         }else{
-          logMsg='収納箱がいっぱいです！一部のアイテムが入りません';
+          pushLog('収納箱がいっぱいです！一部のアイテムが入りません');
           break;
         }
       }
@@ -1082,7 +1100,7 @@ function saveGame(){
 function loadGame(){
   try{
     const d=JSON.parse(localStorage.getItem('scavenger_save'));
-    if(!d){logMsg='セーブデータがありません';return;}
+    if(!d){pushLog('セーブデータがありません');return;}
     Object.assign(player,d.player);inventory=d.inventory||[];invW=d.invW||6;invH=d.invH||4;
     bagExpansions=d.bagExpansions||0;armorUpgrade=d.armorUpgrade||0;hasDetector=d.hasDetector||false;
     baseMaxHp=d.baseMaxHp||100;baseAtk=d.baseAtk||8;baseDef=d.baseDef||2;
@@ -1094,7 +1112,7 @@ function loadGame(){
     gameState=d.gameState||'base';
     if(gameState==='dungeon')updateFOV();
     render();
-  }catch(e){logMsg='ロード失敗';}
+  }catch(e){pushLog('ロード失敗');}
 }
 function startNewGame(){
   player={x:0,y:0,hp:100,maxHp:100,atk:8,def:2,level:1,exp:0,fullness:100,money:0,floor:1,turnCount:0};
@@ -1103,7 +1121,7 @@ function startNewGame(){
   storageBox=[];storageCapacity=20;storageExpansions=0;
   cardKeys=0;totalCardKeys=0;mapCardKeys=[];revealNextMap=false;gachaResultModal=null;
   stats={maxFloor:0,totalKills:0,totalItems:0,totalSales:0,totalRuns:0,totalMoney:0};
-  gameState='base';logMsg='';baseTab='home';
+  gameState='base';logMsg='';logHistory=[];baseTab='home';
   render();
 }
 
@@ -1171,7 +1189,12 @@ function renderDungeonUI(){
       // Enemies (only if visible)
       if(vis){
         const enemy=enemies.find(e=>e.hp>0&&e.x===tx&&e.y===ty);
-        if(enemy)content=`<span class="entity">${enemy.icon}</span>`;
+        if(enemy){
+          content=`<span class="entity">${enemy.icon}</span>`;
+          const ehpPct=Math.max(0,Math.round(enemy.hp/enemy.maxHp*100));
+          const ehpColor=ehpPct>50?'#e74c3c':ehpPct>25?'#f59e0b':'#ff1744';
+          content+=`<div class="enemy-hp-bar"><div class="enemy-hp-fill" style="width:${ehpPct}%;background:${ehpColor}"></div></div>`;
+        }
       }
       // Items
       if(vis||wasSeen){
@@ -1189,10 +1212,21 @@ function renderDungeonUI(){
     }
   }
   h+=`</div></div>`;
+  // Level-up flash
+  if(showLevelUpFlash){
+    h+=`<div class="levelup-flash"></div>`;
+    showLevelUpFlash=false;
+  }
   // Minimap
   h+=renderMinimap();
   h+=`</div>`;
-  h+=`<div class="log-bar">${logMsg||'―'}</div>`;
+  h+=`<div class="log-bar">`;
+  const displayLogs=logHistory.length>0?logHistory:['―'];
+  for(let li=0;li<displayLogs.length;li++){
+    const isCurrent=li===displayLogs.length-1;
+    h+=`<div class="log-line ${isCurrent?'current':'old'}">${displayLogs[li]}</div>`;
+  }
+  h+=`</div>`;
   // Controls
   h+=`<div class="controls"><div class="dpad">
 <div></div><button data-dir="up">↑</button><div></div>
