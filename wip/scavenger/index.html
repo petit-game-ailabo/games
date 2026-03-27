@@ -159,6 +159,9 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .record-value.highlight{color:#f59e0b}
 .base-explore-btn{padding:14px;font-size:18px;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;border-radius:10px;cursor:pointer;text-align:center;font-weight:bold;letter-spacing:1px;box-shadow:0 2px 8px rgba(124,58,237,.4);transition:transform .1s}
 .base-explore-btn:active{transform:scale(.97);background:linear-gradient(135deg,#6d28d9,#5b21b6)}
+.minimap-wrap{position:absolute;top:4px;right:4px;z-index:15;cursor:pointer;border:1px solid #3a3a5e;border-radius:4px;overflow:hidden;background:#000;opacity:.85;transition:width .2s,height .2s,opacity .15s}
+.minimap-wrap:active{opacity:1}
+.minimap-wrap.expanded{border-color:#7c3aed;opacity:.95;box-shadow:0 0 8px rgba(124,58,237,.5)}
 </style>
 </head>
 <body>
@@ -279,6 +282,8 @@ let baseAmbientNode=null;
 let baseAmbientGain=null;
 let lastDpadTime=0;
 const DPAD_DEBOUNCE_MS=150;
+let minimapExpanded=false;
+const MINIMAP_CELL=2, MINIMAP_CELL_EX=4;
 
 // ═══════════════════════════════════════
 // AUDIO
@@ -1131,6 +1136,8 @@ function render(){
   // Base ambient sound
   if(gameState==='base'&&audioCtx&&!baseAmbientNode)startBaseAmbient();
   else if(gameState!=='base'&&gameState!=='storage_place')stopBaseAmbient();
+  // Draw minimap after DOM update
+  requestAnimationFrame(drawMinimap);
   // Auto-save
   saveGame();
 }
@@ -1181,7 +1188,10 @@ function renderDungeonUI(){
       h+=`<div class="tile ${cls}${dim}">${content}</div>`;
     }
   }
-  h+=`</div></div></div>`;
+  h+=`</div></div>`;
+  // Minimap
+  h+=renderMinimap();
+  h+=`</div>`;
   h+=`<div class="log-bar">${logMsg||'―'}</div>`;
   // Controls
   h+=`<div class="controls"><div class="dpad">
@@ -1195,6 +1205,54 @@ function renderDungeonUI(){
   if(gameState==='item_preview')h+=renderItemPreviewModal();
   if(gameState==='loot_preview')h+=renderLootPreviewModal();
   return h;
+}
+
+function renderMinimap(){
+  const ex=minimapExpanded;
+  const cs=ex?MINIMAP_CELL_EX:MINIMAP_CELL;
+  const w=MW*cs, h=MH*cs;
+  let html=`<div class="minimap-wrap${ex?' expanded':''}" data-action="toggle-minimap" style="width:${w+2}px;height:${h+2}px">`;
+  html+=`<canvas id="minimapCanvas" width="${w}" height="${h}" style="display:block"></canvas>`;
+  html+=`</div>`;
+  return html;
+}
+function drawMinimap(){
+  const cvs=document.getElementById('minimapCanvas');
+  if(!cvs)return;
+  const ctx=cvs.getContext('2d');
+  const ex=minimapExpanded;
+  const cs=ex?MINIMAP_CELL_EX:MINIMAP_CELL;
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  for(let y=0;y<MH;y++){
+    for(let x=0;x<MW;x++){
+      if(!seen[y][x]){continue;} // unseen = black (already cleared)
+      const tile=map[y][x];
+      if(tile===WALL){ctx.fillStyle='#2a2a3e';}
+      else if(tile===STAIRS){ctx.fillStyle='#a855f7';}
+      else if(tile===EXIT){ctx.fillStyle='#22c55e';}
+      else{ctx.fillStyle='#444';}
+      ctx.fillRect(x*cs,y*cs,cs,cs);
+    }
+  }
+  // Items (small dots)
+  if(ex){
+    for(const mi of mapItems){
+      if(!seen[mi.y][mi.x])continue;
+      ctx.fillStyle='#f59e0b';
+      ctx.fillRect(mi.x*cs+1,mi.y*cs+1,cs-2,cs-2);
+    }
+    // Enemies (visible only)
+    for(const e of enemies){
+      if(e.hp<=0)continue;
+      if(!isVisible(player.x,player.y,e.x,e.y))continue;
+      ctx.fillStyle='#e74c3c';
+      ctx.fillRect(e.x*cs+1,e.y*cs+1,cs-2,cs-2);
+    }
+  }
+  // Player
+  ctx.fillStyle='#fff';
+  const ps=ex?cs:Math.max(cs,2);
+  ctx.fillRect(player.x*cs,player.y*cs,ps,ps);
 }
 
 function renderOverlayStatusBar(){
@@ -1701,6 +1759,10 @@ function attachEvents(){
   document.querySelectorAll('[data-action="return-to-storage"]').forEach(b=>b.addEventListener('click',returnItemToStorage));
   document.querySelectorAll('[data-action="rest"]').forEach(b=>b.addEventListener('click',restAtHome));
   document.querySelectorAll('[data-action="gacha"]').forEach(b=>b.addEventListener('click',pullGacha));
+  // Minimap toggle
+  document.querySelectorAll('[data-action="toggle-minimap"]').forEach(el=>{
+    el.addEventListener('click',()=>{minimapExpanded=!minimapExpanded;render();});
+  });
   // Close overlay by tapping empty space
   document.querySelectorAll('.overlay').forEach(ov=>{
     ov.addEventListener('click',(e)=>{
