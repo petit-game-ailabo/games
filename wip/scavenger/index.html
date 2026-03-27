@@ -75,6 +75,30 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .game-over p{color:#888;font-size:14px;text-align:center;padding:0 20px}
 .game-over button{padding:10px 24px;font-size:16px;background:#7c3aed;border:none;color:#fff;border-radius:8px;cursor:pointer}
 .rotate-btn{padding:6px 12px;background:#222244;border:1px solid #3a3a5e;color:#e0e0e0;border-radius:4px;font-size:13px;cursor:pointer;margin:4px 12px}
+.item-preview-modal{position:absolute;inset:0;background:rgba(10,10,26,.95);z-index:22;display:flex;align-items:center;justify-content:center}
+.item-preview-card{background:#1e1e3a;border:1px solid #3a3a5e;border-radius:12px;padding:16px;width:280px;max-width:90%;display:flex;flex-direction:column;gap:10px}
+.item-preview-card .ipv-header{display:flex;align-items:center;gap:10px;font-size:18px}
+.item-preview-card .ipv-header .ipv-icon{font-size:32px}
+.item-preview-card .ipv-header .ipv-name{font-weight:bold;color:#e0e0e0}
+.ipv-shape-grid{display:inline-grid;gap:1px;justify-self:center;margin:4px auto}
+.ipv-shape-cell{width:22px;height:22px;border-radius:2px}
+.ipv-shape-cell.filled{background:#7c3aed;border:1px solid #a855f7}
+.ipv-shape-cell.empty{background:transparent}
+.ipv-details{font-size:13px;color:#aaa;display:flex;flex-direction:column;gap:4px}
+.ipv-details .ipv-effect{color:#22c55e}
+.ipv-details .ipv-value{color:#f59e0b}
+.ipv-details .ipv-rarity{font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.ipv-buttons{display:flex;gap:8px;justify-content:center;margin-top:4px}
+.ipv-buttons button{flex:1;padding:10px;font-size:15px;border:none;border-radius:6px;cursor:pointer;color:#fff}
+.ipv-buttons .ipv-pickup{background:#7c3aed}
+.ipv-buttons .ipv-pickup:active{background:#6d28d9}
+.ipv-buttons .ipv-ignore{background:#333;border:1px solid #555}
+.ipv-buttons .ipv-ignore:active{background:#444}
+.loot-item-info{display:flex;align-items:center;gap:6px;padding:2px 8px;font-size:11px;color:#aaa}
+.loot-item-info .loot-shape-mini{display:inline-grid;gap:1px}
+.loot-shape-mini-cell{width:10px;height:10px;border-radius:1px}
+.loot-shape-mini-cell.filled{background:#7c3aed}
+.loot-shape-mini-cell.empty{background:transparent}
 </style>
 </head>
 <body>
@@ -148,6 +172,8 @@ let logMsg='';
 let bagExpansions=0, armorUpgrade=0, hasDetector=false;
 let selectedInvItem=null, selectedLootItem=null, invRotation=0;
 let currentLootBag=null;
+let pendingFloorItem=null; // {itemId, mapItemIdx} — item on floor awaiting pickup/ignore decision
+let pendingLootItem=null; // {itemId, lootIdx} — loot bag item awaiting preview decision
 let audioCtx=null;
 let floatingDmgs=[];
 let lastDpadTime=0;
@@ -499,12 +525,30 @@ function addFloatDmg(tx,ty,dmg,color){
 }
 function pickupFloorItem(idx){
   const mi=mapItems[idx];
-  selectedLootItem=mi.itemId;
-  mapItems.splice(idx,1);
+  // Show preview modal instead of immediately picking up
+  pendingFloorItem={itemId:mi.itemId, mapItemIdx:idx};
+  gameState='item_preview';
+  logMsg=`${ITEMS[mi.itemId].name}を見つけた`;
+  playSound('pickup');
+}
+function confirmPickupFloorItem(){
+  if(!pendingFloorItem)return;
+  const mi=mapItems[pendingFloorItem.mapItemIdx];
+  if(!mi){pendingFloorItem=null;gameState='dungeon';render();return;}
+  selectedLootItem=pendingFloorItem.itemId;
+  mapItems.splice(pendingFloorItem.mapItemIdx,1);
+  pendingFloorItem=null;
   gameState='inventory';
   invRotation=0;
-  logMsg=`${ITEMS[mi.itemId].name}を拾った`;
-  playSound('pickup');
+  logMsg=`${ITEMS[selectedLootItem].name}を拾った`;
+  render();
+}
+function ignoreFloorItem(){
+  if(!pendingFloorItem)return;
+  logMsg=`${ITEMS[pendingFloorItem.itemId].name}を無視した`;
+  pendingFloorItem=null;
+  gameState='dungeon';
+  render();
 }
 function openLootBag(idx){
   currentLootBag=lootBags[idx];
@@ -567,7 +611,7 @@ function rotateItem(){invRotation=(invRotation+1)%4;render();}
 function toggleBag(){
   initAudio();
   if(gameState==='dungeon'){gameState='inventory';selectedLootItem=null;selectedInvItem=null;invRotation=0;}
-  else if(gameState==='inventory'||gameState==='looting'){gameState='dungeon';currentLootBag=null;selectedLootItem=null;selectedInvItem=null;}
+  else if(gameState==='inventory'||gameState==='looting'||gameState==='loot_preview'){gameState='dungeon';currentLootBag=null;selectedLootItem=null;selectedInvItem=null;pendingLootItem=null;}
   render();
 }
 function closeLoot(){
@@ -617,9 +661,10 @@ function enterDungeon(){
 // SAVE / LOAD
 // ═══════════════════════════════════════
 function saveGame(){
-  try{localStorage.setItem('scavenger_save',JSON.stringify({
+  try{const saveState=gameState==='dead'?'base':gameState==='item_preview'?'dungeon':gameState==='loot_preview'?'looting':gameState;
+  localStorage.setItem('scavenger_save',JSON.stringify({
     player,inventory,invW,invH,bagExpansions,armorUpgrade,hasDetector,
-    map,seen,enemies,mapItems,lootBags,rooms,gameState:gameState==='dead'?'base':gameState,
+    map,seen,enemies,mapItems,lootBags,rooms,gameState:saveState,
   }));}catch(e){}
 }
 function loadGame(){
@@ -653,7 +698,7 @@ function render(){
   if(title)title.style.display='none';
   // Build HTML
   let html='';
-  if(gameState==='dungeon'||gameState==='inventory'||gameState==='looting'){
+  if(gameState==='dungeon'||gameState==='inventory'||gameState==='looting'||gameState==='item_preview'||gameState==='loot_preview'){
     html+=renderDungeonUI();
   }else if(gameState==='base'){
     html+=renderBaseUI();
@@ -724,14 +769,21 @@ function renderDungeonUI(){
 </div><button class="bag-btn" data-action="bag">🎒</button></div>`;
   // Overlays
   if(gameState==='inventory')h+=renderInventoryOverlay();
-  if(gameState==='looting')h+=renderLootOverlay();
+  if(gameState==='looting'||gameState==='loot_preview')h+=renderLootOverlay();
+  if(gameState==='item_preview')h+=renderItemPreviewModal();
+  if(gameState==='loot_preview')h+=renderLootPreviewModal();
   return h;
 }
 
 function renderInventoryOverlay(){
   let h=`<div class="overlay"><div class="overlay-header"><span>🎒 バックパック</span><button data-action="closebag">×閉じる</button></div>`;
   if(selectedLootItem){
-    h+=`<div style="padding:4px 12px;color:#f59e0b">配置: ${ITEMS[selectedLootItem].icon} ${ITEMS[selectedLootItem].name}</div>`;
+    const slItem=ITEMS[selectedLootItem];
+    const slRarity=getItemRarity(selectedLootItem);
+    const slShape=getRotatedShape(slItem.shape,invRotation);
+    h+=`<div style="padding:4px 12px;color:#f59e0b;display:flex;align-items:center;gap:8px">配置: ${slItem.icon} ${slItem.name} `;
+    h+=renderShapeGrid(slShape,14,slRarity.color);
+    h+=`</div>`;
   }
   h+=`<button class="rotate-btn" data-action="rotate">回転🔄</button>`;
   h+=`<div class="inv-section">${renderInvGrid(true)}</div>`;
@@ -765,10 +817,34 @@ function renderLootOverlay(){
       if(itemId)h+=`<div class="loot-cell ${sel}" data-loot="${i}">${ITEMS[itemId].icon}</div>`;
       else h+=`<div class="loot-cell"></div>`;
     }
-    h+=`</div></div>`;
+    h+=`</div>`;
+    // Show shape info for each loot item
+    const seenLoot=new Set();
+    for(const itemId of currentLootBag.items){
+      if(!itemId||seenLoot.has(itemId))continue;
+      seenLoot.add(itemId);
+      const item=ITEMS[itemId];
+      const rarity=getItemRarity(itemId);
+      const cols=Math.max(...item.shape.map(r=>r.length));
+      h+=`<div class="loot-item-info">`;
+      h+=`<div class="loot-shape-mini" style="grid-template-columns:repeat(${cols},10px)">`;
+      for(let r=0;r<item.shape.length;r++)for(let c=0;c<cols;c++){
+        const filled=item.shape[r]&&item.shape[r][c];
+        h+=`<div class="loot-shape-mini-cell ${filled?'filled':'empty'}" style="${filled?`background:${rarity.color}`:''}""></div>`;
+      }
+      h+=`</div>`;
+      h+=`<span>${item.icon} ${item.name}</span><span style="color:${rarity.color}">${item.value}G</span>`;
+      h+=`</div>`;
+    }
+    h+=`</div>`;
   }
   if(selectedLootItem){
-    h+=`<div style="padding:4px 12px;color:#f59e0b">配置: ${ITEMS[selectedLootItem].icon} ${ITEMS[selectedLootItem].name}</div>`;
+    const slItem2=ITEMS[selectedLootItem];
+    const slRarity2=getItemRarity(selectedLootItem);
+    const slShape2=getRotatedShape(slItem2.shape,invRotation);
+    h+=`<div style="padding:4px 12px;color:#f59e0b;display:flex;align-items:center;gap:8px">配置: ${slItem2.icon} ${slItem2.name} `;
+    h+=renderShapeGrid(slShape2,14,slRarity2.color);
+    h+=`</div>`;
   }
   h+=`<button class="rotate-btn" data-action="rotate">回転🔄</button>`;
   h+=`<div class="inv-section">${renderInvGrid(gameState==='looting')}</div>`;
@@ -805,6 +881,96 @@ function renderInvGrid(interactive){
   }
   h+=`</div>`;
   return h;
+}
+
+function getItemEffectText(itemId){
+  const item=ITEMS[itemId];
+  const effects=[];
+  if(item.heal)effects.push(`HP+${item.heal} 回復`);
+  if(item.food)effects.push(`満腹度+${item.food}`);
+  if(item.weapon){
+    effects.push(`攻撃力+${item.atkBonus}`);
+    if(item.needsAmmo)effects.push('(弾薬が必要)');
+  }
+  if(item.usable&&!item.heal&&!item.food)effects.push('使用可能');
+  if(effects.length===0)effects.push('素材 / 売却用');
+  return effects.join(' ');
+}
+
+function getItemRarity(itemId){
+  const v=ITEMS[itemId].value;
+  if(v>=150)return {label:'LEGENDARY',color:'#ff9800'};
+  if(v>=80)return {label:'RARE',color:'#2196f3'};
+  if(v>=30)return {label:'UNCOMMON',color:'#4caf50'};
+  return {label:'COMMON',color:'#aaa'};
+}
+
+function renderShapeGrid(shape,cellSize,colorFill){
+  const rows=shape.length,cols=Math.max(...shape.map(r=>r.length));
+  let h=`<div class="ipv-shape-grid" style="grid-template-columns:repeat(${cols},${cellSize}px)">`;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const filled=shape[r]&&shape[r][c];
+      h+=`<div class="ipv-shape-cell ${filled?'filled':'empty'}" style="${filled?`background:${colorFill||'#7c3aed'};border:1px solid ${colorFill?'rgba(255,255,255,.3)':'#a855f7'}`:''}""></div>`;
+    }
+  }
+  h+=`</div>`;
+  return h;
+}
+
+function renderItemPreviewModal(){
+  if(!pendingFloorItem)return '';
+  const itemId=pendingFloorItem.itemId;
+  const item=ITEMS[itemId];
+  const rarity=getItemRarity(itemId);
+  let h=`<div class="item-preview-modal"><div class="item-preview-card" style="border-color:${rarity.color}">`;
+  h+=`<div class="ipv-header"><span class="ipv-icon">${item.icon}</span><span class="ipv-name">${item.name}</span></div>`;
+  h+=renderShapeGrid(item.shape,22,rarity.color);
+  h+=`<div class="ipv-details">`;
+  h+=`<span class="ipv-rarity" style="color:${rarity.color}">${rarity.label}</span>`;
+  h+=`<span class="ipv-effect">📋 ${getItemEffectText(itemId)}</span>`;
+  h+=`<span class="ipv-value">💰 売値: ${item.value}G</span>`;
+  // Show shape size
+  const cells=item.shape.reduce((s,r)=>s+r.filter(c=>c).length,0);
+  h+=`<span>📐 ${item.shape[0].length}×${item.shape.length} (${cells}マス)</span>`;
+  h+=`</div>`;
+  h+=`<div class="ipv-buttons"><button class="ipv-pickup" data-action="confirm-pickup">🎒 拾う</button><button class="ipv-ignore" data-action="ignore-item">✋ 無視</button></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+function renderLootPreviewModal(){
+  if(!pendingLootItem)return '';
+  const itemId=pendingLootItem.itemId;
+  const item=ITEMS[itemId];
+  const rarity=getItemRarity(itemId);
+  const cells=item.shape.reduce((s,r)=>s+r.filter(c=>c).length,0);
+  let h=`<div class="item-preview-modal"><div class="item-preview-card" style="border-color:${rarity.color}">`;
+  h+=`<div class="ipv-header"><span class="ipv-icon">${item.icon}</span><span class="ipv-name">${item.name}</span></div>`;
+  h+=renderShapeGrid(item.shape,22,rarity.color);
+  h+=`<div class="ipv-details">`;
+  h+=`<span class="ipv-rarity" style="color:${rarity.color}">${rarity.label}</span>`;
+  h+=`<span class="ipv-effect">📋 ${getItemEffectText(itemId)}</span>`;
+  h+=`<span class="ipv-value">💰 売値: ${item.value}G</span>`;
+  h+=`<span>📐 ${item.shape[0].length}×${item.shape.length} (${cells}マス)</span>`;
+  h+=`</div>`;
+  h+=`<div class="ipv-buttons"><button class="ipv-pickup" data-action="confirm-loot-pickup">🎒 鞄に入れる</button><button class="ipv-ignore" data-action="ignore-loot-item">✋ 戻す</button></div>`;
+  h+=`</div></div>`;
+  return h;
+}
+function confirmLootPickup(){
+  if(!pendingLootItem)return;
+  selectedLootItem=pendingLootItem.itemId;
+  invRotation=0;
+  pendingLootItem=null;
+  gameState='looting';
+  render();
+}
+function ignoreLootItem(){
+  if(!pendingLootItem)return;
+  pendingLootItem=null;
+  gameState='looting';
+  render();
 }
 
 function renderBaseUI(){
@@ -867,6 +1033,9 @@ function attachEvents(){
   document.querySelectorAll('[data-action="respawn"]').forEach(b=>b.addEventListener('click',()=>{
     player.hp=player.maxHp;player.fullness=100;gameState='base';render();
   }));
+  // Item preview modal
+  document.querySelectorAll('[data-action="confirm-pickup"]').forEach(b=>b.addEventListener('click',confirmPickupFloorItem));
+  document.querySelectorAll('[data-action="ignore-item"]').forEach(b=>b.addEventListener('click',ignoreFloorItem));
   // Use items
   document.querySelectorAll('[data-use]').forEach(b=>b.addEventListener('click',()=>useItem(b.dataset.use)));
   // Sell items
@@ -888,24 +1057,27 @@ function attachEvents(){
       if(occ>=0){selectedInvItem=selectedInvItem===occ?null:occ;render();}
     });
   });
-  // Loot cell clicks
+  // Loot cell clicks — show preview modal first
   document.querySelectorAll('.loot-cell[data-loot]').forEach(cell=>{
     cell.addEventListener('click',()=>{
       const idx=parseInt(cell.dataset.loot);
       if(currentLootBag&&currentLootBag.items[idx]){
-        selectedLootItem=currentLootBag.items[idx];
-        invRotation=0;
+        pendingLootItem={itemId:currentLootBag.items[idx],lootIdx:idx};
+        gameState='loot_preview';
         render();
       }
     });
   });
+  // Loot preview modal buttons
+  document.querySelectorAll('[data-action="confirm-loot-pickup"]').forEach(b=>b.addEventListener('click',confirmLootPickup));
+  document.querySelectorAll('[data-action="ignore-loot-item"]').forEach(b=>b.addEventListener('click',ignoreLootItem));
 }
 
 // ═══════════════════════════════════════
 // KEYBOARD & SWIPE
 // ═══════════════════════════════════════
 document.addEventListener('keydown',e=>{
-  if(gameState==='title'||gameState==='base'||gameState==='dead')return;
+  if(gameState==='title'||gameState==='base'||gameState==='dead'||gameState==='item_preview'||gameState==='loot_preview')return;
   switch(e.key){
     case'ArrowUp':case'w':case'W':movePlayer(0,-1);break;
     case'ArrowDown':case's':case'S':movePlayer(0,1);break;
@@ -922,7 +1094,8 @@ document.addEventListener('touchstart',e=>{
   touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;touchStartTime=Date.now();
 },{passive:true});
 document.addEventListener('touchend',e=>{
-  if(e.target.closest('.dpad,.bag-btn,.overlay,.base-screen,.title-screen,.game-over'))return;
+  if(e.target.closest('.dpad,.bag-btn,.overlay,.base-screen,.title-screen,.game-over,.item-preview-modal'))return;
+  if(gameState==='loot_preview')return;
   if(gameState!=='dungeon')return;
   const dx=e.changedTouches[0].clientX-touchStartX;
   const dy=e.changedTouches[0].clientY-touchStartY;
