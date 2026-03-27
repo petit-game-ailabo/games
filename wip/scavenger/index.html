@@ -104,6 +104,23 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .loot-shape-mini-cell{width:10px;height:10px;border-radius:1px}
 .loot-shape-mini-cell.filled{background:#7c3aed}
 .loot-shape-mini-cell.empty{background:transparent}
+.item-detail-panel{background:#1e1e3a;border:1px solid #3a3a5e;border-radius:10px;margin:4px 12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.item-detail-panel .idp-header{display:flex;align-items:center;gap:10px;font-size:16px}
+.item-detail-panel .idp-icon{font-size:28px}
+.item-detail-panel .idp-name{font-weight:bold;color:#e0e0e0}
+.item-detail-panel .idp-rarity{font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;border-radius:3px;background:rgba(255,255,255,.08)}
+.item-detail-panel .idp-info{font-size:12px;color:#aaa;display:flex;flex-direction:column;gap:4px}
+.item-detail-panel .idp-info .idp-effect{color:#22c55e;font-size:13px}
+.item-detail-panel .idp-info .idp-equipped{color:#f59e0b;font-size:12px}
+.item-detail-panel .idp-info .idp-value{color:#f59e0b}
+.item-detail-panel .idp-actions{display:flex;gap:6px;margin-top:2px}
+.item-detail-panel .idp-actions button{flex:1;padding:8px;font-size:13px;border:none;border-radius:6px;cursor:pointer;color:#fff}
+.item-detail-panel .idp-actions .idp-use{background:#2e7d32}
+.item-detail-panel .idp-actions .idp-use:active{background:#1b5e20}
+.item-detail-panel .idp-actions .idp-drop{background:#444;border:1px solid #666}
+.item-detail-panel .idp-actions .idp-drop:active{background:#555}
+.item-detail-panel .idp-actions .idp-close{background:#333;border:1px solid #555}
+.item-detail-panel .idp-actions .idp-close:active{background:#444}
 </style>
 </head>
 <body>
@@ -817,9 +834,9 @@ function renderInventoryOverlay(){
     }
     h+=`</div>`;
   }
-  // Drop selected
-  if(selectedInvItem!==null){
-    h+=`<div class="item-actions" style="padding:4px 12px"><button data-action="drop">🗑️ 捨てる</button></div>`;
+  // Detail panel for selected item
+  if(selectedInvItem!==null&&selectedInvItem<inventory.length){
+    h+=renderItemDetailPanel(selectedInvItem);
   }
   h+=`<div class="warn-turns">⚠️ ターンは進行中！</div></div>`;
   return h;
@@ -996,6 +1013,45 @@ function renderShapeGrid(shape,cellSize,colorFill){
   return h;
 }
 
+function renderItemDetailPanel(invIdx){
+  const invItem=inventory[invIdx];
+  if(!invItem)return '';
+  const itemId=invItem.itemId;
+  const item=ITEMS[itemId];
+  const rarity=getItemRarity(itemId);
+  const cells=item.shape.reduce((s,r)=>s+r.filter(c=>c).length,0);
+  let h=`<div class="item-detail-panel" style="border-color:${rarity.color}">`;
+  // Header: icon + name + rarity
+  h+=`<div class="idp-header"><span class="idp-icon">${item.icon}</span><span class="idp-name">${item.name}</span><span class="idp-rarity" style="color:${rarity.color}">${rarity.label}</span></div>`;
+  // Shape preview (small grid)
+  h+=renderShapeGrid(item.shape,16,rarity.color);
+  // Info section
+  h+=`<div class="idp-info">`;
+  h+=`<span class="idp-effect">📋 ${getItemEffectText(itemId)}</span>`;
+  // Weapon equipped status
+  if(item.weapon){
+    const isEquipped=true; // weapons in bag are always active
+    h+=`<span class="idp-equipped">⚔️ 装備中 → 攻撃力+${item.atkBonus}</span>`;
+    if(item.needsAmmo){
+      const ammoCount=countItem('ammo');
+      h+=`<span class="idp-equipped">🎯 弾薬残: ${ammoCount}個${ammoCount===0?' (弾切れ！)':''}</span>`;
+    }
+  }
+  h+=`<span class="idp-value">💰 売値: ${item.value}G</span>`;
+  h+=`<span>📐 ${item.shape[0].length}×${item.shape.length} (${cells}マス)</span>`;
+  h+=`</div>`;
+  // Action buttons
+  h+=`<div class="idp-actions">`;
+  if(item.usable){
+    h+=`<button class="idp-use" data-detail-use="${itemId}">✨ 使う</button>`;
+  }
+  h+=`<button class="idp-drop" data-detail-drop="${invIdx}">🗑️ 捨てる</button>`;
+  h+=`<button class="idp-close" data-detail-close>✕</button>`;
+  h+=`</div>`;
+  h+=`</div>`;
+  return h;
+}
+
 function renderItemPreviewModal(){
   if(!pendingFloorItem)return '';
   const itemId=pendingFloorItem.itemId;
@@ -1106,7 +1162,10 @@ function attachEvents(){
   document.querySelectorAll('[data-action="closebag"]').forEach(b=>b.addEventListener('click',toggleBag));
   document.querySelectorAll('[data-action="closeloot"]').forEach(b=>b.addEventListener('click',closeLoot));
   document.querySelectorAll('[data-action="rotate"]').forEach(b=>b.addEventListener('click',rotateItem));
-  document.querySelectorAll('[data-action="drop"]').forEach(b=>b.addEventListener('click',()=>{if(selectedInvItem!==null)dropInvItem(selectedInvItem);}));
+  // Detail panel actions
+  document.querySelectorAll('[data-detail-use]').forEach(b=>b.addEventListener('click',()=>{selectedInvItem=null;useItem(b.dataset.detailUse);}));
+  document.querySelectorAll('[data-detail-drop]').forEach(b=>b.addEventListener('click',()=>{const idx=parseInt(b.dataset.detailDrop);selectedInvItem=null;dropInvItem(idx);}));
+  document.querySelectorAll('[data-detail-close]').forEach(b=>b.addEventListener('click',()=>{selectedInvItem=null;render();}));
   document.querySelectorAll('[data-action="enter"]').forEach(b=>b.addEventListener('click',enterDungeon));
   document.querySelectorAll('[data-action="respawn"]').forEach(b=>b.addEventListener('click',()=>{
     player.hp=player.maxHp;player.fullness=100;gameState='base';render();
