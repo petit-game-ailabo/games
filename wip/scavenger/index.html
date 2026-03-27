@@ -188,12 +188,12 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 const MW=30,MH=25,VW=13,VH=9,CELL=28,FOV_R=6;
 const WALL=0,FLOOR=1,STAIRS=2,EXIT=3;
 const ENEMY_TYPES={
-rat:{name:'ネズミ',icon:'🐀',hp:15,atk:5,def:0,exp:3,loot:['bandage','battery'],level:1},
+rat:{name:'ネズミ',icon:'🐀',hp:15,atk:5,def:0,exp:3,loot:['bandage','battery'],level:1,special:'doubleSpeed'},
 dog:{name:'野犬',icon:'🐺',hp:25,atk:8,def:1,exp:5,loot:['cannedfood','bandage','bolt'],level:1},
-thug:{name:'チンピラ',icon:'👤',hp:40,atk:12,def:3,exp:10,loot:['knife','ammo','flashlight'],level:2},
-bandit:{name:'盗賊',icon:'🔫',hp:60,atk:16,def:5,exp:18,loot:['rifle','medkit','compass'],level:3},
+thug:{name:'チンピラ',icon:'👤',hp:40,atk:12,def:3,exp:10,loot:['knife','ammo','flashlight'],level:2,special:'steal'},
+bandit:{name:'盗賊',icon:'🔫',hp:60,atk:16,def:5,exp:18,loot:['rifle','medkit','compass'],level:3,special:'ranged'},
 soldier:{name:'武装兵',icon:'🎖️',hp:80,atk:22,def:8,exp:30,loot:['rifle','electronics','radio'],level:4},
-robot:{name:'警備ロボ',icon:'🤖',hp:120,atk:28,def:12,exp:50,loot:['goldbar','document','electronics'],level:5},
+robot:{name:'警備ロボ',icon:'🤖',hp:120,atk:28,def:12,exp:50,loot:['goldbar','document','electronics'],level:5,special:'wallBreak'},
 };
 const ITEMS={
 bandage:{name:'包帯',icon:'🩹',shape:[[1,1]],value:15,usable:true,heal:20},
@@ -419,7 +419,7 @@ function generateMap(floorNum){
     if(map[ey][ex]===FLOOR&&!(ex===player.x&&ey===player.y)){
       const type=ePool[Math.floor(Math.random()*ePool.length)];
       const et=ENEMY_TYPES[type];
-      enemies.push({x:ex,y:ey,type,name:et.name,icon:et.icon,hp:et.hp,maxHp:et.hp,atk:et.atk,def:et.def,exp:et.exp,loot:et.loot});
+      enemies.push({x:ex,y:ey,type,name:et.name,icon:et.icon,hp:et.hp,maxHp:et.hp,atk:et.atk,def:et.def,exp:et.exp,loot:[...et.loot],special:et.special||null,stolenItem:null,acted:false});
     }
   }
 }
@@ -528,48 +528,90 @@ function processTurn(){
   updateFOV();
 }
 function processEnemies(){
-  for(const e of enemies){
-    if(e.hp<=0)continue;
-    const dx=player.x-e.x,dy=player.y-e.y;
-    const dist=Math.abs(dx)+Math.abs(dy);
-    // Adjacent? Attack
-    if(dist===1){
-      const dmg=Math.max(1,e.atk-getPlayerDef()+Math.floor(Math.random()*5)-2);
-      player.hp-=dmg;
-      addFloatDmg(player.x,player.y,dmg,'#e74c3c');
-      playSound('hurt');
-      pushLog(`${e.name}から${dmg}ダメージ！`);
-      // Keep bag open but flash the status bar to alert player
-      if(gameState==='inventory'||gameState==='looting'){
-        overlayDmgFlash=true;
+  // Reset acted flag for double-speed enemies
+  for(const e of enemies)if(e.hp>0)e.acted=false;
+  // Run up to 2 passes — second pass only for doubleSpeed enemies
+  for(let pass=0;pass<2;pass++){
+    for(const e of enemies){
+      if(e.hp<=0)continue;
+      // On second pass, only doubleSpeed enemies act
+      if(pass===1&&e.special!=='doubleSpeed')continue;
+      const dx=player.x-e.x,dy=player.y-e.y;
+      const dist=Math.abs(dx)+Math.abs(dy);
+      // --- Ranged attack (bandit): shoot from 2 tiles away ---
+      if(e.special==='ranged'&&dist===2&&Math.abs(dx)<=2&&Math.abs(dy)<=2){
+        const canSee=isVisible(e.x,e.y,player.x,player.y);
+        if(canSee){
+          const dmg=Math.max(1,Math.floor(e.atk/2)-getPlayerDef()+Math.floor(Math.random()*3));
+          player.hp-=dmg;
+          addFloatDmg(player.x,player.y,dmg,'#ff5722');
+          playSound('hurt');
+          pushLog(`${e.name}の遠距離攻撃！ ${dmg}ダメージ！`);
+          if(gameState==='inventory'||gameState==='looting')overlayDmgFlash=true;
+          if(player.hp<=0){playerDeath();return;}
+          continue;
+        }
       }
-      if(player.hp<=0){playerDeath();return;}
-      continue;
-    }
-    // Can see player? Chase
-    const canSee=Math.sqrt(dx*dx+dy*dy)<=6&&isVisible(e.x,e.y,player.x,player.y);
-    if(canSee){
-      // Move toward player
-      const mx=dx===0?0:(dx>0?1:-1);
-      const my=dy===0?0:(dy>0?1:-1);
-      // Prefer axis with larger distance
-      let moved=false;
-      if(Math.abs(dx)>=Math.abs(dy)){
-        if(tryMoveEnemy(e,mx,0))moved=true;
-        else if(my!==0&&tryMoveEnemy(e,0,my))moved=true;
+      // Adjacent? Attack (+ steal for thug)
+      if(dist===1){
+        // Thug steal attempt: 30% chance when adjacent, before normal attack
+        if(e.special==='steal'&&!e.stolenItem&&inventory.length>0&&Math.random()<0.3){
+          const stealIdx=Math.floor(Math.random()*inventory.length);
+          const stolen=inventory[stealIdx];
+          e.stolenItem=stolen.itemId;
+          e.loot.push(stolen.itemId); // add to loot table so it drops on kill
+          removeInvItem(stealIdx);
+          pushLog(`⚠️ ${e.name}が${ITEMS[e.stolenItem].name}を盗んだ！ 倒すと取り返せる`);
+          playSound('hurt');
+          if(gameState==='inventory'||gameState==='looting')overlayDmgFlash=true;
+          continue;
+        }
+        const dmg=Math.max(1,e.atk-getPlayerDef()+Math.floor(Math.random()*5)-2);
+        player.hp-=dmg;
+        addFloatDmg(player.x,player.y,dmg,'#e74c3c');
+        playSound('hurt');
+        pushLog(`${e.name}から${dmg}ダメージ！`);
+        if(gameState==='inventory'||gameState==='looting')overlayDmgFlash=true;
+        if(player.hp<=0){playerDeath();return;}
+        continue;
+      }
+      // Can see player? Chase
+      const canSee=Math.sqrt(dx*dx+dy*dy)<=6&&isVisible(e.x,e.y,player.x,player.y);
+      if(canSee){
+        const mx=dx===0?0:(dx>0?1:-1);
+        const my=dy===0?0:(dy>0?1:-1);
+        let moved=false;
+        if(Math.abs(dx)>=Math.abs(dy)){
+          if(tryMoveEnemy(e,mx,0))moved=true;
+          else if(my!==0&&tryMoveEnemy(e,0,my))moved=true;
+          // Robot wall break: if blocked, try breaking the wall ahead
+          else if(e.special==='wallBreak')moved=tryWallBreak(e,mx,0)||tryWallBreak(e,0,my);
+        }else{
+          if(tryMoveEnemy(e,0,my))moved=true;
+          else if(mx!==0&&tryMoveEnemy(e,mx,0))moved=true;
+          else if(e.special==='wallBreak')moved=tryWallBreak(e,0,my)||tryWallBreak(e,mx,0);
+        }
       }else{
-        if(tryMoveEnemy(e,0,my))moved=true;
-        else if(mx!==0&&tryMoveEnemy(e,mx,0))moved=true;
-      }
-    }else{
-      // Wander
-      if(Math.random()<.5){
-        const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
-        const d=dirs[Math.floor(Math.random()*4)];
-        tryMoveEnemy(e,d[0],d[1]);
+        if(Math.random()<.5){
+          const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+          const d=dirs[Math.floor(Math.random()*4)];
+          tryMoveEnemy(e,d[0],d[1]);
+        }
       }
     }
   }
+}
+function tryWallBreak(e,dx,dy){
+  if(dx===0&&dy===0)return false;
+  const nx=e.x+dx,ny=e.y+dy;
+  if(nx<=0||nx>=MW-1||ny<=0||ny>=MH-1)return false;
+  if(map[ny][nx]===WALL){
+    map[ny][nx]=FLOOR;
+    pushLog(`💥 ${e.name}が壁を破壊した！`);
+    playSound('hit');
+    return true; // wall broken this turn; enemy moves in next turn
+  }
+  return false;
 }
 function tryMoveEnemy(e,dx,dy){
   const nx=e.x+dx,ny=e.y+dy;
@@ -1194,6 +1236,11 @@ function renderDungeonUI(){
           const ehpPct=Math.max(0,Math.round(enemy.hp/enemy.maxHp*100));
           const ehpColor=ehpPct>50?'#e74c3c':ehpPct>25?'#f59e0b':'#ff1744';
           content+=`<div class="enemy-hp-bar"><div class="enemy-hp-fill" style="width:${ehpPct}%;background:${ehpColor}"></div></div>`;
+          // Special ability indicator
+          if(enemy.special==='doubleSpeed')content+=`<span style="position:absolute;top:0;right:0;font-size:8px;z-index:4">⚡</span>`;
+          else if(enemy.special==='steal')content+=`<span style="position:absolute;top:0;right:0;font-size:8px;z-index:4">${enemy.stolenItem?'💰':'🤏'}</span>`;
+          else if(enemy.special==='ranged')content+=`<span style="position:absolute;top:0;right:0;font-size:8px;z-index:4">🎯</span>`;
+          else if(enemy.special==='wallBreak')content+=`<span style="position:absolute;top:0;right:0;font-size:8px;z-index:4">💪</span>`;
         }
       }
       // Items
