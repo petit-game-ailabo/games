@@ -188,6 +188,8 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .tutorial-tip .key{display:inline-block;padding:2px 8px;background:#222244;border:1px solid #3a3a5e;border-radius:4px;font-weight:bold;color:#e0e0e0;font-size:12px}
 .tutorial-close{padding:12px 32px;font-size:16px;background:#7c3aed;border:none;color:#fff;border-radius:8px;cursor:pointer;align-self:center}
 .tutorial-close:active{background:#6d28d9}
+.tutorial-nav{padding:10px 20px;font-size:14px;background:#333;border:1px solid #555;color:#fff;border-radius:6px;cursor:pointer}
+.tutorial-nav:active{background:#444}
 </style>
 </head>
 <body>
@@ -345,6 +347,7 @@ let dashHoldTimer=null;
 const DASH_HOLD_MS=500;
 let tutorialSeen=false; // Has the user seen the tutorial?
 let showTutorial=false; // Currently showing tutorial overlay?
+let tutorialPage=0; // Current tutorial page (0-4)
 
 function pushLog(msg){
   if(!msg)return;
@@ -1566,52 +1569,23 @@ function renderDungeonUI(){
 }
 
 function renderTutorialOverlay(){
+  const pages=[
+    {title:'🚶 移動と行動',content:`・十字キー（↑↓←→）で移動<br>・敵に隣接すると自動的に攻撃<br>・●ボタンで待機（1ターン経過）<br>・十字キーを長押し（0.5秒）でダッシュ！<br>（壁・敵・アイテム・分岐点で自動停止）`},
+    {title:'🎒 バックパック',content:`・🎒ボタンでバックパック開閉<br>・アイテムは形状に応じてグリッドに配置<br>・回転🔄ボタンでアイテムを回転<br>・配置中もターンが進行するので注意！<br>・緑色＝配置可能 / 赤色＝配置不可<br>・アイテムをタップして「移動」で再配置可能`},
+    {title:'💊 アイテム',content:`・床のアイテムを踏むと自動拾得<br>・🩹包帯・💊医療キットでHP回復<br>・🥫缶詰・🧴水筒で満腹度回復<br>・🔪ナイフ・🔫ライフルは鞄に入れると攻撃力UP<br>・🎒ルートバッグ（敵ドロップ）をタップで開く<br>・📦コンテナ・⚠️罠・🔑カードキーもマップに出現`},
+    {title:'🏠 拠点',content:`・△出口マークで拠点に帰還<br>・💤休憩でHP全回復<br>・🛒ショップでアイテムを売却＆アップグレード購入<br>・📦収納箱でアイテムを保管（次の探索に持ち出せる）<br>・🎰ガチャで強化アイテム獲得（カードキー1枚=1回）<br>・📊記録タブで統計＆実績を確認`},
+    {title:'🔄 レベルシステム',content:`・探索に入るたびにレベル1からスタート<br>・レベルアップのボーナスはダンジョン内のみ有効<br>・拠点に戻るとレベル＆ステータスがリセット<br>・装備（鞄の武器）・アップグレード購入は永続`},
+  ];
+  const p=pages[tutorialPage];
   let h=`<div class="tutorial-overlay"><div class="tutorial-card">`;
-  h+=`<h2>📘 ゲームガイド</h2>`;
-  // Movement
-  h+=`<div class="tutorial-section"><h3>🚶 移動と行動</h3>`;
-  h+=`<div class="tutorial-tip">・十字キー（<span class="key">↑</span><span class="key">↓</span><span class="key">←</span><span class="key">→</span>）で移動<br>`;
-  h+=`・敵に隣接すると自動的に攻撃<br>`;
-  h+=`・<span class="key">●</span>ボタンで待機（1ターン経過）<br>`;
-  h+=`・十字キーを長押し（0.5秒）でダッシュ！<br>`;
-  h+=`（壁・敵・アイテム・分岐点で自動停止）</div>`;
-  h+=`</div>`;
-  // Inventory
-  h+=`<div class="tutorial-section"><h3>🎒 バックパック</h3>`;
-  h+=`<div class="tutorial-tip">・<span class="key">🎒</span>ボタンでバックパック開閉<br>`;
-  h+=`・アイテムは形状に応じてグリッドに配置<br>`;
-  h+=`・<span class="key">回転🔄</span>ボタンでアイテムを回転<br>`;
-  h+=`・配置中もターンが進行するので注意！<br>`;
-  h+=`・緑色＝配置可能 / 赤色＝配置不可<br>`;
-  h+=`・アイテムをタップして「移動」で再配置可能</div>`;
-  h+=`</div>`;
-  // Items
-  h+=`<div class="tutorial-section"><h3>💊 アイテム</h3>`;
-  h+=`<div class="tutorial-tip">・床のアイテムを踏むと自動拾得<br>`;
-  h+=`・🩹包帯・💊医療キットでHP回復<br>`;
-  h+=`・🥫缶詰・🧴水筒で満腹度回復<br>`;
-  h+=`・🔪ナイフ・🔫ライフルは鞄に入れると攻撃力UP<br>`;
-  h+=`・🎒ルートバッグ（敵ドロップ）をタップで開く<br>`;
-  h+=`・📦コンテナ・⚠️罠・🔑カードキーもマップに出現</div>`;
-  h+=`</div>`;
-  // Base
-  h+=`<div class="tutorial-section"><h3>🏠 拠点</h3>`;
-  h+=`<div class="tutorial-tip">・△出口マークで拠点に帰還<br>`;
-  h+=`・💤休憩でHP全回復<br>`;
-  h+=`・🛒ショップでアイテムを売却＆アップグレード購入<br>`;
-  h+=`・📦収納箱でアイテムを保管（次の探索に持ち出せる）<br>`;
-  h+=`・🎰ガチャで強化アイテム獲得（カードキー1枚=1回）<br>`;
-  h+=`・📊記録タブで統計＆実績を確認</div>`;
-  h+=`</div>`;
-  // Leveling
-  h+=`<div class="tutorial-section"><h3>🔄 レベルシステム</h3>`;
-  h+=`<div class="tutorial-tip">・探索に入るたびにレベル1からスタート<br>`;
-  h+=`・レベルアップのボーナスはダンジョン内のみ有効<br>`;
-  h+=`・拠点に戻るとレベル＆ステータスがリセット<br>`;
-  h+=`・装備（鞄の武器）・アップグレード購入は永続</div>`;
-  h+=`</div>`;
-  h+=`<button class="tutorial-close" data-action="close-tutorial">わかった！</button>`;
-  h+=`</div></div>`;
+  h+=`<h2>📘 ゲームガイド (${tutorialPage+1}/${pages.length})</h2>`;
+  h+=`<div class="tutorial-section"><h3>${p.title}</h3>`;
+  h+=`<div class="tutorial-tip">${p.content}</div></div>`;
+  h+=`<div style="display:flex;gap:8px;justify-content:center;margin-top:8px">`;
+  if(tutorialPage>0)h+=`<button class="tutorial-nav" data-action="tutorial-prev">← 戻る</button>`;
+  if(tutorialPage<pages.length-1)h+=`<button class="tutorial-nav" data-action="tutorial-next">次へ →</button>`;
+  h+=`<button class="tutorial-close" data-action="close-tutorial">閉じる</button>`;
+  h+=`</div></div></div>`;
   return h;
 }
 
@@ -2296,7 +2270,9 @@ function attachEvents(){
   document.querySelectorAll('[data-action="ignore-loot-item"]').forEach(b=>b.addEventListener('click',ignoreLootItem));
   // Help button
   document.querySelectorAll('[data-action="show-help"]').forEach(b=>b.addEventListener('click',()=>{showTutorial=true;render();}));
-  document.querySelectorAll('[data-action="close-tutorial"]').forEach(b=>b.addEventListener('click',()=>{showTutorial=false;render();}));
+  document.querySelectorAll('[data-action="tutorial-prev"]').forEach(b=>b.addEventListener('click',()=>{tutorialPage=Math.max(0,tutorialPage-1);render();}));
+  document.querySelectorAll('[data-action="tutorial-next"]').forEach(b=>b.addEventListener('click',()=>{tutorialPage++;render();}));
+  document.querySelectorAll('[data-action="close-tutorial"]').forEach(b=>b.addEventListener('click',()=>{showTutorial=false;tutorialPage=0;render();}));
 }
 
 // ═══════════════════════════════════════
