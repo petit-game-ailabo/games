@@ -209,7 +209,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 const MW=30,MH=25,VW=13,VH=9,CELL=28,FOV_R=6;
 const WALL=0,FLOOR=1,STAIRS=2,EXIT=3,TRAP=4,CONTAINER=5;
 const ENEMY_TYPES={
-rat:{name:'ネズミ',icon:'🐀',hp:15,atk:5,def:0,exp:3,loot:['bandage','battery'],level:1,special:'doubleSpeed'},
+rat:{name:'ネズミ',icon:'🐀',hp:15,atk:5,def:0,exp:3,loot:['bandage','battery'],level:1},
 dog:{name:'野犬',icon:'🐺',hp:25,atk:8,def:1,exp:5,loot:['cannedfood','bandage','bolt'],level:1},
 thug:{name:'チンピラ',icon:'👤',hp:40,atk:12,def:3,exp:10,loot:['knife','ammo','flashlight'],level:2,special:'steal'},
 bandit:{name:'盗賊',icon:'🔫',hp:60,atk:16,def:5,exp:18,loot:['rifle','medkit','compass'],level:3,special:'ranged'},
@@ -278,7 +278,7 @@ let bagExpansions=0, armorUpgrade=0, hasDetector=false;
 let baseMaxHp=100, baseAtk=8, baseDef=2;
 // Storage box (home)
 let storageBox=[]; // [{itemId},...] — simple list, no tetris
-let storageCapacity=20; // slots (each item costs its cell count)
+let storageCapacity=50; // slots (each item costs its cell count)
 let storageExpansions=0;
 let baseTab='home'; // 'home' | 'shop' | 'records'
 let storagePlaceMode=false; // when taking from storage, placing in bag
@@ -630,14 +630,8 @@ function processTurn(){
   updateFOV();
 }
 function processEnemies(){
-  // Reset acted flag for double-speed enemies
-  for(const e of enemies)if(e.hp>0)e.acted=false;
-  // Run up to 2 passes — second pass only for doubleSpeed enemies
-  for(let pass=0;pass<2;pass++){
-    for(const e of enemies){
-      if(e.hp<=0)continue;
-      // On second pass, only doubleSpeed enemies act
-      if(pass===1&&e.special!=='doubleSpeed')continue;
+  for(const e of enemies){
+    if(e.hp<=0)continue;
       const dx=player.x-e.x,dy=player.y-e.y;
       const dist=Math.abs(dx)+Math.abs(dy);
       // --- Ranged attack (bandit): shoot from 2 tiles away ---
@@ -701,7 +695,6 @@ function processEnemies(){
         }
       }
     }
-  }
 }
 function tryWallBreak(e,dx,dy){
   if(dx===0&&dy===0)return false;
@@ -1231,12 +1224,7 @@ function storagePlaceAttempt(gx,gy){
     render();
   }
 }
-function restAtHome(){
-  player.hp=player.maxHp;
-  playSound('pickup');
-  pushLog('自宅で休憩した — HP全回復！');
-  render();
-}
+// Rest removed (HP auto-restores on return to base)
 function enterDungeon(){
   // シレン式: ダンジョン突入時にレベル1にリセット
   player.level=1;player.exp=0;
@@ -1558,7 +1546,7 @@ function renderTutorialOverlay(){
     {title:'🚶 移動と行動',content:`・十字キー（↑↓←→）で移動<br>・敵に隣接すると自動的に攻撃<br>・●ボタンで待機（1ターン経過）<br>・十字キーを長押し（0.5秒）でダッシュ！<br>（壁・敵・アイテム・分岐点で自動停止）`},
     {title:'🎒 バックパック',content:`・🎒ボタンでバックパック開閉<br>・アイテムは形状に応じてグリッドに配置<br>・回転🔄ボタンでアイテムを回転<br>・配置中もターンが進行するので注意！<br>・緑色＝配置可能 / 赤色＝配置不可<br>・アイテムをタップして「移動」で再配置可能`},
     {title:'💊 アイテム',content:`・床のアイテムを踏むと自動拾得<br>・🩹包帯・💊医療キットでHP回復<br>・🥫缶詰・🧴水筒で満腹度回復<br>・🔪ナイフ・🔫ライフルは鞄に入れると攻撃力UP<br>・🎒ルートバッグ（敵ドロップ）をタップで開く<br>・📦コンテナ・⚠️罠・🔑カードキーもマップに出現`},
-    {title:'🏠 拠点',content:`・△出口マークで拠点に帰還<br>・💤休憩でHP全回復<br>・🛒ショップでアイテムを売却＆アップグレード購入<br>・📦収納箱でアイテムを保管（次の探索に持ち出せる）<br>・🎰ガチャで強化アイテム獲得（カードキー1枚=1回）<br>・📊記録タブで統計＆実績を確認`},
+    {title:'🏠 拠点',content:`・△出口マークで拠点に帰還（HP全回復）<br>・🛒ショップでアイテムを売却＆アップグレード購入<br>・📦収納箱でアイテムを保管（次の探索に持ち出せる）<br>・🎰ガチャで強化アイテム獲得（カードキー1枚=1回）<br>・📊記録タブで統計＆実績を確認`},
     {title:'🔄 レベルシステム',content:`・探索に入るたびにレベル1からスタート<br>・レベルアップのボーナスはダンジョン内のみ有効<br>・拠点に戻るとレベル＆ステータスがリセット<br>・装備（鞄の武器）・アップグレード購入は永続`},
   ];
   const p=pages[tutorialPage];
@@ -1960,13 +1948,7 @@ function renderBaseUI(){
 
 function renderHomeTab(){
   let h='';
-  // Rest
-  h+=`<div class="home-section">`;
-  h+=`<h3>🛏️ 休憩</h3>`;
-  const hpFull=player.hp>=player.maxHp;
-  h+=`<button class="base-btn" data-action="rest" style="width:100%;font-size:14px;padding:8px;${hpFull?'opacity:.5;cursor:default':''}">`;
-  h+=hpFull?'❤️ HP満タン':'💤 休憩してHP全回復';
-  h+=`</button></div>`;
+  // Rest removed (auto-restore on base return)
   // Storage box
   const used=getStorageUsed();
   const pct=Math.round(used/storageCapacity*100);
@@ -2146,7 +2128,7 @@ function attachEvents(){
   document.querySelectorAll('[data-storage-take]').forEach(b=>b.addEventListener('click',()=>takeItemFromStorage(parseInt(b.dataset.storageTake))));
   document.querySelectorAll('[data-store]').forEach(b=>b.addEventListener('click',()=>storeItemFromBag(parseInt(b.dataset.store))));
   document.querySelectorAll('[data-action="return-to-storage"]').forEach(b=>b.addEventListener('click',returnItemToStorage));
-  document.querySelectorAll('[data-action="rest"]').forEach(b=>b.addEventListener('click',restAtHome));
+  // Rest removed
   document.querySelectorAll('[data-action="gacha"]').forEach(b=>b.addEventListener('click',pullGacha));
   // Minimap toggle
   document.querySelectorAll('[data-action="toggle-minimap"]').forEach(el=>{
