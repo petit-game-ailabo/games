@@ -770,14 +770,8 @@ function movePlayer(dx,dy,dashMode=false){
   // Check tile
   if(map[ny][nx]===STAIRS){
     stopDash();
-    player.floor++;
-    if(player.floor>stats.maxFloor)stats.maxFloor=player.floor;
-    checkAchievements();
-    pushLog(`${player.floor}階に降りた`);
-    playSound('stairs');
-    generateMap(player.floor);
-    updateFOV();
-    processTurn();
+    // Show choice: descend or return to base
+    gameState='stairs_choice';
     render();
     return false;
   }
@@ -939,6 +933,7 @@ function addFloatDmg(tx,ty,dmg,color){
   setTimeout(()=>{floatingDmgs=floatingDmgs.filter(f=>Date.now()-f.t<800);render();},800);
 }
 function pickupFloorItem(idx){
+  stopDash(); // Stop dash when picking up item
   const mi=mapItems[idx];
   // Skip confirmation — go straight to inventory placement
   selectedLootItem=mi.itemId;
@@ -996,6 +991,31 @@ function openLootBag(idx){
   selectedInvItem=null;
   invRotation=0;
   pushLog('ルートバッグを開いた');
+}
+function descendStairs(){
+  player.floor++;
+  if(player.floor>stats.maxFloor)stats.maxFloor=player.floor;
+  checkAchievements();
+  pushLog(`${player.floor}階に降りた`);
+  playSound('stairs');
+  generateMap(player.floor);
+  updateFOV();
+  gameState='dungeon';
+  processTurn();
+  render();
+}
+function returnFromStairs(){
+  // Same as EXIT logic
+  if(hasItem('goldbar'))achievements.goldbar=true;
+  gameState='base';
+  player.level=1;player.exp=0;
+  player.maxHp=baseMaxHp;player.atk=baseAtk;player.def=baseDef;
+  player.hp=player.maxHp;player.fullness=100;
+  totalCardKeys+=cardKeys;
+  cardKeys=0;
+  checkAchievements();
+  pushLog('拠点に帰還した（ステータスリセット）');
+  render();
 }
 
 // ═══════════════════════════════════════
@@ -1426,6 +1446,8 @@ function render(){
   let html='';
   if(gameState==='dungeon'||gameState==='inventory'||gameState==='looting'||gameState==='item_preview'||gameState==='loot_preview'){
     html+=renderDungeonUI();
+  }else if(gameState==='stairs_choice'){
+    html+=renderStairsChoiceUI();
   }else if(gameState==='base'){
     html+=renderBaseUI();
   }else if(gameState==='storage_place'){
@@ -1555,9 +1577,9 @@ function renderTutorialOverlay(){
   h+=`（壁・敵・アイテム・分岐点で自動停止）</div>`;
   h+=`</div>`;
   // Inventory
-  h+=`<div class="tutorial-section"><h3>🎒 バックパック（テトリス式）</h3>`;
+  h+=`<div class="tutorial-section"><h3>🎒 バックパック</h3>`;
   h+=`<div class="tutorial-tip">・<span class="key">🎒</span>ボタンでバックパック開閉<br>`;
-  h+=`・アイテムをテトリスのように配置<br>`;
+  h+=`・アイテムは形状に応じてグリッドに配置<br>`;
   h+=`・<span class="key">回転🔄</span>ボタンでアイテムを回転<br>`;
   h+=`・配置中もターンが進行するので注意！<br>`;
   h+=`・緑色＝配置可能 / 赤色＝配置不可<br>`;
@@ -1581,8 +1603,8 @@ function renderTutorialOverlay(){
   h+=`・🎰ガチャで強化アイテム獲得（カードキー1枚=1回）<br>`;
   h+=`・📊記録タブで統計＆実績を確認</div>`;
   h+=`</div>`;
-  // Shiren-style leveling
-  h+=`<div class="tutorial-section"><h3>🔄 シレン式レベルシステム</h3>`;
+  // Leveling
+  h+=`<div class="tutorial-section"><h3>🔄 レベルシステム</h3>`;
   h+=`<div class="tutorial-tip">・探索に入るたびにレベル1からスタート<br>`;
   h+=`・レベルアップのボーナスはダンジョン内のみ有効<br>`;
   h+=`・拠点に戻るとレベル＆ステータスがリセット<br>`;
@@ -2111,6 +2133,12 @@ function renderStoragePlaceUI(){
   return h;
 }
 
+function renderStairsChoiceUI(){
+  let h=`<div class="game-over"><h2>▼ 階段を発見</h2>`;
+  h+=`<p>さらに深く潜りますか？<br>それとも今のルートで帰還しますか？</p>`;
+  h+=`<div style="display:flex;gap:12px;justify-content:center"><button data-action="descend" style="background:#7c3aed">▼ 降りる</button><button data-action="return-stairs" style="background:#333">△ 帰還</button></div></div>`;
+  return h;
+}
 function renderDeadUI(){
   let h=`<div class="game-over"><h2>💀 力尽きた...</h2>`;
   h+=`<p>アイテムの半分を失った。<br>拠点に戻ります。</p>`;
@@ -2195,6 +2223,8 @@ function attachEvents(){
       }
     });
   });
+  document.querySelectorAll('[data-action="descend"]').forEach(b=>b.addEventListener('click',descendStairs));
+  document.querySelectorAll('[data-action="return-stairs"]').forEach(b=>b.addEventListener('click',returnFromStairs));
   document.querySelectorAll('[data-action="respawn"]').forEach(b=>b.addEventListener('click',()=>{
     // シレン式: 死亡時も基礎ステータスに戻る
     player.level=1;player.exp=0;
