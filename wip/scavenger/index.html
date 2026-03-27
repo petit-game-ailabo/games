@@ -192,6 +192,8 @@ let rooms=[];
 let gameState='title'; // title, dungeon, base, dead, inventory, looting
 let logMsg='';
 let bagExpansions=0, armorUpgrade=0, hasDetector=false;
+// Base stats (permanent, persist across dungeon runs)
+let baseMaxHp=100, baseAtk=8, baseDef=2;
 let selectedInvItem=null, selectedLootItem=null, invRotation=0;
 let currentLootBag=null;
 let pendingFloorItem=null; // {itemId, mapItemIdx} — item on floor awaiting pickup/ignore decision
@@ -387,13 +389,13 @@ function processTurn(){
   lootBags=lootBags.filter(b=>(player.turnCount-b.turnPlaced)<30);
   // Enemy AI
   processEnemies();
-  // Level up check
+  // Level up check (dungeon-only bonuses — reset on return to base)
   while(player.exp>=player.level*20){
     player.exp-=player.level*20;
     player.level++;
     player.maxHp+=10;player.hp=Math.min(player.hp+10,player.maxHp);
     player.atk+=2;player.def+=1;
-    logMsg=`レベルアップ！ Lv${player.level}`;
+    logMsg=`レベルアップ！ Lv${player.level}（ダンジョン内のみ有効）`;
     playSound('levelup');
   }
   updateFOV();
@@ -495,8 +497,11 @@ function movePlayer(dx,dy){
   }
   if(map[ny][nx]===EXIT){
     gameState='base';
+    // シレン式: 拠点に戻ると基礎ステータスに戻る（レベルボーナス消失）
+    player.level=1;player.exp=0;
+    player.maxHp=baseMaxHp;player.atk=baseAtk;player.def=baseDef;
     player.hp=player.maxHp;player.fullness=100;
-    logMsg='拠点に帰還した';
+    logMsg='拠点に帰還した（ステータスリセット）';
     render();
     return;
   }
@@ -748,9 +753,13 @@ function buyUpgrade(type){
   render();
 }
 function enterDungeon(){
-  player.floor=1;player.hp=player.maxHp;player.fullness=100;player.turnCount=0;
+  // シレン式: ダンジョン突入時にレベル1にリセット
+  player.level=1;player.exp=0;
+  player.maxHp=baseMaxHp;player.hp=baseMaxHp;
+  player.atk=baseAtk;player.def=baseDef;
+  player.floor=1;player.fullness=100;player.turnCount=0;
   generateMap(1);updateFOV();
-  gameState='dungeon';logMsg='ダンジョンに入った';
+  gameState='dungeon';logMsg='ダンジョンに入った（Lv1から開始）';
   render();
 }
 
@@ -761,6 +770,7 @@ function saveGame(){
   try{const saveState=gameState==='dead'?'base':gameState==='item_preview'?'dungeon':gameState==='loot_preview'?'looting':gameState;
   localStorage.setItem('scavenger_save',JSON.stringify({
     player,inventory,invW,invH,bagExpansions,armorUpgrade,hasDetector,
+    baseMaxHp,baseAtk,baseDef,
     map,seen,enemies,mapItems,lootBags,rooms,gameState:saveState,
   }));}catch(e){}
 }
@@ -770,6 +780,7 @@ function loadGame(){
     if(!d){logMsg='セーブデータがありません';return;}
     Object.assign(player,d.player);inventory=d.inventory||[];invW=d.invW||6;invH=d.invH||4;
     bagExpansions=d.bagExpansions||0;armorUpgrade=d.armorUpgrade||0;hasDetector=d.hasDetector||false;
+    baseMaxHp=d.baseMaxHp||100;baseAtk=d.baseAtk||8;baseDef=d.baseDef||2;
     map=d.map||[];seen=d.seen||[];enemies=d.enemies||[];mapItems=d.mapItems||[];
     lootBags=d.lootBags||[];rooms=d.rooms||[];
     gameState=d.gameState||'base';
@@ -780,6 +791,7 @@ function loadGame(){
 function startNewGame(){
   player={x:0,y:0,hp:100,maxHp:100,atk:8,def:2,level:1,exp:0,fullness:100,money:0,floor:1,turnCount:0};
   inventory=[];invW=6;invH=4;bagExpansions=0;armorUpgrade=0;hasDetector=false;
+  baseMaxHp=100;baseAtk=8;baseDef=2;
   gameState='base';logMsg='';
   render();
 }
@@ -1251,6 +1263,9 @@ function attachEvents(){
   document.querySelectorAll('[data-action="return-to-floor"]').forEach(b=>b.addEventListener('click',returnItemToFloor));
   document.querySelectorAll('[data-action="enter"]').forEach(b=>b.addEventListener('click',enterDungeon));
   document.querySelectorAll('[data-action="respawn"]').forEach(b=>b.addEventListener('click',()=>{
+    // シレン式: 死亡時も基礎ステータスに戻る
+    player.level=1;player.exp=0;
+    player.maxHp=baseMaxHp;player.atk=baseAtk;player.def=baseDef;
     player.hp=player.maxHp;player.fullness=100;gameState='base';render();
   }));
   // Item preview modal
