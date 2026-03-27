@@ -80,6 +80,23 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;display:
 .game-over p{color:#888;font-size:14px;text-align:center;padding:0 20px}
 .game-over button{padding:10px 24px;font-size:16px;background:#7c3aed;border:none;color:#fff;border-radius:8px;cursor:pointer}
 .rotate-btn{padding:6px 12px;background:#222244;border:1px solid #3a3a5e;color:#e0e0e0;border-radius:4px;font-size:13px;cursor:pointer;margin:4px 12px}
+.home-section{background:#12122a;border:1px solid #2a2a4e;border-radius:8px;padding:12px}
+.home-section h3{font-size:14px;color:#888;margin-bottom:8px}
+.storage-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12px;color:#888}
+.storage-bar-bg{height:6px;background:#333;border-radius:3px;flex:1;margin-left:8px;overflow:hidden}
+.storage-bar-fg{height:100%;background:#7c3aed;border-radius:3px;transition:width .2s}
+.storage-list{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto}
+.storage-item{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:#1a1a2e;border:1px solid #2a2a4e;border-radius:4px;font-size:13px}
+.storage-item .si-info{display:flex;align-items:center;gap:6px}
+.storage-item .si-slots{color:#888;font-size:11px}
+.storage-item button{padding:4px 10px;background:#222244;border:1px solid #3a3a5e;color:#e0e0e0;border-radius:4px;font-size:12px;cursor:pointer}
+.storage-item button:active{background:#3a3a6e}
+.storage-empty{color:#555;font-size:12px;text-align:center;padding:12px}
+.storage-place-screen{position:absolute;inset:0;background:#1a1a2e;z-index:25;display:flex;flex-direction:column;overflow-y:auto}
+.base-tabs{display:flex;gap:0;border-bottom:1px solid #2a2a4e;flex-shrink:0}
+.base-tab{flex:1;padding:10px 8px;text-align:center;font-size:13px;background:#12122a;color:#888;cursor:pointer;border:none;border-bottom:2px solid transparent}
+.base-tab.active{color:#a855f7;border-bottom-color:#a855f7;background:#1a1a2e}
+.base-tab:active{background:#222244}
 .item-preview-modal{position:absolute;inset:0;background:rgba(10,10,26,.95);z-index:22;display:flex;align-items:center;justify-content:center}
 .item-preview-card{background:#1e1e3a;border:1px solid #3a3a5e;border-radius:12px;padding:16px;width:280px;max-width:90%;display:flex;flex-direction:column;gap:10px}
 .item-preview-card .ipv-header{display:flex;align-items:center;gap:10px;font-size:18px}
@@ -194,6 +211,12 @@ let logMsg='';
 let bagExpansions=0, armorUpgrade=0, hasDetector=false;
 // Base stats (permanent, persist across dungeon runs)
 let baseMaxHp=100, baseAtk=8, baseDef=2;
+// Storage box (home)
+let storageBox=[]; // [{itemId},...] — simple list, no tetris
+let storageCapacity=20; // slots (each item costs its cell count)
+let storageExpansions=0;
+let baseTab='home'; // 'home' | 'shop'
+let storagePlaceMode=false; // when taking from storage, placing in bag
 let selectedInvItem=null, selectedLootItem=null, invRotation=0;
 let currentLootBag=null;
 let pendingFloorItem=null; // {itemId, mapItemIdx} — item on floor awaiting pickup/ignore decision
@@ -555,10 +578,14 @@ function addFloatDmg(tx,ty,dmg,color){
 }
 function pickupFloorItem(idx){
   const mi=mapItems[idx];
-  // Show preview modal instead of immediately picking up
-  pendingFloorItem={itemId:mi.itemId, mapItemIdx:idx};
-  gameState='item_preview';
-  logMsg=`${ITEMS[mi.itemId].name}を見つけた`;
+  // Skip confirmation — go straight to inventory placement
+  selectedLootItem=mi.itemId;
+  floorPickupItemId=mi.itemId;
+  mapItems.splice(idx,1);
+  pendingFloorItem=null;
+  gameState='inventory';
+  invRotation=0;
+  logMsg=`${ITEMS[mi.itemId].name}を拾った — 鞄に配置してください`;
   playSound('pickup');
 }
 function confirmPickupFloorItem(){
@@ -752,6 +779,69 @@ function buyUpgrade(type){
   }
   render();
 }
+// ═══════════════════════════════════════
+// STORAGE BOX
+// ═══════════════════════════════════════
+function getItemCellCount(itemId){
+  const item=ITEMS[itemId];
+  return item.shape.reduce((s,r)=>s+r.filter(c=>c).length,0);
+}
+function getStorageUsed(){
+  return storageBox.reduce((s,si)=>s+getItemCellCount(si.itemId),0);
+}
+function canStoreItem(itemId){
+  return getStorageUsed()+getItemCellCount(itemId)<=storageCapacity;
+}
+function storeItemFromBag(invIdx){
+  const it=inventory[invIdx];
+  if(!canStoreItem(it.itemId)){logMsg='収納箱がいっぱいです！';render();return;}
+  storageBox.push({itemId:it.itemId});
+  removeInvItem(invIdx);
+  selectedInvItem=null;
+  playSound('pickup');
+  logMsg=`${ITEMS[it.itemId].name}を収納箱に入れた`;
+  render();
+}
+function takeItemFromStorage(storIdx){
+  const si=storageBox[storIdx];
+  // Enter placement mode — need to place in bag
+  selectedLootItem=si.itemId;
+  invRotation=0;
+  storagePlaceMode=true;
+  storageBox.splice(storIdx,1);
+  gameState='storage_place';
+  logMsg=`${ITEMS[si.itemId].name}を鞄に配置してください`;
+  render();
+}
+function returnItemToStorage(){
+  if(!storagePlaceMode||!selectedLootItem)return;
+  storageBox.push({itemId:selectedLootItem});
+  selectedLootItem=null;
+  storagePlaceMode=false;
+  invRotation=0;
+  gameState='base';
+  logMsg='アイテムを収納箱に戻した';
+  render();
+}
+function storagePlaceAttempt(gx,gy){
+  if(!selectedLootItem||!storagePlaceMode)return;
+  if(canPlace(selectedLootItem,gx,gy,invRotation)){
+    placeItem(selectedLootItem,gx,gy,invRotation);
+    logMsg=`${ITEMS[selectedLootItem].name}を鞄に入れた`;
+    selectedLootItem=null;
+    storagePlaceMode=false;
+    invRotation=0;
+    playSound('pickup');
+    gameState='base';
+    render();
+  }
+}
+function restAtHome(){
+  player.hp=player.maxHp;
+  playSound('pickup');
+  logMsg='自宅で休憩した — HP全回復！';
+  render();
+}
 function enterDungeon(){
   // シレン式: ダンジョン突入時にレベル1にリセット
   player.level=1;player.exp=0;
@@ -767,10 +857,11 @@ function enterDungeon(){
 // SAVE / LOAD
 // ═══════════════════════════════════════
 function saveGame(){
-  try{const saveState=gameState==='dead'?'base':gameState==='item_preview'?'dungeon':gameState==='loot_preview'?'looting':gameState;
+  try{const saveState=gameState==='dead'?'base':gameState==='item_preview'?'dungeon':gameState==='loot_preview'?'looting':gameState==='storage_place'?'base':gameState;
   localStorage.setItem('scavenger_save',JSON.stringify({
     player,inventory,invW,invH,bagExpansions,armorUpgrade,hasDetector,
     baseMaxHp,baseAtk,baseDef,
+    storageBox,storageCapacity,storageExpansions,
     map,seen,enemies,mapItems,lootBags,rooms,gameState:saveState,
   }));}catch(e){}
 }
@@ -781,6 +872,7 @@ function loadGame(){
     Object.assign(player,d.player);inventory=d.inventory||[];invW=d.invW||6;invH=d.invH||4;
     bagExpansions=d.bagExpansions||0;armorUpgrade=d.armorUpgrade||0;hasDetector=d.hasDetector||false;
     baseMaxHp=d.baseMaxHp||100;baseAtk=d.baseAtk||8;baseDef=d.baseDef||2;
+    storageBox=d.storageBox||[];storageCapacity=d.storageCapacity||20;storageExpansions=d.storageExpansions||0;
     map=d.map||[];seen=d.seen||[];enemies=d.enemies||[];mapItems=d.mapItems||[];
     lootBags=d.lootBags||[];rooms=d.rooms||[];
     gameState=d.gameState||'base';
@@ -792,7 +884,8 @@ function startNewGame(){
   player={x:0,y:0,hp:100,maxHp:100,atk:8,def:2,level:1,exp:0,fullness:100,money:0,floor:1,turnCount:0};
   inventory=[];invW=6;invH=4;bagExpansions=0;armorUpgrade=0;hasDetector=false;
   baseMaxHp=100;baseAtk=8;baseDef=2;
-  gameState='base';logMsg='';
+  storageBox=[];storageCapacity=20;storageExpansions=0;
+  gameState='base';logMsg='';baseTab='home';
   render();
 }
 
@@ -811,6 +904,8 @@ function render(){
     html+=renderDungeonUI();
   }else if(gameState==='base'){
     html+=renderBaseUI();
+  }else if(gameState==='storage_place'){
+    html+=renderStoragePlaceUI();
   }else if(gameState==='dead'){
     html+=renderDeadUI();
   }
