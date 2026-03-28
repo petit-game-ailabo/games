@@ -110,6 +110,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 #radar-dir-panel button{background:#0a1a2a;border:1px solid #1a4a3a;color:#8fc;padding:10px;font-size:14px;cursor:pointer;border-radius:3px}
 #radar-dir-panel button:hover{background:#1a3a2a}
 .torpedo-marker{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:5;pointer-events:none;color:#ff8800;text-shadow:0 0 4px #ff6600}
+#bgm-toggle{position:fixed;top:4px;right:8px;z-index:250;background:none;border:1px solid #1a4a3a;color:#6a8a7a;font-size:16px;padding:2px 6px;cursor:pointer;font-family:inherit;border-radius:3px;line-height:1.2}
+#bgm-toggle:hover{background:#1a3a2a;color:#8fc}
+#bgm-toggle.muted{color:#4a5a5a;border-color:#1a2a2a}
 </style>
 </head>
 <body>
@@ -119,6 +122,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 <button onclick="startGame()">出 撃</button>
 </div>
 
+<button id="bgm-toggle" onclick="toggleBGM()" style="display:none" title="BGM ON/OFF">🔊</button>
 <div id="game-container">
 <div id="top-bar">
 <span id="turn-info">Turn 1</span>
@@ -218,19 +222,206 @@ const SHIP_DEFS=[
 // AUDIO
 // ============================================================
 let audioCtx;
+let bgmGain,bgmPlaying=false,bgmMuted=false;
+let bgmDrone1,bgmDrone2,bgmLfo,bgmPingInterval;
+
 function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
+
+// --- Enhanced multi-layer sound effects ---
 function playSound(type){
   try{initAudio()}catch(e){return}
   if(!audioCtx)return;
-  const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime;
-  o.connect(g);g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime;
   switch(type){
-    case'fire':o.type='sawtooth';o.frequency.setValueAtTime(200,t);o.frequency.exponentialRampToValueAtTime(60,t+.3);g.gain.setValueAtTime(.3,t);g.gain.exponentialRampToValueAtTime(.01,t+.4);o.start(t);o.stop(t+.4);break;
-    case'torpedo':o.type='sine';o.frequency.setValueAtTime(800,t);o.frequency.exponentialRampToValueAtTime(200,t+.5);g.gain.setValueAtTime(.15,t);g.gain.exponentialRampToValueAtTime(.01,t+.5);o.start(t);o.stop(t+.5);break;
-    case'hit':o.type='square';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(40,t+.3);g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.01,t+.5);o.start(t);o.stop(t+.5);break;
-    case'sink':o.type='sawtooth';o.frequency.setValueAtTime(300,t);o.frequency.exponentialRampToValueAtTime(20,t+1);g.gain.setValueAtTime(.3,t);g.gain.exponentialRampToValueAtTime(.01,t+1);o.start(t);o.stop(t+1);break;
-    case'radar':o.type='sine';o.frequency.setValueAtTime(1200,t);o.frequency.exponentialRampToValueAtTime(600,t+.2);g.gain.setValueAtTime(.08,t);g.gain.exponentialRampToValueAtTime(.01,t+.3);o.start(t);o.stop(t+.3);break;
-    case'click':o.type='sine';o.frequency.setValueAtTime(600,t);g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.01,t+.05);o.start(t);o.stop(t+.05);break;
+    case'fire':{
+      // Layer 1: cannon boom
+      const o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
+      o1.connect(g1);g1.connect(audioCtx.destination);
+      o1.type='sawtooth';o1.frequency.setValueAtTime(200,t);o1.frequency.exponentialRampToValueAtTime(40,t+.35);
+      g1.gain.setValueAtTime(.3,t);g1.gain.exponentialRampToValueAtTime(.01,t+.4);
+      o1.start(t);o1.stop(t+.4);
+      // Layer 2: noise burst (simulated with detuned square)
+      const o2=audioCtx.createOscillator(),g2=audioCtx.createGain();
+      o2.connect(g2);g2.connect(audioCtx.destination);
+      o2.type='square';o2.frequency.setValueAtTime(100,t);o2.frequency.exponentialRampToValueAtTime(30,t+.2);
+      o2.detune.setValueAtTime(1200,t);
+      g2.gain.setValueAtTime(.15,t);g2.gain.exponentialRampToValueAtTime(.01,t+.25);
+      o2.start(t);o2.stop(t+.25);
+      break;
+    }
+    case'torpedo':{
+      // Whoosh + high ping
+      const o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
+      o1.connect(g1);g1.connect(audioCtx.destination);
+      o1.type='sine';o1.frequency.setValueAtTime(900,t);o1.frequency.exponentialRampToValueAtTime(150,t+.6);
+      g1.gain.setValueAtTime(.15,t);g1.gain.exponentialRampToValueAtTime(.01,t+.6);
+      o1.start(t);o1.stop(t+.6);
+      // Bubble trail
+      const o2=audioCtx.createOscillator(),g2=audioCtx.createGain();
+      o2.connect(g2);g2.connect(audioCtx.destination);
+      o2.type='triangle';o2.frequency.setValueAtTime(300,t+.1);o2.frequency.setValueAtTime(320,t+.2);o2.frequency.setValueAtTime(280,t+.3);
+      g2.gain.setValueAtTime(0,t);g2.gain.linearRampToValueAtTime(.06,t+.1);g2.gain.exponentialRampToValueAtTime(.01,t+.5);
+      o2.start(t+.05);o2.stop(t+.5);
+      break;
+    }
+    case'hit':{
+      // Impact crunch
+      const o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
+      o1.connect(g1);g1.connect(audioCtx.destination);
+      o1.type='square';o1.frequency.setValueAtTime(180,t);o1.frequency.exponentialRampToValueAtTime(30,t+.35);
+      g1.gain.setValueAtTime(.28,t);g1.gain.exponentialRampToValueAtTime(.01,t+.5);
+      o1.start(t);o1.stop(t+.5);
+      // Metal creak
+      const o2=audioCtx.createOscillator(),g2=audioCtx.createGain();
+      o2.connect(g2);g2.connect(audioCtx.destination);
+      o2.type='sawtooth';o2.frequency.setValueAtTime(400,t+.05);o2.frequency.exponentialRampToValueAtTime(80,t+.3);
+      g2.gain.setValueAtTime(.08,t+.05);g2.gain.exponentialRampToValueAtTime(.01,t+.35);
+      o2.start(t+.05);o2.stop(t+.35);
+      break;
+    }
+    case'sink':{
+      // Deep explosion
+      const o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
+      o1.connect(g1);g1.connect(audioCtx.destination);
+      o1.type='sawtooth';o1.frequency.setValueAtTime(300,t);o1.frequency.exponentialRampToValueAtTime(15,t+1.2);
+      g1.gain.setValueAtTime(.35,t);g1.gain.exponentialRampToValueAtTime(.01,t+1.2);
+      o1.start(t);o1.stop(t+1.2);
+      // Secondary blast
+      const o2=audioCtx.createOscillator(),g2=audioCtx.createGain();
+      o2.connect(g2);g2.connect(audioCtx.destination);
+      o2.type='square';o2.frequency.setValueAtTime(120,t+.2);o2.frequency.exponentialRampToValueAtTime(20,t+1);
+      g2.gain.setValueAtTime(.2,t+.2);g2.gain.exponentialRampToValueAtTime(.01,t+1);
+      o2.start(t+.2);o2.stop(t+1);
+      // Hiss / bubbles
+      const o3=audioCtx.createOscillator(),g3=audioCtx.createGain();
+      o3.connect(g3);g3.connect(audioCtx.destination);
+      o3.type='triangle';o3.frequency.setValueAtTime(500,t+.4);o3.frequency.exponentialRampToValueAtTime(60,t+1.5);
+      g3.gain.setValueAtTime(.06,t+.4);g3.gain.exponentialRampToValueAtTime(.01,t+1.5);
+      o3.start(t+.4);o3.stop(t+1.5);
+      break;
+    }
+    case'radar':{
+      // Sonar ping
+      const o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
+      o1.connect(g1);g1.connect(audioCtx.destination);
+      o1.type='sine';o1.frequency.setValueAtTime(1300,t);o1.frequency.exponentialRampToValueAtTime(600,t+.25);
+      g1.gain.setValueAtTime(.1,t);g1.gain.exponentialRampToValueAtTime(.01,t+.35);
+      o1.start(t);o1.stop(t+.35);
+      // Echo
+      const o2=audioCtx.createOscillator(),g2=audioCtx.createGain();
+      o2.connect(g2);g2.connect(audioCtx.destination);
+      o2.type='sine';o2.frequency.setValueAtTime(1100,t+.2);o2.frequency.exponentialRampToValueAtTime(500,t+.45);
+      g2.gain.setValueAtTime(.04,t+.2);g2.gain.exponentialRampToValueAtTime(.01,t+.5);
+      o2.start(t+.2);o2.stop(t+.5);
+      break;
+    }
+    case'click':{
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.connect(g);g.connect(audioCtx.destination);
+      o.type='sine';o.frequency.setValueAtTime(600,t);
+      g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.01,t+.05);
+      o.start(t);o.stop(t+.05);
+      break;
+    }
+    case'turnchange':{
+      // Rising tone for new turn
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.connect(g);g.connect(audioCtx.destination);
+      o.type='sine';o.frequency.setValueAtTime(440,t);o.frequency.linearRampToValueAtTime(660,t+.15);
+      g.gain.setValueAtTime(.08,t);g.gain.exponentialRampToValueAtTime(.01,t+.25);
+      o.start(t);o.stop(t+.25);
+      break;
+    }
+    case'alert':{
+      // Warning beeps (enemy spotted)
+      for(let i=0;i<2;i++){
+        const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+        o.connect(g);g.connect(audioCtx.destination);
+        o.type='square';o.frequency.setValueAtTime(800,t+i*.12);
+        g.gain.setValueAtTime(.06,t+i*.12);g.gain.exponentialRampToValueAtTime(.01,t+i*.12+.08);
+        o.start(t+i*.12);o.stop(t+i*.12+.08);
+      }
+      break;
+    }
+  }
+}
+
+// ============================================================
+// BGM - Procedural ambient soundtrack
+// ============================================================
+function startBGM(){
+  try{initAudio()}catch(e){return}
+  if(!audioCtx||bgmPlaying)return;
+
+  bgmGain=audioCtx.createGain();
+  bgmGain.gain.setValueAtTime(bgmMuted?0:.07,audioCtx.currentTime);
+  bgmGain.connect(audioCtx.destination);
+
+  // Drone 1: deep ocean hum
+  bgmDrone1=audioCtx.createOscillator();
+  bgmDrone1.type='sine';bgmDrone1.frequency.setValueAtTime(55,audioCtx.currentTime);
+  const d1g=audioCtx.createGain();d1g.gain.setValueAtTime(.6,audioCtx.currentTime);
+  bgmDrone1.connect(d1g);d1g.connect(bgmGain);
+  bgmDrone1.start();
+
+  // Drone 2: slightly detuned for thickness
+  bgmDrone2=audioCtx.createOscillator();
+  bgmDrone2.type='sine';bgmDrone2.frequency.setValueAtTime(55.5,audioCtx.currentTime);
+  const d2g=audioCtx.createGain();d2g.gain.setValueAtTime(.4,audioCtx.currentTime);
+  bgmDrone2.connect(d2g);d2g.connect(bgmGain);
+  bgmDrone2.start();
+
+  // LFO: slow wobble on the drone
+  bgmLfo=audioCtx.createOscillator();
+  bgmLfo.type='sine';bgmLfo.frequency.setValueAtTime(.15,audioCtx.currentTime);
+  const lfoG=audioCtx.createGain();lfoG.gain.setValueAtTime(3,audioCtx.currentTime);
+  bgmLfo.connect(lfoG);lfoG.connect(bgmDrone1.frequency);
+  bgmLfo.start();
+
+  // Periodic sonar ping (every 4 seconds)
+  bgmPingInterval=setInterval(()=>{
+    if(bgmMuted||!audioCtx)return;
+    const t=audioCtx.currentTime;
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(bgmGain);
+    o.type='sine';
+    o.frequency.setValueAtTime(1100+Math.random()*200,t);
+    o.frequency.exponentialRampToValueAtTime(500+Math.random()*100,t+.4);
+    g.gain.setValueAtTime(.15,t);g.gain.exponentialRampToValueAtTime(.01,t+.8);
+    o.start(t);o.stop(t+.8);
+  },4000);
+
+  bgmPlaying=true;
+  document.getElementById('bgm-toggle').style.display='block';
+}
+
+function stopBGM(){
+  if(!bgmPlaying)return;
+  try{bgmDrone1.stop();bgmDrone2.stop();bgmLfo.stop()}catch(e){}
+  clearInterval(bgmPingInterval);
+  bgmPlaying=false;
+}
+
+function toggleBGM(){
+  bgmMuted=!bgmMuted;
+  const btn=document.getElementById('bgm-toggle');
+  btn.textContent=bgmMuted?'🔇':'🔊';
+  btn.classList.toggle('muted',bgmMuted);
+  if(bgmGain)bgmGain.gain.setValueAtTime(bgmMuted?0:.07,audioCtx.currentTime);
+}
+
+// Increase BGM intensity when enemies are detected
+function updateBGMIntensity(){
+  if(!bgmGain||bgmMuted)return;
+  const detected=detectedEnemies.size;
+  // Base volume 0.07, up to 0.12 when enemies visible
+  const vol=Math.min(.12,.07+detected*.01);
+  bgmGain.gain.setTargetAtTime(vol,audioCtx.currentTime,.5);
+  // Shift drone pitch slightly with tension
+  if(bgmDrone1){
+    const freq=55+detected*2;
+    bgmDrone1.frequency.setTargetAtTime(freq,audioCtx.currentTime,1);
+    bgmDrone2.frequency.setTargetAtTime(freq+.5,audioCtx.currentTime,1);
   }
 }
 
@@ -439,6 +630,7 @@ function startGame(){
 function startGameActual(){
   generateIslands();
   buildBoard();
+  startBGM();
   state='placement';
   placementIdx=0;placementDir=0;placementCells=[];
   playerShips=[];aiShips=[];
@@ -563,6 +755,7 @@ function placeAI(){
 // RADAR
 // ============================================================
 function doRadarScan(){
+  const prevDetected=detectedEnemies.size;
   detectedEnemies=new Map();
   playerShips.forEach(sh=>{
     if(!sh.alive)return;
@@ -574,6 +767,9 @@ function doRadarScan(){
     scanArc(sh,playerShips).forEach(k=>{aiDetected.set(k,turn);aiGhosts.set(k,turn)});
   });
   playSound('radar');
+  // Alert if new contacts appeared
+  if(detectedEnemies.size>0&&prevDetected===0)playSound('alert');
+  updateBGMIntensity();
 }
 
 function scanArc(ship,targets){
@@ -1117,6 +1313,7 @@ function endPlayerTurn(){
       doRadarScan();
       selectedIdx=-1;actionMode=null;
       aiProcessing=false;
+      playSound('turnchange');
       addLog(`── Turn ${turn} ──`);
       updateUI();render();
     });
@@ -1366,6 +1563,7 @@ function checkGameOver(){
   if(pAlive&&aAlive)return false;
 
   state='gameover';
+  stopBGM();
   const ov=document.getElementById('game-over-overlay');
   ov.style.display='flex';
   const txt=document.getElementById('game-over-text');
