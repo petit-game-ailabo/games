@@ -71,6 +71,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
   0%{opacity:.8;transform:scale(.3)}
   100%{opacity:0;transform:scale(2)}
 }
+.muzzle-flash{animation:muzzleFlash .5s ease-out forwards;z-index:11}
+@keyframes muzzleFlash{
+  0%{background:#ffaa0000;box-shadow:0 0 0 0 #ffaa00}
+  15%{background:#ffcc44cc;box-shadow:0 0 20px 8px #ffaa00aa}
+  40%{background:#ff880066;box-shadow:0 0 12px 4px #ff660066}
+  100%{background:transparent;box-shadow:none}
+}
+.muzzle-flash-marker{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,3vw,22px);z-index:12;pointer-events:none;animation:flashEmoji .5s ease-out forwards}
+@keyframes flashEmoji{
+  0%{opacity:0;transform:scale(.3)}
+  20%{opacity:1;transform:scale(1.2)}
+  60%{opacity:.8;transform:scale(1)}
+  100%{opacity:0;transform:scale(.5)}
+}
 #game-over-overlay{display:none;position:absolute;inset:0;background:#050a14dd;z-index:200;flex-direction:column;align-items:center;justify-content:center}
 #game-over-overlay h2{font-size:36px;margin-bottom:16px}
 #game-over-overlay .win{color:#00ff88}
@@ -696,6 +710,26 @@ function playSinkAnimation(ship){
   },200);
 }
 
+function playMuzzleFlash(ship){
+  const cells=shipCells(ship);
+  if(cells.length===0)return;
+  const headCell=cells[0];
+  if(!inBounds(headCell.r,headCell.c))return;
+  const cell=getCell(headCell.r,headCell.c);
+  cell.classList.add('muzzle-flash');
+  const em=document.createElement('div');em.className='muzzle-flash-marker';em.textContent='🔥';
+  cell.appendChild(em);
+  setTimeout(()=>{cell.classList.remove('muzzle-flash');em.remove()},500);
+}
+
+function calcHitChance(attacker,targetR,targetC){
+  const dist=Math.sqrt((targetR-attacker.r)**2+(targetC-attacker.c)**2);
+  // Base accuracy 95% at dist 1, decreasing ~12% per extra hex
+  // Minimum 25%
+  const chance=Math.max(0.25,0.95-0.12*(dist-1));
+  return chance;
+}
+
 function hasVisibleTarget(sh){
   for(const[key] of detectedEnemies){
     const[r,c]=key.split(',').map(Number);
@@ -854,26 +888,43 @@ function doFire(r,c){
   if(!target){addLog('目標なし');updateUI();render();return}
   if(Math.sqrt((target.r-sh.r)**2+(target.c-sh.c)**2)>sh.fireRange){addLog('射程外');updateUI();render();return}
 
-  // HIT
-  target.hp-=sh.firepower;
+  // Accuracy check
+  const hitChance=calcHitChance(sh,target.r,target.c);
+  const isHit=Math.random()<hitChance;
+
   sh.attacked=true;sh.done=true;
   playSound('fire');
-  addLog(`${sh.name}→${target.name}に砲撃！${sh.firepower}ダメージ`);
+  playMuzzleFlash(sh);
 
-  // Reveal firer to AI
+  // Reveal firer to AI (firing reveals position!)
   shipCells(sh).forEach(p=>{aiDetected.set(ck(p.r,p.c),turn);aiGhosts.set(ck(p.r,p.c),turn)});
 
-  setTimeout(()=>{
-    if(inBounds(r,c)){getCell(r,c).classList.add('dmg-flash');setTimeout(()=>getCell(r,c).classList.remove('dmg-flash'),400)}
-    playSound('hit');
-    if(target.hp<=0){
-      addLog(`💥 ${target.name}撃沈！`);
-      playSinkAnimation(target);
-      setTimeout(()=>{target.alive=false;checkGameOver();updateUI();render()},1200);
-    } else {
-      checkGameOver();updateUI();render();
-    }
-  },150);
+  if(isHit){
+    target.hp-=sh.firepower;
+    addLog(`${sh.name}→${target.name}に砲撃命中！${sh.firepower}ダメージ（命中率${Math.round(hitChance*100)}%）`);
+    setTimeout(()=>{
+      if(inBounds(r,c)){getCell(r,c).classList.add('dmg-flash');setTimeout(()=>getCell(r,c).classList.remove('dmg-flash'),400)}
+      playSound('hit');
+      if(target.hp<=0){
+        addLog(`💥 ${target.name}撃沈！`);
+        playSinkAnimation(target);
+        setTimeout(()=>{target.alive=false;checkGameOver();updateUI();render()},1200);
+      } else {
+        checkGameOver();updateUI();render();
+      }
+    },150);
+  } else {
+    addLog(`${sh.name}→${target.name}に砲撃…外れ！（命中率${Math.round(hitChance*100)}%）`);
+    setTimeout(()=>{
+      // Show splash near target
+      if(inBounds(r,c)){
+        const cell=getCell(r,c);
+        const splash=document.createElement('div');splash.className='muzzle-flash-marker';splash.textContent='💨';
+        cell.appendChild(splash);setTimeout(()=>splash.remove(),500);
+      }
+      updateUI();render();
+    },150);
+  }
 }
 
 function doTorpedo(r,c){
@@ -964,17 +1015,29 @@ function animateAIActions(actions,callback){
     const act=actions[i];
     addLog(act.msg);
     if(act.type==='fire'&&act.targetCell){
-      // Flash the target cell
-      const cell=getCell(act.targetCell.r,act.targetCell.c);
-      if(cell){cell.classList.add('dmg-flash');setTimeout(()=>cell.classList.remove('dmg-flash'),400)}
+      // Muzzle flash on firer
+      if(act.firer)playMuzzleFlash(act.firer);
       playSound('fire');
       setTimeout(()=>{
-        playSound('hit');
-        if(act.sunkShip){
-          playSinkAnimation(act.sunkShip);
-          setTimeout(()=>{act.sunkShip.alive=false;render();i++;setTimeout(next,300)},1200);
+        if(act.missed){
+          // Show splash near target
+          const cell=getCell(act.targetCell.r,act.targetCell.c);
+          if(cell){
+            const splash=document.createElement('div');splash.className='muzzle-flash-marker';splash.textContent='💨';
+            cell.appendChild(splash);setTimeout(()=>splash.remove(),500);
+          }
+          render();i++;setTimeout(next,400);
         } else {
-          render();i++;setTimeout(next,300);
+          // Flash the target cell for hit
+          const cell=getCell(act.targetCell.r,act.targetCell.c);
+          if(cell){cell.classList.add('dmg-flash');setTimeout(()=>cell.classList.remove('dmg-flash'),400)}
+          playSound('hit');
+          if(act.sunkShip){
+            playSinkAnimation(act.sunkShip);
+            setTimeout(()=>{act.sunkShip.alive=false;render();i++;setTimeout(next,300)},1200);
+          } else {
+            render();i++;setTimeout(next,300);
+          }
         }
       },200);
     } else if(act.type==='torpedo'){
@@ -1048,14 +1111,18 @@ function doAITurn(){
       for(const ps of playerShips){
         if(!ps.alive)continue;
         if(shipCells(ps).some(p=>p.r===r&&p.c===c)){
-          ps.hp-=sh.firepower;
-          // Reveal firer
+          // Reveal firer (firing reveals position!)
           shipCells(sh).forEach(p=>{detectedEnemies.set(ck(p.r,p.c),turn);ghostEnemies.set(ck(p.r,p.c),turn)});
-          const sunk=ps.hp<=0;
-          if(sunk){
-            // Don't set alive=false yet — let animation play
+          // Accuracy check
+          const aiHitChance=calcHitChance(sh,ps.r,ps.c);
+          const aiIsHit=Math.random()<aiHitChance;
+          if(aiIsHit){
+            ps.hp-=sh.firepower;
+            const sunk=ps.hp<=0;
+            actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃命中！${sh.firepower}ダメージ${sunk?' → 撃沈！':''}`,targetCell:{r,c},sunkShip:sunk?ps:null,firer:sh});
+          } else {
+            actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃…外れ！`,targetCell:{r,c},sunkShip:null,firer:sh,missed:true});
           }
-          actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃！${sh.firepower}ダメージ${sunk?' → 撃沈！':''}`,targetCell:{r,c},sunkShip:sunk?ps:null});
           fired=true;break;
         }
       }
