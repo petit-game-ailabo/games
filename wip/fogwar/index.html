@@ -2,735 +2,963 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=yes">
-<title>FogWar — 夜戦・不完全情報海戦</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>FogWar — 夜戦</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-:root{
---bg:#0a0e1a;--sea:#0a1628;--fog:#0d1a2e;--grid-line:#1a2a44;
---player:#4fc3f7;--enemy:#ff5252;--island:#3e2723;
---highlight:#ffeb3b;--move-hi:rgba(33,150,243,.35);
---fire-hi:rgba(244,67,54,.35);--torp-hi:rgba(255,235,59,.5);
---panel:#0f1729;--text:#c8d6e5;--text-dim:#5a6a7a;
---hp-green:#4caf50;--hp-red:#f44336;
-}
-html,body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
-overflow-x:hidden;touch-action:manipulation;-webkit-tap-highlight-color:transparent;height:100%}
-#title-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;
-height:100vh;gap:20px;animation:fadeIn .8s}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
-#title-screen h1{font-size:3.5em;color:#4fc3f7;text-shadow:0 0 30px rgba(79,195,247,.5),0 0 60px rgba(79,195,247,.2);
-letter-spacing:.15em;font-weight:900}
-#title-screen .sub{color:var(--text-dim);font-size:1.1em;letter-spacing:.3em}
-.btn{background:linear-gradient(135deg,#1565c0,#0d47a1);color:#fff;border:none;
-padding:14px 48px;font-size:1.2em;border-radius:8px;cursor:pointer;
-letter-spacing:.1em;transition:all .2s;touch-action:manipulation}
-.btn:hover,.btn:active{background:linear-gradient(135deg,#1976d2,#1565c0);transform:scale(1.03)}
-.btn-sm{padding:8px 16px;font-size:.85em;border-radius:6px}
-.btn-danger{background:linear-gradient(135deg,#c62828,#b71c1c)}
-.btn-warn{background:linear-gradient(135deg,#e65100,#bf360c)}
-.btn-torp{background:linear-gradient(135deg,#f9a825,#f57f17)}
-.btn-wait{background:linear-gradient(135deg,#37474f,#263238)}
-.btn-end{background:linear-gradient(135deg,#2e7d32,#1b5e20)}
-.btn:disabled{opacity:.4;pointer-events:none}
-
-#game-screen{display:none;flex-direction:column;align-items:center;min-height:100vh;padding:4px}
-#turn-info{font-size:1em;color:var(--highlight);padding:6px;text-align:center;min-height:28px}
-#grid-wrap{position:relative;overflow:auto;-webkit-overflow-scrolling:touch;max-height:70vh}
-#grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1px;background:var(--grid-line);
-border:2px solid var(--grid-line);touch-action:manipulation}
-.cell{position:relative;background:var(--sea);display:flex;align-items:center;justify-content:center;
-font-size:clamp(12px,2.8vw,22px);cursor:pointer;aspect-ratio:1;user-select:none;transition:background .15s}
-.cell.island{background:var(--island);cursor:default}
-.cell.fog{background:var(--fog)}
-.cell.move-hi{background:var(--move-hi)}
-.cell.fire-hi{background:var(--fire-hi)}
-.cell.torp-hi{background:var(--torp-hi)}
-.cell.selected{box-shadow:inset 0 0 0 2px var(--highlight)}
-.cell .unit{position:relative;z-index:2;line-height:1}
-.cell .hp-bar{position:absolute;bottom:1px;left:10%;width:80%;height:3px;background:#333;border-radius:2px;z-index:3}
-.cell .hp-fill{height:100%;border-radius:2px;transition:width .3s}
-.cell .torp-count{position:absolute;top:0;right:1px;font-size:.55em;color:var(--highlight);z-index:3}
-.cell .torpedo-marker{font-size:.7em;z-index:2}
-.cell .dir-arrow{position:absolute;font-size:1.4em;color:var(--highlight);z-index:4;opacity:.85;
-text-shadow:0 0 6px rgba(255,235,59,.6)}
-
-#panel{background:var(--panel);width:100%;max-width:600px;padding:8px;border-radius:8px 8px 0 0;
-margin-top:4px;display:flex;flex-direction:column;gap:6px}
-#ship-info{font-size:.85em;min-height:40px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-#ship-info .si-name{font-weight:bold;font-size:1.1em}
-#ship-info .si-stat{color:var(--text-dim);font-size:.8em}
-#actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
-#log{font-size:.75em;color:var(--text-dim);max-height:54px;overflow-y:auto;line-height:1.4}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d0;font-family:'Courier New',monospace;touch-action:manipulation}
+#title-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;background:#050a14}
+#title-screen h1{font-size:clamp(48px,12vw,96px);color:#00ff88;text-shadow:0 0 30px #00ff8866,0 0 60px #00ff8833;letter-spacing:8px;margin-bottom:8px}
+#title-screen .sub{font-size:clamp(14px,3vw,22px);color:#4a8;margin-bottom:40px;letter-spacing:4px}
+#title-screen button{background:none;border:2px solid #00ff88;color:#00ff88;padding:16px 48px;font-size:20px;font-family:inherit;cursor:pointer;letter-spacing:4px;transition:all .3s}
+#title-screen button:hover{background:#00ff8822;box-shadow:0 0 20px #00ff8844}
+#game-container{display:none;width:100%;height:100%;flex-direction:column}
+#top-bar{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:#0a1020;border-bottom:1px solid #1a3a2a;font-size:12px;min-height:28px;flex-shrink:0}
+#board-wrapper{position:relative;flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#board{display:grid;grid-template-columns:repeat(16,1fr);position:relative;touch-action:none}
+#board .cell{aspect-ratio:1;border:1px solid #0a1a2a;position:relative;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;transition:background .15s}
+#board .cell:hover{background:#0a2a3a44}
+#board .cell.island{background:#1a2a1a;border-color:#2a3a2a}
+#board .cell.island::after{content:'🏝️';font-size:clamp(8px,1.8vw,13px)}
+#board .cell.ship-cell{z-index:2}
+#board .cell.selected{box-shadow:inset 0 0 0 2px #ffaa00}
+#board .cell.attack-target{background:#ff000044;cursor:crosshair}
+#board .cell.torpedo-target{background:#ff660033;cursor:crosshair}
+#board .cell.placement-valid{background:#00ff8822}
+#radar-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:3}
+#bottom-panel{background:#0a1020;border-top:1px solid #1a3a2a;padding:6px 8px;flex-shrink:0}
+#ship-info{font-size:11px;margin-bottom:4px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#action-bar{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px}
+#action-bar button{background:#0a1a2a;border:1px solid #1a4a3a;color:#8fc;padding:6px 10px;font-size:12px;font-family:inherit;cursor:pointer;border-radius:3px;white-space:nowrap}
+#action-bar button:hover:not(:disabled){background:#1a3a2a}
+#action-bar button:disabled{opacity:.3;cursor:default}
+#action-bar button.active{background:#1a4a3a;border-color:#00ff88}
+#log{font-size:10px;color:#6a8a7a;max-height:52px;overflow:hidden;line-height:1.3}
 #log div{padding:1px 0}
-
-#placement-info{background:var(--panel);padding:10px;border-radius:8px;max-width:600px;width:100%;
-margin-top:6px;font-size:.8em;line-height:1.6}
-#placement-info h3{color:var(--player);margin-bottom:6px}
-.unit-desc{display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;border-radius:4px;
-padding-left:6px;transition:background .15s}
-.unit-desc:hover,.unit-desc.active{background:rgba(79,195,247,.15)}
-.unit-desc .emoji{font-size:1.3em}
-
-#result-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);
-z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:20px}
-#result-overlay h2{font-size:2.5em;text-shadow:0 0 20px currentColor}
-#result-overlay .win{color:#4fc3f7}
-#result-overlay .lose{color:#ff5252}
+#placement-panel{display:none;background:#0a1020;border-top:1px solid #1a3a2a;padding:8px;text-align:center}
+#placement-panel .info{font-size:13px;margin-bottom:8px}
+#placement-panel button{background:#0a1a2a;border:1px solid #1a4a3a;color:#8fc;padding:8px 16px;font-size:13px;font-family:inherit;cursor:pointer;border-radius:3px;margin:2px}
+#placement-panel button:hover{background:#1a3a2a}
+#placement-panel button.active{background:#1a4a3a;border-color:#00ff88}
+.blip{position:absolute;width:60%;height:60%;border-radius:50%;background:#00ff88;box-shadow:0 0 6px #00ff88;z-index:5;pointer-events:none;top:20%;left:20%}
+.blip.ghost{background:#00ff8844;box-shadow:0 0 4px #00ff8822}
+.ship-marker{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(10px,2.5vw,18px);z-index:4;pointer-events:none}
+.dmg-flash{animation:dmgFlash .4s ease-out}
+@keyframes dmgFlash{0%{background:#ff4400aa}100%{background:transparent}}
+#game-over-overlay{display:none;position:absolute;inset:0;background:#050a14dd;z-index:200;flex-direction:column;align-items:center;justify-content:center}
+#game-over-overlay h2{font-size:36px;margin-bottom:16px}
+#game-over-overlay .win{color:#00ff88}
+#game-over-overlay .lose{color:#ff4444}
+#game-over-overlay button{background:none;border:2px solid #00ff88;color:#00ff88;padding:12px 36px;font-size:16px;font-family:inherit;cursor:pointer;margin-top:20px}
+#radar-dir-panel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#0a1020ee;border:2px solid #00ff88;padding:16px;z-index:50;border-radius:8px;text-align:center}
+#radar-dir-panel .title{color:#00ff88;margin-bottom:12px;font-size:14px}
+#radar-dir-panel .dirs{display:grid;grid-template-columns:repeat(3,50px);gap:4px;justify-content:center}
+#radar-dir-panel button{background:#0a1a2a;border:1px solid #1a4a3a;color:#8fc;padding:10px;font-size:14px;cursor:pointer;border-radius:3px}
+#radar-dir-panel button:hover{background:#1a3a2a}
+.torpedo-marker{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:5;pointer-events:none;color:#ff8800;text-shadow:0 0 4px #ff6600}
 </style>
 </head>
 <body>
-
 <div id="title-screen">
 <h1>FogWar</h1>
 <div class="sub">夜戦 — 不完全情報海戦</div>
-<div style="margin-top:10px;color:var(--text-dim);font-size:.8em;max-width:320px;text-align:center;line-height:1.5">
-ソロモン海域、深夜。レーダーに映るのは断片的な影のみ——<br>魚雷の軌道を読み、闇の中で敵を討て。
-</div>
-<button class="btn" onclick="startGame()">出 撃</button>
+<button onclick="startGame()">出 撃</button>
 </div>
 
-<div id="game-screen">
-<div id="turn-info"></div>
-<div id="grid-wrap"><div id="grid"></div></div>
-<div id="placement-info"></div>
-<div id="panel" style="display:none">
-<div id="ship-info"></div>
-<div id="actions"></div>
+<div id="game-container">
+<div id="top-bar">
+<span id="turn-info">Turn 1</span>
+<span id="phase-info">配置フェーズ</span>
+</div>
+<div id="board-wrapper">
+<div id="board"></div>
+<canvas id="radar-canvas"></canvas>
+</div>
+<div id="placement-panel">
+<div class="info" id="placement-info">戦艦を配置してください</div>
+<div>
+<span>向き: </span>
+<button onclick="rotatePlacement(-1)">↶</button>
+<span id="placement-dir-label">N</span>
+<button onclick="rotatePlacement(1)">↷</button>
+<button onclick="confirmPlacement()" id="confirm-place-btn" disabled>配置確定</button>
+</div>
+</div>
+<div id="bottom-panel">
+<div id="ship-info">艦を選択してください</div>
+<div id="action-bar">
+<button id="btn-turn-l" onclick="doAction('turnL')" disabled>↶回頭</button>
+<button id="btn-turn-r" onclick="doAction('turnR')" disabled>回頭↷</button>
+<button id="btn-move" onclick="doAction('move')" disabled>前進</button>
+<button id="btn-fire" onclick="doAction('fire')" disabled>砲撃</button>
+<button id="btn-torpedo" onclick="doAction('torpedo')" disabled>魚雷</button>
+<button id="btn-radar" onclick="doAction('radar')" disabled>📡</button>
+<button id="btn-wait" onclick="doAction('wait')" disabled>待機</button>
+<button id="btn-end" onclick="doAction('endTurn')">ターン終了</button>
+</div>
 <div id="log"></div>
 </div>
 </div>
 
-<div id="result-overlay">
-<h2 id="result-text"></h2>
-<button class="btn" onclick="location.reload()">もう一度</button>
+<div id="game-over-overlay">
+<h2 id="game-over-text"></h2>
+<div id="game-over-detail"></div>
+<button onclick="location.reload()">再出撃</button>
+</div>
+
+<div id="radar-dir-panel">
+<div class="title">📡 レーダー方向選択</div>
+<div class="dirs">
+<button onclick="setRadarDir(7)">↖NW</button>
+<button onclick="setRadarDir(0)">↑N</button>
+<button onclick="setRadarDir(1)">↗NE</button>
+<button onclick="setRadarDir(6)">←W</button>
+<button onclick="closeRadarPanel()">✕</button>
+<button onclick="setRadarDir(2)">→E</button>
+<button onclick="setRadarDir(5)">↙SW</button>
+<button onclick="setRadarDir(4)">↓S</button>
+<button onclick="setRadarDir(3)">↘SE</button>
+</div>
 </div>
 
 <script>
 "use strict";
-// ===== CONSTANTS =====
-const G=12,DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-const DIR_NAMES=['↖','↑','↗','←','→','↙','↓','↘'];
-const DIR_ARROWS=['↖','↑','↗','←','→','↙','↓','↘'];
-const SHIP_TYPES=[
-{name:'戦艦',emoji:'⚓',hp:5,atk:3,atkRange:3,move:1,radar:3,torpMax:0},
-{name:'巡洋艦',emoji:'🚢',hp:3,atk:2,atkRange:3,move:2,radar:3,torpMax:2},
-{name:'駆逐艦',emoji:'🔱',hp:2,atk:1,atkRange:2,move:3,radar:2,torpMax:4},
-{name:'偵察艦',emoji:'🔭',hp:1,atk:0,atkRange:0,move:3,radar:5,torpMax:0}
+// ============================================================
+// CONSTANTS
+// ============================================================
+const GRID=16;
+const DIRS=['N','NE','E','SE','S','SW','W','NW'];
+const DX=[0,1,1,1,0,-1,-1,-1];
+const DY=[-1,-1,0,1,1,1,0,-1];
+const DIR_ARROWS=['↑','↗','→','↘','↓','↙','←','↖'];
+
+const SHIP_DEFS=[
+  {type:'battleship',name:'戦艦',emoji:'⚓',size:3,maxHp:8,firepower:3,fireRange:4,radarRange:5,maxTorpedoes:0,maxTurnSteps:1,maxMove:1},
+  {type:'cruiser',name:'巡洋艦',emoji:'🚢',size:2,maxHp:5,firepower:2,fireRange:3,radarRange:4,maxTorpedoes:3,maxTurnSteps:2,maxMove:2},
+  {type:'destroyer1',name:'駆逐艦α',emoji:'🔱',size:1,maxHp:2,firepower:1,fireRange:2,radarRange:3,maxTorpedoes:5,maxTurnSteps:2,maxMove:3},
+  {type:'destroyer2',name:'駆逐艦β',emoji:'🔱',size:1,maxHp:2,firepower:1,fireRange:2,radarRange:3,maxTorpedoes:5,maxTurnSteps:2,maxMove:3}
 ];
 
-// ===== AUDIO =====
-const AC=new(window.AudioContext||window.webkitAudioContext)();
+// ============================================================
+// AUDIO
+// ============================================================
+let audioCtx;
+function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
 function playSound(type){
-try{
-const now=AC.currentTime;
-if(type==='fire'){
-const n=AC.createBufferSource(),b=AC.createBuffer(1,AC.sampleRate*.3,AC.sampleRate),d=b.getChannelData(0);
-for(let i=0;i<d.length;i++){const t=i/AC.sampleRate;d[i]=(Math.random()*2-1)*Math.exp(-t*12)*.6}
-n.buffer=b;const g=AC.createGain();g.gain.setValueAtTime(.5,now);g.gain.exponentialDecayTo&&0;
-n.connect(g);g.connect(AC.destination);n.start(now);
-}else if(type==='torpedo'){
-const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(200,now);
-o.frequency.exponentialRampToValueAtTime(80,now+.4);g.gain.setValueAtTime(.3,now);
-g.gain.exponentialRampToValueAtTime(.01,now+.4);o.connect(g);g.connect(AC.destination);
-o.start(now);o.stop(now+.4);
-}else if(type==='explosion'){
-const n=AC.createBufferSource(),b=AC.createBuffer(1,AC.sampleRate*.5,AC.sampleRate),d=b.getChannelData(0);
-for(let i=0;i<d.length;i++){const t=i/AC.sampleRate;d[i]=(Math.random()*2-1)*Math.exp(-t*6)*.8}
-n.buffer=b;const g=AC.createGain();g.gain.setValueAtTime(.7,now);
-n.connect(g);g.connect(AC.destination);n.start(now);
-}else if(type==='sink'){
-const o=AC.createOscillator(),g=AC.createGain();o.type='sawtooth';
-o.frequency.setValueAtTime(300,now);o.frequency.exponentialRampToValueAtTime(40,now+1);
-g.gain.setValueAtTime(.4,now);g.gain.exponentialRampToValueAtTime(.01,now+1);
-o.connect(g);g.connect(AC.destination);o.start(now);o.stop(now+1);
-}
-}catch(e){}
+  try{initAudio()}catch(e){return}
+  if(!audioCtx)return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime;
+  o.connect(g);g.connect(audioCtx.destination);
+  switch(type){
+    case'fire':o.type='sawtooth';o.frequency.setValueAtTime(200,t);o.frequency.exponentialRampToValueAtTime(60,t+.3);g.gain.setValueAtTime(.3,t);g.gain.exponentialRampToValueAtTime(.01,t+.4);o.start(t);o.stop(t+.4);break;
+    case'torpedo':o.type='sine';o.frequency.setValueAtTime(800,t);o.frequency.exponentialRampToValueAtTime(200,t+.5);g.gain.setValueAtTime(.15,t);g.gain.exponentialRampToValueAtTime(.01,t+.5);o.start(t);o.stop(t+.5);break;
+    case'hit':o.type='square';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(40,t+.3);g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.01,t+.5);o.start(t);o.stop(t+.5);break;
+    case'sink':o.type='sawtooth';o.frequency.setValueAtTime(300,t);o.frequency.exponentialRampToValueAtTime(20,t+1);g.gain.setValueAtTime(.3,t);g.gain.exponentialRampToValueAtTime(.01,t+1);o.start(t);o.stop(t+1);break;
+    case'radar':o.type='sine';o.frequency.setValueAtTime(1200,t);o.frequency.exponentialRampToValueAtTime(600,t+.2);g.gain.setValueAtTime(.08,t);g.gain.exponentialRampToValueAtTime(.01,t+.3);o.start(t);o.stop(t+.3);break;
+    case'click':o.type='sine';o.frequency.setValueAtTime(600,t);g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.01,t+.05);o.start(t);o.stop(t+.05);break;
+  }
 }
 
-// ===== GAME STATE =====
-let board=[]; // 0=sea, 1=island
-let playerShips=[],aiShips=[],torpedoes=[];
-let phase='title'; // title,placement,player,ai,gameover
-let selectedShip=null,actionMode=null; // move,fire,torpedo
-let placementIndex=0;
-let torpFiringCount=0; // for destroyer double-fire
-let turnNumber=0;
-let logLines=[];
+// ============================================================
+// GAME STATE
+// ============================================================
+let state='title';
+let islands=new Set();
+let playerShips=[], aiShips=[];
+let playerTorpedoes=[], aiTorpedoes=[];
+let turn=1;
+let selectedIdx=-1;
+let actionMode=null; // null|'fire'|'torpedo'
+let detectedEnemies=new Map();
+let ghostEnemies=new Map();
+let aiDetected=new Map();
+let aiGhosts=new Map();
+let logs=[];
+let placementIdx=0, placementDir=0, placementCells=[];
+let aiProcessing=false;
 
-function mkShip(type,r,c,owner){
-const t=SHIP_TYPES[type];
-return{type,name:t.name,emoji:t.emoji,hp:t.hp,maxHp:t.hp,atk:t.atk,atkRange:t.atkRange,
-move:t.move,radar:t.radar,torpMax:t.torpMax,torpLeft:t.torpMax,
-r,c,owner,moved:false,attacked:false,alive:true};
-}
+// Per-ship per-turn action flags
+// Each ship tracks: turned, moved, attacked (in that order)
+// Turn flow per ship: can turn → can move → can attack/torpedo → done
 
-// ===== BOARD GENERATION =====
-function genBoard(){
-board=Array.from({length:G},()=>Array(G).fill(0));
-// Place 3-5 islands (clusters of 2-3 cells)
-const nIslands=3+Math.floor(Math.random()*3);
-for(let i=0;i<nIslands;i++){
-const cr=2+Math.floor(Math.random()*(G-4));
-const cc=2+Math.floor(Math.random()*(G-4));
-board[cr][cc]=1;
-// add 1-2 adjacent
-const adj=[[0,1],[1,0],[0,-1],[-1,0]];
-for(let j=0;j<1+Math.floor(Math.random()*2);j++){
-const d=adj[Math.floor(Math.random()*adj.length)];
-const nr=cr+d[0],nc=cc+d[1];
-if(nr>=1&&nr<G-1&&nc>=0&&nc<G) board[nr][nc]=1;
-}
-}
-// Clear placement rows
-for(let r=0;r<3;r++) for(let c=0;c<G;c++) board[r][c]=0;
-for(let r=G-3;r<G;r++) for(let c=0;c<G;c++) board[r][c]=0;
+function makeShip(def,r,c,dir,owner){
+  return{
+    type:def.type, name:def.name, emoji:def.emoji, size:def.size,
+    hp:def.maxHp, maxHp:def.maxHp,
+    firepower:def.firepower, fireRange:def.fireRange,
+    radarRange:def.radarRange,
+    torpedoCount:def.maxTorpedoes, maxTurnSteps:def.maxTurnSteps, maxMove:def.maxMove,
+    r, c, dir, owner,
+    radarDir: owner==='player'?0:4,
+    alive:true,
+    // per-turn flags
+    turned:false, movesDone:0, attacked:false, done:false
+  };
 }
 
-// ===== LOS CHECK =====
-function hasLOS(r1,c1,r2,c2){
-// Bresenham-style line; if any intermediate cell is island, blocked
-const dr=r2-r1,dc=c2-c1;
-const steps=Math.max(Math.abs(dr),Math.abs(dc));
-if(steps===0) return true;
-for(let i=1;i<steps;i++){
-const r=Math.round(r1+dr*i/steps);
-const c=Math.round(c1+dc*i/steps);
-if(board[r]&&board[r][c]===1) return false;
-}
-return true;
+function resetShipTurn(sh){sh.turned=false;sh.movesDone=0;sh.attacked=false;sh.done=false}
+
+function shipCells(sh){
+  if(!sh.alive)return[];
+  const cells=[{r:sh.r,c:sh.c}];
+  const bd=(sh.dir+4)%8;
+  for(let i=1;i<sh.size;i++) cells.push({r:sh.r+DY[bd]*i,c:sh.c+DX[bd]*i});
+  return cells;
 }
 
-function isAdjacentToIsland(r,c){
-for(const[dr,dc] of DIRS){
-const nr=r+dr,nc=c+dc;
-if(nr>=0&&nr<G&&nc>=0&&nc<G&&board[nr][nc]===1) return true;
-}
-return false;
+function inBounds(r,c){return r>=0&&r<GRID&&c>=0&&c<GRID}
+function ck(r,c){return r+','+c}
+function isIsl(r,c){return islands.has(ck(r,c))}
+
+function occupiedSet(ships,excludeIdx){
+  const s=new Set();
+  ships.forEach((sh,i)=>{if(sh.alive&&i!==excludeIdx)shipCells(sh).forEach(p=>s.add(ck(p.r,p.c)))});
+  return s;
 }
 
-function getEffRadar(ship){
-let r=ship.radar;
-if(isAdjacentToIsland(ship.r,ship.c)) r=Math.max(0,r-1);
-return r;
+function allBlockedSet(myShips,myIdx){
+  const s=occupiedSet(myShips,myIdx);
+  const others=myShips===playerShips?aiShips:playerShips;
+  others.forEach(sh=>{if(sh.alive)shipCells(sh).forEach(p=>s.add(ck(p.r,p.c)))});
+  return s;
 }
 
-function chebyshev(r1,c1,r2,c2){return Math.max(Math.abs(r1-r2),Math.abs(c1-c2))}
-
-function getVisibleCells(ships){
-const vis=new Set();
-for(const s of ships){
-if(!s.alive) continue;
-const rad=getEffRadar(s);
-for(let dr=-rad;dr<=rad;dr++) for(let dc=-rad;dc<=rad;dc++){
-const nr=s.r+dr,nc=s.c+dc;
-if(nr>=0&&nr<G&&nc>=0&&nc<G&&hasLOS(s.r,s.c,nr,nc)) vis.add(nr*G+nc);
-}
-}
-return vis;
-}
-
-// ===== MOVEMENT =====
-function getReachable(ship){
-const visited=new Map();
-visited.set(ship.r*G+ship.c,0);
-const queue=[{r:ship.r,c:ship.c,d:0}];
-while(queue.length){
-const{r,c,d}=queue.shift();
-if(d>=ship.move) continue;
-for(const[dr,dc] of [[0,1],[0,-1],[1,0],[-1,0]]){
-const nr=r+dr,nc=c+dc,key=nr*G+nc;
-if(nr<0||nr>=G||nc<0||nc>=G) continue;
-if(board[nr][nc]===1) continue;
-if(allShipsAt(nr,nc).length>0) continue;
-if(!visited.has(key)||visited.get(key)>d+1){
-visited.set(key,d+1);
-queue.push({r:nr,c:nc,d:d+1});
-}
-}
-}
-visited.delete(ship.r*G+ship.c);
-return visited;
+// ============================================================
+// ISLAND GENERATION
+// ============================================================
+function generateIslands(){
+  islands=new Set();
+  const count=5+Math.floor(Math.random()*4);
+  for(let i=0;i<count;i++){
+    const cr=4+Math.floor(Math.random()*8);
+    const cc=1+Math.floor(Math.random()*14);
+    islands.add(ck(cr,cc));
+    const clSz=1+Math.floor(Math.random()*3);
+    let cells=[{r:cr,c:cc}];
+    for(let j=0;j<clSz;j++){
+      const b=cells[Math.floor(Math.random()*cells.length)];
+      const dd=[[0,-1],[1,0],[0,1],[-1,0]][Math.floor(Math.random()*4)];
+      const nr=b.r+dd[1],nc=b.c+dd[0];
+      if(inBounds(nr,nc)&&nr>=4&&nr<=11&&!islands.has(ck(nr,nc))){
+        islands.add(ck(nr,nc));cells.push({r:nr,c:nc});
+      }
+    }
+  }
 }
 
-function allShipsAt(r,c){
-return[...playerShips,...aiShips].filter(s=>s.alive&&s.r===r&&s.c===c);
+// ============================================================
+// BOARD BUILD
+// ============================================================
+function buildBoard(){
+  const board=document.getElementById('board');
+  board.innerHTML='';
+  const wrapper=document.getElementById('board-wrapper');
+  const sz=Math.min(wrapper.clientWidth,wrapper.clientHeight)-2;
+  board.style.width=sz+'px';board.style.height=sz+'px';
+  for(let r=0;r<GRID;r++){
+    for(let c=0;c<GRID;c++){
+      const cell=document.createElement('div');
+      cell.className='cell'+(isIsl(r,c)?' island':'');
+      cell.dataset.r=r;cell.dataset.c=c;
+      cell.addEventListener('click',()=>onCellClick(r,c));
+      board.appendChild(cell);
+    }
+  }
+  const canvas=document.getElementById('radar-canvas');
+  canvas.width=sz;canvas.height=sz;
 }
 
-// ===== RENDER =====
-const gridEl=document.getElementById('grid');
-let cells=[];
-function buildGrid(){
-gridEl.innerHTML='';
-cells=[];
-const sz=Math.min(Math.floor((window.innerWidth-12)/G), Math.floor(window.innerHeight*.65/G), 44);
-gridEl.style.width=sz*G+G+'px';
-gridEl.style.gridTemplateColumns=`repeat(${G},${sz}px)`;
-for(let r=0;r<G;r++) for(let c=0;c<G;c++){
-const d=document.createElement('div');
-d.className='cell';
-d.dataset.r=r;d.dataset.c=c;
-d.style.width=sz+'px';d.style.height=sz+'px';
-d.addEventListener('click',()=>onCellClick(r,c));
-gridEl.appendChild(d);
-cells.push(d);
-}
+function getCell(r,c){
+  return document.getElementById('board').children[r*GRID+c];
 }
 
-function render(){
-const playerVis=getVisibleCells(playerShips);
-for(let r=0;r<G;r++) for(let c=0;c<G;c++){
-const d=cells[r*G+c];
-d.className='cell';
-d.innerHTML='';
-if(board[r][c]===1){d.classList.add('island');d.innerHTML='🏝️';continue}
-const isVisible=playerVis.has(r*G+c);
-if(phase==='placement'&&r>=G-3&&board[r][c]!==1&&allShipsAt(r,c).length===0){
-d.classList.add('move-hi');
-}
-if(!isVisible&&phase!=='placement') d.classList.add('fog');
-// Player ships
-const ps=playerShips.find(s=>s.alive&&s.r===r&&s.c===c);
-if(ps){
-d.innerHTML=`<span class="unit">${ps.emoji}</span>`;
-addHpBar(d,ps);
-if(ps.torpMax>0) d.innerHTML+=`<span class="torp-count">T${ps.torpLeft}</span>`;
-if(selectedShip===ps) d.classList.add('selected');
-if(ps.moved&&!ps.attacked) d.style.borderBottom='2px solid #ff9800';
-}
-// Enemy ships (only if visible)
-const es=aiShips.find(s=>s.alive&&s.r===r&&s.c===c);
-if(es&&isVisible){
-d.innerHTML=`<span class="unit" style="filter:hue-rotate(180deg) brightness(1.2)">${es.emoji}</span>`;
-addHpBar(d,es);
-}
-// Torpedoes
-for(const t of torpedoes){
-if(t.r===r&&t.c===c&&!t.dead){
-if(t.owner==='player'||(t.owner==='ai'&&isVisible)){
-d.innerHTML+=`<span class="torpedo-marker" style="color:${t.owner==='player'?'#ffeb3b':'#ff5252'}">●</span>`;
-}
-}
-}
-}
-// Highlights
-if(phase==='player'&&selectedShip&&actionMode){
-applyHighlights();
-}
-renderPanel();
-renderLog();
-document.getElementById('turn-info').textContent=
-phase==='placement'?`配置フェーズ — ${SHIP_TYPES[placementIndex].emoji}${SHIP_TYPES[placementIndex].name}を配置`:
-phase==='player'?`ターン${turnNumber} — あなたの行動`:
-phase==='ai'?'敵ターン…':'';
-}
-
-function addHpBar(d,ship){
-const bar=document.createElement('div');bar.className='hp-bar';
-const fill=document.createElement('div');fill.className='hp-fill';
-const pct=ship.hp/ship.maxHp*100;
-fill.style.width=pct+'%';
-fill.style.background=pct>50?'var(--hp-green)':pct>25?'#ff9800':'var(--hp-red)';
-bar.appendChild(fill);d.appendChild(bar);
-}
-
-function applyHighlights(){
-if(!selectedShip||!selectedShip.alive) return;
-const s=selectedShip;
-if(actionMode==='move'&&!s.moved){
-const reach=getReachable(s);
-for(const[key] of reach){
-const r=Math.floor(key/G),c=key%G;
-cells[r*G+c].classList.add('move-hi');
-}
-}else if(actionMode==='fire'&&!s.attacked&&s.atk>0){
-const vis=getVisibleCells(playerShips);
-for(const es of aiShips){
-if(!es.alive) continue;
-const dist=chebyshev(s.r,s.c,es.r,es.c);
-if(dist<=s.atkRange&&vis.has(es.r*G+es.c)&&hasLOS(s.r,s.c,es.r,es.c)){
-cells[es.r*G+es.c].classList.add('fire-hi');
-}
-}
-}else if(actionMode==='torpedo'&&!s.attacked&&s.torpLeft>0){
-for(let i=0;i<8;i++){
-const dr=DIRS[i][0],dc=DIRS[i][1];
-const nr=s.r+dr,nc=s.c+dc;
-if(nr>=0&&nr<G&&nc>=0&&nc<G&&board[nr][nc]!==1){
-cells[nr*G+nc].classList.add('torp-hi');
-const arrow=document.createElement('span');
-arrow.className='dir-arrow';arrow.textContent=DIR_ARROWS[i];
-cells[nr*G+nc].appendChild(arrow);
-}
-}
-}
-}
-
-// ===== PANEL =====
-function renderPanel(){
-const panel=document.getElementById('panel');
-const info=document.getElementById('ship-info');
-const acts=document.getElementById('actions');
-if(phase!=='player'){panel.style.display='none';return}
-panel.style.display='flex';
-if(!selectedShip){
-info.innerHTML='<span style="color:var(--text-dim)">艦をタップして選択</span>';
-acts.innerHTML=`<button class="btn btn-sm btn-end" onclick="endTurn()">ターン終了</button>`;
-return;
-}
-const s=selectedShip;
-const radarEff=getEffRadar(s);
-info.innerHTML=`<span class="si-name" style="color:var(--player)">${s.emoji} ${s.name}</span>
-<span class="si-stat">HP:${s.hp}/${s.maxHp} 砲:${s.atk} 範囲:${s.atkRange} 移動:${s.move} 探知:${radarEff}</span>
-${s.torpMax>0?`<span class="si-stat">魚雷:${s.torpLeft}/${s.torpMax}</span>`:''}`;
-let btns='';
-if(!s.moved) btns+=`<button class="btn btn-sm ${actionMode==='move'?'':'btn-wait'}" onclick="setAction('move')">移動</button>`;
-if(!s.attacked&&s.atk>0) btns+=`<button class="btn btn-sm btn-danger ${actionMode==='fire'?'':'btn-wait'}" onclick="setAction('fire')">砲撃</button>`;
-if(!s.attacked&&s.torpLeft>0) btns+=`<button class="btn btn-sm btn-torp ${actionMode==='torpedo'?'':'btn-wait'}" onclick="setAction('torpedo')">魚雷</button>`;
-btns+=`<button class="btn btn-sm btn-wait" onclick="skipShip()">待機</button>`;
-btns+=`<button class="btn btn-sm btn-end" onclick="endTurn()">ターン終了</button>`;
-acts.innerHTML=btns;
-}
-
-function renderLog(){
-const el=document.getElementById('log');
-el.innerHTML=logLines.slice(-4).map(l=>`<div>${l}</div>`).join('');
-el.scrollTop=el.scrollHeight;
-}
-function addLog(msg){logLines.push(msg)}
-
-// ===== PLACEMENT =====
+// ============================================================
+// START
+// ============================================================
 function startGame(){
-document.getElementById('title-screen').style.display='none';
-document.getElementById('game-screen').style.display='flex';
-AC.resume();
-genBoard();buildGrid();
-phase='placement';placementIndex=0;
-showPlacementInfo();
-render();
+  initAudio();
+  document.getElementById('title-screen').style.display='none';
+  document.getElementById('game-container').style.display='flex';
+  generateIslands();
+  buildBoard();
+  state='placement';
+  placementIdx=0;placementDir=0;placementCells=[];
+  playerShips=[];aiShips=[];
+  playerTorpedoes=[];aiTorpedoes=[];
+  detectedEnemies=new Map();ghostEnemies=new Map();
+  aiDetected=new Map();aiGhosts=new Map();
+  logs=[];turn=1;selectedIdx=-1;actionMode=null;
+  document.getElementById('placement-panel').style.display='block';
+  document.getElementById('bottom-panel').style.display='none';
+  updatePlacementUI();
+  render();
 }
 
-function showPlacementInfo(){
-const pi=document.getElementById('placement-info');
-if(phase!=='placement'){pi.style.display='none';return}
-pi.style.display='block';
-let html='<h3>艦隊を配置（下3行をタップ）</h3>';
-SHIP_TYPES.forEach((t,i)=>{
-const active=i===placementIndex?'active':'';
-const placed=i<placementIndex?'✅ ':'';
-html+=`<div class="unit-desc ${active}">
-<span class="emoji">${t.emoji}</span>
-<span>${placed}${t.name} — HP${t.hp} 砲${t.atk} 範囲${t.atkRange} 移動${t.move} レーダー${t.radar} 魚雷${t.torpMax}</span>
-</div>`;
-});
-pi.innerHTML=html;
+// ============================================================
+// PLACEMENT
+// ============================================================
+function updatePlacementUI(){
+  const d=SHIP_DEFS[placementIdx];
+  document.getElementById('placement-info').textContent=`${d.emoji}${d.name}を配置（${d.size}マス）— 下4行にタップ`;
+  document.getElementById('placement-dir-label').textContent=DIRS[placementDir];
+  document.getElementById('confirm-place-btn').disabled=placementCells.length===0;
 }
 
-function placeShip(r,c){
-if(r<G-3) return;
-if(board[r][c]===1) return;
-if(allShipsAt(r,c).length>0) return;
-const ship=mkShip(placementIndex,r,c,'player');
-playerShips.push(ship);
-placementIndex++;
-if(placementIndex>=SHIP_TYPES.length){
-placeAI();
-phase='player';turnNumber=1;
-document.getElementById('placement-info').style.display='none';
-resetTurn('player');
-addLog('戦闘開始！索敵せよ。');
-}else{
-showPlacementInfo();
+function rotatePlacement(delta){
+  placementDir=((placementDir+delta)%8+8)%8;
+  placementCells=[];
+  updatePlacementUI();render();
 }
-render();
+
+function tryPlace(r,c){
+  if(state!=='placement')return;
+  if(r<12)return;
+  const d=SHIP_DEFS[placementIdx];
+  const cells=[{r,c}];
+  const bd=(placementDir+4)%8;
+  for(let i=1;i<d.size;i++) cells.push({r:r+DY[bd]*i,c:c+DX[bd]*i});
+  const occ=occupiedSet(playerShips,-1);
+  for(const p of cells){
+    if(!inBounds(p.r,p.c)||p.r<12||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c)))return;
+  }
+  placementCells=cells;
+  updatePlacementUI();
+  playSound('click');
+  render();
+}
+
+function confirmPlacement(){
+  if(!placementCells.length)return;
+  const d=SHIP_DEFS[placementIdx];
+  playerShips.push(makeShip(d,placementCells[0].r,placementCells[0].c,placementDir,'player'));
+  placementCells=[];
+  placementIdx++;
+  if(placementIdx>=SHIP_DEFS.length){
+    placeAI();
+    state='play';
+    document.getElementById('placement-panel').style.display='none';
+    document.getElementById('bottom-panel').style.display='block';
+    playerShips.forEach(s=>resetShipTurn(s));
+    aiShips.forEach(s=>resetShipTurn(s));
+    doRadarScan();
+    addLog('夜戦開始。全艦戦闘配置。');
+    updateUI();render();
+  } else {
+    placementDir=0;
+    updatePlacementUI();render();
+  }
 }
 
 function placeAI(){
-for(let i=0;i<SHIP_TYPES.length;i++){
-let r,c,tries=0;
-do{r=Math.floor(Math.random()*3);c=Math.floor(Math.random()*G);tries++}
-while((board[r][c]===1||allShipsAt(r,c).length>0)&&tries<100);
-aiShips.push(mkShip(i,r,c,'ai'));
-}
+  aiShips=[];
+  for(const d of SHIP_DEFS){
+    for(let att=0;att<300;att++){
+      const r=Math.floor(Math.random()*4);
+      const c=Math.floor(Math.random()*GRID);
+      const dir=4;
+      const cells=[{r,c}];
+      const bd=(dir+4)%8;
+      for(let i=1;i<d.size;i++) cells.push({r:r+DY[bd]*i,c:c+DX[bd]*i});
+      const occ=occupiedSet(aiShips,-1);
+      let ok=true;
+      for(const p of cells){if(!inBounds(p.r,p.c)||p.r>=4||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c))){ok=false;break}}
+      if(ok){aiShips.push(makeShip(d,r,c,dir,'ai'));break}
+    }
+  }
 }
 
-// ===== PLAYER ACTIONS =====
-function setAction(mode){actionMode=mode;render()}
+// ============================================================
+// RADAR
+// ============================================================
+function doRadarScan(){
+  detectedEnemies=new Map();
+  playerShips.forEach(sh=>{
+    if(!sh.alive)return;
+    scanArc(sh,aiShips).forEach(k=>{detectedEnemies.set(k,turn);ghostEnemies.set(k,turn)});
+  });
+  aiDetected=new Map();
+  aiShips.forEach(sh=>{
+    if(!sh.alive)return;
+    scanArc(sh,playerShips).forEach(k=>{aiDetected.set(k,turn);aiGhosts.set(k,turn)});
+  });
+  playSound('radar');
+}
 
+function scanArc(ship,targets){
+  const found=new Set();
+  const baseDeg=ship.radarDir*45;
+  targets.forEach(t=>{
+    if(!t.alive)return;
+    shipCells(t).forEach(p=>{
+      const dr=p.r-ship.r, dc=p.c-ship.c;
+      const dist=Math.sqrt(dr*dr+dc*dc);
+      if(dist>ship.radarRange||dist<0.1)return;
+      let ang=Math.atan2(dc,-dr)*180/Math.PI;
+      if(ang<0)ang+=360;
+      let diff=ang-baseDeg;
+      while(diff>180)diff-=360;
+      while(diff<-180)diff+=360;
+      if(Math.abs(diff)<=45&&hasLOS(ship.r,ship.c,p.r,p.c)){
+        found.add(ck(p.r,p.c));
+      }
+    });
+  });
+  return found;
+}
+
+function hasLOS(r1,c1,r2,c2){
+  const steps=Math.max(Math.abs(r2-r1),Math.abs(c2-c1));
+  if(steps===0)return true;
+  for(let i=1;i<steps;i++){
+    const r=Math.round(r1+(r2-r1)*i/steps);
+    const c=Math.round(c1+(c2-c1)*i/steps);
+    if(isIsl(r,c))return false;
+  }
+  return true;
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function render(){
+  for(let r=0;r<GRID;r++){
+    for(let c=0;c<GRID;c++){
+      const cell=getCell(r,c);
+      if(!cell)continue;
+      cell.className='cell'+(isIsl(r,c)?' island':'');
+      cell.querySelectorAll('.ship-marker,.blip,.torpedo-marker').forEach(e=>e.remove());
+      cell.style.boxShadow='';
+    }
+  }
+
+  if(state==='placement'){
+    // Valid zone
+    if(!placementCells.length){
+      for(let r=12;r<16;r++)for(let c=0;c<16;c++)if(!isIsl(r,c))getCell(r,c).classList.add('placement-valid');
+    }
+    placementCells.forEach(p=>{if(inBounds(p.r,p.c))getCell(p.r,p.c).classList.add('placement-valid')});
+    playerShips.forEach(sh=>drawShip(sh));
+    renderRadar();
+    return;
+  }
+
+  if(state!=='play'&&state!=='gameover')return;
+
+  // Player ships
+  playerShips.forEach((sh,i)=>{
+    if(!sh.alive)return;
+    drawShip(sh);
+    if(i===selectedIdx)shipCells(sh).forEach(p=>{if(inBounds(p.r,p.c))getCell(p.r,p.c).classList.add('selected')});
+  });
+
+  // Blips (detected enemies)
+  detectedEnemies.forEach((_,key)=>{
+    const[r,c]=key.split(',').map(Number);
+    if(!inBounds(r,c))return;
+    const b=document.createElement('div');b.className='blip';
+    getCell(r,c).appendChild(b);
+  });
+
+  // Ghosts
+  ghostEnemies.forEach((_,key)=>{
+    if(detectedEnemies.has(key))return;
+    const[r,c]=key.split(',').map(Number);
+    if(!inBounds(r,c))return;
+    const b=document.createElement('div');b.className='blip ghost';
+    getCell(r,c).appendChild(b);
+  });
+
+  // Player torpedoes
+  playerTorpedoes.forEach(t=>{
+    if(!inBounds(t.r,t.c))return;
+    const m=document.createElement('div');m.className='torpedo-marker';m.textContent='•';
+    getCell(t.r,t.c).appendChild(m);
+  });
+
+  // Action highlights
+  if(actionMode==='fire'&&selectedIdx>=0){
+    const sh=playerShips[selectedIdx];
+    detectedEnemies.forEach((_,key)=>{
+      const[r,c]=key.split(',').map(Number);
+      if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)<=sh.fireRange)
+        getCell(r,c).classList.add('attack-target');
+    });
+  }
+  if(actionMode==='torpedo'&&selectedIdx>=0){
+    const sh=playerShips[selectedIdx];
+    for(let d=-2;d<=2;d++){
+      const dir=((sh.dir+d)%8+8)%8;
+      for(let s=1;s<=4;s++){
+        const r=sh.r+DY[dir]*s,c=sh.c+DX[dir]*s;
+        if(inBounds(r,c)&&!isIsl(r,c))getCell(r,c).classList.add('torpedo-target');
+        else break;
+      }
+    }
+  }
+
+  renderRadar();
+}
+
+function drawShip(sh){
+  const cells=shipCells(sh);
+  const isEnemy=sh.owner==='ai';
+  cells.forEach((p,i)=>{
+    if(!inBounds(p.r,p.c))return;
+    const cell=getCell(p.r,p.c);
+    cell.classList.add('ship-cell');
+    const m=document.createElement('div');
+    m.className='ship-marker';
+    if(i===0){
+      m.textContent=sh.emoji+DIR_ARROWS[sh.dir];
+      m.style.color=isEnemy?'#ff6666':'#66ccff';
+    } else {
+      m.textContent='█';
+      m.style.color=isEnemy?'#883333':'#335588';
+      m.style.fontSize='clamp(8px,2vw,14px)';
+    }
+    cell.appendChild(m);
+    // HP indicator
+    if(i===0&&sh.hp<sh.maxHp){
+      const pct=sh.hp/sh.maxHp;
+      cell.style.boxShadow=`inset 0 -3px 0 ${pct>.5?'#4a4':'#f44'}`;
+    }
+  });
+}
+
+function renderRadar(){
+  const canvas=document.getElementById('radar-canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const cs=canvas.width/GRID;
+
+  playerShips.forEach(sh=>{
+    if(!sh.alive)return;
+    const cx=(sh.c+.5)*cs, cy=(sh.r+.5)*cs;
+    const range=sh.radarRange*cs;
+    const baseDeg=sh.radarDir*45-90;
+    const startRad=(baseDeg-45)*Math.PI/180;
+    const endRad=(baseDeg+45)*Math.PI/180;
+
+    ctx.save();
+    ctx.globalAlpha=.08;ctx.fillStyle='#00ff88';
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,range,startRad,endRad);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=.3;ctx.strokeStyle='#00ff88';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,range,startRad,endRad);ctx.closePath();ctx.stroke();
+    // Sweep line
+    ctx.globalAlpha=.2;ctx.lineWidth=2;
+    const mid=(baseDeg)*Math.PI/180;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(mid)*range,cy+Math.sin(mid)*range);ctx.stroke();
+    ctx.restore();
+  });
+}
+
+// ============================================================
+// UI
+// ============================================================
+function updateUI(){
+  document.getElementById('turn-info').textContent=`Turn ${turn}`;
+  document.getElementById('phase-info').textContent=state==='play'?(aiProcessing?'敵ターン…':'プレイヤーターン'):'';
+
+  const sh=selectedIdx>=0?playerShips[selectedIdx]:null;
+  if(sh&&sh.alive){
+    const tStr=sh.torpedoCount>0?` 魚雷:${sh.torpedoCount}`:'';
+    const status=sh.done?'✓完了':sh.attacked?'攻撃済':sh.movesDone?'移動済':'';
+    document.getElementById('ship-info').textContent=
+      `${sh.emoji}${sh.name} HP:${sh.hp}/${sh.maxHp} ${DIRS[sh.dir]}${tStr} ${status}`;
+
+    const canTurn=!sh.done&&!sh.turned&&!sh.movesDone&&!sh.attacked;
+    const canMove=!sh.done&&!sh.attacked&&sh.movesDone<sh.maxMove;
+    const canAttack=!sh.done&&!sh.attacked;
+    const canRadar=!sh.done;
+
+    document.getElementById('btn-turn-l').disabled=!canTurn||aiProcessing;
+    document.getElementById('btn-turn-r').disabled=!canTurn||aiProcessing;
+    document.getElementById('btn-move').disabled=!canMove||aiProcessing;
+    document.getElementById('btn-fire').disabled=!canAttack||!hasVisibleTarget(sh)||aiProcessing;
+    document.getElementById('btn-torpedo').disabled=!canAttack||sh.torpedoCount<=0||aiProcessing;
+    document.getElementById('btn-radar').disabled=!canRadar||aiProcessing;
+    document.getElementById('btn-wait').disabled=sh.done||aiProcessing;
+  } else {
+    document.getElementById('ship-info').textContent='艦を選択してください';
+    ['btn-turn-l','btn-turn-r','btn-move','btn-fire','btn-torpedo','btn-radar','btn-wait'].forEach(id=>
+      document.getElementById(id).disabled=true);
+  }
+  document.getElementById('btn-end').disabled=aiProcessing;
+}
+
+function hasVisibleTarget(sh){
+  for(const[key] of detectedEnemies){
+    const[r,c]=key.split(',').map(Number);
+    if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)<=sh.fireRange)return true;
+  }
+  return false;
+}
+
+function addLog(msg){
+  logs.push(msg);
+  if(logs.length>4)logs.shift();
+  document.getElementById('log').innerHTML=logs.map(l=>`<div>${l}</div>`).join('');
+}
+
+// ============================================================
+// CELL CLICK
+// ============================================================
 function onCellClick(r,c){
-if(phase==='placement'){placeShip(r,c);return}
-if(phase!=='player') return;
-// If in action mode
-if(selectedShip&&actionMode){
-if(actionMode==='move') doMove(r,c);
-else if(actionMode==='fire') doFire(r,c);
-else if(actionMode==='torpedo') doTorpedo(r,c);
-return;
-}
-// Select own ship
-const ps=playerShips.find(s=>s.alive&&s.r===r&&s.c===c);
-if(ps){selectedShip=ps;actionMode=null;render();return}
+  if(state==='placement'){tryPlace(r,c);return}
+  if(state!=='play'||aiProcessing)return;
+
+  if(actionMode==='fire'&&selectedIdx>=0){doFire(r,c);return}
+  if(actionMode==='torpedo'&&selectedIdx>=0){doTorpedo(r,c);return}
+
+  // Select ship
+  for(let i=0;i<playerShips.length;i++){
+    const sh=playerShips[i];
+    if(!sh.alive)continue;
+    if(shipCells(sh).some(p=>p.r===r&&p.c===c)){
+      selectedIdx=i;actionMode=null;
+      playSound('click');
+      updateUI();render();return;
+    }
+  }
 }
 
-function doMove(r,c){
-const s=selectedShip;if(!s||s.moved) return;
-const reach=getReachable(s);
-if(!reach.has(r*G+c)) return;
-s.r=r;s.c=c;s.moved=true;
-actionMode=null;
-render();
+// ============================================================
+// ACTIONS
+// ============================================================
+function doAction(action){
+  if(state!=='play'||aiProcessing)return;
+  if(action==='endTurn'){endPlayerTurn();return}
+
+  const sh=selectedIdx>=0?playerShips[selectedIdx]:null;
+  if(!sh||!sh.alive)return;
+
+  switch(action){
+    case'turnL':case'turnR':{
+      if(sh.done||sh.turned||sh.movesDone||sh.attacked)return;
+      const delta=action==='turnL'?-1:1;
+      const oldDir=sh.dir;
+      sh.dir=((sh.dir+delta)%8+8)%8;
+      const cells=shipCells(sh);
+      const occ=allBlockedSet(playerShips,selectedIdx);
+      if(cells.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c)))){
+        sh.dir=oldDir;addLog('回頭不可：障害物');return;
+      }
+      sh.turned=true;
+      addLog(`${sh.name} ${action==='turnL'?'左':'右'}回頭→${DIRS[sh.dir]}`);
+      playSound('click');
+      break;
+    }
+    case'move':{
+      if(sh.done||sh.attacked||sh.movesDone>=sh.maxMove)return;
+      const nr=sh.r+DY[sh.dir],nc=sh.c+DX[sh.dir];
+      const newCells=[{r:nr,c:nc}];
+      const bd=(sh.dir+4)%8;
+      for(let i=1;i<sh.size;i++)newCells.push({r:nr+DY[bd]*i,c:nc+DX[bd]*i});
+      const occ=allBlockedSet(playerShips,selectedIdx);
+      if(newCells.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c)))){
+        addLog('前進不可');return;
+      }
+      sh.r=nr;sh.c=nc;
+      sh.movesDone++;
+      sh.turned=true; // can't turn after moving
+      addLog(`${sh.name} 前進（${sh.movesDone}/${sh.maxMove}）`);
+      playSound('click');
+      break;
+    }
+    case'fire':{
+      if(sh.done||sh.attacked)return;
+      actionMode='fire';
+      addLog('砲撃目標を選択…');
+      playSound('click');
+      break;
+    }
+    case'torpedo':{
+      if(sh.done||sh.attacked||sh.torpedoCount<=0)return;
+      actionMode='torpedo';
+      addLog('魚雷発射方向をタップ…');
+      playSound('click');
+      break;
+    }
+    case'radar':{
+      if(sh.done)return;
+      showRadarDirPanel();
+      return;
+    }
+    case'wait':{
+      sh.done=true;
+      addLog(`${sh.name} 待機`);
+      playSound('click');
+      break;
+    }
+  }
+  updateUI();render();
 }
 
 function doFire(r,c){
-const s=selectedShip;if(!s||s.attacked||s.atk===0) return;
-const es=aiShips.find(e=>e.alive&&e.r===r&&e.c===c);
-if(!es) return;
-const dist=chebyshev(s.r,s.c,es.r,es.c);
-const vis=getVisibleCells(playerShips);
-if(dist>s.atkRange||!vis.has(es.r*G+es.c)||!hasLOS(s.r,s.c,es.r,es.c)) return;
-playSound('fire');
-es.hp-=s.atk;
-addLog(`${s.emoji}${s.name}が砲撃→${es.emoji}${es.name}に${s.atk}ダメージ`);
-if(es.hp<=0){es.alive=false;playSound('sink');addLog(`${es.emoji}${es.name}撃沈！`)}
-else{playSound('explosion')}
-s.attacked=true;actionMode=null;
-checkWin();render();
+  const sh=playerShips[selectedIdx];
+  actionMode=null;
+
+  // Find AI ship at this cell that's detected
+  let target=null;
+  for(const as of aiShips){
+    if(!as.alive)continue;
+    const cells=shipCells(as);
+    if(cells.some(p=>p.r===r&&p.c===c)){
+      if(cells.some(p=>detectedEnemies.has(ck(p.r,p.c)))){target=as;break}
+    }
+  }
+  if(!target){addLog('目標なし');updateUI();render();return}
+  if(Math.sqrt((target.r-sh.r)**2+(target.c-sh.c)**2)>sh.fireRange){addLog('射程外');updateUI();render();return}
+
+  // HIT
+  target.hp-=sh.firepower;
+  sh.attacked=true;sh.done=true;
+  playSound('fire');
+  addLog(`${sh.name}→${target.name}に砲撃！${sh.firepower}ダメージ`);
+
+  // Reveal firer to AI
+  shipCells(sh).forEach(p=>{aiDetected.set(ck(p.r,p.c),turn);aiGhosts.set(ck(p.r,p.c),turn)});
+
+  setTimeout(()=>{
+    if(inBounds(r,c)){getCell(r,c).classList.add('dmg-flash');setTimeout(()=>getCell(r,c).classList.remove('dmg-flash'),400)}
+    playSound('hit');
+    if(target.hp<=0){target.alive=false;addLog(`💥 ${target.name}撃沈！`);playSound('sink')}
+    checkGameOver();
+    updateUI();render();
+  },150);
 }
 
 function doTorpedo(r,c){
-const s=selectedShip;if(!s||s.attacked||s.torpLeft<=0) return;
-// Find direction
-let dirIdx=-1;
-for(let i=0;i<8;i++){
-if(s.r+DIRS[i][0]===r&&s.c+DIRS[i][1]===c) dirIdx=i;
-}
-if(dirIdx<0) return;
-if(board[r][c]===1) return;
-playSound('torpedo');
-torpedoes.push({r:s.r,c:s.c,dr:DIRS[dirIdx][0],dc:DIRS[dirIdx][1],owner:'player',dist:0,dead:false});
-s.torpLeft--;
-torpFiringCount++;
-addLog(`${s.emoji}${s.name}が魚雷発射！${DIR_NAMES[dirIdx]}方向`);
-// Destroyer can fire 2 in one turn
-if(s.type===2&&torpFiringCount<2&&s.torpLeft>0){
-render();return; // stay in torpedo mode
-}
-s.attacked=true;torpFiringCount=0;actionMode=null;
-render();
+  const sh=playerShips[selectedIdx];
+  actionMode=null;
+  if(sh.torpedoCount<=0){updateUI();render();return}
+
+  const dr=r-sh.r,dc=c-sh.c;
+  if(dr===0&&dc===0){updateUI();render();return}
+
+  // Find closest 8-dir
+  let ang=Math.atan2(dc,-dr)*180/Math.PI;
+  if(ang<0)ang+=360;
+  let bestD=0,bestDiff=999;
+  for(let d=0;d<8;d++){let diff=Math.abs(ang-d*45);if(diff>180)diff=360-diff;if(diff<bestDiff){bestDiff=diff;bestD=d}}
+
+  // Forward 180° check
+  let rel=bestD-sh.dir;while(rel>4)rel-=8;while(rel<-4)rel+=8;
+  if(Math.abs(rel)>2){addLog('後方には発射不可');updateUI();render();return}
+
+  sh.torpedoCount--;
+  sh.attacked=true;sh.done=true;
+  const tr=sh.r+DY[bestD],tc=sh.c+DX[bestD];
+  playerTorpedoes.push({r:tr,c:tc,dir:bestD,dist:1});
+  addLog(`${sh.name} 魚雷発射→${DIRS[bestD]}（残${sh.torpedoCount}）`);
+  playSound('torpedo');
+  updateUI();render();
 }
 
-function skipShip(){
-if(!selectedShip) return;
-selectedShip.moved=true;selectedShip.attacked=true;
-selectedShip=null;actionMode=null;render();
+// ============================================================
+// RADAR DIR PANEL
+// ============================================================
+function showRadarDirPanel(){document.getElementById('radar-dir-panel').style.display='block'}
+function closeRadarPanel(){document.getElementById('radar-dir-panel').style.display='none'}
+function setRadarDir(dir){
+  if(selectedIdx<0)return;
+  const sh=playerShips[selectedIdx];
+  sh.radarDir=dir;
+  sh.done=true;
+  closeRadarPanel();
+  // Re-scan
+  doRadarScan();
+  addLog(`${sh.name} レーダー→${DIRS[dir]}`);
+  updateUI();render();
 }
 
-function endTurn(){
-selectedShip=null;actionMode=null;torpFiringCount=0;
-// Advance player torpedoes
-advanceTorpedoes();
-render();
-if(phase==='gameover') return;
-phase='ai';
-render();
-setTimeout(doAITurn,600);
+// ============================================================
+// END TURN
+// ============================================================
+function endPlayerTurn(){
+  if(aiProcessing)return;
+  actionMode=null;
+
+  // Advance player torpedoes
+  advanceTorpedoes(playerTorpedoes,aiShips);
+
+  if(checkGameOver())return;
+
+  aiProcessing=true;
+  updateUI();render();
+
+  setTimeout(()=>{
+    doAITurn();
+    advanceTorpedoes(aiTorpedoes,playerShips);
+    if(checkGameOver()){aiProcessing=false;return}
+
+    // New turn
+    turn++;
+    // Auto-rotate radars 90° CW
+    playerShips.forEach(sh=>{if(sh.alive){sh.radarDir=(sh.radarDir+2)%8;resetShipTurn(sh)}});
+    aiShips.forEach(sh=>{if(sh.alive){sh.radarDir=(sh.radarDir+2)%8;resetShipTurn(sh)}});
+
+    doRadarScan();
+    selectedIdx=-1;actionMode=null;
+    aiProcessing=false;
+    addLog(`── Turn ${turn} ──`);
+    updateUI();render();
+  },500);
 }
 
-function resetTurn(who){
-const ships=who==='player'?playerShips:aiShips;
-for(const s of ships){if(s.alive){s.moved=false;s.attacked=false}}
-torpFiringCount=0;
+function advanceTorpedoes(torps,targets){
+  const rm=[];
+  torps.forEach((t,i)=>{
+    t.r+=DY[t.dir];t.c+=DX[t.dir];t.dist++;
+    if(!inBounds(t.r,t.c)||isIsl(t.r,t.c)||t.dist>8){rm.push(i);return}
+    const key=ck(t.r,t.c);
+    for(const sh of targets){
+      if(!sh.alive)continue;
+      if(shipCells(sh).some(p=>ck(p.r,p.c)===key)){
+        sh.hp-=3;
+        addLog(`💥 魚雷命中！${sh.name}に3ダメージ`);
+        playSound('hit');
+        if(sh.hp<=0){sh.alive=false;addLog(`${sh.name}撃沈！`);playSound('sink')}
+        rm.push(i);
+        if(inBounds(t.r,t.c)){
+          const cell=getCell(t.r,t.c);
+          cell.classList.add('dmg-flash');
+          setTimeout(()=>cell.classList.remove('dmg-flash'),400);
+        }
+        return;
+      }
+    }
+  });
+  rm.sort((a,b)=>b-a).forEach(i=>torps.splice(i,1));
 }
 
-// ===== TORPEDOES =====
-function advanceTorpedoes(){
-for(const t of torpedoes){
-if(t.dead) continue;
-t.r+=t.dr;t.c+=t.dc;t.dist++;
-if(t.r<0||t.r>=G||t.c<0||t.c>=G){t.dead=true;continue}
-if(board[t.r][t.c]===1){t.dead=true;continue}
-if(t.dist>6){t.dead=true;continue}
-// Check hit
-const targets=t.owner==='player'?aiShips:playerShips;
-const hit=targets.find(s=>s.alive&&s.r===t.r&&s.c===t.c);
-if(hit){
-hit.hp-=2;t.dead=true;
-playSound('explosion');
-addLog(`魚雷命中！${hit.emoji}${hit.name}に2ダメージ`);
-if(hit.hp<=0){hit.alive=false;playSound('sink');addLog(`${hit.emoji}${hit.name}撃沈！`)}
-checkWin();
-}
-}
-torpedoes=torpedoes.filter(t=>!t.dead);
-}
-
-// ===== AI =====
+// ============================================================
+// AI TURN
+// ============================================================
 function doAITurn(){
-if(phase==='gameover') return;
-phase='ai';
-resetTurn('ai');
-const aiVis=getVisibleCells(aiShips);
-const alive=aiShips.filter(s=>s.alive);
-// Sort: scout first, then destroyers, then cruisers, then battleships
-const order=[3,2,1,0];
-const sorted=[...alive].sort((a,b)=>order.indexOf(b.type)-order.indexOf(a.type));
-for(const ship of sorted){
-if(!ship.alive) continue;
-aiActShip(ship,aiVis);
-}
-// Advance AI torpedoes
-advanceTorpedoes();
-if(phase==='gameover') return;
-phase='player';turnNumber++;
-resetTurn('player');
-selectedShip=null;actionMode=null;
-render();
+  addLog('敵艦隊行動中…');
+
+  aiShips.forEach((sh,idx)=>{
+    if(!sh.alive)return;
+    const isDest=sh.size===1;
+    const isBB=sh.size===3;
+
+    // Find nearest known player target
+    let nearDist=999, nearR=-1, nearC=-1;
+    const all=new Map([...aiDetected,...aiGhosts]);
+    all.forEach((_,key)=>{
+      const[r,c]=key.split(',').map(Number);
+      const d=Math.sqrt((r-sh.r)**2+(c-sh.c)**2);
+      if(d<nearDist){nearDist=d;nearR=r;nearC=c}
+    });
+
+    let fired=false;
+
+    // Try fire at detected targets
+    for(const[key] of aiDetected){
+      const[r,c]=key.split(',').map(Number);
+      if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)>sh.fireRange)continue;
+      for(const ps of playerShips){
+        if(!ps.alive)continue;
+        if(shipCells(ps).some(p=>p.r===r&&p.c===c)){
+          ps.hp-=sh.firepower;
+          addLog(`敵${sh.name}が砲撃！${sh.firepower}ダメージ`);
+          playSound('fire');
+          // Reveal firer
+          shipCells(sh).forEach(p=>{detectedEnemies.set(ck(p.r,p.c),turn);ghostEnemies.set(ck(p.r,p.c),turn)});
+          if(ps.hp<=0){ps.alive=false;addLog(`${ps.name}撃沈！`);playSound('sink')}
+          fired=true;break;
+        }
+      }
+      if(fired)break;
+    }
+
+    // Torpedo if destroyer, close, and has torpedoes
+    if(!fired&&isDest&&sh.torpedoCount>0&&nearDist<=5&&nearR>=0){
+      let ang=Math.atan2(nearC-sh.c,-(nearR-sh.r))*180/Math.PI;
+      if(ang<0)ang+=360;
+      let bd=Math.round(ang/45)%8;
+      let rel=bd-sh.dir;while(rel>4)rel-=8;while(rel<-4)rel+=8;
+      if(Math.abs(rel)<=2){
+        sh.torpedoCount--;
+        aiTorpedoes.push({r:sh.r+DY[bd],c:sh.c+DX[bd],dir:bd,dist:1});
+        addLog(`敵${sh.name} 魚雷発射！`);
+        playSound('torpedo');
+        fired=true;
+      }
+    }
+
+    // Move if didn't fire (or always move destroyers forward)
+    if(!fired||isDest){
+      // Turn toward target or random patrol
+      if(nearR>=0){
+        let ang=Math.atan2(nearC-sh.c,-(nearR-sh.r))*180/Math.PI;
+        if(ang<0)ang+=360;
+        let targetDir=Math.round(ang/45)%8;
+        if(sh.dir!==targetDir){
+          let diff=targetDir-sh.dir;while(diff>4)diff-=8;while(diff<-4)diff+=8;
+          const step=Math.sign(diff)*Math.min(Math.abs(diff),sh.maxTurnSteps);
+          const nd=((sh.dir+step)%8+8)%8;
+          const old=sh.dir;sh.dir=nd;
+          const cells=shipCells(sh);
+          const occ=allBlockedSet(aiShips,idx);
+          if(cells.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c))))sh.dir=old;
+        }
+      } else if(Math.random()<.3){
+        const d=Math.random()<.5?1:-1;
+        const nd=((sh.dir+d)%8+8)%8;
+        const old=sh.dir;sh.dir=nd;
+        const cells=shipCells(sh);
+        const occ=allBlockedSet(aiShips,idx);
+        if(cells.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c))))sh.dir=old;
+      }
+
+      // Advance (BB keeps distance)
+      const wantDist=isBB?4:0;
+      if(nearDist>wantDist||!isBB||nearR<0){
+        const nr=sh.r+DY[sh.dir],nc=sh.c+DX[sh.dir];
+        const nc2=[{r:nr,c:nc}];
+        const bd=(sh.dir+4)%8;
+        for(let i=1;i<sh.size;i++)nc2.push({r:nr+DY[bd]*i,c:nc+DX[bd]*i});
+        const occ=allBlockedSet(aiShips,idx);
+        if(!nc2.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c)))){
+          sh.r=nr;sh.c=nc;
+        }
+      }
+    }
+
+    // Point radar toward known targets sometimes
+    if(nearR>=0&&Math.random()<.6){
+      let ang=Math.atan2(nearC-sh.c,-(nearR-sh.r))*180/Math.PI;
+      if(ang<0)ang+=360;
+      sh.radarDir=Math.round(ang/45)%8;
+    }
+  });
 }
 
-function aiActShip(ship,aiVis){
-// Find visible player ships
-const visEnemies=playerShips.filter(e=>e.alive&&aiVis.has(e.r*G+e.c));
-// === MOVEMENT ===
-if(!ship.moved){
-if(ship.type===3){ // Scout: advance toward center/player side, avoid getting too close
-aiMoveScout(ship,visEnemies);
-}else if(ship.type===2){ // Destroyer: flank
-aiMoveDestroyer(ship,visEnemies);
-}else{ // Battleship/Cruiser: advance toward enemies
-aiMoveAdvance(ship,visEnemies);
-}
-ship.moved=true;
-}
-// === ATTACK ===
-if(!ship.attacked){
-// Try fire first if enemies in range
-if(ship.atk>0){
-for(const e of visEnemies){
-const dist=chebyshev(ship.r,ship.c,e.r,e.c);
-if(dist<=ship.atkRange&&hasLOS(ship.r,ship.c,e.r,e.c)){
-e.hp-=ship.atk;
-playSound('fire');
-addLog(`敵${ship.emoji}${ship.name}が砲撃→${e.emoji}${e.name}に${ship.atk}ダメージ`);
-if(e.hp<=0){e.alive=false;playSound('sink');addLog(`${e.emoji}${e.name}撃沈…`)}
-ship.attacked=true;
-checkWin();
-break;
-}
-}
-}
-// Try torpedo if not attacked yet
-if(!ship.attacked&&ship.torpLeft>0){
-const torpTarget=aiFindTorpTarget(ship,visEnemies);
-if(torpTarget!==null){
-const maxFire=ship.type===2?Math.min(2,ship.torpLeft):1;
-for(let f=0;f<maxFire;f++){
-if(ship.torpLeft<=0) break;
-const dir=f===0?torpTarget:aiAlternateTorpDir(ship,torpTarget);
-torpedoes.push({r:ship.r,c:ship.c,dr:DIRS[dir][0],dc:DIRS[dir][1],owner:'ai',dist:0,dead:false});
-ship.torpLeft--;
-playSound('torpedo');
-addLog(`敵${ship.emoji}${ship.name}が魚雷発射！`);
-}
-ship.attacked=true;
-}
-}
-}
+// ============================================================
+// GAME OVER
+// ============================================================
+function checkGameOver(){
+  const pAlive=playerShips.some(s=>s.alive);
+  const aAlive=aiShips.some(s=>s.alive);
+  if(pAlive&&aAlive)return false;
+
+  state='gameover';
+  const ov=document.getElementById('game-over-overlay');
+  ov.style.display='flex';
+  const txt=document.getElementById('game-over-text');
+  const det=document.getElementById('game-over-detail');
+  if(!aAlive&&pAlive){txt.textContent='勝 利';txt.className='win';det.textContent='敵艦隊を殲滅した。'}
+  else if(!pAlive&&aAlive){txt.textContent='敗 北';txt.className='lose';det.textContent='我が艦隊は壊滅した…'}
+  else{txt.textContent='相 討 ち';txt.className='lose';det.textContent='両艦隊壊滅。'}
+  return true;
 }
 
-function aiMoveScout(ship,visEnemies){
-// Move toward center, use islands for cover, but don't rush too deep
-const targetR=Math.min(G-4,ship.r+2);
-const targetC=Math.floor(G/2)+(Math.random()>.5?2:-2);
-aiMoveToward(ship,targetR,Math.max(0,Math.min(G-1,Math.round(targetC))));
-}
-
-function aiMoveDestroyer(ship,visEnemies){
-if(visEnemies.length>0){
-// Flank: move to side of nearest enemy
-const e=visEnemies.reduce((a,b)=>chebyshev(ship.r,ship.c,a.r,a.c)<chebyshev(ship.r,ship.c,b.r,b.c)?a:b);
-const flankC=ship.c<e.c?e.c+2:e.c-2;
-aiMoveToward(ship,e.r,Math.max(0,Math.min(G-1,flankC)));
-}else{
-const tc=Math.max(0,Math.min(G-1,ship.c+(Math.random()>.5?2:-2)));
-aiMoveToward(ship,Math.min(G-1,ship.r+2),tc);
-}
-}
-
-function aiMoveAdvance(ship,visEnemies){
-if(visEnemies.length>0){
-const e=visEnemies.reduce((a,b)=>chebyshev(ship.r,ship.c,a.r,a.c)<chebyshev(ship.r,ship.c,b.r,b.c)?a:b);
-// Battleship stays at range, cruiser closes in
-const stayDist=ship.type===0?3:2;
-const dist=chebyshev(ship.r,ship.c,e.r,e.c);
-if(dist>stayDist) aiMoveToward(ship,e.r,e.c);
-// else stay put for firing position
-}else{
-aiMoveToward(ship,Math.min(G-1,ship.r+1),ship.c);
-}
-}
-
-function aiMoveToward(ship,tr,tc){
-const reach=getReachable(ship);
-if(reach.size===0) return;
-let best=null,bestDist=Infinity;
-// Prefer cells closer to target, and prefer cells adjacent to islands for cover
-for(const[key] of reach){
-const r=Math.floor(key/G),c=key%G;
-let d=chebyshev(r,c,tr,tc);
-if(isAdjacentToIsland(r,c)) d-=0.5; // slight preference for cover
-if(d<bestDist){bestDist=d;best={r,c}}
-}
-if(best){ship.r=best.r;ship.c=best.c}
-}
-
-function aiFindTorpTarget(ship,visEnemies){
-// Find best direction to fire torpedo toward an enemy
-if(visEnemies.length===0) return null;
-let bestDir=-1,bestDist=Infinity;
-for(const e of visEnemies){
-for(let d=0;d<8;d++){
-// Check if firing in direction d would eventually hit near enemy
-let r=ship.r,c=ship.c;
-for(let step=1;step<=6;step++){
-r+=DIRS[d][0];c+=DIRS[d][1];
-if(r<0||r>=G||c<0||c>=G) break;
-if(board[r][c]===1) break;
-const dist=chebyshev(r,c,e.r,e.c);
-if(dist<=1&&step<bestDist){bestDist=step;bestDir=d}
-if(r===e.r&&c===e.c){bestDist=step;bestDir=d;break}
-}
-}
-}
-return bestDir>=0?bestDir:null;
-}
-
-function aiAlternateTorpDir(ship,mainDir){
-// For fan fire: pick adjacent direction
-const alt=[mainDir-1,mainDir+1].filter(d=>d>=0&&d<8);
-return alt.length>0?alt[Math.floor(Math.random()*alt.length)]:mainDir;
-}
-
-// ===== WIN CHECK =====
-function checkWin(){
-if(aiShips.every(s=>!s.alive)){
-phase='gameover';
-showResult(true);
-}else if(playerShips.every(s=>!s.alive)){
-phase='gameover';
-showResult(false);
-}
-}
-
-function showResult(win){
-const ov=document.getElementById('result-overlay');
-ov.style.display='flex';
-const t=document.getElementById('result-text');
-t.className=win?'win':'lose';
-t.textContent=win?'勝利！敵艦隊を殲滅！':'敗北…我が艦隊は壊滅した…';
-}
-
-// ===== INIT =====
-window.addEventListener('resize',()=>{if(phase!=='title'){buildGrid();render()}});
+// ============================================================
+// RESIZE
+// ============================================================
+window.addEventListener('resize',()=>{if(state!=='title')buildBoard(); render()});
 </script>
 </body>
 </html>
