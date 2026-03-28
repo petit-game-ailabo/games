@@ -50,7 +50,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 #game-over-overlay .win{color:#00ff88}
 #game-over-overlay .lose{color:#ff4444}
 #game-over-overlay button{background:none;border:2px solid #00ff88;color:#00ff88;padding:12px 36px;font-size:16px;font-family:inherit;cursor:pointer;margin-top:20px}
-#radar-dir-panel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#0a1020ee;border:2px solid #00ff88;padding:16px;z-index:50;border-radius:8px;text-align:center}
+#radar-dir-panel{display:none!important}
 #radar-dir-panel .title{color:#00ff88;margin-bottom:12px;font-size:14px}
 #radar-dir-panel .dirs{display:grid;grid-template-columns:repeat(3,50px);gap:4px;justify-content:center}
 #radar-dir-panel button{background:#0a1a2a;border:1px solid #1a4a3a;color:#8fc;padding:10px;font-size:14px;cursor:pointer;border-radius:3px}
@@ -92,7 +92,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 <button id="btn-move" onclick="doAction('move')" disabled>前進</button>
 <button id="btn-fire" onclick="doAction('fire')" disabled>砲撃</button>
 <button id="btn-torpedo" onclick="doAction('torpedo')" disabled>魚雷</button>
-<button id="btn-radar" onclick="doAction('radar')" disabled>📡</button>
+<button id="btn-radar" onclick="doAction('radar')" disabled style="display:none">📡</button>
 <button id="btn-wait" onclick="doAction('wait')" disabled>待機</button>
 <button id="btn-end" onclick="doAction('endTurn')">ターン終了</button>
 </div>
@@ -292,6 +292,9 @@ function startGame(){
   document.getElementById('bottom-panel').style.display='none';
   updatePlacementUI();
   render();
+  // Start radar sweep animation
+  function animateRadar(){renderRadar();requestAnimationFrame(animateRadar);}
+  requestAnimationFrame(animateRadar);
 }
 
 // ============================================================
@@ -386,19 +389,14 @@ function doRadarScan(){
 
 function scanArc(ship,targets){
   const found=new Set();
-  const baseDeg=ship.radarDir*45;
   targets.forEach(t=>{
     if(!t.alive)return;
     shipCells(t).forEach(p=>{
       const dr=p.r-ship.r, dc=p.c-ship.c;
       const dist=Math.sqrt(dr*dr+dc*dc);
       if(dist>ship.radarRange||dist<0.1)return;
-      let ang=Math.atan2(dc,-dr)*180/Math.PI;
-      if(ang<0)ang+=360;
-      let diff=ang-baseDeg;
-      while(diff>180)diff-=360;
-      while(diff<-180)diff+=360;
-      if(Math.abs(diff)<=45&&hasLOS(ship.r,ship.c,p.r,p.c)){
+      // 360 degree scan — only check range and LOS
+      if(hasLOS(ship.r,ship.c,p.r,p.c)){
         found.add(ck(p.r,p.c));
       }
     });
@@ -535,19 +533,16 @@ function renderRadar(){
     if(!sh.alive)return;
     const cx=(sh.c+.5)*cs, cy=(sh.r+.5)*cs;
     const range=sh.radarRange*cs;
-    const baseDeg=sh.radarDir*45-90;
-    const startRad=(baseDeg-45)*Math.PI/180;
-    const endRad=(baseDeg+45)*Math.PI/180;
-
+    // 360-degree radar circle
     ctx.save();
-    ctx.globalAlpha=.08;ctx.fillStyle='#00ff88';
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,range,startRad,endRad);ctx.closePath();ctx.fill();
-    ctx.globalAlpha=.3;ctx.strokeStyle='#00ff88';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,range,startRad,endRad);ctx.closePath();ctx.stroke();
-    // Sweep line
-    ctx.globalAlpha=.2;ctx.lineWidth=2;
-    const mid=(baseDeg)*Math.PI/180;
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(mid)*range,cy+Math.sin(mid)*range);ctx.stroke();
+    ctx.globalAlpha=.06;ctx.fillStyle='#00ff88';
+    ctx.beginPath();ctx.arc(cx,cy,range,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=.25;ctx.strokeStyle='#00ff88';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(cx,cy,range,0,Math.PI*2);ctx.stroke();
+    // Rotating sweep line (cosmetic)
+    ctx.globalAlpha=.3;ctx.lineWidth=2;
+    const sweepDeg=((Date.now()/20)%360)*Math.PI/180;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(sweepDeg)*range,cy+Math.sin(sweepDeg)*range);ctx.stroke();
     ctx.restore();
   });
 }
@@ -794,9 +789,9 @@ function endPlayerTurn(){
 
     // New turn
     turn++;
-    // Auto-rotate radars 90° CW
-    playerShips.forEach(sh=>{if(sh.alive){sh.radarDir=(sh.radarDir+2)%8;resetShipTurn(sh)}});
-    aiShips.forEach(sh=>{if(sh.alive){sh.radarDir=(sh.radarDir+2)%8;resetShipTurn(sh)}});
+    // Reset ships for new turn (radar is always 360°)
+    playerShips.forEach(sh=>{if(sh.alive)resetShipTurn(sh)});
+    aiShips.forEach(sh=>{if(sh.alive)resetShipTurn(sh)});
 
     doRadarScan();
     selectedIdx=-1;actionMode=null;
