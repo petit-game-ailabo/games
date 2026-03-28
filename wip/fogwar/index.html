@@ -53,6 +53,24 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 .ship-marker{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(10px,2.5vw,18px);z-index:4;pointer-events:none}
 .dmg-flash{animation:dmgFlash .4s ease-out}
 @keyframes dmgFlash{0%{background:#ff4400aa}100%{background:transparent}}
+.sink-anim{animation:sinkAnim 1.2s ease-in forwards;pointer-events:none}
+@keyframes sinkAnim{
+  0%{opacity:1;transform:translateY(0) scale(1);filter:brightness(1)}
+  20%{opacity:1;transform:translateY(0) scale(1.1);filter:brightness(2) hue-rotate(-30deg)}
+  50%{opacity:.7;transform:translateY(4px) scale(.9);filter:brightness(.8) hue-rotate(0deg)}
+  100%{opacity:0;transform:translateY(12px) scale(.5);filter:brightness(.3) hue-rotate(180deg)}
+}
+.sink-explosion{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,3vw,24px);z-index:10;pointer-events:none;animation:explode .8s ease-out forwards}
+@keyframes explode{
+  0%{opacity:1;transform:scale(.5)}
+  30%{opacity:1;transform:scale(1.5)}
+  100%{opacity:0;transform:scale(2.5)}
+}
+.sink-ripple{position:absolute;inset:-50%;border-radius:50%;border:2px solid #ff4400;z-index:9;pointer-events:none;animation:ripple 1s ease-out forwards}
+@keyframes ripple{
+  0%{opacity:.8;transform:scale(.3)}
+  100%{opacity:0;transform:scale(2)}
+}
 #game-over-overlay{display:none;position:absolute;inset:0;background:#050a14dd;z-index:200;flex-direction:column;align-items:center;justify-content:center}
 #game-over-overlay h2{font-size:36px;margin-bottom:16px}
 #game-over-overlay .win{color:#00ff88}
@@ -454,12 +472,26 @@ function scanArc(ship,targets){
 }
 
 function hasLOS(r1,c1,r2,c2){
-  const steps=Math.max(Math.abs(r2-r1),Math.abs(c2-c1));
+  // Supercover line: check all cells the line passes through
+  const dr=Math.abs(r2-r1), dc=Math.abs(c2-c1);
+  if(dr===0&&dc===0)return true;
+  const sr=r1<r2?1:-1, sc=c1<c2?1:-1;
+  // Use fine-grained stepping to catch all crossed cells
+  const steps=Math.max(dr,dc)*3; // oversample for accuracy
   if(steps===0)return true;
-  for(let i=1;i<steps;i++){
-    const r=Math.round(r1+(r2-r1)*i/steps);
-    const c=Math.round(c1+(c2-c1)*i/steps);
+  let prevR=r1, prevC=c1;
+  for(let i=1;i<=steps;i++){
+    const t=i/steps;
+    const r=Math.round(r1+(r2-r1)*t);
+    const c=Math.round(c1+(c2-c1)*t);
+    if(r===r2&&c===c2)break; // don't check destination
+    if(r===r1&&c===c1)continue; // skip origin
     if(isIsl(r,c))return false;
+    // Also check the "corner" cells for diagonal steps to prevent peeking through diagonal gaps
+    if(r!==prevR&&c!==prevC){
+      if(isIsl(prevR,c)&&isIsl(r,prevC))return false;
+    }
+    prevR=r;prevC=c;
   }
   return true;
 }
@@ -628,6 +660,40 @@ function updateUI(){
       document.getElementById(id).disabled=true);
   }
   document.getElementById('btn-end').disabled=aiProcessing;
+}
+
+function playSinkAnimation(ship){
+  const cells=shipCells(ship);
+  // Even if ship is about to be marked dead, compute cells first
+  cells.forEach((p,i)=>{
+    if(!inBounds(p.r,p.c))return;
+    const cell=getCell(p.r,p.c);
+    // Add explosion emoji
+    const expl=document.createElement('div');
+    expl.className='sink-explosion';
+    expl.textContent='💥';
+    cell.appendChild(expl);
+    // Add ripple
+    const rip=document.createElement('div');
+    rip.className='sink-ripple';
+    cell.appendChild(rip);
+    // Animate existing ship marker
+    const markers=cell.querySelectorAll('.ship-marker');
+    markers.forEach(m=>m.classList.add('sink-anim'));
+  });
+  // Enhanced sink sound: play the base sink + a low boom
+  playSound('sink');
+  setTimeout(()=>{
+    try{
+      initAudio();
+      if(!audioCtx)return;
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime;
+      o.connect(g);g.connect(audioCtx.destination);
+      o.type='sawtooth';o.frequency.setValueAtTime(80,t);o.frequency.exponentialRampToValueAtTime(15,t+.8);
+      g.gain.setValueAtTime(.2,t);g.gain.exponentialRampToValueAtTime(.01,t+.8);
+      o.start(t);o.stop(t+.8);
+    }catch(e){}
+  },200);
 }
 
 function hasVisibleTarget(sh){
@@ -800,9 +866,13 @@ function doFire(r,c){
   setTimeout(()=>{
     if(inBounds(r,c)){getCell(r,c).classList.add('dmg-flash');setTimeout(()=>getCell(r,c).classList.remove('dmg-flash'),400)}
     playSound('hit');
-    if(target.hp<=0){target.alive=false;addLog(`💥 ${target.name}撃沈！`);playSound('sink')}
-    checkGameOver();
-    updateUI();render();
+    if(target.hp<=0){
+      addLog(`💥 ${target.name}撃沈！`);
+      playSinkAnimation(target);
+      setTimeout(()=>{target.alive=false;checkGameOver();updateUI();render()},1200);
+    } else {
+      checkGameOver();updateUI();render();
+    }
   },150);
 }
 
@@ -898,7 +968,15 @@ function animateAIActions(actions,callback){
       const cell=getCell(act.targetCell.r,act.targetCell.c);
       if(cell){cell.classList.add('dmg-flash');setTimeout(()=>cell.classList.remove('dmg-flash'),400)}
       playSound('fire');
-      setTimeout(()=>{playSound('hit');render();i++;setTimeout(next,300)},200);
+      setTimeout(()=>{
+        playSound('hit');
+        if(act.sunkShip){
+          playSinkAnimation(act.sunkShip);
+          setTimeout(()=>{act.sunkShip.alive=false;render();i++;setTimeout(next,300)},1200);
+        } else {
+          render();i++;setTimeout(next,300);
+        }
+      },200);
     } else if(act.type==='torpedo'){
       playSound('torpedo');
       render();i++;setTimeout(next,400);
@@ -923,7 +1001,11 @@ function advanceTorpedoes(torps,targets){
         sh.hp-=3;
         addLog(`💥 魚雷命中！${sh.name}に3ダメージ`);
         playSound('hit');
-        if(sh.hp<=0){sh.alive=false;addLog(`${sh.name}撃沈！`);playSound('sink')}
+        if(sh.hp<=0){
+          addLog(`${sh.name}撃沈！`);
+          playSinkAnimation(sh);
+          setTimeout(()=>{sh.alive=false;render()},1200);
+        }
         rm.push(i);
         if(inBounds(t.r,t.c)){
           const cell=getCell(t.r,t.c);
@@ -970,8 +1052,10 @@ function doAITurn(){
           // Reveal firer
           shipCells(sh).forEach(p=>{detectedEnemies.set(ck(p.r,p.c),turn);ghostEnemies.set(ck(p.r,p.c),turn)});
           const sunk=ps.hp<=0;
-          if(sunk)ps.alive=false;
-          actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃！${sh.firepower}ダメージ${sunk?' → 撃沈！':''}`,targetCell:{r,c}});
+          if(sunk){
+            // Don't set alive=false yet — let animation play
+          }
+          actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃！${sh.firepower}ダメージ${sunk?' → 撃沈！':''}`,targetCell:{r,c},sunkShip:sunk?ps:null});
           fired=true;break;
         }
       }
