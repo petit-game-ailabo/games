@@ -85,6 +85,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
   60%{opacity:.8;transform:scale(1)}
   100%{opacity:0;transform:scale(.5)}
 }
+#tutorial-overlay{display:none;position:absolute;inset:0;background:#050a14ee;z-index:300;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#tutorial-overlay .tut-box{max-width:420px;width:90%;text-align:center}
+#tutorial-overlay h2{color:#00ff88;font-size:24px;margin-bottom:16px;letter-spacing:4px}
+#tutorial-overlay .tut-page{font-size:14px;line-height:1.8;color:#c0d8d0;margin-bottom:20px;text-align:left;min-height:180px}
+#tutorial-overlay .tut-page .emoji-icon{font-size:32px;display:block;text-align:center;margin:10px 0}
+#tutorial-overlay .tut-page h3{color:#88ddaa;font-size:16px;margin:12px 0 6px;text-align:center}
+#tutorial-overlay .tut-nav{display:flex;justify-content:center;gap:12px;align-items:center}
+#tutorial-overlay .tut-nav button{background:none;border:1px solid #00ff88;color:#00ff88;padding:8px 24px;font-size:14px;font-family:inherit;cursor:pointer;border-radius:3px;letter-spacing:2px}
+#tutorial-overlay .tut-nav button:hover{background:#00ff8822}
+#tutorial-overlay .tut-dots{display:flex;gap:6px;justify-content:center;margin-bottom:12px}
+#tutorial-overlay .tut-dots .dot{width:8px;height:8px;border-radius:50%;background:#1a4a3a;transition:background .2s}
+#tutorial-overlay .tut-dots .dot.active{background:#00ff88}
+#tutorial-overlay .tut-skip{margin-top:16px;color:#4a6a5a;font-size:11px;cursor:pointer}
+#tutorial-overlay .tut-skip:hover{color:#8fc}
 #game-over-overlay{display:none;position:absolute;inset:0;background:#050a14dd;z-index:200;flex-direction:column;align-items:center;justify-content:center}
 #game-over-overlay h2{font-size:36px;margin-bottom:16px}
 #game-over-overlay .win{color:#00ff88}
@@ -148,6 +162,19 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 </div>
 </div>
 
+<div id="tutorial-overlay">
+<div class="tut-box">
+<h2>📖 操作説明</h2>
+<div class="tut-page" id="tut-page-content"></div>
+<div class="tut-dots" id="tut-dots"></div>
+<div class="tut-nav">
+<button id="tut-prev" onclick="tutPrev()">◀ 前へ</button>
+<button id="tut-next" onclick="tutNext()">次へ ▶</button>
+</div>
+<div class="tut-skip" onclick="closeTutorial()">スキップして開始 →</div>
+</div>
+</div>
+
 <div id="game-over-overlay">
 <h2 id="game-over-text"></h2>
 <div id="game-over-detail"></div>
@@ -205,6 +232,62 @@ function playSound(type){
     case'radar':o.type='sine';o.frequency.setValueAtTime(1200,t);o.frequency.exponentialRampToValueAtTime(600,t+.2);g.gain.setValueAtTime(.08,t);g.gain.exponentialRampToValueAtTime(.01,t+.3);o.start(t);o.stop(t+.3);break;
     case'click':o.type='sine';o.frequency.setValueAtTime(600,t);g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.01,t+.05);o.start(t);o.stop(t+.05);break;
   }
+}
+
+// ============================================================
+// TUTORIAL
+// ============================================================
+const TUTORIAL_PAGES=[
+  {title:'FogWarへようこそ',icon:'⚓',text:'これは<b>不完全情報</b>の海戦ゲームです。\n\nあなたは4隻の艦隊を指揮し、\n霧の中に潜む敵艦隊を撃滅します。\n\nレーダーの範囲内しか見えません。\n敵も同じ条件で戦っています。'},
+  {title:'艦種と特徴',icon:'🚢',text:'<b>⚓ 戦艦</b> — HP8・火力3・射程4。鈍足だが頑丈\n<b>🚢 巡洋艦</b> — HP5・火力2・魚雷3本。バランス型\n<b>🔱 駆逐艦×2</b> — HP2・火力1・魚雷5本。高速＆魚雷特化\n\n大型艦は複数マスを占め、\n旋回にスペースが必要です。'},
+  {title:'配置フェーズ',icon:'📍',text:'ゲーム開始時、下4行に艦を配置します。\n\n<b>①</b> 方向ボタン（↑↗→…）で向きを選択\n<b>②</b> マスをタップして位置を決定\n<b>③</b> 「配置確定」で次の艦へ\n\nマウスホバーでプレビューが表示されます。'},
+  {title:'ターンの流れ',icon:'🎯',text:'各艦は1ターンに以下を順番に実行できます：\n\n<b>1. 回頭</b>（↶↷）— 向きを変える\n<b>2. 前進</b> — 向いている方向に移動\n<b>3. 攻撃</b> — 砲撃 or 魚雷（どちらか1回）\n\n全艦の行動が終わったら「ターン終了」。\n未行動の艦は「待機」で飛ばせます。'},
+  {title:'砲撃と魚雷',icon:'💥',text:'<b>🔥 砲撃</b>\nレーダーで探知した敵を直接攻撃。\n距離が遠いほど命中率が下がります。\n砲撃すると閃光で<b>位置がバレます</b>！\n\n<b>🐟 魚雷</b>\n前方180°に発射し、毎ターン直進。\n命中すれば<b>3ダメージ</b>の大打撃！\n数に限りがあるので大事に使いましょう。'},
+  {title:'ダメージと損傷',icon:'⚠️',text:'HPが<b>半分以下</b>になると中破：\n　速度-1、射程-1、レーダー-1\n\nHPが<b>1/4以下</b>で大破：\n　速度-2、射程-2、火力-1\n\n損傷した艦は性能が大きく落ちます。\n退避するか、最後まで戦うかはあなた次第。'},
+  {title:'島と視線遮断',icon:'🏝️',text:'マップ上の<b>🏝️ 島</b>は移動不可で、\nレーダーの<b>視線（LOS）を遮断</b>します。\n\n島の裏に隠れれば敵から見えません。\n逆に、島越しの敵は探知できません。\n\n地形を活かした戦術がカギです！'},
+  {title:'さあ、出撃！',icon:'⚔️',text:'全ての準備は整いました。\n\n敵艦隊を探し出し、撃滅せよ！\n\n<b>💡 Tips:</b>\n・駆逐艦は偵察と魚雷攻撃に使おう\n・戦艦は島影から砲撃すると強い\n・砲撃の位置バレに注意！'}
+];
+let tutPage=0;
+
+function showTutorial(){
+  tutPage=0;
+  document.getElementById('tutorial-overlay').style.display='flex';
+  renderTutorial();
+}
+
+function renderTutorial(){
+  const p=TUTORIAL_PAGES[tutPage];
+  document.getElementById('tut-page-content').innerHTML=
+    `<div class="emoji-icon">${p.icon}</div><h3>${p.title}</h3>`+
+    p.text.replace(/\n/g,'<br>');
+  // Dots
+  const dots=document.getElementById('tut-dots');
+  dots.innerHTML=TUTORIAL_PAGES.map((_,i)=>
+    `<div class="dot${i===tutPage?' active':''}"></div>`
+  ).join('');
+  // Nav buttons
+  document.getElementById('tut-prev').style.visibility=tutPage>0?'visible':'hidden';
+  document.getElementById('tut-next').textContent=
+    tutPage>=TUTORIAL_PAGES.length-1?'出撃！':'次へ ▶';
+}
+
+function tutNext(){
+  if(tutPage>=TUTORIAL_PAGES.length-1){closeTutorial();return}
+  tutPage++;renderTutorial();playSound('click');
+}
+
+function tutPrev(){
+  if(tutPage>0){tutPage--;renderTutorial();playSound('click')}
+}
+
+function closeTutorial(){
+  document.getElementById('tutorial-overlay').style.display='none';
+  try{localStorage.setItem('fogwar-tutorial-seen','1')}catch(e){}
+  startGameActual();
+}
+
+function needsTutorial(){
+  try{return !localStorage.getItem('fogwar-tutorial-seen')}catch(e){return true}
 }
 
 // ============================================================
@@ -344,6 +427,16 @@ function startGame(){
   initAudio();
   document.getElementById('title-screen').style.display='none';
   document.getElementById('game-container').style.display='flex';
+  if(needsTutorial()){
+    // Build board first so tutorial has background
+    generateIslands();buildBoard();render();
+    showTutorial();
+  } else {
+    startGameActual();
+  }
+}
+
+function startGameActual(){
   generateIslands();
   buildBoard();
   state='placement';
