@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FogWar</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;overflow-x:hidden;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+#title-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;width:100%;gap:40px}
+#title-screen h1{font-size:3.5rem;letter-spacing:0.3em;color:#7faaff;text-shadow:0 0 30px rgba(127,170,255,0.5),0 0 60px rgba(127,170,255,0.2);font-weight:300}
+#title-screen .subtitle{font-size:0.9rem;color:#667;letter-spacing:0.2em}
+#start-btn{padding:14px 48px;font-size:1.1rem;background:transparent;border:1px solid #7faaff;color:#7faaff;border-radius:4px;cursor:pointer;letter-spacing:0.2em;transition:all 0.3s}
+#start-btn:hover,#start-btn:active{background:rgba(127,170,255,0.15);box-shadow:0 0 20px rgba(127,170,255,0.3)}
+#game-screen{display:none;flex-direction:column;align-items:center;width:100%;max-width:480px;padding:8px}
+#info-bar{width:100%;text-align:center;padding:8px;font-size:0.85rem;color:#99a;letter-spacing:0.1em;min-height:36px}
+#board-container{position:relative;width:100%;aspect-ratio:1/1;max-width:400px}
+#board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:100%;height:100%;gap:1px;background:#1a1a2e}
+.cell{position:relative;background:#12122a;display:flex;align-items:center;justify-content:center;font-size:1.6rem;cursor:pointer;transition:background 0.2s;border-radius:2px}
+.cell.fog{background:#0d0d1a}
+.cell.fog::after{content:'';position:absolute;inset:0;background:rgba(10,10,26,0.7);border-radius:2px}
+.cell.visible{background:#181835}
+.cell.highlight-move{background:rgba(80,140,255,0.25);box-shadow:inset 0 0 8px rgba(80,140,255,0.3)}
+.cell.highlight-attack{background:rgba(255,80,80,0.25);box-shadow:inset 0 0 8px rgba(255,80,80,0.3)}
+.cell.highlight-place{background:rgba(80,255,140,0.2);box-shadow:inset 0 0 8px rgba(80,255,140,0.3)}
+.cell.selected{box-shadow:inset 0 0 0 2px #7faaff}
+.cell .unit{position:relative;z-index:2;text-shadow:0 0 6px rgba(255,255,255,0.3)}
+.cell .hp-bar{position:absolute;bottom:2px;left:10%;width:80%;height:3px;background:#333;border-radius:2px;z-index:3}
+.cell .hp-fill{height:100%;border-radius:2px;transition:width 0.3s}
+.cell .hp-fill.ally{background:#7faaff}
+.cell .hp-fill.enemy{background:#ff6666}
+.cell.acted .unit{opacity:0.5}
+#panel{width:100%;max-width:400px;padding:12px 8px;display:flex;flex-direction:column;gap:8px;min-height:140px}
+#unit-info{text-align:center;font-size:0.8rem;color:#99a;min-height:40px;display:flex;flex-direction:column;align-items:center;gap:2px}
+#unit-info .name{font-size:1rem;color:#ccd}
+#unit-info .stats{font-size:0.75rem;color:#778}
+#actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+#actions button{padding:8px 16px;font-size:0.85rem;background:transparent;border:1px solid #445;color:#aab;border-radius:4px;cursor:pointer;transition:all 0.2s;min-width:80px}
+#actions button:hover,#actions button:active{background:rgba(127,170,255,0.1);border-color:#7faaff;color:#7faaff}
+#actions button:disabled{opacity:0.3;cursor:default}
+#actions button.primary{border-color:#7faaff;color:#7faaff}
+#actions button.danger{border-color:#ff6666;color:#ff6666}
+#placement-panel{display:none;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:400px;padding:12px 8px}
+#placement-panel .unit-select{display:flex;gap:12px;justify-content:center}
+.unit-btn{padding:10px 14px;font-size:1.4rem;background:#1a1a2e;border:1px solid #334;border-radius:6px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:4px}
+.unit-btn span{font-size:0.65rem;color:#778}
+.unit-btn.selected-unit{border-color:#7faaff;background:rgba(127,170,255,0.1)}
+.unit-btn.placed{opacity:0.3;cursor:default}
+#placement-info{font-size:0.75rem;color:#667;text-align:center}
+#result-overlay{display:none;position:fixed;inset:0;background:rgba(10,10,26,0.92);z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:24px}
+#result-overlay h2{font-size:2rem;letter-spacing:0.2em}
+#result-overlay .win{color:#7faaff;text-shadow:0 0 20px rgba(127,170,255,0.5)}
+#result-overlay .lose{color:#ff6666;text-shadow:0 0 20px rgba(255,100,100,0.5)}
+#result-overlay button{padding:12px 36px;font-size:1rem;background:transparent;border:1px solid #556;color:#aab;border-radius:4px;cursor:pointer}
+.damage-popup{position:absolute;z-index:10;font-size:1rem;font-weight:bold;color:#ff4444;pointer-events:none;animation:popUp 0.8s ease-out forwards}
+@keyframes popUp{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-30px)}}
+.shake{animation:shake 0.3s ease-in-out}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+</style>
+</head>
+<body>
+
+<div id="title-screen">
+  <h1>FogWar</h1>
+  <div class="subtitle">不完全情報戦略ゲーム</div>
+  <button id="start-btn" onclick="startGame()">開 始</button>
+</div>
+
+<div id="game-screen">
+  <div id="info-bar">配置フェーズ</div>
+  <div id="board-container">
+    <div id="board"></div>
+  </div>
+  <div id="placement-panel">
+    <div id="placement-info">ユニットを選んで、下2行に配置してください</div>
+    <div class="unit-select" id="unit-buttons"></div>
+    <button id="placement-done-btn" style="padding:8px 24px;font-size:0.85rem;background:transparent;border:1px solid #445;color:#aab;border-radius:4px;cursor:pointer;margin-top:4px" disabled onclick="finishPlacement()">配置完了</button>
+  </div>
+  <div id="panel" style="display:none">
+    <div id="unit-info"></div>
+    <div id="actions"></div>
+  </div>
+</div>
+
+<div id="result-overlay">
+  <h2 id="result-text"></h2>
+  <button onclick="location.reload()">もう一度</button>
+</div>
+
+<script>
+// === Audio ===
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
+function playSound(type){
+  ensureAudio();
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.connect(g);g.connect(audioCtx.destination);
+  const t=audioCtx.currentTime;
+  if(type==='move'){o.frequency.setValueAtTime(400,t);o.frequency.exponentialRampToValueAtTime(600,t+0.1);g.gain.setValueAtTime(0.15,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.15);o.start(t);o.stop(t+0.15)}
+  else if(type==='attack'){o.type='sawtooth';o.frequency.setValueAtTime(200,t);o.frequency.exponentialRampToValueAtTime(80,t+0.2);g.gain.setValueAtTime(0.2,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.25);o.start(t);o.stop(t+0.25)}
+  else if(type==='hit'){o.type='square';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(50,t+0.15);g.gain.setValueAtTime(0.15,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.2);o.start(t);o.stop(t+0.2)}
+  else if(type==='destroy'){o.type='sawtooth';o.frequency.setValueAtTime(300,t);o.frequency.exponentialRampToValueAtTime(30,t+0.5);g.gain.setValueAtTime(0.25,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.5);o.start(t);o.stop(t+0.5)}
+  else if(type==='place'){o.frequency.setValueAtTime(500,t);o.frequency.exponentialRampToValueAtTime(700,t+0.08);g.gain.setValueAtTime(0.1,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.1);o.start(t);o.stop(t+0.1)}
+  else if(type==='win'){o.type='sine';o.frequency.setValueAtTime(523,t);g.gain.setValueAtTime(0.2,t);o.frequency.setValueAtTime(659,t+0.15);o.frequency.setValueAtTime(784,t+0.3);g.gain.exponentialRampToValueAtTime(0.01,t+0.6);o.start(t);o.stop(t+0.6)}
+  else if(type==='lose'){o.type='sine';o.frequency.setValueAtTime(400,t);o.frequency.exponentialRampToValueAtTime(200,t+0.5);g.gain.setValueAtTime(0.2,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.6);o.start(t);o.stop(t+0.6)}
+}
+
+// === Game State ===
+const UNIT_DEFS = [
+  {type:'tank',emoji:'🛡️',name:'タンク',hp:3,atk:1,move:1,sight:2,range:1},
+  {type:'attacker',emoji:'⚔️',name:'アタッカー',hp:2,atk:2,move:2,sight:1,range:2},
+  {type:'scout',emoji:'🔭',name:'スカウト',hp:1,atk:1,move:2,sight:3,range:1}
+];
+
+let state = null;
+
+function createUnit(def, owner, id){
+  return {id, type:def.type, emoji:def.emoji, name:def.name, hp:def.hp, maxHp:def.hp, atk:def.atk, moveRange:def.move, sight:def.sight, range:def.range, owner, x:-1, y:-1, moved:false, attacked:false};
+}
+
+function startGame(){
+  ensureAudio();
+  document.getElementById('title-screen').style.display='none';
+  const gs = document.getElementById('game-screen');
+  gs.style.display='flex';
+  
+  state = {
+    phase:'placement',
+    turn:'player',
+    playerUnits:[],
+    enemyUnits:[],
+    selectedUnit:null,
+    mode:null, // 'move','attack'
+    placementSelected:null,
+    placedCount:0
+  };
+
+  // Create AI units (placed on top 2 rows)
+  const aiPositions = [[1,0],[4,1],[6,0]];
+  UNIT_DEFS.forEach((def,i)=>{
+    const u = createUnit(def,'enemy','e'+i);
+    u.x = aiPositions[i][0];
+    u.y = aiPositions[i][1];
+    state.enemyUnits.push(u);
+  });
+
+  buildBoard();
+  showPlacementUI();
+  render();
+}
+
+function buildBoard(){
+  const board = document.getElementById('board');
+  board.innerHTML='';
+  for(let y=0;y<8;y++){
+    for(let x=0;x<8;x++){
+      const cell = document.createElement('div');
+      cell.className='cell';
+      cell.dataset.x=x;
+      cell.dataset.y=y;
+      cell.addEventListener('click',()=>onCellClick(x,y));
+      board.appendChild(cell);
+    }
+  }
+}
+
+function getCell(x,y){
+  return document.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+}
+
+function allUnits(){return [...state.playerUnits,...state.enemyUnits]}
+function aliveUnits(owner){return (owner==='player'?state.playerUnits:state.enemyUnits).filter(u=>u.hp>0)}
+function unitAt(x,y){return allUnits().find(u=>u.hp>0&&u.x===x&&u.y===y)}
+
+// Manhattan distance
+function dist(x1,y1,x2,y2){return Math.abs(x1-x2)+Math.abs(y1-y2)}
+
+// Chebyshev distance (for sight - feels more natural on grid)
+function cdist(x1,y1,x2,y2){return Math.max(Math.abs(x1-x2),Math.abs(y1-y2))}
+
+function getPlayerVisibleCells(){
+  const visible = new Set();
+  aliveUnits('player').forEach(u=>{
+    for(let y=0;y<8;y++)for(let x=0;x<8;x++){
+      if(cdist(u.x,u.y,x,y)<=u.sight) visible.add(y*8+x);
+    }
+  });
+  return visible;
+}
+
+// BFS for reachable cells within move range
+function getReachable(unit){
+  const visited = new Map();
+  const queue = [{x:unit.x,y:unit.y,cost:0}];
+  visited.set(unit.y*8+unit.x, 0);
+  const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+  while(queue.length){
+    const {x,y,cost} = queue.shift();
+    if(cost>=unit.moveRange) continue;
+    for(const [dx,dy] of dirs){
+      const nx=x+dx, ny=y+dy;
+      if(nx<0||nx>7||ny<0||ny>7) continue;
+      const key=ny*8+nx;
+      const existing = unitAt(nx,ny);
+      if(existing) continue; // blocked
+      if(!visited.has(key)||visited.get(key)>cost+1){
+        visited.set(key,cost+1);
+        queue.push({x:nx,y:ny,cost:cost+1});
+      }
+    }
+  }
+  visited.delete(unit.y*8+unit.x);
+  return [...visited.keys()].map(k=>({x:k%8,y:Math.floor(k/8)}));
+}
+
+function getAttackTargets(unit){
+  const visible = getPlayerVisibleCells();
+  const targets = [];
+  aliveUnits('enemy').forEach(e=>{
+    if(cdist(unit.x,unit.y,e.x,e.y)<=unit.range && visible.has(e.y*8+e.x)){
+      targets.push({x:e.x,y:e.y});
+    }
+  });
+  return targets;
+}
+
+// === Placement ===
+function showPlacementUI(){
+  document.getElementById('panel').style.display='none';
+  const pp = document.getElementById('placement-panel');
+  pp.style.display='flex';
+  const btns = document.getElementById('unit-buttons');
+  btns.innerHTML='';
+  UNIT_DEFS.forEach((def,i)=>{
+    const b = document.createElement('div');
+    b.className='unit-btn';
+    b.dataset.idx=i;
+    b.innerHTML=`${def.emoji}<span>${def.name}</span><span style="font-size:0.55rem;color:#556">HP${def.hp} 攻${def.atk} 移${def.move} 視${def.sight}</span>`;
+    b.addEventListener('click',()=>selectPlacementUnit(i));
+    btns.appendChild(b);
+  });
+}
+
+function selectPlacementUnit(idx){
+  if(state.playerUnits[idx]&&state.playerUnits[idx].x>=0) return;
+  state.placementSelected=idx;
+  document.querySelectorAll('.unit-btn').forEach((b,i)=>{
+    b.classList.toggle('selected-unit',i===idx);
+  });
+  render();
+}
+
+function finishPlacement(){
+  if(state.placedCount<3) return;
+  state.phase='battle';
+  state.turn='player';
+  document.getElementById('placement-panel').style.display='none';
+  document.getElementById('panel').style.display='flex';
+  resetTurnState('player');
+  document.getElementById('info-bar').textContent='あなたのターン';
+  render();
+  updatePanel();
+}
+
+function resetTurnState(owner){
+  aliveUnits(owner).forEach(u=>{u.moved=false;u.attacked=false});
+  state.selectedUnit=null;
+  state.mode=null;
+}
+
+// === Render ===
+function render(){
+  const visible = state.phase==='placement'?null:getPlayerVisibleCells();
+  for(let y=0;y<8;y++){
+    for(let x=0;x<8;x++){
+      const cell=getCell(x,y);
+      cell.className='cell';
+      cell.innerHTML='';
+      
+      if(state.phase==='placement'){
+        // Show placement zone
+        if(y>=6 && state.placementSelected!==null){
+          const existing=unitAt(x,y);
+          if(!existing) cell.classList.add('highlight-place');
+        }
+      } else {
+        // Fog of war
+        if(visible.has(y*8+x)){
+          cell.classList.add('visible');
+        } else {
+          cell.classList.add('fog');
+        }
+      }
+      
+      // Draw units
+      const unit = unitAt(x,y);
+      if(unit){
+        if(unit.owner==='player'){
+          const span=document.createElement('span');
+          span.className='unit';
+          span.textContent=unit.emoji;
+          cell.appendChild(span);
+          // HP bar
+          const bar=document.createElement('div');bar.className='hp-bar';
+          const fill=document.createElement('div');fill.className='hp-fill ally';
+          fill.style.width=(unit.hp/unit.maxHp*100)+'%';
+          bar.appendChild(fill);cell.appendChild(bar);
+          if(unit.moved&&unit.attacked) cell.classList.add('acted');
+        } else if(state.phase!=='placement'&&visible&&visible.has(y*8+x)){
+          const span=document.createElement('span');
+          span.className='unit';
+          span.style.filter='hue-rotate(180deg) brightness(1.2)';
+          span.textContent=unit.emoji;
+          cell.appendChild(span);
+          const bar=document.createElement('div');bar.className='hp-bar';
+          const fill=document.createElement('div');fill.className='hp-fill enemy';
+          fill.style.width=(unit.hp/unit.maxHp*100)+'%';
+          bar.appendChild(fill);cell.appendChild(bar);
+        }
+      }
+      
+      // Selected highlight
+      if(state.selectedUnit && state.selectedUnit.x===x && state.selectedUnit.y===y){
+        cell.classList.add('selected');
+      }
+    }
+  }
+  
+  // Show move/attack highlights
+  if(state.selectedUnit && state.phase==='battle' && state.turn==='player'){
+    if(state.mode==='move' && !state.selectedUnit.moved){
+      getReachable(state.selectedUnit).forEach(p=>{
+        getCell(p.x,p.y).classList.add('highlight-move');
+      });
+    }
+    if(state.mode==='attack' && !state.selectedUnit.attacked){
+      getAttackTargets(state.selectedUnit).forEach(p=>{
+        getCell(p.x,p.y).classList.add('highlight-attack');
+      });
+    }
+  }
+}
+
+function updatePanel(){
+  const info = document.getElementById('unit-info');
+  const actions = document.getElementById('actions');
+  
+  if(!state.selectedUnit || state.phase!=='battle'){
+    info.innerHTML='<span style="color:#556">ユニットをタップして選択</span>';
+    actions.innerHTML = state.phase==='battle'&&state.turn==='player'?
+      `<button class="primary" onclick="endTurn()">ターン終了</button>`:'';
+    return;
+  }
+  
+  const u = state.selectedUnit;
+  info.innerHTML=`
+    <div class="name">${u.emoji} ${u.name}</div>
+    <div class="stats">HP: ${u.hp}/${u.maxHp} | 攻撃力: ${u.atk} | 移動: ${u.moveRange} | 視界: ${u.sight} | 射程: ${u.range}</div>
+  `;
+  
+  let btns='';
+  if(!u.moved){
+    btns+=`<button ${state.mode==='move'?'class="primary"':''} onclick="setMode('move')">移動</button>`;
+  }
+  if(!u.attacked){
+    const targets=getAttackTargets(u);
+    btns+=`<button ${state.mode==='attack'?'class="danger"':''} ${targets.length===0?'disabled':''} onclick="setMode('attack')">攻撃${targets.length?'('+targets.length+')':''}</button>`;
+  }
+  btns+=`<button onclick="skipUnit()">待機</button>`;
+  btns+=`<button class="primary" onclick="endTurn()">ターン終了</button>`;
+  actions.innerHTML=btns;
+}
+
+function setMode(mode){
+  state.mode=mode;
+  render();
+  updatePanel();
+}
+
+function skipUnit(){
+  if(!state.selectedUnit)return;
+  state.selectedUnit.moved=true;
+  state.selectedUnit.attacked=true;
+  state.selectedUnit=null;
+  state.mode=null;
+  render();
+  updatePanel();
+}
+
+// === Cell Click ===
+function onCellClick(x,y){
+  if(state.phase==='placement') return onPlacementClick(x,y);
+  if(state.phase==='battle' && state.turn==='player') return onBattleClick(x,y);
+}
+
+function onPlacementClick(x,y){
+  if(state.placementSelected===null) return;
+  if(y<6) return; // only bottom 2 rows
+  if(unitAt(x,y)) return;
+  
+  const def = UNIT_DEFS[state.placementSelected];
+  let u = state.playerUnits[state.placementSelected];
+  if(!u){
+    u = createUnit(def,'player','p'+state.placementSelected);
+    state.playerUnits[state.placementSelected]=u;
+    state.placedCount++;
+  } else if(u.x>=0){
+    return; // already placed
+  }
+  u.x=x; u.y=y;
+  playSound('place');
+  
+  // Mark as placed
+  document.querySelectorAll('.unit-btn')[state.placementSelected].classList.add('placed');
+  state.placementSelected=null;
+  document.querySelectorAll('.unit-btn').forEach(b=>b.classList.remove('selected-unit'));
+  
+  if(state.placedCount>=3){
+    document.getElementById('placement-done-btn').disabled=false;
+  }
+  render();
+}
+
+function onBattleClick(x,y){
+  const clickedUnit = unitAt(x,y);
+  
+  // If in move mode and clicked a valid move cell
+  if(state.mode==='move' && state.selectedUnit && !state.selectedUnit.moved){
+    const reachable = getReachable(state.selectedUnit);
+    if(reachable.some(p=>p.x===x&&p.y===y)){
+      doMove(state.selectedUnit,x,y);
+      return;
+    }
+  }
+  
+  // If in attack mode and clicked a valid target
+  if(state.mode==='attack' && state.selectedUnit && !state.selectedUnit.attacked){
+    const targets = getAttackTargets(state.selectedUnit);
+    if(targets.some(p=>p.x===x&&p.y===y)){
+      doAttack(state.selectedUnit,x,y);
+      return;
+    }
+  }
+  
+  // Select own unit
+  if(clickedUnit && clickedUnit.owner==='player'){
+    state.selectedUnit=clickedUnit;
+    state.mode=null;
+    // Auto-enter move mode if not moved
+    if(!clickedUnit.moved) state.mode='move';
+    else if(!clickedUnit.attacked) state.mode='attack';
+    render();
+    updatePanel();
+    return;
+  }
+  
+  // Deselect
+  state.selectedUnit=null;
+  state.mode=null;
+  render();
+  updatePanel();
+}
+
+function doMove(unit,x,y){
+  unit.x=x; unit.y=y;
+  unit.moved=true;
+  playSound('move');
+  
+  // Auto switch to attack mode if targets available
+  if(!unit.attacked){
+    state.mode='attack';
+    const targets=getAttackTargets(unit);
+    if(targets.length===0){
+      state.mode=null;
+    }
+  } else {
+    state.mode=null;
+  }
+  render();
+  updatePanel();
+}
+
+function doAttack(unit,tx,ty){
+  const target=unitAt(tx,ty);
+  if(!target)return;
+  
+  unit.attacked=true;
+  target.hp-=unit.atk;
+  playSound('attack');
+  
+  // Damage popup
+  const cell=getCell(tx,ty);
+  const popup=document.createElement('div');
+  popup.className='damage-popup';
+  popup.textContent='-'+unit.atk;
+  cell.appendChild(popup);
+  cell.classList.add('shake');
+  setTimeout(()=>{popup.remove();cell.classList.remove('shake')},800);
+  
+  if(target.hp<=0){
+    target.hp=0;
+    playSound('destroy');
+    // Check win
+    setTimeout(()=>{
+      if(aliveUnits('enemy').length===0){
+        showResult(true);
+        return;
+      }
+      render();
+      updatePanel();
+    },300);
+  }
+  
+  if(!unit.moved){
+    state.mode=null;
+  } else {
+    state.mode=null;
+    // Unit done
+  }
+  render();
+  updatePanel();
+}
+
+function endTurn(){
+  if(state.turn!=='player')return;
+  state.turn='enemy';
+  state.selectedUnit=null;
+  state.mode=null;
+  document.getElementById('info-bar').textContent='相手のターン...';
+  render();
+  updatePanel();
+  setTimeout(doAITurn,600);
+}
+
+// === AI ===
+function doAITurn(){
+  resetTurnState('enemy');
+  const alive = aliveUnits('enemy');
+  
+  // AI visibility
+  function aiVisible(x,y){
+    return alive.some(u=>cdist(u.x,u.y,x,y)<=u.sight);
+  }
+  
+  let actionQueue = [];
+  
+  alive.forEach(unit=>{
+    // Find visible player units
+    const visibleTargets = aliveUnits('player').filter(p=>aiVisible(p.x,p.y));
+    
+    // Can attack from current position?
+    const attackableNow = visibleTargets.filter(p=>cdist(unit.x,unit.y,p.x,p.y)<=unit.range);
+    
+    if(attackableNow.length>0){
+      // Attack weakest
+      attackableNow.sort((a,b)=>a.hp-b.hp);
+      actionQueue.push({type:'attack',unit,target:attackableNow[0]});
+      
+      // Then move away if possible (hit and run for scout)
+      if(unit.type==='scout'){
+        actionQueue.push({type:'moveAway',unit,from:attackableNow[0]});
+      }
+    } else {
+      // Move toward nearest visible target or advance
+      if(visibleTargets.length>0){
+        visibleTargets.sort((a,b)=>dist(unit.x,unit.y,a.x,a.y)-dist(unit.x,unit.y,b.x,b.y));
+        actionQueue.push({type:'moveToward',unit,target:visibleTargets[0]});
+        // Check if can attack after move
+        actionQueue.push({type:'attackAfterMove',unit});
+      } else {
+        // Advance toward bottom
+        actionQueue.push({type:'advance',unit});
+      }
+    }
+  });
+  
+  // Execute actions with delay
+  let delay=0;
+  const step=400;
+  
+  actionQueue.forEach(action=>{
+    setTimeout(()=>executeAIAction(action),delay);
+    delay+=step;
+  });
+  
+  setTimeout(()=>{
+    if(aliveUnits('player').length===0){
+      showResult(false);
+      return;
+    }
+    state.turn='player';
+    resetTurnState('player');
+    document.getElementById('info-bar').textContent='あなたのターン';
+    render();
+    updatePanel();
+  },delay+200);
+}
+
+function executeAIAction(action){
+  const {unit} = action;
+  if(unit.hp<=0) return;
+  
+  if(action.type==='attack'){
+    const t=action.target;
+    if(t.hp<=0)return;
+    t.hp-=unit.atk;
+    unit.attacked=true;
+    playSound('hit');
+    const cell=getCell(t.x,t.y);
+    const popup=document.createElement('div');popup.className='damage-popup';popup.textContent='-'+unit.atk;
+    cell.appendChild(popup);cell.classList.add('shake');
+    setTimeout(()=>{popup.remove();cell.classList.remove('shake')},800);
+    if(t.hp<=0){t.hp=0;playSound('destroy')}
+    render();
+  }
+  else if(action.type==='moveToward'){
+    if(unit.moved)return;
+    const t=action.target;
+    moveAIToward(unit,t.x,t.y);
+  }
+  else if(action.type==='attackAfterMove'){
+    if(unit.attacked)return;
+    const aiAlive=aliveUnits('enemy');
+    const visTargets=aliveUnits('player').filter(p=>aiAlive.some(u=>cdist(u.x,u.y,p.x,p.y)<=u.sight));
+    const inRange=visTargets.filter(p=>cdist(unit.x,unit.y,p.x,p.y)<=unit.range);
+    if(inRange.length>0){
+      inRange.sort((a,b)=>a.hp-b.hp);
+      const t=inRange[0];
+      t.hp-=unit.atk;
+      unit.attacked=true;
+      playSound('hit');
+      const cell=getCell(t.x,t.y);
+      const popup=document.createElement('div');popup.className='damage-popup';popup.textContent='-'+unit.atk;
+      cell.appendChild(popup);cell.classList.add('shake');
+      setTimeout(()=>{popup.remove();cell.classList.remove('shake')},800);
+      if(t.hp<=0){t.hp=0;playSound('destroy')}
+      render();
+    }
+  }
+  else if(action.type==='advance'){
+    if(unit.moved)return;
+    // Move toward center-bottom
+    moveAIToward(unit,unit.x,7);
+  }
+  else if(action.type==='moveAway'){
+    if(unit.moved)return;
+    const from=action.from;
+    const reachable=getAIReachable(unit);
+    if(reachable.length===0)return;
+    reachable.sort((a,b)=>dist(b.x,b.y,from.x,from.y)-dist(a.x,a.y,from.x,from.y));
+    unit.x=reachable[0].x;unit.y=reachable[0].y;unit.moved=true;
+    playSound('move');render();
+  }
+}
+
+function getAIReachable(unit){
+  const visited=new Map();
+  const queue=[{x:unit.x,y:unit.y,cost:0}];
+  visited.set(unit.y*8+unit.x,0);
+  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  while(queue.length){
+    const {x,y,cost}=queue.shift();
+    if(cost>=unit.moveRange)continue;
+    for(const[dx,dy]of dirs){
+      const nx=x+dx,ny=y+dy;
+      if(nx<0||nx>7||ny<0||ny>7)continue;
+      if(unitAt(nx,ny))continue;
+      const key=ny*8+nx;
+      if(!visited.has(key)||visited.get(key)>cost+1){
+        visited.set(key,cost+1);
+        queue.push({x:nx,y:ny,cost:cost+1});
+      }
+    }
+  }
+  visited.delete(unit.y*8+unit.x);
+  return[...visited.keys()].map(k=>({x:k%8,y:Math.floor(k/8)}));
+}
+
+function moveAIToward(unit,tx,ty){
+  const reachable=getAIReachable(unit);
+  if(reachable.length===0)return;
+  reachable.sort((a,b)=>dist(a.x,a.y,tx,ty)-dist(b.x,b.y,tx,ty));
+  unit.x=reachable[0].x;unit.y=reachable[0].y;unit.moved=true;
+  playSound('move');render();
+}
+
+function showResult(win){
+  playSound(win?'win':'lose');
+  const overlay=document.getElementById('result-overlay');
+  overlay.style.display='flex';
+  const text=document.getElementById('result-text');
+  text.className=win?'win':'lose';
+  text.textContent=win?'VICTORY':'DEFEAT';
+}
+</script>
+</body>
+</html>
