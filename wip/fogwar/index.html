@@ -2,709 +2,735 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FogWar</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=yes">
+<title>FogWar — 夜戦・不完全情報海戦</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
-body{background:#0a0a1a;color:#e0e0e0;font-family:'Segoe UI',sans-serif;overflow-x:hidden;min-height:100vh;display:flex;flex-direction:column;align-items:center}
-#title-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;width:100%;gap:40px}
-#title-screen h1{font-size:3.5rem;letter-spacing:0.3em;color:#7faaff;text-shadow:0 0 30px rgba(127,170,255,0.5),0 0 60px rgba(127,170,255,0.2);font-weight:300}
-#title-screen .subtitle{font-size:0.9rem;color:#667;letter-spacing:0.2em}
-#start-btn{padding:14px 48px;font-size:1.1rem;background:transparent;border:1px solid #7faaff;color:#7faaff;border-radius:4px;cursor:pointer;letter-spacing:0.2em;transition:all 0.3s}
-#start-btn:hover,#start-btn:active{background:rgba(127,170,255,0.15);box-shadow:0 0 20px rgba(127,170,255,0.3)}
-#game-screen{display:none;flex-direction:column;align-items:center;width:100%;max-width:480px;padding:8px}
-#info-bar{width:100%;text-align:center;padding:8px;font-size:0.85rem;color:#99a;letter-spacing:0.1em;min-height:36px}
-#board-container{position:relative;width:100%;aspect-ratio:1/1;max-width:400px}
-#board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:100%;height:100%;gap:1px;background:#1a1a2e}
-.cell{position:relative;background:#12122a;display:flex;align-items:center;justify-content:center;font-size:1.6rem;cursor:pointer;transition:background 0.2s;border-radius:2px}
-.cell.fog{background:#0d0d1a}
-.cell.fog::after{content:'';position:absolute;inset:0;background:rgba(10,10,26,0.7);border-radius:2px}
-.cell.visible{background:#181835}
-.cell.highlight-move{background:rgba(80,140,255,0.25);box-shadow:inset 0 0 8px rgba(80,140,255,0.3)}
-.cell.highlight-attack{background:rgba(255,80,80,0.25);box-shadow:inset 0 0 8px rgba(255,80,80,0.3)}
-.cell.highlight-place{background:rgba(80,255,140,0.2);box-shadow:inset 0 0 8px rgba(80,255,140,0.3)}
-.cell.selected{box-shadow:inset 0 0 0 2px #7faaff}
-.cell .unit{position:relative;z-index:2;text-shadow:0 0 6px rgba(255,255,255,0.3)}
-.cell .hp-bar{position:absolute;bottom:2px;left:10%;width:80%;height:3px;background:#333;border-radius:2px;z-index:3}
-.cell .hp-fill{height:100%;border-radius:2px;transition:width 0.3s}
-.cell .hp-fill.ally{background:#7faaff}
-.cell .hp-fill.enemy{background:#ff6666}
-.cell.acted .unit{opacity:0.5}
-#panel{width:100%;max-width:400px;padding:12px 8px;display:flex;flex-direction:column;gap:8px;min-height:140px}
-#unit-info{text-align:center;font-size:0.8rem;color:#99a;min-height:40px;display:flex;flex-direction:column;align-items:center;gap:2px}
-#unit-info .name{font-size:1rem;color:#ccd}
-#unit-info .stats{font-size:0.75rem;color:#778}
-#actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-#actions button{padding:8px 16px;font-size:0.85rem;background:transparent;border:1px solid #445;color:#aab;border-radius:4px;cursor:pointer;transition:all 0.2s;min-width:80px}
-#actions button:hover,#actions button:active{background:rgba(127,170,255,0.1);border-color:#7faaff;color:#7faaff}
-#actions button:disabled{opacity:0.3;cursor:default}
-#actions button.primary{border-color:#7faaff;color:#7faaff}
-#actions button.danger{border-color:#ff6666;color:#ff6666}
-#placement-panel{display:none;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:400px;padding:12px 8px}
-#placement-panel .unit-select{display:flex;gap:12px;justify-content:center}
-.unit-btn{padding:10px 14px;font-size:1.4rem;background:#1a1a2e;border:1px solid #334;border-radius:6px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:4px}
-.unit-btn span{font-size:0.65rem;color:#778}
-.unit-btn.selected-unit{border-color:#7faaff;background:rgba(127,170,255,0.1)}
-.unit-btn.placed{opacity:0.3;cursor:default}
-#placement-info{font-size:0.75rem;color:#667;text-align:center}
-#result-overlay{display:none;position:fixed;inset:0;background:rgba(10,10,26,0.92);z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:24px}
-#result-overlay h2{font-size:2rem;letter-spacing:0.2em}
-#result-overlay .win{color:#7faaff;text-shadow:0 0 20px rgba(127,170,255,0.5)}
-#result-overlay .lose{color:#ff6666;text-shadow:0 0 20px rgba(255,100,100,0.5)}
-#result-overlay button{padding:12px 36px;font-size:1rem;background:transparent;border:1px solid #556;color:#aab;border-radius:4px;cursor:pointer}
-.damage-popup{position:absolute;z-index:10;font-size:1rem;font-weight:bold;color:#ff4444;pointer-events:none;animation:popUp 0.8s ease-out forwards}
-@keyframes popUp{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-30px)}}
-.shake{animation:shake 0.3s ease-in-out}
-@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#0a0e1a;--sea:#0a1628;--fog:#0d1a2e;--grid-line:#1a2a44;
+--player:#4fc3f7;--enemy:#ff5252;--island:#3e2723;
+--highlight:#ffeb3b;--move-hi:rgba(33,150,243,.35);
+--fire-hi:rgba(244,67,54,.35);--torp-hi:rgba(255,235,59,.5);
+--panel:#0f1729;--text:#c8d6e5;--text-dim:#5a6a7a;
+--hp-green:#4caf50;--hp-red:#f44336;
+}
+html,body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
+overflow-x:hidden;touch-action:manipulation;-webkit-tap-highlight-color:transparent;height:100%}
+#title-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;
+height:100vh;gap:20px;animation:fadeIn .8s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+#title-screen h1{font-size:3.5em;color:#4fc3f7;text-shadow:0 0 30px rgba(79,195,247,.5),0 0 60px rgba(79,195,247,.2);
+letter-spacing:.15em;font-weight:900}
+#title-screen .sub{color:var(--text-dim);font-size:1.1em;letter-spacing:.3em}
+.btn{background:linear-gradient(135deg,#1565c0,#0d47a1);color:#fff;border:none;
+padding:14px 48px;font-size:1.2em;border-radius:8px;cursor:pointer;
+letter-spacing:.1em;transition:all .2s;touch-action:manipulation}
+.btn:hover,.btn:active{background:linear-gradient(135deg,#1976d2,#1565c0);transform:scale(1.03)}
+.btn-sm{padding:8px 16px;font-size:.85em;border-radius:6px}
+.btn-danger{background:linear-gradient(135deg,#c62828,#b71c1c)}
+.btn-warn{background:linear-gradient(135deg,#e65100,#bf360c)}
+.btn-torp{background:linear-gradient(135deg,#f9a825,#f57f17)}
+.btn-wait{background:linear-gradient(135deg,#37474f,#263238)}
+.btn-end{background:linear-gradient(135deg,#2e7d32,#1b5e20)}
+.btn:disabled{opacity:.4;pointer-events:none}
+
+#game-screen{display:none;flex-direction:column;align-items:center;min-height:100vh;padding:4px}
+#turn-info{font-size:1em;color:var(--highlight);padding:6px;text-align:center;min-height:28px}
+#grid-wrap{position:relative;overflow:auto;-webkit-overflow-scrolling:touch;max-height:70vh}
+#grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1px;background:var(--grid-line);
+border:2px solid var(--grid-line);touch-action:manipulation}
+.cell{position:relative;background:var(--sea);display:flex;align-items:center;justify-content:center;
+font-size:clamp(12px,2.8vw,22px);cursor:pointer;aspect-ratio:1;user-select:none;transition:background .15s}
+.cell.island{background:var(--island);cursor:default}
+.cell.fog{background:var(--fog)}
+.cell.move-hi{background:var(--move-hi)}
+.cell.fire-hi{background:var(--fire-hi)}
+.cell.torp-hi{background:var(--torp-hi)}
+.cell.selected{box-shadow:inset 0 0 0 2px var(--highlight)}
+.cell .unit{position:relative;z-index:2;line-height:1}
+.cell .hp-bar{position:absolute;bottom:1px;left:10%;width:80%;height:3px;background:#333;border-radius:2px;z-index:3}
+.cell .hp-fill{height:100%;border-radius:2px;transition:width .3s}
+.cell .torp-count{position:absolute;top:0;right:1px;font-size:.55em;color:var(--highlight);z-index:3}
+.cell .torpedo-marker{font-size:.7em;z-index:2}
+.cell .dir-arrow{position:absolute;font-size:1.4em;color:var(--highlight);z-index:4;opacity:.85;
+text-shadow:0 0 6px rgba(255,235,59,.6)}
+
+#panel{background:var(--panel);width:100%;max-width:600px;padding:8px;border-radius:8px 8px 0 0;
+margin-top:4px;display:flex;flex-direction:column;gap:6px}
+#ship-info{font-size:.85em;min-height:40px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#ship-info .si-name{font-weight:bold;font-size:1.1em}
+#ship-info .si-stat{color:var(--text-dim);font-size:.8em}
+#actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+#log{font-size:.75em;color:var(--text-dim);max-height:54px;overflow-y:auto;line-height:1.4}
+#log div{padding:1px 0}
+
+#placement-info{background:var(--panel);padding:10px;border-radius:8px;max-width:600px;width:100%;
+margin-top:6px;font-size:.8em;line-height:1.6}
+#placement-info h3{color:var(--player);margin-bottom:6px}
+.unit-desc{display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;border-radius:4px;
+padding-left:6px;transition:background .15s}
+.unit-desc:hover,.unit-desc.active{background:rgba(79,195,247,.15)}
+.unit-desc .emoji{font-size:1.3em}
+
+#result-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);
+z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:20px}
+#result-overlay h2{font-size:2.5em;text-shadow:0 0 20px currentColor}
+#result-overlay .win{color:#4fc3f7}
+#result-overlay .lose{color:#ff5252}
 </style>
 </head>
 <body>
 
 <div id="title-screen">
-  <h1>FogWar</h1>
-  <div class="subtitle">不完全情報戦略ゲーム</div>
-  <button id="start-btn" onclick="startGame()">開 始</button>
+<h1>FogWar</h1>
+<div class="sub">夜戦 — 不完全情報海戦</div>
+<div style="margin-top:10px;color:var(--text-dim);font-size:.8em;max-width:320px;text-align:center;line-height:1.5">
+ソロモン海域、深夜。レーダーに映るのは断片的な影のみ——<br>魚雷の軌道を読み、闇の中で敵を討て。
+</div>
+<button class="btn" onclick="startGame()">出 撃</button>
 </div>
 
 <div id="game-screen">
-  <div id="info-bar">配置フェーズ</div>
-  <div id="board-container">
-    <div id="board"></div>
-  </div>
-  <div id="placement-panel">
-    <div id="placement-info">ユニットを選んで、下2行に配置してください</div>
-    <div class="unit-select" id="unit-buttons"></div>
-    <button id="placement-done-btn" style="padding:8px 24px;font-size:0.85rem;background:transparent;border:1px solid #445;color:#aab;border-radius:4px;cursor:pointer;margin-top:4px" disabled onclick="finishPlacement()">配置完了</button>
-  </div>
-  <div id="panel" style="display:none">
-    <div id="unit-info"></div>
-    <div id="actions"></div>
-  </div>
+<div id="turn-info"></div>
+<div id="grid-wrap"><div id="grid"></div></div>
+<div id="placement-info"></div>
+<div id="panel" style="display:none">
+<div id="ship-info"></div>
+<div id="actions"></div>
+<div id="log"></div>
+</div>
 </div>
 
 <div id="result-overlay">
-  <h2 id="result-text"></h2>
-  <button onclick="restartGame()">もう一度</button>
+<h2 id="result-text"></h2>
+<button class="btn" onclick="location.reload()">もう一度</button>
 </div>
 
 <script>
-// === Audio ===
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx;
-function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
-function playSound(type){
-  ensureAudio();
-  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-  o.connect(g);g.connect(audioCtx.destination);
-  const t=audioCtx.currentTime;
-  if(type==='move'){o.frequency.setValueAtTime(400,t);o.frequency.exponentialRampToValueAtTime(600,t+0.1);g.gain.setValueAtTime(0.15,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.15);o.start(t);o.stop(t+0.15)}
-  else if(type==='attack'){o.type='sawtooth';o.frequency.setValueAtTime(200,t);o.frequency.exponentialRampToValueAtTime(80,t+0.2);g.gain.setValueAtTime(0.2,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.25);o.start(t);o.stop(t+0.25)}
-  else if(type==='hit'){o.type='square';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(50,t+0.15);g.gain.setValueAtTime(0.15,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.2);o.start(t);o.stop(t+0.2)}
-  else if(type==='destroy'){o.type='sawtooth';o.frequency.setValueAtTime(300,t);o.frequency.exponentialRampToValueAtTime(30,t+0.5);g.gain.setValueAtTime(0.25,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.5);o.start(t);o.stop(t+0.5)}
-  else if(type==='place'){o.frequency.setValueAtTime(500,t);o.frequency.exponentialRampToValueAtTime(700,t+0.08);g.gain.setValueAtTime(0.1,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.1);o.start(t);o.stop(t+0.1)}
-  else if(type==='win'){o.type='sine';o.frequency.setValueAtTime(523,t);g.gain.setValueAtTime(0.2,t);o.frequency.setValueAtTime(659,t+0.15);o.frequency.setValueAtTime(784,t+0.3);g.gain.exponentialRampToValueAtTime(0.01,t+0.6);o.start(t);o.stop(t+0.6)}
-  else if(type==='lose'){o.type='sine';o.frequency.setValueAtTime(400,t);o.frequency.exponentialRampToValueAtTime(200,t+0.5);g.gain.setValueAtTime(0.2,t);g.gain.exponentialRampToValueAtTime(0.01,t+0.6);o.start(t);o.stop(t+0.6)}
-}
-
-// === Game State ===
-const UNIT_DEFS = [
-  {type:'tank',emoji:'🛡️',name:'タンク',hp:3,atk:1,move:1,sight:2,range:1},
-  {type:'attacker',emoji:'⚔️',name:'アタッカー',hp:2,atk:2,move:2,sight:1,range:2},
-  {type:'scout',emoji:'🔭',name:'スカウト',hp:1,atk:1,move:2,sight:3,range:1}
+"use strict";
+// ===== CONSTANTS =====
+const G=12,DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+const DIR_NAMES=['↖','↑','↗','←','→','↙','↓','↘'];
+const DIR_ARROWS=['↖','↑','↗','←','→','↙','↓','↘'];
+const SHIP_TYPES=[
+{name:'戦艦',emoji:'⚓',hp:5,atk:3,atkRange:3,move:1,radar:3,torpMax:0},
+{name:'巡洋艦',emoji:'🚢',hp:3,atk:2,atkRange:3,move:2,radar:3,torpMax:2},
+{name:'駆逐艦',emoji:'🔱',hp:2,atk:1,atkRange:2,move:3,radar:2,torpMax:4},
+{name:'偵察艦',emoji:'🔭',hp:1,atk:0,atkRange:0,move:3,radar:5,torpMax:0}
 ];
 
-let state = null;
-
-function createUnit(def, owner, id){
-  return {id, type:def.type, emoji:def.emoji, name:def.name, hp:def.hp, maxHp:def.hp, atk:def.atk, moveRange:def.move, sight:def.sight, range:def.range, owner, x:-1, y:-1, moved:false, attacked:false};
+// ===== AUDIO =====
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function playSound(type){
+try{
+const now=AC.currentTime;
+if(type==='fire'){
+const n=AC.createBufferSource(),b=AC.createBuffer(1,AC.sampleRate*.3,AC.sampleRate),d=b.getChannelData(0);
+for(let i=0;i<d.length;i++){const t=i/AC.sampleRate;d[i]=(Math.random()*2-1)*Math.exp(-t*12)*.6}
+n.buffer=b;const g=AC.createGain();g.gain.setValueAtTime(.5,now);g.gain.exponentialDecayTo&&0;
+n.connect(g);g.connect(AC.destination);n.start(now);
+}else if(type==='torpedo'){
+const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(200,now);
+o.frequency.exponentialRampToValueAtTime(80,now+.4);g.gain.setValueAtTime(.3,now);
+g.gain.exponentialRampToValueAtTime(.01,now+.4);o.connect(g);g.connect(AC.destination);
+o.start(now);o.stop(now+.4);
+}else if(type==='explosion'){
+const n=AC.createBufferSource(),b=AC.createBuffer(1,AC.sampleRate*.5,AC.sampleRate),d=b.getChannelData(0);
+for(let i=0;i<d.length;i++){const t=i/AC.sampleRate;d[i]=(Math.random()*2-1)*Math.exp(-t*6)*.8}
+n.buffer=b;const g=AC.createGain();g.gain.setValueAtTime(.7,now);
+n.connect(g);g.connect(AC.destination);n.start(now);
+}else if(type==='sink'){
+const o=AC.createOscillator(),g=AC.createGain();o.type='sawtooth';
+o.frequency.setValueAtTime(300,now);o.frequency.exponentialRampToValueAtTime(40,now+1);
+g.gain.setValueAtTime(.4,now);g.gain.exponentialRampToValueAtTime(.01,now+1);
+o.connect(g);g.connect(AC.destination);o.start(now);o.stop(now+1);
+}
+}catch(e){}
 }
 
-function restartGame(){
-  document.getElementById('result-overlay').style.display='none';
-  document.getElementById('game-screen').style.display='none';
-  document.getElementById('panel').style.display='none';
-  document.getElementById('placement-panel').style.display='none';
-  document.getElementById('title-screen').style.display='flex';
-}
-function startGame(){
-  ensureAudio();
-  document.getElementById('title-screen').style.display='none';
-  const gs = document.getElementById('game-screen');
-  gs.style.display='flex';
-  
-  state = {
-    phase:'placement',
-    turn:'player',
-    playerUnits:[null,null,null],
-    enemyUnits:[],
-    selectedUnit:null,
-    mode:null, // 'move','attack'
-    placementSelected:null,
-    placedCount:0
-  };
+// ===== GAME STATE =====
+let board=[]; // 0=sea, 1=island
+let playerShips=[],aiShips=[],torpedoes=[];
+let phase='title'; // title,placement,player,ai,gameover
+let selectedShip=null,actionMode=null; // move,fire,torpedo
+let placementIndex=0;
+let torpFiringCount=0; // for destroyer double-fire
+let turnNumber=0;
+let logLines=[];
 
-  // Create AI units (placed on top 2 rows)
-  const aiPositions = [[1,0],[4,1],[6,0]];
-  UNIT_DEFS.forEach((def,i)=>{
-    const u = createUnit(def,'enemy','e'+i);
-    u.x = aiPositions[i][0];
-    u.y = aiPositions[i][1];
-    state.enemyUnits.push(u);
-  });
-
-  buildBoard();
-  showPlacementUI();
-  render();
+function mkShip(type,r,c,owner){
+const t=SHIP_TYPES[type];
+return{type,name:t.name,emoji:t.emoji,hp:t.hp,maxHp:t.hp,atk:t.atk,atkRange:t.atkRange,
+move:t.move,radar:t.radar,torpMax:t.torpMax,torpLeft:t.torpMax,
+r,c,owner,moved:false,attacked:false,alive:true};
 }
 
-function buildBoard(){
-  const board = document.getElementById('board');
-  board.innerHTML='';
-  for(let y=0;y<8;y++){
-    for(let x=0;x<8;x++){
-      const cell = document.createElement('div');
-      cell.className='cell';
-      cell.dataset.x=x;
-      cell.dataset.y=y;
-      cell.addEventListener('click',()=>onCellClick(x,y));
-      board.appendChild(cell);
-    }
-  }
+// ===== BOARD GENERATION =====
+function genBoard(){
+board=Array.from({length:G},()=>Array(G).fill(0));
+// Place 3-5 islands (clusters of 2-3 cells)
+const nIslands=3+Math.floor(Math.random()*3);
+for(let i=0;i<nIslands;i++){
+const cr=2+Math.floor(Math.random()*(G-4));
+const cc=2+Math.floor(Math.random()*(G-4));
+board[cr][cc]=1;
+// add 1-2 adjacent
+const adj=[[0,1],[1,0],[0,-1],[-1,0]];
+for(let j=0;j<1+Math.floor(Math.random()*2);j++){
+const d=adj[Math.floor(Math.random()*adj.length)];
+const nr=cr+d[0],nc=cc+d[1];
+if(nr>=1&&nr<G-1&&nc>=0&&nc<G) board[nr][nc]=1;
+}
+}
+// Clear placement rows
+for(let r=0;r<3;r++) for(let c=0;c<G;c++) board[r][c]=0;
+for(let r=G-3;r<G;r++) for(let c=0;c<G;c++) board[r][c]=0;
 }
 
-function getCell(x,y){
-  return document.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+// ===== LOS CHECK =====
+function hasLOS(r1,c1,r2,c2){
+// Bresenham-style line; if any intermediate cell is island, blocked
+const dr=r2-r1,dc=c2-c1;
+const steps=Math.max(Math.abs(dr),Math.abs(dc));
+if(steps===0) return true;
+for(let i=1;i<steps;i++){
+const r=Math.round(r1+dr*i/steps);
+const c=Math.round(c1+dc*i/steps);
+if(board[r]&&board[r][c]===1) return false;
+}
+return true;
 }
 
-function allUnits(){return [...state.playerUnits.filter(u=>u),...state.enemyUnits.filter(u=>u)]}
-function aliveUnits(owner){return (owner==='player'?state.playerUnits:state.enemyUnits).filter(u=>u&&u.hp>0)}
-function unitAt(x,y){return allUnits().find(u=>u.hp>0&&u.x===x&&u.y===y)}
-
-// Manhattan distance
-function dist(x1,y1,x2,y2){return Math.abs(x1-x2)+Math.abs(y1-y2)}
-
-// Chebyshev distance (for sight - feels more natural on grid)
-function cdist(x1,y1,x2,y2){return Math.max(Math.abs(x1-x2),Math.abs(y1-y2))}
-
-function getPlayerVisibleCells(){
-  const visible = new Set();
-  aliveUnits('player').forEach(u=>{
-    for(let y=0;y<8;y++)for(let x=0;x<8;x++){
-      if(cdist(u.x,u.y,x,y)<=u.sight) visible.add(y*8+x);
-    }
-  });
-  return visible;
+function isAdjacentToIsland(r,c){
+for(const[dr,dc] of DIRS){
+const nr=r+dr,nc=c+dc;
+if(nr>=0&&nr<G&&nc>=0&&nc<G&&board[nr][nc]===1) return true;
+}
+return false;
 }
 
-// BFS for reachable cells within move range
-function getReachable(unit){
-  const visited = new Map();
-  const queue = [{x:unit.x,y:unit.y,cost:0}];
-  visited.set(unit.y*8+unit.x, 0);
-  const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
-  while(queue.length){
-    const {x,y,cost} = queue.shift();
-    if(cost>=unit.moveRange) continue;
-    for(const [dx,dy] of dirs){
-      const nx=x+dx, ny=y+dy;
-      if(nx<0||nx>7||ny<0||ny>7) continue;
-      const key=ny*8+nx;
-      const existing = unitAt(nx,ny);
-      if(existing) continue; // blocked
-      if(!visited.has(key)||visited.get(key)>cost+1){
-        visited.set(key,cost+1);
-        queue.push({x:nx,y:ny,cost:cost+1});
-      }
-    }
-  }
-  visited.delete(unit.y*8+unit.x);
-  return [...visited.keys()].map(k=>({x:k%8,y:Math.floor(k/8)}));
+function getEffRadar(ship){
+let r=ship.radar;
+if(isAdjacentToIsland(ship.r,ship.c)) r=Math.max(0,r-1);
+return r;
 }
 
-function getAttackTargets(unit){
-  const visible = getPlayerVisibleCells();
-  const targets = [];
-  aliveUnits('enemy').forEach(e=>{
-    if(cdist(unit.x,unit.y,e.x,e.y)<=unit.range && visible.has(e.y*8+e.x)){
-      targets.push({x:e.x,y:e.y});
-    }
-  });
-  return targets;
+function chebyshev(r1,c1,r2,c2){return Math.max(Math.abs(r1-r2),Math.abs(c1-c2))}
+
+function getVisibleCells(ships){
+const vis=new Set();
+for(const s of ships){
+if(!s.alive) continue;
+const rad=getEffRadar(s);
+for(let dr=-rad;dr<=rad;dr++) for(let dc=-rad;dc<=rad;dc++){
+const nr=s.r+dr,nc=s.c+dc;
+if(nr>=0&&nr<G&&nc>=0&&nc<G&&hasLOS(s.r,s.c,nr,nc)) vis.add(nr*G+nc);
+}
+}
+return vis;
 }
 
-// === Placement ===
-function showPlacementUI(){
-  document.getElementById('panel').style.display='none';
-  const pp = document.getElementById('placement-panel');
-  pp.style.display='flex';
-  const btns = document.getElementById('unit-buttons');
-  btns.innerHTML='';
-  UNIT_DEFS.forEach((def,i)=>{
-    const b = document.createElement('div');
-    b.className='unit-btn';
-    b.dataset.idx=i;
-    b.innerHTML=`${def.emoji}<span>${def.name}</span><span style="font-size:0.55rem;color:#556">HP${def.hp} 攻${def.atk} 移${def.move} 視${def.sight}</span>`;
-    b.addEventListener('click',()=>selectPlacementUnit(i));
-    btns.appendChild(b);
-  });
+// ===== MOVEMENT =====
+function getReachable(ship){
+const visited=new Map();
+visited.set(ship.r*G+ship.c,0);
+const queue=[{r:ship.r,c:ship.c,d:0}];
+while(queue.length){
+const{r,c,d}=queue.shift();
+if(d>=ship.move) continue;
+for(const[dr,dc] of [[0,1],[0,-1],[1,0],[-1,0]]){
+const nr=r+dr,nc=c+dc,key=nr*G+nc;
+if(nr<0||nr>=G||nc<0||nc>=G) continue;
+if(board[nr][nc]===1) continue;
+if(allShipsAt(nr,nc).length>0) continue;
+if(!visited.has(key)||visited.get(key)>d+1){
+visited.set(key,d+1);
+queue.push({r:nr,c:nc,d:d+1});
+}
+}
+}
+visited.delete(ship.r*G+ship.c);
+return visited;
 }
 
-function selectPlacementUnit(idx){
-  if(state.playerUnits[idx]&&state.playerUnits[idx].x!==-1) return;
-  state.placementSelected=idx;
-  document.querySelectorAll('.unit-btn').forEach((b,i)=>{
-    b.classList.toggle('selected-unit',i===idx);
-  });
-  render();
+function allShipsAt(r,c){
+return[...playerShips,...aiShips].filter(s=>s.alive&&s.r===r&&s.c===c);
 }
 
-function finishPlacement(){
-  if(state.placedCount<3) return;
-  state.phase='battle';
-  state.turn='player';
-  document.getElementById('placement-panel').style.display='none';
-  document.getElementById('panel').style.display='flex';
-  resetTurnState('player');
-  document.getElementById('info-bar').textContent='あなたのターン';
-  render();
-  updatePanel();
+// ===== RENDER =====
+const gridEl=document.getElementById('grid');
+let cells=[];
+function buildGrid(){
+gridEl.innerHTML='';
+cells=[];
+const sz=Math.min(Math.floor((window.innerWidth-12)/G), Math.floor(window.innerHeight*.65/G), 44);
+gridEl.style.width=sz*G+G+'px';
+gridEl.style.gridTemplateColumns=`repeat(${G},${sz}px)`;
+for(let r=0;r<G;r++) for(let c=0;c<G;c++){
+const d=document.createElement('div');
+d.className='cell';
+d.dataset.r=r;d.dataset.c=c;
+d.style.width=sz+'px';d.style.height=sz+'px';
+d.addEventListener('click',()=>onCellClick(r,c));
+gridEl.appendChild(d);
+cells.push(d);
+}
 }
 
-function resetTurnState(owner){
-  aliveUnits(owner).forEach(u=>{u.moved=false;u.attacked=false});
-  state.selectedUnit=null;
-  state.mode=null;
-}
-
-// === Render ===
 function render(){
-  const visible = state.phase==='placement'?null:getPlayerVisibleCells();
-  for(let y=0;y<8;y++){
-    for(let x=0;x<8;x++){
-      const cell=getCell(x,y);
-      cell.className='cell';
-      cell.innerHTML='';
-      
-      if(state.phase==='placement'){
-        // Show placement zone
-        if(y>=6 && state.placementSelected!==null){
-          const existing=unitAt(x,y);
-          if(!existing) cell.classList.add('highlight-place');
-        }
-      } else {
-        // Fog of war
-        if(visible.has(y*8+x)){
-          cell.classList.add('visible');
-        } else {
-          cell.classList.add('fog');
-        }
-      }
-      
-      // Draw units
-      const unit = unitAt(x,y);
-      if(unit){
-        if(unit.owner==='player'){
-          const span=document.createElement('span');
-          span.className='unit';
-          span.textContent=unit.emoji;
-          cell.appendChild(span);
-          // HP bar
-          const bar=document.createElement('div');bar.className='hp-bar';
-          const fill=document.createElement('div');fill.className='hp-fill ally';
-          fill.style.width=(unit.hp/unit.maxHp*100)+'%';
-          bar.appendChild(fill);cell.appendChild(bar);
-          if(unit.moved&&unit.attacked) cell.classList.add('acted');
-        } else if(state.phase!=='placement'&&visible&&visible.has(y*8+x)){
-          const span=document.createElement('span');
-          span.className='unit';
-          span.style.filter='hue-rotate(180deg) brightness(1.2)';
-          span.textContent=unit.emoji;
-          cell.appendChild(span);
-          const bar=document.createElement('div');bar.className='hp-bar';
-          const fill=document.createElement('div');fill.className='hp-fill enemy';
-          fill.style.width=(unit.hp/unit.maxHp*100)+'%';
-          bar.appendChild(fill);cell.appendChild(bar);
-        }
-      }
-      
-      // Selected highlight
-      if(state.selectedUnit && state.selectedUnit.x===x && state.selectedUnit.y===y){
-        cell.classList.add('selected');
-      }
-    }
-  }
-  
-  // Show move/attack highlights
-  if(state.selectedUnit && state.phase==='battle' && state.turn==='player'){
-    if(state.mode==='move' && !state.selectedUnit.moved){
-      getReachable(state.selectedUnit).forEach(p=>{
-        getCell(p.x,p.y).classList.add('highlight-move');
-      });
-    }
-    if(state.mode==='attack' && !state.selectedUnit.attacked){
-      getAttackTargets(state.selectedUnit).forEach(p=>{
-        getCell(p.x,p.y).classList.add('highlight-attack');
-      });
-    }
-  }
+const playerVis=getVisibleCells(playerShips);
+for(let r=0;r<G;r++) for(let c=0;c<G;c++){
+const d=cells[r*G+c];
+d.className='cell';
+d.innerHTML='';
+if(board[r][c]===1){d.classList.add('island');d.innerHTML='🏝️';continue}
+const isVisible=playerVis.has(r*G+c);
+if(phase==='placement'&&r>=G-3&&board[r][c]!==1&&allShipsAt(r,c).length===0){
+d.classList.add('move-hi');
+}
+if(!isVisible&&phase!=='placement') d.classList.add('fog');
+// Player ships
+const ps=playerShips.find(s=>s.alive&&s.r===r&&s.c===c);
+if(ps){
+d.innerHTML=`<span class="unit">${ps.emoji}</span>`;
+addHpBar(d,ps);
+if(ps.torpMax>0) d.innerHTML+=`<span class="torp-count">T${ps.torpLeft}</span>`;
+if(selectedShip===ps) d.classList.add('selected');
+if(ps.moved&&!ps.attacked) d.style.borderBottom='2px solid #ff9800';
+}
+// Enemy ships (only if visible)
+const es=aiShips.find(s=>s.alive&&s.r===r&&s.c===c);
+if(es&&isVisible){
+d.innerHTML=`<span class="unit" style="filter:hue-rotate(180deg) brightness(1.2)">${es.emoji}</span>`;
+addHpBar(d,es);
+}
+// Torpedoes
+for(const t of torpedoes){
+if(t.r===r&&t.c===c&&!t.dead){
+if(t.owner==='player'||(t.owner==='ai'&&isVisible)){
+d.innerHTML+=`<span class="torpedo-marker" style="color:${t.owner==='player'?'#ffeb3b':'#ff5252'}">●</span>`;
+}
+}
+}
+}
+// Highlights
+if(phase==='player'&&selectedShip&&actionMode){
+applyHighlights();
+}
+renderPanel();
+renderLog();
+document.getElementById('turn-info').textContent=
+phase==='placement'?`配置フェーズ — ${SHIP_TYPES[placementIndex].emoji}${SHIP_TYPES[placementIndex].name}を配置`:
+phase==='player'?`ターン${turnNumber} — あなたの行動`:
+phase==='ai'?'敵ターン…':'';
 }
 
-function updatePanel(){
-  const info = document.getElementById('unit-info');
-  const actions = document.getElementById('actions');
-  
-  if(!state.selectedUnit || state.phase!=='battle'){
-    info.innerHTML='<span style="color:#556">ユニットをタップして選択</span>';
-    actions.innerHTML = state.phase==='battle'&&state.turn==='player'?
-      `<button class="primary" onclick="endTurn()">ターン終了</button>`:'';
-    return;
-  }
-  
-  const u = state.selectedUnit;
-  info.innerHTML=`
-    <div class="name">${u.emoji} ${u.name}</div>
-    <div class="stats">HP: ${u.hp}/${u.maxHp} | 攻撃力: ${u.atk} | 移動: ${u.moveRange} | 視界: ${u.sight} | 射程: ${u.range}</div>
-  `;
-  
-  let btns='';
-  if(!u.moved){
-    btns+=`<button ${state.mode==='move'?'class="primary"':''} onclick="setMode('move')">移動</button>`;
-  }
-  if(!u.attacked){
-    const targets=getAttackTargets(u);
-    btns+=`<button ${state.mode==='attack'?'class="danger"':''} ${targets.length===0?'disabled':''} onclick="setMode('attack')">攻撃${targets.length?'('+targets.length+')':''}</button>`;
-  }
-  btns+=`<button onclick="skipUnit()">待機</button>`;
-  btns+=`<button class="primary" onclick="endTurn()">ターン終了</button>`;
-  actions.innerHTML=btns;
+function addHpBar(d,ship){
+const bar=document.createElement('div');bar.className='hp-bar';
+const fill=document.createElement('div');fill.className='hp-fill';
+const pct=ship.hp/ship.maxHp*100;
+fill.style.width=pct+'%';
+fill.style.background=pct>50?'var(--hp-green)':pct>25?'#ff9800':'var(--hp-red)';
+bar.appendChild(fill);d.appendChild(bar);
 }
 
-function setMode(mode){
-  state.mode=mode;
-  render();
-  updatePanel();
+function applyHighlights(){
+if(!selectedShip||!selectedShip.alive) return;
+const s=selectedShip;
+if(actionMode==='move'&&!s.moved){
+const reach=getReachable(s);
+for(const[key] of reach){
+const r=Math.floor(key/G),c=key%G;
+cells[r*G+c].classList.add('move-hi');
+}
+}else if(actionMode==='fire'&&!s.attacked&&s.atk>0){
+const vis=getVisibleCells(playerShips);
+for(const es of aiShips){
+if(!es.alive) continue;
+const dist=chebyshev(s.r,s.c,es.r,es.c);
+if(dist<=s.atkRange&&vis.has(es.r*G+es.c)&&hasLOS(s.r,s.c,es.r,es.c)){
+cells[es.r*G+es.c].classList.add('fire-hi');
+}
+}
+}else if(actionMode==='torpedo'&&!s.attacked&&s.torpLeft>0){
+for(let i=0;i<8;i++){
+const dr=DIRS[i][0],dc=DIRS[i][1];
+const nr=s.r+dr,nc=s.c+dc;
+if(nr>=0&&nr<G&&nc>=0&&nc<G&&board[nr][nc]!==1){
+cells[nr*G+nc].classList.add('torp-hi');
+const arrow=document.createElement('span');
+arrow.className='dir-arrow';arrow.textContent=DIR_ARROWS[i];
+cells[nr*G+nc].appendChild(arrow);
+}
+}
+}
 }
 
-function skipUnit(){
-  if(!state.selectedUnit)return;
-  state.selectedUnit.moved=true;
-  state.selectedUnit.attacked=true;
-  state.selectedUnit=null;
-  state.mode=null;
-  render();
-  updatePanel();
+// ===== PANEL =====
+function renderPanel(){
+const panel=document.getElementById('panel');
+const info=document.getElementById('ship-info');
+const acts=document.getElementById('actions');
+if(phase!=='player'){panel.style.display='none';return}
+panel.style.display='flex';
+if(!selectedShip){
+info.innerHTML='<span style="color:var(--text-dim)">艦をタップして選択</span>';
+acts.innerHTML=`<button class="btn btn-sm btn-end" onclick="endTurn()">ターン終了</button>`;
+return;
+}
+const s=selectedShip;
+const radarEff=getEffRadar(s);
+info.innerHTML=`<span class="si-name" style="color:var(--player)">${s.emoji} ${s.name}</span>
+<span class="si-stat">HP:${s.hp}/${s.maxHp} 砲:${s.atk} 範囲:${s.atkRange} 移動:${s.move} 探知:${radarEff}</span>
+${s.torpMax>0?`<span class="si-stat">魚雷:${s.torpLeft}/${s.torpMax}</span>`:''}`;
+let btns='';
+if(!s.moved) btns+=`<button class="btn btn-sm ${actionMode==='move'?'':'btn-wait'}" onclick="setAction('move')">移動</button>`;
+if(!s.attacked&&s.atk>0) btns+=`<button class="btn btn-sm btn-danger ${actionMode==='fire'?'':'btn-wait'}" onclick="setAction('fire')">砲撃</button>`;
+if(!s.attacked&&s.torpLeft>0) btns+=`<button class="btn btn-sm btn-torp ${actionMode==='torpedo'?'':'btn-wait'}" onclick="setAction('torpedo')">魚雷</button>`;
+btns+=`<button class="btn btn-sm btn-wait" onclick="skipShip()">待機</button>`;
+btns+=`<button class="btn btn-sm btn-end" onclick="endTurn()">ターン終了</button>`;
+acts.innerHTML=btns;
 }
 
-// === Cell Click ===
-function onCellClick(x,y){
-  if(state.phase==='placement') return onPlacementClick(x,y);
-  if(state.phase==='battle' && state.turn==='player') return onBattleClick(x,y);
+function renderLog(){
+const el=document.getElementById('log');
+el.innerHTML=logLines.slice(-4).map(l=>`<div>${l}</div>`).join('');
+el.scrollTop=el.scrollHeight;
+}
+function addLog(msg){logLines.push(msg)}
+
+// ===== PLACEMENT =====
+function startGame(){
+document.getElementById('title-screen').style.display='none';
+document.getElementById('game-screen').style.display='flex';
+AC.resume();
+genBoard();buildGrid();
+phase='placement';placementIndex=0;
+showPlacementInfo();
+render();
 }
 
-function onPlacementClick(x,y){
-  if(state.placementSelected===null) return;
-  if(y<6) return; // only bottom 2 rows
-  if(unitAt(x,y)) return;
-  
-  const idx = state.placementSelected;
-  const def = UNIT_DEFS[idx];
-  
-  // Check if already placed
-  if(state.playerUnits[idx] && state.playerUnits[idx].x !== -1) return;
-  
-  let u = state.playerUnits[idx];
-  if(!u){
-    u = createUnit(def,'player','p'+idx);
-    state.playerUnits[idx] = u;
-  }
-  u.x=x; u.y=y;
-  state.placedCount = state.playerUnits.filter(u=>u&&u.x!==-1).length;
-  playSound('place');
-  
-  // Mark as placed
-  document.querySelectorAll('.unit-btn').forEach((b,i)=>{
-    if(state.playerUnits[i]&&state.playerUnits[i].x!==-1) b.classList.add('placed');
-    b.classList.remove('selected-unit');
-  });
-  state.placementSelected=null;
-  
-  if(state.placedCount>=3){
-    document.getElementById('placement-done-btn').disabled=false;
-  }
-  render();
+function showPlacementInfo(){
+const pi=document.getElementById('placement-info');
+if(phase!=='placement'){pi.style.display='none';return}
+pi.style.display='block';
+let html='<h3>艦隊を配置（下3行をタップ）</h3>';
+SHIP_TYPES.forEach((t,i)=>{
+const active=i===placementIndex?'active':'';
+const placed=i<placementIndex?'✅ ':'';
+html+=`<div class="unit-desc ${active}">
+<span class="emoji">${t.emoji}</span>
+<span>${placed}${t.name} — HP${t.hp} 砲${t.atk} 範囲${t.atkRange} 移動${t.move} レーダー${t.radar} 魚雷${t.torpMax}</span>
+</div>`;
+});
+pi.innerHTML=html;
 }
 
-function onBattleClick(x,y){
-  const clickedUnit = unitAt(x,y);
-  
-  // If in move mode and clicked a valid move cell
-  if(state.mode==='move' && state.selectedUnit && !state.selectedUnit.moved){
-    const reachable = getReachable(state.selectedUnit);
-    if(reachable.some(p=>p.x===x&&p.y===y)){
-      doMove(state.selectedUnit,x,y);
-      return;
-    }
-  }
-  
-  // If in attack mode and clicked a valid target
-  if(state.mode==='attack' && state.selectedUnit && !state.selectedUnit.attacked){
-    const targets = getAttackTargets(state.selectedUnit);
-    if(targets.some(p=>p.x===x&&p.y===y)){
-      doAttack(state.selectedUnit,x,y);
-      return;
-    }
-  }
-  
-  // Select own unit
-  if(clickedUnit && clickedUnit.owner==='player'){
-    state.selectedUnit=clickedUnit;
-    state.mode=null;
-    // Auto-enter move mode if not moved
-    if(!clickedUnit.moved) state.mode='move';
-    else if(!clickedUnit.attacked) state.mode='attack';
-    render();
-    updatePanel();
-    return;
-  }
-  
-  // Deselect
-  state.selectedUnit=null;
-  state.mode=null;
-  render();
-  updatePanel();
+function placeShip(r,c){
+if(r<G-3) return;
+if(board[r][c]===1) return;
+if(allShipsAt(r,c).length>0) return;
+const ship=mkShip(placementIndex,r,c,'player');
+playerShips.push(ship);
+placementIndex++;
+if(placementIndex>=SHIP_TYPES.length){
+placeAI();
+phase='player';turnNumber=1;
+document.getElementById('placement-info').style.display='none';
+resetTurn('player');
+addLog('戦闘開始！索敵せよ。');
+}else{
+showPlacementInfo();
+}
+render();
 }
 
-function doMove(unit,x,y){
-  unit.x=x; unit.y=y;
-  unit.moved=true;
-  playSound('move');
-  
-  // Auto switch to attack mode if targets available
-  if(!unit.attacked){
-    state.mode='attack';
-    const targets=getAttackTargets(unit);
-    if(targets.length===0){
-      state.mode=null;
-    }
-  } else {
-    state.mode=null;
-  }
-  render();
-  updatePanel();
+function placeAI(){
+for(let i=0;i<SHIP_TYPES.length;i++){
+let r,c,tries=0;
+do{r=Math.floor(Math.random()*3);c=Math.floor(Math.random()*G);tries++}
+while((board[r][c]===1||allShipsAt(r,c).length>0)&&tries<100);
+aiShips.push(mkShip(i,r,c,'ai'));
+}
 }
 
-function doAttack(unit,tx,ty){
-  const target=unitAt(tx,ty);
-  if(!target)return;
-  
-  unit.attacked=true;
-  target.hp-=unit.atk;
-  playSound('attack');
-  
-  // Damage popup
-  const cell=getCell(tx,ty);
-  const popup=document.createElement('div');
-  popup.className='damage-popup';
-  popup.textContent='-'+unit.atk;
-  cell.appendChild(popup);
-  cell.classList.add('shake');
-  setTimeout(()=>{popup.remove();cell.classList.remove('shake')},800);
-  
-  if(target.hp<=0){
-    target.hp=0;
-    playSound('destroy');
-    // Check win
-    setTimeout(()=>{
-      if(aliveUnits('enemy').length===0){
-        showResult(true);
-        return;
-      }
-      render();
-      updatePanel();
-    },300);
-  }
-  
-  if(!unit.moved){
-    state.mode=null;
-  } else {
-    state.mode=null;
-    // Unit done
-  }
-  render();
-  updatePanel();
+// ===== PLAYER ACTIONS =====
+function setAction(mode){actionMode=mode;render()}
+
+function onCellClick(r,c){
+if(phase==='placement'){placeShip(r,c);return}
+if(phase!=='player') return;
+// If in action mode
+if(selectedShip&&actionMode){
+if(actionMode==='move') doMove(r,c);
+else if(actionMode==='fire') doFire(r,c);
+else if(actionMode==='torpedo') doTorpedo(r,c);
+return;
+}
+// Select own ship
+const ps=playerShips.find(s=>s.alive&&s.r===r&&s.c===c);
+if(ps){selectedShip=ps;actionMode=null;render();return}
+}
+
+function doMove(r,c){
+const s=selectedShip;if(!s||s.moved) return;
+const reach=getReachable(s);
+if(!reach.has(r*G+c)) return;
+s.r=r;s.c=c;s.moved=true;
+actionMode=null;
+render();
+}
+
+function doFire(r,c){
+const s=selectedShip;if(!s||s.attacked||s.atk===0) return;
+const es=aiShips.find(e=>e.alive&&e.r===r&&e.c===c);
+if(!es) return;
+const dist=chebyshev(s.r,s.c,es.r,es.c);
+const vis=getVisibleCells(playerShips);
+if(dist>s.atkRange||!vis.has(es.r*G+es.c)||!hasLOS(s.r,s.c,es.r,es.c)) return;
+playSound('fire');
+es.hp-=s.atk;
+addLog(`${s.emoji}${s.name}が砲撃→${es.emoji}${es.name}に${s.atk}ダメージ`);
+if(es.hp<=0){es.alive=false;playSound('sink');addLog(`${es.emoji}${es.name}撃沈！`)}
+else{playSound('explosion')}
+s.attacked=true;actionMode=null;
+checkWin();render();
+}
+
+function doTorpedo(r,c){
+const s=selectedShip;if(!s||s.attacked||s.torpLeft<=0) return;
+// Find direction
+let dirIdx=-1;
+for(let i=0;i<8;i++){
+if(s.r+DIRS[i][0]===r&&s.c+DIRS[i][1]===c) dirIdx=i;
+}
+if(dirIdx<0) return;
+if(board[r][c]===1) return;
+playSound('torpedo');
+torpedoes.push({r:s.r,c:s.c,dr:DIRS[dirIdx][0],dc:DIRS[dirIdx][1],owner:'player',dist:0,dead:false});
+s.torpLeft--;
+torpFiringCount++;
+addLog(`${s.emoji}${s.name}が魚雷発射！${DIR_NAMES[dirIdx]}方向`);
+// Destroyer can fire 2 in one turn
+if(s.type===2&&torpFiringCount<2&&s.torpLeft>0){
+render();return; // stay in torpedo mode
+}
+s.attacked=true;torpFiringCount=0;actionMode=null;
+render();
+}
+
+function skipShip(){
+if(!selectedShip) return;
+selectedShip.moved=true;selectedShip.attacked=true;
+selectedShip=null;actionMode=null;render();
 }
 
 function endTurn(){
-  if(state.turn!=='player')return;
-  state.turn='enemy';
-  state.selectedUnit=null;
-  state.mode=null;
-  document.getElementById('info-bar').textContent='相手のターン...';
-  render();
-  updatePanel();
-  setTimeout(doAITurn,600);
+selectedShip=null;actionMode=null;torpFiringCount=0;
+// Advance player torpedoes
+advanceTorpedoes();
+render();
+if(phase==='gameover') return;
+phase='ai';
+render();
+setTimeout(doAITurn,600);
 }
 
-// === AI ===
+function resetTurn(who){
+const ships=who==='player'?playerShips:aiShips;
+for(const s of ships){if(s.alive){s.moved=false;s.attacked=false}}
+torpFiringCount=0;
+}
+
+// ===== TORPEDOES =====
+function advanceTorpedoes(){
+for(const t of torpedoes){
+if(t.dead) continue;
+t.r+=t.dr;t.c+=t.dc;t.dist++;
+if(t.r<0||t.r>=G||t.c<0||t.c>=G){t.dead=true;continue}
+if(board[t.r][t.c]===1){t.dead=true;continue}
+if(t.dist>6){t.dead=true;continue}
+// Check hit
+const targets=t.owner==='player'?aiShips:playerShips;
+const hit=targets.find(s=>s.alive&&s.r===t.r&&s.c===t.c);
+if(hit){
+hit.hp-=2;t.dead=true;
+playSound('explosion');
+addLog(`魚雷命中！${hit.emoji}${hit.name}に2ダメージ`);
+if(hit.hp<=0){hit.alive=false;playSound('sink');addLog(`${hit.emoji}${hit.name}撃沈！`)}
+checkWin();
+}
+}
+torpedoes=torpedoes.filter(t=>!t.dead);
+}
+
+// ===== AI =====
 function doAITurn(){
-  resetTurnState('enemy');
-  const alive = aliveUnits('enemy');
-  
-  // AI visibility
-  function aiVisible(x,y){
-    return alive.some(u=>cdist(u.x,u.y,x,y)<=u.sight);
-  }
-  
-  let actionQueue = [];
-  
-  alive.forEach(unit=>{
-    // Find visible player units
-    const visibleTargets = aliveUnits('player').filter(p=>aiVisible(p.x,p.y));
-    
-    // Can attack from current position?
-    const attackableNow = visibleTargets.filter(p=>cdist(unit.x,unit.y,p.x,p.y)<=unit.range);
-    
-    if(attackableNow.length>0){
-      // Attack weakest
-      attackableNow.sort((a,b)=>a.hp-b.hp);
-      actionQueue.push({type:'attack',unit,target:attackableNow[0]});
-      
-      // Then move away if possible (hit and run for scout)
-      if(unit.type==='scout'){
-        actionQueue.push({type:'moveAway',unit,from:attackableNow[0]});
-      }
-    } else {
-      // Move toward nearest visible target or advance
-      if(visibleTargets.length>0){
-        visibleTargets.sort((a,b)=>dist(unit.x,unit.y,a.x,a.y)-dist(unit.x,unit.y,b.x,b.y));
-        actionQueue.push({type:'moveToward',unit,target:visibleTargets[0]});
-        // Check if can attack after move
-        actionQueue.push({type:'attackAfterMove',unit});
-      } else {
-        // Advance toward bottom
-        actionQueue.push({type:'advance',unit});
-      }
-    }
-  });
-  
-  // Execute actions with delay
-  let delay=0;
-  const step=400;
-  
-  actionQueue.forEach(action=>{
-    setTimeout(()=>executeAIAction(action),delay);
-    delay+=step;
-  });
-  
-  setTimeout(()=>{
-    if(aliveUnits('player').length===0){
-      showResult(false);
-      return;
-    }
-    state.turn='player';
-    resetTurnState('player');
-    document.getElementById('info-bar').textContent='あなたのターン';
-    render();
-    updatePanel();
-  },delay+200);
+if(phase==='gameover') return;
+phase='ai';
+resetTurn('ai');
+const aiVis=getVisibleCells(aiShips);
+const alive=aiShips.filter(s=>s.alive);
+// Sort: scout first, then destroyers, then cruisers, then battleships
+const order=[3,2,1,0];
+const sorted=[...alive].sort((a,b)=>order.indexOf(b.type)-order.indexOf(a.type));
+for(const ship of sorted){
+if(!ship.alive) continue;
+aiActShip(ship,aiVis);
+}
+// Advance AI torpedoes
+advanceTorpedoes();
+if(phase==='gameover') return;
+phase='player';turnNumber++;
+resetTurn('player');
+selectedShip=null;actionMode=null;
+render();
 }
 
-function executeAIAction(action){
-  const {unit} = action;
-  if(unit.hp<=0) return;
-  
-  if(action.type==='attack'){
-    const t=action.target;
-    if(t.hp<=0)return;
-    t.hp-=unit.atk;
-    unit.attacked=true;
-    playSound('hit');
-    const cell=getCell(t.x,t.y);
-    const popup=document.createElement('div');popup.className='damage-popup';popup.textContent='-'+unit.atk;
-    cell.appendChild(popup);cell.classList.add('shake');
-    setTimeout(()=>{popup.remove();cell.classList.remove('shake')},800);
-    if(t.hp<=0){t.hp=0;playSound('destroy')}
-    render();
-  }
-  else if(action.type==='moveToward'){
-    if(unit.moved)return;
-    const t=action.target;
-    moveAIToward(unit,t.x,t.y);
-  }
-  else if(action.type==='attackAfterMove'){
-    if(unit.attacked)return;
-    const aiAlive=aliveUnits('enemy');
-    const visTargets=aliveUnits('player').filter(p=>aiAlive.some(u=>cdist(u.x,u.y,p.x,p.y)<=u.sight));
-    const inRange=visTargets.filter(p=>cdist(unit.x,unit.y,p.x,p.y)<=unit.range);
-    if(inRange.length>0){
-      inRange.sort((a,b)=>a.hp-b.hp);
-      const t=inRange[0];
-      t.hp-=unit.atk;
-      unit.attacked=true;
-      playSound('hit');
-      const cell=getCell(t.x,t.y);
-      const popup=document.createElement('div');popup.className='damage-popup';popup.textContent='-'+unit.atk;
-      cell.appendChild(popup);cell.classList.add('shake');
-      setTimeout(()=>{popup.remove();cell.classList.remove('shake')},800);
-      if(t.hp<=0){t.hp=0;playSound('destroy')}
-      render();
-    }
-  }
-  else if(action.type==='advance'){
-    if(unit.moved)return;
-    // Move toward center-bottom
-    moveAIToward(unit,unit.x,7);
-  }
-  else if(action.type==='moveAway'){
-    if(unit.moved)return;
-    const from=action.from;
-    const reachable=getAIReachable(unit);
-    if(reachable.length===0)return;
-    reachable.sort((a,b)=>dist(b.x,b.y,from.x,from.y)-dist(a.x,a.y,from.x,from.y));
-    unit.x=reachable[0].x;unit.y=reachable[0].y;unit.moved=true;
-    playSound('move');render();
-  }
+function aiActShip(ship,aiVis){
+// Find visible player ships
+const visEnemies=playerShips.filter(e=>e.alive&&aiVis.has(e.r*G+e.c));
+// === MOVEMENT ===
+if(!ship.moved){
+if(ship.type===3){ // Scout: advance toward center/player side, avoid getting too close
+aiMoveScout(ship,visEnemies);
+}else if(ship.type===2){ // Destroyer: flank
+aiMoveDestroyer(ship,visEnemies);
+}else{ // Battleship/Cruiser: advance toward enemies
+aiMoveAdvance(ship,visEnemies);
+}
+ship.moved=true;
+}
+// === ATTACK ===
+if(!ship.attacked){
+// Try fire first if enemies in range
+if(ship.atk>0){
+for(const e of visEnemies){
+const dist=chebyshev(ship.r,ship.c,e.r,e.c);
+if(dist<=ship.atkRange&&hasLOS(ship.r,ship.c,e.r,e.c)){
+e.hp-=ship.atk;
+playSound('fire');
+addLog(`敵${ship.emoji}${ship.name}が砲撃→${e.emoji}${e.name}に${ship.atk}ダメージ`);
+if(e.hp<=0){e.alive=false;playSound('sink');addLog(`${e.emoji}${e.name}撃沈…`)}
+ship.attacked=true;
+checkWin();
+break;
+}
+}
+}
+// Try torpedo if not attacked yet
+if(!ship.attacked&&ship.torpLeft>0){
+const torpTarget=aiFindTorpTarget(ship,visEnemies);
+if(torpTarget!==null){
+const maxFire=ship.type===2?Math.min(2,ship.torpLeft):1;
+for(let f=0;f<maxFire;f++){
+if(ship.torpLeft<=0) break;
+const dir=f===0?torpTarget:aiAlternateTorpDir(ship,torpTarget);
+torpedoes.push({r:ship.r,c:ship.c,dr:DIRS[dir][0],dc:DIRS[dir][1],owner:'ai',dist:0,dead:false});
+ship.torpLeft--;
+playSound('torpedo');
+addLog(`敵${ship.emoji}${ship.name}が魚雷発射！`);
+}
+ship.attacked=true;
+}
+}
+}
 }
 
-function getAIReachable(unit){
-  const visited=new Map();
-  const queue=[{x:unit.x,y:unit.y,cost:0}];
-  visited.set(unit.y*8+unit.x,0);
-  const dirs=[[0,-1],[0,1],[-1,0],[1,0]];
-  while(queue.length){
-    const {x,y,cost}=queue.shift();
-    if(cost>=unit.moveRange)continue;
-    for(const[dx,dy]of dirs){
-      const nx=x+dx,ny=y+dy;
-      if(nx<0||nx>7||ny<0||ny>7)continue;
-      if(unitAt(nx,ny))continue;
-      const key=ny*8+nx;
-      if(!visited.has(key)||visited.get(key)>cost+1){
-        visited.set(key,cost+1);
-        queue.push({x:nx,y:ny,cost:cost+1});
-      }
-    }
-  }
-  visited.delete(unit.y*8+unit.x);
-  return[...visited.keys()].map(k=>({x:k%8,y:Math.floor(k/8)}));
+function aiMoveScout(ship,visEnemies){
+// Move toward center, use islands for cover, but don't rush too deep
+const targetR=Math.min(G-4,ship.r+2);
+const targetC=Math.floor(G/2)+(Math.random()>.5?2:-2);
+aiMoveToward(ship,targetR,Math.max(0,Math.min(G-1,Math.round(targetC))));
 }
 
-function moveAIToward(unit,tx,ty){
-  const reachable=getAIReachable(unit);
-  if(reachable.length===0)return;
-  reachable.sort((a,b)=>dist(a.x,a.y,tx,ty)-dist(b.x,b.y,tx,ty));
-  unit.x=reachable[0].x;unit.y=reachable[0].y;unit.moved=true;
-  playSound('move');render();
+function aiMoveDestroyer(ship,visEnemies){
+if(visEnemies.length>0){
+// Flank: move to side of nearest enemy
+const e=visEnemies.reduce((a,b)=>chebyshev(ship.r,ship.c,a.r,a.c)<chebyshev(ship.r,ship.c,b.r,b.c)?a:b);
+const flankC=ship.c<e.c?e.c+2:e.c-2;
+aiMoveToward(ship,e.r,Math.max(0,Math.min(G-1,flankC)));
+}else{
+const tc=Math.max(0,Math.min(G-1,ship.c+(Math.random()>.5?2:-2)));
+aiMoveToward(ship,Math.min(G-1,ship.r+2),tc);
+}
+}
+
+function aiMoveAdvance(ship,visEnemies){
+if(visEnemies.length>0){
+const e=visEnemies.reduce((a,b)=>chebyshev(ship.r,ship.c,a.r,a.c)<chebyshev(ship.r,ship.c,b.r,b.c)?a:b);
+// Battleship stays at range, cruiser closes in
+const stayDist=ship.type===0?3:2;
+const dist=chebyshev(ship.r,ship.c,e.r,e.c);
+if(dist>stayDist) aiMoveToward(ship,e.r,e.c);
+// else stay put for firing position
+}else{
+aiMoveToward(ship,Math.min(G-1,ship.r+1),ship.c);
+}
+}
+
+function aiMoveToward(ship,tr,tc){
+const reach=getReachable(ship);
+if(reach.size===0) return;
+let best=null,bestDist=Infinity;
+// Prefer cells closer to target, and prefer cells adjacent to islands for cover
+for(const[key] of reach){
+const r=Math.floor(key/G),c=key%G;
+let d=chebyshev(r,c,tr,tc);
+if(isAdjacentToIsland(r,c)) d-=0.5; // slight preference for cover
+if(d<bestDist){bestDist=d;best={r,c}}
+}
+if(best){ship.r=best.r;ship.c=best.c}
+}
+
+function aiFindTorpTarget(ship,visEnemies){
+// Find best direction to fire torpedo toward an enemy
+if(visEnemies.length===0) return null;
+let bestDir=-1,bestDist=Infinity;
+for(const e of visEnemies){
+for(let d=0;d<8;d++){
+// Check if firing in direction d would eventually hit near enemy
+let r=ship.r,c=ship.c;
+for(let step=1;step<=6;step++){
+r+=DIRS[d][0];c+=DIRS[d][1];
+if(r<0||r>=G||c<0||c>=G) break;
+if(board[r][c]===1) break;
+const dist=chebyshev(r,c,e.r,e.c);
+if(dist<=1&&step<bestDist){bestDist=step;bestDir=d}
+if(r===e.r&&c===e.c){bestDist=step;bestDir=d;break}
+}
+}
+}
+return bestDir>=0?bestDir:null;
+}
+
+function aiAlternateTorpDir(ship,mainDir){
+// For fan fire: pick adjacent direction
+const alt=[mainDir-1,mainDir+1].filter(d=>d>=0&&d<8);
+return alt.length>0?alt[Math.floor(Math.random()*alt.length)]:mainDir;
+}
+
+// ===== WIN CHECK =====
+function checkWin(){
+if(aiShips.every(s=>!s.alive)){
+phase='gameover';
+showResult(true);
+}else if(playerShips.every(s=>!s.alive)){
+phase='gameover';
+showResult(false);
+}
 }
 
 function showResult(win){
-  playSound(win?'win':'lose');
-  const overlay=document.getElementById('result-overlay');
-  overlay.style.display='flex';
-  const text=document.getElementById('result-text');
-  text.className=win?'win':'lose';
-  text.textContent=win?'VICTORY':'DEFEAT';
+const ov=document.getElementById('result-overlay');
+ov.style.display='flex';
+const t=document.getElementById('result-text');
+t.className=win?'win':'lose';
+t.textContent=win?'勝利！敵艦隊を殲滅！':'敗北…我が艦隊は壊滅した…';
 }
+
+// ===== INIT =====
+window.addEventListener('resize',()=>{if(phase!=='title'){buildGrid();render()}});
 </script>
 </body>
 </html>
