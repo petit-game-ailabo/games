@@ -40,6 +40,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 #placement-panel button{background:#0a1a2a;border:1px solid #1a4a3a;color:#8fc;padding:8px 16px;font-size:13px;font-family:inherit;cursor:pointer;border-radius:3px;margin:2px}
 #placement-panel button:hover{background:#1a3a2a}
 #placement-panel button.active{background:#1a4a3a;border-color:#00ff88}
+#placement-dir-grid{display:inline-grid;grid-template-columns:repeat(3,40px);gap:3px;vertical-align:middle;margin:0 8px}
+#placement-dir-grid button{padding:6px;font-size:16px;background:#0a1a2a;border:1px solid #1a4a3a;color:#8fc;cursor:pointer;border-radius:3px;line-height:1}
+#placement-dir-grid button:hover{background:#1a3a2a}
+#placement-dir-grid button.active{background:#1a4a3a;border-color:#00ff88;color:#00ff88}
+#placement-dir-grid button.blank{visibility:hidden}
+.ship-preview{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(10px,2.5vw,18px);z-index:4;pointer-events:none;opacity:.5}
+.cell.placement-hover{background:#00ff8844;border-color:#00ff88}
+.cell.placement-invalid{background:#ff444422;border-color:#ff4444}
 .blip{position:absolute;width:60%;height:60%;border-radius:50%;background:#00ff88;box-shadow:0 0 6px #00ff88;z-index:5;pointer-events:none;top:20%;left:20%}
 .blip.ghost{background:#00ff8844;box-shadow:0 0 4px #00ff8822}
 .ship-marker{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(10px,2.5vw,18px);z-index:4;pointer-events:none}
@@ -76,11 +84,19 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 </div>
 <div id="placement-panel">
 <div class="info" id="placement-info">戦艦を配置してください</div>
-<div>
-<span>向き: </span>
-<button onclick="rotatePlacement(-1)">↶</button>
-<span id="placement-dir-label">N</span>
-<button onclick="rotatePlacement(1)">↷</button>
+<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap">
+<span>向き:</span>
+<div id="placement-dir-grid">
+<button onclick="setPlacementDir(7)">↖</button>
+<button onclick="setPlacementDir(0)">↑</button>
+<button onclick="setPlacementDir(1)">↗</button>
+<button onclick="setPlacementDir(6)">←</button>
+<button class="blank"></button>
+<button onclick="setPlacementDir(2)">→</button>
+<button onclick="setPlacementDir(5)">↙</button>
+<button onclick="setPlacementDir(4)">↓</button>
+<button onclick="setPlacementDir(3)">↘</button>
+</div>
 <button onclick="confirmPlacement()" id="confirm-place-btn" disabled>配置確定</button>
 </div>
 </div>
@@ -261,6 +277,8 @@ function buildBoard(){
       cell.className='cell'+(isIsl(r,c)?' island':'');
       cell.dataset.r=r;cell.dataset.c=c;
       cell.addEventListener('click',()=>onCellClick(r,c));
+      cell.addEventListener('pointerenter',()=>onCellHover(r,c));
+      cell.addEventListener('pointerleave',()=>onCellHoverOut());
       board.appendChild(cell);
     }
   }
@@ -300,17 +318,48 @@ function startGame(){
 // ============================================================
 // PLACEMENT
 // ============================================================
+let placementHover=[]; // cells currently being hovered for preview
+let placementHoverValid=false;
+
 function updatePlacementUI(){
   const d=SHIP_DEFS[placementIdx];
   document.getElementById('placement-info').textContent=`${d.emoji}${d.name}を配置（${d.size}マス）— 下4行にタップ`;
-  document.getElementById('placement-dir-label').textContent=DIRS[placementDir];
   document.getElementById('confirm-place-btn').disabled=placementCells.length===0;
+  // Highlight active direction button
+  const btns=document.querySelectorAll('#placement-dir-grid button:not(.blank)');
+  const dirOrder=[7,0,1,6,-1,2,5,4,3];
+  btns.forEach((b,i)=>{
+    const d=dirOrder[i];
+    b.classList.toggle('active',d===placementDir);
+  });
+}
+
+function setPlacementDir(dir){
+  placementDir=dir;
+  placementCells=[];
+  playSound('click');
+  updatePlacementUI();render();
 }
 
 function rotatePlacement(delta){
   placementDir=((placementDir+delta)%8+8)%8;
   placementCells=[];
   updatePlacementUI();render();
+}
+
+function calcPlacementPreview(r,c){
+  if(state!=='placement')return{cells:[],valid:false};
+  if(r<12)return{cells:[],valid:false};
+  const d=SHIP_DEFS[placementIdx];
+  const cells=[{r,c}];
+  const bd=(placementDir+4)%8;
+  for(let i=1;i<d.size;i++) cells.push({r:r+DY[bd]*i,c:c+DX[bd]*i});
+  const occ=occupiedSet(playerShips,-1);
+  let valid=true;
+  for(const p of cells){
+    if(!inBounds(p.r,p.c)||p.r<12||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c))){valid=false;break}
+  }
+  return{cells,valid};
 }
 
 function tryPlace(r,c){
@@ -598,6 +647,40 @@ function addLog(msg){
 // ============================================================
 // CELL CLICK
 // ============================================================
+function onCellHover(r,c){
+  if(state!=='placement'||placementCells.length>0)return;
+  const preview=calcPlacementPreview(r,c);
+  placementHover=preview.cells;
+  placementHoverValid=preview.valid;
+  renderPlacementPreview();
+}
+function onCellHoverOut(){
+  if(placementHover.length===0)return;
+  placementHover.forEach(p=>{
+    if(inBounds(p.r,p.c)){
+      const cell=getCell(p.r,p.c);
+      cell.classList.remove('placement-hover','placement-invalid');
+      cell.querySelectorAll('.ship-preview').forEach(e=>e.remove());
+    }
+  });
+  placementHover=[];
+}
+function renderPlacementPreview(){
+  placementHover.forEach((p,i)=>{
+    if(!inBounds(p.r,p.c))return;
+    const cell=getCell(p.r,p.c);
+    cell.classList.add(placementHoverValid?'placement-hover':'placement-invalid');
+    if(placementHoverValid&&i===0){
+      const d=SHIP_DEFS[placementIdx];
+      const m=document.createElement('div');
+      m.className='ship-preview';
+      m.textContent=d.emoji+DIR_ARROWS[placementDir];
+      m.style.color='#66ccff';
+      cell.appendChild(m);
+    }
+  });
+}
+
 function onCellClick(r,c){
   if(state==='placement'){tryPlace(r,c);return}
   if(state!=='play'||aiProcessing)return;
@@ -783,22 +866,49 @@ function endPlayerTurn(){
   updateUI();render();
 
   setTimeout(()=>{
-    doAITurn();
-    advanceTorpedoes(aiTorpedoes,playerShips);
-    if(checkGameOver()){aiProcessing=false;return}
+    const aiActions=doAITurn();
+    // Animate AI actions sequentially
+    animateAIActions(aiActions,()=>{
+      advanceTorpedoes(aiTorpedoes,playerShips);
+      if(checkGameOver()){aiProcessing=false;return}
 
-    // New turn
-    turn++;
-    // Reset ships for new turn (radar is always 360°)
-    playerShips.forEach(sh=>{if(sh.alive)resetShipTurn(sh)});
-    aiShips.forEach(sh=>{if(sh.alive)resetShipTurn(sh)});
+      // New turn
+      turn++;
+      playerShips.forEach(sh=>{if(sh.alive)resetShipTurn(sh)});
+      aiShips.forEach(sh=>{if(sh.alive)resetShipTurn(sh)});
 
-    doRadarScan();
-    selectedIdx=-1;actionMode=null;
-    aiProcessing=false;
-    addLog(`── Turn ${turn} ──`);
-    updateUI();render();
+      doRadarScan();
+      selectedIdx=-1;actionMode=null;
+      aiProcessing=false;
+      addLog(`── Turn ${turn} ──`);
+      updateUI();render();
+    });
   },500);
+}
+
+function animateAIActions(actions,callback){
+  if(!actions||actions.length===0){callback();return}
+  let i=0;
+  function next(){
+    if(i>=actions.length){callback();return}
+    const act=actions[i];
+    addLog(act.msg);
+    if(act.type==='fire'&&act.targetCell){
+      // Flash the target cell
+      const cell=getCell(act.targetCell.r,act.targetCell.c);
+      if(cell){cell.classList.add('dmg-flash');setTimeout(()=>cell.classList.remove('dmg-flash'),400)}
+      playSound('fire');
+      setTimeout(()=>{playSound('hit');render();i++;setTimeout(next,300)},200);
+    } else if(act.type==='torpedo'){
+      playSound('torpedo');
+      render();i++;setTimeout(next,400);
+    } else if(act.type==='move'){
+      render();i++;setTimeout(next,200);
+    } else {
+      render();i++;setTimeout(next,150);
+    }
+  }
+  next();
 }
 
 function advanceTorpedoes(torps,targets){
@@ -831,7 +941,7 @@ function advanceTorpedoes(torps,targets){
 // AI TURN
 // ============================================================
 function doAITurn(){
-  addLog('敵艦隊行動中…');
+  const actions=[];
 
   aiShips.forEach((sh,idx)=>{
     if(!sh.alive)return;
@@ -857,11 +967,11 @@ function doAITurn(){
         if(!ps.alive)continue;
         if(shipCells(ps).some(p=>p.r===r&&p.c===c)){
           ps.hp-=sh.firepower;
-          addLog(`敵${sh.name}が砲撃！${sh.firepower}ダメージ`);
-          playSound('fire');
           // Reveal firer
           shipCells(sh).forEach(p=>{detectedEnemies.set(ck(p.r,p.c),turn);ghostEnemies.set(ck(p.r,p.c),turn)});
-          if(ps.hp<=0){ps.alive=false;addLog(`${ps.name}撃沈！`);playSound('sink')}
+          const sunk=ps.hp<=0;
+          if(sunk)ps.alive=false;
+          actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃！${sh.firepower}ダメージ${sunk?' → 撃沈！':''}`,targetCell:{r,c}});
           fired=true;break;
         }
       }
@@ -877,13 +987,13 @@ function doAITurn(){
       if(Math.abs(rel)<=2){
         sh.torpedoCount--;
         aiTorpedoes.push({r:sh.r+DY[bd],c:sh.c+DX[bd],dir:bd,dist:1});
-        addLog(`敵${sh.name} 魚雷発射！`);
-        playSound('torpedo');
+        actions.push({type:'torpedo',msg:`敵${sh.name} 魚雷発射→${DIRS[bd]}！`});
         fired=true;
       }
     }
 
     // Move if didn't fire (or always move destroyers forward)
+    let moved=false;
     if(!fired||isDest){
       // Turn toward target or random patrol
       if(nearR>=0){
@@ -917,7 +1027,7 @@ function doAITurn(){
         for(let i=1;i<sh.size;i++)nc2.push({r:nr+DY[bd]*i,c:nc+DX[bd]*i});
         const occ=allBlockedSet(aiShips,idx);
         if(!nc2.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c)))){
-          sh.r=nr;sh.c=nc;
+          sh.r=nr;sh.c=nc;moved=true;
         }
       }
     }
@@ -928,7 +1038,15 @@ function doAITurn(){
       if(ang<0)ang+=360;
       sh.radarDir=Math.round(ang/45)%8;
     }
+
+    // Only log movement for detected enemies (so player sees something)
+    if(moved&&detectedEnemies.size>0){
+      const isVisible=shipCells(sh).some(p=>detectedEnemies.has(ck(p.r,p.c)));
+      if(isVisible) actions.push({type:'move',msg:`敵${sh.name} 移動`});
+    }
   });
+
+  return actions;
 }
 
 // ============================================================
