@@ -246,6 +246,21 @@ function makeShip(def,r,c,dir,owner){
 
 function resetShipTurn(sh){sh.turned=false;sh.movesDone=0;sh.attacked=false;sh.done=false}
 
+// Damage-based performance degradation
+function getEffStats(sh){
+  const ratio=sh.hp/sh.maxHp;
+  let movePen=0, rangePen=0, radarPen=0, fpPen=0;
+  if(ratio<=0.25){movePen=2;rangePen=2;radarPen=2;fpPen=1}
+  else if(ratio<=0.5){movePen=1;rangePen=1;radarPen=1;fpPen=0}
+  return{
+    maxMove:Math.max(1,sh.maxMove-movePen),
+    fireRange:Math.max(1,sh.fireRange-rangePen),
+    radarRange:Math.max(2,sh.radarRange-radarPen),
+    firepower:Math.max(1,sh.firepower-fpPen),
+    maxTurnSteps:ratio<=0.25?Math.max(1,sh.maxTurnSteps-1):sh.maxTurnSteps
+  };
+}
+
 function shipCells(sh){
   if(!sh.alive)return[];
   const cells=[{r:sh.r,c:sh.c}];
@@ -475,7 +490,8 @@ function scanArc(ship,targets){
     shipCells(t).forEach(p=>{
       const dr=p.r-ship.r, dc=p.c-ship.c;
       const dist=Math.sqrt(dr*dr+dc*dc);
-      if(dist>ship.radarRange||dist<0.1)return;
+      const eff=getEffStats(ship);
+      if(dist>eff.radarRange||dist<0.1)return;
       // 360 degree scan — only check range and LOS
       if(hasLOS(ship.r,ship.c,p.r,p.c)){
         found.add(ck(p.r,p.c));
@@ -571,9 +587,10 @@ function render(){
   // Action highlights
   if(actionMode==='fire'&&selectedIdx>=0){
     const sh=playerShips[selectedIdx];
+    const effR=getEffStats(sh);
     detectedEnemies.forEach((_,key)=>{
       const[r,c]=key.split(',').map(Number);
-      if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)<=sh.fireRange)
+      if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)<=effR.fireRange)
         getCell(r,c).classList.add('attack-target');
     });
   }
@@ -627,7 +644,8 @@ function renderRadar(){
   playerShips.forEach(sh=>{
     if(!sh.alive)return;
     const cx=(sh.c+.5)*cs, cy=(sh.r+.5)*cs;
-    const range=sh.radarRange*cs;
+    const eff=getEffStats(sh);
+    const range=eff.radarRange*cs;
     // 360-degree radar circle
     ctx.save();
     ctx.globalAlpha=.06;ctx.fillStyle='#00ff88';
@@ -651,13 +669,15 @@ function updateUI(){
 
   const sh=selectedIdx>=0?playerShips[selectedIdx]:null;
   if(sh&&sh.alive){
+    const eff=getEffStats(sh);
     const tStr=sh.torpedoCount>0?` 魚雷:${sh.torpedoCount}`:'';
+    const dmgStr=sh.hp<=sh.maxHp*0.5?(sh.hp<=sh.maxHp*0.25?' ⚠大破':' ⚠中破'):'';
     const status=sh.done?'✓完了':sh.attacked?'攻撃済':sh.movesDone?'移動済':'';
     document.getElementById('ship-info').textContent=
-      `${sh.emoji}${sh.name} HP:${sh.hp}/${sh.maxHp} ${DIRS[sh.dir]}${tStr} ${status}`;
+      `${sh.emoji}${sh.name} HP:${sh.hp}/${sh.maxHp} ${DIRS[sh.dir]}${tStr}${dmgStr} ${status}`;
 
     const canTurn=!sh.done&&!sh.turned&&!sh.movesDone&&!sh.attacked;
-    const canMove=!sh.done&&!sh.attacked&&sh.movesDone<sh.maxMove;
+    const canMove=!sh.done&&!sh.attacked&&sh.movesDone<eff.maxMove;
     const canAttack=!sh.done&&!sh.attacked;
     const canRadar=!sh.done;
 
@@ -731,9 +751,10 @@ function calcHitChance(attacker,targetR,targetC){
 }
 
 function hasVisibleTarget(sh){
+  const eff=getEffStats(sh);
   for(const[key] of detectedEnemies){
     const[r,c]=key.split(',').map(Number);
-    if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)<=sh.fireRange)return true;
+    if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)<=eff.fireRange)return true;
   }
   return false;
 }
@@ -827,7 +848,8 @@ function doAction(action){
       break;
     }
     case'move':{
-      if(sh.done||sh.attacked||sh.movesDone>=sh.maxMove)return;
+      const effM=getEffStats(sh);
+      if(sh.done||sh.attacked||sh.movesDone>=effM.maxMove)return;
       const nr=sh.r+DY[sh.dir],nc=sh.c+DX[sh.dir];
       const newCells=[{r:nr,c:nc}];
       const bd=(sh.dir+4)%8;
@@ -839,7 +861,7 @@ function doAction(action){
       sh.r=nr;sh.c=nc;
       sh.movesDone++;
       sh.turned=true; // can't turn after moving
-      addLog(`${sh.name} 前進（${sh.movesDone}/${sh.maxMove}）`);
+      addLog(`${sh.name} 前進（${sh.movesDone}/${effM.maxMove}）`);
       playSound('click');
       break;
     }
@@ -885,8 +907,9 @@ function doFire(r,c){
       if(cells.some(p=>detectedEnemies.has(ck(p.r,p.c)))){target=as;break}
     }
   }
+  const effF=getEffStats(sh);
   if(!target){addLog('目標なし');updateUI();render();return}
-  if(Math.sqrt((target.r-sh.r)**2+(target.c-sh.c)**2)>sh.fireRange){addLog('射程外');updateUI();render();return}
+  if(Math.sqrt((target.r-sh.r)**2+(target.c-sh.c)**2)>effF.fireRange){addLog('射程外');updateUI();render();return}
 
   // Accuracy check
   const hitChance=calcHitChance(sh,target.r,target.c);
@@ -900,8 +923,8 @@ function doFire(r,c){
   shipCells(sh).forEach(p=>{aiDetected.set(ck(p.r,p.c),turn);aiGhosts.set(ck(p.r,p.c),turn)});
 
   if(isHit){
-    target.hp-=sh.firepower;
-    addLog(`${sh.name}→${target.name}に砲撃命中！${sh.firepower}ダメージ（命中率${Math.round(hitChance*100)}%）`);
+    target.hp-=effF.firepower;
+    addLog(`${sh.name}→${target.name}に砲撃命中！${effF.firepower}ダメージ（命中率${Math.round(hitChance*100)}%）`);
     setTimeout(()=>{
       if(inBounds(r,c)){getCell(r,c).classList.add('dmg-flash');setTimeout(()=>getCell(r,c).classList.remove('dmg-flash'),400)}
       playSound('hit');
@@ -1104,10 +1127,12 @@ function doAITurn(){
 
     let fired=false;
 
+    const aiEff=getEffStats(sh);
+
     // Try fire at detected targets
     for(const[key] of aiDetected){
       const[r,c]=key.split(',').map(Number);
-      if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)>sh.fireRange)continue;
+      if(Math.sqrt((r-sh.r)**2+(c-sh.c)**2)>aiEff.fireRange)continue;
       for(const ps of playerShips){
         if(!ps.alive)continue;
         if(shipCells(ps).some(p=>p.r===r&&p.c===c)){
@@ -1117,9 +1142,9 @@ function doAITurn(){
           const aiHitChance=calcHitChance(sh,ps.r,ps.c);
           const aiIsHit=Math.random()<aiHitChance;
           if(aiIsHit){
-            ps.hp-=sh.firepower;
+            ps.hp-=aiEff.firepower;
             const sunk=ps.hp<=0;
-            actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃命中！${sh.firepower}ダメージ${sunk?' → 撃沈！':''}`,targetCell:{r,c},sunkShip:sunk?ps:null,firer:sh});
+            actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃命中！${aiEff.firepower}ダメージ${sunk?' → 撃沈！':''}`,targetCell:{r,c},sunkShip:sunk?ps:null,firer:sh});
           } else {
             actions.push({type:'fire',msg:`敵${sh.name}が${ps.name}に砲撃…外れ！`,targetCell:{r,c},sunkShip:null,firer:sh,missed:true});
           }
@@ -1129,31 +1154,67 @@ function doAITurn(){
       if(fired)break;
     }
 
-    // Torpedo if destroyer, close, and has torpedoes
-    if(!fired&&isDest&&sh.torpedoCount>0&&nearDist<=5&&nearR>=0){
-      let ang=Math.atan2(nearC-sh.c,-(nearR-sh.r))*180/Math.PI;
-      if(ang<0)ang+=360;
-      let bd=Math.round(ang/45)%8;
-      let rel=bd-sh.dir;while(rel>4)rel-=8;while(rel<-4)rel+=8;
-      if(Math.abs(rel)<=2){
-        sh.torpedoCount--;
-        aiTorpedoes.push({r:sh.r+DY[bd],c:sh.c+DX[bd],dir:bd,dist:1});
-        actions.push({type:'torpedo',msg:`敵${sh.name} 魚雷発射→${DIRS[bd]}！`});
-        fired=true;
+    // Torpedo: predictive fire at ghost positions too (not just detected)
+    if(!fired&&sh.torpedoCount>0&&nearDist<=6&&nearR>=0){
+      // Destroyers fire freely; cruisers fire if close
+      const shouldTorpedo=isDest||(sh.torpedoCount>0&&nearDist<=4);
+      if(shouldTorpedo){
+        let ang=Math.atan2(nearC-sh.c,-(nearR-sh.r))*180/Math.PI;
+        if(ang<0)ang+=360;
+        let bd=Math.round(ang/45)%8;
+        let rel=bd-sh.dir;while(rel>4)rel-=8;while(rel<-4)rel+=8;
+        if(Math.abs(rel)<=2){
+          sh.torpedoCount--;
+          aiTorpedoes.push({r:sh.r+DY[bd],c:sh.c+DX[bd],dir:bd,dist:1});
+          actions.push({type:'torpedo',msg:`敵${sh.name} 魚雷発射→${DIRS[bd]}！`});
+          fired=true;
+        }
       }
     }
 
     // Move if didn't fire (or always move destroyers forward)
     let moved=false;
     if(!fired||isDest){
-      // Turn toward target or random patrol
+      // Determine desired direction
+      let targetDir=sh.dir;
       if(nearR>=0){
         let ang=Math.atan2(nearC-sh.c,-(nearR-sh.r))*180/Math.PI;
         if(ang<0)ang+=360;
-        let targetDir=Math.round(ang/45)%8;
+        const directDir=Math.round(ang/45)%8;
+
+        // Destroyers try to flank: offset approach angle by ±2 (90°)
+        if(isDest&&nearDist>3&&nearDist<=8){
+          const flankOffset=(idx%2===0)?2:-2;
+          targetDir=((directDir+flankOffset)%8+8)%8;
+        }
+        // Battleship/cruiser: try to stay near islands for cover
+        else if(isBB&&nearDist<=6){
+          // Check if there's an island-adjacent cell roughly toward the target
+          let bestCoverDir=directDir;
+          let bestScore=-1;
+          for(let dd=-2;dd<=2;dd++){
+            const cd=((directDir+dd)%8+8)%8;
+            const tr=sh.r+DY[cd],tc=sh.c+DX[cd];
+            if(!inBounds(tr,tc)||isIsl(tr,tc))continue;
+            // Score: adjacent islands provide cover
+            let score=0;
+            for(let nd=0;nd<8;nd++){
+              const ar=tr+DY[nd],ac=tc+DX[nd];
+              if(inBounds(ar,ac)&&isIsl(ar,ac))score+=2;
+            }
+            // Prefer directions closer to target
+            if(dd===0)score+=1;
+            if(score>bestScore){bestScore=score;bestCoverDir=cd}
+          }
+          targetDir=bestCoverDir;
+        } else {
+          targetDir=directDir;
+        }
+
+        // Turn toward target direction
         if(sh.dir!==targetDir){
           let diff=targetDir-sh.dir;while(diff>4)diff-=8;while(diff<-4)diff+=8;
-          const step=Math.sign(diff)*Math.min(Math.abs(diff),sh.maxTurnSteps);
+          const step=Math.sign(diff)*Math.min(Math.abs(diff),aiEff.maxTurnSteps);
           const nd=((sh.dir+step)%8+8)%8;
           const old=sh.dir;sh.dir=nd;
           const cells=shipCells(sh);
@@ -1169,16 +1230,19 @@ function doAITurn(){
         if(cells.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c))))sh.dir=old;
       }
 
-      // Advance (BB keeps distance)
-      const wantDist=isBB?4:0;
-      if(nearDist>wantDist||!isBB||nearR<0){
-        const nr=sh.r+DY[sh.dir],nc=sh.c+DX[sh.dir];
-        const nc2=[{r:nr,c:nc}];
-        const bd=(sh.dir+4)%8;
-        for(let i=1;i<sh.size;i++)nc2.push({r:nr+DY[bd]*i,c:nc+DX[bd]*i});
-        const occ=allBlockedSet(aiShips,idx);
-        if(!nc2.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c)))){
-          sh.r=nr;sh.c=nc;moved=true;
+      // Advance (BB keeps distance, cruiser moderate)
+      const wantDist=isBB?4:sh.size===2?2:0;
+      if(nearDist>wantDist||nearR<0||(isDest&&nearDist>2)){
+        const moveSteps=Math.min(isDest?2:1,aiEff.maxMove);
+        for(let ms=0;ms<moveSteps;ms++){
+          const nr=sh.r+DY[sh.dir],nc=sh.c+DX[sh.dir];
+          const nc2=[{r:nr,c:nc}];
+          const bd=(sh.dir+4)%8;
+          for(let i=1;i<sh.size;i++)nc2.push({r:nr+DY[bd]*i,c:nc+DX[bd]*i});
+          const occ=allBlockedSet(aiShips,idx);
+          if(!nc2.some(p=>!inBounds(p.r,p.c)||isIsl(p.r,p.c)||occ.has(ck(p.r,p.c)))){
+            sh.r=nr;sh.c=nc;moved=true;
+          } else break;
         }
       }
     }
