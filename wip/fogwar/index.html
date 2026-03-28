@@ -243,7 +243,7 @@ function showPlacementUI(){
 }
 
 function selectPlacementUnit(idx){
-  if(state.playerUnits[idx]&&state.playerUnits[idx].x>=0) return;
+  if(state.playerUnits[idx]&&state.playerUnits[idx].x!==-1) return;
   state.placementSelected=idx;
   document.querySelectorAll('.unit-btn').forEach((b,i)=>{
     b.classList.toggle('selected-unit',i===idx);
@@ -399,22 +399,27 @@ function onPlacementClick(x,y){
   if(y<6) return; // only bottom 2 rows
   if(unitAt(x,y)) return;
   
-  const def = UNIT_DEFS[state.placementSelected];
-  let u = state.playerUnits[state.placementSelected];
+  const idx = state.placementSelected;
+  const def = UNIT_DEFS[idx];
+  
+  // Check if already placed
+  if(state.playerUnits[idx] && state.playerUnits[idx].x !== -1) return;
+  
+  let u = state.playerUnits[idx];
   if(!u){
-    u = createUnit(def,'player','p'+state.placementSelected);
-    state.playerUnits[state.placementSelected]=u;
-    state.placedCount++;
-  } else if(u.x>=0){
-    return; // already placed
+    u = createUnit(def,'player','p'+idx);
+    state.playerUnits[idx] = u;
   }
   u.x=x; u.y=y;
+  state.placedCount = state.playerUnits.filter(u=>u&&u.x!==-1).length;
   playSound('place');
   
   // Mark as placed
-  document.querySelectorAll('.unit-btn')[state.placementSelected].classList.add('placed');
+  document.querySelectorAll('.unit-btn').forEach((b,i)=>{
+    if(state.playerUnits[i]&&state.playerUnits[i].x!==-1) b.classList.add('placed');
+    b.classList.remove('selected-unit');
+  });
   state.placementSelected=null;
-  document.querySelectorAll('.unit-btn').forEach(b=>b.classList.remove('selected-unit'));
   
   if(state.placedCount>=3){
     document.getElementById('placement-done-btn').disabled=false;
