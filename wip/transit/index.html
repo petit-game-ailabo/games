@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Transit Builder</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#f0ece0;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden;color:#3a3a3a;touch-action:none}
+canvas{display:block}
+#title-screen{position:fixed;inset:0;background:#f0ece0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100}
+#title-screen h1{font-size:clamp(2rem,8vw,4rem);font-weight:300;letter-spacing:.3em;color:#3a3a3a;margin-bottom:.2em}
+#title-screen p{font-size:clamp(.9rem,3vw,1.3rem);color:#8a8a7a;margin-bottom:2em;letter-spacing:.15em}
+#start-btn{padding:.8em 3em;font-size:1.1rem;background:#e85d5d;color:#fff;border:none;border-radius:2em;cursor:pointer;letter-spacing:.1em;transition:transform .2s}
+#start-btn:hover{transform:scale(1.05)}
+#hud{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(240,236,224,.92);backdrop-filter:blur(4px);z-index:10;font-size:clamp(.7rem,2.5vw,.85rem);gap:4px;flex-wrap:wrap}
+.hud-item{display:flex;align-items:center;gap:3px;white-space:nowrap}
+.hud-item span{font-weight:600}
+#speed-btns{display:flex;gap:2px}
+#speed-btns button{padding:3px 8px;border:1.5px solid #bbb;background:#fff;border-radius:4px;font-size:.75rem;cursor:pointer}
+#speed-btns button.active{background:#e85d5d;color:#fff;border-color:#e85d5d}
+#toolbar{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:center;padding:8px 10px;background:rgba(240,236,224,.92);backdrop-filter:blur(4px);z-index:10;gap:6px;flex-wrap:wrap}
+.tool-btn{padding:6px 14px;border:2px solid #ccc;background:#fff;border-radius:8px;font-size:clamp(.7rem,2.5vw,.85rem);cursor:pointer;transition:all .15s}
+.tool-btn.active{border-color:#e85d5d;background:#fde8e8}
+.tool-btn:disabled{opacity:.4;cursor:default}
+.route-color{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:4px}
+#edit-panel{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:20;display:none;min-width:220px;text-align:center}
+#edit-panel h3{margin-bottom:8px;font-size:.9rem}
+#edit-panel label{font-size:.8rem;display:block;margin:6px 0 2px}
+#edit-panel input[type=range]{width:100%}
+#edit-panel .edit-btns{display:flex;gap:8px;margin-top:10px;justify-content:center}
+#edit-panel button{padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem}
+#del-route-btn{background:#e85d5d;color:#fff}
+#close-edit-btn{background:#ddd}
+#vehicle-select{display:flex;gap:4px;margin-top:6px;justify-content:center;flex-wrap:wrap}
+#vehicle-select button{padding:3px 8px;border:1.5px solid #ccc;border-radius:6px;background:#fff;font-size:.75rem;cursor:pointer}
+#vehicle-select button.active{border-color:#e85d5d;background:#fde8e8}
+#vehicle-select button:disabled{opacity:.35}
+#game-over{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;flex-direction:column}
+#game-over .go-box{background:#fff;border-radius:16px;padding:30px 40px;text-align:center}
+#game-over h2{font-size:1.6rem;margin-bottom:8px;color:#e85d5d}
+#game-over p{margin:4px 0;font-size:.95rem}
+#game-over button{margin-top:16px;padding:10px 30px;background:#e85d5d;color:#fff;border:none;border-radius:2em;font-size:1rem;cursor:pointer}
+#notif{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;padding:8px 20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.15);z-index:30;font-size:.85rem;display:none;transition:opacity .3s}
+</style>
+</head>
+<body>
+
+<div id="title-screen">
+  <h1>Transit Builder</h1>
+  <p>街を繋げ、人を運べ</p>
+  <button id="start-btn">開 始</button>
+</div>
+
+<div id="hud" style="display:none">
+  <div class="hud-item">👥 <span id="h-pop">0</span></div>
+  <div class="hud-item">💰 <span id="h-money">500</span></div>
+  <div class="hud-item">📦 <span id="h-score">0</span></div>
+  <div id="speed-btns">
+    <button data-sp="0">⏸</button>
+    <button data-sp="1" class="active">x1</button>
+    <button data-sp="2">x2</button>
+    <button data-sp="4">x4</button>
+  </div>
+</div>
+
+<div id="toolbar" style="display:none">
+  <button class="tool-btn" id="btn-route">＋路線</button>
+  <button class="tool-btn" id="btn-edit">✏️ 編集</button>
+  <div id="vehicle-select">
+    <button data-v="bus" class="active">🚌</button>
+    <button data-v="tram" disabled>🚋</button>
+    <button data-v="train" disabled>🚂</button>
+    <button data-v="ferry">⛴️</button>
+    <button data-v="plane" disabled>✈️</button>
+  </div>
+</div>
+
+<div id="edit-panel">
+  <h3 id="edit-title">路線 1</h3>
+  <label>本数: <span id="freq-val">1</span></label>
+  <input type="range" id="freq-slider" min="1" max="5" value="1">
+  <div id="vehicle-info" style="font-size:.75rem;margin-top:4px"></div>
+  <div class="edit-btns">
+    <button id="del-route-btn">削除</button>
+    <button id="close-edit-btn">閉じる</button>
+  </div>
+</div>
+
+<div id="game-over">
+  <div class="go-box">
+    <h2>GAME OVER</h2>
+    <p id="go-reason"></p>
+    <p>運んだ人数: <span id="go-score">0</span></p>
+    <button id="retry-btn">もう一度</button>
+  </div>
+</div>
+
+<div id="notif"></div>
+
+<canvas id="c"></canvas>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+// ── Constants ──
+const BG = '#f0ece0';
+const ROUTE_COLORS = ['#e85d5d','#4a90d9','#5cbd6a','#e8943d','#9b6bc4','#e87da5'];
+const FACILITY_TYPES = {
+  residential: {shape:'circle',color:'#ffffff',stroke:'#aaa',label:'🏠',generates:true},
+  office:      {shape:'square',color:'#4a90d9',stroke:'#3570b0',label:'🏢'},
+  factory:     {shape:'triangle',color:'#e8943d',stroke:'#c07020',label:'🏭'},
+  commercial:  {shape:'diamond',color:'#5cbd6a',stroke:'#3a9a4a',label:'🛒'},
+  hospital:    {shape:'cross',color:'#e85d5d',stroke:'#c04040',label:'🏥'}
+};
+const DEST_TYPES = ['office','factory','commercial','hospital'];
+const VEHICLE_TYPES = {
+  bus:   {cap:6, speed:1.5, cost:5,  icon:'🚌', unlockPop:0},
+  tram:  {cap:12,speed:1.5, cost:8,  icon:'🚋', unlockPop:50},
+  train: {cap:30,speed:2.5, cost:15, icon:'🚂', unlockPop:100},
+  ferry: {cap:20,speed:1.2, cost:10, icon:'⛴️', unlockPop:0, water:true},
+  plane: {cap:50,speed:4,   cost:25, icon:'✈️', unlockPop:200}
+};
+const MAX_PEOPLE = 300;
+const OVERCROWD_LIMIT = 15;
+const FACILITY_RADIUS = 18;
+
+// ── State ──
+let canvas, ctx, W, H;
+let gameState = 'title'; // title, playing, over
+let speed = 1;
+let money = 500, score = 0, totalPop = 0;
+let facilities = [], routes = [], vehicles = [], people = [];
+let rivers = [];
+let simTime = 0, lastFrame = 0;
+let selectedTool = 'none'; // none, route, edit
+let selectedVehicle = 'bus';
+let routeStart = null; // facility being connected from
+let routeBuilding = []; // facilities in current route being built
+let currentRouteIdx = -1; // for building
+let editingRoute = -1;
+let hudH = 40, toolH = 55;
+let camX = 0, camY = 0, camZoom = 1;
+let dragging = false, dragStartX = 0, dragStartY = 0, camStartX = 0, camStartY = 0;
+let pinchDist = 0;
+let facilitySpawnTimer = 0;
+let costTimer = 0;
+let notifTimer = 0;
+let mapW, mapH;
+
+// ── Init ──
+function init() {
+  canvas = $('#c');
+  ctx = canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Events
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('wheel', onWheel, {passive:false});
+  canvas.addEventListener('touchstart', onTouchStart, {passive:false});
+  canvas.addEventListener('touchmove', onTouchMove, {passive:false});
+  canvas.addEventListener('touchend', onTouchEnd, {passive:false});
+
+  $('#start-btn').onclick = startGame;
+  $('#btn-route').onclick = () => setTool('route');
+  $('#btn-edit').onclick = () => setTool('edit');
+  $('#close-edit-btn').onclick = closeEditPanel;
+  $('#del-route-btn').onclick = deleteRoute;
+  $('#freq-slider').oninput = e => {
+    $('#freq-val').textContent = e.target.value;
+    if (editingRoute >= 0 && routes[editingRoute]) {
+      routes[editingRoute].freq = +e.target.value;
+      syncVehicles(editingRoute);
+    }
+  };
+  $('#retry-btn').onclick = () => location.reload();
+
+  $$('#speed-btns button').forEach(b => b.onclick = () => {
+    speed = +b.dataset.sp;
+    $$('#speed-btns button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+  });
+
+  $$('#vehicle-select button').forEach(b => b.onclick = () => {
+    if (b.disabled) return;
+    selectedVehicle = b.dataset.v;
+    $$('#vehicle-select button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+  });
+
+  requestAnimationFrame(loop);
+}
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  mapW = Math.max(W * 1.5, 900);
+  mapH = Math.max(H * 1.5, 700);
+}
+
+function startGame() {
+  $('#title-screen').style.display = 'none';
+  $('#hud').style.display = 'flex';
+  $('#toolbar').style.display = 'flex';
+  gameState = 'playing';
+  generateMap();
+}
+
+// ── Map Generation ──
+function generateMap() {
+  // Generate rivers
+  rivers = [];
+  // One horizontal-ish river
+  let ry = mapH * (0.3 + Math.random() * 0.4);
+  let pts = [];
+  for (let x = -50; x <= mapW + 50; x += 80) {
+    pts.push({x, y: ry + (Math.random() - 0.5) * 60});
+  }
+  rivers.push({points: pts, width: 35 + Math.random() * 15});
+
+  // Initial facilities
+  const types = ['residential','residential','residential','office','factory','commercial'];
+  types.forEach(t => spawnFacility(t, true));
+}
+
+function spawnFacility(type, initial) {
+  for (let tries = 0; tries < 50; tries++) {
+    let x = 60 + Math.random() * (mapW - 120);
+    let y = 60 + Math.random() * (mapH - 120);
+    // Check not too close to others
+    let ok = true;
+    for (let f of facilities) {
+      if (Math.hypot(f.x - x, f.y - y) < 70) { ok = false; break; }
+    }
+    // Check not in river
+    if (ok && isInRiver(x, y)) ok = false;
+    if (ok) {
+      facilities.push({
+        type, x, y, waiting: [], id: facilities.length,
+        flashTimer: 0, spawnTimer: 0
+      });
+      return;
+    }
+  }
+}
+
+function isInRiver(x, y) {
+  for (let r of rivers) {
+    for (let i = 0; i < r.points.length - 1; i++) {
+      let a = r.points[i], b = r.points[i+1];
+      let d = distPointSeg(x, y, a.x, a.y, b.x, b.y);
+      if (d < r.width / 2 + 5) return true;
+    }
+  }
+  return false;
+}
+
+function routeCrossesRiver(f1, f2) {
+  for (let r of rivers) {
+    for (let i = 0; i < r.points.length - 1; i++) {
+      let a = r.points[i], b = r.points[i+1];
+      if (segmentsIntersect(f1.x, f1.y, f2.x, f2.y, a.x, a.y, b.x, b.y)) return true;
+    }
+  }
+  return false;
+}
+
+function distPointSeg(px, py, ax, ay, bx, by) {
+  let dx = bx - ax, dy = by - ay;
+  let t = Math.max(0, Math.min(1, ((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
+  return Math.hypot(px - (ax+t*dx), py - (ay+t*dy));
+}
+
+function segmentsIntersect(x1,y1,x2,y2,x3,y3,x4,y4) {
+  let d = (x2-x1)*(y4-y3)-(y2-y1)*(x4-x3);
+  if (Math.abs(d) < 0.001) return false;
+  let t = ((x3-x1)*(y4-y3)-(y3-y1)*(x4-x3))/d;
+  let u = ((x3-x1)*(y2-y1)-(y3-y1)*(x2-x1))/d;
+  return t > 0 && t < 1 && u > 0 && u < 1;
+}
+
+// ── Tools ──
+function setTool(tool) {
+  if (selectedTool === tool) {
+    selectedTool = 'none';
+    routeBuilding = [];
+    currentRouteIdx = -1;
+  } else {
+    selectedTool = tool;
+    routeBuilding = [];
+    currentRouteIdx = -1;
+  }
+  closeEditPanel();
+  $('#btn-route').classList.toggle('active', selectedTool === 'route');
+  $('#btn-edit').classList.toggle('active', selectedTool === 'edit');
+}
+
+function closeEditPanel() {
+  $('#edit-panel').style.display = 'none';
+  editingRoute = -1;
+}
+
+function deleteRoute() {
+  if (editingRoute >= 0) {
+    // Remove vehicles for this route
+    vehicles = vehicles.filter(v => v.routeIdx !== editingRoute);
+    routes.splice(editingRoute, 1);
+    // Re-index vehicles
+    vehicles.forEach(v => { if (v.routeIdx > editingRoute) v.routeIdx--; });
+    closeEditPanel();
+  }
+}
+
+function syncVehicles(ri) {
+  let r = routes[ri];
+  if (!r) return;
+  let existing = vehicles.filter(v => v.routeIdx === ri);
+  let target = r.freq;
+  while (existing.length < target) {
+    let v = createVehicle(ri, existing.length / target);
+    vehicles.push(v);
+    existing.push(v);
+  }
+  while (existing.length > target) {
+    let rem = existing.pop();
+    // Unload passengers
+    rem.passengers.forEach(p => {
+      p.state = 'waiting';
+      p.vehicleId = -1;
+    });
+    vehicles = vehicles.filter(v => v !== rem);
+  }
+}
+
+function createVehicle(ri, offsetFrac) {
+  let r = routes[ri];
+  let vt = VEHICLE_TYPES[r.vehicleType];
+  return {
+    routeIdx: ri,
+    pos: offsetFrac, // 0-1 along route
+    dir: 1,
+    speed: vt.speed,
+    cap: vt.cap,
+    passengers: [],
+    type: r.vehicleType,
+    atStation: 0,
+    dwellTimer: 0
+  };
+}
+
+// ── Pointer/Touch ──
+let pointers = new Map();
+
+function screenToWorld(sx, sy) {
+  return {
+    x: (sx - W/2) / camZoom + camX,
+    y: (sy - H/2) / camZoom + camY
+  };
+}
+
+function worldToScreen(wx, wy) {
+  return {
+    x: (wx - camX) * camZoom + W/2,
+    y: (wy - camY) * camZoom + H/2
+  };
+}
+
+function findFacilityAt(wx, wy) {
+  let best = null, bestD = FACILITY_RADIUS + 10;
+  for (let f of facilities) {
+    let d = Math.hypot(f.x - wx, f.y - wy);
+    if (d < bestD) { bestD = d; best = f; }
+  }
+  return best;
+}
+
+function findRouteAt(wx, wy) {
+  for (let ri = 0; ri < routes.length; ri++) {
+    let r = routes[ri];
+    for (let i = 0; i < r.stops.length - 1; i++) {
+      let a = facilities[r.stops[i]], b = facilities[r.stops[i+1]];
+      if (a && b) {
+        let d = distPointSeg(wx, wy, a.x, a.y, b.x, b.y);
+        if (d < 15) return ri;
+      }
+    }
+  }
+  return -1;
+}
+
+function onPointerDown(e) {
+  if (gameState !== 'playing') return;
+  let wp = screenToWorld(e.clientX, e.clientY);
+
+  if (selectedTool === 'route') {
+    let f = findFacilityAt(wp.x, wp.y);
+    if (f) {
+      if (routeBuilding.length === 0) {
+        // Start new route or extend
+        if (routes.length >= 6) { showNotif('路線は最大6本です'); return; }
+        currentRouteIdx = routes.length;
+        routeBuilding = [f.id];
+        showNotif('次の施設をタップして接続');
+      } else {
+        if (f.id === routeBuilding[routeBuilding.length - 1]) return;
+        // Check if water crossing needs ferry
+        let lastF = facilities[routeBuilding[routeBuilding.length - 1]];
+        let crosses = routeCrossesRiver(lastF, f);
+        if (crosses && selectedVehicle !== 'ferry') {
+          showNotif('川を渡るには⛴️船が必要です');
+          return;
+        }
+        routeBuilding.push(f.id);
+        if (routeBuilding.length >= 2) {
+          // Check cost
+          let vt = VEHICLE_TYPES[selectedVehicle];
+          let cost = vt.cost * 3;
+          if (money < cost) { showNotif('資金不足！'); routeBuilding.pop(); return; }
+          // Create route
+          money -= cost;
+          let newRoute = {
+            stops: [...routeBuilding],
+            color: ROUTE_COLORS[routes.length % 6],
+            freq: 1,
+            vehicleType: selectedVehicle,
+            crossesWater: crosses
+          };
+          routes.push(newRoute);
+          syncVehicles(routes.length - 1);
+          showNotif(`路線${routes.length}を開通！ (-${cost}💰)`);
+          // Allow extending: keep last stop as new start
+          routeBuilding = [f.id];
+          // Or finish
+          setTool('none');
+        }
+      }
+    }
+    return;
+  }
+
+  if (selectedTool === 'edit') {
+    let ri = findRouteAt(wp.x, wp.y);
+    if (ri >= 0) {
+      editingRoute = ri;
+      let r = routes[ri];
+      $('#edit-title').textContent = `路線 ${ri+1}`;
+      $('#edit-title').style.color = r.color;
+      $('#freq-slider').value = r.freq;
+      $('#freq-val').textContent = r.freq;
+      let vt = VEHICLE_TYPES[r.vehicleType];
+      $('#vehicle-info').textContent = `${vt.icon} ${r.vehicleType} (容量${vt.cap}人)`;
+      $('#edit-panel').style.display = 'block';
+      return;
+    }
+  }
+
+  // Pan
+  dragging = true;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  camStartX = camX;
+  camStartY = camY;
+}
+
+function onPointerMove(e) {
+  if (!dragging) return;
+  let dx = e.clientX - dragStartX;
+  let dy = e.clientY - dragStartY;
+  camX = camStartX - dx / camZoom;
+  camY = camStartY - dy / camZoom;
+  clampCam();
+}
+
+function onPointerUp(e) {
+  dragging = false;
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  let z = camZoom * (e.deltaY < 0 ? 1.1 : 0.9);
+  camZoom = Math.max(0.4, Math.min(2.5, z));
+}
+
+let lastTouchDist = 0;
+function onTouchStart(e) {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    lastTouchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+}
+function onTouchMove(e) {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    let d = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    if (lastTouchDist > 0) {
+      camZoom *= d / lastTouchDist;
+      camZoom = Math.max(0.4, Math.min(2.5, camZoom));
+    }
+    lastTouchDist = d;
+  }
+}
+function onTouchEnd(e) {
+  lastTouchDist = 0;
+}
+
+function clampCam() {
+  let hw = W / 2 / camZoom;
+  let hh = H / 2 / camZoom;
+  camX = Math.max(hw - 50, Math.min(mapW - hw + 50, camX));
+  camY = Math.max(hh - 50, Math.min(mapH - hh + 50, camY));
+}
+
+// ── Notifications ──
+function showNotif(text) {
+  let el = $('#notif');
+  el.textContent = text;
+  el.style.display = 'block';
+  el.style.opacity = 1;
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.style.display='none', 300); }, 2000);
+}
+
+// ── Simulation ──
+function update(dt) {
+  if (speed === 0 || gameState !== 'playing') return;
+  let sDt = dt * speed;
+  simTime += sDt;
+
+  // Spawn facilities over time
+  facilitySpawnTimer += sDt;
+  if (facilitySpawnTimer > 12) {
+    facilitySpawnTimer = 0;
+    let types = [...DEST_TYPES, 'residential'];
+    let t = types[Math.floor(Math.random() * types.length)];
+    spawnFacility(t, false);
+  }
+
+  // Spawn people at residential
+  let residentials = facilities.filter(f => f.type === 'residential');
+  let destinations = facilities.filter(f => f.type !== 'residential');
+  residentials.forEach(f => {
+    f.spawnTimer += sDt;
+    let interval = Math.max(2, 6 - simTime / 60); // Gets faster
+    if (f.spawnTimer >= interval && destinations.length > 0 && people.length < MAX_PEOPLE) {
+      f.spawnTimer = 0;
+      let dest = destinations[Math.floor(Math.random() * destinations.length)];
+      let person = {
+        id: Math.random(),
+        origin: f.id,
+        dest: dest.id,
+        destType: dest.type,
+        state: 'waiting', // waiting, riding, arrived
+        facilityId: f.id,
+        vehicleId: -1,
+        x: f.x, y: f.y
+      };
+      f.waiting.push(person);
+      people.push(person);
+      totalPop++;
+    }
+  });
+
+  // Move vehicles
+  vehicles.forEach(v => {
+    let r = routes[v.routeIdx];
+    if (!r || r.stops.length < 2) return;
+    let vt = VEHICLE_TYPES[v.type];
+    let totalSegs = r.stops.length - 1;
+
+    if (v.dwellTimer > 0) {
+      v.dwellTimer -= sDt;
+      if (v.dwellTimer <= 0) v.dwellTimer = 0;
+      return;
+    }
+
+    // Move along route
+    let segSpeed = vt.speed * 0.008 * sDt;
+    v.pos += v.dir * segSpeed;
+
+    // Check arrival at stops
+    let stopIdx = Math.round(v.pos * totalSegs);
+    stopIdx = Math.max(0, Math.min(totalSegs, stopIdx));
+    let atEnd = v.pos >= 1;
+    let atStart = v.pos <= 0;
+
+    if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = 0.5; stopIdx = totalSegs; }
+    if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = 0.5; stopIdx = 0; }
+
+    // At a station?
+    let nearStop = -1;
+    for (let i = 0; i <= totalSegs; i++) {
+      let t = i / totalSegs;
+      if (Math.abs(v.pos - t) < 0.02) { nearStop = i; break; }
+    }
+
+    if (nearStop >= 0 && nearStop !== v.atStation) {
+      v.atStation = nearStop;
+      let fid = r.stops[nearStop];
+      let f = facilities[fid];
+      if (!f) return;
+
+      // Unload passengers at their destination
+      let toUnload = [];
+      v.passengers.forEach(p => {
+        if (p.dest === fid) {
+          toUnload.push(p);
+        }
+      });
+      toUnload.forEach(p => {
+        v.passengers = v.passengers.filter(pp => pp !== p);
+        p.state = 'arrived';
+        p.x = f.x; p.y = f.y;
+        score++;
+        money += 3;
+        // Remove from people
+        people = people.filter(pp => pp !== p);
+        // Remove from waiting if somehow
+        f.waiting = f.waiting.filter(pp => pp !== p);
+      });
+
+      // Also unload people who can transfer (stop matches a destination on a different route)
+      // Leave at any non-origin stop that is residential? No, just unload at dest.
+
+      // Load passengers
+      if (v.passengers.length < vt.cap) {
+        let toLoad = [];
+        f.waiting.forEach(p => {
+          if (v.passengers.length + toLoad.length < vt.cap) {
+            // Check if this route goes to their destination
+            if (r.stops.includes(p.dest)) {
+              toLoad.push(p);
+            }
+          }
+        });
+        toLoad.forEach(p => {
+          f.waiting = f.waiting.filter(pp => pp !== p);
+          p.state = 'riding';
+          p.vehicleId = v.routeIdx;
+          v.passengers.push(p);
+        });
+      }
+
+      if (toUnload.length > 0 || v.passengers.length > 0) {
+        v.dwellTimer = 0.3;
+      }
+    }
+  });
+
+  // Update vehicle positions for rendering
+  vehicles.forEach(v => {
+    let r = routes[v.routeIdx];
+    if (!r || r.stops.length < 2) return;
+    let totalSegs = r.stops.length - 1;
+    let seg = Math.floor(v.pos * totalSegs);
+    seg = Math.max(0, Math.min(totalSegs - 1, seg));
+    let t = (v.pos * totalSegs) - seg;
+    let a = facilities[r.stops[seg]];
+    let b = facilities[r.stops[seg + 1]];
+    if (a && b) {
+      v.wx = a.x + (b.x - a.x) * t;
+      v.wy = a.y + (b.y - a.y) * t;
+    }
+  });
+
+  // Costs
+  costTimer += sDt;
+  if (costTimer >= 5) {
+    costTimer = 0;
+    let totalCost = 0;
+    routes.forEach(r => {
+      let vt = VEHICLE_TYPES[r.vehicleType];
+      totalCost += r.freq * vt.cost * 0.5;
+    });
+    money -= totalCost;
+  }
+
+  // Check overcrowding
+  for (let f of facilities) {
+    if (f.waiting.length >= OVERCROWD_LIMIT) {
+      f.flashTimer += sDt;
+      if (f.waiting.length >= OVERCROWD_LIMIT + 5) {
+        gameOver('施設の待ち人数が限界を超えました！');
+        return;
+      }
+    } else {
+      f.flashTimer = 0;
+    }
+  }
+
+  // Check bankruptcy
+  if (money < -50) {
+    gameOver('資金が尽きました！');
+  }
+
+  // Unlock vehicles
+  updateUnlocks();
+}
+
+function updateUnlocks() {
+  $$('#vehicle-select button').forEach(b => {
+    let vt = VEHICLE_TYPES[b.dataset.v];
+    b.disabled = totalPop < vt.unlockPop;
+  });
+}
+
+function gameOver(reason) {
+  gameState = 'over';
+  $('#go-reason').textContent = reason;
+  $('#go-score').textContent = score;
+  $('#game-over').style.display = 'flex';
+}
+
+// ── Drawing ──
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  if (gameState === 'title') return;
+
+  ctx.save();
+  ctx.translate(W/2, H/2);
+  ctx.scale(camZoom, camZoom);
+  ctx.translate(-camX, -camY);
+
+  // Draw map border
+  ctx.strokeStyle = '#d5d0c0';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, mapW, mapH);
+
+  // Draw rivers
+  rivers.forEach(r => {
+    ctx.beginPath();
+    ctx.moveTo(r.points[0].x, r.points[0].y);
+    for (let i = 1; i < r.points.length; i++) {
+      let p = r.points[i], pp = r.points[i-1];
+      let mx = (pp.x + p.x) / 2, my = (pp.y + p.y) / 2;
+      ctx.quadraticCurveTo(pp.x, pp.y, mx, my);
+    }
+    ctx.strokeStyle = '#a8d4e6';
+    ctx.lineWidth = r.width;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.strokeStyle = '#8bc4d8';
+    ctx.lineWidth = r.width * 0.6;
+    ctx.stroke();
+  });
+
+  // Draw routes
+  routes.forEach((r, ri) => {
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let i = 0; i < r.stops.length; i++) {
+      let f = facilities[r.stops[i]];
+      if (!f) continue;
+      if (i === 0) ctx.moveTo(f.x, f.y);
+      else ctx.lineTo(f.x, f.y);
+    }
+    ctx.stroke();
+
+    // Draw stop markers on route
+    r.stops.forEach(sid => {
+      let f = facilities[sid];
+      if (!f) return;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = r.color;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+  });
+
+  // Building route preview
+  if (selectedTool === 'route' && routeBuilding.length > 0) {
+    ctx.strokeStyle = ROUTE_COLORS[routes.length % 6];
+    ctx.lineWidth = 4;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    for (let i = 0; i < routeBuilding.length; i++) {
+      let f = facilities[routeBuilding[i]];
+      if (i === 0) ctx.moveTo(f.x, f.y);
+      else ctx.lineTo(f.x, f.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Draw facilities
+  facilities.forEach(f => {
+    let ft = FACILITY_TYPES[f.type];
+    let flashing = f.waiting.length >= OVERCROWD_LIMIT && Math.sin(simTime * 8) > 0;
+
+    ctx.save();
+    ctx.translate(f.x, f.y);
+
+    // Shadow
+    ctx.shadowColor = 'rgba(0,0,0,.12)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+
+    if (flashing) {
+      ctx.shadowColor = 'rgba(232,93,93,.5)';
+      ctx.shadowBlur = 12;
+    }
+
+    drawShape(ft.shape, 0, 0, FACILITY_RADIUS, flashing ? '#ffe0e0' : ft.color, ft.stroke);
+
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Waiting count
+    let wc = f.waiting.length;
+    if (wc > 0) {
+      ctx.fillStyle = wc >= OVERCROWD_LIMIT ? '#e85d5d' : '#3a3a3a';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(wc, 0, -FACILITY_RADIUS - 6);
+    }
+
+    // Waiting people dots
+    let maxDots = Math.min(wc, 8);
+    for (let i = 0; i < maxDots; i++) {
+      let p = f.waiting[i];
+      let angle = (i / maxDots) * Math.PI * 2;
+      let dx = Math.cos(angle) * (FACILITY_RADIUS + 8);
+      let dy = Math.sin(angle) * (FACILITY_RADIUS + 8);
+      ctx.beginPath();
+      ctx.arc(dx, dy, 3, 0, Math.PI * 2);
+      let destF = FACILITY_TYPES[p.destType];
+      ctx.fillStyle = destF ? destF.color === '#ffffff' ? '#aaa' : destF.stroke : '#888';
+      ctx.fill();
+    }
+
+    ctx.restore();
+  });
+
+  // Draw vehicles
+  vehicles.forEach(v => {
+    if (v.wx == null) return;
+    let r = routes[v.routeIdx];
+    if (!r) return;
+    let vt = VEHICLE_TYPES[v.type];
+
+    ctx.save();
+    ctx.translate(v.wx, v.wy);
+
+    // Vehicle body
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fillStyle = r.color;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Icon
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(vt.icon, 0, 0);
+
+    // Passenger count
+    if (v.passengers.length > 0) {
+      ctx.font = 'bold 8px sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(v.passengers.length, 0, 14);
+    }
+
+    ctx.restore();
+  });
+
+  ctx.restore();
+
+  // Update HUD
+  $('#h-pop').textContent = totalPop;
+  $('#h-money').textContent = Math.floor(money);
+  $('#h-score').textContent = score;
+}
+
+function drawShape(shape, x, y, r, fill, stroke) {
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2.5;
+
+  switch (shape) {
+    case 'circle':
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      break;
+    case 'square':
+      ctx.beginPath();
+      let s = r * 0.8;
+      ctx.rect(x - s, y - s, s * 2, s * 2);
+      ctx.fill();
+      ctx.stroke();
+      break;
+    case 'triangle':
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r * 0.9, y + r * 0.7);
+      ctx.lineTo(x - r * 0.9, y + r * 0.7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      break;
+    case 'diamond':
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r * 0.7, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r * 0.7, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      break;
+    case 'cross':
+      ctx.beginPath();
+      let cw = r * 0.35;
+      ctx.moveTo(x - cw, y - r * 0.8);
+      ctx.lineTo(x + cw, y - r * 0.8);
+      ctx.lineTo(x + cw, y - cw);
+      ctx.lineTo(x + r * 0.8, y - cw);
+      ctx.lineTo(x + r * 0.8, y + cw);
+      ctx.lineTo(x + cw, y + cw);
+      ctx.lineTo(x + cw, y + r * 0.8);
+      ctx.lineTo(x - cw, y + r * 0.8);
+      ctx.lineTo(x - cw, y + cw);
+      ctx.lineTo(x - r * 0.8, y + cw);
+      ctx.lineTo(x - r * 0.8, y - cw);
+      ctx.lineTo(x - cw, y - cw);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      break;
+  }
+}
+
+// ── Game Loop ──
+function loop(ts) {
+  let dt = Math.min((ts - lastFrame) / 1000, 0.1);
+  lastFrame = ts;
+
+  if (gameState === 'playing') {
+    update(dt);
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Center camera on map
+camX = 450;
+camY = 350;
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
