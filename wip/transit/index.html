@@ -922,6 +922,34 @@ function findFacilityAt(wx, wy, radius) {
   return best;
 }
 
+// Check if destFacility is reachable from originFacility via any combination of routes
+function isReachable(originFacility, destFacility) {
+  if (originFacility === destFacility) return true;
+  let adj = {};
+  routes.forEach(r => {
+    if (!r || r.stops.length < 2) return;
+    for (let i = 0; i < r.stops.length; i++) {
+      let sid = r.stops[i];
+      if (!adj[sid]) adj[sid] = new Set();
+      for (let j = 0; j < r.stops.length; j++) {
+        if (i !== j) adj[sid].add(r.stops[j]);
+      }
+    }
+  });
+  let visited = new Set([originFacility]);
+  let queue = [originFacility];
+  while (queue.length > 0) {
+    let cur = queue.shift();
+    if (cur === destFacility) return true;
+    if (adj[cur]) {
+      adj[cur].forEach(nb => {
+        if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+      });
+    }
+  }
+  return false;
+}
+
 function findTransferStop(currentFacility, destFacility, currentRouteIdx) {
   // Build adjacency graph from all routes
   let adj = {};
@@ -1455,6 +1483,7 @@ function update(dt) {
       // Load
       if (v.passengers.length < vt.cap) {
         let toLoad = [];
+        let skippedNoRoute = 0;
         f.waiting.forEach(p => {
           if (v.passengers.length + toLoad.length >= vt.cap) return;
           if (r.stops.includes(p.dest)) {
@@ -1465,9 +1494,18 @@ function update(dt) {
             if (transferStop >= 0) {
               p._exitStop = transferStop;
               toLoad.push(p);
+            } else {
+              skippedNoRoute++;
             }
           }
         });
+        if (skippedNoRoute > 0 && !window._lastTransferWarn || Date.now() - window._lastTransferWarn > 5000) {
+          console.warn(`[Transit] ${skippedNoRoute} passengers at facility ${fid} (${f.type}) cannot find route to destination. Route ${v.routeIdx} stops:`, r.stops.slice());
+          // Log one passenger's details
+          let stuck = f.waiting.find(p => !r.stops.includes(p.dest) && findTransferStop(fid, p.dest, v.routeIdx) < 0);
+          if (stuck) console.warn(`  Stuck passenger: origin=${stuck.origin}, dest=${stuck.dest}, destType=${stuck.destType}, at facility=${fid}`);
+          window._lastTransferWarn = Date.now();
+        }
         toLoad.forEach(p => {
           f.waiting = f.waiting.filter(pp => pp !== p);
           p.state = 'riding';
@@ -1497,6 +1535,23 @@ function update(dt) {
       v.wy = a.y + (b.y - a.y) * t;
     }
   });
+
+  // Remove unreachable passengers every ~3 seconds (avoid doing BFS every frame)
+  if (!window._unreachableTimer) window._unreachableTimer = 0;
+  window._unreachableTimer += sDt;
+  if (window._unreachableTimer > 3) {
+    window._unreachableTimer = 0;
+    for (let f of facilities) {
+      let before = f.waiting.length;
+      f.waiting = f.waiting.filter(p => {
+        if (p.state !== 'waiting') return true;
+        if (isReachable(f.id, p.dest)) return true;
+        // Remove unreachable passenger
+        people = people.filter(pp => pp !== p);
+        return false;
+      });
+    }
+  }
 
   // Check overcrowding + hints
   for (let f of facilities) {
