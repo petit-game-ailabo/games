@@ -260,7 +260,7 @@ const VEHICLE_TYPES = {
   train: {cap:30, pxSpeed:250, dailyCost:30, icon:'🚂', unlockPop:100, buildCost:60, dwell:0.8, needsTerminal:'station', desc:'駅🚉が必要 / 最速・大容量・高コスト'},
   ferry: {cap:30, pxSpeed:40,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:2.0, needsTerminal:'port', desc:'港⚓が必要 / 川を渡れる'},
   plane: {cap:50, pxSpeed:0,   dailyCost:45, icon:'✈️', unlockPop:200, buildCost:100, planeScaling:true, dwell:3.0, needsTerminal:'airport', desc:'空港✈️が必要 / 長距離最強・最高コスト'},
-  walk:  {cap:1,  pxSpeed:30,  dailyCost:0,  icon:'🚶', unlockPop:0,   buildCost:0,  dwell:0, needsTerminal:false, desc:'無料・低速 / 川は渡れない'}
+  walk:  {cap:1,  pxSpeed:8,   dailyCost:0,  icon:'🚶', unlockPop:0,   buildCost:0,  dwell:3, needsTerminal:false, desc:'無料・低速 / 川は渡れない'}
 };
 const MAX_PEOPLE = 300;
 const OVERCROWD_LIMIT = 20;
@@ -630,7 +630,7 @@ function calcRequiredVehicles(r) {
       let f = facilities[sid];
       if (f) totalWaiting += f.waiting.length;
     });
-    needed = Math.max(1, Math.min(20, Math.max(needed, totalWaiting)));
+    needed = Math.max(1, Math.min(100, Math.max(needed, totalWaiting)));
   }
   return {needed, oneWayMinutes, roundTripMinutes};
 }
@@ -2434,21 +2434,20 @@ function draw() {
     ctx.save();
     ctx.translate(v.wx, v.wy);
 
-    // Walk: draw as small colored dot based on passenger destination
+    // Walk: draw as small colored dot only when carrying a passenger
     if (v.type === 'walk') {
-      let dotColor = r.color;
       if (v.passengers.length > 0) {
         let p = v.passengers[0];
         let destFt = FACILITY_TYPES[p.destType];
-        dotColor = destFt ? (destFt.color === '#ffffff' ? '#aaa' : destFt.stroke) : r.color;
+        let dotColor = destFt ? (destFt.color === '#ffffff' ? '#aaa' : destFt.stroke) : r.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, Math.PI * 2);
+        ctx.fillStyle = dotColor;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
       }
-      ctx.beginPath();
-      ctx.arc(0, 0, 3, 0, Math.PI * 2);
-      ctx.fillStyle = dotColor;
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
       ctx.restore();
       return;
     }
