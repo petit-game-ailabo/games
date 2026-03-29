@@ -255,10 +255,10 @@ const FACILITY_TYPES = {
 };
 const DEST_TYPES = ['office','factory','commercial','hospital'];
 const VEHICLE_TYPES = {
-  bus:   {cap:6,  pxSpeed:120, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false, desc:'安価で万能'},
+  bus:   {cap:10, pxSpeed:120, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false, desc:'安価で万能'},
   tram:  {cap:15, pxSpeed:150, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30, dwell:0.5, needsTerminal:'tramStop', desc:'停留所🚏が必要 / 容量大'},
   train: {cap:30, pxSpeed:250, dailyCost:30, icon:'🚂', unlockPop:100, buildCost:60, dwell:0.8, needsTerminal:'station', desc:'駅🚉が必要 / 最速・大容量・高コスト'},
-  ferry: {cap:30, pxSpeed:40,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:2.0, needsTerminal:'port', desc:'港⚓が必要 / 川を渡れる'},
+  ferry: {cap:30, pxSpeed:40,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:0.8, needsTerminal:'port', desc:'港⚓が必要 / 川を渡れる'},
   plane: {cap:50, pxSpeed:0,   dailyCost:45, icon:'✈️', unlockPop:200, buildCost:100, planeScaling:true, dwell:3.0, needsTerminal:'airport', desc:'空港✈️が必要 / 長距離最強・最高コスト'},
   walk:  {cap:1,  pxSpeed:8,   dailyCost:0,  icon:'🚶', unlockPop:0,   buildCost:0,  dwell:3, needsTerminal:false, desc:'無料・低速 / 川は渡れない'}
 };
@@ -1947,10 +1947,15 @@ function update(dt) {
     }
   });
 
-  // Auto-sync walk route vehicles (scale with demand)
-  routes.forEach((r, ri) => {
-    if (r.vehicleType === 'walk') syncVehicles(ri);
-  });
+  // Auto-sync walk route vehicles (scale with demand, every 2 seconds)
+  if (!window._walkSyncTimer) window._walkSyncTimer = 0;
+  window._walkSyncTimer += sDt;
+  if (window._walkSyncTimer > 2) {
+    window._walkSyncTimer = 0;
+    routes.forEach((r, ri) => {
+      if (r.vehicleType === 'walk') syncVehicles(ri);
+    });
+  }
 
   // Move vehicles
   vehicles.forEach(v => {
