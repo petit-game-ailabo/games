@@ -1452,6 +1452,15 @@ function update(dt) {
         let exitHere = (p.dest === fid) || (p._exitStop === fid);
         if (exitHere) toUnload.push(p);
       });
+      // Debug: log if passengers NOT unloading when they should
+      if (toUnload.length === 0 && v.passengers.length > 0) {
+        if (!window._lastUnloadDbg || Date.now() - window._lastUnloadDbg > 3000) {
+          window._lastUnloadDbg = Date.now();
+          v.passengers.slice(0,3).forEach(p => {
+            console.log(`[DBG] Passenger on route ${v.routeIdx} (${v.type}): dest=${p.dest}, _exitStop=${p._exitStop}, currentStop fid=${fid}, fid===_exitStop: ${fid===p._exitStop}, typeof fid=${typeof fid}, typeof _exitStop=${typeof p._exitStop}`);
+          });
+        }
+      }
       toUnload.forEach(p => {
         v.passengers = v.passengers.filter(pp => pp !== p);
         if (p.dest === fid) {
