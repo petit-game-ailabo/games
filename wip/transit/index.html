@@ -429,6 +429,9 @@ function init() {
   canvas.addEventListener('touchstart', onTouchStart, {passive:false});
   canvas.addEventListener('touchmove', onTouchMove, {passive:false});
   canvas.addEventListener('touchend', onTouchEnd, {passive:false});
+  // Prevent scroll on entire document (mobile scroll bug)
+  document.addEventListener('touchmove', function(e){ if(gameState==='playing') e.preventDefault(); }, {passive:false});
+  document.addEventListener('gesturestart', function(e){ e.preventDefault(); }, {passive:false});
 
   // Title buttons
   $('#stage-btn').onclick = () => showStageSelect();
@@ -1457,15 +1460,6 @@ function update(dt) {
         let exitHere = (p.dest === fid) || (p._exitStop === fid);
         if (exitHere) toUnload.push(p);
       });
-      // Debug: log if passengers NOT unloading when they should
-      if (toUnload.length === 0 && v.passengers.length > 0) {
-        if (!window._lastUnloadDbg || Date.now() - window._lastUnloadDbg > 3000) {
-          window._lastUnloadDbg = Date.now();
-          v.passengers.slice(0,3).forEach(p => {
-            console.log(`[DBG] Passenger on route ${v.routeIdx} (${v.type}): dest=${p.dest}, _exitStop=${p._exitStop}, currentStop fid=${fid}, fid===_exitStop: ${fid===p._exitStop}, typeof fid=${typeof fid}, typeof _exitStop=${typeof p._exitStop}`);
-          });
-        }
-      }
       toUnload.forEach(p => {
         v.passengers = v.passengers.filter(pp => pp !== p);
         if (p.dest === fid) {
@@ -1498,7 +1492,6 @@ function update(dt) {
       // Load — skip passengers who just transferred OFF this same route
       if (v.passengers.length < vt.cap) {
         let toLoad = [];
-        let skippedNoRoute = 0;
         f.waiting.forEach(p => {
           if (v.passengers.length + toLoad.length >= vt.cap) return;
           // Don't re-board the same route you just transferred from
@@ -1513,18 +1506,9 @@ function update(dt) {
               p._exitStop = transferStop;
               p._lastRouteIdx = undefined;
               toLoad.push(p);
-            } else {
-              skippedNoRoute++;
             }
           }
         });
-        if (skippedNoRoute > 0 && !window._lastTransferWarn || Date.now() - window._lastTransferWarn > 5000) {
-          console.warn(`[Transit] ${skippedNoRoute} passengers at facility ${fid} (${f.type}) cannot find route to destination. Route ${v.routeIdx} stops:`, r.stops.slice());
-          // Log one passenger's details
-          let stuck = f.waiting.find(p => !r.stops.includes(p.dest) && findTransferStop(fid, p.dest, v.routeIdx) < 0);
-          if (stuck) console.warn(`  Stuck passenger: origin=${stuck.origin}, dest=${stuck.dest}, destType=${stuck.destType}, at facility=${fid}`);
-          window._lastTransferWarn = Date.now();
-        }
         toLoad.forEach(p => {
           f.waiting = f.waiting.filter(pp => pp !== p);
           p.state = 'riding';
@@ -2047,23 +2031,6 @@ camY = 350;
 
 window.addEventListener('load', init);
 </script>
-<div id="dbg-log" style="position:fixed;bottom:60px;left:0;right:0;max-height:120px;overflow-y:auto;background:rgba(0,0,0,.85);color:#0f0;font-size:10px;font-family:monospace;padding:4px 6px;z-index:999;display:none;pointer-events:auto" onclick="this.style.display='none'"></div>
-<script>
-(function(){
-  var el=document.getElementById('dbg-log');
-  var orig=console.warn;
-  var origLog=console.log;
-  function addLine(txt){
-    el.style.display='block';
-    var d=document.createElement('div');
-    d.textContent=txt;
-    el.appendChild(d);
-    if(el.children.length>30)el.removeChild(el.firstChild);
-    el.scrollTop=el.scrollHeight;
-  }
-  console.warn=function(){orig.apply(console,arguments);var t=[].map.call(arguments,String).join(' ');if(t.includes('[Transit]'))addLine(t)};
-  console.log=function(){origLog.apply(console,arguments);var t=[].map.call(arguments,String).join(' ');if(t.includes('[DBG]'))addLine(t)};
-})();
-</script>
+
 </body>
 </html>
