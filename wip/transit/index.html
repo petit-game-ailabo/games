@@ -219,10 +219,10 @@ const FACILITY_TYPES = {
 };
 const DEST_TYPES = ['office','factory','commercial','hospital'];
 const VEHICLE_TYPES = {
-  bus:   {cap:6,  pxSpeed:240, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false, desc:'安価で万能'},
-  tram:  {cap:15, pxSpeed:300, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30, dwell:0.5, needsTerminal:'tramStop', desc:'停留所🚏が必要 / 容量大'},
-  train: {cap:30, pxSpeed:500, dailyCost:30, icon:'🚂', unlockPop:100, buildCost:60, dwell:0.8, needsTerminal:'station', desc:'駅🚉が必要 / 最速・大容量・高コスト'},
-  ferry: {cap:30, pxSpeed:80,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:2.0, needsTerminal:'port', desc:'港⚓が必要 / 川を渡れる'},
+  bus:   {cap:6,  pxSpeed:120, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false, desc:'安価で万能'},
+  tram:  {cap:15, pxSpeed:150, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30, dwell:0.5, needsTerminal:'tramStop', desc:'停留所🚏が必要 / 容量大'},
+  train: {cap:30, pxSpeed:250, dailyCost:30, icon:'🚂', unlockPop:100, buildCost:60, dwell:0.8, needsTerminal:'station', desc:'駅🚉が必要 / 最速・大容量・高コスト'},
+  ferry: {cap:30, pxSpeed:40,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:2.0, needsTerminal:'port', desc:'港⚓が必要 / 川を渡れる'},
   plane: {cap:50, pxSpeed:0,   dailyCost:45, icon:'✈️', unlockPop:200, buildCost:100, planeScaling:true, dwell:3.0, needsTerminal:'airport', desc:'空港✈️が必要 / 長距離最強・最高コスト'}
 };
 const MAX_PEOPLE = 300;
@@ -388,7 +388,7 @@ function calcRouteLength(r) {
 function getEffectivePxSpeed(vehicleType, routeLen) {
   let vt = VEHICLE_TYPES[vehicleType];
   if (vt.planeScaling) {
-    return 180 + routeLen * 0.9;
+    return 80 + routeLen * 0.5;
   }
   return vt.pxSpeed;
 }
@@ -397,10 +397,9 @@ function getEffectivePxSpeed(vehicleType, routeLen) {
 function calcRequiredVehicles(r) {
   let len = calcRouteLength(r);
   let pxSpeed = getEffectivePxSpeed(r.vehicleType, len);
-  // oneWayMinutes: calibrated so bus (80px/s) on 300px route ≈ 60 min
-  // 300 / 80 = 3.75 real seconds. We want that to be 60 game-minutes.
-  // So scale = 60 / 3.75 = 16. oneWayMinutes = (len / pxSpeed) * 16
-  let oneWayMinutes = (len / Math.max(pxSpeed, 1)) * 16;
+  // oneWayMinutes: bus (120px/s) on 300px = 2.5 real seconds = 2.5 game-minutes at x1
+  // Scale to game time: multiply by 24 so 2.5s becomes ~60 game-minutes
+  let oneWayMinutes = (len / Math.max(pxSpeed, 1)) * 24;
   let roundTripMinutes = oneWayMinutes * 2;
   let needed = Math.max(1, Math.ceil(roundTripMinutes / r.interval));
   return {needed, oneWayMinutes, roundTripMinutes};
@@ -419,6 +418,7 @@ function init() {
   ctx = canvas.getContext('2d');
   resize();
   window.addEventListener('resize', resize);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 
   // Pointer events
   canvas.addEventListener('pointerdown', onPointerDown);
@@ -430,8 +430,11 @@ function init() {
   canvas.addEventListener('touchmove', onTouchMove, {passive:false});
   canvas.addEventListener('touchend', onTouchEnd, {passive:false});
   // Prevent scroll on entire document (mobile scroll bug)
-  document.addEventListener('touchmove', function(e){ if(gameState==='playing') e.preventDefault(); }, {passive:false});
+  document.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive:false});
   document.addEventListener('gesturestart', function(e){ e.preventDefault(); }, {passive:false});
+  // Force scroll position to top
+  window.scrollTo(0, 0);
+  setInterval(function(){ window.scrollTo(0, 0); }, 500);
 
   // Title buttons
   $('#stage-btn').onclick = () => showStageSelect();
@@ -548,8 +551,13 @@ function init() {
 }
 
 function resize() {
-  W = canvas.width = window.innerWidth;
-  H = canvas.height = window.innerHeight;
+  // Use visualViewport to avoid jumps when mobile address bar shows/hides
+  let vv = window.visualViewport;
+  W = canvas.width = vv ? vv.width : window.innerWidth;
+  H = canvas.height = vv ? vv.height : window.innerHeight;
+  // Also fix canvas CSS size to prevent CSS pixel mismatch
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
   mapW = Math.max(W * 1.5, 900);
   mapH = Math.max(H * 1.5, 700);
 }
@@ -1423,10 +1431,8 @@ function update(dt) {
 
     let routeLen = calcRouteLength(r);
     let pxSpeed = getEffectivePxSpeed(v.type, routeLen);
-    // Convert px/real-second to px/game-minute: divide by 16 (scale factor)
-    // gameMinDelta = dt * speed (game minutes elapsed this frame)
-    let pxPerGameMin = pxSpeed / 16;
-    let posIncrement = (routeLen > 0) ? (pxPerGameMin * gameMinDelta) / routeLen : 0;
+    // pxSpeed is px/real-second. Use sDt (real seconds * speed multiplier) directly.
+    let posIncrement = (routeLen > 0) ? (pxSpeed * sDt) / routeLen : 0;
     v.pos += v.dir * posIncrement;
 
     let atEnd = v.pos >= 1;
