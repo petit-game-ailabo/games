@@ -186,11 +186,11 @@ const FACILITY_TYPES = {
 };
 const DEST_TYPES = ['office','factory','commercial','hospital'];
 const VEHICLE_TYPES = {
-  bus:   {cap:6,  speed:10, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15},
-  tram:  {cap:12, speed:8,  dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30},
-  train: {cap:30, speed:12, dailyCost:25, icon:'🚂', unlockPop:100, buildCost:50},
-  ferry: {cap:30, speed:3,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true},
-  plane: {cap:50, speed:20, dailyCost:40, icon:'✈️', unlockPop:200, buildCost:80}
+  bus:   {cap:6,  pxSpeed:80,  dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15},
+  tram:  {cap:12, pxSpeed:100, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30},
+  train: {cap:30, pxSpeed:150, dailyCost:25, icon:'🚂', unlockPop:100, buildCost:50},
+  ferry: {cap:30, pxSpeed:30,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true},
+  plane: {cap:50, pxSpeed:0,   dailyCost:40, icon:'✈️', unlockPop:200, buildCost:80, planeScaling:true}
 };
 const MAX_PEOPLE = 300;
 const OVERCROWD_LIMIT = 15;
@@ -201,71 +201,76 @@ const ROUTE_HIT_DIST = 12;
 // ── Stages ──
 const STAGES = [
   {
-    name: 'ステージ 1',
-    desc: 'バスで住宅地とオフィスを繋ごう',
+    name: '路線を引こう',
+    desc: '住宅地からオフィスへドラッグして路線を引こう！',
     goal: 5,
     money: 300,
     unlocks: ['bus'],
+    maxRoutes: null,
     facilities: [
-      {type:'residential', x:150, y:200},
-      {type:'office', x:450, y:200}
+      {type:'residential', x:200, y:250},
+      {type:'office', x:500, y:250}
     ],
     rivers: []
   },
   {
-    name: 'ステージ 2',
-    desc: '2つの路線で街を繋ごう',
-    goal: 15,
+    name: '乗り物の使い分け',
+    desc: '近距離はバス🚌、遠距離は電車🚂が効率的！',
+    goal: 20,
     money: 500,
-    unlocks: ['bus','ferry'],
+    unlocks: ['bus','train'],
+    maxRoutes: null,
     facilities: [
       {type:'residential', x:100, y:150},
       {type:'residential', x:100, y:350},
-      {type:'office', x:450, y:150},
-      {type:'factory', x:450, y:350}
+      {type:'office', x:350, y:250},
+      {type:'factory', x:600, y:250}
     ],
     rivers: []
   },
   {
-    name: 'ステージ 3',
-    desc: '川を船で渡ろう',
+    name: '経由地を使え',
+    desc: '路線数に限りがある！1本の路線に複数の停車駅を設定しよう。線の途中をドラッグして施設に繋げば経由地になるよ',
     goal: 30,
     money: 800,
-    unlocks: ['bus','ferry'],
+    unlocks: ['bus','tram'],
+    maxRoutes: 2,
     facilities: [
-      {type:'residential', x:120, y:120},
-      {type:'residential', x:120, y:350},
-      {type:'office', x:500, y:120},
-      {type:'factory', x:500, y:250},
-      {type:'commercial', x:500, y:380}
+      {type:'residential', x:80, y:120},
+      {type:'residential', x:80, y:420},
+      {type:'office', x:350, y:80},
+      {type:'factory', x:600, y:150},
+      {type:'commercial', x:600, y:400},
+      {type:'hospital', x:350, y:460}
     ],
-    rivers: [
-      {points:[{x:-50,y:230},{x:150,y:240},{x:300,y:220},{x:450,y:250},{x:650,y:240}], width:40}
-    ]
+    rivers: []
   },
   {
-    name: 'ステージ 4',
-    desc: '路面電車を活用しよう',
+    name: '乗り換えネットワーク',
+    desc: '乗り換えを活用しよう！直通が無くても、路線が繋がっていれば人は乗り換えて移動する',
     goal: 50,
     money: 1200,
-    unlocks: ['bus','tram','ferry'],
+    unlocks: ['bus','tram','train','ferry','plane'],
+    maxRoutes: 4,
     facilities: [
       {type:'residential', x:80, y:100},
       {type:'residential', x:80, y:300},
-      {type:'residential', x:80, y:500},
+      {type:'residential', x:80, y:480},
       {type:'office', x:350, y:100},
       {type:'factory', x:350, y:300},
       {type:'commercial', x:550, y:200},
-      {type:'hospital', x:550, y:400}
+      {type:'hospital', x:550, y:400},
+      {type:'office', x:600, y:480}
     ],
     rivers: []
   },
   {
-    name: 'ステージ 5',
-    desc: '大都市を制覇せよ！',
+    name: '大都市',
+    desc: '大都市の交通を管理せよ！',
     goal: 100,
     money: 2000,
     unlocks: ['bus','tram','train','ferry','plane'],
+    maxRoutes: 6,
     facilities: [
       {type:'residential', x:80, y:80},
       {type:'residential', x:80, y:250},
@@ -276,7 +281,9 @@ const STAGES = [
       {type:'factory', x:300, y:300},
       {type:'factory', x:550, y:300},
       {type:'commercial', x:400, y:450},
-      {type:'hospital', x:200, y:450}
+      {type:'hospital', x:200, y:450},
+      {type:'office', x:450, y:180},
+      {type:'commercial', x:250, y:180}
     ],
     rivers: [
       {points:[{x:-50,y:370},{x:150,y:360},{x:350,y:380},{x:500,y:365},{x:700,y:375}], width:35}
@@ -329,15 +336,23 @@ function calcRouteLength(r) {
   return len;
 }
 
+// ── Helper: Get effective pixel speed for a vehicle type on a route ──
+function getEffectivePxSpeed(vehicleType, routeLen) {
+  let vt = VEHICLE_TYPES[vehicleType];
+  if (vt.planeScaling) {
+    return 60 + routeLen * 0.3;
+  }
+  return vt.pxSpeed;
+}
+
 // ── Helper: Calculate required vehicles for a route ──
 function calcRequiredVehicles(r) {
   let len = calcRouteLength(r);
-  let vt = VEHICLE_TYPES[r.vehicleType];
-  let oneWayTime = len / vt.speed; // in "pixel-time" units
-  // Convert to game minutes: at speed factor 0.008 per second, 1 game-sec moves vt.speed * 0.008
-  // But we need real game-minutes. Let's define: oneWayMinutes = len / (vt.speed * 0.48)
-  // This means a bus (speed 10) traveling 300px takes 300/(10*0.48) = 62.5 minutes ≈ 1 hour
-  let oneWayMinutes = len / (vt.speed * 0.48);
+  let pxSpeed = getEffectivePxSpeed(r.vehicleType, len);
+  // oneWayMinutes: calibrated so bus (80px/s) on 300px route ≈ 60 min
+  // 300 / 80 = 3.75 real seconds. We want that to be 60 game-minutes.
+  // So scale = 60 / 3.75 = 16. oneWayMinutes = (len / pxSpeed) * 16
+  let oneWayMinutes = (len / Math.max(pxSpeed, 1)) * 16;
   let roundTripMinutes = oneWayMinutes * 2;
   let needed = Math.max(1, Math.ceil(roundTripMinutes / r.interval));
   return {needed, oneWayMinutes, roundTripMinutes};
@@ -488,7 +503,8 @@ function buildStageCards() {
     let card = document.createElement('div');
     card.className = 'stage-card';
     let vehicleIcons = s.unlocks.map(v => VEHICLE_TYPES[v].icon).join(' ');
-    card.innerHTML = `<h3>${s.name}</h3><p>${s.desc}</p><p class="stage-goal">目標: ${s.goal}人運ぶ</p><p style="font-size:.75rem;color:#aaa">乗り物: ${vehicleIcons} ｜ 資金: ¥${s.money}</p>`;
+    let routeLimit = s.maxRoutes != null ? `路線上限: ${s.maxRoutes}本 ｜ ` : '';
+    card.innerHTML = `<h3>${s.name}</h3><p style="font-size:.8rem;color:#555;margin:4px 0;line-height:1.4">${s.desc}</p><p class="stage-goal">目標: ${s.goal}人運ぶ</p><p style="font-size:.75rem;color:#aaa">${routeLimit}乗り物: ${vehicleIcons} ｜ 資金: ¥${s.money}</p>`;
     card.onclick = () => {
       $('#stage-select').style.display = 'none';
       gameMode = 'stage';
@@ -609,11 +625,29 @@ function startStage(idx) {
   $('#game-over').style.display = 'none';
   $('#stage-clear').style.display = 'none';
   $('#stage-info').style.display = 'block';
-  $('#stage-info').textContent = `${stage.name}: ${stage.desc} — 目標: ${stage.goal}人`;
+  let routeLimitText = stage.maxRoutes != null ? ` ｜ 路線上限: ${stage.maxRoutes}本` : '';
+  $('#stage-info').textContent = `${stage.name} — 目標: ${stage.goal}人${routeLimitText}`;
   gameState = 'playing';
+  // Show description overlay briefly
+  showStageDesc(stage.desc);
   camX = mapW / 2;
   camY = mapH / 2;
   camZoom = 1;
+}
+
+function showStageDesc(text) {
+  let el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(74,144,217,.92);color:#fff;padding:20px 32px;border-radius:16px;font-size:clamp(1rem,3.5vw,1.3rem);z-index:60;text-align:center;max-width:85vw;line-height:1.6;box-shadow:0 4px 20px rgba(0,0,0,.2);transition:opacity .5s';
+  el.textContent = text;
+  document.body.appendChild(el);
+  // Pause the game during description
+  let prevSpeed = speed;
+  speed = 0;
+  setTimeout(() => {
+    el.style.opacity = '0';
+    speed = prevSpeed || 1;
+    setTimeout(() => el.remove(), 500);
+  }, 3500);
 }
 
 function updateStageUnlocks(unlocks) {
@@ -791,13 +825,11 @@ function createVehicle(ri, offsetFrac) {
     routeIdx: ri,
     pos: offsetFrac,
     dir: 1,
-    speed: vt.speed,
     cap: vt.cap,
     passengers: [],
     type: r.vehicleType,
     atStation: -1,
     dwellTimer: 0,
-    // Timetable: track departure
     nextDepartMinute: 0,
     departed: true
   };
@@ -982,7 +1014,12 @@ function onPointerUp(e) {
 }
 
 function createRouteFromDrag(fromFac, toFac) {
-  if (routes.length >= 6) { showNotif('路線は最大6本です'); return; }
+  let maxR = 6;
+  if (gameMode === 'stage') {
+    let stage = STAGES[currentStage];
+    if (stage.maxRoutes != null) maxR = stage.maxRoutes;
+  }
+  if (routes.length >= maxR) { showNotif('路線数上限です！'); return; }
   let crosses = routeCrossesRiver(fromFac, toFac);
   if (crosses && selectedVehicle !== 'ferry') {
     showNotif('川を渡るには⛴️船が必要です');
@@ -1170,8 +1207,10 @@ function update(dt) {
       return;
     }
 
-    let segSpeed = vt.speed * 0.008 * sDt;
-    v.pos += v.dir * segSpeed;
+    let routeLen = calcRouteLength(r);
+    let pxSpeed = getEffectivePxSpeed(v.type, routeLen);
+    let posIncrement = (routeLen > 0) ? (pxSpeed * sDt) / routeLen : 0;
+    v.pos += v.dir * posIncrement;
 
     let atEnd = v.pos >= 1;
     let atStart = v.pos <= 0;
