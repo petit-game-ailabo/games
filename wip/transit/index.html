@@ -1429,19 +1429,23 @@ function update(dt) {
     let atStart = v.pos <= 0;
 
     let vtDwell = vt.dwell || 0.3;
-    if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = vtDwell; v.atStation = -1; }
-    if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = vtDwell; v.atStation = -1; }
+    if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = vtDwell; v.atStation = -1; v.justTurned = true; }
+    if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = vtDwell; v.atStation = -1; v.justTurned = true; }
 
-    // Check if near a stop (use dynamic threshold based on speed to avoid overshoot)
+    // Check if near a stop — use generous threshold and also check if we crossed over a stop
     let nearStop = -1;
-    let threshold = Math.max(0.03, posIncrement * 2.0);
+    let threshold = Math.max(0.04, posIncrement * 2.5);
+    let prevPos = v.pos - v.dir * posIncrement;
     for (let i = 0; i <= totalSegs; i++) {
       let t = i / totalSegs;
-      if (Math.abs(v.pos - t) < threshold) { nearStop = i; break; }
+      // Within threshold OR crossed over this stop
+      let crossed = (v.dir > 0) ? (prevPos < t && v.pos >= t - threshold) : (prevPos > t && v.pos <= t + threshold);
+      if (Math.abs(v.pos - t) < threshold || crossed) { nearStop = i; break; }
     }
 
-    if (nearStop >= 0 && nearStop !== v.atStation) {
+    if (nearStop >= 0 && (nearStop !== v.atStation || v.justTurned)) {
       v.atStation = nearStop;
+      v.justTurned = false;
       let fid = r.stops[nearStop];
       let f = facilities[fid];
       if (!f) return;
