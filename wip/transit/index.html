@@ -11,6 +11,8 @@ canvas{display:block}
 #title-screen{position:fixed;inset:0;background:#f0ece0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100}
 #title-screen h1{font-size:clamp(2rem,8vw,4rem);font-weight:300;letter-spacing:.3em;color:#3a3a3a;margin-bottom:.2em}
 #title-screen p{font-size:clamp(.9rem,3vw,1.3rem);color:#8a8a7a;margin-bottom:2em;letter-spacing:.15em}
+#how-to-btn{padding:.6em 2em;font-size:.95rem;background:none;color:#888;border:2px solid #ccc;border-radius:2em;cursor:pointer;letter-spacing:.1em;transition:all .2s}
+#how-to-btn:hover{border-color:#888;color:#555}
 #start-btn{padding:.8em 3em;font-size:1.1rem;background:#e85d5d;color:#fff;border:none;border-radius:2em;cursor:pointer;letter-spacing:.1em;transition:transform .2s}
 #start-btn:hover{transform:scale(1.05)}
 #hud{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(240,236,224,.92);backdrop-filter:blur(4px);z-index:10;font-size:clamp(.7rem,2.5vw,.85rem);gap:4px;flex-wrap:wrap}
@@ -49,7 +51,20 @@ canvas{display:block}
 <div id="title-screen">
   <h1>Transit Builder</h1>
   <p>街を繋げ、人を運べ</p>
+  <button id="how-to-btn" style="margin-bottom:12px">📖 遊び方</button>
   <button id="start-btn">開 始</button>
+</div>
+
+<div id="tutorial-overlay" style="display:none;position:fixed;inset:0;background:rgba(240,236,224,.97);z-index:200;overflow-y:auto;padding:24px">
+  <div style="max-width:400px;margin:0 auto">
+    <h2 style="font-size:1.5rem;color:#3a3a3a;text-align:center;margin-bottom:16px">📖 遊び方</h2>
+    <div id="tut-pages"></div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
+      <button id="tut-prev" style="padding:8px 20px;background:#ddd;border:none;border-radius:6px;font-size:14px;cursor:pointer">← 戻る</button>
+      <button id="tut-next" style="padding:8px 20px;background:#4a9;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">次へ →</button>
+      <button id="tut-close" style="padding:8px 20px;background:#888;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">閉じる</button>
+    </div>
+  </div>
 </div>
 
 <div id="hud" style="display:none">
@@ -167,6 +182,56 @@ function init() {
   canvas.addEventListener('touchend', onTouchEnd, {passive:false});
 
   $('#start-btn').onclick = startGame;
+  // Tutorial
+  const tutPages=[
+    `<div style="text-align:center;line-height:1.8;font-size:15px;color:#3a3a3a">
+      <h3 style="color:#e85d5d;margin-bottom:8px">🎯 目的</h3>
+      <p>住宅地（⚪白い丸）から発生する人々を<br>目的の施設まで運びましょう</p>
+      <div style="display:flex;gap:16px;justify-content:center;margin:16px 0;flex-wrap:wrap">
+        <span>🔵 オフィス</span>
+        <span>🟠 工場</span>
+        <span>🟢 商業</span>
+        <span>🔴 病院</span>
+      </div>
+      <p>人の色＝行きたい施設の色</p>
+    </div>`,
+    `<div style="text-align:center;line-height:1.8;font-size:15px;color:#3a3a3a">
+      <h3 style="color:#4a9;margin-bottom:8px">🚌 路線の作り方</h3>
+      <p>①下の「＋路線」ボタンをタップ</p>
+      <p>②施設をタップで接続していく</p>
+      <p>③もう一度「＋路線」を押して確定</p>
+      <p style="margin-top:12px;color:#888">路線に沿ってバスが自動で走ります</p>
+    </div>`,
+    `<div style="text-align:center;line-height:1.8;font-size:15px;color:#3a3a3a">
+      <h3 style="color:#e8a83e;margin-bottom:8px">⚙️ 路線の編集</h3>
+      <p>「✏️編集」ボタン→路線をタップ</p>
+      <p>・本数（頻度）をスライダーで調整</p>
+      <p>・乗り物タイプを変更</p>
+      <p>・不要な路線は削除</p>
+    </div>`,
+    `<div style="text-align:center;line-height:1.8;font-size:15px;color:#3a3a3a">
+      <h3 style="color:#5588cc;margin-bottom:8px">💡 コツ</h3>
+      <p>・待ち人数が増えすぎるとゲームオーバー💥</p>
+      <p>・路線の維持にお金がかかります</p>
+      <p>・人口が増えると新しい乗り物が解放🚂</p>
+      <p>・川を渡るには船⛴️が必要</p>
+      <p style="margin-top:12px">ゆっくり始めて、街の成長に合わせて<br>路線を追加していきましょう！</p>
+    </div>`
+  ];
+  let tutPage=0;
+  function showTut(){
+    $('#tutorial-overlay').style.display='block';
+    renderTut();
+  }
+  function renderTut(){
+    $('#tut-pages').innerHTML=tutPages[tutPage];
+    $('#tut-prev').style.display=tutPage>0?'inline-block':'none';
+    $('#tut-next').style.display=tutPage<tutPages.length-1?'inline-block':'none';
+  }
+  $('#how-to-btn').onclick=showTut;
+  $('#tut-prev').onclick=()=>{tutPage=Math.max(0,tutPage-1);renderTut()};
+  $('#tut-next').onclick=()=>{tutPage++;renderTut()};
+  $('#tut-close').onclick=()=>{$('#tutorial-overlay').style.display='none';tutPage=0};
   $('#btn-route').onclick = () => setTool('route');
   $('#btn-edit').onclick = () => setTool('edit');
   $('#close-edit-btn').onclick = closeEditPanel;
@@ -537,21 +602,21 @@ function update(dt) {
   let sDt = dt * speed;
   simTime += sDt;
 
-  // Spawn facilities over time
+  // Spawn facilities over time (slower for beginner-friendly pace)
   facilitySpawnTimer += sDt;
-  if (facilitySpawnTimer > 12) {
+  if (facilitySpawnTimer > 30) {
     facilitySpawnTimer = 0;
     let types = [...DEST_TYPES, 'residential'];
     let t = types[Math.floor(Math.random() * types.length)];
     spawnFacility(t, false);
   }
 
-  // Spawn people at residential
+  // Spawn people at residential (slower start, gradual ramp)
   let residentials = facilities.filter(f => f.type === 'residential');
   let destinations = facilities.filter(f => f.type !== 'residential');
   residentials.forEach(f => {
     f.spawnTimer += sDt;
-    let interval = Math.max(2, 6 - simTime / 60); // Gets faster
+    let interval = Math.max(4, 12 - simTime / 120); // Slower: starts at 12s, min 4s
     if (f.spawnTimer >= interval && destinations.length > 0 && people.length < MAX_PEOPLE) {
       f.spawnTimer = 0;
       let dest = destinations[Math.floor(Math.random() * destinations.length)];
