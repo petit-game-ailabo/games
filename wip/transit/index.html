@@ -18,9 +18,9 @@ canvas{display:block;position:fixed;top:0;left:0;width:100%!important;height:100
 #free-btn{background:#e85d5d;color:#fff}
 #how-to-btn{padding:.6em 2em;font-size:.95rem;background:none;color:#888;border:2px solid #ccc;border-radius:2em;cursor:pointer;letter-spacing:.1em;transition:all .2s;margin-top:12px}
 #how-to-btn:hover{border-color:#888;color:#555}
-#stage-select{position:fixed;inset:0;background:#f0ece0;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:99;overflow-y:auto;padding:20px}
+#stage-select{position:fixed;inset:0;background:#f0ece0;display:none;flex-direction:column;align-items:center;z-index:99;overflow-y:auto;padding:20px;padding-bottom:80px;justify-content:flex-start;padding-top:40px}
 #stage-select h2{font-size:1.5rem;color:#3a3a3a;margin-bottom:20px;letter-spacing:.15em}
-.stage-card{background:#fff;border-radius:12px;padding:16px 24px;margin:6px;width:min(320px,85vw);box-shadow:0 2px 10px rgba(0,0,0,.1);cursor:pointer;transition:transform .15s,box-shadow .15s;text-align:left}
+.stage-card{background:#fff;border-radius:12px;padding:12px 20px;margin:4px;width:min(320px,85vw);box-shadow:0 2px 10px rgba(0,0,0,.1);cursor:pointer;transition:transform .15s,box-shadow .15s;text-align:left}
 .stage-card:hover{transform:scale(1.03);box-shadow:0 4px 16px rgba(0,0,0,.15)}
 .stage-card h3{font-size:1rem;color:#4a90d9;margin-bottom:4px}
 .stage-card p{font-size:.8rem;color:#888;margin:2px 0}
@@ -131,12 +131,14 @@ canvas{display:block;position:fixed;top:0;left:0;width:100%!important;height:100
 
 <div id="toolbar" style="display:none">
   <div id="vehicle-select">
+    <button data-v="walk">🚶</button>
     <button data-v="bus" class="active">🚌</button>
     <button data-v="tram" disabled>🚋</button>
     <button data-v="train" disabled>🚂</button>
     <button data-v="ferry">⛴️</button>
     <button data-v="plane" disabled>✈️</button>
   </div>
+  <button id="build-btn" class="tool-btn" style="padding:6px 12px;font-size:1rem;min-height:36px">🏗️</button>
   <button id="stats-btn" class="tool-btn" style="padding:6px 12px;font-size:1rem;min-height:36px">📊</button>
 </div>
 
@@ -165,6 +167,12 @@ canvas{display:block;position:fixed;top:0;left:0;width:100%!important;height:100
     <button class="edit-action" id="del-route-btn">削除</button>
     <button class="edit-action" id="close-edit-btn">閉じる</button>
   </div>
+</div>
+
+<div id="build-panel" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:20;text-align:center">
+  <h3 style="font-size:.95rem;margin-bottom:8px">🏗️ 建設する施設を選択</h3>
+  <div id="build-options" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap"></div>
+  <button id="build-cancel-btn" style="margin-top:10px;padding:5px 14px;background:#ddd;border:none;border-radius:6px;cursor:pointer;font-size:.8rem">キャンセル</button>
 </div>
 
 <div id="stats-panel">
@@ -251,7 +259,8 @@ const VEHICLE_TYPES = {
   tram:  {cap:15, pxSpeed:150, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30, dwell:0.5, needsTerminal:'tramStop', desc:'停留所🚏が必要 / 容量大'},
   train: {cap:30, pxSpeed:250, dailyCost:30, icon:'🚂', unlockPop:100, buildCost:60, dwell:0.8, needsTerminal:'station', desc:'駅🚉が必要 / 最速・大容量・高コスト'},
   ferry: {cap:30, pxSpeed:40,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:2.0, needsTerminal:'port', desc:'港⚓が必要 / 川を渡れる'},
-  plane: {cap:50, pxSpeed:0,   dailyCost:45, icon:'✈️', unlockPop:200, buildCost:100, planeScaling:true, dwell:3.0, needsTerminal:'airport', desc:'空港✈️が必要 / 長距離最強・最高コスト'}
+  plane: {cap:50, pxSpeed:0,   dailyCost:45, icon:'✈️', unlockPop:200, buildCost:100, planeScaling:true, dwell:3.0, needsTerminal:'airport', desc:'空港✈️が必要 / 長距離最強・最高コスト'},
+  walk:  {cap:1,  pxSpeed:30,  dailyCost:0,  icon:'🚶', unlockPop:0,   buildCost:0,  dwell:0, needsTerminal:false, desc:'無料・低速 / 川は渡れない'}
 };
 const MAX_PEOPLE = 300;
 const OVERCROWD_LIMIT = 20;
@@ -280,7 +289,7 @@ const STAGES = [
     desc: '住宅地からオフィスへドラッグして路線を引こう！',
     goal: 5,
     money: 200,
-    unlocks: ['bus'],
+    unlocks: ['walk','bus'],
     maxRoutes: null,
     facilities: [
       {type:'residential', x:200, y:250},
@@ -293,7 +302,7 @@ const STAGES = [
     desc: '近距離はバス🚌、遠距離は電車🚂が効率的！',
     goal: 20,
     money: 500,
-    unlocks: ['bus','train'],
+    unlocks: ['walk','bus','train'],
     maxRoutes: null,
     facilities: [
       {type:'residential', x:80, y:200},
@@ -308,7 +317,7 @@ const STAGES = [
     desc: '路線数に限りがある！1本の路線に複数の停車駅を設定しよう。線の途中をドラッグして施設に繋げば経由地になるよ。路面電車🚋には停留所🚏が必要！',
     goal: 30,
     money: 800,
-    unlocks: ['bus','tram'],
+    unlocks: ['walk','bus','tram'],
     maxRoutes: 2,
     facilities: [
       {type:'residential', x:80, y:120},
@@ -326,7 +335,7 @@ const STAGES = [
     desc: '川で左右が分断！船🚢で川を渡って乗り換えよう。港⚓が両岸に必要！',
     goal: 50,
     money: 1200,
-    unlocks: ['bus','tram','ferry'],
+    unlocks: ['walk','bus','tram','ferry'],
     maxRoutes: 5,
     facilities: [
       {type:'residential', x:100, y:120},
@@ -349,7 +358,7 @@ const STAGES = [
     desc: '大都市の交通を管理せよ！全ての乗り物を駆使しよう',
     goal: 100,
     money: 2000,
-    unlocks: ['bus','tram','train','ferry','plane'],
+    unlocks: ['walk','bus','tram','train','ferry','plane'],
     maxRoutes: 6,
     facilities: [
       {type:'residential', x:80, y:80},
@@ -380,7 +389,7 @@ const STAGES = [
     desc: '3つの島が海で分断！船と飛行機で島を繋げよう',
     goal: 150,
     money: 3000,
-    unlocks: ['bus','tram','train','ferry','plane'],
+    unlocks: ['walk','bus','tram','train','ferry','plane'],
     maxRoutes: 8,
     mapW: 1200, mapH: 800,
     facilities: [
@@ -411,8 +420,8 @@ const STAGES = [
       {type:'airport', x:1050, y:600}
     ],
     rivers: [
-      {points:[{x:370,y:-30},{x:380,y:100},{x:390,y:250},{x:375,y:400},{x:385,y:550},{x:370,y:700},{x:380,y:830}], width:70},
-      {points:[{x:770,y:-30},{x:760,y:120},{x:775,y:280},{x:765,y:420},{x:770,y:580},{x:780,y:700},{x:770,y:830}], width:60}
+      {points:[{x:370,y:-30},{x:380,y:100},{x:390,y:250},{x:375,y:400},{x:385,y:550},{x:370,y:700},{x:380,y:830}], width:100, isSea:true},
+      {points:[{x:770,y:-30},{x:760,y:120},{x:775,y:280},{x:765,y:420},{x:770,y:580},{x:780,y:700},{x:770,y:830}], width:90, isSea:true}
     ]
   },
   // ── Stage 7: 首都圏 ──
@@ -421,49 +430,47 @@ const STAGES = [
     desc: '中心の大都市と3つの郊外衛星都市を繋げ！電車とバスで効率的に',
     goal: 300,
     money: 5000,
-    unlocks: ['bus','tram','train','ferry','plane'],
+    unlocks: ['walk','bus','tram','train','ferry','plane'],
     maxRoutes: 12,
     mapW: 1500, mapH: 1000,
     facilities: [
-      // Central city
-      {type:'residential', x:650, y:350},
-      {type:'residential', x:700, y:450},
-      {type:'residential', x:750, y:350},
-      {type:'residential', x:700, y:550},
-      {type:'residential', x:800, y:450},
-      {type:'office', x:650, y:450},
-      {type:'office', x:750, y:500},
-      {type:'office', x:680, y:300},
-      {type:'factory', x:800, y:350},
-      {type:'factory', x:600, y:500},
-      {type:'commercial', x:750, y:400},
-      {type:'commercial', x:650, y:550},
-      {type:'hospital', x:700, y:400},
-      {type:'station', x:700, y:480},
-      {type:'tramStop', x:660, y:400},
-      {type:'airport', x:850, y:300},
+      // Central city (spread out, min 120px apart)
+      {type:'residential', x:580, y:300},
+      {type:'residential', x:720, y:300},
+      {type:'residential', x:580, y:540},
+      {type:'residential', x:720, y:540},
+      {type:'residential', x:860, y:420},
+      {type:'office', x:650, y:420},
+      {type:'office', x:800, y:300},
+      {type:'office', x:580, y:420},
+      {type:'factory', x:860, y:300},
+      {type:'factory', x:860, y:540},
+      {type:'commercial', x:720, y:420},
+      {type:'commercial', x:650, y:540},
+      {type:'hospital', x:800, y:540},
+      {type:'station', x:720, y:660},
+      {type:'tramStop', x:580, y:660},
+      {type:'airport', x:950, y:420},
       // Satellite 1 (north-west)
-      {type:'residential', x:200, y:150},
-      {type:'residential', x:300, y:200},
-      {type:'office', x:250, y:100},
-      {type:'commercial', x:180, y:250},
-      {type:'station', x:250, y:180},
+      {type:'residential', x:150, y:100},
+      {type:'residential', x:300, y:100},
+      {type:'office', x:150, y:240},
+      {type:'commercial', x:300, y:240},
+      {type:'station', x:230, y:170},
       // Satellite 2 (south-west)
-      {type:'residential', x:200, y:700},
-      {type:'residential', x:300, y:750},
-      {type:'office', x:250, y:800},
-      {type:'factory', x:150, y:750},
-      {type:'station', x:250, y:740},
+      {type:'residential', x:150, y:700},
+      {type:'residential', x:300, y:700},
+      {type:'office', x:150, y:840},
+      {type:'factory', x:300, y:840},
+      {type:'station', x:230, y:770},
       // Satellite 3 (east)
-      {type:'residential', x:1200, y:400},
-      {type:'residential', x:1250, y:500},
-      {type:'office', x:1300, y:450},
-      {type:'commercial', x:1200, y:550},
-      {type:'station', x:1230, y:460}
+      {type:'residential', x:1200, y:350},
+      {type:'residential', x:1350, y:350},
+      {type:'office', x:1200, y:500},
+      {type:'commercial', x:1350, y:500},
+      {type:'station', x:1280, y:420}
     ],
-    rivers: [
-      {points:[{x:-50,y:620},{x:200,y:610},{x:400,y:630},{x:600,y:625},{x:800,y:640},{x:1000,y:630},{x:1200,y:620},{x:1550,y:630}], width:40}
-    ]
+    rivers: []
   },
   // ── Stage 8: 国土開発 ──
   {
@@ -471,69 +478,66 @@ const STAGES = [
     desc: '5つの都市を繋げて国土交通網を完成させよ！飛行機と電車を駆使',
     goal: 500,
     money: 8000,
-    unlocks: ['bus','tram','train','ferry','plane'],
+    unlocks: ['walk','bus','tram','train','ferry','plane'],
     maxRoutes: 16,
     mapW: 2000, mapH: 1500,
     facilities: [
-      // Central city
-      {type:'residential', x:900, y:700},
-      {type:'residential', x:950, y:750},
-      {type:'residential', x:1000, y:700},
-      {type:'office', x:950, y:650},
-      {type:'office', x:900, y:800},
-      {type:'factory', x:1050, y:750},
-      {type:'commercial', x:850, y:750},
-      {type:'hospital', x:950, y:800},
-      {type:'station', x:950, y:720},
-      {type:'tramStop', x:900, y:750},
-      {type:'airport', x:1050, y:650},
-      // North city
-      {type:'residential', x:800, y:150},
-      {type:'residential', x:850, y:200},
-      {type:'residential', x:900, y:150},
-      {type:'office', x:850, y:100},
-      {type:'factory', x:750, y:200},
-      {type:'commercial', x:950, y:200},
-      {type:'hospital', x:850, y:250},
-      {type:'station', x:860, y:170},
-      {type:'airport', x:950, y:100},
-      // East city (coastal)
-      {type:'residential', x:1700, y:600},
-      {type:'residential', x:1750, y:650},
-      {type:'residential', x:1700, y:700},
-      {type:'office', x:1750, y:550},
-      {type:'factory', x:1650, y:650},
-      {type:'commercial', x:1800, y:650},
-      {type:'hospital', x:1700, y:750},
-      {type:'station', x:1720, y:640},
-      {type:'port', x:1850, y:650},
-      {type:'airport', x:1800, y:550},
-      // West city
-      {type:'residential', x:200, y:600},
-      {type:'residential', x:250, y:650},
-      {type:'residential', x:200, y:700},
-      {type:'office', x:150, y:650},
-      {type:'factory', x:300, y:650},
-      {type:'commercial', x:200, y:550},
-      {type:'hospital', x:250, y:750},
-      {type:'station', x:230, y:640},
-      {type:'airport', x:150, y:550},
-      // South city (coastal)
-      {type:'residential', x:800, y:1250},
-      {type:'residential', x:850, y:1300},
-      {type:'residential', x:900, y:1250},
-      {type:'office', x:850, y:1200},
-      {type:'factory', x:950, y:1300},
-      {type:'commercial', x:750, y:1300},
-      {type:'hospital', x:850, y:1350},
-      {type:'station', x:860, y:1270},
-      {type:'port', x:850, y:1400},
-      {type:'airport', x:950, y:1200}
+      // Central city (spread, min 120px apart)
+      {type:'residential', x:850, y:600},
+      {type:'residential', x:1000, y:600},
+      {type:'residential', x:850, y:750},
+      {type:'office', x:1000, y:750},
+      {type:'office', x:1150, y:680},
+      {type:'factory', x:1150, y:820},
+      {type:'commercial', x:700, y:680},
+      {type:'hospital', x:700, y:820},
+      {type:'station', x:925, y:680},
+      {type:'tramStop', x:1075, y:600},
+      {type:'airport', x:1150, y:540},
+      // North city (spread, min 120px, 300px+ from central)
+      {type:'residential', x:750, y:100},
+      {type:'residential', x:900, y:100},
+      {type:'residential', x:750, y:240},
+      {type:'office', x:900, y:240},
+      {type:'factory', x:1050, y:170},
+      {type:'commercial', x:600, y:170},
+      {type:'hospital', x:750, y:370},
+      {type:'station', x:825, y:170},
+      {type:'airport', x:1050, y:50},
+      // East city (coastal, spread)
+      {type:'residential', x:1650, y:550},
+      {type:'residential', x:1800, y:550},
+      {type:'residential', x:1650, y:700},
+      {type:'office', x:1800, y:700},
+      {type:'factory', x:1650, y:850},
+      {type:'commercial', x:1800, y:850},
+      {type:'hospital', x:1520, y:630},
+      {type:'station', x:1725, y:630},
+      {type:'port', x:1900, y:630},
+      {type:'airport', x:1900, y:480},
+      // West city (spread)
+      {type:'residential', x:150, y:550},
+      {type:'residential', x:300, y:550},
+      {type:'residential', x:150, y:700},
+      {type:'office', x:300, y:700},
+      {type:'factory', x:150, y:850},
+      {type:'commercial', x:300, y:850},
+      {type:'hospital', x:420, y:630},
+      {type:'station', x:225, y:630},
+      {type:'airport', x:80, y:480},
+      // South city (coastal, spread)
+      {type:'residential', x:750, y:1150},
+      {type:'residential', x:900, y:1150},
+      {type:'residential', x:750, y:1300},
+      {type:'office', x:900, y:1300},
+      {type:'factory', x:1050, y:1230},
+      {type:'commercial', x:600, y:1230},
+      {type:'hospital', x:750, y:1430},
+      {type:'station', x:825, y:1230},
+      {type:'port', x:825, y:1430},
+      {type:'airport', x:1050, y:1100}
     ],
-    rivers: [
-      {points:[{x:500,y:-50},{x:520,y:200},{x:510,y:400},{x:530,y:600},{x:515,y:800},{x:525,y:1000},{x:510,y:1200},{x:520,y:1550}], width:50},
-      {points:[{x:-50,y:400},{x:200,y:410},{x:500,y:395},{x:800,y:405},{x:1100,y:400},{x:1400,y:410},{x:1700,y:395},{x:2050,y:405}], width:45}
-    ]
+    rivers: []
   }
 ];
 
@@ -563,6 +567,12 @@ let dayIncome = 0, dayExpense = 0, dayDelivered = 0;
 let showingReport = false;
 let _lowMoneyHinted = false;
 let _lastHintTime = 0;
+
+// Build mode state
+let buildMode = false;
+let buildType = null; // 'tramStop','station','port','airport'
+const BUILD_COSTS = {tramStop: 20, station: 50, port: 30, airport: 80};
+const BUILD_LABELS = {tramStop: '🚏 バス停 ¥20', station: '🚉 駅 ¥50', port: '⚓ 港 ¥30', airport: '✈️ 空港 ¥80'};
 
 // Drag state
 let isDragging = false;
@@ -613,6 +623,15 @@ function calcRequiredVehicles(r) {
   let oneWayMinutes = (len / Math.max(pxSpeed, 1)) * 24;
   let roundTripMinutes = oneWayMinutes * 2;
   let needed = Math.max(1, Math.ceil(roundTripMinutes / r.interval));
+  // Walk: scale by waiting people at stops (cap at 20)
+  if (r.vehicleType === 'walk') {
+    let totalWaiting = 0;
+    r.stops.forEach(sid => {
+      let f = facilities[sid];
+      if (f) totalWaiting += f.waiting.length;
+    });
+    needed = Math.max(1, Math.min(20, Math.max(needed, totalWaiting)));
+  }
   return {needed, oneWayMinutes, roundTripMinutes};
 }
 
@@ -762,6 +781,29 @@ function init() {
     };
   });
 
+  // Build button
+  $('#build-btn').onclick = () => {
+    if (buildMode) { closeBuildPanel(); return; }
+    buildMode = true;
+    $('#build-btn').classList.add('active');
+    let opts = $('#build-options');
+    opts.innerHTML = '';
+    Object.keys(BUILD_COSTS).forEach(bt => {
+      let btn = document.createElement('button');
+      btn.style.cssText = 'padding:6px 12px;border:1.5px solid #ccc;border-radius:6px;background:#fff;font-size:.85rem;cursor:pointer';
+      btn.textContent = BUILD_LABELS[bt];
+      btn.onclick = () => {
+        buildType = bt;
+        opts.querySelectorAll('button').forEach(b => b.style.borderColor = '#ccc');
+        btn.style.borderColor = '#e85d5d';
+        showNotif(`マップをタップして${BUILD_LABELS[bt].split(' ')[0]}を建設`);
+      };
+      opts.appendChild(btn);
+    });
+    $('#build-panel').style.display = 'block';
+  };
+  $('#build-cancel-btn').onclick = closeBuildPanel;
+
   // Stats button
   $('#stats-btn').onclick = openStatsPanel;
   $('#stats-close-btn').onclick = () => { $('#stats-panel').style.display = 'none'; };
@@ -812,6 +854,7 @@ function goToTitle() {
   $('#stage-info').style.display = 'none';
   $('#stats-panel').style.display = 'none';
   closeEditPanel();
+  closeBuildPanel();
 }
 
 function resetGame() {
@@ -835,6 +878,8 @@ function resetGame() {
   dayIncome = 0; dayExpense = 0; dayDelivered = 0;
   showingReport = false;
   _lowMoneyHinted = false;
+  buildMode = false;
+  buildType = null;
   speed = 1;
   isDragging = false;
   dragType = 'none';
@@ -851,7 +896,7 @@ function startFreeMode() {
   gameMode = 'free';
   resetGame();
   money = 500;
-  currentUnlocks = ['bus','ferry'];
+  currentUnlocks = ['walk','bus','ferry'];
   mapW = 2000;
   mapH = 1500;
   $('#title-screen').style.display = 'none';
@@ -870,7 +915,7 @@ function startFreeMode() {
 function resetFreeMode() {
   resetGame();
   money = 500;
-  currentUnlocks = ['bus','ferry'];
+  currentUnlocks = ['walk','bus','ferry'];
   mapW = 2000;
   mapH = 1500;
   gameState = 'playing';
@@ -897,7 +942,7 @@ function generateFreeMap() {
   for (let y = -50; y <= mapH + 50; y += 80) {
     r1pts.push({x: r1x + (Math.random() - 0.5) * 80, y});
   }
-  rivers.push({points: r1pts, width: 40 + Math.random() * 15});
+  rivers.push({points: r1pts, width: 100 + Math.random() * 30});
 
   // River 2: roughly horizontal through center
   let r2pts = [];
@@ -905,7 +950,7 @@ function generateFreeMap() {
   for (let x = -50; x <= mapW + 50; x += 80) {
     r2pts.push({x, y: r2y + (Math.random() - 0.5) * 60});
   }
-  rivers.push({points: r2pts, width: 35 + Math.random() * 10});
+  rivers.push({points: r2pts, width: 100 + Math.random() * 20});
 
   // Initial cluster in center
   spawnCluster(mapW * 0.5, mapH * 0.4, 'medium', '中心街');
@@ -1196,6 +1241,37 @@ function updateEditPanel() {
   let dailyCost = calcRouteDailyCost(r);
   $('#edit-vehicles').textContent = needed;
   $('#edit-cost').textContent = dailyCost;
+}
+
+function closeBuildPanel() {
+  buildMode = false;
+  buildType = null;
+  $('#build-panel').style.display = 'none';
+  $('#build-btn').classList.remove('active');
+}
+
+function placeBuildFacility(wx, wy) {
+  if (!buildType) { showNotif('建設する施設を選んでください'); return; }
+  let cost = BUILD_COSTS[buildType];
+  if (money < cost) { showNotif('資金不足！'); return; }
+  // Check min distance from existing facilities
+  for (let f of facilities) {
+    if (Math.hypot(f.x - wx, f.y - wy) < 50) {
+      showNotif('既存施設に近すぎます（50px以上離してください）');
+      return;
+    }
+  }
+  if (isInRiver(wx, wy)) { showNotif('川/海の上には建設できません'); return; }
+  if (wx < 10 || wy < 10 || wx > mapW - 10 || wy > mapH - 10) { showNotif('マップ外です'); return; }
+  money -= cost;
+  let id = facilities.length;
+  facilities.push({
+    type: buildType, x: wx, y: wy, waiting: [], id: id,
+    flashTimer: 0, spawnTimer: 0
+  });
+  let ft = FACILITY_TYPES[buildType];
+  showNotif(`${ft.label} を建設！ (-¥${cost})`);
+  closeBuildPanel();
 }
 
 function closeEditPanel() {
@@ -1505,6 +1581,14 @@ function onPointerUp(e) {
   if (!isDragging) { isDragging = false; return; }
   let wp = screenToWorld(e.clientX, e.clientY);
 
+  // Build mode: tap to place facility
+  if (buildMode && dragType === 'pan' && !dragMoved) {
+    placeBuildFacility(wp.x, wp.y);
+    isDragging = false;
+    dragType = 'none';
+    return;
+  }
+
   if (dragType === 'route-line' && !dragMoved) {
     openEditPanel(dragRouteIdx);
   }
@@ -1536,6 +1620,7 @@ function onPointerUp(e) {
 
 function hasRequiredTerminal(vehicleType, stopIds) {
   let vt = VEHICLE_TYPES[vehicleType];
+  // Bus and walk can stop at any facility
   if (!vt.needsTerminal) return true;
   let needed = vt.needsTerminal;
   for (let sid of stopIds) {
@@ -1552,26 +1637,31 @@ function getTerminalName(vehicleType) {
 
 function createRouteFromDrag(fromFac, toFac) {
   let maxR = getMaxRoutes();
-  if (routes.length >= maxR) { showNotif('路線数上限です！'); return; }
+  if (routes.length >= maxR && selectedVehicle !== 'walk') { showNotif('路線数上限です！'); return; }
   let crosses = routeCrossesRiver(fromFac, toFac);
-  if (crosses && selectedVehicle !== 'ferry') {
+  // Planes fly over rivers; walk and bus/tram/train cannot cross
+  if (crosses && selectedVehicle !== 'ferry' && selectedVehicle !== 'plane') {
     showNotif('川を渡るには⛴️船が必要です');
     return;
   }
   let stopIds = [fromFac.id, toFac.id];
-  if (!hasRequiredTerminal(selectedVehicle, stopIds)) {
-    let name = getTerminalName(selectedVehicle);
-    showNotif(`${name}が路線に必要です！`);
-    return;
+  // Bus and walk can stop at any facility
+  if (selectedVehicle !== 'bus' && selectedVehicle !== 'walk') {
+    if (!hasRequiredTerminal(selectedVehicle, stopIds)) {
+      let name = getTerminalName(selectedVehicle);
+      showNotif(`${name}が路線に必要です！`);
+      return;
+    }
   }
   let vt = VEHICLE_TYPES[selectedVehicle];
   let cost = vt.buildCost;
   if (money < cost) { showNotif('資金不足！'); return; }
   money -= cost;
+  let interval = selectedVehicle === 'walk' ? 1 : 60;
   let newRoute = {
     stops: [fromFac.id, toFac.id],
     color: ROUTE_COLORS[routes.length % ROUTE_COLORS.length],
-    interval: 60,
+    interval: interval,
     vehicleType: selectedVehicle,
     crossesWater: crosses,
     name: ''
@@ -1579,7 +1669,11 @@ function createRouteFromDrag(fromFac, toFac) {
   routes.push(newRoute);
   syncVehicles(routes.length - 1);
   sfxRouteCreated();
-  showNotif(`路線${routes.length}を開通！ (-¥${cost})`);
+  if (cost > 0) {
+    showNotif(`路線${routes.length}を開通！ (-¥${cost})`);
+  } else {
+    showNotif(`徒歩ルートを設定！`);
+  }
 }
 
 function addStopToRoute(ri, segIdx, newFac) {
@@ -1590,7 +1684,7 @@ function addStopToRoute(ri, segIdx, newFac) {
   let afterFac = facilities[r.stops[segIdx + 1]];
   let crossesBefore = routeCrossesRiver(beforeFac, newFac);
   let crossesAfter = routeCrossesRiver(newFac, afterFac);
-  if ((crossesBefore || crossesAfter) && r.vehicleType !== 'ferry') {
+  if ((crossesBefore || crossesAfter) && r.vehicleType !== 'ferry' && r.vehicleType !== 'plane') {
     showNotif('川を渡るには⛴️船が必要です');
     return;
   }
@@ -1851,6 +1945,11 @@ function update(dt) {
       people.push(person);
       totalPop++;
     }
+  });
+
+  // Auto-sync walk route vehicles (scale with demand)
+  routes.forEach((r, ri) => {
+    if (r.vehicleType === 'walk') syncVehicles(ri);
   });
 
   // Move vehicles
@@ -2134,7 +2233,7 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
-  // Rivers
+  // Rivers & Sea channels
   rivers.forEach(r => {
     ctx.beginPath();
     ctx.moveTo(r.points[0].x, r.points[0].y);
@@ -2143,11 +2242,11 @@ function draw() {
       let mx = (pp.x + p.x) / 2, my = (pp.y + p.y) / 2;
       ctx.quadraticCurveTo(pp.x, pp.y, mx, my);
     }
-    ctx.strokeStyle = '#a8d4e6';
+    ctx.strokeStyle = r.isSea ? '#7ab8d4' : '#a8d4e6';
     ctx.lineWidth = r.width;
     ctx.lineCap = 'round';
     ctx.stroke();
-    ctx.strokeStyle = '#8bc4d8';
+    ctx.strokeStyle = r.isSea ? '#5a9cb8' : '#8bc4d8';
     ctx.lineWidth = r.width * 0.6;
     ctx.stroke();
   });
@@ -2174,11 +2273,13 @@ function draw() {
 
   // Routes
   routes.forEach((r, ri) => {
+    let isWalk = r.vehicleType === 'walk';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    ctx.strokeStyle = 'rgba(0,0,0,.25)';
-    ctx.lineWidth = 10;
+    if (isWalk) ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = 'rgba(0,0,0,.15)';
+    ctx.lineWidth = isWalk ? 5 : 10;
     ctx.beginPath();
     for (let i = 0; i < r.stops.length; i++) {
       let f = facilities[r.stops[i]];
@@ -2189,7 +2290,7 @@ function draw() {
     ctx.stroke();
 
     ctx.strokeStyle = r.color;
-    ctx.lineWidth = 7;
+    ctx.lineWidth = isWalk ? 3 : 7;
     ctx.beginPath();
     for (let i = 0; i < r.stops.length; i++) {
       let f = facilities[r.stops[i]];
@@ -2198,6 +2299,7 @@ function draw() {
       else ctx.lineTo(f.x, f.y);
     }
     ctx.stroke();
+    if (isWalk) ctx.setLineDash([]);
 
     if (ri === editingRoute) {
       ctx.strokeStyle = 'rgba(255,255,255,.5)';
@@ -2331,6 +2433,25 @@ function draw() {
 
     ctx.save();
     ctx.translate(v.wx, v.wy);
+
+    // Walk: draw as small colored dot based on passenger destination
+    if (v.type === 'walk') {
+      let dotColor = r.color;
+      if (v.passengers.length > 0) {
+        let p = v.passengers[0];
+        let destFt = FACILITY_TYPES[p.destType];
+        dotColor = destFt ? (destFt.color === '#ffffff' ? '#aaa' : destFt.stroke) : r.color;
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fillStyle = dotColor;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
 
     let loadRatio = v.passengers.length / Math.max(vt.cap, 1);
     let baseR = 10;
