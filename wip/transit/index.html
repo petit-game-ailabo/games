@@ -672,6 +672,45 @@ function findFacilityAt(wx, wy, radius) {
   return best;
 }
 
+// BFS: find a transfer stop on currentRoute that can reach destFacility via other routes
+function findTransferStop(currentFacility, destFacility, currentRouteIdx) {
+  // Build adjacency: facility -> set of reachable facilities (via any route)
+  let adj = {};
+  routes.forEach((r, ri) => {
+    if (!r || r.stops.length < 2) return;
+    for (let i = 0; i < r.stops.length; i++) {
+      let sid = r.stops[i];
+      if (!adj[sid]) adj[sid] = new Set();
+      for (let j = 0; j < r.stops.length; j++) {
+        if (i !== j) adj[sid].add(r.stops[j]);
+      }
+    }
+  });
+  // BFS from each candidate transfer stop on currentRoute to destFacility
+  let cr = routes[currentRouteIdx];
+  if (!cr) return -1;
+  for (let si = 0; si < cr.stops.length; si++) {
+    let transferId = cr.stops[si];
+    if (transferId === currentFacility) continue; // don't exit at same stop
+    // BFS from transferId
+    let visited = new Set([currentFacility]); // don't loop back
+    let queue = [transferId];
+    visited.add(transferId);
+    let found = false;
+    while (queue.length > 0) {
+      let cur = queue.shift();
+      if (cur === destFacility) { found = true; break; }
+      if (adj[cur]) {
+        adj[cur].forEach(nb => {
+          if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
+        });
+      }
+    }
+    if (found) return transferId;
+  }
+  return -1;
+}
+
 function findRouteAt(wx, wy) {
   for (let ri = 0; ri < routes.length; ri++) {
     let r = routes[ri];
@@ -989,27 +1028,45 @@ function update(dt) {
       let f = facilities[fid];
       if (!f) return;
 
-      // Unload
+      // Unload — at final destination OR at transfer stop
       let toUnload = [];
       v.passengers.forEach(p => {
-        if (p.dest === fid) toUnload.push(p);
+        let exitHere = (p.dest === fid) || (p._exitStop === fid);
+        if (exitHere) toUnload.push(p);
       });
       toUnload.forEach(p => {
         v.passengers = v.passengers.filter(pp => pp !== p);
-        p.state = 'arrived';
-        p.x = f.x; p.y = f.y;
-        score++;
-        money += 3;
-        people = people.filter(pp => pp !== p);
-        f.waiting = f.waiting.filter(pp => pp !== p);
+        if (p.dest === fid) {
+          // Arrived at final destination
+          p.state = 'arrived';
+          p.x = f.x; p.y = f.y;
+          score++;
+          money += 3;
+          people = people.filter(pp => pp !== p);
+        } else {
+          // Transfer: wait at this facility for next route
+          p.state = 'waiting';
+          p._exitStop = undefined;
+          p.facilityId = fid;
+          p.x = f.x; p.y = f.y;
+          if (!f.waiting.includes(p)) f.waiting.push(p);
+        }
       });
 
-      // Load
+      // Load — direct destination OR transfer stop toward destination
       if (v.passengers.length < vt.cap) {
         let toLoad = [];
         f.waiting.forEach(p => {
-          if (v.passengers.length + toLoad.length < vt.cap) {
-            if (r.stops.includes(p.dest)) {
+          if (v.passengers.length + toLoad.length >= vt.cap) return;
+          // Direct: destination is on this route
+          if (r.stops.includes(p.dest)) {
+            p._exitStop = p.dest;
+            toLoad.push(p);
+          } else {
+            // Transfer: find a stop on this route that connects to a route reaching dest
+            let transferStop = findTransferStop(fid, p.dest, v.routeIdx);
+            if (transferStop >= 0) {
+              p._exitStop = transferStop;
               toLoad.push(p);
             }
           }
