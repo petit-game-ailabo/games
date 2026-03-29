@@ -1483,9 +1483,10 @@ function update(dt) {
           sfxPassengerArrived();
           people = people.filter(pp => pp !== p);
         } else {
-          // Transfer
+          // Transfer — mark which route they just rode so they don't re-board it
           p.state = 'waiting';
           p._exitStop = undefined;
+          p._lastRouteIdx = v.routeIdx;
           p.facilityId = fid;
           p.transfers = (p.transfers || 0) + 1;
           p.x = f.x; p.y = f.y;
@@ -1493,19 +1494,23 @@ function update(dt) {
         }
       });
 
-      // Load
+      // Load — skip passengers who just transferred OFF this same route
       if (v.passengers.length < vt.cap) {
         let toLoad = [];
         let skippedNoRoute = 0;
         f.waiting.forEach(p => {
           if (v.passengers.length + toLoad.length >= vt.cap) return;
+          // Don't re-board the same route you just transferred from
+          if (p._lastRouteIdx === v.routeIdx) return;
           if (r.stops.includes(p.dest)) {
             p._exitStop = p.dest;
+            p._lastRouteIdx = undefined;
             toLoad.push(p);
           } else {
             let transferStop = findTransferStop(fid, p.dest, v.routeIdx);
             if (transferStop >= 0) {
               p._exitStop = transferStop;
+              p._lastRouteIdx = undefined;
               toLoad.push(p);
             } else {
               skippedNoRoute++;
