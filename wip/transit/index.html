@@ -29,14 +29,14 @@ canvas{display:block}
 .hud-item{display:flex;align-items:center;gap:3px;white-space:nowrap}
 .hud-item span{font-weight:600}
 #speed-btns{display:flex;gap:2px}
-#speed-btns button{padding:3px 8px;border:1.5px solid #bbb;background:#fff;border-radius:4px;font-size:.75rem;cursor:pointer}
+#speed-btns button{padding:4px 10px;border:1.5px solid #bbb;background:#fff;border-radius:4px;font-size:.75rem;cursor:pointer;min-height:28px;min-width:28px}
 #speed-btns button.active{background:#e85d5d;color:#fff;border-color:#e85d5d}
 #toolbar{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:center;padding:8px 10px;background:rgba(240,236,224,.92);backdrop-filter:blur(4px);z-index:10;gap:6px;flex-wrap:wrap}
-.tool-btn{padding:6px 14px;border:2px solid #ccc;background:#fff;border-radius:8px;font-size:clamp(.7rem,2.5vw,.85rem);cursor:pointer;transition:all .15s}
+.tool-btn{padding:8px 16px;border:2px solid #ccc;background:#fff;border-radius:8px;font-size:clamp(.75rem,2.5vw,.9rem);cursor:pointer;transition:all .15s;min-height:40px}
 .tool-btn.active{border-color:#e85d5d;background:#fde8e8}
 .tool-btn:disabled{opacity:.4;cursor:default}
 .route-color{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:4px}
-#edit-panel{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:20;display:none;min-width:250px;text-align:center}
+#edit-panel{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:20;display:none;min-width:250px;max-width:90vw;max-height:calc(100vh - 140px);overflow-y:auto;text-align:center}
 #edit-panel h3{margin-bottom:8px;font-size:.95rem}
 #edit-panel .edit-row{font-size:.8rem;margin:6px 0;display:flex;align-items:center;justify-content:center;gap:6px}
 #edit-panel .edit-label{color:#888;font-size:.75rem}
@@ -53,7 +53,7 @@ canvas{display:block}
 #del-route-btn{background:#e85d5d;color:#fff}
 #close-edit-btn{background:#ddd}
 #vehicle-select{display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
-#vehicle-select button{padding:3px 8px;border:1.5px solid #ccc;border-radius:6px;background:#fff;font-size:.75rem;cursor:pointer}
+#vehicle-select button{padding:6px 12px;border:1.5px solid #ccc;border-radius:6px;background:#fff;font-size:clamp(.8rem,2.5vw,.95rem);cursor:pointer;min-height:36px;min-width:36px}
 #vehicle-select button.active{border-color:#e85d5d;background:#fde8e8}
 #vehicle-select button:disabled{opacity:.35}
 #game-over{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;flex-direction:column}
@@ -73,8 +73,9 @@ canvas{display:block}
 <body>
 
 <div id="title-screen">
-  <h1>Transit Builder</h1>
-  <p>街を繋げ、人を運べ</p>
+  <div style="font-size:clamp(2rem,10vw,4rem);margin-bottom:4px;letter-spacing:.1em">🚌🚋🚂⛴️✈️</div>
+  <h1 style="font-size:clamp(2.2rem,9vw,4.5rem);font-weight:700;letter-spacing:.25em;background:linear-gradient(135deg,#4a90d9,#e85d5d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:0">Transit Builder</h1>
+  <p style="font-size:clamp(.95rem,3vw,1.4rem);color:#8a8a7a;margin-bottom:2.5em;letter-spacing:.2em">街を繋げ、人を運べ</p>
   <button class="title-btn" id="stage-btn">🗺️ ステージモード</button>
   <button class="title-btn" id="free-btn">🌆 フリーモード</button>
   <button id="how-to-btn">📖 遊び方</button>
@@ -150,6 +151,7 @@ canvas{display:block}
     <h2 id="go-title">GAME OVER</h2>
     <p id="go-reason"></p>
     <p>運んだ人数: <span id="go-score">0</span></p>
+    <p id="go-achievement" style="font-size:.85rem;color:#888;margin:4px 0"></p>
     <button id="retry-btn">リトライ</button>
     <button id="go-title-btn">タイトルへ</button>
   </div>
@@ -159,6 +161,7 @@ canvas{display:block}
   <div class="sc-box">
     <h2>🎉 ステージクリア！</h2>
     <p id="sc-msg"></p>
+    <p id="sc-stars" style="font-size:2rem;margin:8px 0"></p>
     <p>運んだ人数: <span id="sc-score">0</span></p>
     <button id="next-stage-btn">次のステージへ →</button>
     <button id="sc-title-btn">タイトルへ</button>
@@ -215,14 +218,14 @@ const FACILITY_TYPES = {
 };
 const DEST_TYPES = ['office','factory','commercial','hospital'];
 const VEHICLE_TYPES = {
-  bus:   {cap:6,  pxSpeed:240, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false},
-  tram:  {cap:12, pxSpeed:300, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30, dwell:0.5, needsTerminal:'tramStop'},
-  train: {cap:30, pxSpeed:450, dailyCost:25, icon:'🚂', unlockPop:100, buildCost:50, dwell:0.8, needsTerminal:'station'},
-  ferry: {cap:30, pxSpeed:80,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:2.0, needsTerminal:'port'},
-  plane: {cap:50, pxSpeed:0,   dailyCost:40, icon:'✈️', unlockPop:200, buildCost:80, planeScaling:true, dwell:3.0, needsTerminal:'airport'}
+  bus:   {cap:6,  pxSpeed:240, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false, desc:'安価で万能'},
+  tram:  {cap:15, pxSpeed:300, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30, dwell:0.5, needsTerminal:'tramStop', desc:'停留所🚏が必要 / 容量大'},
+  train: {cap:30, pxSpeed:500, dailyCost:30, icon:'🚂', unlockPop:100, buildCost:60, dwell:0.8, needsTerminal:'station', desc:'駅🚉が必要 / 最速・大容量・高コスト'},
+  ferry: {cap:30, pxSpeed:80,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:2.0, needsTerminal:'port', desc:'港⚓が必要 / 川を渡れる'},
+  plane: {cap:50, pxSpeed:0,   dailyCost:45, icon:'✈️', unlockPop:200, buildCost:100, planeScaling:true, dwell:3.0, needsTerminal:'airport', desc:'空港✈️が必要 / 長距離最強・最高コスト'}
 };
 const MAX_PEOPLE = 300;
-const OVERCROWD_LIMIT = 15;
+const OVERCROWD_LIMIT = 20;
 const FACILITY_RADIUS = 18;
 const DRAG_FACILITY_RADIUS = 30;
 const ROUTE_HIT_DIST = 12;
@@ -233,7 +236,7 @@ const STAGES = [
     name: '路線を引こう',
     desc: '住宅地からオフィスへドラッグして路線を引こう！',
     goal: 5,
-    money: 300,
+    money: 200,
     unlocks: ['bus'],
     maxRoutes: null,
     facilities: [
@@ -246,7 +249,7 @@ const STAGES = [
     name: '乗り物の使い分け',
     desc: '近距離はバス🚌、遠距離は電車🚂が効率的！',
     goal: 20,
-    money: 600,
+    money: 500,
     unlocks: ['bus','train'],
     maxRoutes: null,
     facilities: [
@@ -356,6 +359,8 @@ let currentUnlocks = [];
 // Daily report tracking
 let dayIncome = 0, dayExpense = 0, dayDelivered = 0;
 let showingReport = false;
+let _lowMoneyHinted = false;
+let _lastHintTime = 0;
 
 // Drag state
 let isDragging = false;
@@ -521,11 +526,18 @@ function init() {
     b.classList.add('active');
   });
 
-  $$('#vehicle-select button').forEach(b => b.onclick = () => {
-    if (b.disabled) return;
-    selectedVehicle = b.dataset.v;
-    $$('#vehicle-select button').forEach(x => x.classList.remove('active'));
-    b.classList.add('active');
+  $$('#vehicle-select button').forEach(b => {
+    let vt = VEHICLE_TYPES[b.dataset.v];
+    if (vt) {
+      let unlockText = vt.unlockPop > 0 ? `解放: 人口${vt.unlockPop}人` : '最初から使用可能';
+      b.title = `${vt.desc}\n容量: ${vt.cap}人 / 建設: ¥${vt.buildCost} / 維持: ¥${vt.dailyCost}/日\n${unlockText}`;
+    }
+    b.onclick = () => {
+      if (b.disabled) return;
+      selectedVehicle = b.dataset.v;
+      $$('#vehicle-select button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    };
   });
 
   requestAnimationFrame(loop);
@@ -589,6 +601,7 @@ function resetGame() {
   facilitySpawnTimer = 0;
   dayIncome = 0; dayExpense = 0; dayDelivered = 0;
   showingReport = false;
+  _lowMoneyHinted = false;
   speed = 1;
   isDragging = false;
   dragType = 'none';
@@ -1332,10 +1345,17 @@ function update(dt) {
 
   // Spawn people at residential
   let residentials = facilities.filter(f => f.type === 'residential');
-  let destinations = facilities.filter(f => f.type !== 'residential');
+  let destinations = facilities.filter(f => f.type !== 'residential' && !FACILITY_TYPES[f.type].terminal);
   residentials.forEach(f => {
     f.spawnTimer += sDt;
-    let interval = Math.max(4, 12 - simTime / 120);
+    let interval;
+    if (gameMode === 'stage') {
+      // Stage-specific spawn intervals: stage 1 slow, stage 5 fast
+      const stageIntervals = [14, 11, 9, 7, 5];
+      interval = stageIntervals[currentStage] || 8;
+    } else {
+      interval = Math.max(4, 12 - simTime / 120);
+    }
     if (f.spawnTimer >= interval && destinations.length > 0 && people.length < MAX_PEOPLE) {
       f.spawnTimer = 0;
       let dest = destinations[Math.floor(Math.random() * destinations.length)];
@@ -1478,11 +1498,16 @@ function update(dt) {
     }
   });
 
-  // Check overcrowding
+  // Check overcrowding + hints
   for (let f of facilities) {
     if (f.waiting.length >= OVERCROWD_LIMIT) {
       f.flashTimer += sDt;
-      if (f.waiting.length >= OVERCROWD_LIMIT + 5) {
+      // Show hint when first reaching overcrowd limit
+      if (f.flashTimer > 0 && f.flashTimer < sDt * 2) {
+        let typeNames = {residential:'住宅地',office:'オフィス',factory:'工場',commercial:'商業施設',hospital:'病院',tramStop:'停留所',station:'駅',port:'港',airport:'空港'};
+        showNotif(`⚠️ ${typeNames[f.type]||f.type}が混雑しています！路線を追加しよう`);
+      }
+      if (f.waiting.length >= OVERCROWD_LIMIT + 8) {
         gameOver('施設の待ち人数が限界を超えました！');
         return;
       }
@@ -1491,10 +1516,28 @@ function update(dt) {
     }
   }
 
+  // Low money hint
+  if (money >= 0 && money < 30 && routes.length > 0 && !_lowMoneyHinted) {
+    _lowMoneyHinted = true;
+    showNotif('💰 資金注意！不要な路線を削除して節約しよう');
+  }
+  if (money > 60) _lowMoneyHinted = false;
+
   // Check bankruptcy
   if (money < -50) {
     gameOver('資金が尽きました！');
     return;
+  }
+
+  // Cap people: remove oldest waiting people if over limit
+  if (people.length > MAX_PEOPLE) {
+    let waiting = people.filter(p => p.state === 'waiting');
+    while (people.length > MAX_PEOPLE && waiting.length > 0) {
+      let oldest = waiting.shift();
+      let f = facilities[oldest.facilityId];
+      if (f) f.waiting = f.waiting.filter(p => p !== oldest);
+      people = people.filter(p => p !== oldest);
+    }
   }
 
   // Stage clear check
@@ -1527,6 +1570,13 @@ function gameOver(reason) {
   $('#go-title').textContent = 'GAME OVER';
   $('#go-reason').textContent = reason;
   $('#go-score').textContent = score;
+  if (gameMode === 'stage') {
+    let stage = STAGES[currentStage];
+    let pct = Math.min(100, Math.round(score / stage.goal * 100));
+    $('#go-achievement').textContent = `達成率: ${pct}% (目標: ${stage.goal}人)`;
+  } else {
+    $('#go-achievement').textContent = `Day ${gameDay} まで運営 ｜ 路線: ${routes.length}本`;
+  }
   $('#game-over').style.display = 'flex';
 }
 
@@ -1535,6 +1585,15 @@ function stageClear() {
   let stage = STAGES[currentStage];
   $('#sc-msg').textContent = `${stage.name}をクリア！`;
   $('#sc-score').textContent = score;
+  // Star rating
+  let stars = 1;
+  let ratio = score / stage.goal;
+  if (ratio >= 2.0) stars = 3;
+  else if (ratio >= 1.5) stars = 2;
+  let starText = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+  let ratingMsg = stars === 3 ? '完璧！' : stars === 2 ? 'すばらしい！' : 'クリア！';
+  $('#sc-stars').textContent = starText;
+  $('#sc-msg').textContent = `${stage.name} — ${ratingMsg}`;
   if (currentStage >= STAGES.length - 1) {
     $('#next-stage-btn').textContent = '🎉 全ステージクリア！';
   } else {
@@ -1908,7 +1967,7 @@ function loop(ts) {
   if (gameState === 'playing') {
     update(dt);
   }
-  draw();
+  if (!document.hidden) draw();
   requestAnimationFrame(loop);
 }
 
