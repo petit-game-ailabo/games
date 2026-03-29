@@ -182,15 +182,19 @@ const FACILITY_TYPES = {
   office:      {shape:'square',color:'#4a90d9',stroke:'#3570b0',label:'🏢'},
   factory:     {shape:'triangle',color:'#e8943d',stroke:'#c07020',label:'🏭'},
   commercial:  {shape:'diamond',color:'#5cbd6a',stroke:'#3a9a4a',label:'🛒'},
-  hospital:    {shape:'cross',color:'#e85d5d',stroke:'#c04040',label:'🏥'}
+  hospital:    {shape:'cross',color:'#e85d5d',stroke:'#c04040',label:'🏥'},
+  tramStop:    {shape:'square',color:'#8866cc',stroke:'#6644aa',label:'🚏',terminal:true},
+  station:     {shape:'square',color:'#cc8844',stroke:'#aa6622',label:'🚉',terminal:true},
+  port:        {shape:'circle',color:'#44aacc',stroke:'#228899',label:'⚓',terminal:true},
+  airport:     {shape:'diamond',color:'#cc44aa',stroke:'#aa2288',label:'✈️',terminal:true}
 };
 const DEST_TYPES = ['office','factory','commercial','hospital'];
 const VEHICLE_TYPES = {
-  bus:   {cap:6,  pxSpeed:80,  dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15},
-  tram:  {cap:12, pxSpeed:100, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30},
-  train: {cap:30, pxSpeed:150, dailyCost:25, icon:'🚂', unlockPop:100, buildCost:50},
-  ferry: {cap:30, pxSpeed:30,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true},
-  plane: {cap:50, pxSpeed:0,   dailyCost:40, icon:'✈️', unlockPop:200, buildCost:80, planeScaling:true}
+  bus:   {cap:6,  pxSpeed:240, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false},
+  tram:  {cap:12, pxSpeed:300, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30, dwell:0.5, needsTerminal:'tramStop'},
+  train: {cap:30, pxSpeed:450, dailyCost:25, icon:'🚂', unlockPop:100, buildCost:50, dwell:0.8, needsTerminal:'station'},
+  ferry: {cap:30, pxSpeed:80,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:2.0, needsTerminal:'port'},
+  plane: {cap:50, pxSpeed:0,   dailyCost:40, icon:'✈️', unlockPop:200, buildCost:80, planeScaling:true, dwell:3.0, needsTerminal:'airport'}
 };
 const MAX_PEOPLE = 300;
 const OVERCROWD_LIMIT = 15;
@@ -341,7 +345,7 @@ function calcRouteLength(r) {
 function getEffectivePxSpeed(vehicleType, routeLen) {
   let vt = VEHICLE_TYPES[vehicleType];
   if (vt.planeScaling) {
-    return 60 + routeLen * 0.3;
+    return 180 + routeLen * 0.9;
   }
   return vt.pxSpeed;
 }
@@ -1252,8 +1256,9 @@ function update(dt) {
     let atEnd = v.pos >= 1;
     let atStart = v.pos <= 0;
 
-    if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = 0.2; }
-    if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = 0.5; }
+    let vtDwell = vt.dwell || 0.3;
+    if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = vtDwell; }
+    if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = vtDwell; }
 
     // Check if near a stop (use dynamic threshold based on speed to avoid overshoot)
     let nearStop = -1;
@@ -1325,7 +1330,7 @@ function update(dt) {
       }
 
       if (toUnload.length > 0 || v.passengers.length > 0) {
-        v.dwellTimer = 0.3;
+        v.dwellTimer = vt.dwell || 0.3;
       }
     }
   });
