@@ -174,6 +174,31 @@ canvas{display:block}
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
+// ── Sound Effects (Web Audio) ──
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, dur, type, vol) {
+  try {
+    let ac = getAudioCtx();
+    let osc = ac.createOscillator();
+    let gain = ac.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.15;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start();
+    osc.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+function sfxRouteCreated() { playTone(523, 0.15, 'sine', 0.12); setTimeout(() => playTone(659, 0.15, 'sine', 0.12), 100); setTimeout(() => playTone(784, 0.2, 'sine', 0.12), 200); }
+function sfxPassengerArrived() { playTone(880, 0.08, 'sine', 0.06); }
+function sfxGameOver() { playTone(220, 0.3, 'sawtooth', 0.1); setTimeout(() => playTone(180, 0.3, 'sawtooth', 0.1), 200); setTimeout(() => playTone(140, 0.5, 'sawtooth', 0.1), 400); }
+
 // ── Constants ──
 const BG = '#f0ece0';
 const ROUTE_COLORS = ['#d63031','#2d6cdf','#27ae60','#e67e22','#8e44ad','#e84393','#16a085','#c0392b'];
@@ -802,6 +827,7 @@ function closeEditPanel() {
 
 function deleteRoute() {
   if (editingRoute >= 0) {
+    if (!confirm(`路線${editingRoute + 1}を削除しますか？`)) return;
     let ri = editingRoute;
     // Release passengers
     vehicles.filter(v => v.routeIdx === ri).forEach(v => {
@@ -1031,6 +1057,11 @@ function onPointerUp(e) {
     }
   }
 
+  // Facility tap (no drag) → show info
+  if (dragType === 'facility' && !dragMoved && dragStartFacility) {
+    showFacilityInfo(dragStartFacility);
+  }
+
   if (dragType === 'facility' && dragMoved) {
     let target = findFacilityAt(wp.x, wp.y, DRAG_FACILITY_RADIUS);
     if (target && target !== dragStartFacility) {
@@ -1094,6 +1125,7 @@ function createRouteFromDrag(fromFac, toFac) {
   };
   routes.push(newRoute);
   syncVehicles(routes.length - 1);
+  sfxRouteCreated();
   showNotif(`路線${routes.length}を開通！ (-¥${cost})`);
 }
 
@@ -1193,6 +1225,29 @@ function showNotif(text) {
   el.style.opacity = 1;
   clearTimeout(notifTimer);
   notifTimer = setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.style.display='none', 300); }, 2000);
+}
+
+function showFacilityInfo(f) {
+  let ft = FACILITY_TYPES[f.type];
+  let typeNames = {residential:'住宅地',office:'オフィス',factory:'工場',commercial:'商業施設',hospital:'病院',tramStop:'路面電車停留所',station:'駅',port:'港',airport:'空港'};
+  let typeName = typeNames[f.type] || f.type;
+  // Find connected routes
+  let connRoutes = [];
+  routes.forEach((r, ri) => {
+    if (r.stops.includes(f.id)) connRoutes.push(ri + 1);
+  });
+  let connText = connRoutes.length > 0 ? connRoutes.map(n => `路線${n}`).join(', ') : 'なし';
+  let el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:18px 26px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.18);z-index:55;text-align:center;min-width:200px;transition:opacity .4s';
+  el.innerHTML = `<div style="font-size:1.2rem;margin-bottom:6px">${ft.label} ${typeName}</div>
+    <div style="font-size:.85rem;line-height:1.8;color:#555">
+      <div>👥 待ち人数: <b>${f.waiting.length}</b>人</div>
+      <div>🔗 接続路線: ${connText}</div>
+      ${ft.terminal ? '<div style="color:#8e44ad;font-size:.8rem">🔄 ターミナル施設</div>' : ''}
+    </div>`;
+  el.onclick = () => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); };
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 3500);
 }
 
 function showDailyReport(day, income, expense, delivered) {
@@ -1364,6 +1419,7 @@ function update(dt) {
           money += fare;
           dayIncome += fare;
           dayDelivered++;
+          sfxPassengerArrived();
           people = people.filter(pp => pp !== p);
         } else {
           // Transfer
@@ -1467,6 +1523,7 @@ function updateUnlocks() {
 
 function gameOver(reason) {
   gameState = 'over';
+  sfxGameOver();
   $('#go-title').textContent = 'GAME OVER';
   $('#go-reason').textContent = reason;
   $('#go-score').textContent = score;
@@ -1714,6 +1771,60 @@ function draw() {
   });
 
   ctx.restore();
+
+  // Minimap
+  if (facilities.length > 2) {
+    let mmW = 100, mmH = 70;
+    let mmX = W - mmW - 8, mmY = H - toolH - mmH - 8;
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 1;
+    ctx.fillRect(mmX, mmY, mmW, mmH);
+    ctx.strokeRect(mmX, mmY, mmW, mmH);
+    let scX = mmW / mapW, scY = mmH / mapH;
+    // Draw rivers on minimap
+    rivers.forEach(r => {
+      ctx.beginPath();
+      r.points.forEach((p, i) => {
+        let mx = mmX + p.x * scX, my = mmY + p.y * scY;
+        if (i === 0) ctx.moveTo(mx, my); else ctx.lineTo(mx, my);
+      });
+      ctx.strokeStyle = '#a8d4e6';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+    // Routes on minimap
+    routes.forEach(r => {
+      ctx.beginPath();
+      r.stops.forEach((sid, i) => {
+        let f = facilities[sid];
+        if (!f) return;
+        let mx = mmX + f.x * scX, my = mmY + f.y * scY;
+        if (i === 0) ctx.moveTo(mx, my); else ctx.lineTo(mx, my);
+      });
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+    // Facilities on minimap
+    facilities.forEach(f => {
+      let mx = mmX + f.x * scX, my = mmY + f.y * scY;
+      let ft = FACILITY_TYPES[f.type];
+      ctx.beginPath();
+      ctx.arc(mx, my, 2, 0, Math.PI * 2);
+      ctx.fillStyle = ft.color === '#ffffff' ? '#aaa' : ft.stroke;
+      ctx.fill();
+    });
+    // Viewport rectangle
+    let vl = camX - W / 2 / camZoom, vt2 = camY - H / 2 / camZoom;
+    let vw = W / camZoom, vh = H / camZoom;
+    ctx.strokeStyle = '#e85d5d';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mmX + vl * scX, mmY + vt2 * scY, vw * scX, vh * scY);
+    ctx.restore();
+  }
 
   // Update HUD
   $('#h-time').textContent = formatGameTime();
