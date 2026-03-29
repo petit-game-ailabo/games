@@ -1401,12 +1401,12 @@ function update(dt) {
     let atStart = v.pos <= 0;
 
     let vtDwell = vt.dwell || 0.3;
-    if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = vtDwell; }
-    if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = vtDwell; }
+    if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = vtDwell; v.atStation = -1; }
+    if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = vtDwell; v.atStation = -1; }
 
     // Check if near a stop (use dynamic threshold based on speed to avoid overshoot)
     let nearStop = -1;
-    let threshold = Math.max(0.02, posIncrement * 1.5);
+    let threshold = Math.max(0.03, posIncrement * 2.0);
     for (let i = 0; i <= totalSegs; i++) {
       let t = i / totalSegs;
       if (Math.abs(v.pos - t) < threshold) { nearStop = i; break; }
@@ -1507,10 +1507,7 @@ function update(dt) {
         let typeNames = {residential:'住宅地',office:'オフィス',factory:'工場',commercial:'商業施設',hospital:'病院',tramStop:'停留所',station:'駅',port:'港',airport:'空港'};
         showNotif(`⚠️ ${typeNames[f.type]||f.type}が混雑しています！路線を追加しよう`);
       }
-      if (f.waiting.length >= OVERCROWD_LIMIT + 8) {
-        gameOver('施設の待ち人数が限界を超えました！');
-        return;
-      }
+      // No game over from overcrowding — just flash warning
     } else {
       f.flashTimer = 0;
     }
