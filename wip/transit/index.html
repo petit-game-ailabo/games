@@ -6,9 +6,9 @@
 <title>Transit Builder</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:fixed;top:0;left:0}
-body{background:#f0ece0;font-family:'Segoe UI',system-ui,sans-serif;color:#3a3a3a;touch-action:none}
-canvas{display:block}
+html{position:fixed;top:0;left:0;right:0;bottom:0;overflow:hidden}
+body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#f0ece0;font-family:'Segoe UI',system-ui,sans-serif;color:#3a3a3a;touch-action:none;-webkit-overflow-scrolling:auto}
+canvas{display:block;position:fixed;top:0;left:0;width:100%!important;height:100%!important}
 #title-screen{position:fixed;inset:0;background:#f0ece0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100}
 #title-screen h1{font-size:clamp(2rem,8vw,4rem);font-weight:300;letter-spacing:.3em;color:#3a3a3a;margin-bottom:.2em}
 #title-screen p{font-size:clamp(.9rem,3vw,1.3rem);color:#8a8a7a;margin-bottom:2em;letter-spacing:.15em}
@@ -1442,13 +1442,20 @@ function update(dt) {
     if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = vtDwell; v.atStation = -1; v.justTurned = true; }
     if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = vtDwell; v.atStation = -1; v.justTurned = true; }
 
-    // Check if near a stop — use generous threshold and also check if we crossed over a stop
+    // Check if near a stop — distance-based positions
     let nearStop = -1;
     let threshold = Math.max(0.04, posIncrement * 2.5);
     let prevPos = v.pos - v.dir * posIncrement;
+    // Compute stop positions based on cumulative distance
+    let stopPositions = [0]; // stop 0 is at pos 0
+    let cumDist = 0;
+    for (let i = 0; i < totalSegs; i++) {
+      let a = facilities[r.stops[i]], b = facilities[r.stops[i+1]];
+      if (a && b) cumDist += Math.hypot(b.x - a.x, b.y - a.y);
+      stopPositions.push(routeLen > 0 ? cumDist / routeLen : (i+1) / totalSegs);
+    }
     for (let i = 0; i <= totalSegs; i++) {
-      let t = i / totalSegs;
-      // Within threshold OR crossed over this stop
+      let t = stopPositions[i];
       let crossed = (v.dir > 0) ? (prevPos < t && v.pos >= t - threshold) : (prevPos > t && v.pos <= t + threshold);
       if (Math.abs(v.pos - t) < threshold || crossed) { nearStop = i; break; }
     }
@@ -1529,20 +1536,30 @@ function update(dt) {
     }
   });
 
-  // Update vehicle positions for rendering
+  // Update vehicle positions for rendering (distance-based interpolation)
   vehicles.forEach(v => {
     let r = routes[v.routeIdx];
     if (!r || r.stops.length < 2) return;
-    let totalSegs = r.stops.length - 1;
-    let seg = Math.floor(v.pos * totalSegs);
-    seg = Math.max(0, Math.min(totalSegs - 1, seg));
-    let t = (v.pos * totalSegs) - seg;
-    let a = facilities[r.stops[seg]];
-    let b = facilities[r.stops[seg + 1]];
-    if (a && b) {
-      v.wx = a.x + (b.x - a.x) * t;
-      v.wy = a.y + (b.y - a.y) * t;
+    let routeLen = calcRouteLength(r);
+    if (routeLen <= 0) return;
+    // v.pos is 0..1 representing fraction of total DISTANCE traveled
+    let targetDist = v.pos * routeLen;
+    let cumDist = 0;
+    for (let i = 0; i < r.stops.length - 1; i++) {
+      let a = facilities[r.stops[i]], b = facilities[r.stops[i+1]];
+      if (!a || !b) continue;
+      let segLen = Math.hypot(b.x - a.x, b.y - a.y);
+      if (cumDist + segLen >= targetDist) {
+        let t = segLen > 0 ? (targetDist - cumDist) / segLen : 0;
+        v.wx = a.x + (b.x - a.x) * t;
+        v.wy = a.y + (b.y - a.y) * t;
+        return;
+      }
+      cumDist += segLen;
     }
+    // Fallback: at end
+    let last = facilities[r.stops[r.stops.length - 1]];
+    if (last) { v.wx = last.x; v.wy = last.y; }
   });
 
 
