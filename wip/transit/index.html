@@ -176,7 +176,7 @@ const $$ = s => document.querySelectorAll(s);
 
 // ── Constants ──
 const BG = '#f0ece0';
-const ROUTE_COLORS = ['#e85d5d','#4a90d9','#5cbd6a','#e8943d','#9b6bc4','#e87da5'];
+const ROUTE_COLORS = ['#d63031','#2d6cdf','#27ae60','#e67e22','#8e44ad','#e84393','#16a085','#c0392b'];
 const FACILITY_TYPES = {
   residential: {shape:'circle',color:'#ffffff',stroke:'#aaa',label:'🏠',generates:true},
   office:      {shape:'square',color:'#4a90d9',stroke:'#3570b0',label:'🏢'},
@@ -234,7 +234,7 @@ const STAGES = [
   },
   {
     name: '経由地を使え',
-    desc: '路線数に限りがある！1本の路線に複数の停車駅を設定しよう。線の途中をドラッグして施設に繋げば経由地になるよ',
+    desc: '路線数に限りがある！1本の路線に複数の停車駅を設定しよう。線の途中をドラッグして施設に繋げば経由地になるよ。路面電車🚋には停留所🚏が必要！',
     goal: 30,
     money: 800,
     unlocks: ['bus','tram'],
@@ -242,6 +242,7 @@ const STAGES = [
     facilities: [
       {type:'residential', x:80, y:120},
       {type:'residential', x:80, y:420},
+      {type:'tramStop', x:340, y:270},
       {type:'office', x:350, y:80},
       {type:'factory', x:600, y:150},
       {type:'commercial', x:600, y:400},
@@ -251,7 +252,7 @@ const STAGES = [
   },
   {
     name: '乗り換えネットワーク',
-    desc: '川で左右が分断！船🚢で川を渡って乗り換えよう',
+    desc: '川で左右が分断！船🚢で川を渡って乗り換えよう。港⚓が両岸に必要！',
     goal: 50,
     money: 1200,
     unlocks: ['bus','tram','ferry'],
@@ -260,6 +261,9 @@ const STAGES = [
       {type:'residential', x:100, y:120},
       {type:'residential', x:100, y:300},
       {type:'residential', x:100, y:480},
+      {type:'tramStop', x:220, y:200},
+      {type:'port', x:310, y:300},
+      {type:'port', x:400, y:300},
       {type:'office', x:550, y:120},
       {type:'factory', x:550, y:300},
       {type:'commercial', x:550, y:480},
@@ -271,7 +275,7 @@ const STAGES = [
   },
   {
     name: '大都市',
-    desc: '大都市の交通を管理せよ！',
+    desc: '大都市の交通を管理せよ！全ての乗り物を駆使しよう',
     goal: 100,
     money: 2000,
     unlocks: ['bus','tram','train','ferry','plane'],
@@ -281,6 +285,11 @@ const STAGES = [
       {type:'residential', x:80, y:250},
       {type:'residential', x:80, y:450},
       {type:'residential', x:600, y:450},
+      {type:'station', x:300, y:180},
+      {type:'tramStop', x:180, y:180},
+      {type:'port', x:250, y:340},
+      {type:'port', x:450, y:340},
+      {type:'airport', x:650, y:80},
       {type:'office', x:300, y:80},
       {type:'office', x:550, y:80},
       {type:'factory', x:300, y:300},
@@ -288,7 +297,7 @@ const STAGES = [
       {type:'commercial', x:400, y:450},
       {type:'hospital', x:200, y:450},
       {type:'office', x:450, y:180},
-      {type:'commercial', x:250, y:180}
+      {type:'commercial', x:250, y:80}
     ],
     rivers: [
       {points:[{x:-50,y:370},{x:150,y:360},{x:350,y:380},{x:500,y:365},{x:700,y:375}], width:35}
@@ -319,6 +328,9 @@ let notifTimer = 0;
 let mapW, mapH;
 // Track unlocks for current game
 let currentUnlocks = [];
+// Daily report tracking
+let dayIncome = 0, dayExpense = 0, dayDelivered = 0;
+let showingReport = false;
 
 // Drag state
 let isDragging = false;
@@ -550,6 +562,8 @@ function resetGame() {
   score = 0;
   totalPop = 0;
   facilitySpawnTimer = 0;
+  dayIncome = 0; dayExpense = 0; dayDelivered = 0;
+  showingReport = false;
   speed = 1;
   isDragging = false;
   dragType = 'none';
@@ -745,6 +759,12 @@ function openEditPanel(ri) {
       // Check water constraint
       if (!vt.water && r.crossesWater) {
         showNotif('川を渡るには⛴️船が必要です');
+        return;
+      }
+      // Check terminal constraint
+      if (!hasRequiredTerminal(vk, r.stops)) {
+        let name = getTerminalName(vk);
+        showNotif(`${name}が路線に必要です！`);
         return;
       }
       r.vehicleType = vk;
@@ -1025,6 +1045,23 @@ function onPointerUp(e) {
   dragRouteSegIdx = -1;
 }
 
+// Check if a set of stop facility IDs satisfies the terminal requirement for a vehicle type
+function hasRequiredTerminal(vehicleType, stopIds) {
+  let vt = VEHICLE_TYPES[vehicleType];
+  if (!vt.needsTerminal) return true; // bus: no terminal needed
+  let needed = vt.needsTerminal; // e.g. 'tramStop', 'station', 'port', 'airport'
+  for (let sid of stopIds) {
+    let f = facilities[sid];
+    if (f && f.type === needed) return true;
+  }
+  return false;
+}
+
+function getTerminalName(vehicleType) {
+  let map = {tram:'路面電車停留所🚏',train:'駅🚉',ferry:'港⚓',plane:'空港✈️'};
+  return map[vehicleType] || '';
+}
+
 function createRouteFromDrag(fromFac, toFac) {
   let maxR = 6;
   if (gameMode === 'stage') {
@@ -1035,6 +1072,13 @@ function createRouteFromDrag(fromFac, toFac) {
   let crosses = routeCrossesRiver(fromFac, toFac);
   if (crosses && selectedVehicle !== 'ferry') {
     showNotif('川を渡るには⛴️船が必要です');
+    return;
+  }
+  // Terminal check
+  let stopIds = [fromFac.id, toFac.id];
+  if (!hasRequiredTerminal(selectedVehicle, stopIds)) {
+    let name = getTerminalName(selectedVehicle);
+    showNotif(`${name}が路線に必要です！`);
     return;
   }
   let vt = VEHICLE_TYPES[selectedVehicle];
@@ -1151,6 +1195,23 @@ function showNotif(text) {
   notifTimer = setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.style.display='none', 300); }, 2000);
 }
 
+function showDailyReport(day, income, expense, delivered) {
+  if (day < 1) return;
+  let profit = income - expense;
+  let profitColor = profit >= 0 ? '#27ae60' : '#e85d5d';
+  let el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px 32px;border-radius:16px;box-shadow:0 6px 30px rgba(0,0,0,.2);z-index:55;text-align:center;min-width:220px;transition:opacity .5s';
+  el.innerHTML = `<div style="font-size:1.1rem;font-weight:700;color:#3a3a3a;margin-bottom:10px">📊 Day ${day} レポート</div>
+    <div style="font-size:.9rem;line-height:2;color:#555">
+      <div>🚶 運んだ人数: <b>${delivered}</b>人</div>
+      <div>💰 収入: <b style="color:#27ae60">+¥${income}</b></div>
+      <div>🔧 維持費: <b style="color:#e85d5d">-¥${expense}</b></div>
+      <div style="border-top:1px solid #eee;padding-top:6px;margin-top:4px">📈 損益: <b style="color:${profitColor}">${profit >= 0 ? '+' : ''}¥${profit}</b></div>
+    </div>`;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }, 4000);
+}
+
 // ── Game Time ──
 function formatGameTime() {
   let totalMin = Math.floor(gameMinutes) % 1440;
@@ -1191,7 +1252,10 @@ function update(dt) {
     totalCost *= daysSinceLastCost;
     if (totalCost > 0) {
       money -= totalCost;
-      showNotif(`日次維持費: -¥${totalCost}`);
+      dayExpense += totalCost;
+      // Show daily report before resetting
+      showDailyReport(gameDay - 1, dayIncome, dayExpense, dayDelivered);
+      dayIncome = 0; dayExpense = 0; dayDelivered = 0;
     }
   }
 
@@ -1201,6 +1265,11 @@ function update(dt) {
     if (facilitySpawnTimer > 30) {
       facilitySpawnTimer = 0;
       let types = [...DEST_TYPES, 'residential'];
+      // Terminal facilities based on population thresholds
+      if (totalPop >= 30) types.push('tramStop');
+      if (totalPop >= 80) types.push('station');
+      if (totalPop >= 20) types.push('port');
+      if (totalPop >= 150) types.push('airport');
       let t = types[Math.floor(Math.random() * types.length)];
       spawnFacility(t, false);
     }
@@ -1293,6 +1362,8 @@ function update(dt) {
           // Transfer bonus
           fare += (p.transfers || 0) * 2;
           money += fare;
+          dayIncome += fare;
+          dayDelivered++;
           people = people.filter(pp => pp !== p);
         } else {
           // Transfer
@@ -1453,10 +1524,24 @@ function draw() {
 
   // Routes
   routes.forEach((r, ri) => {
-    ctx.strokeStyle = r.color;
-    ctx.lineWidth = 6;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    // Dark outline for contrast
+    ctx.strokeStyle = 'rgba(0,0,0,.25)';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    for (let i = 0; i < r.stops.length; i++) {
+      let f = facilities[r.stops[i]];
+      if (!f) continue;
+      if (i === 0) ctx.moveTo(f.x, f.y);
+      else ctx.lineTo(f.x, f.y);
+    }
+    ctx.stroke();
+
+    // Main color line
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = 7;
     ctx.beginPath();
     for (let i = 0; i < r.stops.length; i++) {
       let f = facilities[r.stops[i]];
@@ -1468,8 +1553,8 @@ function draw() {
 
     // Highlight if editing this route
     if (ri === editingRoute) {
-      ctx.strokeStyle = 'rgba(255,255,255,.4)';
-      ctx.lineWidth = 10;
+      ctx.strokeStyle = 'rgba(255,255,255,.5)';
+      ctx.lineWidth = 13;
       ctx.beginPath();
       for (let i = 0; i < r.stops.length; i++) {
         let f = facilities[r.stops[i]];
@@ -1485,11 +1570,11 @@ function draw() {
       let f = facilities[sid];
       if (!f) return;
       ctx.beginPath();
-      ctx.arc(f.x, f.y, 5, 0, Math.PI * 2);
+      ctx.arc(f.x, f.y, 6, 0, Math.PI * 2);
       ctx.fillStyle = r.color;
       ctx.fill();
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2;
       ctx.stroke();
     });
   });
@@ -1590,24 +1675,39 @@ function draw() {
     ctx.save();
     ctx.translate(v.wx, v.wy);
 
+    // Scale vehicle size based on passenger count
+    let loadRatio = v.passengers.length / Math.max(vt.cap, 1);
+    let baseR = 10;
+    let vRadius = baseR + loadRatio * 5; // 10~15px radius
+
     ctx.beginPath();
-    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.arc(0, 0, vRadius, 0, Math.PI * 2);
     ctx.fillStyle = r.color;
     ctx.fill();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.font = '10px sans-serif';
+    // Load indicator ring when near capacity
+    if (loadRatio > 0.7) {
+      ctx.beginPath();
+      ctx.arc(0, 0, vRadius + 3, -Math.PI/2, -Math.PI/2 + Math.PI*2*loadRatio);
+      ctx.strokeStyle = loadRatio > 0.9 ? '#e85d5d' : '#e8a83d';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    let iconSize = 10 + loadRatio * 3;
+    ctx.font = `${iconSize}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff';
     ctx.fillText(vt.icon, 0, 0);
 
     if (v.passengers.length > 0) {
-      ctx.font = 'bold 8px sans-serif';
+      ctx.font = 'bold 9px sans-serif';
       ctx.fillStyle = '#fff';
-      ctx.fillText(v.passengers.length, 0, 14);
+      ctx.fillText(v.passengers.length, 0, vRadius + 10);
     }
 
     ctx.restore();
