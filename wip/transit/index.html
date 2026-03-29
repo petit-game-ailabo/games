@@ -17,6 +17,14 @@ canvas{display:block}
 #free-btn{background:#e85d5d;color:#fff}
 #how-to-btn{padding:.6em 2em;font-size:.95rem;background:none;color:#888;border:2px solid #ccc;border-radius:2em;cursor:pointer;letter-spacing:.1em;transition:all .2s;margin-top:12px}
 #how-to-btn:hover{border-color:#888;color:#555}
+#stage-select{position:fixed;inset:0;background:#f0ece0;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:99;overflow-y:auto;padding:20px}
+#stage-select h2{font-size:1.5rem;color:#3a3a3a;margin-bottom:20px;letter-spacing:.15em}
+.stage-card{background:#fff;border-radius:12px;padding:16px 24px;margin:6px;width:min(320px,85vw);box-shadow:0 2px 10px rgba(0,0,0,.1);cursor:pointer;transition:transform .15s,box-shadow .15s;text-align:left}
+.stage-card:hover{transform:scale(1.03);box-shadow:0 4px 16px rgba(0,0,0,.15)}
+.stage-card h3{font-size:1rem;color:#4a90d9;margin-bottom:4px}
+.stage-card p{font-size:.8rem;color:#888;margin:2px 0}
+.stage-card .stage-goal{color:#e85d5d;font-weight:600}
+#stage-back-btn{margin-top:16px;padding:.6em 2em;font-size:.95rem;background:none;color:#888;border:2px solid #ccc;border-radius:2em;cursor:pointer}
 #hud{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:rgba(240,236,224,.92);backdrop-filter:blur(4px);z-index:10;font-size:clamp(.7rem,2.5vw,.85rem);gap:4px;flex-wrap:wrap}
 .hud-item{display:flex;align-items:center;gap:3px;white-space:nowrap}
 .hud-item span{font-weight:600}
@@ -28,15 +36,23 @@ canvas{display:block}
 .tool-btn.active{border-color:#e85d5d;background:#fde8e8}
 .tool-btn:disabled{opacity:.4;cursor:default}
 .route-color{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:middle;margin-right:4px}
-#edit-panel{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:20;display:none;min-width:220px;text-align:center}
-#edit-panel h3{margin-bottom:8px;font-size:.9rem}
-#edit-panel label{font-size:.8rem;display:block;margin:6px 0 2px}
-#edit-panel input[type=range]{width:100%}
+#edit-panel{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#fff;border-radius:12px;padding:14px 20px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:20;display:none;min-width:250px;text-align:center}
+#edit-panel h3{margin-bottom:8px;font-size:.95rem}
+#edit-panel .edit-row{font-size:.8rem;margin:6px 0;display:flex;align-items:center;justify-content:center;gap:6px}
+#edit-panel .edit-label{color:#888;font-size:.75rem}
+#interval-btns{display:flex;gap:4px;margin:8px 0;justify-content:center}
+#interval-btns button{padding:4px 10px;border:1.5px solid #ccc;border-radius:6px;background:#fff;font-size:.75rem;cursor:pointer;transition:all .15s}
+#interval-btns button.active{border-color:#4a90d9;background:#e0edf9;color:#4a90d9;font-weight:600}
+#edit-vehicle-select{display:flex;gap:4px;margin:8px 0;justify-content:center;flex-wrap:wrap}
+#edit-vehicle-select button{padding:3px 8px;border:1.5px solid #ccc;border-radius:6px;background:#fff;font-size:.75rem;cursor:pointer}
+#edit-vehicle-select button.active{border-color:#e85d5d;background:#fde8e8}
+#edit-vehicle-select button:disabled{opacity:.35}
+#edit-panel .edit-stats{font-size:.78rem;color:#555;margin:6px 0;line-height:1.6}
 #edit-panel .edit-btns{display:flex;gap:8px;margin-top:10px;justify-content:center}
-#edit-panel button{padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem}
+#edit-panel button.edit-action{padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem}
 #del-route-btn{background:#e85d5d;color:#fff}
 #close-edit-btn{background:#ddd}
-#vehicle-select{display:flex;gap:4px;margin-top:6px;justify-content:center;flex-wrap:wrap}
+#vehicle-select{display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
 #vehicle-select button{padding:3px 8px;border:1.5px solid #ccc;border-radius:6px;background:#fff;font-size:.75rem;cursor:pointer}
 #vehicle-select button.active{border-color:#e85d5d;background:#fde8e8}
 #vehicle-select button:disabled{opacity:.35}
@@ -64,6 +80,12 @@ canvas{display:block}
   <button id="how-to-btn">📖 遊び方</button>
 </div>
 
+<div id="stage-select">
+  <h2>🗺️ ステージ選択</h2>
+  <div id="stage-cards"></div>
+  <button id="stage-back-btn">← タイトルへ戻る</button>
+</div>
+
 <div id="tutorial-overlay" style="display:none;position:fixed;inset:0;background:rgba(240,236,224,.97);z-index:200;overflow-y:auto;padding:24px">
   <div style="max-width:400px;margin:0 auto">
     <h2 style="font-size:1.5rem;color:#3a3a3a;text-align:center;margin-bottom:16px">📖 遊び方</h2>
@@ -77,6 +99,7 @@ canvas{display:block}
 </div>
 
 <div id="hud" style="display:none">
+  <div class="hud-item">🕐 <span id="h-time">Day 1 08:00</span></div>
   <div class="hud-item">👥 <span id="h-pop">0</span></div>
   <div class="hud-item">💰 <span id="h-money">500</span></div>
   <div class="hud-item">📦 <span id="h-score">0</span></div>
@@ -85,13 +108,13 @@ canvas{display:block}
     <button data-sp="1" class="active">x1</button>
     <button data-sp="2">x2</button>
     <button data-sp="4">x4</button>
+    <button data-sp="10">x10</button>
   </div>
 </div>
 
 <div id="stage-info" style="display:none"></div>
 
 <div id="toolbar" style="display:none">
-  <button class="tool-btn" id="btn-edit">✏️ 編集</button>
   <div id="vehicle-select">
     <button data-v="bus" class="active">🚌</button>
     <button data-v="tram" disabled>🚋</button>
@@ -103,12 +126,22 @@ canvas{display:block}
 
 <div id="edit-panel">
   <h3 id="edit-title">路線 1</h3>
-  <label>本数: <span id="freq-val">1</span></label>
-  <input type="range" id="freq-slider" min="1" max="5" value="1">
-  <div id="vehicle-info" style="font-size:.75rem;margin-top:4px"></div>
+  <div class="edit-label">乗り物タイプ</div>
+  <div id="edit-vehicle-select"></div>
+  <div class="edit-label">運行間隔</div>
+  <div id="interval-btns">
+    <button data-iv="15">15分</button>
+    <button data-iv="30">30分</button>
+    <button data-iv="60" class="active">60分</button>
+    <button data-iv="120">120分</button>
+  </div>
+  <div class="edit-stats">
+    <div>🚌 必要台数: <span id="edit-vehicles">1</span>台</div>
+    <div>💰 維持費: ¥<span id="edit-cost">8</span>/日</div>
+  </div>
   <div class="edit-btns">
-    <button id="del-route-btn">削除</button>
-    <button id="close-edit-btn">閉じる</button>
+    <button class="edit-action" id="del-route-btn">削除</button>
+    <button class="edit-action" id="close-edit-btn">閉じる</button>
   </div>
 </div>
 
@@ -153,17 +186,17 @@ const FACILITY_TYPES = {
 };
 const DEST_TYPES = ['office','factory','commercial','hospital'];
 const VEHICLE_TYPES = {
-  bus:   {cap:6,  speed:10, cost:5,  icon:'🚌', unlockPop:0},
-  tram:  {cap:12, speed:8,  cost:8,  icon:'🚋', unlockPop:50},
-  train: {cap:30, speed:12, cost:15, icon:'🚂', unlockPop:100},
-  ferry: {cap:30, speed:3,  cost:10, icon:'⛴️', unlockPop:0, water:true},
-  plane: {cap:50, speed:20, cost:25, icon:'✈️', unlockPop:200}
+  bus:   {cap:6,  speed:10, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15},
+  tram:  {cap:12, speed:8,  dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30},
+  train: {cap:30, speed:12, dailyCost:25, icon:'🚂', unlockPop:100, buildCost:50},
+  ferry: {cap:30, speed:3,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true},
+  plane: {cap:50, speed:20, dailyCost:40, icon:'✈️', unlockPop:200, buildCost:80}
 };
 const MAX_PEOPLE = 300;
 const OVERCROWD_LIMIT = 15;
 const FACILITY_RADIUS = 18;
 const DRAG_FACILITY_RADIUS = 30;
-const ROUTE_HIT_DIST = 10;
+const ROUTE_HIT_DIST = 12;
 
 // ── Stages ──
 const STAGES = [
@@ -171,7 +204,7 @@ const STAGES = [
     name: 'ステージ 1',
     desc: 'バスで住宅地とオフィスを繋ごう',
     goal: 5,
-    money: 200,
+    money: 300,
     unlocks: ['bus'],
     facilities: [
       {type:'residential', x:150, y:200},
@@ -183,7 +216,7 @@ const STAGES = [
     name: 'ステージ 2',
     desc: '2つの路線で街を繋ごう',
     goal: 15,
-    money: 400,
+    money: 500,
     unlocks: ['bus','ferry'],
     facilities: [
       {type:'residential', x:100, y:150},
@@ -197,7 +230,7 @@ const STAGES = [
     name: 'ステージ 3',
     desc: '川を船で渡ろう',
     goal: 30,
-    money: 500,
+    money: 800,
     unlocks: ['bus','ferry'],
     facilities: [
       {type:'residential', x:120, y:120},
@@ -214,7 +247,7 @@ const STAGES = [
     name: 'ステージ 4',
     desc: '路面電車を活用しよう',
     goal: 50,
-    money: 600,
+    money: 1200,
     unlocks: ['bus','tram','ferry'],
     facilities: [
       {type:'residential', x:80, y:100},
@@ -231,7 +264,7 @@ const STAGES = [
     name: 'ステージ 5',
     desc: '大都市を制覇せよ！',
     goal: 100,
-    money: 800,
+    money: 2000,
     unlocks: ['bus','tram','train','ferry','plane'],
     facilities: [
       {type:'residential', x:80, y:80},
@@ -253,7 +286,7 @@ const STAGES = [
 
 // ── State ──
 let canvas, ctx, W, H;
-let gameState = 'title'; // title, playing, over, stageclear
+let gameState = 'title'; // title, stageselect, playing, over, stageclear
 let gameMode = 'free'; // free, stage
 let currentStage = 0;
 let speed = 1;
@@ -261,16 +294,19 @@ let money = 500, score = 0, totalPop = 0;
 let facilities = [], routes = [], vehicles = [], people = [];
 let rivers = [];
 let simTime = 0, lastFrame = 0;
-let selectedTool = 'none'; // none, edit
+let gameMinutes = 480; // Start at 08:00 (480 minutes from midnight)
+let gameDay = 1;
+let lastDayCostMinute = 0; // Track when we last charged daily costs
 let selectedVehicle = 'bus';
 let editingRoute = -1;
 let hudH = 40, toolH = 55;
 let camX = 0, camY = 0, camZoom = 1;
 let pinchDist = 0;
 let facilitySpawnTimer = 0;
-let costTimer = 0;
 let notifTimer = 0;
 let mapW, mapH;
+// Track unlocks for current game
+let currentUnlocks = [];
 
 // Drag state
 let isDragging = false;
@@ -282,6 +318,37 @@ let dragCurX = 0, dragCurY = 0;
 let dragStartScreenX = 0, dragStartScreenY = 0;
 let panStartCamX = 0, panStartCamY = 0;
 let dragMoved = false;
+
+// ── Helper: Calculate route length in pixels ──
+function calcRouteLength(r) {
+  let len = 0;
+  for (let i = 0; i < r.stops.length - 1; i++) {
+    let a = facilities[r.stops[i]], b = facilities[r.stops[i+1]];
+    if (a && b) len += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return len;
+}
+
+// ── Helper: Calculate required vehicles for a route ──
+function calcRequiredVehicles(r) {
+  let len = calcRouteLength(r);
+  let vt = VEHICLE_TYPES[r.vehicleType];
+  let oneWayTime = len / vt.speed; // in "pixel-time" units
+  // Convert to game minutes: at speed factor 0.008 per second, 1 game-sec moves vt.speed * 0.008
+  // But we need real game-minutes. Let's define: oneWayMinutes = len / (vt.speed * 0.48)
+  // This means a bus (speed 10) traveling 300px takes 300/(10*0.48) = 62.5 minutes ≈ 1 hour
+  let oneWayMinutes = len / (vt.speed * 0.48);
+  let roundTripMinutes = oneWayMinutes * 2;
+  let needed = Math.max(1, Math.ceil(roundTripMinutes / r.interval));
+  return {needed, oneWayMinutes, roundTripMinutes};
+}
+
+// ── Helper: Calculate daily cost for a route ──
+function calcRouteDailyCost(r) {
+  let {needed} = calcRequiredVehicles(r);
+  let vt = VEHICLE_TYPES[r.vehicleType];
+  return needed * vt.dailyCost;
+}
 
 // ── Init ──
 function init() {
@@ -301,8 +368,15 @@ function init() {
   canvas.addEventListener('touchend', onTouchEnd, {passive:false});
 
   // Title buttons
-  $('#stage-btn').onclick = () => startStageMode();
+  $('#stage-btn').onclick = () => showStageSelect();
   $('#free-btn').onclick = () => startFreeMode();
+
+  // Stage select
+  $('#stage-back-btn').onclick = () => {
+    $('#stage-select').style.display = 'none';
+    $('#title-screen').style.display = 'flex';
+  };
+  buildStageCards();
 
   // Tutorial
   const tutPages=[
@@ -326,14 +400,15 @@ function init() {
     </div>`,
     `<div style="text-align:center;line-height:1.8;font-size:15px;color:#3a3a3a">
       <h3 style="color:#e8a83e;margin-bottom:8px">⚙️ 路線の編集</h3>
-      <p>「✏️編集」ボタン→路線をタップ</p>
-      <p>・本数（頻度）をスライダーで調整</p>
+      <p>路線の<strong>線をタップ</strong>すると編集パネルが開きます</p>
+      <p>・運行間隔を調整（15分/30分/60分/120分）</p>
+      <p>・間隔が短い→台数増→コスト増</p>
       <p>・不要な路線は削除</p>
     </div>`,
     `<div style="text-align:center;line-height:1.8;font-size:15px;color:#3a3a3a">
       <h3 style="color:#5588cc;margin-bottom:8px">💡 コツ</h3>
       <p>・待ち人数が増えすぎるとゲームオーバー💥</p>
-      <p>・路線の維持にお金がかかります</p>
+      <p>・路線の維持費は毎日かかります</p>
       <p>・人口が増えると新しい乗り物が解放🚂</p>
       <p>・川を渡るには船⛴️が必要</p>
       <p style="margin-top:12px">ゆっくり始めて、街の成長に合わせて<br>路線を追加していきましょう！</p>
@@ -354,16 +429,20 @@ function init() {
   $('#tut-next').onclick=()=>{tutPage++;renderTut()};
   $('#tut-close').onclick=()=>{$('#tutorial-overlay').style.display='none';tutPage=0};
 
-  $('#btn-edit').onclick = () => toggleEdit();
   $('#close-edit-btn').onclick = closeEditPanel;
   $('#del-route-btn').onclick = deleteRoute;
-  $('#freq-slider').oninput = e => {
-    $('#freq-val').textContent = e.target.value;
-    if (editingRoute >= 0 && routes[editingRoute]) {
-      routes[editingRoute].freq = +e.target.value;
-      syncVehicles(editingRoute);
-    }
-  };
+
+  // Interval buttons
+  $$('#interval-btns button').forEach(b => b.onclick = () => {
+    if (editingRoute < 0 || !routes[editingRoute]) return;
+    let iv = +b.dataset.iv;
+    routes[editingRoute].interval = iv;
+    $$('#interval-btns button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    syncVehicles(editingRoute);
+    updateEditPanel();
+  });
+
   $('#retry-btn').onclick = () => {
     if (gameMode === 'stage') { startStage(currentStage); }
     else { resetFreeMode(); }
@@ -402,9 +481,33 @@ function resize() {
   mapH = Math.max(H * 1.5, 700);
 }
 
+function buildStageCards() {
+  let container = $('#stage-cards');
+  container.innerHTML = '';
+  STAGES.forEach((s, i) => {
+    let card = document.createElement('div');
+    card.className = 'stage-card';
+    let vehicleIcons = s.unlocks.map(v => VEHICLE_TYPES[v].icon).join(' ');
+    card.innerHTML = `<h3>${s.name}</h3><p>${s.desc}</p><p class="stage-goal">目標: ${s.goal}人運ぶ</p><p style="font-size:.75rem;color:#aaa">乗り物: ${vehicleIcons} ｜ 資金: ¥${s.money}</p>`;
+    card.onclick = () => {
+      $('#stage-select').style.display = 'none';
+      gameMode = 'stage';
+      currentStage = i;
+      startStage(i);
+    };
+    container.appendChild(card);
+  });
+}
+
+function showStageSelect() {
+  $('#title-screen').style.display = 'none';
+  $('#stage-select').style.display = 'flex';
+}
+
 function goToTitle() {
   gameState = 'title';
   $('#title-screen').style.display = 'flex';
+  $('#stage-select').style.display = 'none';
   $('#hud').style.display = 'none';
   $('#toolbar').style.display = 'none';
   $('#game-over').style.display = 'none';
@@ -420,19 +523,19 @@ function resetGame() {
   people = [];
   rivers = [];
   simTime = 0;
+  gameMinutes = 480; // 08:00
+  gameDay = 1;
+  lastDayCostMinute = 480;
   score = 0;
   totalPop = 0;
   facilitySpawnTimer = 0;
-  costTimer = 0;
   speed = 1;
-  selectedTool = 'none';
   isDragging = false;
   dragType = 'none';
   editingRoute = -1;
   $$('#speed-btns button').forEach(b => {
     b.classList.toggle('active', b.dataset.sp === '1');
   });
-  $('#btn-edit').classList.remove('active');
   closeEditPanel();
 }
 
@@ -441,9 +544,11 @@ function startFreeMode() {
   gameMode = 'free';
   resetGame();
   money = 500;
+  currentUnlocks = ['bus','ferry'];
   mapW = Math.max(W * 1.5, 900);
   mapH = Math.max(H * 1.5, 700);
   $('#title-screen').style.display = 'none';
+  $('#stage-select').style.display = 'none';
   $('#hud').style.display = 'flex';
   $('#toolbar').style.display = 'flex';
   $('#game-over').style.display = 'none';
@@ -459,6 +564,7 @@ function startFreeMode() {
 function resetFreeMode() {
   resetGame();
   money = 500;
+  currentUnlocks = ['bus','ferry'];
   gameState = 'playing';
   $('#game-over').style.display = 'none';
   generateFreeMap();
@@ -478,17 +584,11 @@ function generateFreeMap() {
 }
 
 // ── Stage Mode ──
-function startStageMode() {
-  gameMode = 'stage';
-  currentStage = 0;
-  startStage(0);
-}
-
 function startStage(idx) {
   resetGame();
   let stage = STAGES[idx];
   money = stage.money;
-  // Use a smaller map for stages
+  currentUnlocks = [...stage.unlocks];
   mapW = 700;
   mapH = 550;
   rivers = stage.rivers.map(r => ({
@@ -501,9 +601,9 @@ function startStage(idx) {
       flashTimer: 0, spawnTimer: 0
     });
   });
-  // Set unlocks for stage
   updateStageUnlocks(stage.unlocks);
   $('#title-screen').style.display = 'none';
+  $('#stage-select').style.display = 'none';
   $('#hud').style.display = 'flex';
   $('#toolbar').style.display = 'flex';
   $('#game-over').style.display = 'none';
@@ -520,7 +620,6 @@ function updateStageUnlocks(unlocks) {
   $$('#vehicle-select button').forEach(b => {
     b.disabled = !unlocks.includes(b.dataset.v);
   });
-  // Ensure selected vehicle is valid
   if (!unlocks.includes(selectedVehicle)) {
     selectedVehicle = unlocks[0] || 'bus';
     $$('#vehicle-select button').forEach(b => {
@@ -586,15 +685,57 @@ function segmentsIntersect(x1,y1,x2,y2,x3,y3,x4,y4) {
   return t > 0 && t < 1 && u > 0 && u < 1;
 }
 
-// ── Tools ──
-function toggleEdit() {
-  if (selectedTool === 'edit') {
-    selectedTool = 'none';
-  } else {
-    selectedTool = 'edit';
-  }
-  closeEditPanel();
-  $('#btn-edit').classList.toggle('active', selectedTool === 'edit');
+// ── Edit Panel ──
+function openEditPanel(ri) {
+  editingRoute = ri;
+  let r = routes[ri];
+  if (!r) return;
+  $('#edit-title').textContent = `路線 ${ri+1}`;
+  $('#edit-title').style.color = r.color;
+
+  // Build vehicle type buttons for edit panel
+  let evs = $('#edit-vehicle-select');
+  evs.innerHTML = '';
+  Object.keys(VEHICLE_TYPES).forEach(vk => {
+    let vt = VEHICLE_TYPES[vk];
+    let btn = document.createElement('button');
+    btn.textContent = vt.icon;
+    btn.dataset.v = vk;
+    btn.disabled = !currentUnlocks.includes(vk);
+    btn.className = (r.vehicleType === vk) ? 'active' : '';
+    btn.onclick = () => {
+      if (btn.disabled) return;
+      // Check water constraint
+      if (!vt.water && r.crossesWater) {
+        showNotif('川を渡るには⛴️船が必要です');
+        return;
+      }
+      r.vehicleType = vk;
+      evs.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+      btn.classList.add('active');
+      syncVehicles(ri);
+      updateEditPanel();
+    };
+    evs.appendChild(btn);
+  });
+
+  // Set interval buttons
+  $$('#interval-btns button').forEach(b => {
+    b.classList.toggle('active', +b.dataset.iv === r.interval);
+  });
+
+  updateEditPanel();
+  $('#edit-panel').style.display = 'block';
+}
+
+function updateEditPanel() {
+  if (editingRoute < 0 || !routes[editingRoute]) return;
+  let r = routes[editingRoute];
+  let {needed} = calcRequiredVehicles(r);
+  let dailyCost = calcRouteDailyCost(r);
+  let vt = VEHICLE_TYPES[r.vehicleType];
+  $('#edit-vehicles').textContent = needed;
+  $('#edit-cost').textContent = dailyCost;
 }
 
 function closeEditPanel() {
@@ -604,9 +745,19 @@ function closeEditPanel() {
 
 function deleteRoute() {
   if (editingRoute >= 0) {
-    vehicles = vehicles.filter(v => v.routeIdx !== editingRoute);
-    routes.splice(editingRoute, 1);
-    vehicles.forEach(v => { if (v.routeIdx > editingRoute) v.routeIdx--; });
+    let ri = editingRoute;
+    // Release passengers
+    vehicles.filter(v => v.routeIdx === ri).forEach(v => {
+      v.passengers.forEach(p => {
+        p.state = 'waiting';
+        p.vehicleId = -1;
+        let f = facilities[p.facilityId];
+        if (f && !f.waiting.includes(p)) f.waiting.push(p);
+      });
+    });
+    vehicles = vehicles.filter(v => v.routeIdx !== ri);
+    routes.splice(ri, 1);
+    vehicles.forEach(v => { if (v.routeIdx > ri) v.routeIdx--; });
     closeEditPanel();
   }
 }
@@ -614,18 +765,20 @@ function deleteRoute() {
 function syncVehicles(ri) {
   let r = routes[ri];
   if (!r) return;
+  let {needed} = calcRequiredVehicles(r);
   let existing = vehicles.filter(v => v.routeIdx === ri);
-  let target = r.freq;
-  while (existing.length < target) {
-    let v = createVehicle(ri, existing.length / target);
+  while (existing.length < needed) {
+    let v = createVehicle(ri, existing.length / Math.max(needed, 1));
     vehicles.push(v);
     existing.push(v);
   }
-  while (existing.length > target) {
+  while (existing.length > needed) {
     let rem = existing.pop();
     rem.passengers.forEach(p => {
       p.state = 'waiting';
       p.vehicleId = -1;
+      let f = facilities[p.facilityId];
+      if (f && !f.waiting.includes(p)) f.waiting.push(p);
     });
     vehicles = vehicles.filter(v => v !== rem);
   }
@@ -643,7 +796,10 @@ function createVehicle(ri, offsetFrac) {
     passengers: [],
     type: r.vehicleType,
     atStation: -1,
-    dwellTimer: 0
+    dwellTimer: 0,
+    // Timetable: track departure
+    nextDepartMinute: 0,
+    departed: true
   };
 }
 
@@ -672,9 +828,7 @@ function findFacilityAt(wx, wy, radius) {
   return best;
 }
 
-// BFS: find a transfer stop on currentRoute that can reach destFacility via other routes
 function findTransferStop(currentFacility, destFacility, currentRouteIdx) {
-  // Build adjacency: facility -> set of reachable facilities (via any route)
   let adj = {};
   routes.forEach((r, ri) => {
     if (!r || r.stops.length < 2) return;
@@ -686,14 +840,12 @@ function findTransferStop(currentFacility, destFacility, currentRouteIdx) {
       }
     }
   });
-  // BFS from each candidate transfer stop on currentRoute to destFacility
   let cr = routes[currentRouteIdx];
   if (!cr) return -1;
   for (let si = 0; si < cr.stops.length; si++) {
     let transferId = cr.stops[si];
-    if (transferId === currentFacility) continue; // don't exit at same stop
-    // BFS from transferId
-    let visited = new Set([currentFacility]); // don't loop back
+    if (transferId === currentFacility) continue;
+    let visited = new Set([currentFacility]);
     let queue = [transferId];
     visited.add(transferId);
     let found = false;
@@ -718,14 +870,13 @@ function findRouteAt(wx, wy) {
       let a = facilities[r.stops[i]], b = facilities[r.stops[i+1]];
       if (a && b) {
         let d = distPointSeg(wx, wy, a.x, a.y, b.x, b.y);
-        if (d < 15) return ri;
+        if (d < ROUTE_HIT_DIST + 3) return ri;
       }
     }
   }
   return -1;
 }
 
-// Find which segment of a route is nearest
 function findRouteSegAt(wx, wy) {
   let bestRi = -1, bestSeg = -1, bestD = ROUTE_HIT_DIST + 5;
   for (let ri = 0; ri < routes.length; ri++) {
@@ -752,16 +903,6 @@ function onPointerDown(e) {
   dragStartScreenY = e.clientY;
   dragMoved = false;
 
-  // Edit mode: just handle taps on routes (no dragging to create)
-  if (selectedTool === 'edit') {
-    // Start pan
-    isDragging = true;
-    dragType = 'pan';
-    panStartCamX = camX;
-    panStartCamY = camY;
-    return;
-  }
-
   // Check if pointer is on a facility
   let fac = findFacilityAt(wp.x, wp.y, DRAG_FACILITY_RADIUS);
   if (fac) {
@@ -773,7 +914,7 @@ function onPointerDown(e) {
     return;
   }
 
-  // Check if pointer is on a route line (to add a stop)
+  // Check if pointer is on a route line (to add a stop or open edit)
   let seg = findRouteSegAt(wp.x, wp.y);
   if (seg.ri >= 0 && seg.dist <= ROUTE_HIT_DIST) {
     isDragging = true;
@@ -813,35 +954,23 @@ function onPointerUp(e) {
   if (!isDragging) { isDragging = false; return; }
   let wp = screenToWorld(e.clientX, e.clientY);
 
-  if (dragType === 'pan' && !dragMoved && selectedTool === 'edit') {
-    // Tap in edit mode: check if tapped on a route
-    let ri = findRouteAt(wp.x, wp.y);
-    if (ri >= 0) {
-      editingRoute = ri;
-      let r = routes[ri];
-      $('#edit-title').textContent = `路線 ${ri+1}`;
-      $('#edit-title').style.color = r.color;
-      $('#freq-slider').value = r.freq;
-      $('#freq-val').textContent = r.freq;
-      let vt = VEHICLE_TYPES[r.vehicleType];
-      $('#vehicle-info').textContent = `${vt.icon} ${r.vehicleType} (容量${vt.cap}人)`;
-      $('#edit-panel').style.display = 'block';
+  // Route-line tap (no drag) → open edit panel
+  if (dragType === 'route-line' && !dragMoved) {
+    openEditPanel(dragRouteIdx);
+  }
+
+  // Route-line drag → add stop
+  if (dragType === 'route-line' && dragMoved) {
+    let target = findFacilityAt(wp.x, wp.y, DRAG_FACILITY_RADIUS);
+    if (target) {
+      addStopToRoute(dragRouteIdx, dragRouteSegIdx, target);
     }
   }
 
   if (dragType === 'facility' && dragMoved) {
-    // Dragged from a facility — check if dropped on another facility
     let target = findFacilityAt(wp.x, wp.y, DRAG_FACILITY_RADIUS);
     if (target && target !== dragStartFacility) {
       createRouteFromDrag(dragStartFacility, target);
-    }
-  }
-
-  if (dragType === 'route-line' && dragMoved) {
-    // Dragged from a route line — check if dropped on a facility
-    let target = findFacilityAt(wp.x, wp.y, DRAG_FACILITY_RADIUS);
-    if (target) {
-      addStopToRoute(dragRouteIdx, dragRouteSegIdx, target);
     }
   }
 
@@ -854,34 +983,31 @@ function onPointerUp(e) {
 
 function createRouteFromDrag(fromFac, toFac) {
   if (routes.length >= 6) { showNotif('路線は最大6本です'); return; }
-  // Check water crossing
   let crosses = routeCrossesRiver(fromFac, toFac);
   if (crosses && selectedVehicle !== 'ferry') {
     showNotif('川を渡るには⛴️船が必要です');
     return;
   }
   let vt = VEHICLE_TYPES[selectedVehicle];
-  let cost = vt.cost * 3;
+  let cost = vt.buildCost;
   if (money < cost) { showNotif('資金不足！'); return; }
   money -= cost;
   let newRoute = {
     stops: [fromFac.id, toFac.id],
     color: ROUTE_COLORS[routes.length % 6],
-    freq: 1,
+    interval: 60, // default 60 min
     vehicleType: selectedVehicle,
     crossesWater: crosses
   };
   routes.push(newRoute);
   syncVehicles(routes.length - 1);
-  showNotif(`路線${routes.length}を開通！ (-${cost}💰)`);
+  showNotif(`路線${routes.length}を開通！ (-¥${cost})`);
 }
 
 function addStopToRoute(ri, segIdx, newFac) {
   let r = routes[ri];
   if (!r) return;
-  // Don't add if already a stop
   if (r.stops.includes(newFac.id)) { showNotif('既にこの路線の停車駅です'); return; }
-  // Check water crossing for adjacent segments
   let beforeFac = facilities[r.stops[segIdx]];
   let afterFac = facilities[r.stops[segIdx + 1]];
   let crossesBefore = routeCrossesRiver(beforeFac, newFac);
@@ -890,14 +1016,13 @@ function addStopToRoute(ri, segIdx, newFac) {
     showNotif('川を渡るには⛴️船が必要です');
     return;
   }
-  // Cost for adding a stop
   let vt = VEHICLE_TYPES[r.vehicleType];
-  let cost = vt.cost;
+  let cost = Math.floor(vt.buildCost / 2);
   if (money < cost) { showNotif('資金不足！'); return; }
   money -= cost;
-  // Insert the new stop after segIdx
   r.stops.splice(segIdx + 1, 0, newFac.id);
-  showNotif(`停車駅を追加！ (-${cost}💰)`);
+  syncVehicles(ri);
+  showNotif(`停車駅を追加！ (-¥${cost})`);
 }
 
 function onWheel(e) {
@@ -951,11 +1076,49 @@ function showNotif(text) {
   notifTimer = setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.style.display='none', 300); }, 2000);
 }
 
+// ── Game Time ──
+function formatGameTime() {
+  let totalMin = Math.floor(gameMinutes) % 1440;
+  let h = Math.floor(totalMin / 60);
+  let m = totalMin % 60;
+  return `Day ${gameDay} ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
 // ── Simulation ──
 function update(dt) {
   if (speed === 0 || gameState !== 'playing') return;
   let sDt = dt * speed;
   simTime += sDt;
+
+  // Update game time: speed multiplier maps to game-minutes per real-second
+  // x1: 1 sec = 1 min, x2: 1 sec = 2 min, x4: 1 sec = 4 min, x10: 1 sec = 10 min
+  let gameMinDelta = dt * speed; // speed is already the multiplier (1,2,4,10)
+  gameMinutes += gameMinDelta;
+
+  // Day rollover
+  while (gameMinutes >= (gameDay) * 1440 + 480) {
+    // Check if we crossed a day boundary (midnight = gameDay * 1440 from start)
+    // Actually simpler: track absolute minutes
+  }
+  let absoluteDay = Math.floor(gameMinutes / 1440) + 1;
+  if (absoluteDay > gameDay) {
+    gameDay = absoluteDay;
+  }
+
+  // Daily cost: charge once per day (every 1440 game-minutes)
+  let daysSinceLastCost = Math.floor((gameMinutes - lastDayCostMinute) / 1440);
+  if (daysSinceLastCost >= 1) {
+    lastDayCostMinute += daysSinceLastCost * 1440;
+    let totalCost = 0;
+    routes.forEach(r => {
+      totalCost += calcRouteDailyCost(r);
+    });
+    totalCost *= daysSinceLastCost;
+    if (totalCost > 0) {
+      money -= totalCost;
+      showNotif(`日次維持費: -¥${totalCost}`);
+    }
+  }
 
   // Spawn facilities over time (free mode only)
   if (gameMode === 'free') {
@@ -985,7 +1148,8 @@ function update(dt) {
         state: 'waiting',
         facilityId: f.id,
         vehicleId: -1,
-        x: f.x, y: f.y
+        x: f.x, y: f.y,
+        transfers: 0
       };
       f.waiting.push(person);
       people.push(person);
@@ -1028,7 +1192,7 @@ function update(dt) {
       let f = facilities[fid];
       if (!f) return;
 
-      // Unload — at final destination OR at transfer stop
+      // Unload
       let toUnload = [];
       v.passengers.forEach(p => {
         let exitHere = (p.dest === fid) || (p._exitStop === fid);
@@ -1041,29 +1205,33 @@ function update(dt) {
           p.state = 'arrived';
           p.x = f.x; p.y = f.y;
           score++;
-          money += 3;
+          // Distance-based fare
+          let routeLen = calcRouteLength(r);
+          let fare = Math.max(5, Math.round(routeLen / 50));
+          // Transfer bonus
+          fare += (p.transfers || 0) * 2;
+          money += fare;
           people = people.filter(pp => pp !== p);
         } else {
-          // Transfer: wait at this facility for next route
+          // Transfer
           p.state = 'waiting';
           p._exitStop = undefined;
           p.facilityId = fid;
+          p.transfers = (p.transfers || 0) + 1;
           p.x = f.x; p.y = f.y;
           if (!f.waiting.includes(p)) f.waiting.push(p);
         }
       });
 
-      // Load — direct destination OR transfer stop toward destination
+      // Load
       if (v.passengers.length < vt.cap) {
         let toLoad = [];
         f.waiting.forEach(p => {
           if (v.passengers.length + toLoad.length >= vt.cap) return;
-          // Direct: destination is on this route
           if (r.stops.includes(p.dest)) {
             p._exitStop = p.dest;
             toLoad.push(p);
           } else {
-            // Transfer: find a stop on this route that connects to a route reaching dest
             let transferStop = findTransferStop(fid, p.dest, v.routeIdx);
             if (transferStop >= 0) {
               p._exitStop = transferStop;
@@ -1101,18 +1269,6 @@ function update(dt) {
     }
   });
 
-  // Costs
-  costTimer += sDt;
-  if (costTimer >= 5) {
-    costTimer = 0;
-    let totalCost = 0;
-    routes.forEach(r => {
-      let vt = VEHICLE_TYPES[r.vehicleType];
-      totalCost += r.freq * vt.cost * 0.5;
-    });
-    money -= totalCost;
-  }
-
   // Check overcrowding
   for (let f of facilities) {
     if (f.waiting.length >= OVERCROWD_LIMIT) {
@@ -1148,7 +1304,11 @@ function update(dt) {
 function updateUnlocks() {
   $$('#vehicle-select button').forEach(b => {
     let vt = VEHICLE_TYPES[b.dataset.v];
-    b.disabled = totalPop < vt.unlockPop;
+    let unlocked = totalPop >= vt.unlockPop;
+    b.disabled = !unlocked;
+    if (unlocked && !currentUnlocks.includes(b.dataset.v)) {
+      currentUnlocks.push(b.dataset.v);
+    }
   });
 }
 
@@ -1179,7 +1339,7 @@ function draw() {
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, W, H);
 
-  if (gameState === 'title') return;
+  if (gameState === 'title' || gameState === 'stageselect') return;
 
   ctx.save();
   ctx.translate(W/2, H/2);
@@ -1224,6 +1384,20 @@ function draw() {
     }
     ctx.stroke();
 
+    // Highlight if editing this route
+    if (ri === editingRoute) {
+      ctx.strokeStyle = 'rgba(255,255,255,.4)';
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      for (let i = 0; i < r.stops.length; i++) {
+        let f = facilities[r.stops[i]];
+        if (!f) continue;
+        if (i === 0) ctx.moveTo(f.x, f.y);
+        else ctx.lineTo(f.x, f.y);
+      }
+      ctx.stroke();
+    }
+
     // Stop markers
     r.stops.forEach(sid => {
       let f = facilities[sid];
@@ -1245,7 +1419,6 @@ function draw() {
       startX = dragStartFacility.x;
       startY = dragStartFacility.y;
     } else if (dragType === 'route-line') {
-      // Show from a midpoint of the segment
       let r = routes[dragRouteIdx];
       if (r) {
         let a = facilities[r.stops[dragRouteSegIdx]];
@@ -1266,7 +1439,6 @@ function draw() {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Highlight target facility if hovering
       let target = findFacilityAt(dragCurX, dragCurY, DRAG_FACILITY_RADIUS);
       if (target && (dragType !== 'facility' || target !== dragStartFacility)) {
         ctx.beginPath();
@@ -1302,7 +1474,6 @@ function draw() {
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
 
-    // Waiting count
     let wc = f.waiting.length;
     if (wc > 0) {
       ctx.fillStyle = wc >= OVERCROWD_LIMIT ? '#e85d5d' : '#3a3a3a';
@@ -1311,7 +1482,6 @@ function draw() {
       ctx.fillText(wc, 0, -FACILITY_RADIUS - 6);
     }
 
-    // Waiting people dots
     let maxDots = Math.min(wc, 8);
     for (let i = 0; i < maxDots; i++) {
       let p = f.waiting[i];
@@ -1364,9 +1534,15 @@ function draw() {
   ctx.restore();
 
   // Update HUD
+  $('#h-time').textContent = formatGameTime();
   $('#h-pop').textContent = totalPop;
   $('#h-money').textContent = Math.floor(money);
   $('#h-score').textContent = score;
+
+  // Update edit panel if open
+  if (editingRoute >= 0 && routes[editingRoute]) {
+    updateEditPanel();
+  }
 }
 
 function drawShape(shape, x, y, r, fill, stroke) {
