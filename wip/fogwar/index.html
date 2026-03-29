@@ -48,7 +48,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050a14;color:#c0c8d
 .ship-preview{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(10px,2.5vw,18px);z-index:4;pointer-events:none;opacity:.5}
 .cell.placement-hover{background:#00ff8844;border-color:#00ff88}
 .cell.placement-invalid{background:#ff444422;border-color:#ff4444}
-.blip{position:absolute;width:60%;height:60%;border-radius:50%;background:#ff4444;box-shadow:0 0 6px #ff4444;z-index:5;pointer-events:none;top:20%;left:20%}
+.blip{position:absolute;width:60%;height:60%;border-radius:50%;background:#ff4444;box-shadow:0 0 6px #ff4444;z-index:5;top:20%;left:20%}
 .blip.ghost{background:#ff444444;box-shadow:0 0 4px #ff444422}
 .enemy-reveal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(8px,2vw,14px);z-index:5;pointer-events:none;color:#ff6666;text-shadow:0 0 4px #ff4444}
 .enemy-reveal.ghost{opacity:.4}
@@ -793,6 +793,9 @@ function doRadarScan(){
 
   const prevDetected=detectedEnemies.size;
   detectedEnemies=new Map();
+  // Clear revealed types for cells no longer detected (enemy moved away)
+  const oldRevealed=new Map(revealedEnemyTypes);
+  revealedEnemyTypes=new Map();
   playerShips.forEach((sh,i)=>{
     if(!sh.alive)return;
     scanArc(sh,i,'p',aiShips).forEach(k=>{detectedEnemies.set(k,turn);ghostEnemies.set(k,turn)});
@@ -821,6 +824,10 @@ function scanArc(ship,idx,prefix,targets){
       // 360 degree scan — only check range and LOS from bow
       if(hasLOS(center.r,center.c,p.r,p.c)){
         found.add(ck(p.r,p.c));
+        // Reveal enemy type when detected by radar
+        if(prefix==='p'){
+          revealedEnemyTypes.set(ck(p.r,p.c),{emoji:t.emoji,name:t.name});
+        }
       }
     });
   });
@@ -979,27 +986,23 @@ function drawShip(sh){
 function renderRadar(){
   const canvas=document.getElementById('radar-canvas');
   const board=document.getElementById('board');
-  // Sync canvas pixel size with board's actual rendered size for perfect circles
-  const rect=board.getBoundingClientRect();
-  if(canvas.width!==Math.round(rect.width)||canvas.height!==Math.round(rect.height)){
-    canvas.width=Math.round(rect.width);
-    canvas.height=Math.round(rect.height);
-  }
+  // Force canvas to match board's actual pixel size
+  const bw=board.offsetWidth, bh=board.offsetHeight;
+  if(canvas.width!==bw)canvas.width=bw;
+  if(canvas.height!==bh)canvas.height=bh;
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  const csX=canvas.width/GRID;
-  const csY=canvas.height/GRID;
-  // Use the smaller dimension so the radar circle stays circular
-  const cs=Math.min(csX,csY);
+  // Use board size / GRID for cell size (board is always square)
+  const cs=canvas.width/GRID;
 
   playerShips.forEach((sh,i)=>{
     if(!sh.alive)return;
-    // Use confirmed radar center (bow position, stable during actions)
-    const center=getRadarCenter(sh,i,'p');
-    const cx=(center.c+.5)*csX, cy=(center.r+.5)*csY;
+    // Radar center = bow (front of ship)
+    const bow=shipBow(sh);
+    const cx=(bow.c+.5)*cs, cy=(bow.r+.5)*cs;
     const eff=getEffStats(sh);
     const range=eff.radarRange*cs;
-    // 360-degree radar circle - always a perfect circle
+    // 360-degree radar circle
     ctx.save();
     ctx.globalAlpha=.06;ctx.fillStyle='#00ff88';
     ctx.beginPath();ctx.arc(cx,cy,range,0,Math.PI*2);ctx.fill();
