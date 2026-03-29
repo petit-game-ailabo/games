@@ -247,22 +247,23 @@ const STAGES = [
   },
   {
     name: '乗り換えネットワーク',
-    desc: '乗り換えを活用しよう！直通が無くても、路線が繋がっていれば人は乗り換えて移動する',
+    desc: '川で左右が分断！船🚢で川を渡って乗り換えよう',
     goal: 50,
     money: 1200,
-    unlocks: ['bus','tram','train','ferry','plane'],
-    maxRoutes: 4,
+    unlocks: ['bus','tram','ferry'],
+    maxRoutes: 5,
     facilities: [
-      {type:'residential', x:80, y:100},
-      {type:'residential', x:80, y:300},
-      {type:'residential', x:80, y:480},
-      {type:'office', x:350, y:100},
-      {type:'factory', x:350, y:300},
-      {type:'commercial', x:550, y:200},
-      {type:'hospital', x:550, y:400},
-      {type:'office', x:600, y:480}
+      {type:'residential', x:100, y:120},
+      {type:'residential', x:100, y:300},
+      {type:'residential', x:100, y:480},
+      {type:'office', x:550, y:120},
+      {type:'factory', x:550, y:300},
+      {type:'commercial', x:550, y:480},
+      {type:'hospital', x:680, y:300}
     ],
-    rivers: []
+    rivers: [
+      {points:[{x:350,y:-30},{x:340,y:100},{x:360,y:200},{x:345,y:300},{x:355,y:400},{x:340,y:500},{x:350,y:630}], width:60}
+    ]
   },
   {
     name: '大都市',
@@ -573,8 +574,7 @@ function startFreeMode() {
   gameState = 'playing';
   generateFreeMap();
   updateUnlocks();
-  camX = mapW / 2;
-  camY = mapH / 2;
+  fitCameraToFacilities();
 }
 
 function resetFreeMode() {
@@ -585,6 +585,7 @@ function resetFreeMode() {
   $('#game-over').style.display = 'none';
   generateFreeMap();
   updateUnlocks();
+  fitCameraToFacilities();
 }
 
 function generateFreeMap() {
@@ -630,9 +631,7 @@ function startStage(idx) {
   gameState = 'playing';
   // Show description overlay briefly
   showStageDesc(stage.desc);
-  camX = mapW / 2;
-  camY = mapH / 2;
-  camZoom = 1;
+  fitCameraToFacilities();
 }
 
 function showStageDesc(text) {
@@ -861,6 +860,7 @@ function findFacilityAt(wx, wy, radius) {
 }
 
 function findTransferStop(currentFacility, destFacility, currentRouteIdx) {
+  // Build adjacency graph from all routes
   let adj = {};
   routes.forEach((r, ri) => {
     if (!r || r.stops.length < 2) return;
@@ -872,27 +872,35 @@ function findTransferStop(currentFacility, destFacility, currentRouteIdx) {
       }
     }
   });
+  // BFS from destination backward to compute distances
+  let dist = {};
+  dist[destFacility] = 0;
+  let queue = [destFacility];
+  while (queue.length > 0) {
+    let cur = queue.shift();
+    if (adj[cur]) {
+      adj[cur].forEach(nb => {
+        if (dist[nb] === undefined) {
+          dist[nb] = dist[cur] + 1;
+          queue.push(nb);
+        }
+      });
+    }
+  }
+  // Find the stop on current route closest to destination (by graph hops)
   let cr = routes[currentRouteIdx];
   if (!cr) return -1;
+  let bestStop = -1;
+  let bestDist = Infinity;
   for (let si = 0; si < cr.stops.length; si++) {
-    let transferId = cr.stops[si];
-    if (transferId === currentFacility) continue;
-    let visited = new Set([currentFacility]);
-    let queue = [transferId];
-    visited.add(transferId);
-    let found = false;
-    while (queue.length > 0) {
-      let cur = queue.shift();
-      if (cur === destFacility) { found = true; break; }
-      if (adj[cur]) {
-        adj[cur].forEach(nb => {
-          if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
-        });
-      }
+    let stopId = cr.stops[si];
+    if (stopId === currentFacility) continue;
+    if (dist[stopId] !== undefined && dist[stopId] < bestDist) {
+      bestDist = dist[stopId];
+      bestStop = stopId;
     }
-    if (found) return transferId;
   }
-  return -1;
+  return bestStop;
 }
 
 function findRouteAt(wx, wy) {
@@ -1058,6 +1066,13 @@ function addStopToRoute(ri, segIdx, newFac) {
   if (money < cost) { showNotif('資金不足！'); return; }
   money -= cost;
   r.stops.splice(segIdx + 1, 0, newFac.id);
+  // Recompute crossesWater flag
+  r.crossesWater = false;
+  for (let i = 0; i < r.stops.length - 1; i++) {
+    if (routeCrossesRiver(facilities[r.stops[i]], facilities[r.stops[i+1]])) {
+      r.crossesWater = true; break;
+    }
+  }
   syncVehicles(ri);
   showNotif(`停車駅を追加！ (-¥${cost})`);
 }
@@ -1094,6 +1109,25 @@ function onTouchMove(e) {
 }
 function onTouchEnd(e) {
   lastTouchDist = 0;
+}
+
+function fitCameraToFacilities() {
+  if (facilities.length === 0) return;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  facilities.forEach(f => {
+    minX = Math.min(minX, f.x);
+    maxX = Math.max(maxX, f.x);
+    minY = Math.min(minY, f.y);
+    maxY = Math.max(maxY, f.y);
+  });
+  let pad = 80;
+  let bw = (maxX - minX) + pad * 2;
+  let bh = (maxY - minY) + pad * 2;
+  camX = (minX + maxX) / 2;
+  camY = (minY + maxY) / 2;
+  let zoomX = W / bw;
+  let zoomY = (H - hudH - toolH) / bh;
+  camZoom = Math.max(0.4, Math.min(2.0, Math.min(zoomX, zoomY)));
 }
 
 function clampCam() {
@@ -1209,7 +1243,10 @@ function update(dt) {
 
     let routeLen = calcRouteLength(r);
     let pxSpeed = getEffectivePxSpeed(v.type, routeLen);
-    let posIncrement = (routeLen > 0) ? (pxSpeed * sDt) / routeLen : 0;
+    // Convert px/real-second to px/game-minute: divide by 16 (scale factor)
+    // gameMinDelta = dt * speed (game minutes elapsed this frame)
+    let pxPerGameMin = pxSpeed / 16;
+    let posIncrement = (routeLen > 0) ? (pxPerGameMin * gameMinDelta) / routeLen : 0;
     v.pos += v.dir * posIncrement;
 
     let atEnd = v.pos >= 1;
@@ -1218,11 +1255,12 @@ function update(dt) {
     if (atEnd) { v.pos = 1; v.dir = -1; v.dwellTimer = 0.2; }
     if (atStart) { v.pos = 0; v.dir = 1; v.dwellTimer = 0.5; }
 
-    // Check if near a stop
+    // Check if near a stop (use dynamic threshold based on speed to avoid overshoot)
     let nearStop = -1;
+    let threshold = Math.max(0.02, posIncrement * 1.5);
     for (let i = 0; i <= totalSegs; i++) {
       let t = i / totalSegs;
-      if (Math.abs(v.pos - t) < 0.02) { nearStop = i; break; }
+      if (Math.abs(v.pos - t) < threshold) { nearStop = i; break; }
     }
 
     if (nearStop >= 0 && nearStop !== v.atStation) {
