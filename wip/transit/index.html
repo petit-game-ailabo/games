@@ -256,11 +256,11 @@ const FACILITY_TYPES = {
 };
 const DEST_TYPES = ['office','factory','commercial','hospital'];
 const VEHICLE_TYPES = {
-  bus:   {cap:10, pxSpeed:120, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false, color:'#e85d5d', desc:'安価で万能'},
-  tram:  {cap:15, pxSpeed:150, dailyCost:15, icon:'🚋', unlockPop:50,  buildCost:30, dwell:0.5, needsTerminal:'tramStop', color:'#8866cc', desc:'電停🚏が必要 / 容量大'},
-  train: {cap:30, pxSpeed:250, dailyCost:30, icon:'🚂', unlockPop:100, buildCost:60, dwell:0.8, needsTerminal:'station', color:'#cc8844', desc:'駅🚉が必要 / 最速・大容量・高コスト'},
-  ferry: {cap:30, pxSpeed:40,  dailyCost:12, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:0.8, needsTerminal:'port', color:'#44aacc', desc:'港⚓が必要 / 川を渡れる'},
-  plane: {cap:50, pxSpeed:0,   dailyCost:45, icon:'✈️', unlockPop:200, buildCost:100, planeScaling:true, dwell:3.0, needsTerminal:'airport', color:'#cc44aa', desc:'空港✈️が必要 / 長距離最強・最高コスト'},
+  bus:   {cap:10, pxSpeed:120, dailyCost:8,  icon:'🚌', unlockPop:0,   buildCost:15, dwell:0.3, needsTerminal:false, color:'#e85d5d', desc:'安価で万能 / 容量10人'},
+  tram:  {cap:20, pxSpeed:140, dailyCost:6,  icon:'🚋', unlockPop:50,  buildCost:25, dwell:0.4, needsTerminal:'tramStop', color:'#8866cc', desc:'電停🚏が必要 / 容量20人・維持費安い'},
+  train: {cap:50, pxSpeed:250, dailyCost:25, icon:'🚂', unlockPop:100, buildCost:60, dwell:0.8, needsTerminal:'station', color:'#cc8844', desc:'駅🚉が必要 / 容量50人・最速'},
+  ferry: {cap:40, pxSpeed:40,  dailyCost:10, icon:'⛴️', unlockPop:0,   buildCost:20, water:true, dwell:0.8, needsTerminal:'port', color:'#44aacc', desc:'港⚓が必要 / 容量40人・川を渡れる'},
+  plane: {cap:80, pxSpeed:0,   dailyCost:40, icon:'✈️', unlockPop:200, buildCost:100, planeScaling:true, dwell:3.0, needsTerminal:'airport', color:'#cc44aa', desc:'空港✈️が必要 / 容量80人・長距離最強'},
   walk:  {cap:1,  pxSpeed:8,   dailyCost:0,  icon:'🚶', unlockPop:0,   buildCost:0,  dwell:3, needsTerminal:false, color:'#888888', desc:'無料・低速 / 川は渡れない'}
 };
 const MAX_PEOPLE = 300;
@@ -315,20 +315,25 @@ const STAGES = [
     ],
     rivers: []
   },
-  // ── Stage 3: 建設と接続 ──
+  // ── Stage 3: 路面電車の街 ──
   {
-    name: '建設と接続',
-    desc: '電停🚏を建設して路面電車🚋を走らせよう！バスは電停にも停まれるよ',
-    goal: 30,
-    money: 500,
+    name: '路面電車の街',
+    desc: '電停🚏を建設→路面電車🚋で大量輸送！各施設から電停へはバスか徒歩で繋ごう',
+    goal: 60,
+    money: 600,
     unlocks: ['walk','bus','tram'],
-    maxRoutes: 6,
+    maxRoutes: 8,
+    mapW: 1200,
+    mapH: 600,
     facilities: [
+      // 左端の施設群
       {type:'residential', x:80, y:150},
-      {type:'residential', x:80, y:400},
-      {type:'office', x:350, y:120},
-      {type:'commercial', x:600, y:275},
-      {type:'tramStop', x:350, y:275}
+      {type:'office', x:80, y:450},
+      // 右端の施設群
+      {type:'factory', x:1120, y:150},
+      {type:'commercial', x:1120, y:450},
+      // 電停は1つだけ配置（残りは自分で建設）
+      {type:'tramStop', x:300, y:300}
     ],
     rivers: []
   },
@@ -1263,7 +1268,7 @@ function placeBuildFacility(wx, wy) {
   });
   let ft = FACILITY_TYPES[buildType];
   showNotif(`${ft.label} を建設！ (-¥${cost})`);
-  closeBuildPanel();
+  // Stay in build mode for continuous placement
 }
 
 function demolishFacility(wx, wy) {
