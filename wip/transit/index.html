@@ -1658,8 +1658,8 @@ function onPointerUp(e) {
   if (!isDragging) { isDragging = false; return; }
   let wp = screenToWorld(e.clientX, e.clientY);
 
-  // Build mode: tap to place facility
-  if (buildMode && dragType === 'pan' && !dragMoved) {
+  // Build mode: tap to place or demolish (intercept ALL drag types)
+  if (buildMode && !dragMoved) {
     if (demolishMode) {
       demolishFacility(wp.x, wp.y);
     } else {
@@ -2000,15 +2000,15 @@ function update(dt) {
     gameDay = absoluteDay;
   }
 
-  // Daily cost
-  let daysSinceLastCost = Math.floor((gameMinutes - lastDayCostMinute) / 1440);
-  if (daysSinceLastCost >= 1) {
-    lastDayCostMinute += daysSinceLastCost * 1440;
+  // Hourly cost (every 60 game-minutes)
+  let hoursSinceLastCost = Math.floor((gameMinutes - lastDayCostMinute) / 60);
+  if (hoursSinceLastCost >= 1) {
+    lastDayCostMinute += hoursSinceLastCost * 60;
     let totalCost = 0;
     routes.forEach(r => {
-      totalCost += calcRouteDailyCost(r);
+      totalCost += Math.round(calcRouteDailyCost(r) / 24); // daily cost / 24 = hourly
     });
-    totalCost *= daysSinceLastCost;
+    totalCost *= hoursSinceLastCost;
     if (totalCost > 0) {
       money -= totalCost;
       dayExpense += totalCost;
@@ -2163,12 +2163,14 @@ function update(dt) {
       // Unload
       let toUnload = [];
       v.passengers.forEach(p => {
-        let exitHere = (p.dest === fid) || (p._exitStop === fid);
+        // Arrive at exact dest OR any facility of same destType
+        let atDest = (p.dest === fid) || (f.type === p.destType && !FACILITY_TYPES[f.type]?.terminal);
+        let exitHere = atDest || (p._exitStop === fid);
         if (exitHere) toUnload.push(p);
       });
       toUnload.forEach(p => {
-        v.passengers = v.passengers.filter(pp => pp !== p);
-        if (p.dest === fid) {
+        let atDest = (p.dest === fid) || (f.type === p.destType && !FACILITY_TYPES[f.type]?.terminal);
+        if (atDest) {
           p.state = 'arrived';
           p.x = f.x; p.y = f.y;
           score++;
@@ -2197,8 +2199,10 @@ function update(dt) {
         f.waiting.forEach(p => {
           if (v.passengers.length + toLoad.length >= vt.cap) return;
           if (p._lastRouteIdx === v.routeIdx) return;
-          if (r.stops.includes(p.dest)) {
-            p._exitStop = p.dest;
+          // Check if route has exact dest OR same destType facility
+          let directStop = r.stops.find(sid => sid === p.dest || (facilities[sid] && facilities[sid].type === p.destType && !FACILITY_TYPES[facilities[sid].type]?.terminal));
+          if (directStop !== undefined) {
+            p._exitStop = directStop;
             p._lastRouteIdx = undefined;
             toLoad.push(p);
           } else {
