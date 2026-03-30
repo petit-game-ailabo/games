@@ -572,6 +572,7 @@ let _lastHintTime = 0;
 // Build mode state
 let buildMode = false;
 let buildType = null; // 'tramStop','station','port','airport'
+let demolishMode = false;
 const BUILD_COSTS = {tramStop: 20, station: 50, port: 30, airport: 80};
 const BUILD_LABELS = {tramStop: '🚏 電停 ¥20', station: '🚉 駅 ¥50', port: '⚓ 港 ¥30', airport: '✈️ 空港 ¥80'};
 
@@ -773,12 +774,23 @@ function init() {
     if (vt) {
       let unlockText = vt.unlockPop > 0 ? `解放: 人口${vt.unlockPop}人` : '最初から使用可能';
       b.title = `${vt.desc}\n容量: ${vt.cap}人 / 建設: ¥${vt.buildCost} / 維持: ¥${vt.dailyCost}/日\n${unlockText}`;
+      // Tint button background with vehicle color (light version)
+      if (vt.color) {
+        let c = vt.color;
+        b.style.borderColor = c;
+        b.style.background = c + '18'; // very light tint
+      }
     }
     b.onclick = () => {
       if (b.disabled) return;
       selectedVehicle = b.dataset.v;
-      $$('#vehicle-select button').forEach(x => x.classList.remove('active'));
+      $$('#vehicle-select button').forEach(x => {
+        x.classList.remove('active');
+        let xvt = VEHICLE_TYPES[x.dataset.v];
+        x.style.background = xvt && xvt.color ? xvt.color + '18' : '#fff';
+      });
       b.classList.add('active');
+      if (vt && vt.color) b.style.background = vt.color + '35'; // active = slightly stronger tint
     };
   });
 
@@ -790,17 +802,33 @@ function init() {
     let opts = $('#build-options');
     opts.innerHTML = '';
     Object.keys(BUILD_COSTS).forEach(bt => {
+      let ft = FACILITY_TYPES[bt];
       let btn = document.createElement('button');
-      btn.style.cssText = 'padding:6px 12px;border:1.5px solid #ccc;border-radius:6px;background:#fff;font-size:.85rem;cursor:pointer';
+      let tintColor = ft ? ft.color : '#ccc';
+      btn.style.cssText = `padding:6px 12px;border:2px solid ${tintColor};border-radius:6px;background:${tintColor}18;font-size:.85rem;cursor:pointer`;
       btn.textContent = BUILD_LABELS[bt];
       btn.onclick = () => {
         buildType = bt;
-        opts.querySelectorAll('button').forEach(b => b.style.borderColor = '#ccc');
-        btn.style.borderColor = '#e85d5d';
+        demolishMode = false;
+        opts.querySelectorAll('button').forEach(b => { let bft = FACILITY_TYPES[b.dataset.bt]; b.style.background = bft ? bft.color+'18' : '#fff'; });
+        btn.style.background = tintColor + '35';
         showNotif(`マップをタップして${BUILD_LABELS[bt].split(' ')[0]}を建設`);
       };
+      btn.dataset.bt = bt;
       opts.appendChild(btn);
     });
+    // Demolish button
+    let demBtn = document.createElement('button');
+    demBtn.style.cssText = 'padding:6px 12px;border:2px solid #e85d5d;border-radius:6px;background:#fee;font-size:.85rem;cursor:pointer;color:#e85d5d';
+    demBtn.textContent = '🗑️ 撤去';
+    demBtn.onclick = () => {
+      demolishMode = true;
+      buildType = '';
+      opts.querySelectorAll('button').forEach(b => { let bft = FACILITY_TYPES[b.dataset?.bt]; b.style.background = bft ? bft.color+'18' : '#fff'; });
+      demBtn.style.background = '#fcc';
+      showNotif('撤去する建設物をタップ');
+    };
+    opts.appendChild(demBtn);
     $('#build-panel').style.display = 'block';
   };
   $('#build-cancel-btn').onclick = closeBuildPanel;
@@ -1247,6 +1275,7 @@ function updateEditPanel() {
 function closeBuildPanel() {
   buildMode = false;
   buildType = null;
+  demolishMode = false;
   $('#build-panel').style.display = 'none';
   $('#build-btn').classList.remove('active');
 }
@@ -1268,11 +1297,55 @@ function placeBuildFacility(wx, wy) {
   let id = facilities.length;
   facilities.push({
     type: buildType, x: wx, y: wy, waiting: [], id: id,
-    flashTimer: 0, spawnTimer: 0
+    flashTimer: 0, spawnTimer: 0, _origType: buildType
   });
   let ft = FACILITY_TYPES[buildType];
   showNotif(`${ft.label} を建設！ (-¥${cost})`);
   closeBuildPanel();
+}
+
+function demolishFacility(wx, wy) {
+  // Find nearest terminal facility within 30px
+  let best = null, bestD = 30;
+  facilities.forEach((f, i) => {
+    let ft = FACILITY_TYPES[f.type];
+    if (!ft || !ft.terminal) return; // Only demolish terminal facilities
+    let d = Math.hypot(f.x - wx, f.y - wy);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  if (best === null) { showNotif('撤去できる建設物がありません'); return; }
+  let f = facilities[best];
+  let ft = FACILITY_TYPES[f.type];
+  // Remove all routes that use this facility
+  let removedRoutes = 0;
+  for (let ri = routes.length - 1; ri >= 0; ri--) {
+    if (routes[ri].stops.includes(best)) {
+      // Remove vehicles on this route
+      let routeVehicles = vehicles.filter(v => v.routeIdx === ri);
+      routeVehicles.forEach(v => {
+        v.passengers.forEach(p => {
+          p.state = 'waiting';
+          p.vehicleId = -1;
+          let pf = facilities[p.facilityId];
+          if (pf && !pf.waiting.includes(p)) pf.waiting.push(p);
+        });
+      });
+      vehicles = vehicles.filter(v => v.routeIdx !== ri);
+      routes.splice(ri, 1);
+      // Reindex remaining vehicles
+      vehicles.forEach(v => { if (v.routeIdx > ri) v.routeIdx--; });
+      removedRoutes++;
+    }
+  }
+  // Remove waiting people at this facility
+  f.waiting.forEach(p => { people = people.filter(pp => pp !== p); });
+  f.waiting = [];
+  // Mark facility as demolished (don't remove from array to keep indices stable)
+  f.demolished = true;
+  f.type = '_demolished';
+  let refund = Math.floor((BUILD_COSTS[ft.terminal ? f._origType || 'tramStop' : 'tramStop'] || 20) / 2);
+  money += refund;
+  showNotif(`${ft.label} を撤去 (+¥${refund})${removedRoutes > 0 ? ` / ${removedRoutes}路線削除` : ''}`);
 }
 
 function closeEditPanel() {
@@ -1587,7 +1660,11 @@ function onPointerUp(e) {
 
   // Build mode: tap to place facility
   if (buildMode && dragType === 'pan' && !dragMoved) {
-    placeBuildFacility(wp.x, wp.y);
+    if (demolishMode) {
+      demolishFacility(wp.x, wp.y);
+    } else {
+      placeBuildFacility(wp.x, wp.y);
+    }
     isDragging = false;
     dragType = 'none';
     return;
@@ -1960,8 +2037,9 @@ function update(dt) {
   }
 
   facilities.forEach(f => {
+    if (f.demolished) return;
     let ft = FACILITY_TYPES[f.type];
-    if (!ft.generates || ft.terminal) return; // terminals don't generate people
+    if (!ft || !ft.generates || ft.terminal) return; // terminals don't generate people
 
     f.spawnTimer += sDt;
     let interval = baseInterval;
@@ -2454,7 +2532,9 @@ function draw() {
 
   // Facilities
   facilities.forEach(f => {
+    if (f.demolished) return;
     let ft = FACILITY_TYPES[f.type];
+    if (!ft) return;
     let flashing = f.waiting.length >= OVERCROWD_LIMIT && Math.sin(simTime * 8) > 0;
 
     ctx.save();
