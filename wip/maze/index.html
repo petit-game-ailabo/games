@@ -534,8 +534,8 @@ function startBFS(){
   const exploreStep=()=>{
     if(!running)return;
     if(!queue.length){finishSolver();return}
-    // Process a batch per tick for speed
-    const batch=Math.min(queue.length,3);
+    // Process a batch per tick for speed (accelerates over time)
+    const batch=Math.min(queue.length,Math.ceil(3*getSpeedMultiplier()));
     for(let i=0;i<batch;i++){
       if(!queue.length)break;
       const [r,c]=queue.shift();
@@ -575,7 +575,7 @@ function startAStar(){
   const exploreStep=()=>{
     if(!running)return;
     if(!open.length){finishSolver();return}
-    const batch=Math.min(open.length,5);
+    const batch=Math.min(open.length,Math.ceil(5*getSpeedMultiplier()));
     for(let i=0;i<batch;i++){
       if(!open.length)break;
       // Find min f
@@ -623,13 +623,23 @@ function walkPath(path,idx){
   animateMove([r,c],speed,()=>walkPath(path,idx+1));
 }
 
+// Speed multiplier: accelerates after 10s, caps at 8x after 30s
+function getSpeedMultiplier(){
+  const elapsed=(Date.now()-timerStart)/1000;
+  if(elapsed<10)return 1;
+  if(elapsed<20)return 1+(elapsed-10)/10*3; // 1x→4x over 10-20s
+  return Math.min(8,4+(elapsed-20)/10*4); // 4x→8x over 20-30s
+}
+
 function animateMove(target,duration,cb){
+  const speedMul=getSpeedMultiplier();
+  const adjDuration=Math.max(20,duration/speedMul);
   const prev=solverState.pos?[...solverState.pos]:target;
   solverState.prev=prev;solverState.pos=target;solverState.lerp=0;
   const start=performance.now();
   const tick=(t)=>{
     if(!running)return;
-    const p=Math.min(1,(t-start)/duration);
+    const p=Math.min(1,(t-start)/adjDuration);
     solverState.lerp=p;
     draw();
     if(p<1)animId=requestAnimationFrame(tick);
