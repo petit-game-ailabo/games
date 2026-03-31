@@ -217,6 +217,9 @@ function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260
 function sfxStairs(){playTone(440,0.12,'sine',0.1);setTimeout(()=>playTone(550,0.12,'sine',0.1),120);setTimeout(()=>playTone(660,0.15,'sine',0.1),240)}
 function sfxDeadEnd(){playTone(520,0.06,'square',0.07);setTimeout(()=>playTone(700,0.1,'sine',0.09),60)}
 
+// ── Haptic feedback ──
+function vibrate(ms){try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}}
+
 function toggleMute(){
   muted=!muted;
   try{localStorage.setItem('maze_architect_muted',muted?'true':'false')}catch(e){}
@@ -438,6 +441,7 @@ function startDungeon(){
   document.getElementById('testRunBtn').style.display='inline-block';
   document.getElementById('startBtn').textContent='▶ 通し走行';
   showScreen('gameScreen');
+  updateUI(); // Update path preview & dead-end count after wall restoration
   draw();
 }
 
@@ -698,18 +702,19 @@ function handleTap(ex,ey){
   if(walls.has(w.key)){
     walls.delete(w.key);usedWalls--;
     wallHistory.push({key:w.key,action:'remove'});
-    sfxRemove();
+    sfxRemove();vibrate(15);
     spawnWallRipple(w, true);
   } else {
     walls.add(w.key);
     if(!isReachable()){
       walls.delete(w.key);
       showToast('⚠️ 経路がなくなります');
+      vibrate([30,30,30]);
       return;
     }
     usedWalls++;
     wallHistory.push({key:w.key,action:'add'});
-    sfxWall();
+    sfxWall();vibrate(25);
     spawnWallRipple(w, false);
   }
   // Auto-save dungeon walls
@@ -756,13 +761,13 @@ function handleDrag(ex,ey){
   if(dragMode===null){dragMode=walls.has(w.key)?'remove':'add'}
   if(dragMode==='add'&&!walls.has(w.key)){
     walls.add(w.key);
-    if(!isReachable()){walls.delete(w.key);showToast('⚠️ 経路がなくなります');return}
+    if(!isReachable()){walls.delete(w.key);showToast('⚠️ 経路がなくなります');vibrate([30,30,30]);return}
     usedWalls++;wallHistory.push({key:w.key,action:'add'});
-    sfxWall();spawnWallRipple(w,false);draggedWalls.add(w.key);
+    sfxWall();vibrate(15);spawnWallRipple(w,false);draggedWalls.add(w.key);
   } else if(dragMode==='remove'&&walls.has(w.key)){
     walls.delete(w.key);usedWalls--;
     wallHistory.push({key:w.key,action:'remove'});
-    sfxRemove();spawnWallRipple(w,true);draggedWalls.add(w.key);
+    sfxRemove();vibrate(10);spawnWallRipple(w,true);draggedWalls.add(w.key);
   }
   if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
   updateUI();draw();
