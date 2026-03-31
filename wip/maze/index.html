@@ -268,22 +268,22 @@ function shakeScreen(){
 
 // ── Character definitions ──
 const CHARACTERS={
-  marimo:{emoji:'🟢',name:'マリモ',hp:30,desc:'ゴロゴロ転がる。壁破壊不可。完全に閉じ込めれば勝ち確！',speed:250,canBreak:false},
-  kaeru:{emoji:'🐸',name:'かえる',hp:40,desc:'壁を飛び越える2マスジャンプ（3回まで）',speed:250,canBreak:false},
-  nhk:{emoji:'📺',name:'NHKの集金人',hp:50,desc:'全セル訪問型。遅いがしつこい',speed:400,canBreak:true},
+  marimo:{emoji:'🟢',name:'マリモ',hp:60,desc:'ゴロゴロ転がる。壁破壊不可。経路を複雑にして消耗させろ！',speed:250,canBreak:false},
+  kaeru:{emoji:'🐸',name:'かえる',hp:50,desc:'壁を飛び越える2マスジャンプ（3回まで）',speed:250,canBreak:false},
+  nhk:{emoji:'📺',name:'NHKの集金人',hp:80,desc:'全セル訪問型。しつこいが壁は壊せない',speed:400,canBreak:false},
   chatgpt:{emoji:'🤖',name:'ChatGPT',hp:45,desc:'BFS最短経路…でも3歩に1回ハルシネーション',speed:250,canBreak:true},
   elon:{emoji:'🚗',name:'イーロン・マスク',hp:50,desc:'直線暴走！壁に衝突するとHP-5',speed:250,canBreak:true},
   takopy:{emoji:'🐙',name:'タコピー',hp:60,desc:'分岐で分裂！1体でもゴールしたら負け',speed:250,canBreak:true},
   trasana:{emoji:'🇺🇸🌪️',name:'トラサナ同盟',hp:70,desc:'2体同時侵入！トランプ+サナエ',speed:250,canBreak:true},
-  eho:{emoji:'🦉',name:'エッホエッホ',hp:35,desc:'超高速ランダム移動。壁破壊不可',speed:100,canBreak:false},
+  eho:{emoji:'🦉',name:'エッホエッホ',hp:60,desc:'超高速ランダム移動。壁破壊不可',speed:100,canBreak:false},
 };
 
 const DUNGEON_FLOORS=[
-  {char:'marimo',gridN:7,desc:'🟢 マリモがゴロゴロ転がってきた！'},
-  {char:'kaeru',gridN:7,desc:'🐸 かえるがぴょんぴょん！壁を飛び越えてくる'},
-  {char:'nhk',gridN:7,desc:'📺 NHKの集金人…全部の部屋をノックする'},
-  {char:'chatgpt',gridN:7,desc:'🤖 ChatGPTが最短経路を…ハルシネーション！'},
-  {char:'trasana',gridN:7,desc:'🇺🇸🌪️ トラサナ同盟！2体同時侵入！'},
+  {char:'marimo',gridN:7,desc:'🟢 マリモがゴロゴロ転がってきた！直進しかできないけど…'},
+  {char:'nhk',gridN:7,desc:'📺 NHKです〜全部のお部屋を回ります〜 壁は壊せないけどしつこい！'},
+  {char:'eho',gridN:7,desc:'🦉 エッホエッホ！超高速ランダム！勢いだけは一流'},
+  {char:'chatgpt',gridN:7,desc:'🤖 ChatGPTが最短経路を計算…たまにハルシネーションで暴走'},
+  {char:'trasana',gridN:7,desc:'🇺🇸🌪️ トラサナ同盟！トランプが壁を作り、サナエが旋風で壁を吹き飛ばす！'},
 ];
 
 // ── Global state ──
@@ -553,6 +553,23 @@ function getWallBetween(r1,c1,r2,c2){
   return null;
 }
 
+// BFS reachability check (does path exist from start to goal?)
+function hasPath(wallSet,gn){
+  const visited=new Set();
+  const queue=[[0,0]];visited.add('0,0');
+  const goalK=`${gn-1},${gn-1}`;
+  while(queue.length){
+    const [r,c]=queue.shift();
+    const k=`${r},${c}`;
+    if(k===goalK)return true;
+    for(const [nr,nc] of neighborsIn(wallSet,gn,r,c)){
+      const nk=`${nr},${nc}`;
+      if(!visited.has(nk)){visited.add(nk);queue.push([nr,nc])}
+    }
+  }
+  return false;
+}
+
 // BFS shortest path
 function bfsPath(wallSet,gn,sr,sc,gr,gc){
   const visited=new Set();const parent=new Map();
@@ -633,7 +650,14 @@ function handleDrag(ex,ey){
   ensureAudio();
   if(dragMode===null)dragMode=walls.has(w.key)?'remove':'add';
   if(dragMode==='add'&&!walls.has(w.key)){
-    walls.add(w.key);usedWalls++;wallHistory.push({key:w.key,action:'add'});
+    // Path check: temporarily add wall and verify path exists
+    walls.add(w.key);
+    if(!hasPath(walls,gridN)){
+      walls.delete(w.key);
+      showToast('⚠️ 経路が塞がります！');draggedWalls.add(w.key);
+      updateUI();draw();return;
+    }
+    usedWalls++;wallHistory.push({key:w.key,action:'add'});
     sfxWall();vibrate(15);spawnWallRipple(w,false);draggedWalls.add(w.key);
   } else if(dragMode==='remove'&&walls.has(w.key)){
     walls.delete(w.key);usedWalls--;wallHistory.push({key:w.key,action:'remove'});
@@ -1060,12 +1084,7 @@ function startNhk(hp){
       agentStep(a,nextPos[0],nextPos[1],1);
       animateAgent(a,nextPos[0],nextPos[1],speed,step);
     } else {
-      // No path - try to break a wall toward target
-      if(CHARACTERS.nhk.canBreak&&a.hp>3){
-        const broke=tryBreakToward(a,r,c,target[0],target[1]);
-        if(broke){updateUI();setTimeout(step,speed);return}
-      }
-      // Stuck
+      // No path available - stuck (NHK cannot break walls)
       a.hp=0;updateUI();finishGame(true);
     }
   };
