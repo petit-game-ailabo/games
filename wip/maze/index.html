@@ -22,7 +22,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .game-header .info{display:flex;gap:12px}
 .game-header .stage-name{font-weight:700;color:#2F2B2A;font-size:15px}
 .game-footer{display:flex;gap:8px;padding:8px 4px;flex-shrink:0;flex-wrap:wrap;justify-content:center}
-.canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:hidden}
+.canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:auto}
 .stage-card{background:#fff;border-radius:16px;padding:20px;width:280px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);position:relative}
 .stage-card .badge{display:inline-block;padding:3px 10px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:8px}
 .stage-nav{display:flex;align-items:center;gap:16px;margin-top:16px}
@@ -37,6 +37,15 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .free-options{display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px;margin:12px 0}
 .free-options label{font-size:14px;color:#555;font-weight:600}
 .free-options select{padding:10px;border-radius:10px;border:2px solid #E0E0E0;font-size:15px;font-family:system-ui;background:#fff;color:#2F2B2A}
+.quest-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%;max-width:320px;margin:12px 0;max-height:50vh;overflow-y:auto;padding:4px}
+.quest-item{background:#fff;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.06);cursor:pointer;border:2px solid transparent;transition:border-color .2s,transform .1s}
+.quest-item:active{transform:scale(0.97)}
+.quest-item.current{border-color:#2F2B2A}
+.quest-item.cleared{border-color:#4ED26D;background:#F0FFF4}
+.quest-item.locked{opacity:0.4;pointer-events:none}
+.quest-item .q-num{font-size:18px;font-weight:700;color:#2F2B2A}
+.quest-item .q-info{font-size:11px;color:#888;margin-top:2px}
+.quest-item .q-status{font-size:16px;margin-top:4px}
 </style>
 </head>
 <body>
@@ -46,6 +55,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     <h1>🏗️ Maze Architect</h1>
     <div class="subtitle">迷路を作って、AIを迷わせろ！</div>
     <button class="btn" onclick="showStageSelect()">🗺️ ステージモード</button>
+    <button class="btn" onclick="showQuestSelect()" style="background:#5B4FCF">🏰 クエストモード</button>
     <button class="btn btn-secondary" onclick="showFreeMode()">🏗️ フリーモード</button>
   </div>
   <!-- Stage Select -->
@@ -59,6 +69,13 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     </div>
     <button class="btn" style="margin-top:16px" onclick="startStage()">▶ はじめる</button>
     <button class="btn btn-secondary btn-small" style="margin-top:4px" onclick="showTitle()">戻る</button>
+  </div>
+  <!-- Quest Select -->
+  <div class="screen" id="questScreen">
+    <h2>🏰 クエストモード</h2>
+    <div class="subtitle">迷路を繋げて巨大な迷宮を築け！</div>
+    <div class="quest-grid" id="questGrid"></div>
+    <button class="btn btn-secondary btn-small" style="margin-top:8px" onclick="showTitle()">戻る</button>
   </div>
   <!-- Free Mode Options -->
   <div class="screen" id="freeScreen">
@@ -88,7 +105,6 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     <div class="game-header">
       <span class="stage-name" id="gameName"></span>
       <div class="info">
-        <span id="wallCount">壁: 0/8</span>
         <span id="timerDisp">⏱ 0.0s</span>
       </div>
     </div>
@@ -112,6 +128,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
       <div id="resultBreakdown" class="detail"></div>
       <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;align-items:center">
         <button class="btn btn-small" id="nextStageBtn" onclick="nextStage()">次のステージ ▶</button>
+        <button class="btn btn-small" id="nextQuestBtn" onclick="nextQuest()" style="display:none;background:#5B4FCF">次のクエスト ▶</button>
         <button class="btn btn-small btn-secondary" onclick="retryStage()">🔄 リトライ</button>
         <button class="btn btn-small btn-secondary" onclick="showTitle()">🏠 タイトル</button>
       </div>
@@ -140,29 +157,99 @@ function sfxStart(){playTone(880,0.15,'sine',0.1);setTimeout(()=>playTone(1100,0
 function sfxClear(){playTone(660,0.15,'sine',0.12);setTimeout(()=>playTone(880,0.15,'sine',0.12),150);setTimeout(()=>playTone(1100,0.3,'sine',0.12),300)}
 function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260,0.3,'sawtooth',0.08),200)}
 
-// ── Stages ──
+// ── Stages / Quest definitions (shared) ──
 const STAGES=[
-  {name:'はじめての壁',grid:5,budget:8,algo:'random',target:5,desc:'壁をタップして配置！攻略者を迷わせよう'},
-  {name:'行き止まり',grid:6,budget:12,algo:'random',target:10,desc:'行き止まりを作ると攻略者が引き返すよ'},
-  {name:'壁伝いの敵',grid:7,budget:15,algo:'righthand',target:8,desc:'この攻略者は壁を伝って進む。螺旋状に迷わせろ！'},
-  {name:'広い迷路',grid:8,budget:20,algo:'righthand',target:12,desc:'広いフィールド。長い回り道を作れ！'},
-  {name:'探索者',grid:8,budget:22,algo:'bfs',target:6,desc:'⚠️ この攻略者は最短経路を見つける！'},
-  {name:'大迷宮',grid:10,budget:30,algo:'bfs',target:8,desc:'大きな迷路で最短経路を遠回りさせろ！'},
-  {name:'天才',grid:10,budget:35,algo:'astar',target:5,desc:'💀 A*アルゴリズム。ほぼ最短で来る。壁を最大限に活用しろ！'},
-  {name:'究極の迷宮',grid:12,budget:45,algo:'astar',target:7,desc:'最大フィールド。究極の迷路を設計せよ！'},
+  {name:'はじめての壁',grid:5,algo:'random',target:5,desc:'壁をタップして配置！攻略者を迷わせよう'},
+  {name:'行き止まり',grid:6,algo:'random',target:10,desc:'行き止まりを作ると攻略者が引き返すよ'},
+  {name:'壁伝いの敵',grid:7,algo:'righthand',target:8,desc:'この攻略者は壁を伝って進む。螺旋状に迷わせろ！'},
+  {name:'広い迷路',grid:8,algo:'righthand',target:12,desc:'広いフィールド。長い回り道を作れ！'},
+  {name:'探索者',grid:8,algo:'bfs',target:6,desc:'⚠️ この攻略者は最短経路を見つける！'},
+  {name:'大迷宮',grid:10,algo:'bfs',target:8,desc:'大きな迷路で最短経路を遠回りさせろ！'},
+  {name:'天才',grid:10,algo:'astar',target:5,desc:'💀 A*アルゴリズム。ほぼ最短で来る。壁を最大限に活用しろ！'},
+  {name:'究極の迷宮',grid:12,algo:'astar',target:7,desc:'最大フィールド。究極の迷路を設計せよ！'},
 ];
 const ALGO_INFO={random:{label:'🟢 ランダム',color:'#4ED26D'},righthand:{label:'🟡 右手法',color:'#F5A623'},bfs:{label:'🔴 BFS',color:'#FF3B30'},astar:{label:'💀 A*',color:'#8B5CF6'}};
 
 let curStageIdx=0, mode='stage', curConfig=null;
-let gridN=5, wallBudget=8, walls=new Set(), wallHistory=[], usedWalls=0;
+let gridN=5, walls=new Set(), wallHistory=[], usedWalls=0;
 let running=false, timer=0, timerStart=0, animId=null;
 let solverState=null, explored=new Set(), shortestPath=[], deadEndCount=0, realtimeWallPenalty=0;
+
+// ── Quest Mode State ──
+let curQuestIdx=0;
+let questWalls=[]; // questWalls[i] = Array of wall keys (serialized Set)
+let questCleared=[]; // questCleared[i] = true/false
+let questGridOffsets=[]; // questGridOffsets[i] = cumulative X offset in cells for drawing
+
+function initQuestState(){
+  questWalls=[];
+  questCleared=[];
+  questGridOffsets=[];
+  let offset=0;
+  for(let i=0;i<STAGES.length;i++){
+    questWalls.push(null); // null = not yet played
+    questCleared.push(false);
+    questGridOffsets.push(offset);
+    offset+=STAGES[i].grid+1; // +1 gap between grids
+  }
+}
+initQuestState();
 
 // ── Screens ──
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
 function showTitle(){stopSolver();showScreen('titleScreen')}
 function showStageSelect(){curStageIdx=0;renderStageCard();showScreen('stageScreen')}
 function showFreeMode(){showScreen('freeScreen')}
+
+function showQuestSelect(){
+  renderQuestGrid();
+  showScreen('questScreen');
+}
+
+function renderQuestGrid(){
+  const grid=document.getElementById('questGrid');
+  let html='';
+  for(let i=0;i<STAGES.length;i++){
+    const s=STAGES[i];
+    const ai=ALGO_INFO[s.algo];
+    const cleared=questCleared[i];
+    // Unlocked if first quest or previous is cleared
+    const unlocked=(i===0||questCleared[i-1]);
+    const cls=cleared?'cleared':(unlocked?'current':'locked');
+    const status=cleared?'✅':(unlocked?'🔓':'🔒');
+    html+=`<div class="quest-item ${cls}" onclick="startQuest(${i})">
+      <div class="q-num">Q${i+1}</div>
+      <div style="font-size:12px;font-weight:600;margin:2px 0">${s.name}</div>
+      <div class="q-info">${s.grid}×${s.grid} ${ai.label}</div>
+      <div class="q-status">${status}</div>
+    </div>`;
+  }
+  grid.innerHTML=html;
+}
+
+function startQuest(idx){
+  // Check if unlocked
+  if(idx>0&&!questCleared[idx-1])return;
+  mode='quest';
+  curQuestIdx=idx;
+  const s=STAGES[idx];
+  curConfig={grid:s.grid,algo:s.algo,target:s.target,name:`Quest ${idx+1}: ${s.name}`};
+  initGame(curConfig);
+  // Restore walls if replaying a cleared quest
+  if(questWalls[idx]){
+    const savedWalls=questWalls[idx];
+    walls=new Set(savedWalls);
+    usedWalls=walls.size;
+  }
+  showScreen('gameScreen');
+  draw();
+}
+
+function nextQuest(){
+  if(curQuestIdx<STAGES.length-1){
+    startQuest(curQuestIdx+1);
+  }
+}
 
 function renderStageCard(){
   const s=STAGES[curStageIdx];
@@ -173,7 +260,6 @@ function renderStageCard(){
     <div style="font-size:13px;color:#888;margin-bottom:12px">${s.desc}</div>
     <div style="display:flex;justify-content:space-around;font-size:13px;color:#555">
       <span>📐 ${s.grid}×${s.grid}</span>
-      <span>🧱 ${s.budget}</span>
       <span>🎯 ${s.target}s</span>
     </div>`;
   document.getElementById('stageNum').textContent=`${curStageIdx+1}/8`;
@@ -183,7 +269,7 @@ function navStage(d){curStageIdx=(curStageIdx+d+8)%8;renderStageCard()}
 function startStage(){
   mode='stage';
   const s=STAGES[curStageIdx];
-  curConfig={grid:s.grid,budget:s.budget,algo:s.algo,target:s.target,name:`Stage ${curStageIdx+1}: ${s.name}`};
+  curConfig={grid:s.grid,algo:s.algo,target:s.target,name:`Stage ${curStageIdx+1}: ${s.name}`};
   initGame(curConfig);
   showScreen('gameScreen');
 }
@@ -191,7 +277,7 @@ function startFree(){
   mode='free';
   const sz=parseInt(document.getElementById('freeSize').value);
   const algo=document.getElementById('freeAlgo').value;
-  curConfig={grid:sz,budget:Infinity,algo:algo,target:Infinity,name:'フリーモード'};
+  curConfig={grid:sz,algo:algo,target:Infinity,name:'フリーモード'};
   initGame(curConfig);
   showScreen('gameScreen');
 }
@@ -210,7 +296,7 @@ let cellSize=40, offsetX=0, offsetY=0;
 
 function initGame(cfg){
   stopSolver();
-  gridN=cfg.grid;wallBudget=cfg.budget;
+  gridN=cfg.grid;
   walls=new Set();wallHistory=[];usedWalls=0;
   running=false;timer=0;explored=new Set();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
   solverState=null;
@@ -225,9 +311,24 @@ function initGame(cfg){
 function resizeCanvas(){
   const wrap=document.getElementById('canvasWrap');
   const w=wrap.clientWidth-8, h=wrap.clientHeight-8;
-  const maxCell=Math.floor(Math.min(w,h)/(gridN+0.5));
-  cellSize=Math.max(20,Math.min(maxCell,60));
-  const totalW=cellSize*gridN, totalH=cellSize*gridN;
+  // Auto-scale: canvas size based on available space
+  const canvasSize=Math.min(w, h, window.innerWidth-20, window.innerHeight*0.6);
+  cellSize=Math.floor(canvasSize/gridN);
+  // Minimum cell size of 30px; if grid too large, allow larger canvas with scroll
+  if(cellSize<30) cellSize=30;
+  // Cap max cell size
+  if(cellSize>60) cellSize=60;
+
+  let totalW, totalH;
+  if(mode==='quest'){
+    // For quest mode, compute total width including past quests
+    const questTotalW=computeQuestCanvasWidth();
+    totalW=questTotalW;
+    totalH=computeQuestCanvasHeight();
+  } else {
+    totalW=cellSize*gridN;
+    totalH=cellSize*gridN;
+  }
   const dpr=window.devicePixelRatio||1;
   canvas.width=totalW*dpr;canvas.height=totalH*dpr;
   canvas.style.width=totalW+'px';canvas.style.height=totalH+'px';
@@ -235,34 +336,43 @@ function resizeCanvas(){
   offsetX=0;offsetY=0;
 }
 
+function computeQuestCanvasWidth(){
+  // Total width = sum of all past quest grids + current quest grid + gaps
+  let totalCells=0;
+  for(let i=0;i<=curQuestIdx;i++){
+    totalCells+=STAGES[i].grid;
+    if(i<curQuestIdx) totalCells+=1; // gap
+  }
+  return totalCells*cellSize;
+}
+
+function computeQuestCanvasHeight(){
+  // Max grid height among displayed quests
+  let maxGrid=0;
+  for(let i=0;i<=curQuestIdx;i++){
+    if(STAGES[i].grid>maxGrid) maxGrid=STAGES[i].grid;
+  }
+  return maxGrid*cellSize;
+}
+
 function updateUI(){
-  const budgetStr=wallBudget===Infinity?`壁: ${usedWalls}(∞)`:`壁: ${usedWalls}/${wallBudget}`;
-  document.getElementById('wallCount').textContent=budgetStr;
   document.getElementById('timerDisp').textContent=`⏱ ${timer.toFixed(1)}s`;
 }
 
 // ── Wall key: "r,c,d" where d='h' (horizontal, top edge of cell) or 'v' (vertical, left edge of cell)
-// Horizontal wall at (r,c) = wall between cell(r-1,c) and cell(r,c) — top edge of row r
-// Vertical wall at (r,c) = wall between cell(r,c-1) and cell(r,c) — left edge of col c
 function wallKey(r,c,d){return `${r},${c},${d}`}
 
 function hasWall(r,c,d){
-  // Boundary walls
   if(d==='h'){if(r===0||r===gridN)return true}
   if(d==='v'){if(c===0||c===gridN)return true}
   return walls.has(wallKey(r,c,d));
 }
 
-// Check if two adjacent cells are connected (no wall between them)
 function canPass(r1,c1,r2,c2){
   if(r2<0||r2>=gridN||c2<0||c2>=gridN)return false;
-  // Moving up: r2=r1-1 → horizontal wall at (r1,c1,'h')
   if(r2===r1-1&&c2===c1)return !hasWall(r1,c1,'h');
-  // Moving down: r2=r1+1 → horizontal wall at (r1+1,c1,'h')
   if(r2===r1+1&&c2===c1)return !hasWall(r1+1,c1,'h');
-  // Moving left: c2=c1-1 → vertical wall at (r1,c1,'v')
   if(r2===r1&&c2===c1-1)return !hasWall(r1,c1,'v');
-  // Moving right: c2=c1+1 → vertical wall at (r1,c1+1,'v')
   if(r2===r1&&c2===c1+1)return !hasWall(r1,c1+1,'v');
   return false;
 }
@@ -276,7 +386,6 @@ function neighbors(r,c){
   return n;
 }
 
-// BFS reachability check
 function isReachable(){
   const visited=new Set();
   const q=[[0,0]];visited.add('0,0');
@@ -294,26 +403,30 @@ function isReachable(){
 
 // ── Wall placement via tap ──
 function getWallFromPos(x,y){
-  // x,y in canvas local coords
-  // Check proximity to horizontal lines (row boundaries) and vertical lines (col boundaries)
-  let bestDist=16, bestWall=null;
-  // Horizontal walls: y = r*cellSize for r in 1..gridN-1
+  // Adjust for quest mode offset
+  let localX=x, localY=y;
+  if(mode==='quest'){
+    const qOffset=getQuestCurrentOffset();
+    localX=x-qOffset*cellSize;
+    localY=y;
+  }
+  const tapRadius=Math.max(12, cellSize*0.3);
+  let bestDist=tapRadius, bestWall=null;
   for(let r=1;r<gridN;r++){
     const wy=r*cellSize;
-    const dy=Math.abs(y-wy);
+    const dy=Math.abs(localY-wy);
     if(dy<bestDist){
-      const col=Math.floor(x/cellSize);
+      const col=Math.floor(localX/cellSize);
       if(col>=0&&col<gridN){
         bestDist=dy;bestWall={r,c:col,d:'h',key:wallKey(r,col,'h')};
       }
     }
   }
-  // Vertical walls: x = c*cellSize for c in 1..gridN-1
   for(let c=1;c<gridN;c++){
     const wx=c*cellSize;
-    const dx=Math.abs(x-wx);
+    const dx=Math.abs(localX-wx);
     if(dx<bestDist){
-      const row=Math.floor(y/cellSize);
+      const row=Math.floor(localY/cellSize);
       if(row>=0&&row<gridN){
         bestDist=dx;bestWall={r:row,c,d:'v',key:wallKey(row,c,'v')};
       }
@@ -322,21 +435,29 @@ function getWallFromPos(x,y){
   return bestWall;
 }
 
+function getQuestCurrentOffset(){
+  // Returns offset in cells for the current quest grid
+  let offset=0;
+  for(let i=0;i<curQuestIdx;i++){
+    offset+=STAGES[i].grid+1;
+  }
+  return offset;
+}
+
 function handleTap(ex,ey){
   if(running&&mode!=='free')return;
   const rect=canvas.getBoundingClientRect();
   const x=ex-rect.left, y=ey-rect.top;
   const w=getWallFromPos(x,y);
   if(!w)return;
-  
+
   ensureAudio();
-  
+
   if(walls.has(w.key)){
     walls.delete(w.key);usedWalls--;
     wallHistory.push({key:w.key,action:'remove'});
     sfxRemove();
   } else {
-    if(usedWalls>=wallBudget){showToast('壁の予算を使い切りました');return}
     walls.add(w.key);
     if(!isReachable()){
       walls.delete(w.key);
@@ -366,49 +487,64 @@ function undoWall(){
   else{walls.add(last.key);usedWalls++}
   updateUI();draw();
 }
-function backFromGame(){stopSolver();if(mode==='stage')showStageSelect();else showTitle()}
+function backFromGame(){
+  stopSolver();
+  if(mode==='stage')showStageSelect();
+  else if(mode==='quest')showQuestSelect();
+  else showTitle();
+}
 
 // ── Drawing ──
 function draw(){
+  if(mode==='quest'){
+    drawQuest();
+    return;
+  }
   const W=cellSize*gridN, H=cellSize*gridN;
   ctx.clearRect(0,0,W,H);
-  
+  drawGrid(0,0,gridN,walls,explored,shortestPath,solverState,1.0);
+}
+
+function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,alpha){
+  const W=cellSize*gn, H=cellSize*gn;
+  ctx.save();
+  ctx.translate(ox,oy);
+  ctx.globalAlpha=alpha;
+
   // Background
   ctx.fillStyle='#FAFAF9';ctx.fillRect(0,0,W,H);
-  
+
   // Explored cells overlay
-  if(explored.size){
+  if(exploredSet&&exploredSet.size){
     const col=ALGO_INFO[curConfig.algo].color;
     ctx.fillStyle=col+'22';
-    explored.forEach(k=>{
+    exploredSet.forEach(k=>{
       const [r,c]=k.split(',').map(Number);
-      ctx.fillRect(c*cellSize+1,r*cellSize+1,cellSize-2,cellSize-2);
+      if(r<gn&&c<gn) ctx.fillRect(c*cellSize+1,r*cellSize+1,cellSize-2,cellSize-2);
     });
   }
-  
+
   // Shortest path
-  if(shortestPath.length>1){
+  if(path&&path.length>1){
     const col=ALGO_INFO[curConfig.algo].color;
     ctx.strokeStyle=col+'88';ctx.lineWidth=3;ctx.lineCap='round';
     ctx.beginPath();
-    shortestPath.forEach(([r,c],i)=>{
+    path.forEach(([r,c],i)=>{
       const px=c*cellSize+cellSize/2, py=r*cellSize+cellSize/2;
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
     });
     ctx.stroke();
   }
-  
-  // Grid lines (thin)
+
+  // Grid lines
   ctx.strokeStyle='#E0E0E0';ctx.lineWidth=1;
-  for(let r=0;r<=gridN;r++){ctx.beginPath();ctx.moveTo(0,r*cellSize);ctx.lineTo(W,r*cellSize);ctx.stroke()}
-  for(let c=0;c<=gridN;c++){ctx.beginPath();ctx.moveTo(c*cellSize,0);ctx.lineTo(c*cellSize,H);ctx.stroke()}
-  
-  // Walls (thick)
+  for(let r=0;r<=gn;r++){ctx.beginPath();ctx.moveTo(0,r*cellSize);ctx.lineTo(W,r*cellSize);ctx.stroke()}
+  for(let c=0;c<=gn;c++){ctx.beginPath();ctx.moveTo(c*cellSize,0);ctx.lineTo(c*cellSize,H);ctx.stroke()}
+
+  // Walls
   ctx.strokeStyle='#2F2B2A';ctx.lineWidth=4;ctx.lineCap='round';
-  // Outer boundary
   ctx.strokeRect(1,1,W-2,H-2);
-  // Inner walls
-  walls.forEach(k=>{
+  wallSet.forEach(k=>{
     const [r,c,d]=k.split(',');
     const ri=+r,ci=+c;
     ctx.beginPath();
@@ -416,28 +552,69 @@ function draw(){
     else{ctx.moveTo(ci*cellSize,ri*cellSize);ctx.lineTo(ci*cellSize,(ri+1)*cellSize)}
     ctx.stroke();
   });
-  
+
   // Start & Goal
   const sr=cellSize*0.3;
   ctx.fillStyle='#4ED26D';ctx.beginPath();ctx.arc(cellSize/2,cellSize/2,sr,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gridN-0.5)*cellSize,(gridN-0.5)*cellSize,sr,0,Math.PI*2);ctx.fill();
-  
+  ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr,0,Math.PI*2);ctx.fill();
+
   // Solver agent
-  if(solverState&&solverState.pos){
+  if(solver&&solver.pos&&alpha>=1.0){
     const col=ALGO_INFO[curConfig.algo].color;
-    const [pr,pc]=solverState.pos;
+    const [pr,pc]=solver.pos;
     let dr=0,dc=0;
-    if(solverState.lerp<1&&solverState.prev){
-      dr=(pr-solverState.prev[0])*(1-solverState.lerp);
-      dc=(pc-solverState.prev[1])*(1-solverState.lerp);
+    if(solver.lerp<1&&solver.prev){
+      dr=(pr-solver.prev[0])*(1-solver.lerp);
+      dc=(pc-solver.prev[1])*(1-solver.lerp);
     }
     const ax=(pc-dc)*cellSize+cellSize/2, ay=(pr-dr)*cellSize+cellSize/2;
     ctx.fillStyle=col;ctx.beginPath();ctx.arc(ax,ay,sr*0.9,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#fff';ctx.font=`${sr*0.9}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
-    if(solverState.exclaim&&Date.now()-solverState.exclaimTime<500){
+    if(solver.exclaim&&Date.now()-solver.exclaimTime<500){
       ctx.fillStyle=col;ctx.font=`bold ${sr*1.5}px system-ui`;ctx.fillText('!',ax,ay-cellSize*0.6);
     }
   }
+
+  ctx.restore();
+}
+
+function drawQuest(){
+  const totalW=parseInt(canvas.style.width);
+  const totalH=parseInt(canvas.style.height);
+  ctx.clearRect(0,0,totalW,totalH);
+
+  // Draw past quest grids faintly
+  let xOff=0;
+  for(let i=0;i<curQuestIdx;i++){
+    const gn=STAGES[i].grid;
+    const pastWalls=questWalls[i]?new Set(questWalls[i]):new Set();
+    // Center vertically relative to max height
+    const maxH=computeQuestCanvasHeight();
+    const yOff=Math.floor((maxH-gn*cellSize)/2);
+    drawGrid(xOff*cellSize, yOff, gn, pastWalls, null, null, null, 0.3);
+
+    // Draw connection line from past goal to next start
+    const goalX=xOff*cellSize+(gn-0.5)*cellSize;
+    const goalY=yOff+(gn-0.5)*cellSize;
+    const nextXOff=xOff+gn+1;
+    const nextGn=STAGES[i+1].grid;
+    const nextYOff=Math.floor((maxH-nextGn*cellSize)/2);
+    const startX=nextXOff*cellSize+cellSize/2;
+    const startY=nextYOff+cellSize/2;
+    ctx.save();
+    ctx.strokeStyle='#5B4FCF';ctx.lineWidth=3;ctx.setLineDash([6,4]);ctx.globalAlpha=0.5;
+    ctx.beginPath();ctx.moveTo(goalX,goalY);ctx.lineTo(startX,startY);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    xOff+=gn+1;
+  }
+
+  // Draw current quest grid at full opacity
+  const curGn=STAGES[curQuestIdx].grid;
+  const maxH=computeQuestCanvasHeight();
+  const curYOff=Math.floor((maxH-curGn*cellSize)/2);
+  drawGrid(xOff*cellSize, curYOff, curGn, walls, explored, shortestPath, solverState, 1.0);
 }
 
 // ── Solver ──
@@ -453,7 +630,7 @@ function runSolver(){
   explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
   document.getElementById('startBtn').textContent='実行中…';
   document.getElementById('startBtn').disabled=true;
-  
+
   const algo=curConfig.algo;
   if(algo==='random')startRandomWalk();
   else if(algo==='righthand')startRightHand();
@@ -475,7 +652,6 @@ function startRandomWalk(){
       const filtered=nb.filter(([nr,nc])=>!(nr===lastPos[0]&&nc===lastPos[1]));
       if(Math.random()>0.3||filtered.length===0)choices=nb;else choices=filtered;
     }
-    // Dead end check
     if(nb.length<=1&&!(r===0&&c===0)){
       deadEndCount++;solverState.exclaim=true;solverState.exclaimTime=Date.now();
     }
@@ -491,16 +667,14 @@ function startRandomWalk(){
 
 // ── Right Hand ──
 function startRightHand(){
-  // Directions: 0=up,1=right,2=down,3=left
   const DR=[-1,0,1,0],DC=[0,1,0,-1];
-  let dir=2; // start facing down
+  let dir=2;
   solverState={pos:[0,0],prev:null,lerp:1,exclaim:false,exclaimTime:0};
-  
+
   const step=()=>{
     if(!running)return;
     const [r,c]=solverState.pos;
     if(r===gridN-1&&c===gridN-1){finishSolver();return}
-    // Right hand rule: try right, forward, left, back
     const tryOrder=[(dir+1)%4, dir, (dir+3)%4, (dir+2)%4];
     let moved=false;
     for(const d of tryOrder){
@@ -516,7 +690,7 @@ function startRightHand(){
         moved=true;break;
       }
     }
-    if(!moved){finishSolver()} // shouldn't happen
+    if(!moved){finishSolver()}
   };
   explored.add('0,0');
   step();
@@ -530,11 +704,10 @@ function startBFS(){
   const queue=[[0,0]];
   const visited=new Set(['0,0']);
   let found=false;
-  
+
   const exploreStep=()=>{
     if(!running)return;
     if(!queue.length){finishSolver();return}
-    // Process a batch per tick for speed (accelerates over time)
     const batch=Math.min(queue.length,Math.ceil(3*getSpeedMultiplier()));
     for(let i=0;i<batch;i++){
       if(!queue.length)break;
@@ -548,7 +721,6 @@ function startBFS(){
     }
     draw();
     if(found){
-      // Reconstruct path
       const path=[];let cur=`${gridN-1},${gridN-1}`;
       while(cur){path.unshift(cur.split(',').map(Number));cur=parent.get(cur)}
       shortestPath=path;
@@ -571,14 +743,13 @@ function startAStar(){
   const parent=new Map();
   const closed=new Set();
   let found=false;
-  
+
   const exploreStep=()=>{
     if(!running)return;
     if(!open.length){finishSolver();return}
     const batch=Math.min(open.length,Math.ceil(5*getSpeedMultiplier()));
     for(let i=0;i<batch;i++){
       if(!open.length)break;
-      // Find min f
       let minIdx=0;
       for(let j=1;j<open.length;j++){if(open[j].f<open[minIdx].f)minIdx=j}
       const cur=open.splice(minIdx,1)[0];
@@ -623,12 +794,11 @@ function walkPath(path,idx){
   animateMove([r,c],speed,()=>walkPath(path,idx+1));
 }
 
-// Speed multiplier: accelerates after 10s, caps at 8x after 30s
 function getSpeedMultiplier(){
   const elapsed=(Date.now()-timerStart)/1000;
   if(elapsed<10)return 1;
-  if(elapsed<20)return 1+(elapsed-10)/10*3; // 1x→4x over 10-20s
-  return Math.min(8,4+(elapsed-20)/10*4); // 4x→8x over 20-30s
+  if(elapsed<20)return 1+(elapsed-10)/10*3;
+  return Math.min(8,4+(elapsed-20)/10*4);
 }
 
 function animateMove(target,duration,cb){
@@ -659,35 +829,47 @@ function finishSolver(){
   running=false;
   timer=(Date.now()-timerStart)/1000;
   updateUI();draw();
-  
+
+  // Save quest walls on finish
+  if(mode==='quest'){
+    questWalls[curQuestIdx]=[...walls];
+  }
+
   // Score
   const base=Math.round(timer*100);
-  const wallBonus=wallBudget===Infinity?0:Math.max(0,(wallBudget-usedWalls))*50;
   const deadEndBonus=deadEndCount*30;
   const penalty=realtimeWallPenalty*200;
-  const total=Math.max(0,base+wallBonus+deadEndBonus-penalty);
-  
+  const total=Math.max(0,base+deadEndBonus-penalty);
+
   const passed=curConfig.target!==Infinity&&timer>=curConfig.target;
-  
+
+  // Mark quest cleared
+  if(mode==='quest'&&passed){
+    questCleared[curQuestIdx]=true;
+  }
+
   document.getElementById('resultEmoji').textContent=passed?'🎉':'😅';
   document.getElementById('resultTitle').textContent=passed?'クリア！':'もう少し迷わせよう…';
   document.getElementById('resultTime').textContent=`経過時間: ${timer.toFixed(1)}秒${curConfig.target!==Infinity?' / 目標: '+curConfig.target+'秒':''}`;
   document.getElementById('resultScore').textContent=total.toLocaleString();
   let bd=`ベース: ${base}`;
-  if(wallBonus)bd+=` | 壁効率: +${wallBonus}`;
   if(deadEndBonus)bd+=` | 行き止まり: +${deadEndBonus}`;
   if(penalty)bd+=` | ペナルティ: -${penalty}`;
   document.getElementById('resultBreakdown').textContent=bd;
-  
+
+  // Show/hide next buttons
   document.getElementById('nextStageBtn').style.display=(mode==='stage'&&curStageIdx<7)?'block':'none';
-  
+  document.getElementById('nextQuestBtn').style.display=(mode==='quest'&&passed&&curQuestIdx<STAGES.length-1)?'block':'none';
+
   if(passed)sfxClear();else sfxFail();
-  
+
   showScreen('resultScreen');
 }
 
 function retryStage(){
-  if(mode==='stage')startStage();else startFree();
+  if(mode==='stage')startStage();
+  else if(mode==='quest')startQuest(curQuestIdx);
+  else startFree();
 }
 function nextStage(){
   if(curStageIdx<7){curStageIdx++;startStage()}
