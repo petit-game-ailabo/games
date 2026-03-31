@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Maze Architect</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;font-family:system-ui,-apple-system,sans-serif;background:radial-gradient(ellipse at center,#F6F6F5 0%,#ECECEC 100%)}
+#app{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+canvas{display:block;touch-action:none}
+.screen{display:none;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;padding:16px}
+.screen.active{display:flex}
+.btn{background:#2F2B2A;color:#fff;border:none;border-radius:12px;padding:14px 28px;font-size:16px;font-family:system-ui;cursor:pointer;margin:6px;min-width:200px;text-align:center;transition:transform .1s,opacity .1s}
+.btn:active{transform:scale(0.96);opacity:0.8}
+.btn-secondary{background:#fff;color:#2F2B2A;border:2px solid #E0E0E0}
+.btn-small{padding:10px 16px;font-size:14px;min-width:auto;border-radius:10px}
+.btn-dungeon{background:#5B4FCF}
+h1{font-size:28px;color:#2F2B2A;margin-bottom:4px}
+h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
+.subtitle{color:#888;font-size:14px;margin-bottom:20px}
+.game-header{display:flex;flex-direction:column;align-items:center;width:100%;max-width:420px;padding:8px 4px;font-size:13px;color:#555;flex-shrink:0}
+.game-header .header-top{display:flex;justify-content:space-between;align-items:center;width:100%}
+.game-header .info{display:flex;gap:12px}
+.game-header .stage-name{font-weight:700;color:#2F2B2A;font-size:15px}
+.game-header .ability-bar{font-size:12px;color:#5B4FCF;font-weight:600;margin-top:2px;min-height:16px}
+.game-footer{display:flex;gap:8px;padding:8px 4px;flex-shrink:0;flex-wrap:wrap;justify-content:center}
+.canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:hidden;position:relative}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#2F2B2A;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
+.toast.show{opacity:1}
+.result-box{background:#fff;border-radius:16px;padding:24px;text-align:center;box-shadow:0 2px 16px rgba(0,0,0,0.08);max-width:340px;width:90%}
+.result-box .big{font-size:48px;margin:8px 0}
+.result-box .score-val{font-size:32px;font-weight:700;color:#2F2B2A}
+.result-box .detail{font-size:13px;color:#888;margin:4px 0}
+.star-row{display:flex;justify-content:center;gap:8px;margin:12px 0 4px}
+.star{font-size:40px;opacity:0;transform:scale(0.3) rotate(-30deg);transition:opacity .4s ease-out,transform .4s cubic-bezier(0.34,1.56,0.64,1);display:inline-block}
+.star.show{opacity:1;transform:scale(1) rotate(0deg)}
+.star.empty{filter:grayscale(1) opacity(0.3)}
+.star-label{font-size:13px;font-weight:600;margin-bottom:4px}
+.free-options{display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px;margin:12px 0}
+.free-options label{font-size:14px;color:#555;font-weight:600}
+.free-options select,.free-options input[type=range]{padding:10px;border-radius:10px;border:2px solid #E0E0E0;font-size:15px;font-family:system-ui;background:#fff;color:#2F2B2A}
+.dungeon-grid{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:360px;justify-content:center;margin:12px 0}
+.dungeon-floor{background:#fff;border-radius:12px;padding:10px 16px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.06);cursor:pointer;border:2px solid transparent;transition:border-color .2s,transform .1s;min-width:70px}
+.dungeon-floor:active{transform:scale(0.97)}
+.dungeon-floor.cleared{border-color:#4ED26D;background:#F0FFF4}
+.dungeon-floor.current{border-color:#5B4FCF;background:#F5F3FF}
+.dungeon-floor.locked{opacity:0.35;pointer-events:none}
+.dungeon-floor .df-name{font-size:15px;font-weight:700;color:#2F2B2A}
+.dungeon-floor .df-info{font-size:10px;color:#888;margin-top:2px}
+.dungeon-floor .df-status{font-size:14px;margin-top:2px}
+.dungeon-desc{background:#fff;border-radius:12px;padding:12px 16px;margin:8px 0;max-width:340px;width:100%;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.04)}
+.dungeon-desc .dd-title{font-weight:700;font-size:15px;color:#2F2B2A;margin-bottom:4px}
+.dungeon-desc .dd-text{font-size:12px;color:#888}
+.hp-bar-wrap{width:100%;max-width:420px;height:10px;background:#E0E0E0;border-radius:5px;margin:2px 4px;overflow:hidden;opacity:0;transition:opacity .3s}
+.hp-bar-wrap.active{opacity:1}
+.hp-bar{height:100%;border-radius:5px;transition:width .25s ease-out,background .3s;width:100%}
+.hp-label{display:flex;justify-content:space-between;width:100%;max-width:420px;padding:0 4px;font-size:12px;color:#555;font-weight:600;min-height:18px}
+.confetti-canvas{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:200}
+.float-score{position:absolute;pointer-events:none;font-weight:700;font-size:18px;color:#FF9500;text-shadow:0 1px 4px rgba(0,0,0,0.15);z-index:60;animation:floatUp .9s ease-out forwards}
+@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}50%{opacity:1;transform:translateY(-24px) scale(1.2)}100%{opacity:0;transform:translateY(-48px) scale(0.8)}}
+@keyframes shakeCanvas{0%,100%{transform:translate(0,0)}15%{transform:translate(-3px,2px)}30%{transform:translate(3px,-2px)}45%{transform:translate(-2px,3px)}60%{transform:translate(2px,-1px)}75%{transform:translate(-1px,2px)}}
+.wall-ripple{position:absolute;pointer-events:none;border-radius:50%;z-index:55;animation:wallRipple .45s ease-out forwards}
+@keyframes wallRipple{0%{transform:translate(-50%,-50%) scale(0.2);opacity:0.8}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+.wall-break-flash{position:absolute;pointer-events:none;z-index:55;animation:wallBreakFlash .3s ease-out forwards}
+@keyframes wallBreakFlash{0%{opacity:1;transform:translate(-50%,-50%) scale(0.5)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.5)}}
+.char-speech{position:absolute;pointer-events:none;z-index:60;font-size:13px;font-weight:700;color:#2F2B2A;background:rgba(255,255,255,0.9);padding:3px 8px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.12);animation:speechPop 1.5s ease-out forwards;white-space:nowrap}
+@keyframes speechPop{0%{opacity:0;transform:translateY(0) scale(0.5)}15%{opacity:1;transform:translateY(-8px) scale(1)}80%{opacity:1;transform:translateY(-16px)}100%{opacity:0;transform:translateY(-28px)}}
+.jump-anim{animation:jumpBounce .4s ease-out}
+@keyframes jumpBounce{0%{transform:translateY(0) scale(1)}30%{transform:translateY(-20px) scale(1.1,0.9)}60%{transform:translateY(-5px) scale(0.95,1.05)}100%{transform:translateY(0) scale(1)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Title -->
+  <div class="screen active" id="titleScreen">
+    <h1>🏗️ Maze Architect</h1>
+    <div class="subtitle">迷路を作って、侵入者を倒せ！</div>
+    <button class="btn btn-dungeon" onclick="showDungeonSelect()">🏰 ダンジョン防衛</button>
+    <button class="btn btn-secondary" onclick="showFreeMode()">🏗️ フリーモード</button>
+    <button class="btn btn-secondary btn-small" id="muteBtnTitle" onclick="toggleMute()" style="margin-top:12px">🔊 サウンド ON</button>
+  </div>
+  <!-- Dungeon Select -->
+  <div class="screen" id="dungeonScreen">
+    <h2>🏰 ダンジョン防衛</h2>
+    <div class="subtitle">壁を築き、侵入者のHPを削れ！</div>
+    <div class="dungeon-grid" id="dungeonGrid"></div>
+    <div class="dungeon-desc" id="dungeonDesc"></div>
+    <button class="btn btn-dungeon" id="dungeonStartBtn" onclick="startDungeon()" style="margin-top:4px">🧱 この階層を構築</button>
+    <button class="btn btn-secondary btn-small" style="margin-top:4px" onclick="showTitle()">← 戻る</button>
+  </div>
+  <!-- Free Mode Options -->
+  <div class="screen" id="freeScreen">
+    <h2>🏗️ フリーモード</h2>
+    <div class="free-options">
+      <label>グリッドサイズ</label>
+      <select id="freeSize">
+        <option value="5">5×5</option>
+        <option value="7" selected>7×7</option>
+        <option value="9">9×9</option>
+        <option value="11">11×11</option>
+      </select>
+      <label>敵キャラ</label>
+      <select id="freeChar">
+        <option value="marimo">🟢 マリモ</option>
+        <option value="kaeru">🐸 かえる</option>
+        <option value="nhk">📺 NHKの集金人</option>
+        <option value="chatgpt">🤖 ChatGPT</option>
+        <option value="elon">🚗 イーロン・マスク</option>
+        <option value="takopy">🐙 タコピー</option>
+        <option value="trasana">🇺🇸🌪️ トラサナ同盟</option>
+        <option value="eho">🦉 エッホエッホ</option>
+      </select>
+      <label>HP: <span id="freeHpVal">40</span></label>
+      <input type="range" id="freeHp" min="20" max="100" value="40" oninput="document.getElementById('freeHpVal').textContent=this.value">
+    </div>
+    <button class="btn" onclick="startFree()">▶ スタート</button>
+    <button class="btn btn-secondary btn-small" onclick="showTitle()">戻る</button>
+  </div>
+  <!-- Game -->
+  <div class="screen" id="gameScreen">
+    <div class="game-header">
+      <div class="header-top">
+        <span class="stage-name" id="gameName"></span>
+        <div class="info">
+          <span id="wallCount">🧱 0</span>
+          <span id="stepCount">👣 0</span>
+        </div>
+      </div>
+      <div class="hp-label" id="hpLabel">
+        <span id="hpText">❤️ HP: --/--</span>
+        <span id="hpExtra"></span>
+      </div>
+    </div>
+    <div class="hp-bar-wrap" id="hpBarWrap"><div class="hp-bar" id="hpBar" style="background:linear-gradient(90deg,#4ED26D,#34C759)"></div></div>
+    <div class="ability-bar" id="abilityBar" style="font-size:12px;color:#5B4FCF;font-weight:600;min-height:16px;text-align:center;padding:2px"></div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="gameCanvas"></canvas>
+    </div>
+    <div class="game-footer" id="gameFooter">
+      <button class="btn btn-small" id="startBtn" onclick="runSolver()">⚔️ 侵入開始！</button>
+      <button class="btn btn-small btn-secondary" id="speedBtn" onclick="cycleSpeed()" style="display:none">⏩ 1x</button>
+      <button class="btn btn-small btn-secondary" onclick="undoWall()">↩️ 戻す</button>
+      <button class="btn btn-small btn-secondary" onclick="resetWalls()">🗑️ リセット</button>
+      <button class="btn btn-small btn-secondary" id="muteBtn" onclick="toggleMute()">🔊</button>
+      <button class="btn btn-small btn-secondary" onclick="backFromGame()">🏠</button>
+    </div>
+  </div>
+  <!-- Result -->
+  <div class="screen" id="resultScreen">
+    <div class="result-box" id="resultBox">
+      <div id="resultEmoji" class="big">🎉</div>
+      <div id="resultTitle" style="font-size:20px;font-weight:700;margin-bottom:8px">防衛成功！</div>
+      <div id="resultDetail" class="detail"></div>
+      <div class="score-val" id="resultScore">0</div>
+      <div id="resultBreakdown" class="detail"></div>
+      <div class="star-row" id="starRow"></div>
+      <div class="star-label" id="starLabel"></div>
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;align-items:center">
+        <button class="btn btn-small btn-dungeon" id="nextDungeonBtn" onclick="nextDungeonFloor()" style="display:none">🪜 次の階層へ</button>
+        <button class="btn btn-small btn-secondary" onclick="retryStage()">🔄 リトライ</button>
+        <button class="btn btn-small btn-secondary" onclick="backFromResult()">🏠 戻る</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Audio ──
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+let muted=false;
+try{muted=localStorage.getItem('maze_architect_muted')==='true'}catch(e){}
+function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
+function playTone(freq,dur,type,vol){
+  if(muted)return;ensureAudio();
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type||'square';o.frequency.value=freq;
+  g.gain.setValueAtTime(vol||0.08,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);
+  o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);
+}
+function sfxWall(){playTone(600,0.08,'square',0.06)}
+function sfxRemove(){playTone(400,0.08,'square',0.05)}
+function sfxStart(){playTone(880,0.15,'sine',0.1);setTimeout(()=>playTone(1100,0.2,'sine',0.1),150)}
+function sfxClear(){playTone(660,0.15,'sine',0.12);setTimeout(()=>playTone(880,0.15,'sine',0.12),150);setTimeout(()=>playTone(1100,0.3,'sine',0.12),300)}
+function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260,0.3,'sawtooth',0.08),200)}
+function sfxDeadEnd(){playTone(520,0.06,'square',0.07);setTimeout(()=>playTone(700,0.1,'sine',0.09),60)}
+function sfxWallBreak(){playTone(200,0.15,'sawtooth',0.12);setTimeout(()=>playTone(150,0.2,'sawtooth',0.1),100)}
+function sfxHpDown(){playTone(300,0.06,'square',0.06)}
+function sfxCrash(){playTone(120,0.25,'sawtooth',0.15);setTimeout(()=>playTone(80,0.3,'sawtooth',0.12),150)}
+function sfxJump(){playTone(600,0.08,'sine',0.1);setTimeout(()=>playTone(900,0.12,'sine',0.08),80)}
+function vibrate(ms){try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}}
+
+function toggleMute(){
+  muted=!muted;
+  try{localStorage.setItem('maze_architect_muted',muted?'true':'false')}catch(e){}
+  updateMuteUI();
+  if(!muted){ensureAudio();playTone(880,0.1,'sine',0.08)}
+}
+function updateMuteUI(){
+  const gb=document.getElementById('muteBtn');
+  const tb=document.getElementById('muteBtnTitle');
+  if(gb)gb.textContent=muted?'🔇':'🔊';
+  if(tb)tb.textContent=muted?'🔇 サウンド OFF':'🔊 サウンド ON';
+}
+document.addEventListener('DOMContentLoaded',updateMuteUI);
+
+// ── Effects ──
+function spawnWallRipple(wallObj, isRemove){
+  const wrap=document.getElementById('canvasWrap');
+  const rect=canvas.getBoundingClientRect();
+  const wrapRect=wrap.getBoundingClientRect();
+  const [r,c,d]=wallObj.key.split(',');
+  const ri=+r, ci=+c;
+  let cx,cy;
+  if(d==='h'){cx=ci*cellSize+cellSize/2;cy=ri*cellSize}
+  else{cx=ci*cellSize;cy=ri*cellSize+cellSize/2}
+  cx+=(rect.left-wrapRect.left);cy+=(rect.top-wrapRect.top);
+  const el=document.createElement('div');el.className='wall-ripple';
+  const sz=cellSize*1.6;
+  el.style.width=sz+'px';el.style.height=sz+'px';el.style.left=cx+'px';el.style.top=cy+'px';
+  el.style.background=isRemove?'radial-gradient(circle,rgba(255,59,48,0.4) 0%,transparent 70%)':'radial-gradient(circle,rgba(91,79,207,0.4) 0%,transparent 70%)';
+  wrap.appendChild(el);setTimeout(()=>el.remove(),500);
+}
+function spawnWallBreakFlash(r,c,d){
+  const wrap=document.getElementById('canvasWrap');
+  const rect=canvas.getBoundingClientRect();
+  const wrapRect=wrap.getBoundingClientRect();
+  let cx,cy;
+  if(d==='h'){cx=c*cellSize+cellSize/2;cy=r*cellSize}
+  else{cx=c*cellSize;cy=r*cellSize+cellSize/2}
+  cx+=(rect.left-wrapRect.left);cy+=(rect.top-wrapRect.top);
+  const el=document.createElement('div');el.className='wall-break-flash';
+  const sz=cellSize*2;
+  el.style.width=sz+'px';el.style.height=sz+'px';el.style.left=cx+'px';el.style.top=cy+'px';
+  el.style.background='radial-gradient(circle,rgba(255,59,48,0.8) 0%,rgba(255,149,0,0.4) 50%,transparent 70%)';
+  wrap.appendChild(el);setTimeout(()=>el.remove(),350);
+}
+function showFloatScore(r,c,text,color){
+  const wrap=document.getElementById('canvasWrap');
+  const rect=canvas.getBoundingClientRect();
+  const wrapRect=wrap.getBoundingClientRect();
+  const x=c*cellSize+cellSize/2+(rect.left-wrapRect.left);
+  const y=r*cellSize+(rect.top-wrapRect.top);
+  const el=document.createElement('div');el.className='float-score';
+  el.textContent=text;if(color)el.style.color=color;
+  el.style.left=x+'px';el.style.top=y+'px';el.style.transform='translateX(-50%)';
+  wrap.appendChild(el);setTimeout(()=>el.remove(),950);
+}
+function showCharSpeech(r,c,text){
+  const wrap=document.getElementById('canvasWrap');
+  const rect=canvas.getBoundingClientRect();
+  const wrapRect=wrap.getBoundingClientRect();
+  const x=c*cellSize+cellSize/2+(rect.left-wrapRect.left);
+  const y=r*cellSize+(rect.top-wrapRect.top)-8;
+  const el=document.createElement('div');el.className='char-speech';
+  el.textContent=text;
+  el.style.left=x+'px';el.style.top=y+'px';el.style.transform='translateX(-50%)';
+  wrap.appendChild(el);setTimeout(()=>el.remove(),1600);
+}
+function shakeScreen(){
+  canvas.style.animation='none';canvas.offsetHeight;
+  canvas.style.animation='shakeCanvas 0.3s ease';
+  setTimeout(()=>{canvas.style.animation='none'},350);
+}
+
+// ── Character definitions ──
+const CHARACTERS={
+  marimo:{emoji:'🟢',name:'マリモ',hp:60,desc:'ゴロゴロ転がる。壁破壊不可。経路を複雑にして消耗させろ！',speed:250,canBreak:false},
+  kaeru:{emoji:'🐸',name:'かえる',hp:50,desc:'壁を飛び越える2マスジャンプ（3回まで）',speed:250,canBreak:false},
+  nhk:{emoji:'📺',name:'NHKの集金人',hp:80,desc:'全セル訪問型。しつこいが壁は壊せない',speed:400,canBreak:false},
+  chatgpt:{emoji:'🤖',name:'ChatGPT',hp:45,desc:'BFS最短経路…でも3歩に1回ハルシネーション',speed:250,canBreak:true},
+  elon:{emoji:'🚗',name:'イーロン・マスク',hp:50,desc:'直線暴走！壁に衝突するとHP-5',speed:250,canBreak:true},
+  takopy:{emoji:'🐙',name:'タコピー',hp:60,desc:'分岐で分裂！1体でもゴールしたら負け',speed:250,canBreak:true},
+  trasana:{emoji:'🇺🇸🌪️',name:'トラサナ同盟',hp:70,desc:'2体同時侵入！トランプ+サナエ',speed:250,canBreak:true},
+  eho:{emoji:'🦉',name:'エッホエッホ',hp:60,desc:'超高速ランダム移動。壁破壊不可',speed:100,canBreak:false},
+};
+
+const DUNGEON_FLOORS=[
+  {char:'marimo',gridN:7,desc:'🟢 マリモがゴロゴロ転がってきた！直進しかできないけど…'},
+  {char:'nhk',gridN:7,desc:'📺 NHKです〜全部のお部屋を回ります〜 壁は壊せないけどしつこい！'},
+  {char:'eho',gridN:7,desc:'🦉 エッホエッホ！超高速ランダム！勢いだけは一流'},
+  {char:'chatgpt',gridN:7,desc:'🤖 ChatGPTが最短経路を計算…たまにハルシネーションで暴走'},
+  {char:'trasana',gridN:7,desc:'🇺🇸🌪️ トラサナ同盟！トランプが壁を作り、サナエが旋風で壁を吹き飛ばす！'},
+];
+
+// ── Global state ──
+let mode='dungeon', curConfig=null;
+let gridN=7, walls=new Set(), initialWalls=new Set(), wallHistory=[], usedWalls=0;
+let running=false, animId=null;
+let explored=new Set();
+let cellSize=40;
+
+// HP system
+let heroHp=0, heroMaxHp=0, heroSteps=0;
+let wallBreakCount=0, deadEndCount=0;
+let currentChar='marimo';
+
+// Multi-agent state (for takopy/trasana)
+let agents=[];
+
+// ── Dungeon state ──
+let dungeonFloorIdx=0;
+let dungeonWalls=[];
+let dungeonCleared=[];
+let dungeonSelectedFloor=0;
+let userSpeedLevel=0;
+const SPEED_LABELS=['1x','2x','4x'];
+const SPEED_MULTIPLIERS=[1,2,4];
+
+function initDungeonState(){
+  dungeonWalls=[];dungeonCleared=[];
+  for(let i=0;i<DUNGEON_FLOORS.length;i++){dungeonWalls.push([]);dungeonCleared.push(false)}
+}
+initDungeonState();
+
+const SAVE_KEY='maze_architect_hp_v1';
+function saveDungeon(){
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({walls:dungeonWalls,cleared:dungeonCleared}))}catch(e){}
+}
+function loadDungeon(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);if(!raw)return;
+    const data=JSON.parse(raw);
+    if(data.walls&&Array.isArray(data.walls)){
+      for(let i=0;i<Math.min(data.walls.length,DUNGEON_FLOORS.length);i++)
+        dungeonWalls[i]=Array.isArray(data.walls[i])?data.walls[i]:[];
+    }
+    if(data.cleared&&Array.isArray(data.cleared)){
+      for(let i=0;i<Math.min(data.cleared.length,DUNGEON_FLOORS.length);i++)
+        dungeonCleared[i]=!!data.cleared[i];
+    }
+  }catch(e){}
+}
+loadDungeon();
+
+// ── Screens ──
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
+function showTitle(){stopSolver();showScreen('titleScreen')}
+function showFreeMode(){showScreen('freeScreen')}
+function showDungeonSelect(){renderDungeonGrid();showScreen('dungeonScreen')}
+
+function renderDungeonGrid(){
+  const grid=document.getElementById('dungeonGrid');
+  let html='';
+  for(let i=0;i<DUNGEON_FLOORS.length;i++){
+    const f=DUNGEON_FLOORS[i];const ch=CHARACTERS[f.char];
+    const cleared=dungeonCleared[i];
+    const unlocked=(i===0||dungeonCleared[i-1]);
+    const cls=cleared?'cleared':(unlocked?'current':'locked');
+    const status=cleared?'✅':(unlocked?'🔓':'🔒');
+    const sel=i===dungeonSelectedFloor?' style="outline:3px solid #5B4FCF;outline-offset:2px"':'';
+    html+=`<div class="dungeon-floor ${cls}" onclick="selectDungeonFloor(${i})"${sel}>
+      <div class="df-name">B${i+1}F</div>
+      <div class="df-info">${ch.emoji} ${ch.name} HP:${ch.hp}</div>
+      <div class="df-status">${status}</div>
+    </div>`;
+  }
+  grid.innerHTML=html;
+  updateDungeonDesc();
+}
+
+function selectDungeonFloor(idx){
+  if(!(idx===0||dungeonCleared[idx-1]))return;
+  dungeonSelectedFloor=idx;renderDungeonGrid();
+}
+
+function updateDungeonDesc(){
+  const f=DUNGEON_FLOORS[dungeonSelectedFloor];
+  const ch=CHARACTERS[f.char];
+  const desc=document.getElementById('dungeonDesc');
+  desc.innerHTML=`<div class="dd-title">${f.desc}</div>
+    <div class="dd-text">${ch.desc} | ❤️ HP: ${ch.hp} | 壁1枚=HP-3</div>`;
+}
+
+function startDungeon(){
+  const idx=dungeonSelectedFloor;
+  if(!(idx===0||dungeonCleared[idx-1]))return;
+  mode='dungeon';dungeonFloorIdx=idx;
+  const f=DUNGEON_FLOORS[idx];
+  const ch=CHARACTERS[f.char];
+  currentChar=f.char;
+  curConfig={grid:f.gridN,name:`${ch.emoji} B${idx+1}F - ${ch.name}`,floorIdx:idx,charKey:f.char,hp:ch.hp};
+  initGame(curConfig);
+  if(dungeonWalls[idx]&&dungeonWalls[idx].length>0){
+    walls=new Set(dungeonWalls[idx]);usedWalls=walls.size;
+  } else {
+    generateInitialMaze(f.gridN);
+    dungeonWalls[idx]=[...walls];saveDungeon();
+  }
+  document.getElementById('startBtn').textContent='⚔️ 侵入開始！';
+  document.getElementById('abilityBar').textContent=`${ch.emoji} ${ch.name}: ${ch.desc}`;
+  showScreen('gameScreen');updateUI();draw();
+}
+
+function nextDungeonFloor(){
+  if(dungeonFloorIdx<DUNGEON_FLOORS.length-1){dungeonSelectedFloor=dungeonFloorIdx+1;startDungeon()}
+  else showDungeonSelect();
+}
+
+function startFree(){
+  mode='free';
+  const sz=parseInt(document.getElementById('freeSize').value);
+  const charKey=document.getElementById('freeChar').value;
+  const hp=parseInt(document.getElementById('freeHp').value);
+  const ch=CHARACTERS[charKey];
+  currentChar=charKey;
+  curConfig={grid:sz,name:`${ch.emoji} フリー - ${ch.name}`,floorIdx:0,charKey:charKey,hp:hp};
+  initGame(curConfig);
+  generateInitialMaze(sz);
+  document.getElementById('startBtn').textContent='⚔️ 侵入開始！';
+  document.getElementById('abilityBar').textContent=`${ch.emoji} ${ch.name}: ${ch.desc}`;
+  showScreen('gameScreen');updateUI();draw();
+}
+
+// ── Toast ──
+let toastTimer=null;
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1500);
+}
+
+// ── Game Init ──
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+let hoverWall=null;
+
+function initGame(cfg){
+  stopSolver();gridN=cfg.grid;
+  walls=new Set();initialWalls=new Set();wallHistory=[];usedWalls=0;
+  running=false;explored=new Set();deadEndCount=0;wallBreakCount=0;
+  heroHp=cfg.hp;heroMaxHp=cfg.hp;heroSteps=0;
+  agents=[];
+  document.getElementById('gameName').textContent=cfg.name;
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('hpBarWrap').classList.remove('active');
+  updateHpDisplay();resizeCanvas();updateUI();draw();
+}
+
+function resizeCanvas(){
+  const wrap=document.getElementById('canvasWrap');
+  const w=wrap.clientWidth-16, h=wrap.clientHeight-16;
+  const canvasSize=Math.min(w, h, window.innerWidth-20, window.innerHeight*0.50);
+  cellSize=Math.floor(canvasSize/gridN);
+  if(cellSize<28)cellSize=28;if(cellSize>60)cellSize=60;
+  const totalW=cellSize*gridN,totalH=cellSize*gridN;
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=totalW*dpr;canvas.height=totalH*dpr;
+  canvas.style.width=totalW+'px';canvas.style.height=totalH+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function updateUI(){
+  document.getElementById('wallCount').textContent=`🧱 ${usedWalls}`;
+  document.getElementById('stepCount').textContent=`👣 ${heroSteps}`;
+  updateHpDisplay();
+}
+
+function updateHpDisplay(){
+  const totalHp=agents.length>0?agents.reduce((s,a)=>s+Math.max(0,a.hp),0):heroHp;
+  const maxHp=agents.length>0?agents.reduce((s,a)=>s+a.maxHp,0):heroMaxHp;
+  document.getElementById('hpText').textContent=`❤️ HP: ${Math.max(0,totalHp)}/${maxHp}`;
+  const bar=document.getElementById('hpBar');
+  const ratio=maxHp>0?totalHp/maxHp:0;
+  const pct=Math.max(0,Math.min(100,ratio*100));
+  bar.style.width=pct+'%';
+  if(ratio>0.5)bar.style.background='linear-gradient(90deg,#4ED26D,#34C759)';
+  else if(ratio>0.25)bar.style.background='linear-gradient(90deg,#FFCC00,#FF9500)';
+  else bar.style.background='linear-gradient(90deg,#FF9500,#FF3B30)';
+  // Extra info for special chars
+  let extra='';
+  if(currentChar==='kaeru'){
+    const a=agents[0];
+    if(a)extra=`🐸 ジャンプ残り: ${a.jumpsLeft||0}`;
+  }
+  document.getElementById('hpExtra').textContent=extra;
+}
+
+// ── Initial Maze Generation (Recursive Division) ──
+function generateInitialMaze(gn){
+  walls=new Set();initialWalls=new Set();usedWalls=0;
+  function divide(minR,minC,maxR,maxC){
+    const height=maxR-minR;const width=maxC-minC;
+    if(height<2&&width<2)return;
+    if(height>=width&&height>=2){
+      const possRows=[];
+      for(let r=minR+1;r<maxR;r++)possRows.push(r);
+      if(possRows.length===0)return;
+      const wallRow=possRows[Math.floor(Math.random()*possRows.length)];
+      const gap=minC+Math.floor(Math.random()*width);
+      for(let c=minC;c<maxC;c++){
+        if(c!==gap){
+          const k=wallKey(wallRow,c,'h');
+          walls.add(k);initialWalls.add(k);
+        }
+      }
+      divide(minR,minC,wallRow,maxC);
+      divide(wallRow,minC,maxR,maxC);
+    } else if(width>=2){
+      const possCols=[];
+      for(let c=minC+1;c<maxC;c++)possCols.push(c);
+      if(possCols.length===0)return;
+      const wallCol=possCols[Math.floor(Math.random()*possCols.length)];
+      const gap=minR+Math.floor(Math.random()*height);
+      for(let r=minR;r<maxR;r++){
+        if(r!==gap){
+          const k=wallKey(r,wallCol,'v');
+          walls.add(k);initialWalls.add(k);
+        }
+      }
+      divide(minR,minC,maxR,wallCol);
+      divide(minR,wallCol,maxR,maxC);
+    }
+  }
+  divide(0,0,gn,gn);
+  usedWalls=walls.size;
+}
+
+// ── Wall helpers ──
+function wallKey(r,c,d){return `${r},${c},${d}`}
+
+function hasWallIn(wallSet,gn,r,c,d){
+  if(d==='h'){if(r===0||r===gn)return true}
+  if(d==='v'){if(c===0||c===gn)return true}
+  return wallSet.has(wallKey(r,c,d));
+}
+
+function canPassIn(wallSet,gn,r1,c1,r2,c2){
+  if(r2<0||r2>=gn||c2<0||c2>=gn)return false;
+  if(r2===r1-1&&c2===c1)return !hasWallIn(wallSet,gn,r1,c1,'h');
+  if(r2===r1+1&&c2===c1)return !hasWallIn(wallSet,gn,r1+1,c1,'h');
+  if(r2===r1&&c2===c1-1)return !hasWallIn(wallSet,gn,r1,c1,'v');
+  if(r2===r1&&c2===c1+1)return !hasWallIn(wallSet,gn,r1,c1+1,'v');
+  return false;
+}
+
+function neighborsIn(wallSet,gn,r,c){
+  const n=[];
+  [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
+    const nr=r+dr,nc=c+dc;
+    if(canPassIn(wallSet,gn,r,c,nr,nc))n.push([nr,nc]);
+  });
+  return n;
+}
+
+function getWallBetween(r1,c1,r2,c2){
+  if(r2===r1-1&&c2===c1)return{r:r1,c:c1,d:'h'};
+  if(r2===r1+1&&c2===c1)return{r:r1+1,c:c1,d:'h'};
+  if(r2===r1&&c2===c1-1)return{r:r1,c:c1,d:'v'};
+  if(r2===r1&&c2===c1+1)return{r:r1,c:c1+1,d:'v'};
+  return null;
+}
+
+// BFS reachability check (does path exist from start to goal?)
+function hasPath(wallSet,gn){
+  const visited=new Set();
+  const queue=[[0,0]];visited.add('0,0');
+  const goalK=`${gn-1},${gn-1}`;
+  while(queue.length){
+    const [r,c]=queue.shift();
+    const k=`${r},${c}`;
+    if(k===goalK)return true;
+    for(const [nr,nc] of neighborsIn(wallSet,gn,r,c)){
+      const nk=`${nr},${nc}`;
+      if(!visited.has(nk)){visited.add(nk);queue.push([nr,nc])}
+    }
+  }
+  return false;
+}
+
+// BFS shortest path
+function bfsPath(wallSet,gn,sr,sc,gr,gc){
+  const visited=new Set();const parent=new Map();
+  const queue=[[sr,sc]];visited.add(`${sr},${sc}`);
+  const goalK=`${gr},${gc}`;
+  while(queue.length){
+    const [r,c]=queue.shift();const k=`${r},${c}`;
+    if(k===goalK){
+      const path=[];let cur=goalK;
+      while(cur){path.unshift(cur.split(',').map(Number));cur=parent.get(cur)}
+      return path;
+    }
+    for(const [nr,nc] of neighborsIn(wallSet,gn,r,c)){
+      const nk=`${nr},${nc}`;
+      if(!visited.has(nk)){visited.add(nk);parent.set(nk,k);queue.push([nr,nc])}
+    }
+  }
+  return null;
+}
+
+// ── Wall placement (no path check!) ──
+function getWallFromPos(x,y){
+  const tapRadius=Math.max(12, cellSize*0.3);
+  let bestDist=tapRadius, bestWall=null;
+  for(let r=1;r<gridN;r++){
+    const wy=r*cellSize;const dy=Math.abs(y-wy);
+    if(dy<bestDist){
+      const col=Math.floor(x/cellSize);
+      if(col>=0&&col<gridN){bestDist=dy;bestWall={r,c:col,d:'h',key:wallKey(r,col,'h')}}
+    }
+  }
+  for(let c=1;c<gridN;c++){
+    const wx=c*cellSize;const dx=Math.abs(x-wx);
+    if(dx<bestDist){
+      const row=Math.floor(y/cellSize);
+      if(row>=0&&row<gridN){bestDist=dx;bestWall={r:row,c,d:'v',key:wallKey(row,c,'v')}}
+    }
+  }
+  return bestWall;
+}
+
+function handleTap(ex,ey){
+  if(running)return;hoverWall=null;
+  const rect=canvas.getBoundingClientRect();const x=ex-rect.left, y=ey-rect.top;
+  const w=getWallFromPos(x,y);if(!w)return;
+  ensureAudio();
+  if(walls.has(w.key)){
+    walls.delete(w.key);usedWalls--;wallHistory.push({key:w.key,action:'remove'});
+    sfxRemove();vibrate(15);spawnWallRipple(w,true);
+  } else {
+    walls.add(w.key);usedWalls++;wallHistory.push({key:w.key,action:'add'});
+    sfxWall();vibrate(25);spawnWallRipple(w,false);
+  }
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
+  updateUI();draw();
+}
+
+let isDragging=false, dragMode=null, draggedWalls=new Set();
+canvas.addEventListener('pointerdown',e=>{
+  e.preventDefault();if(running)return;
+  isDragging=true;dragMode=null;draggedWalls.clear();handleDrag(e.clientX,e.clientY);
+});
+canvas.addEventListener('pointermove',e=>{
+  if(running)return;
+  if(isDragging){handleDrag(e.clientX,e.clientY)}
+  const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left,y=e.clientY-rect.top;
+  const w=getWallFromPos(x,y);const newKey=w?w.key:null;
+  if((hoverWall?hoverWall.key:null)!==newKey){hoverWall=w;draw()}
+});
+canvas.addEventListener('pointerup',()=>{isDragging=false;dragMode=null});
+canvas.addEventListener('pointerleave',()=>{isDragging=false;dragMode=null;if(hoverWall){hoverWall=null;draw()}});
+
+function handleDrag(ex,ey){
+  if(running)return;hoverWall=null;
+  const rect=canvas.getBoundingClientRect();const x=ex-rect.left,y=ey-rect.top;
+  const w=getWallFromPos(x,y);if(!w)return;
+  if(draggedWalls.has(w.key))return;
+  ensureAudio();
+  if(dragMode===null)dragMode=walls.has(w.key)?'remove':'add';
+  if(dragMode==='add'&&!walls.has(w.key)){
+    // Path check: temporarily add wall and verify path exists
+    walls.add(w.key);
+    if(!hasPath(walls,gridN)){
+      walls.delete(w.key);
+      showToast('⚠️ 経路が塞がります！');draggedWalls.add(w.key);
+      updateUI();draw();return;
+    }
+    usedWalls++;wallHistory.push({key:w.key,action:'add'});
+    sfxWall();vibrate(15);spawnWallRipple(w,false);draggedWalls.add(w.key);
+  } else if(dragMode==='remove'&&walls.has(w.key)){
+    walls.delete(w.key);usedWalls--;wallHistory.push({key:w.key,action:'remove'});
+    sfxRemove();vibrate(10);spawnWallRipple(w,true);draggedWalls.add(w.key);
+  }
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
+  updateUI();draw();
+}
+
+function resetWalls(){
+  if(running)return;
+  walls=new Set(initialWalls);wallHistory=[];usedWalls=walls.size;
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
+  updateUI();draw();
+}
+function undoWall(){
+  if(running)return;if(!wallHistory.length)return;
+  const last=wallHistory.pop();
+  if(last.action==='add'){walls.delete(last.key);usedWalls--}
+  else{walls.add(last.key);usedWalls++}
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
+  updateUI();draw();
+}
+function backFromGame(){stopSolver();if(mode==='dungeon')showDungeonSelect();else showTitle()}
+function backFromResult(){if(mode==='dungeon')showDungeonSelect();else showTitle()}
+
+// ── Drawing ──
+function draw(){
+  const W=cellSize*gridN,H=cellSize*gridN;
+  ctx.clearRect(0,0,canvas.width/(window.devicePixelRatio||1),canvas.height/(window.devicePixelRatio||1));
+  ctx.fillStyle='#FAFAF9';ctx.fillRect(0,0,W,H);
+
+  // Explored cells
+  if(explored.size){
+    ctx.fillStyle='#5B4FCF18';
+    explored.forEach(k=>{
+      const [r,c]=k.split(',').map(Number);
+      if(r<gridN&&c<gridN)ctx.fillRect(c*cellSize+1,r*cellSize+1,cellSize-2,cellSize-2);
+    });
+  }
+
+  // Grid lines
+  ctx.strokeStyle='#E0E0E0';ctx.lineWidth=1;
+  for(let r=0;r<=gridN;r++){ctx.beginPath();ctx.moveTo(0,r*cellSize);ctx.lineTo(W,r*cellSize);ctx.stroke()}
+  for(let c=0;c<=gridN;c++){ctx.beginPath();ctx.moveTo(c*cellSize,0);ctx.lineTo(c*cellSize,H);ctx.stroke()}
+
+  // Walls
+  ctx.lineCap='round';
+  // Border
+  ctx.strokeStyle='#2F2B2A';ctx.lineWidth=4;ctx.strokeRect(1,1,W-2,H-2);
+  // Internal walls
+  walls.forEach(k=>{
+    const [r,c,d]=k.split(',');const ri=+r,ci=+c;
+    const isInitial=initialWalls.has(k);
+    ctx.strokeStyle=isInitial?'#8B8685':'#2F2B2A';
+    ctx.lineWidth=isInitial?3:4;
+    ctx.beginPath();
+    if(d==='h'){ctx.moveTo(ci*cellSize,ri*cellSize);ctx.lineTo((ci+1)*cellSize,ri*cellSize)}
+    else{ctx.moveTo(ci*cellSize,ri*cellSize);ctx.lineTo(ci*cellSize,(ri+1)*cellSize)}
+    ctx.stroke();
+  });
+
+  // Hover preview
+  if(hoverWall&&!running){
+    const hk=hoverWall.key;const [hr,hc,hd]=hk.split(',');const hri=+hr,hci=+hc;
+    const isRemove=walls.has(hk);
+    ctx.strokeStyle=isRemove?'#FF3B3088':'#5B4FCF88';
+    ctx.lineWidth=6;ctx.setLineDash(isRemove?[6,4]:[]);
+    ctx.beginPath();
+    if(hd==='h'){ctx.moveTo(hci*cellSize,hri*cellSize);ctx.lineTo((hci+1)*cellSize,hri*cellSize)}
+    else{ctx.moveTo(hci*cellSize,hri*cellSize);ctx.lineTo(hci*cellSize,(hri+1)*cellSize)}
+    ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // Wall cost hint (when not running)
+  if(!running){
+    ctx.font=`${Math.max(9,cellSize*0.22)}px system-ui`;ctx.fillStyle='#aaa';ctx.textAlign='center';ctx.textBaseline='middle';
+    // Show "壁=HP-3" near bottom-left
+  }
+
+  // Start & Goal
+  const sr=cellSize*0.3;
+  ctx.fillStyle='#4ED26D';ctx.beginPath();ctx.arc(cellSize/2,cellSize/2,sr,0,Math.PI*2);ctx.fill();
+  ctx.font=`${cellSize*0.4}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('🏠',cellSize/2,cellSize/2);
+
+  const goalPulse=0.15+0.15*Math.sin(Date.now()*0.004);
+  ctx.save();ctx.globalAlpha=goalPulse;ctx.fillStyle='#FF3B30';
+  ctx.beginPath();ctx.arc((gridN-0.5)*cellSize,(gridN-0.5)*cellSize,sr*2,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gridN-0.5)*cellSize,(gridN-0.5)*cellSize,sr,0,Math.PI*2);ctx.fill();
+  ctx.font=`${cellSize*0.4}px system-ui`;
+  ctx.fillText('🏁',(gridN-0.5)*cellSize,(gridN-0.5)*cellSize);
+
+  // Draw agents
+  for(const a of agents){
+    if(a.hp<=0&&!a.isAlive)continue;
+    const [pr,pc]=a.pos;
+    let dr=0,dc=0;
+    if(a.lerp<1&&a.prev){
+      dr=(pr-a.prev[0])*(1-a.lerp);dc=(pc-a.prev[1])*(1-a.lerp);
+    }
+    const ax=(pc-dc)*cellSize+cellSize/2, ay=(pr-dr)*cellSize+cellSize/2;
+    const pulse=0.15+0.15*Math.sin(Date.now()*0.005);
+    ctx.save();ctx.globalAlpha=pulse+0.3;ctx.fillStyle=a.color||'#5B4FCF';
+    ctx.beginPath();ctx.arc(ax,ay,sr*1.3,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.font=`${cellSize*0.55}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(a.emoji,ax,ay);
+    // HP above agent
+    if(agents.length>1){
+      ctx.font=`bold ${Math.max(9,cellSize*0.22)}px system-ui`;
+      ctx.fillStyle=a.hp>10?'#555':'#FF3B30';ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(`HP:${Math.max(0,a.hp)}`,ax,ay-cellSize*0.35);
+    }
+  }
+
+}
+// Continuous draw during running
+let drawLoopId=null;
+function startDrawLoop(){
+  if(drawLoopId)return;
+  function loop(){draw();if(running)drawLoopId=requestAnimationFrame(loop);else drawLoopId=null}
+  drawLoopId=requestAnimationFrame(loop);
+}
+
+
+// ── Solver control ──
+function stopSolver(){
+  running=false;agents=[];
+  if(animId)cancelAnimationFrame(animId);animId=null;
+  if(drawLoopId)cancelAnimationFrame(drawLoopId);drawLoopId=null;
+  document.getElementById('speedBtn').style.display='none';
+}
+
+function cycleSpeed(){
+  userSpeedLevel=(userSpeedLevel+1)%SPEED_LABELS.length;
+  document.getElementById('speedBtn').textContent='⏩ '+SPEED_LABELS[userSpeedLevel];
+}
+
+function runSolver(){
+  if(running)return;ensureAudio();sfxStart();
+  running=true;heroSteps=0;deadEndCount=0;wallBreakCount=0;
+  explored.clear();agents=[];
+  const ch=CHARACTERS[curConfig.charKey];
+  heroHp=curConfig.hp;heroMaxHp=curConfig.hp;
+  document.getElementById('startBtn').disabled=true;
+  document.getElementById('hpBarWrap').classList.add('active');
+  userSpeedLevel=0;
+  document.getElementById('speedBtn').style.display='inline-block';
+  document.getElementById('speedBtn').textContent='⏩ 1x';
+  updateUI();
+
+  startDrawLoop();
+  // Start character AI
+  startCharacterAI(curConfig.charKey, curConfig.hp);
+}
+
+// ══════════════════════════════════════════
+// ── Character AI System ──
+// ══════════════════════════════════════════
+
+function createAgent(emoji,hp,r,c,color){
+  return {
+    emoji:emoji,pos:[r,c],prev:null,lerp:1,
+    hp:hp,maxHp:hp,isAlive:true,
+    visited:new Set([`${r},${c}`]),
+    visitOrder:new Map([[`${r},${c}`,0]]),visitIdx:1,
+    prevPos:null,recentPath:[],stepCount:0,
+    lastDir:null,color:color||'#5B4FCF',
+    // char-specific
+    jumpsLeft:3, hallucinationCounter:0,
+    rushDir:null,rushActive:false,
+    splitCount:0,
+    trumpStepCount:0,sanaeStepCount:0,
+    shortMemory:[]
+  };
+}
+
+function agentStep(agent,nextR,nextC,hpCost){
+  if(!running||!agent.isAlive)return;
+  agent.prevPos=agent.pos.slice();
+  agent.recentPath.push(agent.pos.slice());
+  if(agent.recentPath.length>5)agent.recentPath.shift();
+  agent.prev=agent.pos.slice();
+  agent.pos=[nextR,nextC];agent.lerp=0;
+  agent.hp-=hpCost;
+  agent.stepCount++;
+  heroSteps++;
+  agent.visited.add(`${nextR},${nextC}`);
+  agent.visitOrder.set(`${nextR},${nextC}`,agent.visitIdx++);
+  explored.add(`${nextR},${nextC}`);
+  updateUI();
+}
+
+function breakWall(agent,wr,wc,wd){
+  const wk=wallKey(wr,wc,wd);
+  if(!walls.has(wk))return false;
+  walls.delete(wk);
+  wallBreakCount++;
+  agent.hp-=3;
+  sfxWallBreak();shakeScreen();
+  spawnWallBreakFlash(wr,wc,wd);
+  showFloatScore(agent.pos[0],agent.pos[1],'💥HP-3','#FF3B30');
+  updateUI();
+  return true;
+}
+
+function animateAgent(agent,targetR,targetC,duration,cb){
+  const speedMul=SPEED_MULTIPLIERS[userSpeedLevel]||1;
+  const adjDuration=Math.max(15,duration/speedMul);
+  agent.prev=agent.pos.slice();agent.pos=[targetR,targetC];agent.lerp=0;
+  const start=performance.now();
+  const tick=(t)=>{
+    if(!running)return;
+    const p=Math.min(1,(t-start)/adjDuration);
+    agent.lerp=p;
+    if(p<1)animId=requestAnimationFrame(tick);
+    else{agent.lerp=1;cb()}
+  };
+  animId=requestAnimationFrame(tick);
+}
+
+function checkAllAgentsDead(){
+  return agents.every(a=>a.hp<=0);
+}
+
+function checkAnyAgentGoal(){
+  return agents.some(a=>a.pos[0]===gridN-1&&a.pos[1]===gridN-1&&a.isAlive);
+}
+
+function finishGame(won){
+  running=false;
+  if(drawLoopId)cancelAnimationFrame(drawLoopId);drawLoopId=null;
+  document.getElementById('speedBtn').style.display='none';
+  const totalHp=agents.reduce((s,a)=>s+Math.max(0,a.hp),0);
+  // Score calculation
+  let score=0;
+  score+=deadEndCount*30;
+  score+=wallBreakCount*50;
+  score+=(heroMaxHp-totalHp)*10;
+  if(totalHp<=0)score+=500; // bonus for full defense
+
+  if(won&&mode==='dungeon'){
+    dungeonCleared[dungeonFloorIdx]=true;saveDungeon();
+  }
+
+  document.getElementById('resultEmoji').textContent=won?'🛡️':'😰';
+  document.getElementById('resultTitle').textContent=won?'防衛成功！侵入者を撃退した！':'侵入者がゴールに到達した…';
+  document.getElementById('resultDetail').textContent=`👣 ${heroSteps}歩 | 💥 壁破壊: ${wallBreakCount}回 | 🚧 行き止まり: ${deadEndCount}回`;
+  document.getElementById('resultScore').textContent=score.toLocaleString();
+  let bd=`HP削り: ${(heroMaxHp-totalHp)*10}`;
+  if(deadEndCount)bd+=` | 行き止まり: +${deadEndCount*30}`;
+  if(wallBreakCount)bd+=` | 壁破壊: +${wallBreakCount*50}`;
+  if(totalHp<=0)bd+=` | 完全防衛: +500`;
+  document.getElementById('resultBreakdown').textContent=bd;
+  document.getElementById('nextDungeonBtn').style.display=(won&&mode==='dungeon'&&dungeonFloorIdx<DUNGEON_FLOORS.length-1)?'block':'none';
+
+  const stars=totalHp<=0?3:(totalHp<=heroMaxHp*0.3?2:(won?1:0));
+  const label=['もう少し…','クリア！','いい迷路！','完璧！ 🏆'][stars];
+  showStars(stars,label);
+  if(won){sfxClear();spawnConfetti()}else sfxFail();
+  showScreen('resultScreen');
+}
+
+function retryStage(){if(mode==='dungeon')startDungeon();else startFree()}
+
+// ── Character-specific AIs ──
+
+function startCharacterAI(charKey, hp){
+  switch(charKey){
+    case 'marimo': startMarimo(hp); break;
+    case 'kaeru': startKaeru(hp); break;
+    case 'nhk': startNhk(hp); break;
+    case 'chatgpt': startChatgpt(hp); break;
+    case 'elon': startElon(hp); break;
+    case 'takopy': startTakopy(hp); break;
+    case 'trasana': startTrasana(); break;
+    case 'eho': startEho(hp); break;
+  }
+}
+
+// ── 1. マリモ ──
+function startMarimo(hp){
+  const a=createAgent('🟢',hp,0,0,'#2ECC40');
+  a.lastDir=null;
+  agents=[a];
+  explored.add('0,0');
+  const speed=CHARACTERS.marimo.speed;
+
+  const step=()=>{
+    if(!running||a.hp<=0){finishGame(true);return}
+    const [r,c]=a.pos;
+    if(r===gridN-1&&c===gridN-1){finishGame(false);return}
+
+    const nb=neighborsIn(walls,gridN,r,c);
+    if(nb.length===0){
+      // stuck - no break ability
+      a.hp=0;updateUI();finishGame(true);return;
+    }
+
+    let nextPos=null;
+    // Try to continue in same direction
+    if(a.lastDir){
+      const [dr,dc]=a.lastDir;
+      const nr=r+dr,nc=c+dc;
+      const canGo=nb.some(([ar,ac])=>ar===nr&&ac===nc);
+      if(canGo)nextPos=[nr,nc];
+    }
+    if(!nextPos){
+      // Hit wall or first move - random direction (excluding reverse)
+      let candidates=nb.slice();
+      if(a.prevPos&&candidates.length>1){
+        candidates=candidates.filter(([nr,nc])=>!(nr===a.prevPos[0]&&nc===a.prevPos[1]));
+        if(candidates.length===0)candidates=nb.slice();
+      }
+      nextPos=candidates[Math.floor(Math.random()*candidates.length)];
+    }
+    a.lastDir=[nextPos[0]-r,nextPos[1]-c];
+    agentStep(a,nextPos[0],nextPos[1],1);
+    animateAgent(a,nextPos[0],nextPos[1],speed,step);
+  };
+  step();
+}
+
+// ── 2. かえる ──
+function startKaeru(hp){
+  const a=createAgent('🐸',hp,0,0,'#27AE60');
+  a.jumpsLeft=3;
+  agents=[a];
+  explored.add('0,0');
+  const speed=CHARACTERS.kaeru.speed;
+
+  const step=()=>{
+    if(!running||a.hp<=0){finishGame(true);return}
+    const [r,c]=a.pos;
+    if(r===gridN-1&&c===gridN-1){finishGame(false);return}
+
+    const nb=neighborsIn(walls,gridN,r,c);
+
+    if(nb.length===0){
+      // Completely walled - try jump
+      if(a.jumpsLeft>0){
+        doJump(a,r,c,step);return;
+      }
+      a.hp=0;updateUI();finishGame(true);return;
+    }
+
+    // fogExplorer base AI
+    let candidates=nb.slice();
+    // Prefer unvisited
+    if(candidates.length>1){
+      const unv=candidates.filter(([nr,nc])=>!a.visited.has(`${nr},${nc}`));
+      if(unv.length>0)candidates=unv;
+    }
+    // Avoid recent
+    if(candidates.length>1){
+      const notRecent=candidates.filter(([nr,nc])=>!a.recentPath.some(([pr,pc])=>pr===nr&&pc===nc));
+      if(notRecent.length>0)candidates=notRecent;
+    }
+    // Manhattan to goal
+    const goalR=gridN-1,goalC=gridN-1;
+    let best=Infinity,bestC=[];
+    for(const [nr,nc] of candidates){
+      const d=Math.abs(nr-goalR)+Math.abs(nc-goalC);
+      if(d<best){best=d;bestC=[[nr,nc]]}
+      else if(d===best)bestC.push([nr,nc]);
+    }
+    const nextPos=bestC[Math.floor(Math.random()*bestC.length)];
+    agentStep(a,nextPos[0],nextPos[1],1);
+    animateAgent(a,nextPos[0],nextPos[1],speed,step);
+  };
+
+  function doJump(a,r,c,cb){
+    a.jumpsLeft--;
+    sfxJump();
+    showCharSpeech(r,c,'ぴょん！🐸');
+    // Jump 2 cells in random valid direction
+    const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+    const shuffled=dirs.sort(()=>Math.random()-0.5);
+    for(const [dr,dc] of shuffled){
+      const nr=r+dr*2,nc=c+dc*2;
+      if(nr>=0&&nr<gridN&&nc>=0&&nc<gridN){
+        a.hp-=2;
+        agentStep(a,nr,nc,0); // hp already deducted
+        animateAgent(a,nr,nc,speed*1.5,cb);
+        return;
+      }
+    }
+    // Can't jump anywhere valid - just lose HP
+    a.hp-=2;updateUI();
+    setTimeout(cb,speed);
+  }
+  step();
+}
+
+// ── 3. NHKの集金人 ──
+function startNhk(hp){
+  const a=createAgent('📺',hp,0,0,'#8E44AD');
+  a.allCellsVisited=false;a.speechTimer=0;
+  agents=[a];
+  explored.add('0,0');
+  const speed=CHARACTERS.nhk.speed;
+
+  const step=()=>{
+    if(!running||a.hp<=0){finishGame(true);return}
+    const [r,c]=a.pos;
+    if(r===gridN-1&&c===gridN-1&&a.allCellsVisited){finishGame(false);return}
+
+    a.speechTimer++;
+    if(a.speechTimer%6===0)showCharSpeech(r,c,'NHKです〜');
+
+    // Find nearest unvisited cell
+    let target=null;
+    if(!a.allCellsVisited){
+      target=findNearestUnvisited(a,r,c);
+      if(!target)a.allCellsVisited=true;
+    }
+    if(a.allCellsVisited)target=[gridN-1,gridN-1];
+
+    // BFS to target
+    const path=bfsPath(walls,gridN,r,c,target[0],target[1]);
+    if(path&&path.length>1){
+      const nextPos=path[1];
+      agentStep(a,nextPos[0],nextPos[1],1);
+      animateAgent(a,nextPos[0],nextPos[1],speed,step);
+    } else {
+      // No path available - stuck (NHK cannot break walls)
+      a.hp=0;updateUI();finishGame(true);
+    }
+  };
+
+  function findNearestUnvisited(agent,sr,sc){
+    const visited=new Set();const queue=[[sr,sc,0]];visited.add(`${sr},${sc}`);
+    while(queue.length){
+      const [r,c,dist]=queue.shift();
+      if(!agent.visited.has(`${r},${c}`)&&!(r===sr&&c===sc))return [r,c];
+      for(const [nr,nc] of neighborsIn(walls,gridN,r,c)){
+        const k=`${nr},${nc}`;
+        if(!visited.has(k)){visited.add(k);queue.push([nr,nc,dist+1])}
+      }
+    }
+    return null;
+  }
+  step();
+}
+
+// ── 4. ChatGPT ──
+function startChatgpt(hp){
+  const a=createAgent('🤖',hp,0,0,'#3498DB');
+  a.hallucinationCounter=0;
+  agents=[a];
+  explored.add('0,0');
+  const speed=CHARACTERS.chatgpt.speed;
+
+  const step=()=>{
+    if(!running||a.hp<=0){finishGame(true);return}
+    const [r,c]=a.pos;
+    if(r===gridN-1&&c===gridN-1){finishGame(false);return}
+
+    a.hallucinationCounter++;
+    const isHallucination=(a.hallucinationCounter%3===0);
+
+    let nextPos=null;
+
+    if(isHallucination){
+      // Random direction
+      showCharSpeech(r,c,'🤖💭');
+      const nb=neighborsIn(walls,gridN,r,c);
+      if(nb.length>0){
+        nextPos=nb[Math.floor(Math.random()*nb.length)];
+      }
+    }
+
+    if(!nextPos){
+      // BFS shortest path
+      const path=bfsPath(walls,gridN,r,c,gridN-1,gridN-1);
+      if(path&&path.length>1){
+        nextPos=path[1];
+      } else {
+        // No path - break wall
+        if(CHARACTERS.chatgpt.canBreak&&a.hp>3){
+          const broke=tryBreakToward(a,r,c,gridN-1,gridN-1);
+          if(broke){updateUI();setTimeout(step,speed);return}
+        }
+        const nb=neighborsIn(walls,gridN,r,c);
+        if(nb.length>0)nextPos=nb[Math.floor(Math.random()*nb.length)];
+        else{a.hp=0;updateUI();finishGame(true);return}
+      }
+    }
+
+    agentStep(a,nextPos[0],nextPos[1],1);
+    animateAgent(a,nextPos[0],nextPos[1],speed,step);
+  };
+  step();
+}
+
+// ── 5. イーロン・マスク ──
+function startElon(hp){
+  const a=createAgent('🚗',hp,0,0,'#E74C3C');
+  a.rushActive=false;a.rushDir=null;
+  agents=[a];
+  explored.add('0,0');
+  const speed=CHARACTERS.elon.speed;
+
+  const step=()=>{
+    if(!running||a.hp<=0){finishGame(true);return}
+    const [r,c]=a.pos;
+    if(r===gridN-1&&c===gridN-1){finishGame(false);return}
+
+    // Check for straight line rush
+    const nb=neighborsIn(walls,gridN,r,c);
+
+    // At junction or start: pick direction
+    if(nb.length!==2||!a.lastDir){
+      // Junction - use fogExplorer
+      let candidates=nb.slice();
+      if(candidates.length>1){
+        const unv=candidates.filter(([nr,nc])=>!a.visited.has(`${nr},${nc}`));
+        if(unv.length>0)candidates=unv;
+      }
+      if(candidates.length>1&&a.prevPos){
+        const notBack=candidates.filter(([nr,nc])=>!(nr===a.prevPos[0]&&nc===a.prevPos[1]));
+        if(notBack.length>0)candidates=notBack;
+      }
+      const goalR=gridN-1,goalC=gridN-1;
+      let best=Infinity,bestC=[];
+      for(const [nr,nc] of candidates){
+        const d=Math.abs(nr-goalR)+Math.abs(nc-goalC);
+        if(d<best){best=d;bestC=[[nr,nc]]}
+        else if(d===best)bestC.push([nr,nc]);
+      }
+      const nextPos=bestC[Math.floor(Math.random()*bestC.length)];
+      a.lastDir=[nextPos[0]-r,nextPos[1]-c];
+
+      // Check if this starts a straight line
+      const [dr,dc]=a.lastDir;
+      const aheadR=nextPos[0]+dr,aheadC=nextPos[1]+dc;
+      if(aheadR>=0&&aheadR<gridN&&aheadC>=0&&aheadC<gridN&&canPassIn(walls,gridN,nextPos[0],nextPos[1],aheadR,aheadC)){
+        // Start rush!
+        a.rushActive=true;a.rushDir=[dr,dc];
+        agentStep(a,nextPos[0],nextPos[1],1);
+        showCharSpeech(r,c,'🚗💨 自動運転！');
+        animateAgent(a,nextPos[0],nextPos[1],speed*0.5,step);
+      } else {
+        agentStep(a,nextPos[0],nextPos[1],1);
+        animateAgent(a,nextPos[0],nextPos[1],speed,step);
+      }
+      return;
+    }
+
+    // In rush or corridor
+    if(a.rushActive&&a.rushDir){
+      const [dr,dc]=a.rushDir;
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<gridN&&nc>=0&&nc<gridN&&canPassIn(walls,gridN,r,c,nr,nc)){
+        // Continue rush - NO HP cost
+        agentStep(a,nr,nc,0);
+        // Check if next step is also clear
+        const nnr=nr+dr,nnc=nc+dc;
+        if(nnr>=0&&nnr<gridN&&nnc>=0&&nnc<gridN&&canPassIn(walls,gridN,nr,nc,nnr,nnc)){
+          animateAgent(a,nr,nc,speed*0.3,step);
+        } else {
+          a.rushActive=false;
+          animateAgent(a,nr,nc,speed*0.3,step);
+        }
+      } else {
+        // Wall collision! HP-5
+        a.hp-=5;a.rushActive=false;
+        sfxCrash();shakeScreen();
+        showFloatScore(r,c,'💥衝突 HP-5','#FF3B30');
+        showCharSpeech(r,c,'ガシャーン！🚗💥');
+        updateUI();
+        setTimeout(step,speed);
+      }
+      return;
+    }
+
+    // Normal corridor movement
+    let candidates=nb.filter(([nr,nc])=>!(a.prevPos&&nr===a.prevPos[0]&&nc===a.prevPos[1]));
+    if(candidates.length===0)candidates=nb;
+    const nextPos=candidates[0];
+    a.lastDir=[nextPos[0]-r,nextPos[1]-c];
+
+    // Check for rush start
+    const [dr,dc]=a.lastDir;
+    const aheadR=nextPos[0]+dr,aheadC=nextPos[1]+dc;
+    if(aheadR>=0&&aheadR<gridN&&aheadC>=0&&aheadC<gridN&&canPassIn(walls,gridN,nextPos[0],nextPos[1],aheadR,aheadC)){
+      a.rushActive=true;a.rushDir=[dr,dc];
+      showCharSpeech(r,c,'🚗💨');
+    }
+
+    agentStep(a,nextPos[0],nextPos[1],1);
+    animateAgent(a,nextPos[0],nextPos[1],a.rushActive?speed*0.5:speed,step);
+  };
+
+  step();
+}
+
+// ── 6. タコピー ──
+function startTakopy(hp){
+  const a=createAgent('🐙',hp,0,0,'#9B59B6');
+  a.splitCount=0;
+  agents=[a];
+  explored.add('0,0');
+
+  function runAgent(agent){
+    const speed=CHARACTERS.takopy.speed;
+    const tick=()=>{
+      if(!running)return;
+      if(agent.hp<=0){agent.isAlive=false;if(checkAllAgentsDead()){finishGame(true)}return}
+      const [r,c]=agent.pos;
+      if(r===gridN-1&&c===gridN-1){finishGame(false);return}
+
+      const nb=neighborsIn(walls,gridN,r,c);
+      if(nb.length===0){
+        // Try wall break
+        if(agent.hp>=10){
+          const broke=tryBreakToward(agent,r,c,gridN-1,gridN-1);
+          if(broke){updateUI();setTimeout(tick,speed);return}
+        }
+        agent.hp=0;agent.isAlive=false;updateUI();
+        if(checkAllAgentsDead())finishGame(true);
+        return;
+      }
+
+      // Check for split at junction (3+ directions)
+      if(nb.length>=3&&agent.splitCount<2&&agents.length<4&&agent.hp>=6){
+        // Split!
+        const newHp=Math.floor(agent.hp/2);
+        agent.hp=newHp;agent.splitCount++;
+        const baby=createAgent('🐙',newHp,r,c,'#8E44AD');
+        baby.splitCount=agent.splitCount;
+        baby.visited=new Set(agent.visited);
+        agents.push(baby);
+        showCharSpeech(r,c,'分裂！🐙🐙');
+        updateUI();
+        runAgent(baby);
+      }
+
+      // fogExplorer
+      let candidates=nb.slice();
+      if(candidates.length>1){
+        const unv=candidates.filter(([nr,nc])=>!agent.visited.has(`${nr},${nc}`));
+        if(unv.length>0)candidates=unv;
+      }
+      if(candidates.length>1&&agent.prevPos){
+        const notBack=candidates.filter(([nr,nc])=>!(nr===agent.prevPos[0]&&nc===agent.prevPos[1]));
+        if(notBack.length>0)candidates=notBack;
+      }
+      const goalR=gridN-1,goalC=gridN-1;
+      let best=Infinity,bestC=[];
+      for(const [nr,nc] of candidates){
+        const d=Math.abs(nr-goalR)+Math.abs(nc-goalC);
+        if(d<best){best=d;bestC=[[nr,nc]]}
+        else if(d===best)bestC.push([nr,nc]);
+      }
+      const nextPos=bestC[Math.floor(Math.random()*bestC.length)];
+      agentStep(agent,nextPos[0],nextPos[1],1);
+      animateAgent(agent,nextPos[0],nextPos[1],speed,tick);
+    };
+    tick();
+  }
+  runAgent(a);
+}
+
+// ── 7. トラサナ同盟 ──
+function startTrasana(){
+  const trump=createAgent('🇺🇸',35,0,0,'#E67E22');
+  trump.trumpStepCount=0;
+  const sanae=createAgent('🌪️',35,0,0,'#1ABC9C');
+  sanae.sanaeStepCount=0;
+  agents=[trump,sanae];
+  explored.add('0,0');
+
+  // Trump AI
+  function runTrump(){
+    const speed=CHARACTERS.trasana.speed;
+    const tick=()=>{
+      if(!running)return;
+      if(trump.hp<=0){trump.isAlive=false;if(checkAllAgentsDead())finishGame(true);return}
+      if(checkAnyAgentGoal()){finishGame(false);return}
+      const [r,c]=trump.pos;
+      if(r===gridN-1&&c===gridN-1){finishGame(false);return}
+
+      trump.trumpStepCount++;
+      // Place wall every 3 steps
+      if(trump.trumpStepCount%3===0&&trump.prevPos){
+        const wb=getWallBetween(trump.prevPos[0],trump.prevPos[1],r,c);
+        if(wb){
+          const wk=wallKey(wb.r,wb.c,wb.d);
+          if(!walls.has(wk)){
+            walls.add(wk);
+            showCharSpeech(r,c,'壁建設！🧱');
+          }
+        }
+      }
+
+      // fogExplorer with half wall break cost
+      const nb=neighborsIn(walls,gridN,r,c);
+      if(nb.length===0){
+        // Break wall (half HP cost = 1.5 rounded to 2)
+        if(trump.hp>2){
+          const broke=tryBreakTowardCost(trump,r,c,gridN-1,gridN-1,2);
+          if(broke){updateUI();setTimeout(tick,speed);return}
+        }
+        trump.hp=0;trump.isAlive=false;updateUI();
+        if(checkAllAgentsDead())finishGame(true);return;
+      }
+
+      let candidates=nb.slice();
+      if(candidates.length>1){
+        const unv=candidates.filter(([nr,nc])=>!trump.visited.has(`${nr},${nc}`));
+        if(unv.length>0)candidates=unv;
+      }
+      const goalR=gridN-1,goalC=gridN-1;
+      let best=Infinity,bestC=[];
+      for(const [nr,nc] of candidates){
+        const d=Math.abs(nr-goalR)+Math.abs(nc-goalC);
+        if(d<best){best=d;bestC=[[nr,nc]]}
+        else if(d===best)bestC.push([nr,nc]);
+      }
+      const nextPos=bestC[Math.floor(Math.random()*bestC.length)];
+      agentStep(trump,nextPos[0],nextPos[1],1);
+      animateAgent(trump,nextPos[0],nextPos[1],speed,tick);
+    };
+    tick();
+  }
+
+  // Sanae AI
+  function runSanae(){
+    const speed=CHARACTERS.trasana.speed;
+    const tick=()=>{
+      if(!running)return;
+      if(sanae.hp<=0){sanae.isAlive=false;if(checkAllAgentsDead())finishGame(true);return}
+      if(checkAnyAgentGoal()){finishGame(false);return}
+      const [r,c]=sanae.pos;
+      if(r===gridN-1&&c===gridN-1){finishGame(false);return}
+
+      sanae.sanaeStepCount++;
+      // Whirlwind every 5 steps
+      if(sanae.sanaeStepCount%5===0){
+        showCharSpeech(r,c,'旋風！🌪️');
+        shakeScreen();
+        // Remove all walls around current position
+        const wallsToRemove=[];
+        // top
+        if(r>0){const wk=wallKey(r,c,'h');if(walls.has(wk))wallsToRemove.push(wk)}
+        // bottom
+        if(r<gridN-1){const wk=wallKey(r+1,c,'h');if(walls.has(wk))wallsToRemove.push(wk)}
+        // left
+        if(c>0){const wk=wallKey(r,c,'v');if(walls.has(wk))wallsToRemove.push(wk)}
+        // right
+        if(c<gridN-1){const wk=wallKey(r,c+1,'v');if(walls.has(wk))wallsToRemove.push(wk)}
+        // Also check adjacent cells' walls
+        for(let dr=-1;dr<=1;dr++){
+          for(let dc=-1;dc<=1;dc++){
+            if(dr===0&&dc===0)continue;
+            const nr=r+dr,nc=c+dc;
+            if(nr<0||nr>=gridN||nc<0||nc>=gridN)continue;
+            // Walls between (nr,nc) and adjacent
+            const wh=wallKey(nr,nc,'h');if(walls.has(wh))wallsToRemove.push(wh);
+            const wh2=wallKey(nr+1,nc,'h');if(walls.has(wh2))wallsToRemove.push(wh2);
+            const wv=wallKey(nr,nc,'v');if(walls.has(wv))wallsToRemove.push(wv);
+            const wv2=wallKey(nr,nc+1,'v');if(walls.has(wv2))wallsToRemove.push(wv2);
+          }
+        }
+        // Only remove walls within 1 cell radius (filter properly)
+        const removeSet=new Set();
+        for(const wk of wallsToRemove){
+          const [wr,wc,wd]=wk.split(',');
+          const wri=+wr,wci=+wc;
+          // Check if wall is adjacent to (r,c)
+          if(wd==='h'){
+            if(Math.abs(wri-r)<=1&&Math.abs(wci-c)<=1)removeSet.add(wk);
+          } else {
+            if(Math.abs(wri-r)<=1&&Math.abs(wci-c)<=1)removeSet.add(wk);
+          }
+        }
+        for(const wk of removeSet){
+          if(walls.has(wk)){
+            walls.delete(wk);
+            const [wr,wc,wd]=wk.split(',');
+            spawnWallBreakFlash(+wr,+wc,wd);
+          }
+        }
+      }
+
+      // BFS shortest path
+      const path=bfsPath(walls,gridN,r,c,gridN-1,gridN-1);
+      let nextPos;
+      if(path&&path.length>1){
+        nextPos=path[1];
+      } else {
+        const nb=neighborsIn(walls,gridN,r,c);
+        if(nb.length>0)nextPos=nb[Math.floor(Math.random()*nb.length)];
+        else{sanae.hp=0;sanae.isAlive=false;updateUI();if(checkAllAgentsDead())finishGame(true);return}
+      }
+      agentStep(sanae,nextPos[0],nextPos[1],1);
+      animateAgent(sanae,nextPos[0],nextPos[1],speed,tick);
+    };
+    // Slight delay so they don't perfectly overlap
+    setTimeout(tick,150);
+  }
+
+  runTrump();runSanae();
+}
+
+// ── 8. エッホエッホ ──
+function startEho(hp){
+  const a=createAgent('🦉',hp,0,0,'#F39C12');
+  a.shortMemory=[[0,0]];
+  agents=[a];
+  explored.add('0,0');
+  const speed=CHARACTERS.eho.speed;
+
+  const step=()=>{
+    if(!running||a.hp<=0){finishGame(true);return}
+    const [r,c]=a.pos;
+    if(r===gridN-1&&c===gridN-1){finishGame(false);return}
+
+    // All 4 directions
+    const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+    const passable=[];
+    for(const [dr,dc] of dirs){
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<gridN&&nc>=0&&nc<gridN&&canPassIn(walls,gridN,r,c,nr,nc)){
+        passable.push([nr,nc]);
+      }
+    }
+
+    if(passable.length===0){
+      // Completely stuck, no wall break
+      a.hp=0;updateUI();finishGame(true);return;
+    }
+
+    // Filter out short-term memory (last 5 cells)
+    let candidates=passable.filter(([nr,nc])=>!a.shortMemory.some(([mr,mc])=>mr===nr&&mc===nc));
+    if(candidates.length===0)candidates=passable; // all in memory, go anywhere
+
+    // Random
+    const nextPos=candidates[Math.floor(Math.random()*candidates.length)];
+
+    // Wall bounce: if we tried to go somewhere and couldn't, no HP cost
+    // Since we only pick passable, every move costs HP-1
+    agentStep(a,nextPos[0],nextPos[1],1);
+    a.shortMemory.push(nextPos.slice());
+    if(a.shortMemory.length>5)a.shortMemory.shift();
+    animateAgent(a,nextPos[0],nextPos[1],speed,step);
+  };
+  step();
+}
+
+// ── Utility: try break wall toward target ──
+function tryBreakToward(agent,r,c,goalR,goalC){
+  return tryBreakTowardCost(agent,r,c,goalR,goalC,3);
+}
+
+function tryBreakTowardCost(agent,r,c,goalR,goalC,cost){
+  const dirs=[[-1,0,'h',r,c],[1,0,'h',r+1,c],[0,-1,'v',r,c],[0,1,'v',r,c+1]];
+  let bestBreak=null, bestDist=Infinity;
+  for(const [dr,dc,d,wr,wc] of dirs){
+    const nr=r+dr, nc=c+dc;
+    if(nr<0||nr>=gridN||nc<0||nc>=gridN)continue;
+    if(d==='h'&&(wr===0||wr===gridN))continue;
+    if(d==='v'&&(wc===0||wc===gridN))continue;
+    const wk=wallKey(wr,wc,d);
+    if(!walls.has(wk))continue;
+    const dist=Math.abs(nr-goalR)+Math.abs(nc-goalC);
+    if(dist<bestDist){bestDist=dist;bestBreak={wk,wr,wc,d,nr,nc}}
+  }
+  if(bestBreak){
+    walls.delete(bestBreak.wk);
+    wallBreakCount++;
+    agent.hp-=cost;
+    sfxWallBreak();shakeScreen();
+    spawnWallBreakFlash(bestBreak.wr,bestBreak.wc,bestBreak.d);
+    showFloatScore(r,c,`💥HP-${cost}`,'#FF3B30');
+    return true;
+  }
+  return false;
+}
+
+// ── Star Rating ──
+function showStars(stars, label){
+  const row=document.getElementById('starRow');const lbl=document.getElementById('starLabel');
+  row.innerHTML='';lbl.textContent=label;
+  for(let i=0;i<3;i++){
+    const s=document.createElement('span');s.className='star'+(i<stars?'':' empty');
+    s.textContent='⭐';row.appendChild(s);
+    setTimeout(()=>s.classList.add('show'),200+i*200);
+  }
+}
+
+// ── Confetti ──
+function spawnConfetti(){
+  const cvs=document.createElement('canvas');cvs.className='confetti-canvas';
+  document.body.appendChild(cvs);
+  const cctx=cvs.getContext('2d');const dpr=window.devicePixelRatio||1;
+  cvs.width=window.innerWidth*dpr;cvs.height=window.innerHeight*dpr;
+  cvs.style.width=window.innerWidth+'px';cvs.style.height=window.innerHeight+'px';
+  cctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=window.innerWidth,H=window.innerHeight;
+  const colors=['#FF3B30','#FF9500','#FFCC00','#4ED26D','#5AC8FA','#5B4FCF','#FF2D55'];
+  const particles=[];
+  for(let i=0;i<80;i++){
+    particles.push({x:W*0.5+(Math.random()-0.5)*W*0.3,y:H*0.4,
+      vx:(Math.random()-0.5)*8,vy:-Math.random()*12-4,
+      w:Math.random()*8+4,h:Math.random()*6+3,rot:Math.random()*Math.PI*2,
+      rv:(Math.random()-0.5)*0.3,color:colors[Math.floor(Math.random()*colors.length)],
+      gravity:0.25+Math.random()*0.1,alpha:1});
+  }
+  const startT=performance.now();const duration=2200;
+  function tick(t){
+    const elapsed=t-startT;if(elapsed>duration){cvs.remove();return}
+    cctx.clearRect(0,0,W,H);
+    const fade=elapsed>duration*0.6?1-(elapsed-duration*0.6)/(duration*0.4):1;
+    for(const p of particles){
+      p.vy+=p.gravity;p.x+=p.vx;p.y+=p.vy;p.rot+=p.rv;p.vx*=0.99;p.alpha=fade;
+      cctx.save();cctx.translate(p.x,p.y);cctx.rotate(p.rot);cctx.globalAlpha=p.alpha;
+      cctx.fillStyle=p.color;cctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);cctx.restore();
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+window.addEventListener('resize',()=>{
+  if(document.getElementById('gameScreen').classList.contains('active')){resizeCanvas();draw()}
+});
+</script>
+</body>
+</html>
