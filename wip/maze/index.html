@@ -63,6 +63,10 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .float-score{position:absolute;pointer-events:none;font-weight:700;font-size:18px;color:#FF9500;text-shadow:0 1px 4px rgba(0,0,0,0.15);z-index:60;animation:floatUp .9s ease-out forwards}
 @keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}50%{opacity:1;transform:translateY(-24px) scale(1.2)}100%{opacity:0;transform:translateY(-48px) scale(0.8)}}
 @keyframes shakeCanvas{0%,100%{transform:translate(0,0)}15%{transform:translate(-3px,2px)}30%{transform:translate(3px,-2px)}45%{transform:translate(-2px,3px)}60%{transform:translate(2px,-1px)}75%{transform:translate(-1px,2px)}}
+.wall-ripple{position:absolute;pointer-events:none;border-radius:50%;z-index:55;animation:wallRipple .45s ease-out forwards}
+@keyframes wallRipple{0%{transform:translate(-50%,-50%) scale(0.2);opacity:0.8}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+.goal-pulse{animation:goalPulse 2s ease-in-out infinite}
+@keyframes goalPulse{0%,100%{opacity:0.3}50%{opacity:0.7}}
 </style>
 </head>
 <body>
@@ -185,6 +189,28 @@ function sfxClear(){playTone(660,0.15,'sine',0.12);setTimeout(()=>playTone(880,0
 function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260,0.3,'sawtooth',0.08),200)}
 function sfxStairs(){playTone(440,0.12,'sine',0.1);setTimeout(()=>playTone(550,0.12,'sine',0.1),120);setTimeout(()=>playTone(660,0.15,'sine',0.1),240)}
 function sfxDeadEnd(){playTone(520,0.06,'square',0.07);setTimeout(()=>playTone(700,0.1,'sine',0.09),60)}
+
+// ── Wall ripple effect ──
+function spawnWallRipple(wallObj, isRemove){
+  const wrap=document.getElementById('canvasWrap');
+  const rect=canvas.getBoundingClientRect();
+  const wrapRect=wrap.getBoundingClientRect();
+  const [r,c,d]=wallObj.key.split(',');
+  const ri=+r, ci=+c;
+  let cx,cy;
+  if(d==='h'){cx=ci*cellSize+cellSize/2;cy=ri*cellSize}
+  else{cx=ci*cellSize;cy=ri*cellSize+cellSize/2}
+  cx+=(rect.left-wrapRect.left);
+  cy+=(rect.top-wrapRect.top);
+  const el=document.createElement('div');
+  el.className='wall-ripple';
+  const sz=cellSize*1.6;
+  el.style.width=sz+'px';el.style.height=sz+'px';
+  el.style.left=cx+'px';el.style.top=cy+'px';
+  el.style.background=isRemove?'radial-gradient(circle,rgba(255,59,48,0.4) 0%,transparent 70%)':'radial-gradient(circle,rgba(91,79,207,0.4) 0%,transparent 70%)';
+  wrap.appendChild(el);
+  setTimeout(()=>el.remove(),500);
+}
 
 // ── Float score popup ──
 function showFloatScore(r,c,text,color){
@@ -523,6 +549,7 @@ function handleTap(ex,ey){
     walls.delete(w.key);usedWalls--;
     wallHistory.push({key:w.key,action:'remove'});
     sfxRemove();
+    spawnWallRipple(w, true);
   } else {
     walls.add(w.key);
     if(!isReachable()){
@@ -533,6 +560,7 @@ function handleTap(ex,ey){
     usedWalls++;
     wallHistory.push({key:w.key,action:'add'});
     sfxWall();
+    spawnWallRipple(w, false);
   }
   // Auto-save dungeon walls
   if(mode==='dungeon'){
@@ -679,10 +707,18 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
   const sr=cellSize*0.3;
   ctx.fillStyle='#4ED26D';ctx.beginPath();ctx.arc(cellSize/2,cellSize/2,sr,0,Math.PI*2);ctx.fill();
   // Goal = stairs icon for dungeon, red dot otherwise
+  // Goal pulse glow
+  const goalPulse=0.15+0.15*Math.sin(Date.now()*0.004);
   if(mode==='dungeon'){
+    ctx.save();ctx.globalAlpha=alpha*goalPulse;
+    ctx.fillStyle='#5B4FCF';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr*2,0,Math.PI*2);ctx.fill();
+    ctx.restore();ctx.globalAlpha=alpha;
     ctx.font=`${cellSize*0.5}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText('🪜',(gn-0.5)*cellSize,(gn-0.5)*cellSize);
   } else {
+    ctx.save();ctx.globalAlpha=alpha*goalPulse;
+    ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr*2,0,Math.PI*2);ctx.fill();
+    ctx.restore();ctx.globalAlpha=alpha;
     ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr,0,Math.PI*2);ctx.fill();
   }
 
@@ -696,6 +732,14 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
       dc=(pc-solver.prev[1])*(1-solver.lerp);
     }
     const ax=(pc-dc)*cellSize+cellSize/2, ay=(pr-dr)*cellSize+cellSize/2;
+    // Pulse glow ring
+    const pulse=0.3+0.3*Math.sin(Date.now()*0.005);
+    ctx.save();
+    ctx.globalAlpha=alpha*pulse;
+    ctx.fillStyle=col;
+    ctx.beginPath();ctx.arc(ax,ay,sr*1.5,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+    ctx.globalAlpha=alpha;
     ctx.fillStyle=col;ctx.beginPath();ctx.arc(ax,ay,sr*0.9,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#fff';ctx.font=`${sr*0.9}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
     if(solver.exclaim&&Date.now()-solver.exclaimTime<500){
