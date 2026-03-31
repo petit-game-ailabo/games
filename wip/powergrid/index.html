@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>⚡ Power Grid</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:system-ui,-apple-system,sans-serif;background:#F6F6F5;overflow:hidden;touch-action:none;user-select:none}
+canvas{display:block}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#ui>*{pointer-events:auto}
+#topbar{position:absolute;top:0;left:0;right:0;height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:rgba(255,255,255,0.85);backdrop-filter:blur(6px);border-bottom:1px solid #ddd;font-size:13px;color:#444;z-index:10}
+#topbar .stage-name{font-weight:700;color:#333}
+#topbar .info{display:flex;gap:12px;align-items:center}
+#topbar .time-icon{font-size:18px}
+#bottombar{position:absolute;bottom:0;left:0;right:0;display:flex;flex-direction:column;background:rgba(255,255,255,0.9);backdrop-filter:blur(6px);border-top:1px solid #ddd;z-index:10}
+#controls{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px}
+#controls button{border:none;background:#eee;border-radius:8px;padding:8px 16px;font-size:16px;cursor:pointer;transition:background 0.15s}
+#controls button:active,#controls button.active{background:#FFD54F}
+#controls button.danger{background:#FFCDD2}
+#infopanel{padding:6px 12px;font-size:12px;color:#555;min-height:24px;text-align:center;border-top:1px solid #eee}
+#title-screen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#F6F6F5 0%,#ECECEC 100%);z-index:100}
+#title-screen h1{font-size:48px;margin-bottom:4px;letter-spacing:-2px}
+#title-screen .divider{width:200px;height:2px;background:#ccc;margin:8px 0 16px}
+#title-screen p{color:#888;font-size:14px;margin-bottom:24px}
+#title-screen button{display:block;width:220px;margin:6px 0;padding:14px;border:2px solid #bbb;border-radius:12px;background:#fff;font-size:15px;cursor:pointer;transition:all 0.15s}
+#title-screen button:hover,#title-screen button:active{border-color:#FFB300;background:#FFF8E1}
+#stage-select{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#F6F6F5 0%,#ECECEC 100%);z-index:99}
+#stage-select h2{font-size:28px;margin-bottom:20px}
+#stage-select .nav{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+#stage-select .nav button{width:44px;height:44px;border:2px solid #bbb;border-radius:50%;background:#fff;font-size:20px;cursor:pointer}
+#stage-select .nav button:active{background:#FFF8E1}
+#stage-select .stage-info{text-align:center;width:260px}
+#stage-select .stage-info h3{font-size:20px;margin-bottom:8px}
+#stage-select .stage-info p{font-size:13px;color:#666;line-height:1.6}
+#stage-select .start-btn{margin-top:16px;padding:12px 40px;border:2px solid #FFB300;border-radius:10px;background:#FFF8E1;font-size:15px;cursor:pointer}
+#stage-select .start-btn:active{background:#FFD54F}
+#stage-select .back-btn{margin-top:12px;padding:8px 24px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#888}
+#free-setup{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#F6F6F5 0%,#ECECEC 100%);z-index:99}
+#free-setup h2{font-size:24px;margin-bottom:16px}
+#free-setup .opts{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+#free-setup label{font-size:13px;color:#555}
+#free-setup select,#free-setup button{padding:10px;border:1px solid #ccc;border-radius:8px;font-size:14px}
+#free-toolbar{position:absolute;top:48px;left:8px;display:none;flex-direction:column;gap:4px;z-index:11}
+#free-toolbar button{width:40px;height:40px;border:2px solid #bbb;border-radius:8px;background:#fff;font-size:16px;cursor:pointer}
+#free-toolbar button.active{border-color:#FFB300;background:#FFF8E1}
+#overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);z-index:200}
+#overlay .box{background:#fff;border-radius:16px;padding:32px;text-align:center;max-width:300px}
+#overlay .box h2{font-size:24px;margin-bottom:8px}
+#overlay .box p{font-size:14px;color:#666;margin-bottom:16px}
+#overlay .box button{padding:10px 32px;border:2px solid #FFB300;border-radius:10px;background:#FFF8E1;font-size:15px;cursor:pointer;margin:4px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<div id="topbar" style="display:none">
+  <span class="stage-name" id="stageName"></span>
+  <div class="info">
+    <span id="genInfo">⚡0MW</span>
+    <span id="demInfo">🏠0MW</span>
+    <span id="timeInfo" class="time-icon">🌅</span>
+    <span id="clockInfo">6:00</span>
+  </div>
+</div>
+<div id="bottombar" style="display:none">
+  <div id="controls">
+    <button id="btnPlay">▶</button>
+    <button id="btnPause">⏸</button>
+    <button id="btnSpeed">⏩</button>
+    <button id="btnDelete" class="danger">🗑️</button>
+    <button id="btnBack2">↩</button>
+  </div>
+  <div id="infopanel" id="infoText">施設をタップで詳細表示</div>
+</div>
+<div id="free-toolbar"></div>
+<div id="title-screen">
+  <h1>⚡ Power Grid</h1>
+  <div class="divider"></div>
+  <p>発電所から街に電気を届けろ！</p>
+  <button id="btnStage">🗺️ ステージモード</button>
+  <button id="btnFree">🏗️ フリーモード</button>
+</div>
+<div id="stage-select">
+  <h2>ステージ選択</h2>
+  <div class="nav">
+    <button id="btnPrevStage">◀</button>
+    <div class="stage-info">
+      <h3 id="ssTitle"></h3>
+      <p id="ssDesc"></p>
+    </div>
+    <button id="btnNextStage">▶</button>
+  </div>
+  <button class="start-btn" id="btnStartStage">スタート</button>
+  <button class="back-btn" id="btnBackFromStage">← 戻る</button>
+</div>
+<div id="free-setup">
+  <h2>🏗️ フリーモード</h2>
+  <div class="opts">
+    <label>マップサイズ</label>
+    <select id="freeSize">
+      <option value="small">小 (480x360)</option>
+      <option value="medium" selected>中 (720x540)</option>
+      <option value="large">大 (1200x800)</option>
+    </select>
+  </div>
+  <button id="btnStartFree">スタート</button>
+  <button class="back-btn" id="btnBackFromFree" style="margin-top:8px;padding:8px 24px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;color:#888">← 戻る</button>
+</div>
+<div id="overlay"><div class="box"><h2 id="ovTitle"></h2><p id="ovText"></p><button id="ovBtn1"></button><button id="ovBtn2" style="display:none"></button></div></div>
+</div>
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const canvas = $('c');
+const ctx = canvas.getContext('2d');
+
+// ---- Audio ----
+let audioCtx = null;
+function initAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+function playTone(freq, dur, type, vol){
+  if(!audioCtx) return;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type||'sine';
+  o.frequency.value = freq;
+  g.gain.value = vol||0.15;
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime+dur);
+}
+function sfxConnect(){ playTone(880,0.12,'sine',0.12); setTimeout(()=>playTone(1100,0.15,'sine',0.1),80); }
+function sfxError(){ playTone(220,0.3,'sawtooth',0.15); }
+function sfxClear(){ playTone(660,0.15,'sine',0.12); setTimeout(()=>playTone(880,0.15,'sine',0.12),120); setTimeout(()=>playTone(1100,0.2,'sine',0.12),240); }
+function sfxAlarm(){ playTone(440,0.2,'square',0.2); setTimeout(()=>playTone(220,0.2,'square',0.2),200); }
+
+// ---- Constants ----
+const GRID = 40;
+const COLORS = {
+  thermal:'#FF8F00', wind:'#4FC3F7', solar:'#FFD600',
+  house:'#66BB6A', office:'#42A5F5', factory:'#EF5350', hospital:'#EEEEEE',
+  substation:'#AB47BC', battery:'#78909C'
+};
+const FACILITY_TYPES = {
+  thermal:  {cat:'gen', label:'火力発電所', cap:50, color:COLORS.thermal, icon:'🔥', shape:'rect'},
+  wind:     {cat:'gen', label:'風力発電所', cap:30, color:COLORS.wind, icon:'🌀', shape:'rect'},
+  solar:    {cat:'gen', label:'太陽光発電所', cap:40, color:COLORS.solar, icon:'☀️', shape:'rect'},
+  house:    {cat:'dem', label:'住宅地', dem:10, color:COLORS.house, icon:'🏠', shape:'circle'},
+  office:   {cat:'dem', label:'オフィス', dem:20, color:COLORS.office, icon:'🏢', shape:'circle'},
+  factory:  {cat:'dem', label:'工場', dem:30, color:COLORS.factory, icon:'🏭', shape:'circle'},
+  hospital: {cat:'dem', label:'病院', dem:15, color:COLORS.hospital, icon:'🏥', shape:'circle', critical:true},
+  substation:{cat:'relay',label:'変電所', color:COLORS.substation, icon:'🔌', shape:'diamond'},
+  battery:  {cat:'relay',label:'蓄電池', color:COLORS.battery, icon:'🔋', shape:'diamond', maxStore:80}
+};
+
+// ---- Game State ----
+let state = 'title'; // title, stageselect, freesetup, playing
+let mode = 'stage'; // stage, free
+let currentStageIdx = 0;
+let facilities = [];
+let lines = [];
+let mapW = 720, mapH = 540;
+let camX = 0, camY = 0;
+let simRunning = false, simSpeed = 1;
+let simTime = 6; // hour (0-24)
+let simDay = 0;
+let simElapsed = 0;
+let windFactor = 0.75;
+let windTarget = 0.75;
+let dragLine = null; // {fromId, mx, my}
+let selectedFacility = null;
+let deleteMode = false;
+let freePlace = null; // facility type to place
+let clearCondition = null;
+let clearDays = 1;
+let gameOver = false;
+let gameClear = false;
+let stageStartTime = 0;
+let flowParticles = [];
+let alarmTimer = 0;
+let topBarH = 44, bottomBarH = 72;
+
+// ---- Stages ----
+const STAGES = [
+  {
+    name:'ステージ1「はじめての送電」',
+    desc:'火力発電所から住宅に送電線を引こう！\n全住宅に電力を供給すればクリア。',
+    mapW:480, mapH:360,
+    facilities:[
+      {type:'thermal', gx:2, gy:4},
+      {type:'house', gx:8, gy:2},
+      {type:'house', gx:8, gy:6}
+    ],
+    clearCheck: f => f.filter(x=>x.cat==='dem').every(x=>x.powered),
+    clearDays:0, tutorial:true
+  },
+  {
+    name:'ステージ2「容量管理」',
+    desc:'発電50MWに対し需要70MW。\n住宅とオフィスに供給すればクリア。\n（工場は切ってもOK）',
+    mapW:600, mapH:440,
+    facilities:[
+      {type:'thermal', gx:2, gy:5},
+      {type:'house', gx:7, gy:2},
+      {type:'house', gx:7, gy:4},
+      {type:'office', gx:9, gy:6},
+      {type:'factory', gx:11, gy:8}
+    ],
+    clearCheck: f => f.filter(x=>x.type==='house'||x.type==='office').every(x=>x.powered),
+    clearDays:0
+  },
+  {
+    name:'ステージ3「再生可能エネルギー」',
+    desc:'太陽光は夜止まる。病院は24時間停電不可！\n1日サイクルを停電なしで乗り切れ。',
+    mapW:720, mapH:540,
+    facilities:[
+      {type:'thermal', gx:2, gy:3},
+      {type:'wind', gx:2, gy:7},
+      {type:'solar', gx:2, gy:11},
+      {type:'house', gx:10, gy:2},
+      {type:'house', gx:10, gy:5},
+      {type:'house', gx:10, gy:8},
+      {type:'office', gx:13, gy:3},
+      {type:'office', gx:13, gy:7},
+      {type:'hospital', gx:15, gy:5}
+    ],
+    clearCheck: null,
+    clearDays:1
+  },
+  {
+    name:'ステージ4「蓄電池」',
+    desc:'太陽光のみ！蓄電池に昼の電力を貯めて\n夜間に放電。2日サイクルを耐えろ。',
+    mapW:720, mapH:540,
+    facilities:[
+      {type:'solar', gx:2, gy:4},
+      {type:'solar', gx:2, gy:9},
+      {type:'battery', gx:8, gy:6},
+      {type:'house', gx:12, gy:2},
+      {type:'house', gx:12, gy:5},
+      {type:'house', gx:12, gy:8},
+      {type:'house', gx:12, gy:11},
+      {type:'hospital', gx:15, gy:6}
+    ],
+    clearCheck: null,
+    clearDays:2
+  },
+  {
+    name:'ステージ5「大規模電力網」',
+    desc:'全施設に供給＋病院停電なし。\n変電所と蓄電池を活用せよ！',
+    mapW:1200, mapH:800,
+    facilities:[
+      {type:'thermal', gx:2, gy:5},
+      {type:'wind', gx:2, gy:10},
+      {type:'wind', gx:2, gy:15},
+      {type:'solar', gx:5, gy:2},
+      {type:'solar', gx:5, gy:18},
+      {type:'battery', gx:10, gy:6},
+      {type:'battery', gx:10, gy:14},
+      {type:'substation', gx:15, gy:5},
+      {type:'substation', gx:15, gy:15},
+      {type:'house', gx:20, gy:2},
+      {type:'house', gx:20, gy:5},
+      {type:'house', gx:20, gy:8},
+      {type:'house', gx:22, gy:11},
+      {type:'house', gx:22, gy:14},
+      {type:'office', gx:24, gy:3},
+      {type:'office', gx:24, gy:7},
+      {type:'office', gx:24, gy:12},
+      {type:'factory', gx:26, gy:5},
+      {type:'factory', gx:26, gy:10},
+      {type:'hospital', gx:22, gy:17},
+      {type:'hospital', gx:28, gy:8}
+    ],
+    clearCheck: f => f.filter(x=>x.cat==='dem').every(x=>x.powered),
+    clearDays:1
+  }
+];
+
+// ---- Resize ----
+function resize(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---- Utility ----
+function snap(v){ return Math.round(v/GRID)*GRID; }
+function dist(a,b){ return Math.abs(a.gx-b.gx)+Math.abs(a.gy-b.gy); }
+function facilityAt(gx,gy){
+  return facilities.find(f=> Math.abs(f.gx-gx)<1 && Math.abs(f.gy-gy)<1);
+}
+function screenToWorld(sx,sy){
+  return {wx: sx+camX, wy: sy+camY-topBarH};
+}
+function worldToGrid(wx,wy){
+  return {gx: Math.round(wx/GRID), gy: Math.round(wy/GRID)};
+}
+
+// ---- Setup ----
+function loadStage(idx){
+  const s = STAGES[idx];
+  facilities = [];
+  lines = [];
+  flowParticles = [];
+  mapW = s.mapW; mapH = s.mapH;
+  s.facilities.forEach((fd,i)=>{
+    const ft = FACILITY_TYPES[fd.type];
+    facilities.push({
+      id:i, type:fd.type, gx:fd.gx, gy:fd.gy,
+      cat:ft.cat, label:ft.label, color:ft.color, icon:ft.icon, shape:ft.shape,
+      cap: ft.cap||0, dem: ft.dem||0, critical:ft.critical||false,
+      maxStore: ft.maxStore||0, stored:0,
+      powered:false, supply:0, genOutput:0, warning:false
+    });
+  });
+  clearCondition = s.clearCheck;
+  clearDays = s.clearDays;
+  simTime = 6; simDay = 0; simElapsed = 0;
+  simRunning = false; simSpeed = 1;
+  windFactor = 0.75; windTarget = 0.75;
+  gameOver = false; gameClear = false;
+  selectedFacility = null; deleteMode = false;
+  camX = Math.max(0,(mapW - canvas.width)/2);
+  camY = Math.max(0,(mapH - canvas.height + topBarH + bottomBarH)/2);
+  stageStartTime = 0;
+}
+
+function startFreeMode(size){
+  const sizes = {small:[480,360],medium:[720,540],large:[1200,800]};
+  const [w,h] = sizes[size]||sizes.medium;
+  mapW=w; mapH=h;
+  facilities=[]; lines=[]; flowParticles=[];
+  simTime=6; simDay=0; simElapsed=0;
+  simRunning=false; simSpeed=1;
+  windFactor=0.75; windTarget=0.75;
+  gameOver=false; gameClear=false;
+  selectedFacility=null; deleteMode=false; freePlace=null;
+  camX = Math.max(0,(mapW - canvas.width)/2);
+  camY = Math.max(0,(mapH - canvas.height + topBarH + bottomBarH)/2);
+  clearCondition=null; clearDays=0;
+}
+
+// ---- Power Simulation ----
+function getGenOutput(f){
+  if(f.cat!=='gen') return 0;
+  let base = f.cap;
+  if(f.type==='solar'){
+    if(simTime>=6 && simTime<18){
+      let peak = (simTime>=10 && simTime<=14)?1.0: (simTime<10? (simTime-6)/4*0.8+0.2 : (18-simTime)/4*0.8+0.2);
+      return base * peak;
+    }
+    return 0;
+  }
+  if(f.type==='wind') return base * windFactor;
+  return base;
+}
+
+function getDemand(f){
+  if(f.cat!=='dem') return 0;
+  let base = f.dem;
+  if(f.type==='hospital') return base; // constant
+  if(simTime>=8 && simTime<20){
+    let factor = (f.type==='factory'||f.type==='office')? 1.0 : 0.8;
+    return base * factor;
+  }
+  if(f.type==='house') return base * 0.6;
+  return base * 0.3;
+}
+
+function simulatePower(){
+  // Reset
+  facilities.forEach(f=>{
+    f.powered=false; f.supply=0; f.genOutput=0; f.warning=false;
+  });
+  // Calculate gen output
+  facilities.filter(f=>f.cat==='gen').forEach(f=>{
+    f.genOutput = getGenOutput(f);
+  });
+  // BFS-like power distribution
+  // Build adjacency from lines
+  let adj = {};
+  facilities.forEach(f=>{ adj[f.id]=[]; });
+  lines.forEach(l=>{
+    const d = dist(facilities.find(x=>x.id===l.from), facilities.find(x=>x.id===l.to));
+    const loss = 1 - d*0.01;
+    const eff = Math.max(0.5, loss);
+    adj[l.from].push({to:l.to, cap:l.cap||30, eff});
+    adj[l.to].push({to:l.from, cap:l.cap||30, eff});
+  });
+
+  // Simple flow: from each generator, push power through lines
+  // Track remaining capacity per line
+  let lineCap = {};
+  lines.forEach((l,i)=>{ lineCap[i]=l.cap||30; });
+
+  function getLineIdx(a,b){
+    return lines.findIndex(l=>(l.from===a&&l.to===b)||(l.from===b&&l.to===a));
+  }
+
+  // Multi-source BFS
+  let genRemaining = {};
+  facilities.filter(f=>f.cat==='gen').forEach(f=>{ genRemaining[f.id]=f.genOutput; });
+
+  // Battery discharge (if night / low supply)
+  let batteryDischarge = {};
+  facilities.filter(f=>f.type==='battery').forEach(f=>{
+    batteryDischarge[f.id] = 0;
+  });
+
+  // Pass 1: Distribute from generators via BFS
+  let visited, queue;
+  facilities.filter(f=>f.cat==='gen' && f.genOutput>0).forEach(gen=>{
+    visited = new Set([gen.id]);
+    queue = [{id:gen.id, avail:gen.genOutput}];
+    while(queue.length){
+      let cur = queue.shift();
+      let curF = facilities.find(x=>x.id===cur.id);
+      // If demand facility, consume
+      if(curF.cat==='dem'){
+        let need = getDemand(curF) - curF.supply;
+        if(need>0){
+          let give = Math.min(need, cur.avail);
+          curF.supply += give;
+          cur.avail -= give;
+          if(curF.supply >= getDemand(curF)*0.95) curF.powered=true;
+        }
+      }
+      // If battery, charge during surplus
+      if(curF.type==='battery' && cur.avail>0){
+        let canStore = curF.maxStore - curF.stored;
+        let charge = Math.min(canStore, cur.avail);
+        curF.stored += charge * 0.016; // per frame at ~60fps approx
+        // Actually we do this per sim tick not per frame
+      }
+      // Propagate to neighbors
+      if(cur.avail>0.1){
+        adj[cur.id].forEach(edge=>{
+          if(!visited.has(edge.to)){
+            let li = getLineIdx(cur.id, edge.to);
+            if(li>=0){
+              let send = Math.min(cur.avail, lineCap[li]);
+              let delivered = send * edge.eff;
+              if(delivered>0.1){
+                lineCap[li] -= send;
+                visited.add(edge.to);
+                queue.push({id:edge.to, avail:delivered});
+              }
+            }
+          }
+        });
+      }
+    }
+  });
+
+  // Pass 2: Battery discharge to unpowered neighbors
+  facilities.filter(f=>f.type==='battery' && f.stored>0).forEach(bat=>{
+    adj[bat.id].forEach(edge=>{
+      let target = facilities.find(x=>x.id===edge.to);
+      if(target && target.cat==='dem' && !target.powered){
+        let need = getDemand(target) - target.supply;
+        let li = getLineIdx(bat.id, target.id);
+        if(li>=0 && need>0 && bat.stored>0){
+          let give = Math.min(need, bat.stored, lineCap[li]*edge.eff);
+          target.supply += give;
+          bat.stored -= give * 0.016;
+          if(target.supply >= getDemand(target)*0.95) target.powered=true;
+        }
+      }
+    });
+  });
+
+  // Warning for unpowered facilities
+  facilities.filter(f=>f.cat==='dem'&&!f.powered).forEach(f=>{f.warning=true;});
+
+  // Check hospital blackout
+  let hospitalBlackout = facilities.some(f=>f.critical && !f.powered && simRunning);
+  if(hospitalBlackout && simRunning && !gameOver && !gameClear){
+    gameOver = true;
+    sfxAlarm();
+    showOverlay('⚠️ 停電発生！','病院への電力供給が途絶えました…','リトライ',()=>{
+      if(mode==='stage') loadStage(currentStageIdx);
+      hideOverlay();
+    },'タイトルへ',()=>{ goTitle(); hideOverlay(); });
+  }
+}
+
+// Separate battery charging logic for sim ticks
+function simTickBattery(dt){
+  // Build adjacency
+  let adj = {};
+  facilities.forEach(f=>{ adj[f.id]=[]; });
+  lines.forEach(l=>{
+    adj[l.from].push(l.to);
+    adj[l.to].push(l.from);
+  });
+  facilities.filter(f=>f.type==='battery').forEach(bat=>{
+    // Check if connected to generator with surplus
+    let connectedGens = [];
+    let connectedDems = [];
+    // BFS to find connected generators
+    let vis = new Set([bat.id]);
+    let q = [bat.id];
+    while(q.length){
+      let cur = q.shift();
+      let cf = facilities.find(x=>x.id===cur);
+      if(cf.cat==='gen') connectedGens.push(cf);
+      if(cf.cat==='dem') connectedDems.push(cf);
+      (adj[cur]||[]).forEach(nb=>{
+        if(!vis.has(nb)){ vis.add(nb); q.push(nb); }
+      });
+    }
+    let totalGen = connectedGens.reduce((s,g)=>s+getGenOutput(g),0);
+    let totalDem = connectedDems.reduce((s,d)=>s+getDemand(d),0);
+    let surplus = totalGen - totalDem;
+    if(surplus>0 && bat.stored<bat.maxStore){
+      bat.stored = Math.min(bat.maxStore, bat.stored + surplus*dt*0.5);
+    }
+    // Discharge if deficit
+    if(surplus<0 && bat.stored>0){
+      let deficit = -surplus;
+      let discharge = Math.min(deficit*dt*0.5, bat.stored);
+      bat.stored -= discharge;
+    }
+  });
+}
+
+// ---- Flow Particles ----
+function updateParticles(dt){
+  // Remove old
+  flowParticles = flowParticles.filter(p=>p.t<1);
+  // Add new for active lines
+  lines.forEach((l,i)=>{
+    let fFrom = facilities.find(x=>x.id===l.from);
+    let fTo = facilities.find(x=>x.id===l.to);
+    if(!fFrom||!fTo) return;
+    let hasFlow = (fFrom.cat==='gen'&&fFrom.genOutput>0)||(fFrom.type==='battery'&&fFrom.stored>0)||(fFrom.type==='substation');
+    let hasFlow2 = (fTo.cat==='gen'&&fTo.genOutput>0)||(fTo.type==='battery'&&fTo.stored>0)||(fTo.type==='substation');
+    if(!hasFlow && !hasFlow2) return;
+    if(Math.random()<dt*2){
+      // Determine direction
+      let from = fFrom, to = fTo;
+      if(fTo.cat==='gen'||(fTo.type==='battery'&&fTo.stored>0&&fFrom.cat==='dem')){
+        from=fTo; to=fFrom;
+      }
+      flowParticles.push({
+        fromGx:from.gx, fromGy:from.gy,
+        toGx:to.gx, toGy:to.gy,
+        t:0, lineIdx:i
+      });
+    }
+  });
+  flowParticles.forEach(p=>{ p.t += dt*1.2; });
+}
+
+// ---- Check Clear ----
+function checkClear(){
+  if(gameOver||gameClear) return;
+  if(clearDays>0){
+    // Must survive N days
+    if(simDay>=clearDays && simTime>=6){
+      // Check all dem powered (or custom check)
+      let ok = clearCondition ? clearCondition(facilities) : facilities.filter(f=>f.cat==='dem').every(f=>f.powered);
+      if(ok){
+        gameClear=true;
+        simRunning=false;
+        sfxClear();
+        showOverlay('🎉 クリア！','ステージクリア！おめでとう！','次へ',()=>{
+          if(currentStageIdx<STAGES.length-1){currentStageIdx++;loadStage(currentStageIdx);hideOverlay();}
+          else{goTitle();hideOverlay();}
+        },'タイトルへ',()=>{goTitle();hideOverlay();});
+      }
+    }
+  } else {
+    // Instant check (no sim needed for stage 1,2)
+    if(clearCondition && clearCondition(facilities)){
+      // For stage 1&2, check when sim starts or lines connected
+      if(!simRunning){
+        // Check after each line connection
+        gameClear=true;
+        sfxClear();
+        showOverlay('🎉 クリア！','送電成功！','次へ',()=>{
+          if(currentStageIdx<STAGES.length-1){currentStageIdx++;loadStage(currentStageIdx);hideOverlay();}
+          else{goTitle();hideOverlay();}
+        },'タイトルへ',()=>{goTitle();hideOverlay();});
+      }
+    }
+  }
+}
+
+// ---- Drawing ----
+function draw(){
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  if(state==='title'||state==='stageselect'||state==='freesetup') return;
+
+  // Background gradient based on time
+  let bgA, bgB;
+  if(simTime>=6 && simTime<12){ bgA='#FFFDE7'; bgB='#FFF8E1'; }
+  else if(simTime>=12 && simTime<18){ bgA='#FFF8E1'; bgB='#FFE0B2'; }
+  else if(simTime>=18 && simTime<21){ bgA='#E8EAF6'; bgB='#C5CAE9'; }
+  else { bgA='#263238'; bgB='#1a1a2e'; }
+
+  let grad = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)/1.5);
+  grad.addColorStop(0, bgA);
+  grad.addColorStop(1, bgB);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.translate(-camX, -camY+topBarH);
+
+  // Grid dots
+  let isDark = simTime>=21||simTime<6;
+  ctx.fillStyle = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  for(let x=0;x<=mapW;x+=GRID){
+    for(let y=0;y<=mapH;y+=GRID){
+      ctx.beginPath();
+      ctx.arc(x,y,1.5,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Draw lines
+  lines.forEach((l,idx)=>{
+    let fFrom = facilities.find(x=>x.id===l.from);
+    let fTo = facilities.find(x=>x.id===l.to);
+    if(!fFrom||!fTo) return;
+    let x1=fFrom.gx*GRID, y1=fFrom.gy*GRID;
+    let x2=fTo.gx*GRID, y2=fTo.gy*GRID;
+    // L-shape: go horizontal then vertical
+    let mx = x2, my = y1;
+
+    // Line overload check
+    let overload = false;
+    // Simple: if total flow exceeds cap
+    ctx.strokeStyle = overload ? '#EF5350' : (isDark?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.15)');
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(mx,my);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+
+    // Colored overlay
+    let genF = fFrom.cat==='gen'?fFrom:(fTo.cat==='gen'?fTo:null);
+    if(genF){
+      ctx.strokeStyle = genF.color+'60';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(x1,y1);
+      ctx.lineTo(mx,my);
+      ctx.lineTo(x2,y2);
+      ctx.stroke();
+    }
+  });
+
+  // Draw drag line
+  if(dragLine){
+    let fFrom = facilities.find(x=>x.id===dragLine.fromId);
+    if(fFrom){
+      let x1=fFrom.gx*GRID, y1=fFrom.gy*GRID;
+      let x2=dragLine.mx, y2=dragLine.my;
+      let mx2=x2, my2=y1;
+      ctx.strokeStyle = '#FFD54F80';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.setLineDash([8,4]);
+      ctx.beginPath();
+      ctx.moveTo(x1,y1);
+      ctx.lineTo(mx2,my2);
+      ctx.lineTo(x2,y2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Flow particles
+  flowParticles.forEach(p=>{
+    let x1=p.fromGx*GRID, y1=p.fromGy*GRID;
+    let x2=p.toGx*GRID, y2=p.toGy*GRID;
+    let mx=x2, my=y1;
+    // Interpolate along L-path
+    let totalLen = Math.abs(x2-x1)+Math.abs(y2-y1);
+    let hLen = Math.abs(x2-x1);
+    let vLen = Math.abs(y2-y1);
+    let pos = p.t * totalLen;
+    let px, py;
+    if(pos<=hLen){
+      px = x1 + (mx-x1)*(pos/hLen||0);
+      py = y1;
+    } else {
+      px = mx;
+      py = my + (y2-my)*((pos-hLen)/vLen||0);
+    }
+    ctx.fillStyle = '#FFD600';
+    ctx.shadowColor = '#FFD600';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(px,py,3,0,Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  // Draw facilities
+  facilities.forEach(f=>{
+    let x=f.gx*GRID, y=f.gy*GRID;
+    let alpha = (f.cat==='dem' && f.warning && simRunning) ? 0.4 : 1.0;
+    ctx.globalAlpha = alpha;
+
+    if(f.shape==='rect'){
+      ctx.fillStyle = f.color+'30';
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.roundRect(x-18,y-18,36,36,6);
+      ctx.fill(); ctx.stroke();
+      // Icon
+      ctx.font = '16px system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isDark?'#fff':'#333';
+      ctx.fillText(f.icon, x, y);
+    } else if(f.shape==='circle'){
+      ctx.fillStyle = f.color+'25';
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(x,y,16,0,Math.PI*2);
+      ctx.fill(); ctx.stroke();
+      ctx.font = '14px system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isDark?'#fff':'#333';
+      ctx.fillText(f.icon, x, y);
+    } else if(f.shape==='diamond'){
+      ctx.fillStyle = f.color+'25';
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x,y-18);
+      ctx.lineTo(x+18,y);
+      ctx.lineTo(x,y+18);
+      ctx.lineTo(x-18,y);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.font = '14px system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isDark?'#fff':'#333';
+      ctx.fillText(f.icon, x, y);
+      // Battery bar
+      if(f.type==='battery' && f.maxStore>0){
+        let pct = f.stored/f.maxStore;
+        ctx.fillStyle = '#78909C40';
+        ctx.fillRect(x-14,y+20,28,4);
+        ctx.fillStyle = pct>0.3?'#66BB6A':'#EF5350';
+        ctx.fillRect(x-14,y+20,28*pct,4);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Selected highlight
+    if(selectedFacility && selectedFacility.id===f.id){
+      ctx.strokeStyle = '#FFD54F';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([4,3]);
+      ctx.beginPath();
+      ctx.arc(x,y,24,0,Math.PI*2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Warning icons
+    if(f.warning && simRunning){
+      ctx.font = '12px system-ui';
+      ctx.fillStyle = f.critical?'#EF5350':'#FF8F00';
+      ctx.fillText(f.critical?'❌':'⚠️', x+18, y-14);
+    }
+
+    // Gen output label
+    if(f.cat==='gen' && simRunning){
+      ctx.font = '10px system-ui';
+      ctx.fillStyle = isDark?'#aaa':'#888';
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.round(f.genOutput)+'MW', x, y+28);
+    }
+    // Demand label
+    if(f.cat==='dem'){
+      ctx.font = '10px system-ui';
+      ctx.fillStyle = isDark?'#aaa':'#888';
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.round(getDemand(f))+'MW', x, y+28);
+    }
+  });
+
+  ctx.restore();
+
+  // Update UI
+  let totalGen = facilities.filter(f=>f.cat==='gen').reduce((s,f)=>s+f.genOutput,0);
+  let totalDem = facilities.filter(f=>f.cat==='dem').reduce((s,f)=>s+getDemand(f),0);
+  $('genInfo').textContent = '⚡'+Math.round(totalGen)+'MW';
+  $('demInfo').textContent = '🏠'+Math.round(totalDem)+'MW';
+  let timeIcon = simTime>=6&&simTime<12?'🌅':simTime>=12&&simTime<18?'☀️':simTime>=18&&simTime<21?'🌇':'🌙';
+  $('timeInfo').textContent = timeIcon;
+  let h = Math.floor(simTime)%24;
+  let m = Math.floor((simTime%1)*60);
+  $('clockInfo').textContent = h+':'+(m<10?'0':'')+m;
+}
+
+// ---- Game Loop ----
+let lastTime = 0;
+function gameLoop(ts){
+  let dt = Math.min((ts-lastTime)/1000, 0.05);
+  lastTime = ts;
+
+  if(state==='playing'){
+    if(simRunning && !gameOver && !gameClear){
+      let simDt = dt * simSpeed;
+      // 1 day = 30 seconds → 24h in 30s → 0.8h per second
+      let hourPerSec = 24/30;
+      simTime += hourPerSec * simDt;
+      simElapsed += simDt;
+      if(simTime >= 24){
+        simTime -= 24;
+        simDay++;
+      }
+      // Wind variation
+      if(Math.random()<0.02){
+        windTarget = 0.5 + Math.random()*0.5;
+      }
+      windFactor += (windTarget - windFactor) * dt * 2;
+
+      simTickBattery(simDt);
+    }
+    simulatePower();
+    updateParticles(simRunning?dt:dt*0.3);
+    if(simRunning) checkClear();
+  }
+
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ---- Overlay ----
+function showOverlay(title,text,btn1Text,btn1Fn,btn2Text,btn2Fn){
+  $('overlay').style.display='flex';
+  $('ovTitle').textContent=title;
+  $('ovText').textContent=text;
+  $('ovBtn1').textContent=btn1Text;
+  $('ovBtn1').onclick=btn1Fn;
+  if(btn2Text){
+    $('ovBtn2').style.display='inline-block';
+    $('ovBtn2').textContent=btn2Text;
+    $('ovBtn2').onclick=btn2Fn;
+  } else {
+    $('ovBtn2').style.display='none';
+  }
+}
+function hideOverlay(){ $('overlay').style.display='none'; }
+
+// ---- Navigation ----
+function goTitle(){
+  state='title';
+  $('title-screen').style.display='flex';
+  $('stage-select').style.display='none';
+  $('free-setup').style.display='none';
+  $('topbar').style.display='none';
+  $('bottombar').style.display='none';
+  $('free-toolbar').style.display='none';
+  hideOverlay();
+}
+
+function goStageSelect(){
+  state='stageselect';
+  $('title-screen').style.display='none';
+  $('stage-select').style.display='flex';
+  updateStageSelect();
+}
+
+function updateStageSelect(){
+  let s = STAGES[currentStageIdx];
+  $('ssTitle').textContent = s.name;
+  $('ssDesc').textContent = s.desc;
+}
+
+function goFreeSetup(){
+  state='freesetup';
+  $('title-screen').style.display='none';
+  $('free-setup').style.display='flex';
+}
+
+function goPlaying(){
+  state='playing';
+  $('title-screen').style.display='none';
+  $('stage-select').style.display='none';
+  $('free-setup').style.display='none';
+  $('topbar').style.display='flex';
+  $('bottombar').style.display='flex';
+  $('stageName').textContent = mode==='stage'?STAGES[currentStageIdx].name:'フリーモード';
+  if(mode==='free') buildFreeToolbar();
+  else $('free-toolbar').style.display='none';
+}
+
+// ---- Free Mode Toolbar ----
+function buildFreeToolbar(){
+  let tb = $('free-toolbar');
+  tb.innerHTML='';
+  tb.style.display='flex';
+  let types = ['thermal','wind','solar','house','office','factory','hospital','substation','battery'];
+  types.forEach(t=>{
+    let ft = FACILITY_TYPES[t];
+    let btn = document.createElement('button');
+    btn.textContent = ft.icon;
+    btn.title = ft.label;
+    btn.onclick = ()=>{
+      freePlace = (freePlace===t)?null:t;
+      tb.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      if(freePlace) btn.classList.add('active');
+    };
+    tb.appendChild(btn);
+  });
+}
+
+// ---- Input ----
+let pointerDown = false;
+let pointerStartX=0, pointerStartY=0;
+let isPan = false;
+let panStartCamX=0, panStartCamY=0;
+
+function getPos(e){
+  let t = e.touches ? e.touches[0] : e;
+  return {x:t.clientX, y:t.clientY};
+}
+
+function onPointerDown(e){
+  if(state!=='playing') return;
+  initAudio();
+  let pos = getPos(e);
+  pointerDown = true;
+  pointerStartX = pos.x;
+  pointerStartY = pos.y;
+  isPan = false;
+  panStartCamX = camX;
+  panStartCamY = camY;
+
+  let {wx,wy} = screenToWorld(pos.x,pos.y);
+  let {gx,gy} = worldToGrid(wx,wy);
+
+  // Free mode placement
+  if(mode==='free' && freePlace && !simRunning){
+    let ft = FACILITY_TYPES[freePlace];
+    let existing = facilityAt(gx,gy);
+    if(!existing){
+      let newId = facilities.length ? Math.max(...facilities.map(f=>f.id))+1 : 0;
+      facilities.push({
+        id:newId, type:freePlace, gx, gy,
+        cat:ft.cat, label:ft.label, color:ft.color, icon:ft.icon, shape:ft.shape,
+        cap:ft.cap||0, dem:ft.dem||0, critical:ft.critical||false,
+        maxStore:ft.maxStore||0, stored:0,
+        powered:false, supply:0, genOutput:0, warning:false
+      });
+      sfxConnect();
+      return;
+    }
+  }
+
+  // Delete mode
+  if(deleteMode){
+    let f = facilityAt(gx,gy);
+    if(f && mode==='free'){
+      lines = lines.filter(l=>l.from!==f.id&&l.to!==f.id);
+      facilities = facilities.filter(x=>x.id!==f.id);
+      sfxError();
+      return;
+    }
+    // Delete line near click
+    let clickedLine = findLineNear(wx,wy);
+    if(clickedLine!==null){
+      lines.splice(clickedLine,1);
+      sfxError();
+      return;
+    }
+    return;
+  }
+
+  // Check if tapping a facility to start drag line
+  let f = facilityAt(gx,gy);
+  if(f && !simRunning){
+    // Can drag from gen, relay, or substation
+    if(f.cat==='gen'||f.cat==='relay'){
+      dragLine = {fromId:f.id, mx:wx, my:wy};
+    } else {
+      selectedFacility = f;
+      updateInfoPanel(f);
+    }
+  } else if(f){
+    selectedFacility = f;
+    updateInfoPanel(f);
+  }
+}
+
+function onPointerMove(e){
+  if(!pointerDown||state!=='playing') return;
+  let pos = getPos(e);
+  let dx = pos.x - pointerStartX;
+  let dy = pos.y - pointerStartY;
+
+  if(dragLine){
+    let {wx,wy} = screenToWorld(pos.x,pos.y);
+    dragLine.mx = wx;
+    dragLine.my = wy;
+    return;
+  }
+
+  if(Math.abs(dx)>8||Math.abs(dy)>8) isPan=true;
+  if(isPan){
+    camX = panStartCamX - dx;
+    camY = panStartCamY - dy;
+    camX = Math.max(0, Math.min(camX, mapW-canvas.width));
+    camY = Math.max(0, Math.min(camY, mapH-canvas.height+topBarH+bottomBarH));
+  }
+}
+
+function onPointerUp(e){
+  if(state!=='playing'){pointerDown=false;return;}
+  if(dragLine){
+    let pos = e.changedTouches ? e.changedTouches[0] : e;
+    let {wx,wy} = screenToWorld(pos.clientX,pos.clientY);
+    let {gx,gy} = worldToGrid(wx,wy);
+    let target = facilityAt(gx,gy);
+    if(target && target.id!==dragLine.fromId){
+      // Check no duplicate line
+      let dup = lines.some(l=>(l.from===dragLine.fromId&&l.to===target.id)||(l.from===target.id&&l.to===dragLine.fromId));
+      if(!dup){
+        lines.push({from:dragLine.fromId, to:target.id, cap:30});
+        sfxConnect();
+        simulatePower();
+        if(clearDays===0) checkClear();
+      }
+    }
+    dragLine=null;
+  }
+  pointerDown=false;
+}
+
+function findLineNear(wx,wy){
+  for(let i=0;i<lines.length;i++){
+    let l=lines[i];
+    let fA=facilities.find(x=>x.id===l.from);
+    let fB=facilities.find(x=>x.id===l.to);
+    if(!fA||!fB) continue;
+    let x1=fA.gx*GRID,y1=fA.gy*GRID,x2=fB.gx*GRID,y2=fB.gy*GRID;
+    let mx=x2,my=y1;
+    // Distance to L-path segments
+    let d1=distToSeg(wx,wy,x1,y1,mx,my);
+    let d2=distToSeg(wx,wy,mx,my,x2,y2);
+    if(Math.min(d1,d2)<12) return i;
+  }
+  return null;
+}
+
+function distToSeg(px,py,x1,y1,x2,y2){
+  let dx=x2-x1,dy=y2-y1;
+  let len2=dx*dx+dy*dy;
+  if(len2===0) return Math.hypot(px-x1,py-y1);
+  let t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/len2));
+  return Math.hypot(px-(x1+t*dx),py-(y1+t*dy));
+}
+
+function updateInfoPanel(f){
+  let panel = $('infopanel');
+  if(!f){panel.textContent='施設をタップで詳細表示';return;}
+  let info = f.label;
+  if(f.cat==='gen') info += ` | 容量:${f.cap}MW | 出力:${Math.round(f.genOutput)}MW`;
+  if(f.cat==='dem') info += ` | 需要:${Math.round(getDemand(f))}MW | 供給:${Math.round(f.supply)}MW`;
+  if(f.type==='battery') info += ` | 蓄電:${Math.round(f.stored)}/${f.maxStore}MW`;
+  if(f.critical) info += ' | ⚠️停電不可';
+  panel.textContent = info;
+}
+
+// Event listeners
+canvas.addEventListener('mousedown', onPointerDown);
+canvas.addEventListener('mousemove', onPointerMove);
+canvas.addEventListener('mouseup', onPointerUp);
+canvas.addEventListener('touchstart', e=>{e.preventDefault();onPointerDown(e);},{passive:false});
+canvas.addEventListener('touchmove', e=>{e.preventDefault();onPointerMove(e);},{passive:false});
+canvas.addEventListener('touchend', e=>{e.preventDefault();onPointerUp(e);},{passive:false});
+
+// Buttons
+$('btnStage').onclick = ()=> goStageSelect();
+$('btnFree').onclick = ()=> goFreeSetup();
+$('btnPrevStage').onclick = ()=>{ currentStageIdx = (currentStageIdx-1+STAGES.length)%STAGES.length; updateStageSelect(); };
+$('btnNextStage').onclick = ()=>{ currentStageIdx = (currentStageIdx+1)%STAGES.length; updateStageSelect(); };
+$('btnStartStage').onclick = ()=>{
+  initAudio();
+  mode='stage'; loadStage(currentStageIdx); goPlaying();
+};
+$('btnBackFromStage').onclick = ()=> goTitle();
+$('btnStartFree').onclick = ()=>{
+  initAudio();
+  mode='free'; startFreeMode($('freeSize').value); goPlaying();
+};
+$('btnBackFromFree').onclick = ()=> goTitle();
+
+$('btnPlay').onclick = ()=>{
+  if(gameOver||gameClear) return;
+  simRunning=true;
+  $('btnPlay').classList.add('active');
+  $('btnPause').classList.remove('active');
+};
+$('btnPause').onclick = ()=>{
+  simRunning=false;
+  $('btnPlay').classList.remove('active');
+  $('btnPause').classList.add('active');
+};
+$('btnSpeed').onclick = ()=>{
+  simSpeed = simSpeed===1?2:simSpeed===2?4:1;
+  $('btnSpeed').textContent = simSpeed===1?'⏩':simSpeed===2?'⏩×2':'⏩×4';
+};
+$('btnDelete').onclick = ()=>{
+  deleteMode=!deleteMode;
+  $('btnDelete').classList.toggle('active',deleteMode);
+};
+$('btnBack2').onclick = ()=>{
+  simRunning=false;
+  goTitle();
+};
+
+// Start
+goTitle();
+requestAnimationFrame(gameLoop);
+})();
+</script>
+</body>
+</html>
