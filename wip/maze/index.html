@@ -24,11 +24,6 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .game-header .stage-name{font-weight:700;color:#2F2B2A;font-size:15px}
 .game-footer{display:flex;gap:8px;padding:8px 4px;flex-shrink:0;flex-wrap:wrap;justify-content:center}
 .canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:hidden;position:relative}
-.stage-card{background:#fff;border-radius:16px;padding:20px;width:280px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);position:relative}
-.stage-card .badge{display:inline-block;padding:3px 10px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:8px}
-.stage-nav{display:flex;align-items:center;gap:16px;margin-top:16px}
-.nav-btn{width:44px;height:44px;border-radius:50%;background:#fff;border:2px solid #E0E0E0;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#2F2B2A}
-.nav-btn:active{background:#f0f0f0}
 .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#2F2B2A;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
 .toast.show{opacity:1}
 .result-box{background:#fff;border-radius:16px;padding:24px;text-align:center;box-shadow:0 2px 16px rgba(0,0,0,0.08);max-width:320px;width:90%}
@@ -55,10 +50,14 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .dungeon-desc{background:#fff;border-radius:12px;padding:12px 16px;margin:8px 0;max-width:340px;width:100%;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.04)}
 .dungeon-desc .dd-title{font-weight:700;font-size:15px;color:#2F2B2A;margin-bottom:4px}
 .dungeon-desc .dd-text{font-size:12px;color:#888}
-.minimap-wrap{position:absolute;top:4px;right:4px;display:flex;gap:2px;padding:4px;background:rgba(255,255,255,0.85);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1)}
-.minimap-floor{border:1px solid #ccc;border-radius:3px;background:#fafafa}
-.minimap-floor.mm-active{border-color:#5B4FCF;box-shadow:0 0 4px #5B4FCF88}
-.minimap-floor.mm-done{border-color:#4ED26D}
+.minimap-bar{display:flex;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:rgba(255,255,255,0.92);border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,0.1);flex-shrink:0;overflow-x:auto;max-width:100%}
+.minimap-bar .mm-item{display:flex;flex-direction:column;align-items:center;gap:1px}
+.minimap-bar .mm-canvas{border:2px solid #ccc;border-radius:4px;background:#fafafa}
+.minimap-bar .mm-canvas.mm-active{border-color:#5B4FCF;box-shadow:0 0 6px #5B4FCF88}
+.minimap-bar .mm-canvas.mm-done{border-color:#4ED26D}
+.minimap-bar .mm-label{font-size:9px;font-weight:700;color:#888}
+.minimap-bar .mm-label.mm-active-label{color:#5B4FCF}
+.minimap-bar .mm-arrow{font-size:14px;color:#aaa;margin:0 1px}
 .floor-indicator{font-size:13px;color:#5B4FCF;font-weight:700;padding:4px 0}
 .stairs-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:50;opacity:0;transition:opacity .2s;pointer-events:none}
 .stairs-overlay.show{opacity:1}
@@ -90,22 +89,9 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
   <div class="screen active" id="titleScreen">
     <h1>🏗️ Maze Architect</h1>
     <div class="subtitle">迷路を作って、AIを迷わせろ！</div>
-    <button class="btn" onclick="showStageSelect()">🗺️ ステージモード</button>
     <button class="btn btn-dungeon" onclick="showDungeonSelect()">🏰 ダンジョン防衛</button>
     <button class="btn btn-secondary" onclick="showFreeMode()">🏗️ フリーモード</button>
     <button class="btn btn-secondary btn-small" id="muteBtnTitle" onclick="toggleMute()" style="margin-top:12px">🔊 サウンド ON</button>
-  </div>
-  <!-- Stage Select -->
-  <div class="screen" id="stageScreen">
-    <h2>ステージ選択</h2>
-    <div class="stage-card" id="stageCard"></div>
-    <div class="stage-nav">
-      <button class="nav-btn" onclick="navStage(-1)">◀</button>
-      <span id="stageNum" style="font-size:14px;color:#888">1/8</span>
-      <button class="nav-btn" onclick="navStage(1)">▶</button>
-    </div>
-    <button class="btn" style="margin-top:16px" onclick="startStage()">▶ はじめる</button>
-    <button class="btn btn-secondary btn-small" style="margin-top:4px" onclick="showTitle()">戻る</button>
   </div>
   <!-- Dungeon Select -->
   <div class="screen" id="dungeonScreen">
@@ -151,10 +137,10 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     </div>
     <div class="timer-bar-wrap" id="timerBarWrap"><div class="timer-bar under" id="timerBar"></div></div>
     <div class="timer-label" id="timerLabel"><span id="timerLabelLeft">0s</span><span id="timerLabelRight">目標: --s</span></div>
+    <div class="minimap-bar" id="minimapBar" style="display:none"></div>
     <div class="canvas-wrap" id="canvasWrap">
       <canvas id="gameCanvas"></canvas>
       <div class="dead-end-badge" id="deadEndBadge" style="opacity:0">🚧 行き止まり: <span id="deadEndNum">0</span></div>
-      <div class="minimap-wrap" id="minimapWrap" style="display:none"></div>
       <div class="stairs-overlay" id="stairsOverlay">
         <div class="stairs-icon">🪜</div>
         <div class="stairs-text" id="stairsText">B2Fへ…</div>
@@ -182,7 +168,6 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
       <div class="star-row" id="starRow"></div>
       <div class="star-label" id="starLabel"></div>
       <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;align-items:center">
-        <button class="btn btn-small" id="nextStageBtn" onclick="nextStage()">次のステージ ▶</button>
         <button class="btn btn-small btn-dungeon" id="nextDungeonBtn" onclick="nextDungeonFloor()" style="display:none">🪜 次の階層を構築</button>
         <button class="btn btn-small btn-secondary" onclick="retryStage()">🔄 リトライ</button>
         <button class="btn btn-small btn-secondary" onclick="backFromResult()">🏠 戻る</button>
@@ -282,18 +267,6 @@ function shakeScreen(){
   setTimeout(()=>{canvas.style.animation='none'},350);
 }
 
-// ── Stage definitions ──
-const STAGES=[
-  {name:'はじめての壁',grid:5,algo:'random',target:5,desc:'壁をタップして配置！攻略者を迷わせよう'},
-  {name:'行き止まり',grid:6,algo:'random',target:10,desc:'行き止まりを作ると攻略者が引き返すよ'},
-  {name:'壁伝いの敵',grid:7,algo:'righthand',target:8,desc:'この攻略者は壁を伝って進む。螺旋状に迷わせろ！'},
-  {name:'広い迷路',grid:8,algo:'righthand',target:12,desc:'広いフィールド。長い回り道を作れ！'},
-  {name:'探索者',grid:8,algo:'bfs',target:6,desc:'⚠️ この攻略者は最短経路を見つける！'},
-  {name:'大迷宮',grid:10,algo:'bfs',target:8,desc:'大きな迷路で最短経路を遠回りさせろ！'},
-  {name:'天才',grid:10,algo:'astar',target:5,desc:'💀 A*アルゴリズム。ほぼ最短で来る。壁を最大限に活用しろ！'},
-  {name:'究極の迷宮',grid:12,algo:'astar',target:7,desc:'最大フィールド。究極の迷路を設計せよ！'},
-];
-
 // ── Dungeon quest definitions ──
 const QUESTS=[
   {name:'B1F',gridN:5,algo:'random',goalTime:5,desc:'迷子のスライムが入ってきた。まずは壁の置き方を覚えよう'},
@@ -309,7 +282,7 @@ const QUESTS=[
 const ALGO_INFO={random:{label:'🟢 スライム',color:'#4ED26D',name:'スライム'},righthand:{label:'🟡 剣士',color:'#F5A623',name:'剣士'},bfs:{label:'🔴 魔法使い',color:'#FF3B30',name:'魔法使い'},astar:{label:'💀 勇者',color:'#8B5CF6',name:'勇者'}};
 
 // ── Global state ──
-let curStageIdx=0, mode='stage', curConfig=null;
+let mode='dungeon', curConfig=null;
 let gridN=5, walls=new Set(), wallHistory=[], usedWalls=0;
 let running=false, timer=0, timerStart=0, animId=null;
 let solverState=null, explored=new Set(), shortestPath=[], deadEndCount=0, realtimeWallPenalty=0;
@@ -368,7 +341,6 @@ loadDungeon();
 // ── Screens ──
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
 function showTitle(){stopSolver();showScreen('titleScreen')}
-function showStageSelect(){curStageIdx=0;renderStageCard();showScreen('stageScreen')}
 function showFreeMode(){showScreen('freeScreen')}
 
 function showDungeonSelect(){
@@ -454,31 +426,6 @@ function nextDungeonFloor(){
   }
 }
 
-// ── Stage mode ──
-function renderStageCard(){
-  const s=STAGES[curStageIdx];
-  const ai=ALGO_INFO[s.algo];
-  document.getElementById('stageCard').innerHTML=`
-    <div class="badge" style="background:${ai.color}20;color:${ai.color}">${ai.label}</div>
-    <h2 style="margin:8px 0">Stage ${curStageIdx+1}: ${s.name}</h2>
-    <div style="font-size:13px;color:#888;margin-bottom:12px">${s.desc}</div>
-    <div style="display:flex;justify-content:space-around;font-size:13px;color:#555">
-      <span>📐 ${s.grid}×${s.grid}</span>
-      <span>🎯 ${s.target}s</span>
-    </div>`;
-  document.getElementById('stageNum').textContent=`${curStageIdx+1}/8`;
-}
-function navStage(d){curStageIdx=(curStageIdx+d+8)%8;renderStageCard()}
-
-function startStage(){
-  mode='stage';
-  const s=STAGES[curStageIdx];
-  curConfig={grid:s.grid,algo:s.algo,target:s.target,name:`Stage ${curStageIdx+1}: ${s.name}`};
-  initGame(curConfig);
-  document.getElementById('testRunBtn').style.display='none';
-  document.getElementById('startBtn').textContent='▶ スタート';
-  showScreen('gameScreen');
-}
 function startFree(){
   mode='free';
   const sz=parseInt(document.getElementById('freeSize').value);
@@ -511,7 +458,7 @@ function initGame(cfg){
   solverState=null;dungeonRunning=false;solverTrail=[];
   document.getElementById('gameName').textContent=cfg.name;
   document.getElementById('startBtn').disabled=false;
-  document.getElementById('minimapWrap').style.display='none';
+  document.getElementById('minimapBar').style.display='none';
   document.getElementById('floorIndicator').style.display='none';
   document.getElementById('stairsOverlay').classList.remove('show');
   hideTimerBar();
@@ -790,8 +737,7 @@ function undoWall(){
 }
 function backFromGame(){
   stopSolver();
-  if(mode==='stage')showStageSelect();
-  else if(mode==='dungeon')showDungeonSelect();
+  if(mode==='dungeon')showDungeonSelect();
   else showTitle();
 }
 function backFromResult(){
@@ -804,6 +750,10 @@ function draw(){
   const W=cellSize*gridN, H=cellSize*gridN;
   ctx.clearRect(0,0,canvas.width,canvas.height);
   drawGrid(0,0,gridN,walls,explored,shortestPath,solverState,curConfig?curConfig.algo:'random',1.0);
+  // Update minimap adventurer position during dungeon run
+  if(dungeonRunning&&running){
+    renderMinimap(dungeonRunFloorIdx, dungeonFloorIdx+1);
+  }
 }
 
 function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
@@ -973,25 +923,38 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
   ctx.restore();
 }
 
-// ── Minimap for dungeon runs ──
+// ── Minimap bar for dungeon runs ──
 function renderMinimap(activeFloor, totalFloors){
-  const wrap=document.getElementById('minimapWrap');
-  wrap.style.display='flex';
-  wrap.innerHTML='';
-  const mmSize=28;
+  const bar=document.getElementById('minimapBar');
+  bar.style.display='flex';
+  bar.innerHTML='';
+  const mmSize=44;
   for(let i=0;i<totalFloors;i++){
+    if(i>0){
+      const arrow=document.createElement('span');
+      arrow.className='mm-arrow';
+      arrow.textContent='→';
+      bar.appendChild(arrow);
+    }
+    const item=document.createElement('div');
+    item.className='mm-item';
     const q=QUESTS[i];
     const c=document.createElement('canvas');
     const gn=q.gridN;
-    const cs=Math.floor(mmSize/gn);
+    const cs=Math.max(2,Math.floor(mmSize/gn));
     const sz=cs*gn;
-    c.width=sz;c.height=sz;c.style.width=sz+'px';c.style.height=sz+'px';
-    c.className='minimap-floor'+(i===activeFloor?' mm-active':'')+(i<activeFloor?' mm-done':'');
+    const dpr=window.devicePixelRatio||1;
+    c.width=sz*dpr;c.height=sz*dpr;
+    c.style.width=sz+'px';c.style.height=sz+'px';
+    c.className='mm-canvas'+(i===activeFloor?' mm-active':'')+(i<activeFloor?' mm-done':'');
     const mctx=c.getContext('2d');
-    mctx.fillStyle='#fafafa';mctx.fillRect(0,0,sz,sz);
+    mctx.setTransform(dpr,0,0,dpr,0,0);
+    mctx.fillStyle=i===activeFloor?'#F5F3FF':'#fafafa';
+    mctx.fillRect(0,0,sz,sz);
     // Draw walls
     const wSet=new Set(dungeonWalls[i]||[]);
-    mctx.strokeStyle='#2F2B2A';mctx.lineWidth=1.5;
+    mctx.strokeStyle=i===activeFloor?'#2F2B2A':'#aaa';
+    mctx.lineWidth=i===activeFloor?1.5:1;
     mctx.strokeRect(0,0,sz,sz);
     wSet.forEach(k=>{
       const [r,col,d]=k.split(',');
@@ -1001,7 +964,25 @@ function renderMinimap(activeFloor, totalFloors){
       else{mctx.moveTo(ci*cs,ri*cs);mctx.lineTo(ci*cs,(ri+1)*cs)}
       mctx.stroke();
     });
-    wrap.appendChild(c);
+    // Draw start (green) and goal (blue/red)
+    const dotR=Math.max(1.5,cs*0.25);
+    mctx.fillStyle='#4ED26D';
+    mctx.beginPath();mctx.arc(cs/2,cs/2,dotR,0,Math.PI*2);mctx.fill();
+    mctx.fillStyle='#FF3B30';
+    mctx.beginPath();mctx.arc((gn-0.5)*cs,(gn-0.5)*cs,dotR,0,Math.PI*2);mctx.fill();
+    // Draw adventurer position if on this floor
+    if(i===activeFloor&&solverState&&solverState.pos){
+      const [pr,pc]=solverState.pos;
+      const ax=pc*cs+cs/2, ay=pr*cs+cs/2;
+      mctx.fillStyle=ALGO_INFO[curConfig.algo].color;
+      mctx.beginPath();mctx.arc(ax,ay,Math.max(2,cs*0.35),0,Math.PI*2);mctx.fill();
+    }
+    item.appendChild(c);
+    const label=document.createElement('div');
+    label.className='mm-label'+(i===activeFloor?' mm-active-label':'');
+    label.textContent=q.name;
+    item.appendChild(label);
+    bar.appendChild(item);
   }
 }
 
@@ -1021,6 +1002,7 @@ function stopSolver(){
   running=false;dungeonRunning=false;
   if(animId)cancelAnimationFrame(animId);animId=null;
   document.getElementById('speedBtn').style.display='none';
+  document.getElementById('minimapBar').style.display='none';
 }
 
 // ── Test run: single floor with its own algo ──
@@ -1138,6 +1120,7 @@ function finishDungeonRun(){
   running=false;dungeonRunning=false;
   timer=(Date.now()-timerStart)/1000;
   document.getElementById('speedBtn').style.display='none';
+  document.getElementById('minimapBar').style.display='none';
   hideTimerBar();
   updateUI();
 
@@ -1168,7 +1151,6 @@ function finishDungeonRun(){
   if(deadEndBonus)bd+=` | 行き止まり: +${deadEndBonus}`;
   document.getElementById('resultBreakdown').textContent=bd;
 
-  document.getElementById('nextStageBtn').style.display='none';
   document.getElementById('nextDungeonBtn').style.display=(passed&&targetFloor<QUESTS.length-1)?'block':'none';
 
   const starInfo=calcStars(timer, q.goalTime);
@@ -1469,7 +1451,6 @@ function finishSolver(){
   if(penalty)bd+=` | ペナルティ: -${penalty}`;
   document.getElementById('resultBreakdown').textContent=bd;
 
-  document.getElementById('nextStageBtn').style.display=(mode==='stage'&&curStageIdx<7)?'block':'none';
   document.getElementById('nextDungeonBtn').style.display='none';
 
   const starInfo=calcStars(timer, curConfig.target);
@@ -1480,12 +1461,8 @@ function finishSolver(){
 }
 
 function retryStage(){
-  if(mode==='stage')startStage();
-  else if(mode==='dungeon')startDungeon();
+  if(mode==='dungeon')startDungeon();
   else startFree();
-}
-function nextStage(){
-  if(curStageIdx<7){curStageIdx++;startStage()}
 }
 
 // ── Star Rating ──
