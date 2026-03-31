@@ -85,6 +85,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     <button class="btn" onclick="showStageSelect()">🗺️ ステージモード</button>
     <button class="btn btn-dungeon" onclick="showDungeonSelect()">🏰 ダンジョンモード</button>
     <button class="btn btn-secondary" onclick="showFreeMode()">🏗️ フリーモード</button>
+    <button class="btn btn-secondary btn-small" id="muteBtnTitle" onclick="toggleMute()" style="margin-top:12px">🔊 サウンド ON</button>
   </div>
   <!-- Stage Select -->
   <div class="screen" id="stageScreen">
@@ -156,6 +157,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
       <button class="btn btn-small btn-secondary" id="speedBtn" onclick="cycleSpeed()" style="display:none">⏩ 1x</button>
       <button class="btn btn-small btn-secondary" onclick="undoWall()">↩️ 戻す</button>
       <button class="btn btn-small btn-secondary" onclick="resetWalls()">🗑️ リセット</button>
+      <button class="btn btn-small btn-secondary" id="muteBtn" onclick="toggleMute()">🔊</button>
       <button class="btn btn-small btn-secondary" onclick="backFromGame()">🏠</button>
     </div>
   </div>
@@ -184,8 +186,11 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 // ── Audio ──
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx;
+let muted=false;
+try{muted=localStorage.getItem('maze_architect_muted')==='true'}catch(e){}
 function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
 function playTone(freq,dur,type,vol){
+  if(muted)return;
   ensureAudio();
   const o=audioCtx.createOscillator(),g=audioCtx.createGain();
   o.type=type||'square';o.frequency.value=freq;
@@ -201,6 +206,21 @@ function sfxClear(){playTone(660,0.15,'sine',0.12);setTimeout(()=>playTone(880,0
 function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260,0.3,'sawtooth',0.08),200)}
 function sfxStairs(){playTone(440,0.12,'sine',0.1);setTimeout(()=>playTone(550,0.12,'sine',0.1),120);setTimeout(()=>playTone(660,0.15,'sine',0.1),240)}
 function sfxDeadEnd(){playTone(520,0.06,'square',0.07);setTimeout(()=>playTone(700,0.1,'sine',0.09),60)}
+
+function toggleMute(){
+  muted=!muted;
+  try{localStorage.setItem('maze_architect_muted',muted?'true':'false')}catch(e){}
+  updateMuteUI();
+  if(!muted){ensureAudio();playTone(880,0.1,'sine',0.08)}
+}
+function updateMuteUI(){
+  const gb=document.getElementById('muteBtn');
+  const tb=document.getElementById('muteBtnTitle');
+  if(gb)gb.textContent=muted?'🔇':'🔊';
+  if(tb)tb.textContent=muted?'🔇 サウンド OFF':'🔊 サウンド ON';
+}
+// Init mute UI on load
+document.addEventListener('DOMContentLoaded',updateMuteUI);
 
 // ── Wall ripple effect ──
 function spawnWallRipple(wallObj, isRemove){
