@@ -72,6 +72,14 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 @keyframes wallRipple{0%{transform:translate(-50%,-50%) scale(0.2);opacity:0.8}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
 .goal-pulse{animation:goalPulse 2s ease-in-out infinite}
 @keyframes goalPulse{0%,100%{opacity:0.3}50%{opacity:0.7}}
+.timer-bar-wrap{width:100%;max-width:420px;height:6px;background:#E0E0E0;border-radius:3px;margin:0 4px;overflow:hidden;opacity:0;transition:opacity .3s}
+.timer-bar-wrap.active{opacity:1}
+.timer-bar{height:100%;border-radius:3px;transition:width .15s linear,background .3s;width:0%}
+.timer-bar.under{background:linear-gradient(90deg,#FF9500,#FF3B30)}
+.timer-bar.over{background:linear-gradient(90deg,#4ED26D,#34C759)}
+.timer-bar.way-over{background:linear-gradient(90deg,#34C759,#5B4FCF);box-shadow:0 0 6px #4ED26D88}
+.timer-label{display:flex;justify-content:space-between;width:100%;max-width:420px;padding:0 4px;font-size:11px;color:#888;opacity:0;transition:opacity .3s;margin-top:1px}
+.timer-label.active{opacity:1}
 .dead-end-badge{position:absolute;top:8px;left:8px;background:#FF950022;color:#FF9500;font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;pointer-events:none;transition:opacity .3s}
 @keyframes deadEndPulse{0%,100%{transform:scale(1);opacity:0.7}50%{transform:scale(1.3);opacity:1}}
 </style>
@@ -141,6 +149,8 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
         <span id="timerDisp">⏱ 0.0s</span>
       </div>
     </div>
+    <div class="timer-bar-wrap" id="timerBarWrap"><div class="timer-bar under" id="timerBar"></div></div>
+    <div class="timer-label" id="timerLabel"><span id="timerLabelLeft">0s</span><span id="timerLabelRight">目標: --s</span></div>
     <div class="canvas-wrap" id="canvasWrap">
       <canvas id="gameCanvas"></canvas>
       <div class="dead-end-badge" id="deadEndBadge" style="opacity:0">🚧 行き止まり: <span id="deadEndNum">0</span></div>
@@ -500,6 +510,7 @@ function initGame(cfg){
   document.getElementById('minimapWrap').style.display='none';
   document.getElementById('floorIndicator').style.display='none';
   document.getElementById('stairsOverlay').classList.remove('show');
+  hideTimerBar();
   resizeCanvas();
   updateUI();
   draw();
@@ -1121,6 +1132,7 @@ function finishDungeonRun(){
   running=false;dungeonRunning=false;
   timer=(Date.now()-timerStart)/1000;
   document.getElementById('speedBtn').style.display='none';
+  hideTimerBar();
   updateUI();
 
   // Restore editing floor
@@ -1376,10 +1388,41 @@ function tickTimer(){
   if(!running)return;
   timer=(Date.now()-timerStart)/1000;
   updateUI();
+  updateTimerBar();
   setTimeout(()=>{if(running)tickTimer()},100);
 }
 
+function updateTimerBar(){
+  const bar=document.getElementById('timerBar');
+  const wrap=document.getElementById('timerBarWrap');
+  const label=document.getElementById('timerLabel');
+  const lLeft=document.getElementById('timerLabelLeft');
+  const lRight=document.getElementById('timerLabelRight');
+  const target=curConfig?curConfig.target:Infinity;
+  if(!running||target===Infinity){
+    wrap.classList.remove('active');
+    label.classList.remove('active');
+    return;
+  }
+  wrap.classList.add('active');
+  label.classList.add('active');
+  const ratio=timer/target;
+  const pct=Math.min(ratio*100,100);
+  bar.style.width=pct+'%';
+  if(ratio>=2.0){bar.className='timer-bar way-over'}
+  else if(ratio>=1.0){bar.className='timer-bar over'}
+  else{bar.className='timer-bar under'}
+  lLeft.textContent=timer.toFixed(1)+'s';
+  lRight.textContent='目標: '+target+'s';
+}
+
+function hideTimerBar(){
+  document.getElementById('timerBarWrap').classList.remove('active');
+  document.getElementById('timerLabel').classList.remove('active');
+}
+
 function finishSolver(){
+  hideTimerBar();
   // If dungeon full run, delegate to floor callback
   if(dungeonRunning&&dungeonFloorCallback){
     const cb=dungeonFloorCallback;
