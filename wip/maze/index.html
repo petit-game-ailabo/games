@@ -213,6 +213,8 @@ let curStageIdx=0, mode='stage', curConfig=null;
 let gridN=5, walls=new Set(), wallHistory=[], usedWalls=0;
 let running=false, timer=0, timerStart=0, animId=null;
 let solverState=null, explored=new Set(), shortestPath=[], deadEndCount=0, realtimeWallPenalty=0;
+let solverTrail=[];  // [{r,c,time}] for trail effect
+const TRAIL_MAX=40, TRAIL_DURATION=1200;
 
 // ── Dungeon state ──
 let dungeonFloorIdx=0;          // currently selected floor for editing
@@ -375,7 +377,7 @@ function initGame(cfg){
   gridN=cfg.grid;
   walls=new Set();wallHistory=[];usedWalls=0;
   running=false;timer=0;explored=new Set();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
-  solverState=null;dungeonRunning=false;
+  solverState=null;dungeonRunning=false;solverTrail=[];
   document.getElementById('gameName').textContent=cfg.name;
   document.getElementById('startBtn').disabled=false;
   document.getElementById('minimapWrap').style.display='none';
@@ -577,6 +579,27 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
     });
   }
 
+  // Solver trail (fading footprints)
+  if(solverTrail.length>1&&alpha>=1.0){
+    const now=Date.now();
+    const col=ALGO_INFO[algo].color;
+    for(let i=1;i<solverTrail.length;i++){
+      const t=solverTrail[i];
+      const age=now-t.time;
+      if(age>TRAIL_DURATION)continue;
+      const fade=1-age/TRAIL_DURATION;
+      const prev=solverTrail[i-1];
+      const x1=prev.c*cellSize+cellSize/2, y1=prev.r*cellSize+cellSize/2;
+      const x2=t.c*cellSize+cellSize/2, y2=t.r*cellSize+cellSize/2;
+      ctx.strokeStyle=col;
+      ctx.globalAlpha=alpha*fade*0.5;
+      ctx.lineWidth=Math.max(2,cellSize*0.15*fade);
+      ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    }
+    ctx.globalAlpha=alpha;
+  }
+
   // Shortest path
   if(path&&path.length>1){
     const col=ALGO_INFO[algo].color;
@@ -767,7 +790,7 @@ function runDungeonFloor(floorIdx){
   gridN=gn;
   walls=floorWalls;
   explored.clear();shortestPath=[];
-  solverState=null;
+  solverState=null;solverTrail=[];
   curConfig.grid=gn;
   curConfig.algo=algo;
   const ai=ALGO_INFO[algo];
@@ -1028,6 +1051,9 @@ function animateMove(target,duration,cb){
   const speedMul=getSpeedMultiplier();
   const adjDuration=Math.max(20,duration/speedMul);
   const prev=solverState.pos?[...solverState.pos]:target;
+  // Record trail
+  solverTrail.push({r:target[0],c:target[1],time:Date.now()});
+  if(solverTrail.length>TRAIL_MAX) solverTrail.shift();
   solverState.prev=prev;solverState.pos=target;solverState.lerp=0;
   const start=performance.now();
   const tick=(t)=>{
