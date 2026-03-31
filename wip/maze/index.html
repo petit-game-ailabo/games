@@ -269,14 +269,11 @@ function shakeScreen(){
 
 // ── Dungeon quest definitions ──
 const QUESTS=[
-  {name:'B1F',gridN:5,algo:'random',goalTime:5,desc:'迷子のスライムが入ってきた。まずは壁の置き方を覚えよう'},
-  {name:'B2F',gridN:5,algo:'random',goalTime:8,desc:'またスライムだ。もう少し複雑にしてやろう'},
-  {name:'B3F',gridN:6,algo:'righthand',goalTime:10,desc:'⚠️ 壁伝いに進む冒険者が来た！螺旋で惑わせろ'},
-  {name:'B4F',gridN:6,algo:'righthand',goalTime:12,desc:'壁伝いの冒険者は手強い。回り道を増やせ'},
-  {name:'B5F',gridN:7,algo:'bfs',goalTime:8,desc:'💀 この冒険者は最短経路を見抜く…！'},
-  {name:'B6F',gridN:7,algo:'bfs',goalTime:10,desc:'賢い探索者。壁を最大限に活用しろ'},
-  {name:'B7F',gridN:8,algo:'astar',goalTime:6,desc:'🔥 天才冒険者。ほぼ一直線に来る'},
-  {name:'B8F',gridN:8,algo:'astar',goalTime:8,desc:'最深部に最強の冒険者。ダンジョンの全てが試される'},
+  {name:'B1F',gridN:5,algo:'random',goalTime:10,desc:'迷子のスライムが入ってきた。壁で道を塞ごう'},
+  {name:'B2F',gridN:6,algo:'righthand',goalTime:15,desc:'⚠️ 壁を伝って進む剣士が来た！螺旋で惑わせろ'},
+  {name:'B3F',gridN:7,algo:'righthand',goalTime:18,desc:'剣士はしつこい。もっと複雑な迷路が必要だ'},
+  {name:'B4F',gridN:8,algo:'bfs',goalTime:12,desc:'💀 最短経路を見抜く魔法使い…壁を最大限に活用しろ'},
+  {name:'B5F',gridN:8,algo:'astar',goalTime:10,desc:'🔥 最強の勇者。ダンジョンの全てが試される'},
 ];
 
 const ALGO_INFO={random:{label:'🟢 スライム',color:'#4ED26D',name:'スライム'},righthand:{label:'🟡 剣士',color:'#F5A623',name:'剣士'},bfs:{label:'🔴 魔法使い',color:'#FF3B30',name:'魔法使い'},astar:{label:'💀 勇者',color:'#8B5CF6',name:'勇者'}};
@@ -424,6 +421,100 @@ function nextDungeonFloor(){
   } else {
     showDungeonSelect();
   }
+}
+
+// ── B5F (final floor) clear celebration ──
+function showDungeonComplete(totalTime){
+  showScreen('resultScreen');
+  const box=document.querySelector('.result-box');
+  // Calculate total score across all floors
+  let totalScore=Math.round(totalTime*100);
+
+  // Build minimap gallery HTML
+  let minimapHtml='<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:12px 0">';
+  for(let i=0;i<QUESTS.length;i++){
+    const q=QUESTS[i];
+    minimapHtml+=`<div style="text-align:center"><canvas id="completeMinimap${i}" width="1" height="1" style="border:2px solid #4ED26D;border-radius:6px;background:#fafafa"></canvas><div style="font-size:10px;font-weight:700;color:#555;margin-top:2px">${q.name}</div></div>`;
+  }
+  minimapHtml+='</div>';
+
+  box.innerHTML=`
+    <div class="big">🏰</div>
+    <div style="font-size:22px;font-weight:700;color:#2F2B2A;margin-bottom:4px">ダンジョン完全防衛！</div>
+    <div style="font-size:14px;color:#888;margin-bottom:8px">全${QUESTS.length}階の冒険者を撃退した！</div>
+    <div class="score-val">${totalScore.toLocaleString()}</div>
+    <div class="detail">通し合計: ${totalTime.toFixed(1)}秒</div>
+    ${minimapHtml}
+    <div class="star-row" id="starRow"></div>
+    <div class="star-label" id="starLabel"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-small btn-dungeon" onclick="backFromComplete()">🏠 タイトルに戻る</button>
+    </div>
+  `;
+
+  // Draw minimaps
+  requestAnimationFrame(()=>{
+    for(let i=0;i<QUESTS.length;i++){
+      const c=document.getElementById('completeMinimap'+i);
+      if(!c)continue;
+      const q=QUESTS[i];
+      const gn=q.gridN;
+      const mmSize=52;
+      const cs=Math.max(2,Math.floor(mmSize/gn));
+      const sz=cs*gn;
+      const dpr=window.devicePixelRatio||1;
+      c.width=sz*dpr;c.height=sz*dpr;
+      c.style.width=sz+'px';c.style.height=sz+'px';
+      const mctx=c.getContext('2d');
+      mctx.setTransform(dpr,0,0,dpr,0,0);
+      mctx.fillStyle='#F0FFF4';
+      mctx.fillRect(0,0,sz,sz);
+      const wSet=new Set(dungeonWalls[i]||[]);
+      mctx.strokeStyle='#2F2B2A';mctx.lineWidth=1.5;
+      mctx.strokeRect(0,0,sz,sz);
+      wSet.forEach(k=>{
+        const [r,col,d]=k.split(',');
+        const ri=+r,ci=+col;
+        mctx.beginPath();
+        if(d==='h'){mctx.moveTo(ci*cs,ri*cs);mctx.lineTo((ci+1)*cs,ri*cs)}
+        else{mctx.moveTo(ci*cs,ri*cs);mctx.lineTo(ci*cs,(ri+1)*cs)}
+        mctx.stroke();
+      });
+      const dotR=Math.max(1.5,cs*0.25);
+      mctx.fillStyle='#4ED26D';
+      mctx.beginPath();mctx.arc(cs/2,cs/2,dotR,0,Math.PI*2);mctx.fill();
+      mctx.fillStyle='#FF3B30';
+      mctx.beginPath();mctx.arc((gn-0.5)*cs,(gn-0.5)*cs,dotR,0,Math.PI*2);mctx.fill();
+    }
+  });
+
+  // Stars
+  const starInfo=calcStars(totalTime, QUESTS[QUESTS.length-1].goalTime);
+  showStars(starInfo.stars, starInfo.label);
+
+  sfxClear();spawnConfetti();
+  // Extra confetti burst for final clear
+  setTimeout(()=>spawnConfetti(),600);
+}
+
+function backFromComplete(){
+  // Restore result box HTML to original structure
+  const box=document.querySelector('.result-box');
+  box.innerHTML=`
+    <div id="resultEmoji" class="big">🎉</div>
+    <div id="resultTitle" style="font-size:20px;font-weight:700;margin-bottom:8px">クリア！</div>
+    <div id="resultTime" class="detail"></div>
+    <div class="score-val" id="resultScore">0</div>
+    <div id="resultBreakdown" class="detail"></div>
+    <div class="star-row" id="starRow"></div>
+    <div class="star-label" id="starLabel"></div>
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;align-items:center">
+      <button class="btn btn-small btn-dungeon" id="nextDungeonBtn" onclick="nextDungeonFloor()" style="display:none">🪜 次の階層を構築</button>
+      <button class="btn btn-small btn-secondary" onclick="retryStage()">🔄 リトライ</button>
+      <button class="btn btn-small btn-secondary" onclick="backFromResult()">🏠 戻る</button>
+    </div>
+  `;
+  showTitle();
 }
 
 function startFree(){
@@ -1136,6 +1227,12 @@ function finishDungeonRun(){
   if(passed){
     dungeonCleared[targetFloor]=true;
     saveDungeon();
+  }
+
+  // If final floor cleared, show special completion screen
+  if(passed&&targetFloor===QUESTS.length-1){
+    showDungeonComplete(timer);
+    return;
   }
 
   // Score
