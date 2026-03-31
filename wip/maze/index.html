@@ -653,20 +653,53 @@ function handleTap(ex,ey){
   updateUI();draw();
 }
 
-canvas.addEventListener('pointerdown',e=>{e.preventDefault();handleTap(e.clientX,e.clientY)});
+// ── Drag-to-place walls (swipe gesture) ──
+let isDragging=false, dragMode=null, draggedWalls=new Set();
+
+canvas.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  if(running)return;
+  isDragging=true;dragMode=null;draggedWalls.clear();
+  handleDrag(e.clientX,e.clientY);
+});
 canvas.addEventListener('pointermove',e=>{
   if(running)return;
+  if(isDragging){handleDrag(e.clientX,e.clientY)}
   const rect=canvas.getBoundingClientRect();
   const x=e.clientX-rect.left, y=e.clientY-rect.top;
   const w=getWallFromPos(x,y);
   const newKey=w?w.key:null;
-  if((hoverWall?hoverWall.key:null)!==newKey){
-    hoverWall=w;draw();
-  }
+  if((hoverWall?hoverWall.key:null)!==newKey){hoverWall=w;draw()}
 });
+canvas.addEventListener('pointerup',()=>{isDragging=false;dragMode=null});
 canvas.addEventListener('pointerleave',()=>{
-  if(hoverWall){hoverWall=null;draw();}
+  isDragging=false;dragMode=null;
+  if(hoverWall){hoverWall=null;draw()}
 });
+
+function handleDrag(ex,ey){
+  if(running)return;
+  hoverWall=null;
+  const rect=canvas.getBoundingClientRect();
+  const x=ex-rect.left, y=ey-rect.top;
+  const w=getWallFromPos(x,y);
+  if(!w)return;
+  if(draggedWalls.has(w.key))return;
+  ensureAudio();
+  if(dragMode===null){dragMode=walls.has(w.key)?'remove':'add'}
+  if(dragMode==='add'&&!walls.has(w.key)){
+    walls.add(w.key);
+    if(!isReachable()){walls.delete(w.key);showToast('⚠️ 経路がなくなります');return}
+    usedWalls++;wallHistory.push({key:w.key,action:'add'});
+    sfxWall();spawnWallRipple(w,false);draggedWalls.add(w.key);
+  } else if(dragMode==='remove'&&walls.has(w.key)){
+    walls.delete(w.key);usedWalls--;
+    wallHistory.push({key:w.key,action:'remove'});
+    sfxRemove();spawnWallRipple(w,true);draggedWalls.add(w.key);
+  }
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
+  updateUI();draw();
+}
 
 function resetWalls(){
   if(running)return;
