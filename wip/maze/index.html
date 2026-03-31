@@ -35,6 +35,11 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .result-box .big{font-size:48px;margin:8px 0}
 .result-box .score-val{font-size:32px;font-weight:700;color:#2F2B2A}
 .result-box .detail{font-size:13px;color:#888;margin:4px 0}
+.star-row{display:flex;justify-content:center;gap:8px;margin:12px 0 4px}
+.star{font-size:40px;opacity:0;transform:scale(0.3) rotate(-30deg);transition:opacity .4s ease-out,transform .4s cubic-bezier(0.34,1.56,0.64,1);display:inline-block}
+.star.show{opacity:1;transform:scale(1) rotate(0deg)}
+.star.empty{filter:grayscale(1) opacity(0.3)}
+.star-label{font-size:13px;font-weight:600;margin-bottom:4px}
 .free-options{display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px;margin:12px 0}
 .free-options label{font-size:14px;color:#555;font-weight:600}
 .free-options select{padding:10px;border-radius:10px;border:2px solid #E0E0E0;font-size:15px;font-family:system-ui;background:#fff;color:#2F2B2A}
@@ -158,6 +163,8 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
       <div id="resultTime" class="detail"></div>
       <div class="score-val" id="resultScore">0</div>
       <div id="resultBreakdown" class="detail"></div>
+      <div class="star-row" id="starRow"></div>
+      <div class="star-label" id="starLabel"></div>
       <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;align-items:center">
         <button class="btn btn-small" id="nextStageBtn" onclick="nextStage()">次のステージ ▶</button>
         <button class="btn btn-small btn-dungeon" id="nextDungeonBtn" onclick="nextDungeonFloor()" style="display:none">次の階へ ▶</button>
@@ -1067,6 +1074,9 @@ function finishDungeonRun(){
   document.getElementById('nextStageBtn').style.display='none';
   document.getElementById('nextDungeonBtn').style.display=(passed&&targetFloor<QUESTS.length-1)?'block':'none';
 
+  const starInfo=calcStars(timer, q.goalTime);
+  showStars(starInfo.stars, starInfo.label);
+
   if(passed){sfxClear();spawnConfetti()}else sfxFail();
   showScreen('resultScreen');
 }
@@ -1325,6 +1335,9 @@ function finishSolver(){
   document.getElementById('nextStageBtn').style.display=(mode==='stage'&&curStageIdx<7)?'block':'none';
   document.getElementById('nextDungeonBtn').style.display='none';
 
+  const starInfo=calcStars(timer, curConfig.target);
+  showStars(starInfo.stars, starInfo.label);
+
   if(passed){sfxClear();spawnConfetti()}else sfxFail();
   showScreen('resultScreen');
 }
@@ -1336,6 +1349,29 @@ function retryStage(){
 }
 function nextStage(){
   if(curStageIdx<7){curStageIdx++;startStage()}
+}
+
+// ── Star Rating ──
+function calcStars(time, target){
+  if(target===Infinity) return {stars:0, label:''};
+  const ratio=time/target;
+  if(ratio>=2.0) return {stars:3, label:'完璧！ 🏆'};
+  if(ratio>=1.5) return {stars:2, label:'いい迷路！'};
+  if(ratio>=1.0) return {stars:1, label:'クリア！'};
+  return {stars:0, label:'もう少し…'};
+}
+function showStars(stars, label){
+  const row=document.getElementById('starRow');
+  const lbl=document.getElementById('starLabel');
+  row.innerHTML='';
+  lbl.textContent=label;
+  for(let i=0;i<3;i++){
+    const s=document.createElement('span');
+    s.className='star'+(i<stars?'':' empty');
+    s.textContent='⭐';
+    row.appendChild(s);
+    setTimeout(()=>s.classList.add('show'), 200+i*200);
+  }
 }
 
 // ── Confetti Effect ──
