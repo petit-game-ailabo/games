@@ -60,6 +60,9 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .stairs-overlay .stairs-text{color:#fff;font-size:28px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.4)}
 .stairs-overlay .stairs-icon{font-size:64px;margin-bottom:8px}
 .confetti-canvas{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:200}
+.float-score{position:absolute;pointer-events:none;font-weight:700;font-size:18px;color:#FF9500;text-shadow:0 1px 4px rgba(0,0,0,0.15);z-index:60;animation:floatUp .9s ease-out forwards}
+@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}50%{opacity:1;transform:translateY(-24px) scale(1.2)}100%{opacity:0;transform:translateY(-48px) scale(0.8)}}
+@keyframes shakeCanvas{0%,100%{transform:translate(0,0)}15%{transform:translate(-3px,2px)}30%{transform:translate(3px,-2px)}45%{transform:translate(-2px,3px)}60%{transform:translate(2px,-1px)}75%{transform:translate(-1px,2px)}}
 </style>
 </head>
 <body>
@@ -181,6 +184,32 @@ function sfxStart(){playTone(880,0.15,'sine',0.1);setTimeout(()=>playTone(1100,0
 function sfxClear(){playTone(660,0.15,'sine',0.12);setTimeout(()=>playTone(880,0.15,'sine',0.12),150);setTimeout(()=>playTone(1100,0.3,'sine',0.12),300)}
 function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260,0.3,'sawtooth',0.08),200)}
 function sfxStairs(){playTone(440,0.12,'sine',0.1);setTimeout(()=>playTone(550,0.12,'sine',0.1),120);setTimeout(()=>playTone(660,0.15,'sine',0.1),240)}
+function sfxDeadEnd(){playTone(520,0.06,'square',0.07);setTimeout(()=>playTone(700,0.1,'sine',0.09),60)}
+
+// ── Float score popup ──
+function showFloatScore(r,c,text,color){
+  const wrap=document.getElementById('canvasWrap');
+  const rect=canvas.getBoundingClientRect();
+  const wrapRect=wrap.getBoundingClientRect();
+  const x=c*cellSize+cellSize/2+(rect.left-wrapRect.left);
+  const y=r*cellSize+(rect.top-wrapRect.top);
+  const el=document.createElement('div');
+  el.className='float-score';
+  el.textContent=text;
+  if(color)el.style.color=color;
+  el.style.left=x+'px';el.style.top=y+'px';
+  el.style.transform='translateX(-50%)';
+  wrap.appendChild(el);
+  setTimeout(()=>el.remove(),950);
+}
+
+// ── Screen shake ──
+function shakeScreen(){
+  canvas.style.animation='none';
+  canvas.offsetHeight; // reflow
+  canvas.style.animation='shakeCanvas 0.3s ease';
+  setTimeout(()=>{canvas.style.animation='none'},350);
+}
 
 // ── Stage definitions ──
 const STAGES=[
@@ -907,6 +936,7 @@ function startRandomWalk(){
     }
     if(nb.length<=1&&!(r===0&&c===0)){
       deadEndCount++;solverState.exclaim=true;solverState.exclaimTime=Date.now();
+      sfxDeadEnd();showFloatScore(r,c,'+30',ALGO_INFO[curConfig.algo].color);shakeScreen();
     }
     const pick=choices[Math.floor(Math.random()*choices.length)];
     lastPos=[r,c];
@@ -935,6 +965,7 @@ function startRightHand(){
         const nb=neighbors(r,c);
         if(nb.length<=1&&!(r===0&&c===0)){
           deadEndCount++;solverState.exclaim=true;solverState.exclaimTime=Date.now();
+          sfxDeadEnd();showFloatScore(r,c,'+30',ALGO_INFO[curConfig.algo].color);shakeScreen();
         }
         explored.add(`${nr},${nc}`);
         animateMove([nr,nc],250,step);
