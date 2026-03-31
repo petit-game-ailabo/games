@@ -367,6 +367,7 @@ function showToast(msg){
 const canvas=document.getElementById('gameCanvas');
 const ctx=canvas.getContext('2d');
 let cellSize=40, offsetX=0, offsetY=0;
+let hoverWall=null; // preview wall {r,c,d,key}
 
 function initGame(cfg){
   stopSolver();
@@ -480,6 +481,7 @@ function getWallFromPos(x,y){
 
 function handleTap(ex,ey){
   if(running)return;
+  hoverWall=null;
   const rect=canvas.getBoundingClientRect();
   const x=ex-rect.left, y=ey-rect.top;
   const w=getWallFromPos(x,y);
@@ -508,6 +510,19 @@ function handleTap(ex,ey){
 }
 
 canvas.addEventListener('pointerdown',e=>{e.preventDefault();handleTap(e.clientX,e.clientY)});
+canvas.addEventListener('pointermove',e=>{
+  if(running)return;
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  const w=getWallFromPos(x,y);
+  const newKey=w?w.key:null;
+  if((hoverWall?hoverWall.key:null)!==newKey){
+    hoverWall=w;draw();
+  }
+});
+canvas.addEventListener('pointerleave',()=>{
+  if(hoverWall){hoverWall=null;draw();}
+});
 
 function resetWalls(){
   if(running)return;
@@ -589,6 +604,23 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
     else{ctx.moveTo(ci*cellSize,ri*cellSize);ctx.lineTo(ci*cellSize,(ri+1)*cellSize)}
     ctx.stroke();
   });
+
+  // Hover preview wall
+  if(hoverWall&&alpha>=1.0&&!running){
+    const hk=hoverWall.key;
+    const [hr,hc,hd]=hk.split(',');
+    const hri=+hr,hci=+hc;
+    const isRemove=wallSet.has(hk);
+    ctx.strokeStyle=isRemove?'#FF3B3088':'#5B4FCF88';
+    ctx.lineWidth=6;ctx.lineCap='round';
+    ctx.setLineDash(isRemove?[6,4]:[]);
+    ctx.beginPath();
+    if(hd==='h'){ctx.moveTo(hci*cellSize,hri*cellSize);ctx.lineTo((hci+1)*cellSize,hri*cellSize)}
+    else{ctx.moveTo(hci*cellSize,hri*cellSize);ctx.lineTo(hci*cellSize,(hri+1)*cellSize)}
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth=4;
+  }
 
   // Start & Goal
   const sr=cellSize*0.3;
