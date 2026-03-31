@@ -129,6 +129,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
       <span class="stage-name" id="gameName"></span>
       <div class="info">
         <span id="wallCount">🧱 0</span>
+        <span id="pathLen" style="color:#5B4FCF;font-weight:600">📏 --</span>
         <span id="timerDisp">⏱ 0.0s</span>
       </div>
     </div>
@@ -459,9 +460,64 @@ function resizeCanvas(){
   offsetX=0;offsetY=0;
 }
 
+function calcShortestPath(wallSet, gn){
+  const visited=new Set();
+  const parent=new Map();
+  const q=[[0,0]];visited.add('0,0');
+  const goal=`${gn-1},${gn-1}`;
+  while(q.length){
+    const [r,c]=q.shift();
+    const k=`${r},${c}`;
+    if(k===goal){
+      let len=0,cur=goal;
+      while(cur){len++;cur=parent.get(cur)}
+      return len-1; // steps, not nodes
+    }
+    for(const [nr,nc] of neighborsIn(wallSet,gn,r,c)){
+      const nk=`${nr},${nc}`;
+      if(!visited.has(nk)){visited.add(nk);parent.set(nk,k);q.push([nr,nc])}
+    }
+  }
+  return -1;
+}
+
+let previewPath=[]; // BFS shortest path for preview overlay
+
+function updatePathPreview(){
+  const len=calcShortestPath(walls,gridN);
+  const el=document.getElementById('pathLen');
+  const minPath=(gridN-1)*2; // Manhattan distance
+  if(len<0){el.textContent='📏 --';previewPath=[];return}
+  const ratio=len/minPath;
+  // Color: green when long, red when short
+  if(ratio>=2.5) el.style.color='#4ED26D';
+  else if(ratio>=1.5) el.style.color='#F5A623';
+  else el.style.color='#FF3B30';
+  el.textContent=`📏 ${len}歩`;
+  // Compute actual path for preview
+  const visited=new Set();const par=new Map();
+  const q=[[0,0]];visited.add('0,0');
+  const goal=`${gridN-1},${gridN-1}`;
+  let found=false;
+  while(q.length){
+    const [r,c]=q.shift();const k=`${r},${c}`;
+    if(k===goal){found=true;break}
+    for(const [nr,nc] of neighborsIn(walls,gridN,r,c)){
+      const nk=`${nr},${nc}`;
+      if(!visited.has(nk)){visited.add(nk);par.set(nk,k);q.push([nr,nc])}
+    }
+  }
+  if(found){
+    const p=[];let cur=goal;
+    while(cur){p.unshift(cur.split(',').map(Number));cur=par.get(cur)}
+    previewPath=p;
+  } else {previewPath=[]}
+}
+
 function updateUI(){
   document.getElementById('wallCount').textContent=`🧱 ${usedWalls}`;
   document.getElementById('timerDisp').textContent=`⏱ ${timer.toFixed(1)}s`;
+  if(!running) updatePathPreview();
 }
 
 // ── Wall helpers (parameterized for dungeon multi-grid) ──
@@ -667,6 +723,19 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
     });
     ctx.stroke();
+  }
+
+  // Preview path (only during wall placement, not during solver run)
+  if(!running&&previewPath.length>1&&alpha>=1.0){
+    ctx.strokeStyle='#5B4FCF33';ctx.lineWidth=Math.max(2,cellSize*0.18);ctx.lineCap='round';
+    ctx.setLineDash([cellSize*0.2,cellSize*0.15]);
+    ctx.beginPath();
+    previewPath.forEach(([r,c],i)=>{
+      const px=c*cellSize+cellSize/2, py=r*cellSize+cellSize/2;
+      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   // Grid lines
