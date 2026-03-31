@@ -15,6 +15,7 @@ canvas{display:block;touch-action:none}
 .btn:active{transform:scale(0.96);opacity:0.8}
 .btn-secondary{background:#fff;color:#2F2B2A;border:2px solid #E0E0E0}
 .btn-small{padding:10px 16px;font-size:14px;min-width:auto;border-radius:10px}
+.btn-dungeon{background:#5B4FCF}
 h1{font-size:28px;color:#2F2B2A;margin-bottom:4px}
 h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .subtitle{color:#888;font-size:14px;margin-bottom:20px}
@@ -22,7 +23,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .game-header .info{display:flex;gap:12px}
 .game-header .stage-name{font-weight:700;color:#2F2B2A;font-size:15px}
 .game-footer{display:flex;gap:8px;padding:8px 4px;flex-shrink:0;flex-wrap:wrap;justify-content:center}
-.canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:auto}
+.canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:hidden;position:relative}
 .stage-card{background:#fff;border-radius:16px;padding:20px;width:280px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);position:relative}
 .stage-card .badge{display:inline-block;padding:3px 10px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:8px}
 .stage-nav{display:flex;align-items:center;gap:16px;margin-top:16px}
@@ -37,15 +38,27 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .free-options{display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px;margin:12px 0}
 .free-options label{font-size:14px;color:#555;font-weight:600}
 .free-options select{padding:10px;border-radius:10px;border:2px solid #E0E0E0;font-size:15px;font-family:system-ui;background:#fff;color:#2F2B2A}
-.quest-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%;max-width:320px;margin:12px 0;max-height:50vh;overflow-y:auto;padding:4px}
-.quest-item{background:#fff;border-radius:12px;padding:12px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.06);cursor:pointer;border:2px solid transparent;transition:border-color .2s,transform .1s}
-.quest-item:active{transform:scale(0.97)}
-.quest-item.current{border-color:#2F2B2A}
-.quest-item.cleared{border-color:#4ED26D;background:#F0FFF4}
-.quest-item.locked{opacity:0.4;pointer-events:none}
-.quest-item .q-num{font-size:18px;font-weight:700;color:#2F2B2A}
-.quest-item .q-info{font-size:11px;color:#888;margin-top:2px}
-.quest-item .q-status{font-size:16px;margin-top:4px}
+.dungeon-grid{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:360px;justify-content:center;margin:12px 0}
+.dungeon-floor{background:#fff;border-radius:12px;padding:10px 16px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.06);cursor:pointer;border:2px solid transparent;transition:border-color .2s,transform .1s;min-width:70px}
+.dungeon-floor:active{transform:scale(0.97)}
+.dungeon-floor.cleared{border-color:#4ED26D;background:#F0FFF4}
+.dungeon-floor.current{border-color:#5B4FCF;background:#F5F3FF}
+.dungeon-floor.locked{opacity:0.35;pointer-events:none}
+.dungeon-floor .df-name{font-size:15px;font-weight:700;color:#2F2B2A}
+.dungeon-floor .df-info{font-size:10px;color:#888;margin-top:2px}
+.dungeon-floor .df-status{font-size:14px;margin-top:2px}
+.dungeon-desc{background:#fff;border-radius:12px;padding:12px 16px;margin:8px 0;max-width:340px;width:100%;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.04)}
+.dungeon-desc .dd-title{font-weight:700;font-size:15px;color:#2F2B2A;margin-bottom:4px}
+.dungeon-desc .dd-text{font-size:12px;color:#888}
+.minimap-wrap{position:absolute;top:4px;right:4px;display:flex;gap:2px;padding:4px;background:rgba(255,255,255,0.85);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1)}
+.minimap-floor{border:1px solid #ccc;border-radius:3px;background:#fafafa}
+.minimap-floor.mm-active{border-color:#5B4FCF;box-shadow:0 0 4px #5B4FCF88}
+.minimap-floor.mm-done{border-color:#4ED26D}
+.floor-indicator{font-size:13px;color:#5B4FCF;font-weight:700;padding:4px 0}
+.stairs-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:50;opacity:0;transition:opacity .2s;pointer-events:none}
+.stairs-overlay.show{opacity:1}
+.stairs-overlay .stairs-text{color:#fff;font-size:28px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.4)}
+.stairs-overlay .stairs-icon{font-size:64px;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -55,7 +68,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     <h1>🏗️ Maze Architect</h1>
     <div class="subtitle">迷路を作って、AIを迷わせろ！</div>
     <button class="btn" onclick="showStageSelect()">🗺️ ステージモード</button>
-    <button class="btn" onclick="showQuestSelect()" style="background:#5B4FCF">🏰 クエストモード</button>
+    <button class="btn btn-dungeon" onclick="showDungeonSelect()">🏰 ダンジョンモード</button>
     <button class="btn btn-secondary" onclick="showFreeMode()">🏗️ フリーモード</button>
   </div>
   <!-- Stage Select -->
@@ -70,12 +83,14 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     <button class="btn" style="margin-top:16px" onclick="startStage()">▶ はじめる</button>
     <button class="btn btn-secondary btn-small" style="margin-top:4px" onclick="showTitle()">戻る</button>
   </div>
-  <!-- Quest Select -->
-  <div class="screen" id="questScreen">
-    <h2>🏰 クエストモード</h2>
-    <div class="subtitle">迷路を繋げて巨大な迷宮を築け！</div>
-    <div class="quest-grid" id="questGrid"></div>
-    <button class="btn btn-secondary btn-small" style="margin-top:8px" onclick="showTitle()">戻る</button>
+  <!-- Dungeon Select -->
+  <div class="screen" id="dungeonScreen">
+    <h2>🪜 ダンジョン</h2>
+    <div class="subtitle">階層を潜り、迷宮を築け！</div>
+    <div class="dungeon-grid" id="dungeonGrid"></div>
+    <div class="dungeon-desc" id="dungeonDesc"></div>
+    <button class="btn btn-dungeon" id="dungeonStartBtn" onclick="startDungeon()" style="margin-top:4px">▶ この階の壁を編集</button>
+    <button class="btn btn-secondary btn-small" style="margin-top:4px" onclick="showTitle()">← 戻る</button>
   </div>
   <!-- Free Mode Options -->
   <div class="screen" id="freeScreen">
@@ -110,11 +125,18 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     </div>
     <div class="canvas-wrap" id="canvasWrap">
       <canvas id="gameCanvas"></canvas>
+      <div class="minimap-wrap" id="minimapWrap" style="display:none"></div>
+      <div class="stairs-overlay" id="stairsOverlay">
+        <div class="stairs-icon">🪜</div>
+        <div class="stairs-text" id="stairsText">B2Fへ…</div>
+      </div>
     </div>
-    <div class="game-footer">
+    <div class="floor-indicator" id="floorIndicator" style="display:none"></div>
+    <div class="game-footer" id="gameFooter">
       <button class="btn btn-small" id="startBtn" onclick="runSolver()">▶ スタート</button>
-      <button class="btn btn-small btn-secondary" onclick="resetWalls()">🗑️ リセット</button>
+      <button class="btn btn-small btn-secondary" id="testRunBtn" onclick="testFloorRun()" style="display:none">🔄 この階テスト</button>
       <button class="btn btn-small btn-secondary" onclick="undoWall()">↩️ 戻す</button>
+      <button class="btn btn-small btn-secondary" onclick="resetWalls()">🗑️ リセット</button>
       <button class="btn btn-small btn-secondary" onclick="backFromGame()">🏠</button>
     </div>
   </div>
@@ -128,9 +150,9 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
       <div id="resultBreakdown" class="detail"></div>
       <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;align-items:center">
         <button class="btn btn-small" id="nextStageBtn" onclick="nextStage()">次のステージ ▶</button>
-        <button class="btn btn-small" id="nextQuestBtn" onclick="nextQuest()" style="display:none;background:#5B4FCF">次のクエスト ▶</button>
+        <button class="btn btn-small btn-dungeon" id="nextDungeonBtn" onclick="nextDungeonFloor()" style="display:none">次の階へ ▶</button>
         <button class="btn btn-small btn-secondary" onclick="retryStage()">🔄 リトライ</button>
-        <button class="btn btn-small btn-secondary" onclick="showTitle()">🏠 タイトル</button>
+        <button class="btn btn-small btn-secondary" onclick="backFromResult()">🏠 戻る</button>
       </div>
     </div>
   </div>
@@ -156,8 +178,9 @@ function sfxRemove(){playTone(400,0.08,'square',0.05)}
 function sfxStart(){playTone(880,0.15,'sine',0.1);setTimeout(()=>playTone(1100,0.2,'sine',0.1),150)}
 function sfxClear(){playTone(660,0.15,'sine',0.12);setTimeout(()=>playTone(880,0.15,'sine',0.12),150);setTimeout(()=>playTone(1100,0.3,'sine',0.12),300)}
 function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260,0.3,'sawtooth',0.08),200)}
+function sfxStairs(){playTone(440,0.12,'sine',0.1);setTimeout(()=>playTone(550,0.12,'sine',0.1),120);setTimeout(()=>playTone(660,0.15,'sine',0.1),240)}
 
-// ── Stages / Quest definitions (shared) ──
+// ── Stage definitions ──
 const STAGES=[
   {name:'はじめての壁',grid:5,algo:'random',target:5,desc:'壁をタップして配置！攻略者を迷わせよう'},
   {name:'行き止まり',grid:6,algo:'random',target:10,desc:'行き止まりを作ると攻略者が引き返すよ'},
@@ -168,32 +191,45 @@ const STAGES=[
   {name:'天才',grid:10,algo:'astar',target:5,desc:'💀 A*アルゴリズム。ほぼ最短で来る。壁を最大限に活用しろ！'},
   {name:'究極の迷宮',grid:12,algo:'astar',target:7,desc:'最大フィールド。究極の迷路を設計せよ！'},
 ];
+
+// ── Dungeon quest definitions ──
+const QUESTS=[
+  {name:'B1F',gridN:5,algo:'random',goalTime:5,desc:'地下1階。まずは基本の迷路を作ろう'},
+  {name:'B2F',gridN:5,algo:'random',goalTime:8,desc:'地下2階。ランダムウォークはまだ楽勝'},
+  {name:'B3F',gridN:6,algo:'righthand',goalTime:10,desc:'⚠️ 壁伝いで来る！螺旋で迷わせろ'},
+  {name:'B4F',gridN:6,algo:'righthand',goalTime:12,desc:'右手法の攻略者。回り道を増やせ'},
+  {name:'B5F',gridN:7,algo:'bfs',goalTime:8,desc:'💀 最短経路を見つけてくる！'},
+  {name:'B6F',gridN:7,algo:'bfs',goalTime:10,desc:'BFS探索者。壁を最大限に活用しろ'},
+  {name:'B7F',gridN:8,algo:'astar',goalTime:6,desc:'🔥 A*アルゴリズム。ほぼ最短で来る'},
+  {name:'B8F',gridN:8,algo:'astar',goalTime:8,desc:'最深部。究極の迷宮を設計せよ！'},
+];
+
 const ALGO_INFO={random:{label:'🟢 ランダム',color:'#4ED26D'},righthand:{label:'🟡 右手法',color:'#F5A623'},bfs:{label:'🔴 BFS',color:'#FF3B30'},astar:{label:'💀 A*',color:'#8B5CF6'}};
 
+// ── Global state ──
 let curStageIdx=0, mode='stage', curConfig=null;
 let gridN=5, walls=new Set(), wallHistory=[], usedWalls=0;
 let running=false, timer=0, timerStart=0, animId=null;
 let solverState=null, explored=new Set(), shortestPath=[], deadEndCount=0, realtimeWallPenalty=0;
 
-// ── Quest Mode State ──
-let curQuestIdx=0;
-let questWalls=[]; // questWalls[i] = Array of wall keys (serialized Set)
-let questCleared=[]; // questCleared[i] = true/false
-let questGridOffsets=[]; // questGridOffsets[i] = cumulative X offset in cells for drawing
+// ── Dungeon state ──
+let dungeonFloorIdx=0;          // currently selected floor for editing
+let dungeonWalls=[];             // dungeonWalls[i] = Array of wall keys
+let dungeonCleared=[];           // dungeonCleared[i] = bool
+let dungeonSelectedFloor=0;      // selected in dungeon select screen
+let dungeonRunFloorIdx=0;        // which floor the solver is currently on during full run
+let dungeonRunning=false;        // is a full dungeon run in progress
+let dungeonTestMode=false;       // single-floor test run
 
-function initQuestState(){
-  questWalls=[];
-  questCleared=[];
-  questGridOffsets=[];
-  let offset=0;
-  for(let i=0;i<STAGES.length;i++){
-    questWalls.push(null); // null = not yet played
-    questCleared.push(false);
-    questGridOffsets.push(offset);
-    offset+=STAGES[i].grid+1; // +1 gap between grids
+function initDungeonState(){
+  dungeonWalls=[];
+  dungeonCleared=[];
+  for(let i=0;i<QUESTS.length;i++){
+    dungeonWalls.push([]);
+    dungeonCleared.push(false);
   }
 }
-initQuestState();
+initDungeonState();
 
 // ── Screens ──
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
@@ -201,56 +237,89 @@ function showTitle(){stopSolver();showScreen('titleScreen')}
 function showStageSelect(){curStageIdx=0;renderStageCard();showScreen('stageScreen')}
 function showFreeMode(){showScreen('freeScreen')}
 
-function showQuestSelect(){
-  renderQuestGrid();
-  showScreen('questScreen');
+function showDungeonSelect(){
+  renderDungeonGrid();
+  showScreen('dungeonScreen');
 }
 
-function renderQuestGrid(){
-  const grid=document.getElementById('questGrid');
+function renderDungeonGrid(){
+  const grid=document.getElementById('dungeonGrid');
   let html='';
-  for(let i=0;i<STAGES.length;i++){
-    const s=STAGES[i];
-    const ai=ALGO_INFO[s.algo];
-    const cleared=questCleared[i];
-    // Unlocked if first quest or previous is cleared
-    const unlocked=(i===0||questCleared[i-1]);
+  for(let i=0;i<QUESTS.length;i++){
+    const q=QUESTS[i];
+    const ai=ALGO_INFO[q.algo];
+    const cleared=dungeonCleared[i];
+    const unlocked=(i===0||dungeonCleared[i-1]);
     const cls=cleared?'cleared':(unlocked?'current':'locked');
     const status=cleared?'✅':(unlocked?'🔓':'🔒');
-    html+=`<div class="quest-item ${cls}" onclick="startQuest(${i})">
-      <div class="q-num">Q${i+1}</div>
-      <div style="font-size:12px;font-weight:600;margin:2px 0">${s.name}</div>
-      <div class="q-info">${s.grid}×${s.grid} ${ai.label}</div>
-      <div class="q-status">${status}</div>
+    const sel=i===dungeonSelectedFloor?' style="outline:3px solid #5B4FCF;outline-offset:2px"':'';
+    html+=`<div class="dungeon-floor ${cls}" onclick="selectDungeonFloor(${i})"${sel}>
+      <div class="df-name">${q.name}</div>
+      <div class="df-info">${q.gridN}×${q.gridN} ${ai.label}</div>
+      <div class="df-status">${status}</div>
     </div>`;
   }
   grid.innerHTML=html;
+  updateDungeonDesc();
 }
 
-function startQuest(idx){
-  // Check if unlocked
-  if(idx>0&&!questCleared[idx-1])return;
-  mode='quest';
-  curQuestIdx=idx;
-  const s=STAGES[idx];
-  curConfig={grid:s.grid,algo:s.algo,target:s.target,name:`Quest ${idx+1}: ${s.name}`};
+function selectDungeonFloor(idx){
+  const unlocked=(idx===0||dungeonCleared[idx-1]);
+  if(!unlocked)return;
+  dungeonSelectedFloor=idx;
+  renderDungeonGrid();
+}
+
+function updateDungeonDesc(){
+  const q=QUESTS[dungeonSelectedFloor];
+  const ai=ALGO_INFO[q.algo];
+  const cleared=dungeonCleared[dungeonSelectedFloor];
+  const unlocked=(dungeonSelectedFloor===0||dungeonCleared[dungeonSelectedFloor-1]);
+  const desc=document.getElementById('dungeonDesc');
+  desc.innerHTML=`<div class="dd-title">${q.name} - ${q.desc}</div>
+    <div class="dd-text">攻略者: ${ai.label} | 目標: ${q.goalTime}秒（通し合計）</div>`;
+  const btn=document.getElementById('dungeonStartBtn');
+  if(unlocked){
+    btn.style.display='block';
+    btn.textContent=cleared?'🔧 壁を編集':'▶ この階の壁を配置';
+  } else {
+    btn.style.display='none';
+  }
+}
+
+function startDungeon(){
+  const idx=dungeonSelectedFloor;
+  const unlocked=(idx===0||dungeonCleared[idx-1]);
+  if(!unlocked)return;
+  mode='dungeon';
+  dungeonFloorIdx=idx;
+  dungeonTestMode=false;
+  dungeonRunning=false;
+  const q=QUESTS[idx];
+  curConfig={grid:q.gridN,algo:q.algo,target:q.goalTime,name:`🪜 ${q.name} - 壁配置中`};
   initGame(curConfig);
-  // Restore walls if replaying a cleared quest
-  if(questWalls[idx]){
-    const savedWalls=questWalls[idx];
-    walls=new Set(savedWalls);
+  // Restore walls if editing
+  if(dungeonWalls[idx]&&dungeonWalls[idx].length>0){
+    walls=new Set(dungeonWalls[idx]);
     usedWalls=walls.size;
   }
+  // Show dungeon-specific buttons
+  document.getElementById('testRunBtn').style.display='inline-block';
+  document.getElementById('startBtn').textContent='▶ 通し走行';
   showScreen('gameScreen');
   draw();
 }
 
-function nextQuest(){
-  if(curQuestIdx<STAGES.length-1){
-    startQuest(curQuestIdx+1);
+function nextDungeonFloor(){
+  if(dungeonFloorIdx<QUESTS.length-1){
+    dungeonSelectedFloor=dungeonFloorIdx+1;
+    startDungeon();
+  } else {
+    showDungeonSelect();
   }
 }
 
+// ── Stage mode ──
 function renderStageCard(){
   const s=STAGES[curStageIdx];
   const ai=ALGO_INFO[s.algo];
@@ -271,6 +340,8 @@ function startStage(){
   const s=STAGES[curStageIdx];
   curConfig={grid:s.grid,algo:s.algo,target:s.target,name:`Stage ${curStageIdx+1}: ${s.name}`};
   initGame(curConfig);
+  document.getElementById('testRunBtn').style.display='none';
+  document.getElementById('startBtn').textContent='▶ スタート';
   showScreen('gameScreen');
 }
 function startFree(){
@@ -279,6 +350,8 @@ function startFree(){
   const algo=document.getElementById('freeAlgo').value;
   curConfig={grid:sz,algo:algo,target:Infinity,name:'フリーモード'};
   initGame(curConfig);
+  document.getElementById('testRunBtn').style.display='none';
+  document.getElementById('startBtn').textContent='▶ スタート';
   showScreen('gameScreen');
 }
 
@@ -299,10 +372,12 @@ function initGame(cfg){
   gridN=cfg.grid;
   walls=new Set();wallHistory=[];usedWalls=0;
   running=false;timer=0;explored=new Set();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
-  solverState=null;
+  solverState=null;dungeonRunning=false;
   document.getElementById('gameName').textContent=cfg.name;
-  document.getElementById('startBtn').textContent='▶ スタート';
   document.getElementById('startBtn').disabled=false;
+  document.getElementById('minimapWrap').style.display='none';
+  document.getElementById('floorIndicator').style.display='none';
+  document.getElementById('stairsOverlay').classList.remove('show');
   resizeCanvas();
   updateUI();
   draw();
@@ -310,25 +385,13 @@ function initGame(cfg){
 
 function resizeCanvas(){
   const wrap=document.getElementById('canvasWrap');
-  const w=wrap.clientWidth-8, h=wrap.clientHeight-8;
-  // Auto-scale: canvas size based on available space
-  const canvasSize=Math.min(w, h, window.innerWidth-20, window.innerHeight*0.6);
+  const w=wrap.clientWidth-16, h=wrap.clientHeight-16;
+  const canvasSize=Math.min(w, h, window.innerWidth-20, window.innerHeight*0.55);
   cellSize=Math.floor(canvasSize/gridN);
-  // Minimum cell size of 30px; if grid too large, allow larger canvas with scroll
-  if(cellSize<30) cellSize=30;
-  // Cap max cell size
+  if(cellSize<28) cellSize=28;
   if(cellSize>60) cellSize=60;
-
-  let totalW, totalH;
-  if(mode==='quest'){
-    // For quest mode, compute total width including past quests
-    const questTotalW=computeQuestCanvasWidth();
-    totalW=questTotalW;
-    totalH=computeQuestCanvasHeight();
-  } else {
-    totalW=cellSize*gridN;
-    totalH=cellSize*gridN;
-  }
+  const totalW=cellSize*gridN;
+  const totalH=cellSize*gridN;
   const dpr=window.devicePixelRatio||1;
   canvas.width=totalW*dpr;canvas.height=totalH*dpr;
   canvas.style.width=totalW+'px';canvas.style.height=totalH+'px';
@@ -336,87 +399,65 @@ function resizeCanvas(){
   offsetX=0;offsetY=0;
 }
 
-function computeQuestCanvasWidth(){
-  // Total width = sum of all past quest grids + current quest grid + gaps
-  let totalCells=0;
-  for(let i=0;i<=curQuestIdx;i++){
-    totalCells+=STAGES[i].grid;
-    if(i<curQuestIdx) totalCells+=1; // gap
-  }
-  return totalCells*cellSize;
-}
-
-function computeQuestCanvasHeight(){
-  // Max grid height among displayed quests
-  let maxGrid=0;
-  for(let i=0;i<=curQuestIdx;i++){
-    if(STAGES[i].grid>maxGrid) maxGrid=STAGES[i].grid;
-  }
-  return maxGrid*cellSize;
-}
-
 function updateUI(){
   document.getElementById('timerDisp').textContent=`⏱ ${timer.toFixed(1)}s`;
 }
 
-// ── Wall key: "r,c,d" where d='h' (horizontal, top edge of cell) or 'v' (vertical, left edge of cell)
+// ── Wall helpers (parameterized for dungeon multi-grid) ──
 function wallKey(r,c,d){return `${r},${c},${d}`}
 
-function hasWall(r,c,d){
-  if(d==='h'){if(r===0||r===gridN)return true}
-  if(d==='v'){if(c===0||c===gridN)return true}
-  return walls.has(wallKey(r,c,d));
+function hasWallIn(wallSet,gn,r,c,d){
+  if(d==='h'){if(r===0||r===gn)return true}
+  if(d==='v'){if(c===0||c===gn)return true}
+  return wallSet.has(wallKey(r,c,d));
 }
+function hasWall(r,c,d){return hasWallIn(walls,gridN,r,c,d)}
 
-function canPass(r1,c1,r2,c2){
-  if(r2<0||r2>=gridN||c2<0||c2>=gridN)return false;
-  if(r2===r1-1&&c2===c1)return !hasWall(r1,c1,'h');
-  if(r2===r1+1&&c2===c1)return !hasWall(r1+1,c1,'h');
-  if(r2===r1&&c2===c1-1)return !hasWall(r1,c1,'v');
-  if(r2===r1&&c2===c1+1)return !hasWall(r1,c1+1,'v');
+function canPassIn(wallSet,gn,r1,c1,r2,c2){
+  if(r2<0||r2>=gn||c2<0||c2>=gn)return false;
+  if(r2===r1-1&&c2===c1)return !hasWallIn(wallSet,gn,r1,c1,'h');
+  if(r2===r1+1&&c2===c1)return !hasWallIn(wallSet,gn,r1+1,c1,'h');
+  if(r2===r1&&c2===c1-1)return !hasWallIn(wallSet,gn,r1,c1,'v');
+  if(r2===r1&&c2===c1+1)return !hasWallIn(wallSet,gn,r1,c1+1,'v');
   return false;
 }
+function canPass(r1,c1,r2,c2){return canPassIn(walls,gridN,r1,c1,r2,c2)}
 
-function neighbors(r,c){
+function neighborsIn(wallSet,gn,r,c){
   const n=[];
   [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
     const nr=r+dr,nc=c+dc;
-    if(canPass(r,c,nr,nc))n.push([nr,nc]);
+    if(canPassIn(wallSet,gn,r,c,nr,nc))n.push([nr,nc]);
   });
   return n;
 }
+function neighbors(r,c){return neighborsIn(walls,gridN,r,c)}
 
-function isReachable(){
+function isReachableIn(wallSet,gn){
   const visited=new Set();
   const q=[[0,0]];visited.add('0,0');
-  const goal=`${gridN-1},${gridN-1}`;
+  const goal=`${gn-1},${gn-1}`;
   while(q.length){
     const [r,c]=q.shift();
     if(`${r},${c}`===goal)return true;
-    for(const [nr,nc] of neighbors(r,c)){
+    for(const [nr,nc] of neighborsIn(wallSet,gn,r,c)){
       const k=`${nr},${nc}`;
       if(!visited.has(k)){visited.add(k);q.push([nr,nc])}
     }
   }
   return false;
 }
+function isReachable(){return isReachableIn(walls,gridN)}
 
 // ── Wall placement via tap ──
 function getWallFromPos(x,y){
-  // Adjust for quest mode offset
-  let localX=x, localY=y;
-  if(mode==='quest'){
-    const qOffset=getQuestCurrentOffset();
-    localX=x-qOffset*cellSize;
-    localY=y;
-  }
   const tapRadius=Math.max(12, cellSize*0.3);
   let bestDist=tapRadius, bestWall=null;
   for(let r=1;r<gridN;r++){
     const wy=r*cellSize;
-    const dy=Math.abs(localY-wy);
+    const dy=Math.abs(y-wy);
     if(dy<bestDist){
-      const col=Math.floor(localX/cellSize);
+      const col=Math.floor(x/cellSize);
       if(col>=0&&col<gridN){
         bestDist=dy;bestWall={r,c:col,d:'h',key:wallKey(r,col,'h')};
       }
@@ -424,9 +465,9 @@ function getWallFromPos(x,y){
   }
   for(let c=1;c<gridN;c++){
     const wx=c*cellSize;
-    const dx=Math.abs(localX-wx);
+    const dx=Math.abs(x-wx);
     if(dx<bestDist){
-      const row=Math.floor(localY/cellSize);
+      const row=Math.floor(y/cellSize);
       if(row>=0&&row<gridN){
         bestDist=dx;bestWall={r:row,c,d:'v',key:wallKey(row,c,'v')};
       }
@@ -435,24 +476,13 @@ function getWallFromPos(x,y){
   return bestWall;
 }
 
-function getQuestCurrentOffset(){
-  // Returns offset in cells for the current quest grid
-  let offset=0;
-  for(let i=0;i<curQuestIdx;i++){
-    offset+=STAGES[i].grid+1;
-  }
-  return offset;
-}
-
 function handleTap(ex,ey){
-  if(running&&mode!=='free')return;
+  if(running)return;
   const rect=canvas.getBoundingClientRect();
   const x=ex-rect.left, y=ey-rect.top;
   const w=getWallFromPos(x,y);
   if(!w)return;
-
   ensureAudio();
-
   if(walls.has(w.key)){
     walls.delete(w.key);usedWalls--;
     wallHistory.push({key:w.key,action:'remove'});
@@ -467,7 +497,10 @@ function handleTap(ex,ey){
     usedWalls++;
     wallHistory.push({key:w.key,action:'add'});
     sfxWall();
-    if(running&&mode==='free')realtimeWallPenalty++;
+  }
+  // Auto-save dungeon walls
+  if(mode==='dungeon'){
+    dungeonWalls[dungeonFloorIdx]=[...walls];
   }
   updateUI();draw();
 }
@@ -477,6 +510,7 @@ canvas.addEventListener('pointerdown',e=>{e.preventDefault();handleTap(e.clientX
 function resetWalls(){
   if(running)return;
   walls.clear();wallHistory=[];usedWalls=0;explored.clear();shortestPath=[];
+  if(mode==='dungeon') dungeonWalls[dungeonFloorIdx]=[];
   updateUI();draw();
 }
 function undoWall(){
@@ -485,27 +519,28 @@ function undoWall(){
   const last=wallHistory.pop();
   if(last.action==='add'){walls.delete(last.key);usedWalls--}
   else{walls.add(last.key);usedWalls++}
+  if(mode==='dungeon') dungeonWalls[dungeonFloorIdx]=[...walls];
   updateUI();draw();
 }
 function backFromGame(){
   stopSolver();
   if(mode==='stage')showStageSelect();
-  else if(mode==='quest')showQuestSelect();
+  else if(mode==='dungeon')showDungeonSelect();
+  else showTitle();
+}
+function backFromResult(){
+  if(mode==='dungeon')showDungeonSelect();
   else showTitle();
 }
 
 // ── Drawing ──
 function draw(){
-  if(mode==='quest'){
-    drawQuest();
-    return;
-  }
   const W=cellSize*gridN, H=cellSize*gridN;
-  ctx.clearRect(0,0,W,H);
-  drawGrid(0,0,gridN,walls,explored,shortestPath,solverState,1.0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawGrid(0,0,gridN,walls,explored,shortestPath,solverState,curConfig?curConfig.algo:'random',1.0);
 }
 
-function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,alpha){
+function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
   const W=cellSize*gn, H=cellSize*gn;
   ctx.save();
   ctx.translate(ox,oy);
@@ -516,7 +551,7 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,alpha){
 
   // Explored cells overlay
   if(exploredSet&&exploredSet.size){
-    const col=ALGO_INFO[curConfig.algo].color;
+    const col=ALGO_INFO[algo].color;
     ctx.fillStyle=col+'22';
     exploredSet.forEach(k=>{
       const [r,c]=k.split(',').map(Number);
@@ -526,7 +561,7 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,alpha){
 
   // Shortest path
   if(path&&path.length>1){
-    const col=ALGO_INFO[curConfig.algo].color;
+    const col=ALGO_INFO[algo].color;
     ctx.strokeStyle=col+'88';ctx.lineWidth=3;ctx.lineCap='round';
     ctx.beginPath();
     path.forEach(([r,c],i)=>{
@@ -556,11 +591,17 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,alpha){
   // Start & Goal
   const sr=cellSize*0.3;
   ctx.fillStyle='#4ED26D';ctx.beginPath();ctx.arc(cellSize/2,cellSize/2,sr,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr,0,Math.PI*2);ctx.fill();
+  // Goal = stairs icon for dungeon, red dot otherwise
+  if(mode==='dungeon'){
+    ctx.font=`${cellSize*0.5}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('🪜',(gn-0.5)*cellSize,(gn-0.5)*cellSize);
+  } else {
+    ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr,0,Math.PI*2);ctx.fill();
+  }
 
   // Solver agent
   if(solver&&solver.pos&&alpha>=1.0){
-    const col=ALGO_INFO[curConfig.algo].color;
+    const col=ALGO_INFO[algo].color;
     const [pr,pc]=solver.pos;
     let dr=0,dc=0;
     if(solver.lerp<1&&solver.prev){
@@ -578,65 +619,217 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,alpha){
   ctx.restore();
 }
 
-function drawQuest(){
-  const totalW=parseInt(canvas.style.width);
-  const totalH=parseInt(canvas.style.height);
-  ctx.clearRect(0,0,totalW,totalH);
-
-  // Draw past quest grids faintly
-  let xOff=0;
-  for(let i=0;i<curQuestIdx;i++){
-    const gn=STAGES[i].grid;
-    const pastWalls=questWalls[i]?new Set(questWalls[i]):new Set();
-    // Center vertically relative to max height
-    const maxH=computeQuestCanvasHeight();
-    const yOff=Math.floor((maxH-gn*cellSize)/2);
-    drawGrid(xOff*cellSize, yOff, gn, pastWalls, null, null, null, 0.3);
-
-    // Draw connection line from past goal to next start
-    const goalX=xOff*cellSize+(gn-0.5)*cellSize;
-    const goalY=yOff+(gn-0.5)*cellSize;
-    const nextXOff=xOff+gn+1;
-    const nextGn=STAGES[i+1].grid;
-    const nextYOff=Math.floor((maxH-nextGn*cellSize)/2);
-    const startX=nextXOff*cellSize+cellSize/2;
-    const startY=nextYOff+cellSize/2;
-    ctx.save();
-    ctx.strokeStyle='#5B4FCF';ctx.lineWidth=3;ctx.setLineDash([6,4]);ctx.globalAlpha=0.5;
-    ctx.beginPath();ctx.moveTo(goalX,goalY);ctx.lineTo(startX,startY);ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-
-    xOff+=gn+1;
+// ── Minimap for dungeon runs ──
+function renderMinimap(activeFloor, totalFloors){
+  const wrap=document.getElementById('minimapWrap');
+  wrap.style.display='flex';
+  wrap.innerHTML='';
+  const mmSize=28;
+  for(let i=0;i<totalFloors;i++){
+    const q=QUESTS[i];
+    const c=document.createElement('canvas');
+    const gn=q.gridN;
+    const cs=Math.floor(mmSize/gn);
+    const sz=cs*gn;
+    c.width=sz;c.height=sz;c.style.width=sz+'px';c.style.height=sz+'px';
+    c.className='minimap-floor'+(i===activeFloor?' mm-active':'')+(i<activeFloor?' mm-done':'');
+    const mctx=c.getContext('2d');
+    mctx.fillStyle='#fafafa';mctx.fillRect(0,0,sz,sz);
+    // Draw walls
+    const wSet=new Set(dungeonWalls[i]||[]);
+    mctx.strokeStyle='#2F2B2A';mctx.lineWidth=1.5;
+    mctx.strokeRect(0,0,sz,sz);
+    wSet.forEach(k=>{
+      const [r,col,d]=k.split(',');
+      const ri=+r,ci=+col;
+      mctx.beginPath();
+      if(d==='h'){mctx.moveTo(ci*cs,ri*cs);mctx.lineTo((ci+1)*cs,ri*cs)}
+      else{mctx.moveTo(ci*cs,ri*cs);mctx.lineTo(ci*cs,(ri+1)*cs)}
+      mctx.stroke();
+    });
+    wrap.appendChild(c);
   }
+}
 
-  // Draw current quest grid at full opacity
-  const curGn=STAGES[curQuestIdx].grid;
-  const maxH=computeQuestCanvasHeight();
-  const curYOff=Math.floor((maxH-curGn*cellSize)/2);
-  drawGrid(xOff*cellSize, curYOff, curGn, walls, explored, shortestPath, solverState, 1.0);
+function updateFloorIndicator(activeFloor, totalFloors){
+  const ind=document.getElementById('floorIndicator');
+  ind.style.display='block';
+  let parts=[];
+  for(let i=0;i<totalFloors;i++){
+    if(i===activeFloor) parts.push(`[${QUESTS[i].name}]`);
+    else parts.push(QUESTS[i].name);
+  }
+  ind.textContent='🪜 '+parts.join(' → ');
 }
 
 // ── Solver ──
 function stopSolver(){
-  running=false;
+  running=false;dungeonRunning=false;
   if(animId)cancelAnimationFrame(animId);animId=null;
 }
 
+// ── Test run: single floor with its own algo ──
+function testFloorRun(){
+  if(running)return;
+  if(mode!=='dungeon')return;
+  dungeonTestMode=true;
+  dungeonRunning=false;
+  // Save walls
+  dungeonWalls[dungeonFloorIdx]=[...walls];
+  ensureAudio();sfxStart();
+  running=true;timer=0;timerStart=Date.now();
+  explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
+  document.getElementById('startBtn').disabled=true;
+  document.getElementById('testRunBtn').disabled=true;
+  document.getElementById('gameName').textContent=`🔄 ${QUESTS[dungeonFloorIdx].name} テスト走行`;
+  const algo=QUESTS[dungeonFloorIdx].algo;
+  curConfig.algo=algo;
+  runAlgo(algo, walls, gridN);
+}
+
+// ── Full dungeon run ──
 function runSolver(){
   if(running)return;
   ensureAudio();sfxStart();
+
+  if(mode==='dungeon'){
+    // Save current floor walls
+    dungeonWalls[dungeonFloorIdx]=[...walls];
+    dungeonTestMode=false;
+    dungeonRunning=true;
+    running=true;timer=0;timerStart=Date.now();
+    explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
+    document.getElementById('startBtn').disabled=true;
+    document.getElementById('testRunBtn').disabled=true;
+    const algo=QUESTS[dungeonFloorIdx].algo;
+    curConfig.algo=algo;
+    // Start from floor 0
+    dungeonRunFloorIdx=0;
+    renderMinimap(0, dungeonFloorIdx+1);
+    updateFloorIndicator(0, dungeonFloorIdx+1);
+    runDungeonFloor(0);
+    tickTimer();
+    return;
+  }
+
+  // Stage / Free mode
   running=true;timer=0;timerStart=Date.now();
   explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
   document.getElementById('startBtn').textContent='実行中…';
   document.getElementById('startBtn').disabled=true;
-
   const algo=curConfig.algo;
+  runAlgo(algo, walls, gridN);
+}
+
+function runDungeonFloor(floorIdx){
+  if(!running)return;
+  const q=QUESTS[floorIdx];
+  const gn=q.gridN;
+  const floorWalls=new Set(dungeonWalls[floorIdx]||[]);
+  const algo=QUESTS[dungeonFloorIdx].algo; // Use the target quest's algo for ALL floors
+
+  // Switch display to this floor
+  gridN=gn;
+  walls=floorWalls;
+  explored.clear();shortestPath=[];
+  solverState=null;
+  curConfig.grid=gn;
+  document.getElementById('gameName').textContent=`🪜 ${q.name} 走行中`;
+  resizeCanvas();
+  renderMinimap(floorIdx, dungeonFloorIdx+1);
+  updateFloorIndicator(floorIdx, dungeonFloorIdx+1);
+  draw();
+
+  // Run algo on this floor, with callback on finish
+  runAlgoWithCallback(algo, floorWalls, gn, ()=>{
+    // Floor cleared
+    if(floorIdx<dungeonFloorIdx){
+      // More floors to go - show stairs transition
+      showStairsTransition(q.name, QUESTS[floorIdx+1].name, ()=>{
+        dungeonRunFloorIdx=floorIdx+1;
+        runDungeonFloor(floorIdx+1);
+      });
+    } else {
+      // Final floor reached - finish
+      finishDungeonRun();
+    }
+  });
+}
+
+function showStairsTransition(fromFloor, toFloor, cb){
+  sfxStairs();
+  const overlay=document.getElementById('stairsOverlay');
+  document.getElementById('stairsText').textContent=`${toFloor}へ…`;
+  overlay.classList.add('show');
+  setTimeout(()=>{
+    overlay.classList.remove('show');
+    cb();
+  },700);
+}
+
+function finishDungeonRun(){
+  running=false;dungeonRunning=false;
+  timer=(Date.now()-timerStart)/1000;
+  updateUI();
+
+  // Restore editing floor
+  const targetFloor=dungeonFloorIdx;
+  const q=QUESTS[targetFloor];
+  gridN=q.gridN;
+  walls=new Set(dungeonWalls[targetFloor]||[]);
+  curConfig.grid=q.gridN;
+
+  const passed=timer>=q.goalTime;
+
+  if(passed){
+    dungeonCleared[targetFloor]=true;
+  }
+
+  // Score
+  const base=Math.round(timer*100);
+  const deadEndBonus=deadEndCount*30;
+  const total=Math.max(0,base+deadEndBonus);
+
+  document.getElementById('resultEmoji').textContent=passed?'🎉':'😅';
+  document.getElementById('resultTitle').textContent=passed?`${q.name} クリア！`:'もう少し迷わせよう…';
+  document.getElementById('resultTime').textContent=`通し合計: ${timer.toFixed(1)}秒 / 目標: ${q.goalTime}秒`;
+  document.getElementById('resultScore').textContent=total.toLocaleString();
+  let bd=`ベース: ${base}`;
+  if(deadEndBonus)bd+=` | 行き止まり: +${deadEndBonus}`;
+  document.getElementById('resultBreakdown').textContent=bd;
+
+  document.getElementById('nextStageBtn').style.display='none';
+  document.getElementById('nextDungeonBtn').style.display=(passed&&targetFloor<QUESTS.length-1)?'block':'none';
+
+  if(passed)sfxClear();else sfxFail();
+  showScreen('resultScreen');
+}
+
+// ── Algorithm runners ──
+function runAlgo(algo, wallSet, gn){
+  // Set global state for algo
+  walls=wallSet;gridN=gn;
+  if(algo==='random')startRandomWalk();
+  else if(algo==='righthand')startRightHand();
+  else if(algo==='bfs')startBFS();
+  else if(algo==='astar')startAStar();
+  if(!dungeonRunning) tickTimer();
+}
+
+function runAlgoWithCallback(algo, wallSet, gn, onFinish){
+  // Set global state
+  walls=wallSet;gridN=gn;
+  explored.clear();shortestPath=[];
+  solverState=null;
+  // Override finishSolver for callback
+  dungeonFloorCallback=onFinish;
   if(algo==='random')startRandomWalk();
   else if(algo==='righthand')startRightHand();
   else if(algo==='bfs')startBFS();
   else if(algo==='astar')startAStar();
 }
+
+let dungeonFloorCallback=null;
 
 // ── Random Walk ──
 function startRandomWalk(){
@@ -662,7 +855,6 @@ function startRandomWalk(){
   };
   explored.add('0,0');
   step();
-  tickTimer();
 }
 
 // ── Right Hand ──
@@ -670,7 +862,6 @@ function startRightHand(){
   const DR=[-1,0,1,0],DC=[0,1,0,-1];
   let dir=2;
   solverState={pos:[0,0],prev:null,lerp:1,exclaim:false,exclaimTime:0};
-
   const step=()=>{
     if(!running)return;
     const [r,c]=solverState.pos;
@@ -694,7 +885,6 @@ function startRightHand(){
   };
   explored.add('0,0');
   step();
-  tickTimer();
 }
 
 // ── BFS ──
@@ -704,7 +894,6 @@ function startBFS(){
   const queue=[[0,0]];
   const visited=new Set(['0,0']);
   let found=false;
-
   const exploreStep=()=>{
     if(!running)return;
     if(!queue.length){finishSolver();return}
@@ -730,7 +919,6 @@ function startBFS(){
     }
   };
   exploreStep();
-  tickTimer();
 }
 
 // ── A* ──
@@ -743,7 +931,6 @@ function startAStar(){
   const parent=new Map();
   const closed=new Set();
   let found=false;
-
   const exploreStep=()=>{
     if(!running)return;
     if(!open.length){finishSolver();return}
@@ -778,7 +965,6 @@ function startAStar(){
     }
   };
   exploreStep();
-  tickTimer();
 }
 
 // ── Walk a computed path ──
@@ -826,13 +1012,26 @@ function tickTimer(){
 }
 
 function finishSolver(){
+  // If dungeon full run, delegate to floor callback
+  if(dungeonRunning&&dungeonFloorCallback){
+    const cb=dungeonFloorCallback;
+    dungeonFloorCallback=null;
+    cb();
+    return;
+  }
+
   running=false;
   timer=(Date.now()-timerStart)/1000;
   updateUI();draw();
 
-  // Save quest walls on finish
-  if(mode==='quest'){
-    questWalls[curQuestIdx]=[...walls];
+  // If dungeon test mode, just show toast and reset
+  if(mode==='dungeon'&&dungeonTestMode){
+    dungeonTestMode=false;
+    showToast(`テスト完了: ${timer.toFixed(1)}秒`);
+    document.getElementById('startBtn').disabled=false;
+    document.getElementById('testRunBtn').disabled=false;
+    document.getElementById('gameName').textContent=`🪜 ${QUESTS[dungeonFloorIdx].name} - 壁配置中`;
+    return;
   }
 
   // Score
@@ -843,11 +1042,6 @@ function finishSolver(){
 
   const passed=curConfig.target!==Infinity&&timer>=curConfig.target;
 
-  // Mark quest cleared
-  if(mode==='quest'&&passed){
-    questCleared[curQuestIdx]=true;
-  }
-
   document.getElementById('resultEmoji').textContent=passed?'🎉':'😅';
   document.getElementById('resultTitle').textContent=passed?'クリア！':'もう少し迷わせよう…';
   document.getElementById('resultTime').textContent=`経過時間: ${timer.toFixed(1)}秒${curConfig.target!==Infinity?' / 目標: '+curConfig.target+'秒':''}`;
@@ -857,18 +1051,16 @@ function finishSolver(){
   if(penalty)bd+=` | ペナルティ: -${penalty}`;
   document.getElementById('resultBreakdown').textContent=bd;
 
-  // Show/hide next buttons
   document.getElementById('nextStageBtn').style.display=(mode==='stage'&&curStageIdx<7)?'block':'none';
-  document.getElementById('nextQuestBtn').style.display=(mode==='quest'&&passed&&curQuestIdx<STAGES.length-1)?'block':'none';
+  document.getElementById('nextDungeonBtn').style.display='none';
 
   if(passed)sfxClear();else sfxFail();
-
   showScreen('resultScreen');
 }
 
 function retryStage(){
   if(mode==='stage')startStage();
-  else if(mode==='quest')startQuest(curQuestIdx);
+  else if(mode==='dungeon')startDungeon();
   else startFree();
 }
 function nextStage(){
