@@ -1110,6 +1110,7 @@ function startFogExplorer(wallSet, gn, abilities, floorIdx){
   let visitOrder=0;
   let stepCount=0;
   let prevPos=null;
+  let recentPath=[]; // Short-term memory (last 5 positions) - all explorers have this
 
   solverState={pos:[0,0],prev:null,lerp:1,exclaim:false,exclaimTime:0,exclaimText:'',icon:fi.icon};
   explored.add('0,0');
@@ -1194,10 +1195,15 @@ function startFogExplorer(wallSet, gn, abilities, floorIdx){
           }
         }
 
-        // Avoid going back (if other options exist)
-        if(prevPos&&candidates.length>1){
-          const nonBack=candidates.filter(([nr,nc])=>!(nr===prevPos[0]&&nc===prevPos[1]));
-          if(nonBack.length>0)candidates=nonBack;
+        // Avoid recent positions (short-term memory for all explorers)
+        if(candidates.length>1){
+          const notRecent=candidates.filter(([nr,nc])=>!recentPath.some(([pr,pc])=>pr===nr&&pc===nc));
+          if(notRecent.length>0)candidates=notRecent;
+          else if(prevPos&&candidates.length>1){
+            // At least avoid immediate previous
+            const nonBack=candidates.filter(([nr,nc])=>!(nr===prevPos[0]&&nc===prevPos[1]));
+            if(nonBack.length>0)candidates=nonBack;
+          }
         }
 
         // Pick by manhattan distance to goal
@@ -1214,6 +1220,8 @@ function startFogExplorer(wallSet, gn, abilities, floorIdx){
     }
 
     prevPos=[r,c];
+    recentPath.push([r,c]);
+    if(recentPath.length>5)recentPath.shift(); // Keep last 5 positions
     if(hasMemory)visitedMap.set(`${nextPos[0]},${nextPos[1]}`,visitOrder++);
     explored.add(`${nextPos[0]},${nextPos[1]}`);
     animateMove(nextPos,250,step);
