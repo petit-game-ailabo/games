@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Maze Architect</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;font-family:system-ui,-apple-system,sans-serif;background:radial-gradient(ellipse at center,#F6F6F5 0%,#ECECEC 100%)}
+#app{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+canvas{display:block;touch-action:none}
+.screen{display:none;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;padding:16px}
+.screen.active{display:flex}
+.btn{background:#2F2B2A;color:#fff;border:none;border-radius:12px;padding:14px 28px;font-size:16px;font-family:system-ui;cursor:pointer;margin:6px;min-width:200px;text-align:center;transition:transform .1s,opacity .1s}
+.btn:active{transform:scale(0.96);opacity:0.8}
+.btn-secondary{background:#fff;color:#2F2B2A;border:2px solid #E0E0E0}
+.btn-small{padding:10px 16px;font-size:14px;min-width:auto;border-radius:10px}
+h1{font-size:28px;color:#2F2B2A;margin-bottom:4px}
+h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
+.subtitle{color:#888;font-size:14px;margin-bottom:20px}
+.game-header{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:420px;padding:8px 4px;font-size:13px;color:#555;flex-shrink:0}
+.game-header .info{display:flex;gap:12px}
+.game-header .stage-name{font-weight:700;color:#2F2B2A;font-size:15px}
+.game-footer{display:flex;gap:8px;padding:8px 4px;flex-shrink:0;flex-wrap:wrap;justify-content:center}
+.canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:hidden}
+.stage-card{background:#fff;border-radius:16px;padding:20px;width:280px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,0.06);position:relative}
+.stage-card .badge{display:inline-block;padding:3px 10px;border-radius:8px;font-size:12px;font-weight:700;margin-bottom:8px}
+.stage-nav{display:flex;align-items:center;gap:16px;margin-top:16px}
+.nav-btn{width:44px;height:44px;border-radius:50%;background:#fff;border:2px solid #E0E0E0;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#2F2B2A}
+.nav-btn:active{background:#f0f0f0}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#2F2B2A;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
+.toast.show{opacity:1}
+.result-box{background:#fff;border-radius:16px;padding:24px;text-align:center;box-shadow:0 2px 16px rgba(0,0,0,0.08);max-width:320px;width:90%}
+.result-box .big{font-size:48px;margin:8px 0}
+.result-box .score-val{font-size:32px;font-weight:700;color:#2F2B2A}
+.result-box .detail{font-size:13px;color:#888;margin:4px 0}
+.free-options{display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px;margin:12px 0}
+.free-options label{font-size:14px;color:#555;font-weight:600}
+.free-options select{padding:10px;border-radius:10px;border:2px solid #E0E0E0;font-size:15px;font-family:system-ui;background:#fff;color:#2F2B2A}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Title -->
+  <div class="screen active" id="titleScreen">
+    <h1>🏗️ Maze Architect</h1>
+    <div class="subtitle">迷路を作って、AIを迷わせろ！</div>
+    <button class="btn" onclick="showStageSelect()">🗺️ ステージモード</button>
+    <button class="btn btn-secondary" onclick="showFreeMode()">🏗️ フリーモード</button>
+  </div>
+  <!-- Stage Select -->
+  <div class="screen" id="stageScreen">
+    <h2>ステージ選択</h2>
+    <div class="stage-card" id="stageCard"></div>
+    <div class="stage-nav">
+      <button class="nav-btn" onclick="navStage(-1)">◀</button>
+      <span id="stageNum" style="font-size:14px;color:#888">1/8</span>
+      <button class="nav-btn" onclick="navStage(1)">▶</button>
+    </div>
+    <button class="btn" style="margin-top:16px" onclick="startStage()">▶ はじめる</button>
+    <button class="btn btn-secondary btn-small" style="margin-top:4px" onclick="showTitle()">戻る</button>
+  </div>
+  <!-- Free Mode Options -->
+  <div class="screen" id="freeScreen">
+    <h2>🏗️ フリーモード</h2>
+    <div class="free-options">
+      <label>グリッドサイズ</label>
+      <select id="freeSize">
+        <option value="5">5×5</option>
+        <option value="8" selected>8×8</option>
+        <option value="10">10×10</option>
+        <option value="12">12×12</option>
+        <option value="15">15×15</option>
+      </select>
+      <label>攻略者アルゴリズム</label>
+      <select id="freeAlgo">
+        <option value="random">🟢 ランダムウォーク</option>
+        <option value="righthand">🟡 右手法</option>
+        <option value="bfs">🔴 BFS</option>
+        <option value="astar">💀 A*</option>
+      </select>
+    </div>
+    <button class="btn" onclick="startFree()">▶ スタート</button>
+    <button class="btn btn-secondary btn-small" onclick="showTitle()">戻る</button>
+  </div>
+  <!-- Game -->
+  <div class="screen" id="gameScreen">
+    <div class="game-header">
+      <span class="stage-name" id="gameName"></span>
+      <div class="info">
+        <span id="wallCount">壁: 0/8</span>
+        <span id="timerDisp">⏱ 0.0s</span>
+      </div>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="gameCanvas"></canvas>
+    </div>
+    <div class="game-footer">
+      <button class="btn btn-small" id="startBtn" onclick="runSolver()">▶ スタート</button>
+      <button class="btn btn-small btn-secondary" onclick="resetWalls()">🗑️ リセット</button>
+      <button class="btn btn-small btn-secondary" onclick="undoWall()">↩️ 戻す</button>
+      <button class="btn btn-small btn-secondary" onclick="backFromGame()">🏠</button>
+    </div>
+  </div>
+  <!-- Result -->
+  <div class="screen" id="resultScreen">
+    <div class="result-box">
+      <div id="resultEmoji" class="big">🎉</div>
+      <div id="resultTitle" style="font-size:20px;font-weight:700;margin-bottom:8px">クリア！</div>
+      <div id="resultTime" class="detail"></div>
+      <div class="score-val" id="resultScore">0</div>
+      <div id="resultBreakdown" class="detail"></div>
+      <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;align-items:center">
+        <button class="btn btn-small" id="nextStageBtn" onclick="nextStage()">次のステージ ▶</button>
+        <button class="btn btn-small btn-secondary" onclick="retryStage()">🔄 リトライ</button>
+        <button class="btn btn-small btn-secondary" onclick="showTitle()">🏠 タイトル</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Audio ──
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
+function playTone(freq,dur,type,vol){
+  ensureAudio();
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type||'square';o.frequency.value=freq;
+  g.gain.setValueAtTime(vol||0.08,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);
+  o.connect(g);g.connect(audioCtx.destination);
+  o.start();o.stop(audioCtx.currentTime+dur);
+}
+function sfxWall(){playTone(600,0.08,'square',0.06)}
+function sfxRemove(){playTone(400,0.08,'square',0.05)}
+function sfxStart(){playTone(880,0.15,'sine',0.1);setTimeout(()=>playTone(1100,0.2,'sine',0.1),150)}
+function sfxClear(){playTone(660,0.15,'sine',0.12);setTimeout(()=>playTone(880,0.15,'sine',0.12),150);setTimeout(()=>playTone(1100,0.3,'sine',0.12),300)}
+function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260,0.3,'sawtooth',0.08),200)}
+
+// ── Stages ──
+const STAGES=[
+  {name:'はじめての壁',grid:5,budget:8,algo:'random',target:5,desc:'壁をタップして配置！攻略者を迷わせよう'},
+  {name:'行き止まり',grid:6,budget:12,algo:'random',target:10,desc:'行き止まりを作ると攻略者が引き返すよ'},
+  {name:'壁伝いの敵',grid:7,budget:15,algo:'righthand',target:8,desc:'この攻略者は壁を伝って進む。螺旋状に迷わせろ！'},
+  {name:'広い迷路',grid:8,budget:20,algo:'righthand',target:12,desc:'広いフィールド。長い回り道を作れ！'},
+  {name:'探索者',grid:8,budget:22,algo:'bfs',target:6,desc:'⚠️ この攻略者は最短経路を見つける！'},
+  {name:'大迷宮',grid:10,budget:30,algo:'bfs',target:8,desc:'大きな迷路で最短経路を遠回りさせろ！'},
+  {name:'天才',grid:10,budget:35,algo:'astar',target:5,desc:'💀 A*アルゴリズム。ほぼ最短で来る。壁を最大限に活用しろ！'},
+  {name:'究極の迷宮',grid:12,budget:45,algo:'astar',target:7,desc:'最大フィールド。究極の迷路を設計せよ！'},
+];
+const ALGO_INFO={random:{label:'🟢 ランダム',color:'#4ED26D'},righthand:{label:'🟡 右手法',color:'#F5A623'},bfs:{label:'🔴 BFS',color:'#FF3B30'},astar:{label:'💀 A*',color:'#8B5CF6'}};
+
+let curStageIdx=0, mode='stage', curConfig=null;
+let gridN=5, wallBudget=8, walls=new Set(), wallHistory=[], usedWalls=0;
+let running=false, timer=0, timerStart=0, animId=null;
+let solverState=null, explored=new Set(), shortestPath=[], deadEndCount=0, realtimeWallPenalty=0;
+
+// ── Screens ──
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
+function showTitle(){stopSolver();showScreen('titleScreen')}
+function showStageSelect(){curStageIdx=0;renderStageCard();showScreen('stageScreen')}
+function showFreeMode(){showScreen('freeScreen')}
+
+function renderStageCard(){
+  const s=STAGES[curStageIdx];
+  const ai=ALGO_INFO[s.algo];
+  document.getElementById('stageCard').innerHTML=`
+    <div class="badge" style="background:${ai.color}20;color:${ai.color}">${ai.label}</div>
+    <h2 style="margin:8px 0">Stage ${curStageIdx+1}: ${s.name}</h2>
+    <div style="font-size:13px;color:#888;margin-bottom:12px">${s.desc}</div>
+    <div style="display:flex;justify-content:space-around;font-size:13px;color:#555">
+      <span>📐 ${s.grid}×${s.grid}</span>
+      <span>🧱 ${s.budget}</span>
+      <span>🎯 ${s.target}s</span>
+    </div>`;
+  document.getElementById('stageNum').textContent=`${curStageIdx+1}/8`;
+}
+function navStage(d){curStageIdx=(curStageIdx+d+8)%8;renderStageCard()}
+
+function startStage(){
+  mode='stage';
+  const s=STAGES[curStageIdx];
+  curConfig={grid:s.grid,budget:s.budget,algo:s.algo,target:s.target,name:`Stage ${curStageIdx+1}: ${s.name}`};
+  initGame(curConfig);
+  showScreen('gameScreen');
+}
+function startFree(){
+  mode='free';
+  const sz=parseInt(document.getElementById('freeSize').value);
+  const algo=document.getElementById('freeAlgo').value;
+  curConfig={grid:sz,budget:Infinity,algo:algo,target:Infinity,name:'フリーモード'};
+  initGame(curConfig);
+  showScreen('gameScreen');
+}
+
+// ── Toast ──
+let toastTimer=null;
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1500);
+}
+
+// ── Game Init ──
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+let cellSize=40, offsetX=0, offsetY=0;
+
+function initGame(cfg){
+  stopSolver();
+  gridN=cfg.grid;wallBudget=cfg.budget;
+  walls=new Set();wallHistory=[];usedWalls=0;
+  running=false;timer=0;explored=new Set();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
+  solverState=null;
+  document.getElementById('gameName').textContent=cfg.name;
+  document.getElementById('startBtn').textContent='▶ スタート';
+  document.getElementById('startBtn').disabled=false;
+  resizeCanvas();
+  updateUI();
+  draw();
+}
+
+function resizeCanvas(){
+  const wrap=document.getElementById('canvasWrap');
+  const w=wrap.clientWidth-8, h=wrap.clientHeight-8;
+  const maxCell=Math.floor(Math.min(w,h)/(gridN+0.5));
+  cellSize=Math.max(20,Math.min(maxCell,60));
+  const totalW=cellSize*gridN, totalH=cellSize*gridN;
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=totalW*dpr;canvas.height=totalH*dpr;
+  canvas.style.width=totalW+'px';canvas.style.height=totalH+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  offsetX=0;offsetY=0;
+}
+
+function updateUI(){
+  const budgetStr=wallBudget===Infinity?`壁: ${usedWalls}(∞)`:`壁: ${usedWalls}/${wallBudget}`;
+  document.getElementById('wallCount').textContent=budgetStr;
+  document.getElementById('timerDisp').textContent=`⏱ ${timer.toFixed(1)}s`;
+}
+
+// ── Wall key: "r,c,d" where d='h' (horizontal, top edge of cell) or 'v' (vertical, left edge of cell)
+// Horizontal wall at (r,c) = wall between cell(r-1,c) and cell(r,c) — top edge of row r
+// Vertical wall at (r,c) = wall between cell(r,c-1) and cell(r,c) — left edge of col c
+function wallKey(r,c,d){return `${r},${c},${d}`}
+
+function hasWall(r,c,d){
+  // Boundary walls
+  if(d==='h'){if(r===0||r===gridN)return true}
+  if(d==='v'){if(c===0||c===gridN)return true}
+  return walls.has(wallKey(r,c,d));
+}
+
+// Check if two adjacent cells are connected (no wall between them)
+function canPass(r1,c1,r2,c2){
+  if(r2<0||r2>=gridN||c2<0||c2>=gridN)return false;
+  // Moving up: r2=r1-1 → horizontal wall at (r1,c1,'h')
+  if(r2===r1-1&&c2===c1)return !hasWall(r1,c1,'h');
+  // Moving down: r2=r1+1 → horizontal wall at (r1+1,c1,'h')
+  if(r2===r1+1&&c2===c1)return !hasWall(r1+1,c1,'h');
+  // Moving left: c2=c1-1 → vertical wall at (r1,c1,'v')
+  if(r2===r1&&c2===c1-1)return !hasWall(r1,c1,'v');
+  // Moving right: c2=c1+1 → vertical wall at (r1,c1+1,'v')
+  if(r2===r1&&c2===c1+1)return !hasWall(r1,c1+1,'v');
+  return false;
+}
+
+function neighbors(r,c){
+  const n=[];
+  [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc])=>{
+    const nr=r+dr,nc=c+dc;
+    if(canPass(r,c,nr,nc))n.push([nr,nc]);
+  });
+  return n;
+}
+
+// BFS reachability check
+function isReachable(){
+  const visited=new Set();
+  const q=[[0,0]];visited.add('0,0');
+  const goal=`${gridN-1},${gridN-1}`;
+  while(q.length){
+    const [r,c]=q.shift();
+    if(`${r},${c}`===goal)return true;
+    for(const [nr,nc] of neighbors(r,c)){
+      const k=`${nr},${nc}`;
+      if(!visited.has(k)){visited.add(k);q.push([nr,nc])}
+    }
+  }
+  return false;
+}
+
+// ── Wall placement via tap ──
+function getWallFromPos(x,y){
+  // x,y in canvas local coords
+  // Check proximity to horizontal lines (row boundaries) and vertical lines (col boundaries)
+  let bestDist=16, bestWall=null;
+  // Horizontal walls: y = r*cellSize for r in 1..gridN-1
+  for(let r=1;r<gridN;r++){
+    const wy=r*cellSize;
+    const dy=Math.abs(y-wy);
+    if(dy<bestDist){
+      const col=Math.floor(x/cellSize);
+      if(col>=0&&col<gridN){
+        bestDist=dy;bestWall={r,c:col,d:'h',key:wallKey(r,col,'h')};
+      }
+    }
+  }
+  // Vertical walls: x = c*cellSize for c in 1..gridN-1
+  for(let c=1;c<gridN;c++){
+    const wx=c*cellSize;
+    const dx=Math.abs(x-wx);
+    if(dx<bestDist){
+      const row=Math.floor(y/cellSize);
+      if(row>=0&&row<gridN){
+        bestDist=dx;bestWall={r:row,c,d:'v',key:wallKey(row,c,'v')};
+      }
+    }
+  }
+  return bestWall;
+}
+
+function handleTap(ex,ey){
+  if(running&&mode!=='free')return;
+  const rect=canvas.getBoundingClientRect();
+  const x=ex-rect.left, y=ey-rect.top;
+  const w=getWallFromPos(x,y);
+  if(!w)return;
+  
+  ensureAudio();
+  
+  if(walls.has(w.key)){
+    walls.delete(w.key);usedWalls--;
+    wallHistory.push({key:w.key,action:'remove'});
+    sfxRemove();
+  } else {
+    if(usedWalls>=wallBudget){showToast('壁の予算を使い切りました');return}
+    walls.add(w.key);
+    if(!isReachable()){
+      walls.delete(w.key);
+      showToast('⚠️ 経路がなくなります');
+      return;
+    }
+    usedWalls++;
+    wallHistory.push({key:w.key,action:'add'});
+    sfxWall();
+    if(running&&mode==='free')realtimeWallPenalty++;
+  }
+  updateUI();draw();
+}
+
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();handleTap(e.clientX,e.clientY)});
+
+function resetWalls(){
+  if(running)return;
+  walls.clear();wallHistory=[];usedWalls=0;explored.clear();shortestPath=[];
+  updateUI();draw();
+}
+function undoWall(){
+  if(running)return;
+  if(!wallHistory.length)return;
+  const last=wallHistory.pop();
+  if(last.action==='add'){walls.delete(last.key);usedWalls--}
+  else{walls.add(last.key);usedWalls++}
+  updateUI();draw();
+}
+function backFromGame(){stopSolver();if(mode==='stage')showStageSelect();else showTitle()}
+
+// ── Drawing ──
+function draw(){
+  const W=cellSize*gridN, H=cellSize*gridN;
+  ctx.clearRect(0,0,W,H);
+  
+  // Background
+  ctx.fillStyle='#FAFAF9';ctx.fillRect(0,0,W,H);
+  
+  // Explored cells overlay
+  if(explored.size){
+    const col=ALGO_INFO[curConfig.algo].color;
+    ctx.fillStyle=col+'22';
+    explored.forEach(k=>{
+      const [r,c]=k.split(',').map(Number);
+      ctx.fillRect(c*cellSize+1,r*cellSize+1,cellSize-2,cellSize-2);
+    });
+  }
+  
+  // Shortest path
+  if(shortestPath.length>1){
+    const col=ALGO_INFO[curConfig.algo].color;
+    ctx.strokeStyle=col+'88';ctx.lineWidth=3;ctx.lineCap='round';
+    ctx.beginPath();
+    shortestPath.forEach(([r,c],i)=>{
+      const px=c*cellSize+cellSize/2, py=r*cellSize+cellSize/2;
+      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    });
+    ctx.stroke();
+  }
+  
+  // Grid lines (thin)
+  ctx.strokeStyle='#E0E0E0';ctx.lineWidth=1;
+  for(let r=0;r<=gridN;r++){ctx.beginPath();ctx.moveTo(0,r*cellSize);ctx.lineTo(W,r*cellSize);ctx.stroke()}
+  for(let c=0;c<=gridN;c++){ctx.beginPath();ctx.moveTo(c*cellSize,0);ctx.lineTo(c*cellSize,H);ctx.stroke()}
+  
+  // Walls (thick)
+  ctx.strokeStyle='#2F2B2A';ctx.lineWidth=4;ctx.lineCap='round';
+  // Outer boundary
+  ctx.strokeRect(1,1,W-2,H-2);
+  // Inner walls
+  walls.forEach(k=>{
+    const [r,c,d]=k.split(',');
+    const ri=+r,ci=+c;
+    ctx.beginPath();
+    if(d==='h'){ctx.moveTo(ci*cellSize,ri*cellSize);ctx.lineTo((ci+1)*cellSize,ri*cellSize)}
+    else{ctx.moveTo(ci*cellSize,ri*cellSize);ctx.lineTo(ci*cellSize,(ri+1)*cellSize)}
+    ctx.stroke();
+  });
+  
+  // Start & Goal
+  const sr=cellSize*0.3;
+  ctx.fillStyle='#4ED26D';ctx.beginPath();ctx.arc(cellSize/2,cellSize/2,sr,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gridN-0.5)*cellSize,(gridN-0.5)*cellSize,sr,0,Math.PI*2);ctx.fill();
+  
+  // Solver agent
+  if(solverState&&solverState.pos){
+    const col=ALGO_INFO[curConfig.algo].color;
+    const [pr,pc]=solverState.pos;
+    let dr=0,dc=0;
+    if(solverState.lerp<1&&solverState.prev){
+      dr=(pr-solverState.prev[0])*(1-solverState.lerp);
+      dc=(pc-solverState.prev[1])*(1-solverState.lerp);
+    }
+    const ax=(pc-dc)*cellSize+cellSize/2, ay=(pr-dr)*cellSize+cellSize/2;
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(ax,ay,sr*0.9,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font=`${sr*0.9}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+    if(solverState.exclaim&&Date.now()-solverState.exclaimTime<500){
+      ctx.fillStyle=col;ctx.font=`bold ${sr*1.5}px system-ui`;ctx.fillText('!',ax,ay-cellSize*0.6);
+    }
+  }
+}
+
+// ── Solver ──
+function stopSolver(){
+  running=false;
+  if(animId)cancelAnimationFrame(animId);animId=null;
+}
+
+function runSolver(){
+  if(running)return;
+  ensureAudio();sfxStart();
+  running=true;timer=0;timerStart=Date.now();
+  explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
+  document.getElementById('startBtn').textContent='実行中…';
+  document.getElementById('startBtn').disabled=true;
+  
+  const algo=curConfig.algo;
+  if(algo==='random')startRandomWalk();
+  else if(algo==='righthand')startRightHand();
+  else if(algo==='bfs')startBFS();
+  else if(algo==='astar')startAStar();
+}
+
+// ── Random Walk ──
+function startRandomWalk(){
+  solverState={pos:[0,0],prev:null,lerp:1,exclaim:false,exclaimTime:0};
+  let lastPos=null;
+  const step=()=>{
+    if(!running)return;
+    const [r,c]=solverState.pos;
+    if(r===gridN-1&&c===gridN-1){finishSolver();return}
+    const nb=neighbors(r,c);
+    let choices=nb;
+    if(lastPos&&nb.length>1){
+      const filtered=nb.filter(([nr,nc])=>!(nr===lastPos[0]&&nc===lastPos[1]));
+      if(Math.random()>0.3||filtered.length===0)choices=nb;else choices=filtered;
+    }
+    // Dead end check
+    if(nb.length<=1&&!(r===0&&c===0)){
+      deadEndCount++;solverState.exclaim=true;solverState.exclaimTime=Date.now();
+    }
+    const pick=choices[Math.floor(Math.random()*choices.length)];
+    lastPos=[r,c];
+    explored.add(`${pick[0]},${pick[1]}`);
+    animateMove(pick,300,step);
+  };
+  explored.add('0,0');
+  step();
+  tickTimer();
+}
+
+// ── Right Hand ──
+function startRightHand(){
+  // Directions: 0=up,1=right,2=down,3=left
+  const DR=[-1,0,1,0],DC=[0,1,0,-1];
+  let dir=2; // start facing down
+  solverState={pos:[0,0],prev:null,lerp:1,exclaim:false,exclaimTime:0};
+  
+  const step=()=>{
+    if(!running)return;
+    const [r,c]=solverState.pos;
+    if(r===gridN-1&&c===gridN-1){finishSolver();return}
+    // Right hand rule: try right, forward, left, back
+    const tryOrder=[(dir+1)%4, dir, (dir+3)%4, (dir+2)%4];
+    let moved=false;
+    for(const d of tryOrder){
+      const nr=r+DR[d], nc=c+DC[d];
+      if(canPass(r,c,nr,nc)){
+        dir=d;
+        const nb=neighbors(r,c);
+        if(nb.length<=1&&!(r===0&&c===0)){
+          deadEndCount++;solverState.exclaim=true;solverState.exclaimTime=Date.now();
+        }
+        explored.add(`${nr},${nc}`);
+        animateMove([nr,nc],250,step);
+        moved=true;break;
+      }
+    }
+    if(!moved){finishSolver()} // shouldn't happen
+  };
+  explored.add('0,0');
+  step();
+  tickTimer();
+}
+
+// ── BFS ──
+function startBFS(){
+  solverState={pos:null,prev:null,lerp:1,exclaim:false,exclaimTime:0};
+  const parent=new Map();
+  const queue=[[0,0]];
+  const visited=new Set(['0,0']);
+  let found=false;
+  
+  const exploreStep=()=>{
+    if(!running)return;
+    if(!queue.length){finishSolver();return}
+    // Process a batch per tick for speed
+    const batch=Math.min(queue.length,3);
+    for(let i=0;i<batch;i++){
+      if(!queue.length)break;
+      const [r,c]=queue.shift();
+      explored.add(`${r},${c}`);
+      if(r===gridN-1&&c===gridN-1){found=true;break}
+      for(const [nr,nc] of neighbors(r,c)){
+        const k=`${nr},${nc}`;
+        if(!visited.has(k)){visited.add(k);parent.set(k,`${r},${c}`);queue.push([nr,nc])}
+      }
+    }
+    draw();
+    if(found){
+      // Reconstruct path
+      const path=[];let cur=`${gridN-1},${gridN-1}`;
+      while(cur){path.unshift(cur.split(',').map(Number));cur=parent.get(cur)}
+      shortestPath=path;
+      walkPath(path,0);
+    } else {
+      setTimeout(exploreStep,50);
+    }
+  };
+  exploreStep();
+  tickTimer();
+}
+
+// ── A* ──
+function startAStar(){
+  solverState={pos:null,prev:null,lerp:1,exclaim:false,exclaimTime:0};
+  const goal=[gridN-1,gridN-1];
+  const h=(r,c)=>Math.abs(r-goal[0])+Math.abs(c-goal[1]);
+  const open=[{r:0,c:0,g:0,f:h(0,0)}];
+  const gScore=new Map();gScore.set('0,0',0);
+  const parent=new Map();
+  const closed=new Set();
+  let found=false;
+  
+  const exploreStep=()=>{
+    if(!running)return;
+    if(!open.length){finishSolver();return}
+    const batch=Math.min(open.length,5);
+    for(let i=0;i<batch;i++){
+      if(!open.length)break;
+      // Find min f
+      let minIdx=0;
+      for(let j=1;j<open.length;j++){if(open[j].f<open[minIdx].f)minIdx=j}
+      const cur=open.splice(minIdx,1)[0];
+      const ck=`${cur.r},${cur.c}`;
+      if(closed.has(ck))continue;
+      closed.add(ck);explored.add(ck);
+      if(cur.r===goal[0]&&cur.c===goal[1]){found=true;break}
+      for(const [nr,nc] of neighbors(cur.r,cur.c)){
+        const nk=`${nr},${nc}`;
+        if(closed.has(nk))continue;
+        const ng=cur.g+1;
+        if(!gScore.has(nk)||ng<gScore.get(nk)){
+          gScore.set(nk,ng);parent.set(nk,ck);
+          open.push({r:nr,c:nc,g:ng,f:ng+h(nr,nc)});
+        }
+      }
+    }
+    draw();
+    if(found){
+      const path=[];let cur=`${gridN-1},${gridN-1}`;
+      while(cur){path.unshift(cur.split(',').map(Number));cur=parent.get(cur)}
+      shortestPath=path;
+      walkPath(path,0);
+    } else {
+      setTimeout(exploreStep,30);
+    }
+  };
+  exploreStep();
+  tickTimer();
+}
+
+// ── Walk a computed path ──
+function walkPath(path,idx){
+  if(!running)return;
+  if(idx>=path.length){finishSolver();return}
+  const [r,c]=path[idx];
+  if(r===gridN-1&&c===gridN-1){
+    solverState.pos=[r,c];solverState.prev=idx>0?path[idx-1]:null;solverState.lerp=1;
+    draw();finishSolver();return;
+  }
+  const speed=curConfig.algo==='astar'?150:200;
+  animateMove([r,c],speed,()=>walkPath(path,idx+1));
+}
+
+function animateMove(target,duration,cb){
+  const prev=solverState.pos?[...solverState.pos]:target;
+  solverState.prev=prev;solverState.pos=target;solverState.lerp=0;
+  const start=performance.now();
+  const tick=(t)=>{
+    if(!running)return;
+    const p=Math.min(1,(t-start)/duration);
+    solverState.lerp=p;
+    draw();
+    if(p<1)animId=requestAnimationFrame(tick);
+    else{solverState.lerp=1;cb()}
+  };
+  animId=requestAnimationFrame(tick);
+}
+
+function tickTimer(){
+  if(!running)return;
+  timer=(Date.now()-timerStart)/1000;
+  updateUI();
+  setTimeout(()=>{if(running)tickTimer()},100);
+}
+
+function finishSolver(){
+  running=false;
+  timer=(Date.now()-timerStart)/1000;
+  updateUI();draw();
+  
+  // Score
+  const base=Math.round(timer*100);
+  const wallBonus=wallBudget===Infinity?0:Math.max(0,(wallBudget-usedWalls))*50;
+  const deadEndBonus=deadEndCount*30;
+  const penalty=realtimeWallPenalty*200;
+  const total=Math.max(0,base+wallBonus+deadEndBonus-penalty);
+  
+  const passed=curConfig.target!==Infinity&&timer>=curConfig.target;
+  
+  document.getElementById('resultEmoji').textContent=passed?'🎉':'😅';
+  document.getElementById('resultTitle').textContent=passed?'クリア！':'もう少し迷わせよう…';
+  document.getElementById('resultTime').textContent=`経過時間: ${timer.toFixed(1)}秒${curConfig.target!==Infinity?' / 目標: '+curConfig.target+'秒':''}`;
+  document.getElementById('resultScore').textContent=total.toLocaleString();
+  let bd=`ベース: ${base}`;
+  if(wallBonus)bd+=` | 壁効率: +${wallBonus}`;
+  if(deadEndBonus)bd+=` | 行き止まり: +${deadEndBonus}`;
+  if(penalty)bd+=` | ペナルティ: -${penalty}`;
+  document.getElementById('resultBreakdown').textContent=bd;
+  
+  document.getElementById('nextStageBtn').style.display=(mode==='stage'&&curStageIdx<7)?'block':'none';
+  
+  if(passed)sfxClear();else sfxFail();
+  
+  showScreen('resultScreen');
+}
+
+function retryStage(){
+  if(mode==='stage')startStage();else startFree();
+}
+function nextStage(){
+  if(curStageIdx<7){curStageIdx++;startStage()}
+}
+
+// Resize handler
+window.addEventListener('resize',()=>{
+  if(document.getElementById('gameScreen').classList.contains('active')){
+    resizeCanvas();draw();
+  }
+});
+</script>
+</body>
+</html>
