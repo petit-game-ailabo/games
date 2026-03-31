@@ -51,12 +51,13 @@ const DAMPING = 0.99;
 const NODE_RADIUS = 8;
 const CAR_SPEED = 1.2;
 const SNAP_DIST = 15;
+const MAX_BEAM_LENGTH = 150;
 
 const MAT_WOOD = 0, MAT_STEEL = 1, MAT_ROPE = 2;
 const MATERIALS = [
-  { name: '🪵 木材', color: '#8B6914', tensile: 0.035, compressive: 0.035, cost: 10 },
-  { name: '🔩 鉄骨', color: '#708090', tensile: 0.06, compressive: 0.06, cost: 25 },
-  { name: '🪢 ロープ', color: '#DAA520', tensile: 0.06, compressive: 0, cost: 5 },
+  { name: '🪵 木材', color: '#8B6914', tensile: 0.035, compressive: 0.035, cost: 10, weightPerPx: 0.02 },
+  { name: '🔩 鉄骨', color: '#708090', tensile: 0.06, compressive: 0.06, cost: 25, weightPerPx: 0.04 },
+  { name: '🪢 ロープ', color: '#DAA520', tensile: 0.06, compressive: 0, cost: 5, weightPerPx: 0.005 },
 ];
 
 // ── Stages ──
@@ -151,6 +152,8 @@ let animFrame = 0;
 let clearTimer = 0;
 let failTimer = 0;
 let splashParticles = [];
+let toastMsg = '';
+let toastTimer = 0;
 
 // Camera / pan-zoom
 let camX = 0, camY = 0, camScale = 1;
@@ -251,20 +254,32 @@ function findRoadSegments() {
 function simStep() {
   const s = STAGES[selectedStage];
   const dt = 1;
+  const SIM_DAMPING = 0.98;
+  
+  // Apply self-weight of beams to their endpoint nodes
+  for (const b of simBeams) {
+    if (b.broken) continue;
+    const mat = MATERIALS[b.mat];
+    const selfWeight = b.restLen * mat.weightPerPx;
+    const halfWeight = selfWeight / 2;
+    const na = simNodes[b.a], nb = simNodes[b.b];
+    if (!na.fixed) na.y += halfWeight;
+    if (!nb.fixed) nb.y += halfWeight;
+  }
   
   // Verlet integration
   for (const n of simNodes) {
     if (n.fixed) continue;
-    const vx = (n.x - n.prevX) * DAMPING;
-    const vy = (n.y - n.prevY) * DAMPING;
+    const vx = (n.x - n.prevX) * SIM_DAMPING;
+    const vy = (n.y - n.prevY) * SIM_DAMPING;
     n.prevX = n.x;
     n.prevY = n.y;
     n.x += vx;
     n.y += vy + GRAVITY;
   }
   
-  // Constraint solving (multiple iterations for stability)
-  for (let iter = 0; iter < 5; iter++) {
+  // Constraint solving (15 iterations for stability)
+  for (let iter = 0; iter < 15; iter++) {
     for (const b of simBeams) {
       if (b.broken) continue;
       const na = simNodes[b.a], nb = simNodes[b.b];
@@ -282,12 +297,14 @@ function simStep() {
         nb.x -= ox * 2; nb.y -= oy * 2;
       }
       
-      // Stress
+      // Stress with length factor
       const strain = Math.abs(dist - b.restLen) / b.restLen;
       const mat = MATERIALS[b.mat];
       const isCompression = dist < b.restLen;
       const limit = isCompression ? mat.compressive : mat.tensile;
-      b.stress = limit > 0 ? strain / limit : (strain > 0.001 ? 999 : 0);
+      const baseStress = limit > 0 ? strain / limit : (strain > 0.001 ? 999 : 0);
+      const lengthFactor = 1 + b.restLen / 200;
+      b.stress = baseStress * lengthFactor;
       
       // Break
       if (b.stress > 1.0) {
@@ -567,18 +584,21 @@ function drawGhostLine() {
     const na = nodes[dragFrom];
     const sa = worldToScreen(na.x, na.y);
     const sb = worldToScreen(ghostLine.x, ghostLine.y);
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    const dist = Math.hypot(ghostLine.x - na.x, ghostLine.y - na.y);
+    const tooLong = dist > MAX_BEAM_LENGTH;
+    
+    ctx.strokeStyle = tooLong ? 'rgba(255,60,60,0.7)' : 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 3 * camScale;
     ctx.setLineDash([6, 6]);
     ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
     ctx.setLineDash([]);
     
-    // Show cost
-    const dist = Math.hypot(ghostLine.x - na.x, ghostLine.y - na.y);
+    // Show cost + max length warning
     const cost = Math.round(dist / GRID * MATERIALS[currentMat].cost);
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = tooLong ? '#ff4444' : 'white';
     ctx.font = `${12 * camScale}px sans-serif`;
-    ctx.fillText(`$${cost}`, (sa.x + sb.x) / 2, (sa.y + sb.y) / 2 - 10);
+    const label = tooLong ? `$${cost} (最大長超過)` : `$${cost}`;
+    ctx.fillText(label, (sa.x + sb.x) / 2, (sa.y + sb.y) / 2 - 10);
   }
 }
 
@@ -843,6 +863,24 @@ function drawBuildUI() {
   
   // Back button
   addButton(W - 45, 5, 40, 35, '✕', () => { sfxClick(); state = 'select'; });
+  
+  // Toast message
+  if (toastTimer > 0) {
+    toastTimer--;
+    const alpha = toastTimer > 20 ? 1 : toastTimer / 20;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(200,50,50,0.85)';
+    ctx.font = 'bold 16px sans-serif';
+    const tw = ctx.measureText(toastMsg).width + 30;
+    ctx.beginPath();
+    ctx.roundRect(W / 2 - tw / 2, 55, tw, 35, 8);
+    ctx.fill();
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.fillText(toastMsg, W / 2, 78);
+    ctx.textAlign = 'left';
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ── Test Screen ──
@@ -1020,6 +1058,11 @@ function findNearestBeam(wx, wy, maxDist = 15) {
   return best;
 }
 
+function showToast(msg) {
+  toastMsg = msg;
+  toastTimer = 90; // ~1.5 seconds at 60fps
+}
+
 function addBeamBetween(a, b) {
   if (a === b) return;
   // Check duplicate
@@ -1027,6 +1070,13 @@ function addBeamBetween(a, b) {
   
   const s = STAGES[selectedStage];
   const dist = Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y);
+  
+  // Max length check
+  if (dist > MAX_BEAM_LENGTH) {
+    showToast('長すぎます！（最大150px）');
+    return;
+  }
+  
   const cost = Math.round(dist / GRID * MATERIALS[currentMat].cost);
   
   if (budgetUsed + cost > s.budget) return; // Over budget
@@ -1082,6 +1132,15 @@ function handlePointerDown(x, y) {
     // Check if within buildable area
     const s = STAGES[selectedStage];
     if (gx > s.leftCliffX - 40 && gx < s.rightCliffX + 40 && gy > 80 && gy < s.waterY - 20) {
+      if (selectedNode !== null) {
+        const dist = Math.hypot(nodes[selectedNode].x - gx, nodes[selectedNode].y - gy);
+        // Max length check
+        if (dist > MAX_BEAM_LENGTH) {
+          showToast('長すぎます！（最大150px）');
+          return;
+        }
+      }
+      
       const newIdx = nodes.length;
       nodes.push({ x: gx, y: gy, fixed: false, prevX: gx, prevY: gy });
       
@@ -1136,20 +1195,25 @@ function handlePointerUp(x, y) {
     const gy = snapToGrid(w.y);
     const s = STAGES[selectedStage];
     if (gx > s.leftCliffX - 40 && gx < s.rightCliffX + 40 && gy > 80 && gy < s.waterY - 20) {
-      const newIdx = nodes.length;
-      nodes.push({ x: gx, y: gy, fixed: false, prevX: gx, prevY: gy });
       const dist = Math.hypot(nodes[dragFrom].x - gx, nodes[dragFrom].y - gy);
-      const cost = Math.round(dist / GRID * MATERIALS[currentMat].cost);
-      if (budgetUsed + cost <= s.budget) {
-        const beam = { a: dragFrom, b: newIdx, mat: currentMat };
-        beams.push(beam);
-        budgetUsed += cost;
-        undoStack.push({ type: 'addNodeAndBeam', beam: { ...beam }, cost });
-        sfxPlace();
+      // Max length check
+      if (dist > MAX_BEAM_LENGTH) {
+        showToast('長すぎます！（最大150px）');
       } else {
-        undoStack.push({ type: 'addNode' });
+        const newIdx = nodes.length;
+        nodes.push({ x: gx, y: gy, fixed: false, prevX: gx, prevY: gy });
+        const cost = Math.round(dist / GRID * MATERIALS[currentMat].cost);
+        if (budgetUsed + cost <= s.budget) {
+          const beam = { a: dragFrom, b: newIdx, mat: currentMat };
+          beams.push(beam);
+          budgetUsed += cost;
+          undoStack.push({ type: 'addNodeAndBeam', beam: { ...beam }, cost });
+          sfxPlace();
+        } else {
+          undoStack.push({ type: 'addNode' });
+        }
+        selectedNode = newIdx;
       }
-      selectedNode = newIdx;
     }
   }
   
