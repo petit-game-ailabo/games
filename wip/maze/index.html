@@ -19,9 +19,11 @@ canvas{display:block;touch-action:none}
 h1{font-size:28px;color:#2F2B2A;margin-bottom:4px}
 h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .subtitle{color:#888;font-size:14px;margin-bottom:20px}
-.game-header{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:420px;padding:8px 4px;font-size:13px;color:#555;flex-shrink:0}
+.game-header{display:flex;flex-direction:column;align-items:center;width:100%;max-width:420px;padding:8px 4px;font-size:13px;color:#555;flex-shrink:0}
+.game-header .header-top{display:flex;justify-content:space-between;align-items:center;width:100%}
 .game-header .info{display:flex;gap:12px}
 .game-header .stage-name{font-weight:700;color:#2F2B2A;font-size:15px}
+.game-header .ability-bar{font-size:12px;color:#5B4FCF;font-weight:600;margin-top:2px;min-height:16px}
 .game-footer{display:flex;gap:8px;padding:8px 4px;flex-shrink:0;flex-wrap:wrap;justify-content:center}
 .canvas-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:hidden;position:relative}
 .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#2F2B2A;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
@@ -38,6 +40,8 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .free-options{display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px;margin:12px 0}
 .free-options label{font-size:14px;color:#555;font-weight:600}
 .free-options select{padding:10px;border-radius:10px;border:2px solid #E0E0E0;font-size:15px;font-family:system-ui;background:#fff;color:#2F2B2A}
+.free-options .ability-checks{display:flex;flex-wrap:wrap;gap:10px;margin-top:4px}
+.free-options .ability-checks label{font-size:14px;font-weight:400;display:flex;align-items:center;gap:4px;cursor:pointer}
 .dungeon-grid{display:flex;flex-wrap:wrap;gap:8px;width:100%;max-width:360px;justify-content:center;margin:12px 0}
 .dungeon-floor{background:#fff;border-radius:12px;padding:10px 16px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.06);cursor:pointer;border:2px solid transparent;transition:border-color .2s,transform .1s;min-width:70px}
 .dungeon-floor:active{transform:scale(0.97)}
@@ -80,7 +84,10 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 .timer-label{display:flex;justify-content:space-between;width:100%;max-width:420px;padding:0 4px;font-size:11px;color:#888;opacity:0;transition:opacity .3s;margin-top:1px}
 .timer-label.active{opacity:1}
 .dead-end-badge{position:absolute;top:8px;left:8px;background:#FF950022;color:#FF9500;font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;pointer-events:none;transition:opacity .3s}
-@keyframes deadEndPulse{0%,100%{transform:scale(1);opacity:0.7}50%{transform:scale(1.3);opacity:1}}
+.wall-break-flash{position:absolute;pointer-events:none;z-index:55;animation:wallBreakFlash .3s ease-out forwards}
+@keyframes wallBreakFlash{0%{opacity:1;transform:translate(-50%,-50%) scale(0.5)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.5)}}
+.scent-sparkle{position:absolute;pointer-events:none;z-index:55;font-size:20px;animation:scentSparkle .5s ease-out forwards}
+@keyframes scentSparkle{0%{opacity:1;transform:translate(-50%,-50%) scale(0.5)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}100%{opacity:0;transform:translate(-50%,-50%) scale(0.8)}}
 </style>
 </head>
 <body>
@@ -88,7 +95,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
   <!-- Title -->
   <div class="screen active" id="titleScreen">
     <h1>🏗️ Maze Architect</h1>
-    <div class="subtitle">迷路を作って、AIを迷わせろ！</div>
+    <div class="subtitle">迷路を作って、冒険者を迷わせろ！</div>
     <button class="btn btn-dungeon" onclick="showDungeonSelect()">🏰 ダンジョン防衛</button>
     <button class="btn btn-secondary" onclick="showFreeMode()">🏗️ フリーモード</button>
     <button class="btn btn-secondary btn-small" id="muteBtnTitle" onclick="toggleMute()" style="margin-top:12px">🔊 サウンド ON</button>
@@ -109,18 +116,16 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
       <label>グリッドサイズ</label>
       <select id="freeSize">
         <option value="5">5×5</option>
-        <option value="8" selected>8×8</option>
-        <option value="10">10×10</option>
-        <option value="12">12×12</option>
-        <option value="15">15×15</option>
+        <option value="7" selected>7×7</option>
+        <option value="9">9×9</option>
+        <option value="11">11×11</option>
       </select>
-      <label>攻略者アルゴリズム</label>
-      <select id="freeAlgo">
-        <option value="random">🟢 スライム（ランダム）</option>
-        <option value="righthand">🟡 剣士（右手法）</option>
-        <option value="bfs">🔴 魔法使い（BFS）</option>
-        <option value="astar">💀 勇者（A*）</option>
-      </select>
+      <label>冒険者の能力</label>
+      <div class="ability-checks">
+        <label><input type="checkbox" id="freeMemory"> 📝記憶</label>
+        <label><input type="checkbox" id="freeWallBreak"> 💥壁破壊</label>
+        <label><input type="checkbox" id="freeScent"> 👃嗅覚</label>
+      </div>
     </div>
     <button class="btn" onclick="startFree()">▶ スタート</button>
     <button class="btn btn-secondary btn-small" onclick="showTitle()">戻る</button>
@@ -128,12 +133,15 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
   <!-- Game -->
   <div class="screen" id="gameScreen">
     <div class="game-header">
-      <span class="stage-name" id="gameName"></span>
-      <div class="info">
-        <span id="wallCount">🧱 0</span>
-        <span id="pathLen" style="color:#5B4FCF;font-weight:600">📏 --</span>
-        <span id="timerDisp">⏱ 0.0s</span>
+      <div class="header-top">
+        <span class="stage-name" id="gameName"></span>
+        <div class="info">
+          <span id="wallCount">🧱 0</span>
+          <span id="pathLen" style="color:#5B4FCF;font-weight:600">📏 --</span>
+          <span id="timerDisp">⏱ 0.0s</span>
+        </div>
       </div>
+      <div class="ability-bar" id="abilityBar"></div>
     </div>
     <div class="timer-bar-wrap" id="timerBarWrap"><div class="timer-bar under" id="timerBar"></div></div>
     <div class="timer-label" id="timerLabel"><span id="timerLabelLeft">0s</span><span id="timerLabelRight">目標: --s</span></div>
@@ -185,14 +193,12 @@ let muted=false;
 try{muted=localStorage.getItem('maze_architect_muted')==='true'}catch(e){}
 function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
 function playTone(freq,dur,type,vol){
-  if(muted)return;
-  ensureAudio();
+  if(muted)return;ensureAudio();
   const o=audioCtx.createOscillator(),g=audioCtx.createGain();
   o.type=type||'square';o.frequency.value=freq;
   g.gain.setValueAtTime(vol||0.08,audioCtx.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);
-  o.connect(g);g.connect(audioCtx.destination);
-  o.start();o.stop(audioCtx.currentTime+dur);
+  o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);
 }
 function sfxWall(){playTone(600,0.08,'square',0.06)}
 function sfxRemove(){playTone(400,0.08,'square',0.05)}
@@ -201,8 +207,9 @@ function sfxClear(){playTone(660,0.15,'sine',0.12);setTimeout(()=>playTone(880,0
 function sfxFail(){playTone(330,0.2,'sawtooth',0.08);setTimeout(()=>playTone(260,0.3,'sawtooth',0.08),200)}
 function sfxStairs(){playTone(440,0.12,'sine',0.1);setTimeout(()=>playTone(550,0.12,'sine',0.1),120);setTimeout(()=>playTone(660,0.15,'sine',0.1),240)}
 function sfxDeadEnd(){playTone(520,0.06,'square',0.07);setTimeout(()=>playTone(700,0.1,'sine',0.09),60)}
+function sfxWallBreak(){playTone(200,0.15,'sawtooth',0.12);setTimeout(()=>playTone(150,0.2,'sawtooth',0.1),100)}
+function sfxScent(){playTone(1000,0.1,'sine',0.08);setTimeout(()=>playTone(1200,0.15,'sine',0.06),100)}
 
-// ── Haptic feedback ──
 function vibrate(ms){try{if(navigator.vibrate)navigator.vibrate(ms)}catch(e){}}
 
 function toggleMute(){
@@ -217,7 +224,6 @@ function updateMuteUI(){
   if(gb)gb.textContent=muted?'🔇':'🔊';
   if(tb)tb.textContent=muted?'🔇 サウンド OFF':'🔊 サウンド ON';
 }
-// Init mute UI on load
 document.addEventListener('DOMContentLoaded',updateMuteUI);
 
 // ── Wall ripple effect ──
@@ -230,16 +236,47 @@ function spawnWallRipple(wallObj, isRemove){
   let cx,cy;
   if(d==='h'){cx=ci*cellSize+cellSize/2;cy=ri*cellSize}
   else{cx=ci*cellSize;cy=ri*cellSize+cellSize/2}
-  cx+=(rect.left-wrapRect.left);
-  cy+=(rect.top-wrapRect.top);
-  const el=document.createElement('div');
-  el.className='wall-ripple';
+  cx+=(rect.left-wrapRect.left);cy+=(rect.top-wrapRect.top);
+  const el=document.createElement('div');el.className='wall-ripple';
   const sz=cellSize*1.6;
-  el.style.width=sz+'px';el.style.height=sz+'px';
-  el.style.left=cx+'px';el.style.top=cy+'px';
+  el.style.width=sz+'px';el.style.height=sz+'px';el.style.left=cx+'px';el.style.top=cy+'px';
   el.style.background=isRemove?'radial-gradient(circle,rgba(255,59,48,0.4) 0%,transparent 70%)':'radial-gradient(circle,rgba(91,79,207,0.4) 0%,transparent 70%)';
-  wrap.appendChild(el);
-  setTimeout(()=>el.remove(),500);
+  wrap.appendChild(el);setTimeout(()=>el.remove(),500);
+}
+
+// ── Wall break flash effect ──
+function spawnWallBreakFlash(r,c,d){
+  const wrap=document.getElementById('canvasWrap');
+  const rect=canvas.getBoundingClientRect();
+  const wrapRect=wrap.getBoundingClientRect();
+  let cx,cy;
+  if(d==='h'){cx=c*cellSize+cellSize/2;cy=r*cellSize}
+  else{cx=c*cellSize;cy=r*cellSize+cellSize/2}
+  cx+=(rect.left-wrapRect.left);cy+=(rect.top-wrapRect.top);
+  const el=document.createElement('div');el.className='wall-break-flash';
+  const sz=cellSize*2;
+  el.style.width=sz+'px';el.style.height=sz+'px';el.style.left=cx+'px';el.style.top=cy+'px';
+  el.style.background='radial-gradient(circle,rgba(255,59,48,0.8) 0%,rgba(255,149,0,0.4) 50%,transparent 70%)';
+  wrap.appendChild(el);setTimeout(()=>el.remove(),350);
+}
+
+// ── Scent sparkle effect ──
+function spawnScentSparkle(r,c){
+  const wrap=document.getElementById('canvasWrap');
+  const rect=canvas.getBoundingClientRect();
+  const wrapRect=wrap.getBoundingClientRect();
+  const cx=c*cellSize+cellSize/2+(rect.left-wrapRect.left);
+  const cy=r*cellSize+cellSize/2+(rect.top-wrapRect.top);
+  for(let i=0;i<3;i++){
+    setTimeout(()=>{
+      const el=document.createElement('div');el.className='scent-sparkle';
+      el.textContent='✨';
+      const ox=(Math.random()-0.5)*cellSize*0.8;
+      const oy=(Math.random()-0.5)*cellSize*0.8;
+      el.style.left=(cx+ox)+'px';el.style.top=(cy+oy)+'px';
+      wrap.appendChild(el);setTimeout(()=>el.remove(),550);
+    },i*100);
+  }
 }
 
 // ── Float score popup ──
@@ -249,87 +286,94 @@ function showFloatScore(r,c,text,color){
   const wrapRect=wrap.getBoundingClientRect();
   const x=c*cellSize+cellSize/2+(rect.left-wrapRect.left);
   const y=r*cellSize+(rect.top-wrapRect.top);
-  const el=document.createElement('div');
-  el.className='float-score';
-  el.textContent=text;
-  if(color)el.style.color=color;
-  el.style.left=x+'px';el.style.top=y+'px';
-  el.style.transform='translateX(-50%)';
-  wrap.appendChild(el);
-  setTimeout(()=>el.remove(),950);
+  const el=document.createElement('div');el.className='float-score';
+  el.textContent=text;if(color)el.style.color=color;
+  el.style.left=x+'px';el.style.top=y+'px';el.style.transform='translateX(-50%)';
+  wrap.appendChild(el);setTimeout(()=>el.remove(),950);
 }
 
-// ── Screen shake ──
 function shakeScreen(){
-  canvas.style.animation='none';
-  canvas.offsetHeight; // reflow
+  canvas.style.animation='none';canvas.offsetHeight;
   canvas.style.animation='shakeCanvas 0.3s ease';
   setTimeout(()=>{canvas.style.animation='none'},350);
 }
 
-// ── Dungeon quest definitions ──
+// ── Quest definitions ──
 const QUESTS=[
-  {name:'B1F',gridN:5,algo:'random',goalTime:10,desc:'迷子のスライムが入ってきた。壁で道を塞ごう'},
-  {name:'B2F',gridN:6,algo:'righthand',goalTime:15,desc:'⚠️ 壁を伝って進む剣士が来た！螺旋で惑わせろ'},
-  {name:'B3F',gridN:7,algo:'righthand',goalTime:18,desc:'剣士はしつこい。もっと複雑な迷路が必要だ'},
-  {name:'B4F',gridN:8,algo:'bfs',goalTime:12,desc:'💀 最短経路を見抜く魔法使い…壁を最大限に活用しろ'},
-  {name:'B5F',gridN:8,algo:'astar',goalTime:10,desc:'🔥 最強の勇者。ダンジョンの全てが試される'},
+  {name:'B1F',gridN:7,goalTime:15,abilities:[],desc:'冒険者が来た。視界1マス…まだ楽勝だ'},
+  {name:'B2F',gridN:7,goalTime:12,abilities:['memory'],desc:'📝 こいつ…通った道を覚えてる！'},
+  {name:'B3F',gridN:7,goalTime:10,abilities:['memory','wallBreak'],desc:'💥 行き止まりの壁を破壊してくる！(2回)'},
+  {name:'B4F',gridN:7,goalTime:8,abilities:['memory','wallBreak','scent'],desc:'✨ ゴールの匂いを嗅ぎ分ける…！'},
+  {name:'B5F',gridN:7,goalTime:6,abilities:['memory','wallBreakPlus','scentPlus'],desc:'🔥 全能力強化。最後の防衛線'},
 ];
 
-const ALGO_INFO={random:{label:'🟢 スライム',color:'#4ED26D',name:'スライム'},righthand:{label:'🟡 剣士',color:'#F5A623',name:'剣士'},bfs:{label:'🔴 魔法使い',color:'#FF3B30',name:'魔法使い'},astar:{label:'💀 勇者',color:'#8B5CF6',name:'勇者'}};
+// ── Adventurer info per floor ──
+const FLOOR_INFO={
+  0:{icon:'🏃',label:'🏃 冒険者',name:'冒険者'},
+  1:{icon:'🧠',label:'🧠 記憶の冒険者',name:'記憶の冒険者'},
+  2:{icon:'💪',label:'💪 破壊の冒険者',name:'破壊の冒険者'},
+  3:{icon:'👃',label:'👃 嗅覚の冒険者',name:'嗅覚の冒険者'},
+  4:{icon:'⚡',label:'⚡ 最強の冒険者',name:'最強の冒険者'},
+};
+const ADVENTURER_COLOR='#5B4FCF';
+
+function getFloorInfo(floorIdx){
+  return FLOOR_INFO[floorIdx]||FLOOR_INFO[0];
+}
+
+function getAbilityText(abilities){
+  let parts=['👁️視界1'];
+  if(abilities.includes('memory'))parts.push('📝記憶');
+  if(abilities.includes('wallBreak'))parts.push('💥壁破壊×2');
+  if(abilities.includes('wallBreakPlus'))parts.push('💥壁破壊×3');
+  if(abilities.includes('scent'))parts.push('👃嗅覚(3歩に1回)');
+  if(abilities.includes('scentPlus'))parts.push('👃嗅覚(2歩に1回)');
+  return '能力: '+parts.join(' ');
+}
 
 // ── Global state ──
 let mode='dungeon', curConfig=null;
-let gridN=5, walls=new Set(), wallHistory=[], usedWalls=0;
+let gridN=7, walls=new Set(), wallHistory=[], usedWalls=0;
 let running=false, timer=0, timerStart=0, animId=null;
-let solverState=null, explored=new Set(), shortestPath=[], deadEndCount=0, realtimeWallPenalty=0;
-let solverTrail=[];  // [{r,c,time}] for trail effect
+let solverState=null, explored=new Set(), shortestPath=[], deadEndCount=0;
+let solverTrail=[];
 const TRAIL_MAX=40, TRAIL_DURATION=1200;
+let currentAbilities=[]; // abilities for current run
+let brokenWalls=new Set(); // walls broken by wall-break ability (persistent across floors in a run)
 
 // ── Dungeon state ──
-let dungeonFloorIdx=0;          // currently selected floor for editing
-let dungeonWalls=[];             // dungeonWalls[i] = Array of wall keys
-let dungeonCleared=[];           // dungeonCleared[i] = bool
-let dungeonSelectedFloor=0;      // selected in dungeon select screen
-let dungeonRunFloorIdx=0;        // which floor the solver is currently on during full run
-let dungeonRunning=false;        // is a full dungeon run in progress
-let dungeonTestMode=false;       // single-floor test run
-let userSpeedLevel=0;            // 0=1x, 1=2x, 2=4x
+let dungeonFloorIdx=0;
+let dungeonWalls=[];
+let dungeonCleared=[];
+let dungeonSelectedFloor=0;
+let dungeonRunFloorIdx=0;
+let dungeonRunning=false;
+let dungeonTestMode=false;
+let userSpeedLevel=0;
 const SPEED_LABELS=['1x','2x','4x'];
 const SPEED_MULTIPLIERS=[1,2,4];
 
 function initDungeonState(){
-  dungeonWalls=[];
-  dungeonCleared=[];
-  for(let i=0;i<QUESTS.length;i++){
-    dungeonWalls.push([]);
-    dungeonCleared.push(false);
-  }
+  dungeonWalls=[];dungeonCleared=[];
+  for(let i=0;i<QUESTS.length;i++){dungeonWalls.push([]);dungeonCleared.push(false)}
 }
 initDungeonState();
 
-// ── LocalStorage persistence for dungeon progress ──
-const SAVE_KEY='maze_architect_dungeon';
+const SAVE_KEY='maze_architect_dungeon_v2';
 function saveDungeon(){
-  try{
-    const data={walls:dungeonWalls,cleared:dungeonCleared};
-    localStorage.setItem(SAVE_KEY,JSON.stringify(data));
-  }catch(e){}
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({walls:dungeonWalls,cleared:dungeonCleared}))}catch(e){}
 }
 function loadDungeon(){
   try{
-    const raw=localStorage.getItem(SAVE_KEY);
-    if(!raw)return;
+    const raw=localStorage.getItem(SAVE_KEY);if(!raw)return;
     const data=JSON.parse(raw);
     if(data.walls&&Array.isArray(data.walls)){
-      for(let i=0;i<Math.min(data.walls.length,QUESTS.length);i++){
+      for(let i=0;i<Math.min(data.walls.length,QUESTS.length);i++)
         dungeonWalls[i]=Array.isArray(data.walls[i])?data.walls[i]:[];
-      }
     }
     if(data.cleared&&Array.isArray(data.cleared)){
-      for(let i=0;i<Math.min(data.cleared.length,QUESTS.length);i++){
+      for(let i=0;i<Math.min(data.cleared.length,QUESTS.length);i++)
         dungeonCleared[i]=!!data.cleared[i];
-      }
     }
   }catch(e){}
 }
@@ -340,17 +384,14 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classL
 function showTitle(){stopSolver();showScreen('titleScreen')}
 function showFreeMode(){showScreen('freeScreen')}
 
-function showDungeonSelect(){
-  renderDungeonGrid();
-  showScreen('dungeonScreen');
-}
+function showDungeonSelect(){renderDungeonGrid();showScreen('dungeonScreen')}
 
 function renderDungeonGrid(){
   const grid=document.getElementById('dungeonGrid');
   let html='';
   for(let i=0;i<QUESTS.length;i++){
     const q=QUESTS[i];
-    const ai=ALGO_INFO[q.algo];
+    const fi=getFloorInfo(i);
     const cleared=dungeonCleared[i];
     const unlocked=(i===0||dungeonCleared[i-1]);
     const cls=cleared?'cleared':(unlocked?'current':'locked');
@@ -358,7 +399,7 @@ function renderDungeonGrid(){
     const sel=i===dungeonSelectedFloor?' style="outline:3px solid #5B4FCF;outline-offset:2px"':'';
     html+=`<div class="dungeon-floor ${cls}" onclick="selectDungeonFloor(${i})"${sel}>
       <div class="df-name">${q.name}</div>
-      <div class="df-info">${q.gridN}×${q.gridN} ${ai.label}</div>
+      <div class="df-info">${q.gridN}×${q.gridN} ${fi.label}</div>
       <div class="df-status">${status}</div>
     </div>`;
   }
@@ -367,77 +408,53 @@ function renderDungeonGrid(){
 }
 
 function selectDungeonFloor(idx){
-  const unlocked=(idx===0||dungeonCleared[idx-1]);
-  if(!unlocked)return;
-  dungeonSelectedFloor=idx;
-  renderDungeonGrid();
+  if(!(idx===0||dungeonCleared[idx-1]))return;
+  dungeonSelectedFloor=idx;renderDungeonGrid();
 }
 
 function updateDungeonDesc(){
   const q=QUESTS[dungeonSelectedFloor];
-  const ai=ALGO_INFO[q.algo];
-  const cleared=dungeonCleared[dungeonSelectedFloor];
+  const fi=getFloorInfo(dungeonSelectedFloor);
   const unlocked=(dungeonSelectedFloor===0||dungeonCleared[dungeonSelectedFloor-1]);
   const desc=document.getElementById('dungeonDesc');
   desc.innerHTML=`<div class="dd-title">${q.name} - ${q.desc}</div>
-    <div class="dd-text">冒険者: ${ai.label} | 目標: ${q.goalTime}秒（通し合計）</div>`;
+    <div class="dd-text">冒険者: ${fi.label} | 目標: ${q.goalTime}秒（通し合計）</div>`;
   const btn=document.getElementById('dungeonStartBtn');
-  if(unlocked){
-    btn.style.display='block';
-    btn.textContent='🧱 この階層を構築';
-  } else {
-    btn.style.display='none';
-  }
+  btn.style.display=unlocked?'block':'none';
 }
 
 function startDungeon(){
   const idx=dungeonSelectedFloor;
-  const unlocked=(idx===0||dungeonCleared[idx-1]);
-  if(!unlocked)return;
-  mode='dungeon';
-  dungeonFloorIdx=idx;
-  dungeonTestMode=false;
-  dungeonRunning=false;
+  if(!(idx===0||dungeonCleared[idx-1]))return;
+  mode='dungeon';dungeonFloorIdx=idx;dungeonTestMode=false;dungeonRunning=false;
   const q=QUESTS[idx];
-  curConfig={grid:q.gridN,algo:q.algo,target:q.goalTime,name:`🏰 ${q.name} - 壁配置中`};
+  curConfig={grid:q.gridN,target:q.goalTime,name:`🏰 ${q.name} - 壁配置中`,floorIdx:idx,abilities:q.abilities};
+  currentAbilities=q.abilities;
   initGame(curConfig);
-  // Restore walls if editing
   if(dungeonWalls[idx]&&dungeonWalls[idx].length>0){
-    walls=new Set(dungeonWalls[idx]);
-    usedWalls=walls.size;
+    walls=new Set(dungeonWalls[idx]);usedWalls=walls.size;
   }
-  // Show dungeon-specific buttons
   document.getElementById('testRunBtn').style.display='inline-block';
   document.getElementById('startBtn').textContent='⚔️ 冒険者侵入！';
-  showScreen('gameScreen');
-  updateUI(); // Update path preview & dead-end count after wall restoration
-  draw();
+  document.getElementById('abilityBar').textContent=getAbilityText(q.abilities);
+  showScreen('gameScreen');updateUI();draw();
 }
 
 function nextDungeonFloor(){
-  if(dungeonFloorIdx<QUESTS.length-1){
-    dungeonSelectedFloor=dungeonFloorIdx+1;
-    startDungeon();
-  } else {
-    showDungeonSelect();
-  }
+  if(dungeonFloorIdx<QUESTS.length-1){dungeonSelectedFloor=dungeonFloorIdx+1;startDungeon()}
+  else showDungeonSelect();
 }
 
-// ── B5F (final floor) clear celebration ──
 function showDungeonComplete(totalTime){
   showScreen('resultScreen');
-  const box=document.querySelector('.result-box');
-  // Calculate total score across all floors
   let totalScore=Math.round(totalTime*100);
-
-  // Build minimap gallery HTML
   let minimapHtml='<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:12px 0">';
   for(let i=0;i<QUESTS.length;i++){
     const q=QUESTS[i];
     minimapHtml+=`<div style="text-align:center"><canvas id="completeMinimap${i}" width="1" height="1" style="border:2px solid #4ED26D;border-radius:6px;background:#fafafa"></canvas><div style="font-size:10px;font-weight:700;color:#555;margin-top:2px">${q.name}</div></div>`;
   }
   minimapHtml+='</div>';
-
+  const box=document.querySelector('.result-box');
   box.innerHTML=`
     <div class="big">🏰</div>
     <div style="font-size:22px;font-weight:700;color:#2F2B2A;margin-bottom:4px">ダンジョン完全防衛！</div>
@@ -449,56 +466,36 @@ function showDungeonComplete(totalTime){
     <div class="star-label" id="starLabel"></div>
     <div style="margin-top:16px">
       <button class="btn btn-small btn-dungeon" onclick="backFromComplete()">🏠 タイトルに戻る</button>
-    </div>
-  `;
-
-  // Draw minimaps
+    </div>`;
   requestAnimationFrame(()=>{
     for(let i=0;i<QUESTS.length;i++){
-      const c=document.getElementById('completeMinimap'+i);
-      if(!c)continue;
-      const q=QUESTS[i];
-      const gn=q.gridN;
-      const mmSize=52;
-      const cs=Math.max(2,Math.floor(mmSize/gn));
-      const sz=cs*gn;
+      const c=document.getElementById('completeMinimap'+i);if(!c)continue;
+      const q=QUESTS[i];const gn=q.gridN;const mmSize=52;
+      const cs=Math.max(2,Math.floor(mmSize/gn));const sz=cs*gn;
       const dpr=window.devicePixelRatio||1;
-      c.width=sz*dpr;c.height=sz*dpr;
-      c.style.width=sz+'px';c.style.height=sz+'px';
-      const mctx=c.getContext('2d');
-      mctx.setTransform(dpr,0,0,dpr,0,0);
-      mctx.fillStyle='#F0FFF4';
-      mctx.fillRect(0,0,sz,sz);
+      c.width=sz*dpr;c.height=sz*dpr;c.style.width=sz+'px';c.style.height=sz+'px';
+      const mctx=c.getContext('2d');mctx.setTransform(dpr,0,0,dpr,0,0);
+      mctx.fillStyle='#F0FFF4';mctx.fillRect(0,0,sz,sz);
       const wSet=new Set(dungeonWalls[i]||[]);
-      mctx.strokeStyle='#2F2B2A';mctx.lineWidth=1.5;
-      mctx.strokeRect(0,0,sz,sz);
+      mctx.strokeStyle='#2F2B2A';mctx.lineWidth=1.5;mctx.strokeRect(0,0,sz,sz);
       wSet.forEach(k=>{
-        const [r,col,d]=k.split(',');
-        const ri=+r,ci=+col;
+        const [r,col,d]=k.split(',');const ri=+r,ci=+col;
         mctx.beginPath();
         if(d==='h'){mctx.moveTo(ci*cs,ri*cs);mctx.lineTo((ci+1)*cs,ri*cs)}
         else{mctx.moveTo(ci*cs,ri*cs);mctx.lineTo(ci*cs,(ri+1)*cs)}
         mctx.stroke();
       });
       const dotR=Math.max(1.5,cs*0.25);
-      mctx.fillStyle='#4ED26D';
-      mctx.beginPath();mctx.arc(cs/2,cs/2,dotR,0,Math.PI*2);mctx.fill();
-      mctx.fillStyle='#FF3B30';
-      mctx.beginPath();mctx.arc((gn-0.5)*cs,(gn-0.5)*cs,dotR,0,Math.PI*2);mctx.fill();
+      mctx.fillStyle='#4ED26D';mctx.beginPath();mctx.arc(cs/2,cs/2,dotR,0,Math.PI*2);mctx.fill();
+      mctx.fillStyle='#FF3B30';mctx.beginPath();mctx.arc((gn-0.5)*cs,(gn-0.5)*cs,dotR,0,Math.PI*2);mctx.fill();
     }
   });
-
-  // Stars
   const starInfo=calcStars(totalTime, QUESTS[QUESTS.length-1].goalTime);
   showStars(starInfo.stars, starInfo.label);
-
-  sfxClear();spawnConfetti();
-  // Extra confetti burst for final clear
-  setTimeout(()=>spawnConfetti(),600);
+  sfxClear();spawnConfetti();setTimeout(()=>spawnConfetti(),600);
 }
 
 function backFromComplete(){
-  // Restore result box HTML to original structure
   const box=document.querySelector('.result-box');
   box.innerHTML=`
     <div id="resultEmoji" class="big">🎉</div>
@@ -512,19 +509,23 @@ function backFromComplete(){
       <button class="btn btn-small btn-dungeon" id="nextDungeonBtn" onclick="nextDungeonFloor()" style="display:none">🪜 次の階層を構築</button>
       <button class="btn btn-small btn-secondary" onclick="retryStage()">🔄 リトライ</button>
       <button class="btn btn-small btn-secondary" onclick="backFromResult()">🏠 戻る</button>
-    </div>
-  `;
+    </div>`;
   showTitle();
 }
 
 function startFree(){
   mode='free';
   const sz=parseInt(document.getElementById('freeSize').value);
-  const algo=document.getElementById('freeAlgo').value;
-  curConfig={grid:sz,algo:algo,target:Infinity,name:'フリーモード'};
+  const abilities=[];
+  if(document.getElementById('freeMemory').checked)abilities.push('memory');
+  if(document.getElementById('freeWallBreak').checked)abilities.push('wallBreak');
+  if(document.getElementById('freeScent').checked)abilities.push('scent');
+  curConfig={grid:sz,target:Infinity,name:'フリーモード',floorIdx:0,abilities:abilities};
+  currentAbilities=abilities;
   initGame(curConfig);
   document.getElementById('testRunBtn').style.display='none';
   document.getElementById('startBtn').textContent='▶ スタート';
+  document.getElementById('abilityBar').textContent=getAbilityText(abilities);
   showScreen('gameScreen');
 }
 
@@ -539,23 +540,19 @@ function showToast(msg){
 const canvas=document.getElementById('gameCanvas');
 const ctx=canvas.getContext('2d');
 let cellSize=40, offsetX=0, offsetY=0;
-let hoverWall=null; // preview wall {r,c,d,key}
+let hoverWall=null;
 
 function initGame(cfg){
-  stopSolver();
-  gridN=cfg.grid;
+  stopSolver();gridN=cfg.grid;
   walls=new Set();wallHistory=[];usedWalls=0;
-  running=false;timer=0;explored=new Set();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
-  solverState=null;dungeonRunning=false;solverTrail=[];
+  running=false;timer=0;explored=new Set();shortestPath=[];deadEndCount=0;
+  solverState=null;dungeonRunning=false;solverTrail=[];brokenWalls=new Set();
   document.getElementById('gameName').textContent=cfg.name;
   document.getElementById('startBtn').disabled=false;
   document.getElementById('minimapBar').style.display='none';
   document.getElementById('floorIndicator').style.display='none';
   document.getElementById('stairsOverlay').classList.remove('show');
-  hideTimerBar();
-  resizeCanvas();
-  updateUI();
-  draw();
+  hideTimerBar();resizeCanvas();updateUI();draw();
 }
 
 function resizeCanvas(){
@@ -563,30 +560,20 @@ function resizeCanvas(){
   const w=wrap.clientWidth-16, h=wrap.clientHeight-16;
   const canvasSize=Math.min(w, h, window.innerWidth-20, window.innerHeight*0.55);
   cellSize=Math.floor(canvasSize/gridN);
-  if(cellSize<28) cellSize=28;
-  if(cellSize>60) cellSize=60;
-  const totalW=cellSize*gridN;
-  const totalH=cellSize*gridN;
+  if(cellSize<28)cellSize=28;if(cellSize>60)cellSize=60;
+  const totalW=cellSize*gridN,totalH=cellSize*gridN;
   const dpr=window.devicePixelRatio||1;
   canvas.width=totalW*dpr;canvas.height=totalH*dpr;
   canvas.style.width=totalW+'px';canvas.style.height=totalH+'px';
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  offsetX=0;offsetY=0;
 }
 
 function calcShortestPath(wallSet, gn){
-  const visited=new Set();
-  const parent=new Map();
-  const q=[[0,0]];visited.add('0,0');
-  const goal=`${gn-1},${gn-1}`;
+  const visited=new Set();const parent=new Map();
+  const q=[[0,0]];visited.add('0,0');const goal=`${gn-1},${gn-1}`;
   while(q.length){
-    const [r,c]=q.shift();
-    const k=`${r},${c}`;
-    if(k===goal){
-      let len=0,cur=goal;
-      while(cur){len++;cur=parent.get(cur)}
-      return len-1; // steps, not nodes
-    }
+    const [r,c]=q.shift();const k=`${r},${c}`;
+    if(k===goal){let len=0,cur=goal;while(cur){len++;cur=parent.get(cur)}return len-1}
     for(const [nr,nc] of neighborsIn(wallSet,gn,r,c)){
       const nk=`${nr},${nc}`;
       if(!visited.has(nk)){visited.add(nk);parent.set(nk,k);q.push([nr,nc])}
@@ -595,45 +582,36 @@ function calcShortestPath(wallSet, gn){
   return -1;
 }
 
-let previewPath=[]; // BFS shortest path for preview overlay
-
-// ── Dead-end detection for preview ──
+let previewPath=[];
 let deadEndCells=[];
+
 function detectDeadEnds(){
   deadEndCells=[];
   for(let r=0;r<gridN;r++){
     for(let c=0;c<gridN;c++){
-      if(r===0&&c===0)continue; // start
-      if(r===gridN-1&&c===gridN-1)continue; // goal
+      if(r===0&&c===0)continue;if(r===gridN-1&&c===gridN-1)continue;
       const nb=neighborsIn(walls,gridN,r,c);
-      if(nb.length===1) deadEndCells.push([r,c]);
+      if(nb.length===1)deadEndCells.push([r,c]);
     }
   }
   const badge=document.getElementById('deadEndBadge');
   const num=document.getElementById('deadEndNum');
-  if(deadEndCells.length>0&&!running){
-    badge.style.opacity='1';
-    num.textContent=deadEndCells.length;
-  } else {
-    badge.style.opacity='0';
-  }
+  if(deadEndCells.length>0&&!running){badge.style.opacity='1';num.textContent=deadEndCells.length}
+  else badge.style.opacity='0';
 }
 
 function updatePathPreview(){
   const len=calcShortestPath(walls,gridN);
   const el=document.getElementById('pathLen');
-  const minPath=(gridN-1)*2; // Manhattan distance
+  const minPath=(gridN-1)*2;
   if(len<0){el.textContent='📏 --';previewPath=[];return}
   const ratio=len/minPath;
-  // Color: green when long, red when short
-  if(ratio>=2.5) el.style.color='#4ED26D';
-  else if(ratio>=1.5) el.style.color='#F5A623';
+  if(ratio>=2.5)el.style.color='#4ED26D';
+  else if(ratio>=1.5)el.style.color='#F5A623';
   else el.style.color='#FF3B30';
   el.textContent=`📏 ${len}歩`;
-  // Compute actual path for preview
   const visited=new Set();const par=new Map();
-  const q=[[0,0]];visited.add('0,0');
-  const goal=`${gridN-1},${gridN-1}`;
+  const q=[[0,0]];visited.add('0,0');const goal=`${gridN-1},${gridN-1}`;
   let found=false;
   while(q.length){
     const [r,c]=q.shift();const k=`${r},${c}`;
@@ -643,20 +621,17 @@ function updatePathPreview(){
       if(!visited.has(nk)){visited.add(nk);par.set(nk,k);q.push([nr,nc])}
     }
   }
-  if(found){
-    const p=[];let cur=goal;
-    while(cur){p.unshift(cur.split(',').map(Number));cur=par.get(cur)}
-    previewPath=p;
-  } else {previewPath=[]}
+  if(found){const p=[];let cur=goal;while(cur){p.unshift(cur.split(',').map(Number));cur=par.get(cur)}previewPath=p}
+  else previewPath=[];
 }
 
 function updateUI(){
   document.getElementById('wallCount').textContent=`🧱 ${usedWalls}`;
   document.getElementById('timerDisp').textContent=`⏱ ${timer.toFixed(1)}s`;
-  if(!running){updatePathPreview();detectDeadEnds();}
+  if(!running){updatePathPreview();detectDeadEnds()}
 }
 
-// ── Wall helpers (parameterized for dungeon multi-grid) ──
+// ── Wall helpers ──
 function wallKey(r,c,d){return `${r},${c},${d}`}
 
 function hasWallIn(wallSet,gn,r,c,d){
@@ -664,7 +639,6 @@ function hasWallIn(wallSet,gn,r,c,d){
   if(d==='v'){if(c===0||c===gn)return true}
   return wallSet.has(wallKey(r,c,d));
 }
-function hasWall(r,c,d){return hasWallIn(walls,gridN,r,c,d)}
 
 function canPassIn(wallSet,gn,r1,c1,r2,c2){
   if(r2<0||r2>=gn||c2<0||c2>=gn)return false;
@@ -674,7 +648,6 @@ function canPassIn(wallSet,gn,r1,c1,r2,c2){
   if(r2===r1&&c2===c1+1)return !hasWallIn(wallSet,gn,r1,c1+1,'v');
   return false;
 }
-function canPass(r1,c1,r2,c2){return canPassIn(walls,gridN,r1,c1,r2,c2)}
 
 function neighborsIn(wallSet,gn,r,c){
   const n=[];
@@ -684,127 +657,90 @@ function neighborsIn(wallSet,gn,r,c){
   });
   return n;
 }
-function neighbors(r,c){return neighborsIn(walls,gridN,r,c)}
 
 function isReachableIn(wallSet,gn){
-  const visited=new Set();
-  const q=[[0,0]];visited.add('0,0');
-  const goal=`${gn-1},${gn-1}`;
+  const visited=new Set();const q=[[0,0]];visited.add('0,0');const goal=`${gn-1},${gn-1}`;
   while(q.length){
-    const [r,c]=q.shift();
-    if(`${r},${c}`===goal)return true;
+    const [r,c]=q.shift();if(`${r},${c}`===goal)return true;
     for(const [nr,nc] of neighborsIn(wallSet,gn,r,c)){
-      const k=`${nr},${nc}`;
-      if(!visited.has(k)){visited.add(k);q.push([nr,nc])}
+      const k=`${nr},${nc}`;if(!visited.has(k)){visited.add(k);q.push([nr,nc])}
     }
   }
   return false;
 }
 function isReachable(){return isReachableIn(walls,gridN)}
 
-// ── Wall placement via tap ──
+// ── Wall placement ──
 function getWallFromPos(x,y){
   const tapRadius=Math.max(12, cellSize*0.3);
   let bestDist=tapRadius, bestWall=null;
   for(let r=1;r<gridN;r++){
-    const wy=r*cellSize;
-    const dy=Math.abs(y-wy);
+    const wy=r*cellSize;const dy=Math.abs(y-wy);
     if(dy<bestDist){
       const col=Math.floor(x/cellSize);
-      if(col>=0&&col<gridN){
-        bestDist=dy;bestWall={r,c:col,d:'h',key:wallKey(r,col,'h')};
-      }
+      if(col>=0&&col<gridN){bestDist=dy;bestWall={r,c:col,d:'h',key:wallKey(r,col,'h')}}
     }
   }
   for(let c=1;c<gridN;c++){
-    const wx=c*cellSize;
-    const dx=Math.abs(x-wx);
+    const wx=c*cellSize;const dx=Math.abs(x-wx);
     if(dx<bestDist){
       const row=Math.floor(y/cellSize);
-      if(row>=0&&row<gridN){
-        bestDist=dx;bestWall={r:row,c,d:'v',key:wallKey(row,c,'v')};
-      }
+      if(row>=0&&row<gridN){bestDist=dx;bestWall={r:row,c,d:'v',key:wallKey(row,c,'v')}}
     }
   }
   return bestWall;
 }
 
 function handleTap(ex,ey){
-  if(running)return;
-  hoverWall=null;
-  const rect=canvas.getBoundingClientRect();
-  const x=ex-rect.left, y=ey-rect.top;
-  const w=getWallFromPos(x,y);
-  if(!w)return;
+  if(running)return;hoverWall=null;
+  const rect=canvas.getBoundingClientRect();const x=ex-rect.left, y=ey-rect.top;
+  const w=getWallFromPos(x,y);if(!w)return;
   ensureAudio();
+  // Don't allow placing walls that were broken
+  if(brokenWalls.has(w.key)){showToast('💥 破壊された壁は再配置不可');return}
   if(walls.has(w.key)){
-    walls.delete(w.key);usedWalls--;
-    wallHistory.push({key:w.key,action:'remove'});
-    sfxRemove();vibrate(15);
-    spawnWallRipple(w, true);
+    walls.delete(w.key);usedWalls--;wallHistory.push({key:w.key,action:'remove'});
+    sfxRemove();vibrate(15);spawnWallRipple(w,true);
   } else {
     walls.add(w.key);
-    if(!isReachable()){
-      walls.delete(w.key);
-      showToast('⚠️ 経路がなくなります');
-      vibrate([30,30,30]);
-      return;
-    }
-    usedWalls++;
-    wallHistory.push({key:w.key,action:'add'});
-    sfxWall();vibrate(25);
-    spawnWallRipple(w, false);
+    if(!isReachable()){walls.delete(w.key);showToast('⚠️ 経路がなくなります');vibrate([30,30,30]);return}
+    usedWalls++;wallHistory.push({key:w.key,action:'add'});
+    sfxWall();vibrate(25);spawnWallRipple(w,false);
   }
-  // Auto-save dungeon walls
-  if(mode==='dungeon'){
-    dungeonWalls[dungeonFloorIdx]=[...walls];
-    saveDungeon();
-  }
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
   updateUI();draw();
 }
 
-// ── Drag-to-place walls (swipe gesture) ──
 let isDragging=false, dragMode=null, draggedWalls=new Set();
 
 canvas.addEventListener('pointerdown',e=>{
-  e.preventDefault();
-  if(running)return;
-  isDragging=true;dragMode=null;draggedWalls.clear();
-  handleDrag(e.clientX,e.clientY);
+  e.preventDefault();if(running)return;
+  isDragging=true;dragMode=null;draggedWalls.clear();handleDrag(e.clientX,e.clientY);
 });
 canvas.addEventListener('pointermove',e=>{
   if(running)return;
   if(isDragging){handleDrag(e.clientX,e.clientY)}
-  const rect=canvas.getBoundingClientRect();
-  const x=e.clientX-rect.left, y=e.clientY-rect.top;
-  const w=getWallFromPos(x,y);
-  const newKey=w?w.key:null;
+  const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left,y=e.clientY-rect.top;
+  const w=getWallFromPos(x,y);const newKey=w?w.key:null;
   if((hoverWall?hoverWall.key:null)!==newKey){hoverWall=w;draw()}
 });
 canvas.addEventListener('pointerup',()=>{isDragging=false;dragMode=null});
-canvas.addEventListener('pointerleave',()=>{
-  isDragging=false;dragMode=null;
-  if(hoverWall){hoverWall=null;draw()}
-});
+canvas.addEventListener('pointerleave',()=>{isDragging=false;dragMode=null;if(hoverWall){hoverWall=null;draw()}});
 
 function handleDrag(ex,ey){
-  if(running)return;
-  hoverWall=null;
-  const rect=canvas.getBoundingClientRect();
-  const x=ex-rect.left, y=ey-rect.top;
-  const w=getWallFromPos(x,y);
-  if(!w)return;
+  if(running)return;hoverWall=null;
+  const rect=canvas.getBoundingClientRect();const x=ex-rect.left,y=ey-rect.top;
+  const w=getWallFromPos(x,y);if(!w)return;
   if(draggedWalls.has(w.key))return;
+  if(brokenWalls.has(w.key))return;
   ensureAudio();
-  if(dragMode===null){dragMode=walls.has(w.key)?'remove':'add'}
+  if(dragMode===null)dragMode=walls.has(w.key)?'remove':'add';
   if(dragMode==='add'&&!walls.has(w.key)){
     walls.add(w.key);
     if(!isReachable()){walls.delete(w.key);showToast('⚠️ 経路がなくなります');vibrate([30,30,30]);return}
-    usedWalls++;wallHistory.push({key:w.key,action:'add'});
-    sfxWall();vibrate(15);spawnWallRipple(w,false);draggedWalls.add(w.key);
+    usedWalls++;wallHistory.push({key:w.key,action:'add'});sfxWall();vibrate(15);spawnWallRipple(w,false);draggedWalls.add(w.key);
   } else if(dragMode==='remove'&&walls.has(w.key)){
-    walls.delete(w.key);usedWalls--;
-    wallHistory.push({key:w.key,action:'remove'});
+    walls.delete(w.key);usedWalls--;wallHistory.push({key:w.key,action:'remove'});
     sfxRemove();vibrate(10);spawnWallRipple(w,true);draggedWalls.add(w.key);
   }
   if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
@@ -812,125 +748,92 @@ function handleDrag(ex,ey){
 }
 
 function resetWalls(){
-  if(running)return;
-  walls.clear();wallHistory=[];usedWalls=0;explored.clear();shortestPath=[];
-  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[];saveDungeon();}
+  if(running)return;walls.clear();wallHistory=[];usedWalls=0;explored.clear();shortestPath=[];
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[];saveDungeon()}
   updateUI();draw();
 }
 function undoWall(){
-  if(running)return;
-  if(!wallHistory.length)return;
+  if(running)return;if(!wallHistory.length)return;
   const last=wallHistory.pop();
   if(last.action==='add'){walls.delete(last.key);usedWalls--}
   else{walls.add(last.key);usedWalls++}
-  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon();}
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon()}
   updateUI();draw();
 }
-function backFromGame(){
-  stopSolver();
-  if(mode==='dungeon')showDungeonSelect();
-  else showTitle();
-}
-function backFromResult(){
-  if(mode==='dungeon')showDungeonSelect();
-  else showTitle();
-}
+function backFromGame(){stopSolver();if(mode==='dungeon')showDungeonSelect();else showTitle()}
+function backFromResult(){if(mode==='dungeon')showDungeonSelect();else showTitle()}
 
 // ── Drawing ──
 function draw(){
-  const W=cellSize*gridN, H=cellSize*gridN;
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  drawGrid(0,0,gridN,walls,explored,shortestPath,solverState,curConfig?curConfig.algo:'random',1.0);
-  // Update minimap adventurer position during dungeon run
-  if(dungeonRunning&&running){
-    renderMinimap(dungeonRunFloorIdx, dungeonFloorIdx+1);
-  }
+  drawGrid(0,0,gridN,walls,explored,shortestPath,solverState,1.0);
+  if(dungeonRunning&&running)renderMinimap(dungeonRunFloorIdx, dungeonFloorIdx+1);
 }
 
-function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
+function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,alpha){
   const W=cellSize*gn, H=cellSize*gn;
-  ctx.save();
-  ctx.translate(ox,oy);
-  ctx.globalAlpha=alpha;
+  ctx.save();ctx.translate(ox,oy);ctx.globalAlpha=alpha;
 
-  // Background
   ctx.fillStyle='#FAFAF9';ctx.fillRect(0,0,W,H);
 
-  // Explored cells overlay
+  // Explored cells
   if(exploredSet&&exploredSet.size){
-    const col=ALGO_INFO[algo].color;
-    ctx.fillStyle=col+'22';
+    ctx.fillStyle=ADVENTURER_COLOR+'22';
     exploredSet.forEach(k=>{
       const [r,c]=k.split(',').map(Number);
-      if(r<gn&&c<gn) ctx.fillRect(c*cellSize+1,r*cellSize+1,cellSize-2,cellSize-2);
+      if(r<gn&&c<gn)ctx.fillRect(c*cellSize+1,r*cellSize+1,cellSize-2,cellSize-2);
     });
   }
 
-  // Dead-end cell indicators (only during wall placement)
+  // Dead-end indicators
   if(!running&&deadEndCells.length>0&&alpha>=1.0){
-    const now=Date.now();
-    const pulse=0.35+0.15*Math.sin(now*0.004);
+    const now=Date.now();const pulse=0.35+0.15*Math.sin(now*0.004);
     for(const [dr,dc] of deadEndCells){
       if(dr>=gn||dc>=gn)continue;
-      const cx=dc*cellSize+cellSize/2, cy=dr*cellSize+cellSize/2;
-      const rad=cellSize*0.32;
-      // Pulsing orange circle
-      ctx.save();
-      ctx.globalAlpha=alpha*pulse;
-      ctx.fillStyle='#FF9500';
-      ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();
-      ctx.restore();
+      const cx=dc*cellSize+cellSize/2,cy=dr*cellSize+cellSize/2;
+      ctx.save();ctx.globalAlpha=alpha*pulse;ctx.fillStyle='#FF9500';
+      ctx.beginPath();ctx.arc(cx,cy,cellSize*0.32,0,Math.PI*2);ctx.fill();ctx.restore();
       ctx.globalAlpha=alpha;
-      // Small skull/trap icon
       ctx.font=`${cellSize*0.35}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText('🚧',cx,cy);
     }
   }
 
-  // Solver trail (fading footprints)
+  // Trail
   if(solverTrail.length>1&&alpha>=1.0){
     const now=Date.now();
-    const col=ALGO_INFO[algo].color;
     for(let i=1;i<solverTrail.length;i++){
-      const t=solverTrail[i];
-      const age=now-t.time;
+      const t=solverTrail[i];const age=now-t.time;
       if(age>TRAIL_DURATION)continue;
-      const fade=1-age/TRAIL_DURATION;
-      const prev=solverTrail[i-1];
-      const x1=prev.c*cellSize+cellSize/2, y1=prev.r*cellSize+cellSize/2;
-      const x2=t.c*cellSize+cellSize/2, y2=t.r*cellSize+cellSize/2;
-      ctx.strokeStyle=col;
-      ctx.globalAlpha=alpha*fade*0.5;
-      ctx.lineWidth=Math.max(2,cellSize*0.15*fade);
-      ctx.lineCap='round';
-      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+      const fade=1-age/TRAIL_DURATION;const prev=solverTrail[i-1];
+      ctx.strokeStyle=ADVENTURER_COLOR;ctx.globalAlpha=alpha*fade*0.5;
+      ctx.lineWidth=Math.max(2,cellSize*0.15*fade);ctx.lineCap='round';
+      ctx.beginPath();
+      ctx.moveTo(prev.c*cellSize+cellSize/2,prev.r*cellSize+cellSize/2);
+      ctx.lineTo(t.c*cellSize+cellSize/2,t.r*cellSize+cellSize/2);ctx.stroke();
     }
     ctx.globalAlpha=alpha;
   }
 
   // Shortest path
   if(path&&path.length>1){
-    const col=ALGO_INFO[algo].color;
-    ctx.strokeStyle=col+'88';ctx.lineWidth=3;ctx.lineCap='round';
+    ctx.strokeStyle=ADVENTURER_COLOR+'88';ctx.lineWidth=3;ctx.lineCap='round';
     ctx.beginPath();
     path.forEach(([r,c],i)=>{
-      const px=c*cellSize+cellSize/2, py=r*cellSize+cellSize/2;
+      const px=c*cellSize+cellSize/2,py=r*cellSize+cellSize/2;
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
-    });
-    ctx.stroke();
+    });ctx.stroke();
   }
 
-  // Preview path (only during wall placement, not during solver run)
+  // Preview path
   if(!running&&previewPath.length>1&&alpha>=1.0){
     ctx.strokeStyle='#5B4FCF33';ctx.lineWidth=Math.max(2,cellSize*0.18);ctx.lineCap='round';
     ctx.setLineDash([cellSize*0.2,cellSize*0.15]);
     ctx.beginPath();
     previewPath.forEach(([r,c],i)=>{
-      const px=c*cellSize+cellSize/2, py=r*cellSize+cellSize/2;
+      const px=c*cellSize+cellSize/2,py=r*cellSize+cellSize/2;
       if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
+    });ctx.stroke();ctx.setLineDash([]);
   }
 
   // Grid lines
@@ -942,153 +845,135 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
   ctx.strokeStyle='#2F2B2A';ctx.lineWidth=4;ctx.lineCap='round';
   ctx.strokeRect(1,1,W-2,H-2);
   wallSet.forEach(k=>{
-    const [r,c,d]=k.split(',');
-    const ri=+r,ci=+c;
+    const [r,c,d]=k.split(',');const ri=+r,ci=+c;
     ctx.beginPath();
     if(d==='h'){ctx.moveTo(ci*cellSize,ri*cellSize);ctx.lineTo((ci+1)*cellSize,ri*cellSize)}
     else{ctx.moveTo(ci*cellSize,ri*cellSize);ctx.lineTo(ci*cellSize,(ri+1)*cellSize)}
     ctx.stroke();
   });
 
-  // Hover preview wall
+  // Broken wall markers (red X marks)
+  if(brokenWalls.size>0){
+    brokenWalls.forEach(k=>{
+      const [r,c,d]=k.split(',');const ri=+r,ci=+c;
+      let mx,my;
+      if(d==='h'){mx=ci*cellSize+cellSize/2;my=ri*cellSize}
+      else{mx=ci*cellSize;my=ri*cellSize+cellSize/2}
+      ctx.save();ctx.globalAlpha=0.4;
+      ctx.strokeStyle='#FF3B30';ctx.lineWidth=2;
+      const s=cellSize*0.15;
+      ctx.beginPath();ctx.moveTo(mx-s,my-s);ctx.lineTo(mx+s,my+s);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(mx+s,my-s);ctx.lineTo(mx-s,my+s);ctx.stroke();
+      ctx.restore();ctx.globalAlpha=alpha;
+    });
+  }
+
+  // Hover preview
   if(hoverWall&&alpha>=1.0&&!running){
-    const hk=hoverWall.key;
-    const [hr,hc,hd]=hk.split(',');
-    const hri=+hr,hci=+hc;
-    const isRemove=wallSet.has(hk);
-    ctx.strokeStyle=isRemove?'#FF3B3088':'#5B4FCF88';
-    ctx.lineWidth=6;ctx.lineCap='round';
-    ctx.setLineDash(isRemove?[6,4]:[]);
+    const hk=hoverWall.key;const [hr,hc,hd]=hk.split(',');const hri=+hr,hci=+hc;
+    const isRemove=wallSet.has(hk);const isBroken=brokenWalls.has(hk);
+    ctx.strokeStyle=isBroken?'#FF3B3044':(isRemove?'#FF3B3088':'#5B4FCF88');
+    ctx.lineWidth=6;ctx.lineCap='round';ctx.setLineDash(isRemove||isBroken?[6,4]:[]);
     ctx.beginPath();
     if(hd==='h'){ctx.moveTo(hci*cellSize,hri*cellSize);ctx.lineTo((hci+1)*cellSize,hri*cellSize)}
     else{ctx.moveTo(hci*cellSize,hri*cellSize);ctx.lineTo(hci*cellSize,(hri+1)*cellSize)}
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.lineWidth=4;
+    ctx.stroke();ctx.setLineDash([]);ctx.lineWidth=4;
   }
 
   // Start & Goal
   const sr=cellSize*0.3;
   ctx.fillStyle='#4ED26D';ctx.beginPath();ctx.arc(cellSize/2,cellSize/2,sr,0,Math.PI*2);ctx.fill();
-  // Goal = stairs icon for dungeon, red dot otherwise
-  // Goal pulse glow
   const goalPulse=0.15+0.15*Math.sin(Date.now()*0.004);
   if(mode==='dungeon'){
-    ctx.save();ctx.globalAlpha=alpha*goalPulse;
-    ctx.fillStyle='#5B4FCF';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr*2,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.globalAlpha=alpha*goalPulse;ctx.fillStyle='#5B4FCF';
+    ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr*2,0,Math.PI*2);ctx.fill();
     ctx.restore();ctx.globalAlpha=alpha;
     ctx.font=`${cellSize*0.5}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText('🪜',(gn-0.5)*cellSize,(gn-0.5)*cellSize);
   } else {
-    ctx.save();ctx.globalAlpha=alpha*goalPulse;
-    ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr*2,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.globalAlpha=alpha*goalPulse;ctx.fillStyle='#FF3B30';
+    ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr*2,0,Math.PI*2);ctx.fill();
     ctx.restore();ctx.globalAlpha=alpha;
     ctx.fillStyle='#FF3B30';ctx.beginPath();ctx.arc((gn-0.5)*cellSize,(gn-0.5)*cellSize,sr,0,Math.PI*2);ctx.fill();
   }
 
   // Solver agent
   if(solver&&solver.pos&&alpha>=1.0){
-    const col=ALGO_INFO[algo].color;
     const [pr,pc]=solver.pos;
     let dr=0,dc=0;
     if(solver.lerp<1&&solver.prev){
-      dr=(pr-solver.prev[0])*(1-solver.lerp);
-      dc=(pc-solver.prev[1])*(1-solver.lerp);
+      dr=(pr-solver.prev[0])*(1-solver.lerp);dc=(pc-solver.prev[1])*(1-solver.lerp);
     }
     const ax=(pc-dc)*cellSize+cellSize/2, ay=(pr-dr)*cellSize+cellSize/2;
-    // Pulse glow ring
     const pulse=0.3+0.3*Math.sin(Date.now()*0.005);
-    ctx.save();
-    ctx.globalAlpha=alpha*pulse;
-    ctx.fillStyle=col;
-    ctx.beginPath();ctx.arc(ax,ay,sr*1.5,0,Math.PI*2);ctx.fill();
-    ctx.restore();
+    ctx.save();ctx.globalAlpha=alpha*pulse;ctx.fillStyle=ADVENTURER_COLOR;
+    ctx.beginPath();ctx.arc(ax,ay,sr*1.5,0,Math.PI*2);ctx.fill();ctx.restore();
     ctx.globalAlpha=alpha;
-    ctx.fillStyle=col;ctx.beginPath();ctx.arc(ax,ay,sr*0.9,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#fff';ctx.font=`${sr*0.9}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=ADVENTURER_COLOR;ctx.beginPath();ctx.arc(ax,ay,sr*0.9,0,Math.PI*2);ctx.fill();
+    // Draw floor icon on agent
+    if(solver.icon){
+      ctx.font=`${sr*1.0}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(solver.icon,ax,ay);
+    }
     if(solver.exclaim&&Date.now()-solver.exclaimTime<500){
-      ctx.fillStyle=col;ctx.font=`bold ${sr*1.5}px system-ui`;ctx.fillText('!',ax,ay-cellSize*0.6);
+      ctx.fillStyle=ADVENTURER_COLOR;ctx.font=`bold ${sr*1.5}px system-ui`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(solver.exclaimText||'!',ax,ay-cellSize*0.6);
     }
   }
 
   ctx.restore();
 }
 
-// ── Minimap bar for dungeon runs ──
+// ── Minimap ──
 function renderMinimap(activeFloor, totalFloors){
-  const bar=document.getElementById('minimapBar');
-  bar.style.display='flex';
-  bar.innerHTML='';
+  const bar=document.getElementById('minimapBar');bar.style.display='flex';bar.innerHTML='';
   const mmSize=44;
   for(let i=0;i<totalFloors;i++){
-    if(i>0){
-      const arrow=document.createElement('span');
-      arrow.className='mm-arrow';
-      arrow.textContent='→';
-      bar.appendChild(arrow);
-    }
-    const item=document.createElement('div');
-    item.className='mm-item';
-    const q=QUESTS[i];
-    const c=document.createElement('canvas');
-    const gn=q.gridN;
-    const cs=Math.max(2,Math.floor(mmSize/gn));
-    const sz=cs*gn;
+    if(i>0){const arrow=document.createElement('span');arrow.className='mm-arrow';arrow.textContent='→';bar.appendChild(arrow)}
+    const item=document.createElement('div');item.className='mm-item';
+    const q=QUESTS[i];const c=document.createElement('canvas');
+    const gn=q.gridN;const cs=Math.max(2,Math.floor(mmSize/gn));const sz=cs*gn;
     const dpr=window.devicePixelRatio||1;
-    c.width=sz*dpr;c.height=sz*dpr;
-    c.style.width=sz+'px';c.style.height=sz+'px';
+    c.width=sz*dpr;c.height=sz*dpr;c.style.width=sz+'px';c.style.height=sz+'px';
     c.className='mm-canvas'+(i===activeFloor?' mm-active':'')+(i<activeFloor?' mm-done':'');
-    const mctx=c.getContext('2d');
-    mctx.setTransform(dpr,0,0,dpr,0,0);
-    mctx.fillStyle=i===activeFloor?'#F5F3FF':'#fafafa';
-    mctx.fillRect(0,0,sz,sz);
-    // Draw walls
+    const mctx=c.getContext('2d');mctx.setTransform(dpr,0,0,dpr,0,0);
+    mctx.fillStyle=i===activeFloor?'#F5F3FF':'#fafafa';mctx.fillRect(0,0,sz,sz);
     const wSet=new Set(dungeonWalls[i]||[]);
-    mctx.strokeStyle=i===activeFloor?'#2F2B2A':'#aaa';
-    mctx.lineWidth=i===activeFloor?1.5:1;
+    mctx.strokeStyle=i===activeFloor?'#2F2B2A':'#aaa';mctx.lineWidth=i===activeFloor?1.5:1;
     mctx.strokeRect(0,0,sz,sz);
     wSet.forEach(k=>{
-      const [r,col,d]=k.split(',');
-      const ri=+r,ci=+col;
+      const [r,col,d]=k.split(',');const ri=+r,ci=+col;
       mctx.beginPath();
       if(d==='h'){mctx.moveTo(ci*cs,ri*cs);mctx.lineTo((ci+1)*cs,ri*cs)}
       else{mctx.moveTo(ci*cs,ri*cs);mctx.lineTo(ci*cs,(ri+1)*cs)}
       mctx.stroke();
     });
-    // Draw start (green) and goal (blue/red)
     const dotR=Math.max(1.5,cs*0.25);
-    mctx.fillStyle='#4ED26D';
-    mctx.beginPath();mctx.arc(cs/2,cs/2,dotR,0,Math.PI*2);mctx.fill();
-    mctx.fillStyle='#FF3B30';
-    mctx.beginPath();mctx.arc((gn-0.5)*cs,(gn-0.5)*cs,dotR,0,Math.PI*2);mctx.fill();
-    // Draw adventurer position if on this floor
+    mctx.fillStyle='#4ED26D';mctx.beginPath();mctx.arc(cs/2,cs/2,dotR,0,Math.PI*2);mctx.fill();
+    mctx.fillStyle='#FF3B30';mctx.beginPath();mctx.arc((gn-0.5)*cs,(gn-0.5)*cs,dotR,0,Math.PI*2);mctx.fill();
     if(i===activeFloor&&solverState&&solverState.pos){
       const [pr,pc]=solverState.pos;
-      const ax=pc*cs+cs/2, ay=pr*cs+cs/2;
-      mctx.fillStyle=ALGO_INFO[curConfig.algo].color;
-      mctx.beginPath();mctx.arc(ax,ay,Math.max(2,cs*0.35),0,Math.PI*2);mctx.fill();
+      mctx.fillStyle=ADVENTURER_COLOR;
+      mctx.beginPath();mctx.arc(pc*cs+cs/2,pr*cs+cs/2,Math.max(2,cs*0.35),0,Math.PI*2);mctx.fill();
     }
     item.appendChild(c);
     const label=document.createElement('div');
-    label.className='mm-label'+(i===activeFloor?' mm-active-label':'');
-    label.textContent=q.name;
-    item.appendChild(label);
-    bar.appendChild(item);
+    label.className='mm-label'+(i===activeFloor?' mm-active-label':'');label.textContent=q.name;
+    item.appendChild(label);bar.appendChild(item);
   }
 }
 
 function updateFloorIndicator(activeFloor, totalFloors){
-  const ind=document.getElementById('floorIndicator');
-  ind.style.display='block';
+  const ind=document.getElementById('floorIndicator');ind.style.display='block';
   let parts=[];
   for(let i=0;i<totalFloors;i++){
-    if(i===activeFloor) parts.push(`[${QUESTS[i].name}]`);
-    else parts.push(QUESTS[i].name);
+    if(i===activeFloor)parts.push(`[${QUESTS[i].name}]`);else parts.push(QUESTS[i].name);
   }
   ind.textContent='🏰 '+parts.join(' → ');
 }
 
-// ── Solver ──
+// ── Solver control ──
 function stopSolver(){
   running=false;dungeonRunning=false;
   if(animId)cancelAnimationFrame(animId);animId=null;
@@ -1096,48 +981,38 @@ function stopSolver(){
   document.getElementById('minimapBar').style.display='none';
 }
 
-// ── Test run: single floor with its own algo ──
 function testFloorRun(){
-  if(running)return;
-  if(mode!=='dungeon')return;
-  dungeonTestMode=true;
-  dungeonRunning=false;
-  // Save walls
-  dungeonWalls[dungeonFloorIdx]=[...walls];
-  saveDungeon();
+  if(running||mode!=='dungeon')return;
+  dungeonTestMode=true;dungeonRunning=false;
+  dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon();
   ensureAudio();sfxStart();
   running=true;timer=0;timerStart=Date.now();
-  explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
+  explored.clear();shortestPath=[];deadEndCount=0;
   document.getElementById('startBtn').disabled=true;
   document.getElementById('testRunBtn').disabled=true;
-  document.getElementById('gameName').textContent=`👁️ ${QUESTS[dungeonFloorIdx].name} 偵察中`;
+  const q=QUESTS[dungeonFloorIdx];
+  const fi=getFloorInfo(dungeonFloorIdx);
+  document.getElementById('gameName').textContent=`👁️ ${q.name} 偵察中`;
+  currentAbilities=q.abilities;
   userSpeedLevel=0;
-  {const sb=document.getElementById('speedBtn');sb.style.display='inline-block';sb.textContent='⏩ 1x';}
-  const algo=QUESTS[dungeonFloorIdx].algo;
-  curConfig.algo=algo;
-  runAlgo(algo, walls, gridN);
+  {const sb=document.getElementById('speedBtn');sb.style.display='inline-block';sb.textContent='⏩ 1x'}
+  startFogExplorer(walls, gridN, q.abilities, dungeonFloorIdx);
+  tickTimer();
 }
 
-// ── Full dungeon run ──
 function runSolver(){
-  if(running)return;
-  ensureAudio();sfxStart();
-
+  if(running)return;ensureAudio();sfxStart();
   if(mode==='dungeon'){
-    // Save current floor walls
-    dungeonWalls[dungeonFloorIdx]=[...walls];
-    saveDungeon();
-    dungeonTestMode=false;
-    dungeonRunning=true;
+    dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon();
+    dungeonTestMode=false;dungeonRunning=true;
     running=true;timer=0;timerStart=Date.now();
-    explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
+    explored.clear();shortestPath=[];deadEndCount=0;brokenWalls=new Set();
     document.getElementById('startBtn').disabled=true;
     document.getElementById('testRunBtn').disabled=true;
     userSpeedLevel=0;
-    {const sb=document.getElementById('speedBtn');sb.style.display='inline-block';sb.textContent='⏩ 1x';}
-    const algo=QUESTS[dungeonFloorIdx].algo;
-    curConfig.algo=algo;
-    // Start from floor 0
+    {const sb=document.getElementById('speedBtn');sb.style.display='inline-block';sb.textContent='⏩ 1x'}
+    const q=QUESTS[dungeonFloorIdx];
+    currentAbilities=q.abilities;
     dungeonRunFloorIdx=0;
     renderMinimap(0, dungeonFloorIdx+1);
     updateFloorIndicator(0, dungeonFloorIdx+1);
@@ -1145,66 +1020,52 @@ function runSolver(){
     tickTimer();
     return;
   }
-
-  // Stage / Free mode
+  // Free mode
   running=true;timer=0;timerStart=Date.now();
-  explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
+  explored.clear();shortestPath=[];deadEndCount=0;brokenWalls=new Set();
   document.getElementById('startBtn').textContent='実行中…';
   document.getElementById('startBtn').disabled=true;
   userSpeedLevel=0;
-  const speedBtn=document.getElementById('speedBtn');
-  speedBtn.style.display='inline-block';speedBtn.textContent='⏩ 1x';
-  const algo=curConfig.algo;
-  runAlgo(algo, walls, gridN);
+  {const sb=document.getElementById('speedBtn');sb.style.display='inline-block';sb.textContent='⏩ 1x'}
+  startFogExplorer(walls, gridN, currentAbilities, 0);
+  tickTimer();
 }
 
 function runDungeonFloor(floorIdx){
   if(!running)return;
-  const q=QUESTS[floorIdx];
-  const gn=q.gridN;
+  const q=QUESTS[floorIdx];const gn=q.gridN;
   const floorWalls=new Set(dungeonWalls[floorIdx]||[]);
-  // Use target floor's algorithm for ALL floors (key game mechanic)
-  const algo=QUESTS[dungeonFloorIdx].algo;
-
-  // Switch display to this floor
-  gridN=gn;
-  walls=floorWalls;
-  explored.clear();shortestPath=[];
-  solverState=null;solverTrail=[];
-  curConfig.grid=gn;
-  curConfig.algo=algo;
-  const ai=ALGO_INFO[algo];
-  document.getElementById('gameName').textContent=`⚔️ ${q.name} - ${ai.label}侵入中`;
+  // Remove broken walls from this floor's wall set
+  brokenWalls.forEach(bk=>floorWalls.delete(bk));
+  gridN=gn;walls=floorWalls;explored.clear();shortestPath=[];
+  solverState=null;solverTrail=[];curConfig.grid=gn;
+  const fi=getFloorInfo(dungeonFloorIdx);
+  document.getElementById('gameName').textContent=`⚔️ ${q.name} - ${fi.name}侵入中`;
+  document.getElementById('abilityBar').textContent=getAbilityText(currentAbilities);
   resizeCanvas();
   renderMinimap(floorIdx, dungeonFloorIdx+1);
   updateFloorIndicator(floorIdx, dungeonFloorIdx+1);
   draw();
-
-  // Run algo on this floor, with callback on finish
-  runAlgoWithCallback(algo, floorWalls, gn, ()=>{
-    // Floor cleared
+  dungeonFloorCallback=()=>{
     if(floorIdx<dungeonFloorIdx){
-      // More floors to go - show stairs transition
       showStairsTransition(q.name, QUESTS[floorIdx+1].name, ()=>{
-        dungeonRunFloorIdx=floorIdx+1;
-        runDungeonFloor(floorIdx+1);
+        dungeonRunFloorIdx=floorIdx+1;runDungeonFloor(floorIdx+1);
       });
     } else {
-      // Final floor reached - finish
       finishDungeonRun();
     }
-  });
+  };
+  startFogExplorer(walls, gn, currentAbilities, dungeonFloorIdx);
 }
+
+let dungeonFloorCallback=null;
 
 function showStairsTransition(fromFloor, toFloor, cb){
   sfxStairs();
   const overlay=document.getElementById('stairsOverlay');
   document.getElementById('stairsText').textContent=`${toFloor}へ…`;
   overlay.classList.add('show');
-  setTimeout(()=>{
-    overlay.classList.remove('show');
-    cb();
-  },700);
+  setTimeout(()=>{overlay.classList.remove('show');cb()},700);
 }
 
 function finishDungeonRun(){
@@ -1212,268 +1073,237 @@ function finishDungeonRun(){
   timer=(Date.now()-timerStart)/1000;
   document.getElementById('speedBtn').style.display='none';
   document.getElementById('minimapBar').style.display='none';
-  hideTimerBar();
-  updateUI();
-
-  // Restore editing floor
-  const targetFloor=dungeonFloorIdx;
-  const q=QUESTS[targetFloor];
-  gridN=q.gridN;
-  walls=new Set(dungeonWalls[targetFloor]||[]);
-  curConfig.grid=q.gridN;
-
+  hideTimerBar();updateUI();
+  const targetFloor=dungeonFloorIdx;const q=QUESTS[targetFloor];
+  gridN=q.gridN;walls=new Set(dungeonWalls[targetFloor]||[]);curConfig.grid=q.gridN;
   const passed=timer>=q.goalTime;
-
-  if(passed){
-    dungeonCleared[targetFloor]=true;
-    saveDungeon();
-  }
-
-  // If final floor cleared, show special completion screen
-  if(passed&&targetFloor===QUESTS.length-1){
-    showDungeonComplete(timer);
-    return;
-  }
-
-  // Score
-  const base=Math.round(timer*100);
-  const deadEndBonus=deadEndCount*30;
+  if(passed){dungeonCleared[targetFloor]=true;saveDungeon()}
+  if(passed&&targetFloor===QUESTS.length-1){showDungeonComplete(timer);return}
+  const base=Math.round(timer*100);const deadEndBonus=deadEndCount*30;
   const total=Math.max(0,base+deadEndBonus);
-
   document.getElementById('resultEmoji').textContent=passed?'🛡️':'😰';
   document.getElementById('resultTitle').textContent=passed?'冒険者を十分に足止めした！🛡️':'冒険者に突破されてしまった…壁を見直そう';
   document.getElementById('resultTime').textContent=`通し合計: ${timer.toFixed(1)}秒 / 目標: ${q.goalTime}秒`;
   document.getElementById('resultScore').textContent=total.toLocaleString();
-  let bd=`ベース: ${base}`;
-  if(deadEndBonus)bd+=` | 行き止まり: +${deadEndBonus}`;
+  let bd=`ベース: ${base}`;if(deadEndBonus)bd+=` | 行き止まり: +${deadEndBonus}`;
   document.getElementById('resultBreakdown').textContent=bd;
-
   document.getElementById('nextDungeonBtn').style.display=(passed&&targetFloor<QUESTS.length-1)?'block':'none';
-
-  const starInfo=calcStars(timer, q.goalTime);
-  showStars(starInfo.stars, starInfo.label);
-
+  const starInfo=calcStars(timer, q.goalTime);showStars(starInfo.stars, starInfo.label);
   if(passed){sfxClear();spawnConfetti()}else sfxFail();
   showScreen('resultScreen');
 }
 
-// ── Algorithm runners ──
-function runAlgo(algo, wallSet, gn){
-  // Set global state for algo
-  walls=wallSet;gridN=gn;
-  if(algo==='random')startRandomWalk();
-  else if(algo==='righthand')startRightHand();
-  else if(algo==='bfs')startBFS();
-  else if(algo==='astar')startAStar();
-  if(!dungeonRunning) tickTimer();
-}
+// ══════════════════════════════════════════
+// ── fogExplorer AI ──
+// ══════════════════════════════════════════
 
-function runAlgoWithCallback(algo, wallSet, gn, onFinish){
-  // Set global state
-  walls=wallSet;gridN=gn;
-  explored.clear();shortestPath=[];
-  solverState=null;
-  // Override finishSolver for callback
-  dungeonFloorCallback=onFinish;
-  if(algo==='random')startRandomWalk();
-  else if(algo==='righthand')startRightHand();
-  else if(algo==='bfs')startBFS();
-  else if(algo==='astar')startAStar();
-}
+function startFogExplorer(wallSet, gn, abilities, floorIdx){
+  const hasMemory=abilities.includes('memory');
+  const hasWallBreak=abilities.includes('wallBreak')||abilities.includes('wallBreakPlus');
+  const wallBreakMax=abilities.includes('wallBreakPlus')?3:hasWallBreak?2:0;
+  const hasScent=abilities.includes('scent')||abilities.includes('scentPlus');
+  const scentFreq=abilities.includes('scentPlus')?2:hasScent?3:0; // every N steps
 
-let dungeonFloorCallback=null;
+  const fi=getFloorInfo(floorIdx);
+  let wallBreakCount=0;
+  let visitedMap=new Map(); // key -> visit order (for memory)
+  let visitOrder=0;
+  let stepCount=0;
+  let prevPos=null;
 
-// ── Random Walk ──
-function startRandomWalk(){
-  solverState={pos:[0,0],prev:null,lerp:1,exclaim:false,exclaimTime:0};
-  let lastPos=null;
+  solverState={pos:[0,0],prev:null,lerp:1,exclaim:false,exclaimTime:0,exclaimText:'',icon:fi.icon};
+  explored.add('0,0');
+  if(hasMemory){visitedMap.set('0,0',visitOrder++)}
+
   const step=()=>{
     if(!running)return;
     const [r,c]=solverState.pos;
-    if(r===gridN-1&&c===gridN-1){finishSolver();return}
-    const nb=neighbors(r,c);
-    let choices=nb;
-    if(lastPos&&nb.length>1){
-      const filtered=nb.filter(([nr,nc])=>!(nr===lastPos[0]&&nc===lastPos[1]));
-      if(Math.random()>0.3||filtered.length===0)choices=nb;else choices=filtered;
+    if(r===gn-1&&c===gn-1){finishSolver();return}
+
+    stepCount++;
+
+    // Check if scent ability activates this step
+    let useScentThisStep=false;
+    if(hasScent&&scentFreq>0&&stepCount%scentFreq===0){
+      useScentThisStep=true;
     }
-    if(nb.length<=1&&!(r===0&&c===0)){
-      deadEndCount++;solverState.exclaim=true;solverState.exclaimTime=Date.now();
-      sfxDeadEnd();showFloatScore(r,c,'+30',ALGO_INFO[curConfig.algo].color);shakeScreen();
+
+    let nextPos=null;
+
+    if(useScentThisStep){
+      // BFS to find optimal next step
+      nextPos=bfsNextStep(wallSet, gn, r, c);
+      if(nextPos){
+        sfxScent();spawnScentSparkle(r,c);
+        solverState.exclaim=true;solverState.exclaimTime=Date.now();solverState.exclaimText='✨';
+      }
     }
-    const pick=choices[Math.floor(Math.random()*choices.length)];
-    lastPos=[r,c];
-    explored.add(`${pick[0]},${pick[1]}`);
-    animateMove(pick,300,step);
+
+    if(!nextPos){
+      // Base AI: fogExplorer
+      const nb=neighborsIn(wallSet,gn,r,c);
+
+      if(nb.length===0){
+        // Completely stuck (shouldn't happen with valid maze)
+        finishSolver();return;
+      }
+
+      // Check if dead end (only way out is back)
+      const isDeadEnd=nb.length===1&&prevPos&&nb[0][0]===prevPos[0]&&nb[0][1]===prevPos[1];
+
+      if(isDeadEnd&&hasWallBreak&&wallBreakCount<wallBreakMax){
+        // Try to break a wall
+        const breakResult=tryBreakWall(wallSet, gn, r, c, prevPos);
+        if(breakResult){
+          wallBreakCount++;
+          const {wallK, wallR, wallC, wallD, newR, newC}=breakResult;
+          wallSet.delete(wallK);
+          brokenWalls.add(wallK);
+          walls=wallSet; // update global ref
+          sfxWallBreak();shakeScreen();
+          spawnWallBreakFlash(wallR,wallC,wallD);
+          solverState.exclaim=true;solverState.exclaimTime=Date.now();solverState.exclaimText='💥';
+          showFloatScore(r,c,'💥壁破壊!','#FF3B30');
+          // Move through the broken wall
+          nextPos=[newR,newC];
+        }
+      }
+
+      if(isDeadEnd&&!nextPos){
+        deadEndCount++;
+        sfxDeadEnd();showFloatScore(r,c,'+30',ADVENTURER_COLOR);shakeScreen();
+      }
+
+      if(!nextPos){
+        // Normal fog explorer logic
+        let candidates=nb.slice();
+
+        // Memory: prefer unvisited
+        if(hasMemory&&candidates.length>1){
+          const unvisited=candidates.filter(([nr,nc])=>!visitedMap.has(`${nr},${nc}`));
+          if(unvisited.length>0){
+            candidates=unvisited;
+          } else {
+            // All visited: pick least recently visited
+            candidates.sort((a,b)=>{
+              const va=visitedMap.get(`${a[0]},${a[1]}`)||0;
+              const vb=visitedMap.get(`${b[0]},${b[1]}`)||0;
+              return va-vb;
+            });
+            candidates=[candidates[0]]; // pick oldest
+          }
+        }
+
+        // Avoid going back (if other options exist)
+        if(prevPos&&candidates.length>1){
+          const nonBack=candidates.filter(([nr,nc])=>!(nr===prevPos[0]&&nc===prevPos[1]));
+          if(nonBack.length>0)candidates=nonBack;
+        }
+
+        // Pick by manhattan distance to goal
+        const goalR=gn-1, goalC=gn-1;
+        let bestDist=Infinity;
+        let bestCandidates=[];
+        for(const [nr,nc] of candidates){
+          const dist=Math.abs(nr-goalR)+Math.abs(nc-goalC);
+          if(dist<bestDist){bestDist=dist;bestCandidates=[[nr,nc]]}
+          else if(dist===bestDist)bestCandidates.push([nr,nc]);
+        }
+        nextPos=bestCandidates[Math.floor(Math.random()*bestCandidates.length)];
+      }
+    }
+
+    prevPos=[r,c];
+    if(hasMemory)visitedMap.set(`${nextPos[0]},${nextPos[1]}`,visitOrder++);
+    explored.add(`${nextPos[0]},${nextPos[1]}`);
+    animateMove(nextPos,250,step);
   };
-  explored.add('0,0');
   step();
 }
 
-// ── Right Hand ──
-function startRightHand(){
-  const DR=[-1,0,1,0],DC=[0,1,0,-1];
-  let dir=2;
-  solverState={pos:[0,0],prev:null,lerp:1,exclaim:false,exclaimTime:0};
-  const step=()=>{
-    if(!running)return;
-    const [r,c]=solverState.pos;
-    if(r===gridN-1&&c===gridN-1){finishSolver();return}
-    const tryOrder=[(dir+1)%4, dir, (dir+3)%4, (dir+2)%4];
-    let moved=false;
-    for(const d of tryOrder){
-      const nr=r+DR[d], nc=c+DC[d];
-      if(canPass(r,c,nr,nc)){
-        dir=d;
-        const nb=neighbors(r,c);
-        if(nb.length<=1&&!(r===0&&c===0)){
-          deadEndCount++;solverState.exclaim=true;solverState.exclaimTime=Date.now();
-          sfxDeadEnd();showFloatScore(r,c,'+30',ALGO_INFO[curConfig.algo].color);shakeScreen();
-        }
-        explored.add(`${nr},${nc}`);
-        animateMove([nr,nc],250,step);
-        moved=true;break;
-      }
+// BFS to find the best next step from current position
+function bfsNextStep(wallSet, gn, startR, startC){
+  const goalR=gn-1, goalC=gn-1;
+  if(startR===goalR&&startC===goalC)return null;
+  const visited=new Set();const parent=new Map();
+  const queue=[[startR,startC]];visited.add(`${startR},${startC}`);
+  const goalK=`${goalR},${goalC}`;
+  while(queue.length){
+    const [r,c]=queue.shift();const k=`${r},${c}`;
+    if(k===goalK){
+      // Trace back to find the first step
+      let cur=goalK;
+      while(parent.get(cur)!==`${startR},${startC}`){cur=parent.get(cur);if(!cur)return null}
+      return cur.split(',').map(Number);
     }
-    if(!moved){finishSolver()}
-  };
-  explored.add('0,0');
-  step();
-}
-
-// ── BFS ──
-function startBFS(){
-  solverState={pos:null,prev:null,lerp:1,exclaim:false,exclaimTime:0};
-  const parent=new Map();
-  const queue=[[0,0]];
-  const visited=new Set(['0,0']);
-  let found=false;
-  const exploreStep=()=>{
-    if(!running)return;
-    if(!queue.length){finishSolver();return}
-    const batch=Math.min(queue.length,Math.ceil(3*getSpeedMultiplier()));
-    for(let i=0;i<batch;i++){
-      if(!queue.length)break;
-      const [r,c]=queue.shift();
-      explored.add(`${r},${c}`);
-      if(r===gridN-1&&c===gridN-1){found=true;break}
-      for(const [nr,nc] of neighbors(r,c)){
-        const k=`${nr},${nc}`;
-        if(!visited.has(k)){visited.add(k);parent.set(k,`${r},${c}`);queue.push([nr,nc])}
-      }
+    for(const [nr,nc] of neighborsIn(wallSet,gn,r,c)){
+      const nk=`${nr},${nc}`;
+      if(!visited.has(nk)){visited.add(nk);parent.set(nk,k);queue.push([nr,nc])}
     }
-    draw();
-    if(found){
-      const path=[];let cur=`${gridN-1},${gridN-1}`;
-      while(cur){path.unshift(cur.split(',').map(Number));cur=parent.get(cur)}
-      shortestPath=path;
-      walkPath(path,0);
-    } else {
-      setTimeout(exploreStep,50);
-    }
-  };
-  exploreStep();
-}
-
-// ── A* ──
-function startAStar(){
-  solverState={pos:null,prev:null,lerp:1,exclaim:false,exclaimTime:0};
-  const goal=[gridN-1,gridN-1];
-  const h=(r,c)=>Math.abs(r-goal[0])+Math.abs(c-goal[1]);
-  const open=[{r:0,c:0,g:0,f:h(0,0)}];
-  const gScore=new Map();gScore.set('0,0',0);
-  const parent=new Map();
-  const closed=new Set();
-  let found=false;
-  const exploreStep=()=>{
-    if(!running)return;
-    if(!open.length){finishSolver();return}
-    const batch=Math.min(open.length,Math.ceil(5*getSpeedMultiplier()));
-    for(let i=0;i<batch;i++){
-      if(!open.length)break;
-      let minIdx=0;
-      for(let j=1;j<open.length;j++){if(open[j].f<open[minIdx].f)minIdx=j}
-      const cur=open.splice(minIdx,1)[0];
-      const ck=`${cur.r},${cur.c}`;
-      if(closed.has(ck))continue;
-      closed.add(ck);explored.add(ck);
-      if(cur.r===goal[0]&&cur.c===goal[1]){found=true;break}
-      for(const [nr,nc] of neighbors(cur.r,cur.c)){
-        const nk=`${nr},${nc}`;
-        if(closed.has(nk))continue;
-        const ng=cur.g+1;
-        if(!gScore.has(nk)||ng<gScore.get(nk)){
-          gScore.set(nk,ng);parent.set(nk,ck);
-          open.push({r:nr,c:nc,g:ng,f:ng+h(nr,nc)});
-        }
-      }
-    }
-    draw();
-    if(found){
-      const path=[];let cur=`${gridN-1},${gridN-1}`;
-      while(cur){path.unshift(cur.split(',').map(Number));cur=parent.get(cur)}
-      shortestPath=path;
-      walkPath(path,0);
-    } else {
-      setTimeout(exploreStep,30);
-    }
-  };
-  exploreStep();
-}
-
-// ── Walk a computed path ──
-function walkPath(path,idx){
-  if(!running)return;
-  if(idx>=path.length){finishSolver();return}
-  const [r,c]=path[idx];
-  if(r===gridN-1&&c===gridN-1){
-    solverState.pos=[r,c];solverState.prev=idx>0?path[idx-1]:null;solverState.lerp=1;
-    draw();finishSolver();return;
   }
-  const speed=curConfig.algo==='astar'?150:200;
-  animateMove([r,c],speed,()=>walkPath(path,idx+1));
+  return null; // no path
 }
 
-function cycleSpeed(){
-  userSpeedLevel=(userSpeedLevel+1)%SPEED_LABELS.length;
-  const btn=document.getElementById('speedBtn');
-  btn.textContent='⏩ '+SPEED_LABELS[userSpeedLevel];
+// Try to break a wall when at a dead end
+function tryBreakWall(wallSet, gn, r, c, prevPos){
+  // Find all directions we can't go (walls)
+  const dirs=[[-1,0,'h',r,c],[1,0,'h',r+1,c],[0,-1,'v',r,c],[0,1,'v',r,c+1]];
+  const goalR=gn-1, goalC=gn-1;
+  let bestBreak=null, bestDist=Infinity;
+
+  for(const [dr,dc,d,wr,wc] of dirs){
+    const nr=r+dr, nc=c+dc;
+    // Skip: going back to where we came from
+    if(prevPos&&nr===prevPos[0]&&nc===prevPos[1])continue;
+    // Skip: out of bounds
+    if(nr<0||nr>=gn||nc<0||nc>=gn)continue;
+    // Skip: boundary walls (can't break)
+    if(d==='h'&&(wr===0||wr===gn))continue;
+    if(d==='v'&&(wc===0||wc===gn))continue;
+    const wk=wallKey(wr,wc,d);
+    if(!wallSet.has(wk))continue; // no wall to break
+    const dist=Math.abs(nr-goalR)+Math.abs(nc-goalC);
+    if(dist<bestDist){bestDist=dist;bestBreak={wallK:wk,wallR:wr,wallC:wc,wallD:d,newR:nr,newC:nc}}
+  }
+  return bestBreak;
 }
 
-function getSpeedMultiplier(){
-  const userMul=SPEED_MULTIPLIERS[userSpeedLevel]||1;
-  const elapsed=(Date.now()-timerStart)/1000;
-  let auto=1;
-  if(elapsed>=10&&elapsed<20) auto=1+(elapsed-10)/10*3;
-  else if(elapsed>=20) auto=Math.min(8,4+(elapsed-20)/10*4);
-  return auto*userMul;
-}
-
+// ── Animation & Timer ──
 function animateMove(target,duration,cb){
   const speedMul=getSpeedMultiplier();
   const adjDuration=Math.max(20,duration/speedMul);
   const prev=solverState.pos?[...solverState.pos]:target;
-  // Record trail
   solverTrail.push({r:target[0],c:target[1],time:Date.now()});
-  if(solverTrail.length>TRAIL_MAX) solverTrail.shift();
+  if(solverTrail.length>TRAIL_MAX)solverTrail.shift();
   solverState.prev=prev;solverState.pos=target;solverState.lerp=0;
   const start=performance.now();
   const tick=(t)=>{
     if(!running)return;
     const p=Math.min(1,(t-start)/adjDuration);
-    solverState.lerp=p;
-    draw();
+    solverState.lerp=p;draw();
     if(p<1)animId=requestAnimationFrame(tick);
     else{solverState.lerp=1;cb()}
   };
   animId=requestAnimationFrame(tick);
 }
 
+function cycleSpeed(){
+  userSpeedLevel=(userSpeedLevel+1)%SPEED_LABELS.length;
+  document.getElementById('speedBtn').textContent='⏩ '+SPEED_LABELS[userSpeedLevel];
+}
+
+function getSpeedMultiplier(){
+  const userMul=SPEED_MULTIPLIERS[userSpeedLevel]||1;
+  const elapsed=(Date.now()-timerStart)/1000;
+  let auto=1;
+  if(elapsed>=10&&elapsed<20)auto=1+(elapsed-10)/10*3;
+  else if(elapsed>=20)auto=Math.min(8,4+(elapsed-20)/10*4);
+  return auto*userMul;
+}
+
 function tickTimer(){
   if(!running)return;
-  timer=(Date.now()-timerStart)/1000;
-  updateUI();
-  updateTimerBar();
+  timer=(Date.now()-timerStart)/1000;updateUI();updateTimerBar();
   setTimeout(()=>{if(running)tickTimer()},100);
 }
 
@@ -1484,21 +1314,14 @@ function updateTimerBar(){
   const lLeft=document.getElementById('timerLabelLeft');
   const lRight=document.getElementById('timerLabelRight');
   const target=curConfig?curConfig.target:Infinity;
-  if(!running||target===Infinity){
-    wrap.classList.remove('active');
-    label.classList.remove('active');
-    return;
-  }
-  wrap.classList.add('active');
-  label.classList.add('active');
-  const ratio=timer/target;
-  const pct=Math.min(ratio*100,100);
+  if(!running||target===Infinity){wrap.classList.remove('active');label.classList.remove('active');return}
+  wrap.classList.add('active');label.classList.add('active');
+  const ratio=timer/target;const pct=Math.min(ratio*100,100);
   bar.style.width=pct+'%';
-  if(ratio>=2.0){bar.className='timer-bar way-over'}
-  else if(ratio>=1.0){bar.className='timer-bar over'}
-  else{bar.className='timer-bar under'}
-  lLeft.textContent=timer.toFixed(1)+'s';
-  lRight.textContent='目標: '+target+'s';
+  if(ratio>=2.0)bar.className='timer-bar way-over';
+  else if(ratio>=1.0)bar.className='timer-bar over';
+  else bar.className='timer-bar under';
+  lLeft.textContent=timer.toFixed(1)+'s';lRight.textContent='目標: '+target+'s';
 }
 
 function hideTimerBar(){
@@ -1508,20 +1331,13 @@ function hideTimerBar(){
 
 function finishSolver(){
   hideTimerBar();
-  // If dungeon full run, delegate to floor callback
   if(dungeonRunning&&dungeonFloorCallback){
-    const cb=dungeonFloorCallback;
-    dungeonFloorCallback=null;
-    cb();
-    return;
+    const cb=dungeonFloorCallback;dungeonFloorCallback=null;cb();return;
   }
-
-  running=false;
-  timer=(Date.now()-timerStart)/1000;
+  running=false;timer=(Date.now()-timerStart)/1000;
   document.getElementById('speedBtn').style.display='none';
   updateUI();draw();
 
-  // If dungeon test mode, just show toast and reset
   if(mode==='dungeon'&&dungeonTestMode){
     dungeonTestMode=false;
     showToast(`偵察完了: ${timer.toFixed(1)}秒`);
@@ -1531,67 +1347,48 @@ function finishSolver(){
     return;
   }
 
-  // Score
-  const base=Math.round(timer*100);
-  const deadEndBonus=deadEndCount*30;
-  const penalty=realtimeWallPenalty*200;
-  const total=Math.max(0,base+deadEndBonus-penalty);
-
+  const base=Math.round(timer*100);const deadEndBonus=deadEndCount*30;
+  const total=Math.max(0,base+deadEndBonus);
   const passed=curConfig.target!==Infinity&&timer>=curConfig.target;
 
   document.getElementById('resultEmoji').textContent=passed?'🎉':'😅';
   document.getElementById('resultTitle').textContent=passed?'クリア！':'もう少し迷わせよう…';
   document.getElementById('resultTime').textContent=`経過時間: ${timer.toFixed(1)}秒${curConfig.target!==Infinity?' / 目標: '+curConfig.target+'秒':''}`;
   document.getElementById('resultScore').textContent=total.toLocaleString();
-  let bd=`ベース: ${base}`;
-  if(deadEndBonus)bd+=` | 行き止まり: +${deadEndBonus}`;
-  if(penalty)bd+=` | ペナルティ: -${penalty}`;
+  let bd=`ベース: ${base}`;if(deadEndBonus)bd+=` | 行き止まり: +${deadEndBonus}`;
   document.getElementById('resultBreakdown').textContent=bd;
-
   document.getElementById('nextDungeonBtn').style.display='none';
-
-  const starInfo=calcStars(timer, curConfig.target);
-  showStars(starInfo.stars, starInfo.label);
-
+  const starInfo=calcStars(timer, curConfig.target);showStars(starInfo.stars, starInfo.label);
   if(passed){sfxClear();spawnConfetti()}else sfxFail();
   showScreen('resultScreen');
 }
 
-function retryStage(){
-  if(mode==='dungeon')startDungeon();
-  else startFree();
-}
+function retryStage(){if(mode==='dungeon')startDungeon();else startFree()}
 
 // ── Star Rating ──
 function calcStars(time, target){
-  if(target===Infinity) return {stars:0, label:''};
+  if(target===Infinity)return{stars:0,label:''};
   const ratio=time/target;
-  if(ratio>=2.0) return {stars:3, label:'完璧！ 🏆'};
-  if(ratio>=1.5) return {stars:2, label:'いい迷路！'};
-  if(ratio>=1.0) return {stars:1, label:'クリア！'};
-  return {stars:0, label:'もう少し…'};
+  if(ratio>=2.0)return{stars:3,label:'完璧！ 🏆'};
+  if(ratio>=1.5)return{stars:2,label:'いい迷路！'};
+  if(ratio>=1.0)return{stars:1,label:'クリア！'};
+  return{stars:0,label:'もう少し…'};
 }
 function showStars(stars, label){
-  const row=document.getElementById('starRow');
-  const lbl=document.getElementById('starLabel');
-  row.innerHTML='';
-  lbl.textContent=label;
+  const row=document.getElementById('starRow');const lbl=document.getElementById('starLabel');
+  row.innerHTML='';lbl.textContent=label;
   for(let i=0;i<3;i++){
-    const s=document.createElement('span');
-    s.className='star'+(i<stars?'':' empty');
-    s.textContent='⭐';
-    row.appendChild(s);
-    setTimeout(()=>s.classList.add('show'), 200+i*200);
+    const s=document.createElement('span');s.className='star'+(i<stars?'':' empty');
+    s.textContent='⭐';row.appendChild(s);
+    setTimeout(()=>s.classList.add('show'),200+i*200);
   }
 }
 
-// ── Confetti Effect ──
+// ── Confetti ──
 function spawnConfetti(){
-  const cvs=document.createElement('canvas');
-  cvs.className='confetti-canvas';
+  const cvs=document.createElement('canvas');cvs.className='confetti-canvas';
   document.body.appendChild(cvs);
-  const cctx=cvs.getContext('2d');
-  const dpr=window.devicePixelRatio||1;
+  const cctx=cvs.getContext('2d');const dpr=window.devicePixelRatio||1;
   cvs.width=window.innerWidth*dpr;cvs.height=window.innerHeight*dpr;
   cvs.style.width=window.innerWidth+'px';cvs.style.height=window.innerHeight+'px';
   cctx.setTransform(dpr,0,0,dpr,0,0);
@@ -1599,51 +1396,29 @@ function spawnConfetti(){
   const colors=['#FF3B30','#FF9500','#FFCC00','#4ED26D','#5AC8FA','#5B4FCF','#FF2D55'];
   const particles=[];
   for(let i=0;i<80;i++){
-    particles.push({
-      x:W*0.5+(Math.random()-0.5)*W*0.3,
-      y:H*0.4,
-      vx:(Math.random()-0.5)*8,
-      vy:-Math.random()*12-4,
-      w:Math.random()*8+4,
-      h:Math.random()*6+3,
-      rot:Math.random()*Math.PI*2,
-      rv:(Math.random()-0.5)*0.3,
-      color:colors[Math.floor(Math.random()*colors.length)],
-      gravity:0.25+Math.random()*0.1,
-      alpha:1
-    });
+    particles.push({x:W*0.5+(Math.random()-0.5)*W*0.3,y:H*0.4,
+      vx:(Math.random()-0.5)*8,vy:-Math.random()*12-4,
+      w:Math.random()*8+4,h:Math.random()*6+3,rot:Math.random()*Math.PI*2,
+      rv:(Math.random()-0.5)*0.3,color:colors[Math.floor(Math.random()*colors.length)],
+      gravity:0.25+Math.random()*0.1,alpha:1});
   }
-  const startT=performance.now();
-  const duration=2200;
+  const startT=performance.now();const duration=2200;
   function tick(t){
-    const elapsed=t-startT;
-    if(elapsed>duration){cvs.remove();return;}
+    const elapsed=t-startT;if(elapsed>duration){cvs.remove();return}
     cctx.clearRect(0,0,W,H);
     const fade=elapsed>duration*0.6?1-(elapsed-duration*0.6)/(duration*0.4):1;
     for(const p of particles){
-      p.vy+=p.gravity;
-      p.x+=p.vx;p.y+=p.vy;
-      p.rot+=p.rv;
-      p.vx*=0.99;
-      p.alpha=fade;
-      cctx.save();
-      cctx.translate(p.x,p.y);
-      cctx.rotate(p.rot);
-      cctx.globalAlpha=p.alpha;
-      cctx.fillStyle=p.color;
-      cctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
-      cctx.restore();
+      p.vy+=p.gravity;p.x+=p.vx;p.y+=p.vy;p.rot+=p.rv;p.vx*=0.99;p.alpha=fade;
+      cctx.save();cctx.translate(p.x,p.y);cctx.rotate(p.rot);cctx.globalAlpha=p.alpha;
+      cctx.fillStyle=p.color;cctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);cctx.restore();
     }
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
 }
 
-// Resize handler
 window.addEventListener('resize',()=>{
-  if(document.getElementById('gameScreen').classList.contains('active')){
-    resizeCanvas();draw();
-  }
+  if(document.getElementById('gameScreen').classList.contains('active')){resizeCanvas();draw()}
 });
 </script>
 </body>
