@@ -72,6 +72,8 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
 @keyframes wallRipple{0%{transform:translate(-50%,-50%) scale(0.2);opacity:0.8}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
 .goal-pulse{animation:goalPulse 2s ease-in-out infinite}
 @keyframes goalPulse{0%,100%{opacity:0.3}50%{opacity:0.7}}
+.dead-end-badge{position:absolute;top:8px;left:8px;background:#FF950022;color:#FF9500;font-size:13px;font-weight:700;padding:4px 10px;border-radius:8px;pointer-events:none;transition:opacity .3s}
+@keyframes deadEndPulse{0%,100%{transform:scale(1);opacity:0.7}50%{transform:scale(1.3);opacity:1}}
 </style>
 </head>
 <body>
@@ -140,6 +142,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     </div>
     <div class="canvas-wrap" id="canvasWrap">
       <canvas id="gameCanvas"></canvas>
+      <div class="dead-end-badge" id="deadEndBadge" style="opacity:0">🚧 行き止まり: <span id="deadEndNum">0</span></div>
       <div class="minimap-wrap" id="minimapWrap" style="display:none"></div>
       <div class="stairs-overlay" id="stairsOverlay">
         <div class="stairs-icon">🪜</div>
@@ -517,6 +520,28 @@ function calcShortestPath(wallSet, gn){
 
 let previewPath=[]; // BFS shortest path for preview overlay
 
+// ── Dead-end detection for preview ──
+let deadEndCells=[];
+function detectDeadEnds(){
+  deadEndCells=[];
+  for(let r=0;r<gridN;r++){
+    for(let c=0;c<gridN;c++){
+      if(r===0&&c===0)continue; // start
+      if(r===gridN-1&&c===gridN-1)continue; // goal
+      const nb=neighborsIn(walls,gridN,r,c);
+      if(nb.length===1) deadEndCells.push([r,c]);
+    }
+  }
+  const badge=document.getElementById('deadEndBadge');
+  const num=document.getElementById('deadEndNum');
+  if(deadEndCells.length>0&&!running){
+    badge.style.opacity='1';
+    num.textContent=deadEndCells.length;
+  } else {
+    badge.style.opacity='0';
+  }
+}
+
 function updatePathPreview(){
   const len=calcShortestPath(walls,gridN);
   const el=document.getElementById('pathLen');
@@ -551,7 +576,7 @@ function updatePathPreview(){
 function updateUI(){
   document.getElementById('wallCount').textContent=`🧱 ${usedWalls}`;
   document.getElementById('timerDisp').textContent=`⏱ ${timer.toFixed(1)}s`;
-  if(!running) updatePathPreview();
+  if(!running){updatePathPreview();detectDeadEnds();}
 }
 
 // ── Wall helpers (parameterized for dungeon multi-grid) ──
@@ -758,6 +783,27 @@ function drawGrid(ox,oy,gn,wallSet,exploredSet,path,solver,algo,alpha){
       const [r,c]=k.split(',').map(Number);
       if(r<gn&&c<gn) ctx.fillRect(c*cellSize+1,r*cellSize+1,cellSize-2,cellSize-2);
     });
+  }
+
+  // Dead-end cell indicators (only during wall placement)
+  if(!running&&deadEndCells.length>0&&alpha>=1.0){
+    const now=Date.now();
+    const pulse=0.35+0.15*Math.sin(now*0.004);
+    for(const [dr,dc] of deadEndCells){
+      if(dr>=gn||dc>=gn)continue;
+      const cx=dc*cellSize+cellSize/2, cy=dr*cellSize+cellSize/2;
+      const rad=cellSize*0.32;
+      // Pulsing orange circle
+      ctx.save();
+      ctx.globalAlpha=alpha*pulse;
+      ctx.fillStyle='#FF9500';
+      ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha=alpha;
+      // Small skull/trap icon
+      ctx.font=`${cellSize*0.35}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('🚧',cx,cy);
+    }
   }
 
   // Solver trail (fading footprints)
