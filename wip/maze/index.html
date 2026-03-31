@@ -291,6 +291,33 @@ function initDungeonState(){
 }
 initDungeonState();
 
+// ── LocalStorage persistence for dungeon progress ──
+const SAVE_KEY='maze_architect_dungeon';
+function saveDungeon(){
+  try{
+    const data={walls:dungeonWalls,cleared:dungeonCleared};
+    localStorage.setItem(SAVE_KEY,JSON.stringify(data));
+  }catch(e){}
+}
+function loadDungeon(){
+  try{
+    const raw=localStorage.getItem(SAVE_KEY);
+    if(!raw)return;
+    const data=JSON.parse(raw);
+    if(data.walls&&Array.isArray(data.walls)){
+      for(let i=0;i<Math.min(data.walls.length,QUESTS.length);i++){
+        dungeonWalls[i]=Array.isArray(data.walls[i])?data.walls[i]:[];
+      }
+    }
+    if(data.cleared&&Array.isArray(data.cleared)){
+      for(let i=0;i<Math.min(data.cleared.length,QUESTS.length);i++){
+        dungeonCleared[i]=!!data.cleared[i];
+      }
+    }
+  }catch(e){}
+}
+loadDungeon();
+
 // ── Screens ──
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active')}
 function showTitle(){stopSolver();showScreen('titleScreen')}
@@ -621,6 +648,7 @@ function handleTap(ex,ey){
   // Auto-save dungeon walls
   if(mode==='dungeon'){
     dungeonWalls[dungeonFloorIdx]=[...walls];
+    saveDungeon();
   }
   updateUI();draw();
 }
@@ -643,7 +671,7 @@ canvas.addEventListener('pointerleave',()=>{
 function resetWalls(){
   if(running)return;
   walls.clear();wallHistory=[];usedWalls=0;explored.clear();shortestPath=[];
-  if(mode==='dungeon') dungeonWalls[dungeonFloorIdx]=[];
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[];saveDungeon();}
   updateUI();draw();
 }
 function undoWall(){
@@ -652,7 +680,7 @@ function undoWall(){
   const last=wallHistory.pop();
   if(last.action==='add'){walls.delete(last.key);usedWalls--}
   else{walls.add(last.key);usedWalls++}
-  if(mode==='dungeon') dungeonWalls[dungeonFloorIdx]=[...walls];
+  if(mode==='dungeon'){dungeonWalls[dungeonFloorIdx]=[...walls];saveDungeon();}
   updateUI();draw();
 }
 function backFromGame(){
@@ -876,6 +904,7 @@ function testFloorRun(){
   dungeonRunning=false;
   // Save walls
   dungeonWalls[dungeonFloorIdx]=[...walls];
+  saveDungeon();
   ensureAudio();sfxStart();
   running=true;timer=0;timerStart=Date.now();
   explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
@@ -895,6 +924,7 @@ function runSolver(){
   if(mode==='dungeon'){
     // Save current floor walls
     dungeonWalls[dungeonFloorIdx]=[...walls];
+    saveDungeon();
     dungeonTestMode=false;
     dungeonRunning=true;
     running=true;timer=0;timerStart=Date.now();
@@ -985,6 +1015,7 @@ function finishDungeonRun(){
 
   if(passed){
     dungeonCleared[targetFloor]=true;
+    saveDungeon();
   }
 
   // Score
