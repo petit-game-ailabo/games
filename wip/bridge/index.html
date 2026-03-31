@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Bridge Builder</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; font-family: 'Segoe UI', sans-serif; touch-action: none; user-select: none; }
+canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Audio ──
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(freq, duration, type = 'square', vol = 0.15) {
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + duration);
+}
+function sfxClick() { playSound(800, 0.05, 'sine', 0.1); }
+function sfxPlace() { playSound(440, 0.1, 'triangle', 0.12); }
+function sfxBreak() { playSound(80, 0.4, 'sawtooth', 0.2); playSound(60, 0.5, 'square', 0.15); }
+function sfxSplash() { 
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.5, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.15)) * 0.3;
+  const s = audioCtx.createBufferSource(); s.buffer = buf;
+  s.connect(audioCtx.destination); s.start();
+}
+function sfxClear() {
+  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => playSound(f, 0.3, 'sine', 0.15), i * 120));
+}
+function sfxUndo() { playSound(300, 0.08, 'sine', 0.08); }
+
+// ── Constants ──
+const GRID = 20;
+const GRAVITY = 0.5;
+const DAMPING = 0.99;
+const NODE_RADIUS = 8;
+const CAR_SPEED = 1.2;
+const SNAP_DIST = 15;
+
+const MAT_WOOD = 0, MAT_STEEL = 1, MAT_ROPE = 2;
+const MATERIALS = [
+  { name: '🪵 木材', color: '#8B6914', tensile: 0.035, compressive: 0.035, cost: 10 },
+  { name: '🔩 鉄骨', color: '#708090', tensile: 0.06, compressive: 0.06, cost: 25 },
+  { name: '🪢 ロープ', color: '#DAA520', tensile: 0.06, compressive: 0, cost: 5 },
+];
+
+// ── Stages ──
+const STAGES = [
+  {
+    name: 'はじめての橋', desc: 'まずは短い橋から。木材を使って渡そう！',
+    budget: 500, materials: [MAT_WOOD], carWeight: 3,
+    leftCliffX: 250, rightCliffX: 450, leftCliffY: 300, rightCliffY: 300,
+    anchors: [
+      { x: 250, y: 280, fixed: true }, { x: 250, y: 300, fixed: true },
+      { x: 450, y: 280, fixed: true }, { x: 450, y: 300, fixed: true },
+    ],
+    extraAnchors: [],
+    waterY: 420,
+  },
+  {
+    name: '長い橋', desc: '距離が伸びた。中央がたわむぞ…',
+    budget: 1000, materials: [MAT_WOOD, MAT_STEEL], carWeight: 3,
+    leftCliffX: 150, rightCliffX: 550, leftCliffY: 300, rightCliffY: 300,
+    anchors: [
+      { x: 150, y: 280, fixed: true }, { x: 150, y: 300, fixed: true },
+      { x: 550, y: 280, fixed: true }, { x: 550, y: 300, fixed: true },
+    ],
+    extraAnchors: [],
+    waterY: 450,
+  },
+  {
+    name: '谷渡り', desc: '高低差がある！傾斜をどう処理する？',
+    budget: 1500, materials: [MAT_WOOD, MAT_STEEL, MAT_ROPE], carWeight: 3,
+    leftCliffX: 130, rightCliffX: 570, leftCliffY: 250, rightCliffY: 320,
+    anchors: [
+      { x: 130, y: 230, fixed: true }, { x: 130, y: 250, fixed: true },
+      { x: 570, y: 300, fixed: true }, { x: 570, y: 320, fixed: true },
+    ],
+    extraAnchors: [],
+    waterY: 450,
+  },
+  {
+    name: '吊り橋', desc: '上のアンカーからロープで吊る！吊り橋に挑戦',
+    budget: 1200, materials: [MAT_WOOD, MAT_STEEL, MAT_ROPE], carWeight: 3,
+    leftCliffX: 100, rightCliffX: 600, leftCliffY: 320, rightCliffY: 320,
+    anchors: [
+      { x: 100, y: 300, fixed: true }, { x: 100, y: 320, fixed: true },
+      { x: 600, y: 300, fixed: true }, { x: 600, y: 320, fixed: true },
+    ],
+    extraAnchors: [
+      { x: 100, y: 160, fixed: true }, { x: 600, y: 160, fixed: true },
+    ],
+    waterY: 460,
+  },
+  {
+    name: 'ダブルスパン', desc: '2つの谷を連続で渡る。中央の柱を活用せよ',
+    budget: 2000, materials: [MAT_WOOD, MAT_STEEL, MAT_ROPE], carWeight: 3,
+    leftCliffX: 80, rightCliffX: 620, leftCliffY: 300, rightCliffY: 300,
+    midPillar: { x: 350, topY: 280, botY: 460, w: 30 },
+    anchors: [
+      { x: 80, y: 280, fixed: true }, { x: 80, y: 300, fixed: true },
+      { x: 620, y: 280, fixed: true }, { x: 620, y: 300, fixed: true },
+      { x: 340, y: 280, fixed: true }, { x: 360, y: 280, fixed: true },
+    ],
+    extraAnchors: [],
+    waterY: 460,
+  },
+  {
+    name: '大峡谷', desc: '最終試練。トラックが渡れる橋を架けろ！',
+    budget: 3000, materials: [MAT_WOOD, MAT_STEEL, MAT_ROPE], carWeight: 6,
+    leftCliffX: 50, rightCliffX: 650, leftCliffY: 300, rightCliffY: 300,
+    anchors: [
+      { x: 50, y: 260, fixed: true }, { x: 50, y: 280, fixed: true }, { x: 50, y: 300, fixed: true },
+      { x: 650, y: 260, fixed: true }, { x: 650, y: 280, fixed: true }, { x: 650, y: 300, fixed: true },
+    ],
+    extraAnchors: [],
+    waterY: 470,
+  },
+];
+
+// ── Game State ──
+let W, H;
+let state = 'title'; // title, select, build, test, clear, fail
+let selectedStage = 0;
+let currentMat = MAT_WOOD;
+let eraserMode = false;
+let nodes = [], beams = [], undoStack = [];
+let simNodes = [], simBeams = [];
+let carX, carY, carProgress, carOnBridge, carFell, carReachedGoal;
+let budgetUsed = 0;
+let selectedNode = null;
+let dragFrom = null;
+let ghostLine = null;
+let stageScores = new Array(STAGES.length).fill(0);
+let animFrame = 0;
+let clearTimer = 0;
+let failTimer = 0;
+let splashParticles = [];
+
+// Camera / pan-zoom
+let camX = 0, camY = 0, camScale = 1;
+let isPanning = false, panStartX = 0, panStartY = 0, camStartX = 0, camStartY = 0;
+let pinchStartDist = 0, pinchStartScale = 1;
+
+// Load saved scores
+try {
+  const saved = localStorage.getItem('bridge_scores');
+  if (saved) stageScores = JSON.parse(saved);
+} catch(e) {}
+
+function saveScores() {
+  try { localStorage.setItem('bridge_scores', JSON.stringify(stageScores)); } catch(e) {}
+}
+
+// ── Resize ──
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Coordinate transforms ──
+function screenToWorld(sx, sy) {
+  return { x: (sx - W/2) / camScale + W/2 - camX, y: (sy - H/2) / camScale + H/2 - camY };
+}
+function worldToScreen(wx, wy) {
+  return { x: (wx - W/2 + camX) * camScale + W/2, y: (wy - H/2 + camY) * camScale + H/2 };
+}
+
+function snapToGrid(v) { return Math.round(v / GRID) * GRID; }
+
+// ── Stage setup ──
+function initStage(idx) {
+  const s = STAGES[idx];
+  nodes = [];
+  beams = [];
+  undoStack = [];
+  budgetUsed = 0;
+  selectedNode = null;
+  dragFrom = null;
+  ghostLine = null;
+  eraserMode = false;
+  currentMat = s.materials[0];
+  camX = 0; camY = 0; camScale = 1;
+  
+  // Add anchor nodes
+  s.anchors.forEach(a => {
+    nodes.push({ x: a.x, y: a.y, fixed: true, prevX: a.x, prevY: a.y });
+  });
+  if (s.extraAnchors) {
+    s.extraAnchors.forEach(a => {
+      nodes.push({ x: a.x, y: a.y, fixed: true, prevX: a.x, prevY: a.y });
+    });
+  }
+}
+
+// ── Physics ──
+function initSim() {
+  simNodes = nodes.map(n => ({ x: n.x, y: n.y, prevX: n.x, prevY: n.y, fixed: n.fixed }));
+  simBeams = beams.map(b => ({
+    a: b.a, b: b.b, mat: b.mat,
+    restLen: Math.hypot(nodes[b.a].x - nodes[b.b].x, nodes[b.a].y - nodes[b.b].y),
+    broken: false, stress: 0,
+  }));
+  carProgress = 0;
+  carOnBridge = true;
+  carFell = false;
+  carReachedGoal = false;
+  splashParticles = [];
+  clearTimer = 0;
+  failTimer = 0;
+}
+
+function findRoadSegments() {
+  const s = STAGES[selectedStage];
+  // Find beam segments that form the "road" (roughly horizontal, near cliff Y level)
+  // Road = beams whose both nodes are near the road level
+  const roadY = Math.max(s.leftCliffY, s.rightCliffY);
+  const segments = [];
+  simBeams.forEach((b, i) => {
+    if (b.broken) return;
+    const na = simNodes[b.a], nb = simNodes[b.b];
+    // Consider as road if roughly at road level
+    const avgY = (na.y + nb.y) / 2;
+    if (avgY < roadY + 60 && avgY > roadY - 80) {
+      const left = na.x < nb.x ? b.a : b.b;
+      const right = na.x < nb.x ? b.b : b.a;
+      segments.push({ left, right, beamIdx: i });
+    }
+  });
+  segments.sort((a, b) => simNodes[a.left].x - simNodes[b.left].x);
+  return segments;
+}
+
+function simStep() {
+  const s = STAGES[selectedStage];
+  const dt = 1;
+  
+  // Verlet integration
+  for (const n of simNodes) {
+    if (n.fixed) continue;
+    const vx = (n.x - n.prevX) * DAMPING;
+    const vy = (n.y - n.prevY) * DAMPING;
+    n.prevX = n.x;
+    n.prevY = n.y;
+    n.x += vx;
+    n.y += vy + GRAVITY;
+  }
+  
+  // Constraint solving (multiple iterations for stability)
+  for (let iter = 0; iter < 5; iter++) {
+    for (const b of simBeams) {
+      if (b.broken) continue;
+      const na = simNodes[b.a], nb = simNodes[b.b];
+      const dx = nb.x - na.x, dy = nb.y - na.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+      const diff = (dist - b.restLen) / dist * 0.5;
+      const ox = dx * diff, oy = dy * diff;
+      
+      if (!na.fixed && !nb.fixed) {
+        na.x += ox; na.y += oy;
+        nb.x -= ox; nb.y -= oy;
+      } else if (!na.fixed) {
+        na.x += ox * 2; na.y += oy * 2;
+      } else if (!nb.fixed) {
+        nb.x -= ox * 2; nb.y -= oy * 2;
+      }
+      
+      // Stress
+      const strain = Math.abs(dist - b.restLen) / b.restLen;
+      const mat = MATERIALS[b.mat];
+      const isCompression = dist < b.restLen;
+      const limit = isCompression ? mat.compressive : mat.tensile;
+      b.stress = limit > 0 ? strain / limit : (strain > 0.001 ? 999 : 0);
+      
+      // Break
+      if (b.stress > 1.0) {
+        b.broken = true;
+        sfxBreak();
+      }
+    }
+  }
+  
+  // Car movement
+  if (carOnBridge && !carFell && !carReachedGoal) {
+    carProgress += CAR_SPEED;
+    const roadSegs = findRoadSegments();
+    
+    const startX = s.leftCliffX;
+    const endX = s.rightCliffX;
+    const t = carProgress / (endX - startX + 40);
+    const targetX = startX + carProgress;
+    
+    if (targetX >= endX) {
+      carReachedGoal = true;
+      carX = endX;
+      carY = s.rightCliffY - 20;
+      sfxClear();
+      return;
+    }
+    
+    // Find which road segment the car is on
+    let onSeg = null;
+    for (const seg of roadSegs) {
+      const nl = simNodes[seg.left], nr = simNodes[seg.right];
+      if (targetX >= nl.x && targetX <= nr.x) {
+        onSeg = seg;
+        break;
+      }
+    }
+    
+    if (onSeg) {
+      const nl = simNodes[onSeg.left], nr = simNodes[onSeg.right];
+      const segT = (targetX - nl.x) / (nr.x - nl.x + 0.001);
+      carX = targetX;
+      carY = nl.y + (nr.y - nl.y) * segT - 15;
+      
+      // Apply weight to nodes
+      const weight = s.carWeight * GRAVITY * 2;
+      if (!nl.fixed) { nl.y += weight * (1 - segT); }
+      if (!nr.fixed) { nr.y += weight * segT; }
+    } else {
+      // Car is falling!
+      if (!carFell) {
+        carFell = true;
+        carOnBridge = false;
+      }
+    }
+  }
+  
+  // Falling car
+  if (carFell) {
+    carY += GRAVITY * 3;
+    if (carY > s.waterY && splashParticles.length === 0) {
+      sfxSplash();
+      for (let i = 0; i < 20; i++) {
+        splashParticles.push({
+          x: carX + (Math.random() - 0.5) * 30,
+          y: s.waterY,
+          vx: (Math.random() - 0.5) * 6,
+          vy: -Math.random() * 8 - 2,
+          life: 1,
+        });
+      }
+    }
+  }
+  
+  // Update splash particles
+  for (const p of splashParticles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.3;
+    p.life -= 0.02;
+  }
+  splashParticles = splashParticles.filter(p => p.life > 0);
+}
+
+// ── Drawing ──
+function drawSky() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#87CEEB');
+  grad.addColorStop(1, '#E8F4FD');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawWater(waterY) {
+  const sy = worldToScreen(0, waterY).y;
+  ctx.fillStyle = '#4A90D9';
+  ctx.fillRect(0, sy, W, H - sy);
+  // Waves
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x < W; x += 5) {
+    const wy = sy + Math.sin((x + animFrame * 2) * 0.03) * 4 + Math.sin((x + animFrame) * 0.05) * 2;
+    x === 0 ? ctx.moveTo(x, wy) : ctx.lineTo(x, wy);
+  }
+  ctx.stroke();
+}
+
+function drawCliffs(stage) {
+  ctx.fillStyle = '#654321';
+  // Left cliff
+  const lt = worldToScreen(0, stage.leftCliffY);
+  const lr = worldToScreen(stage.leftCliffX, stage.leftCliffY);
+  ctx.beginPath();
+  ctx.moveTo(0, lt.y);
+  ctx.lineTo(lr.x, lr.y);
+  ctx.lineTo(lr.x, lr.y + 300 * camScale);
+  ctx.lineTo(0, lt.y + 300 * camScale);
+  ctx.closePath();
+  ctx.fill();
+  // cliff top detail
+  ctx.fillStyle = '#4a3520';
+  ctx.fillRect(lr.x - 10 * camScale, lr.y, 10 * camScale, 300 * camScale);
+  
+  // Right cliff
+  ctx.fillStyle = '#654321';
+  const rt = worldToScreen(stage.rightCliffX, stage.rightCliffY);
+  ctx.beginPath();
+  ctx.moveTo(rt.x, rt.y);
+  ctx.lineTo(W, rt.y);
+  ctx.lineTo(W, rt.y + 300 * camScale);
+  ctx.lineTo(rt.x, rt.y + 300 * camScale);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#4a3520';
+  ctx.fillRect(rt.x, rt.y, 10 * camScale, 300 * camScale);
+  
+  // Mid pillar
+  if (stage.midPillar) {
+    const mp = stage.midPillar;
+    const tl = worldToScreen(mp.x - mp.w/2, mp.topY);
+    const br = worldToScreen(mp.x + mp.w/2, mp.botY);
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+  }
+  
+  // Grass
+  ctx.fillStyle = '#4a8c3f';
+  const lgt = worldToScreen(0, stage.leftCliffY - 4);
+  const lgr = worldToScreen(stage.leftCliffX, stage.leftCliffY - 4);
+  ctx.fillRect(0, lgt.y, lgr.x, 8 * camScale);
+  const rgt = worldToScreen(stage.rightCliffX, stage.rightCliffY - 4);
+  ctx.fillRect(rgt.x, rgt.y, W - rgt.x, 8 * camScale);
+}
+
+function drawBeamsAndNodes(nodeList, beamList, isSimulation) {
+  // Draw beams
+  for (const b of beamList) {
+    if (b.broken) continue;
+    const na = nodeList[b.a], nb = nodeList[b.b];
+    const mat = MATERIALS[b.mat !== undefined ? b.mat : MAT_WOOD];
+    const sa = worldToScreen(na.x, na.y);
+    const sb = worldToScreen(nb.x, nb.y);
+    
+    let color = mat.color;
+    let lineW = 4;
+    if (isSimulation && b.stress !== undefined) {
+      const s = Math.min(b.stress, 1);
+      if (s < 0.5) {
+        // green to yellow
+        const t = s * 2;
+        const r = Math.round(50 + t * 205);
+        const g = Math.round(200 - t * 50);
+        color = `rgb(${r},${g},50)`;
+      } else {
+        // yellow to red
+        const t = (s - 0.5) * 2;
+        const r = 255;
+        const g = Math.round(150 * (1 - t));
+        color = `rgb(${r},${g},0)`;
+      }
+      lineW = 3 + s * 4;
+    }
+    
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineW * camScale;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sa.x, sa.y);
+    ctx.lineTo(sb.x, sb.y);
+    ctx.stroke();
+  }
+  
+  // Draw broken beams (dangling ends)
+  if (isSimulation) {
+    for (const b of beamList) {
+      if (!b.broken) continue;
+      const na = nodeList[b.a], nb = nodeList[b.b];
+      const sa = worldToScreen(na.x, na.y);
+      const sb = worldToScreen(nb.x, nb.y);
+      ctx.strokeStyle = 'rgba(180,50,50,0.4)';
+      ctx.lineWidth = 2 * camScale;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  
+  // Draw nodes
+  for (let i = 0; i < nodeList.length; i++) {
+    const n = nodeList[i];
+    const sn = worldToScreen(n.x, n.y);
+    const r = (n.fixed ? NODE_RADIUS + 2 : NODE_RADIUS) * camScale;
+    
+    ctx.beginPath();
+    ctx.arc(sn.x, sn.y, r, 0, Math.PI * 2);
+    if (n.fixed) {
+      ctx.fillStyle = '#e74c3c';
+      ctx.fill();
+      ctx.strokeStyle = '#c0392b';
+      ctx.lineWidth = 2 * camScale;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = selectedNode === i ? '#f1c40f' : '#ecf0f1';
+      ctx.fill();
+      ctx.strokeStyle = '#bdc3c7';
+      ctx.lineWidth = 1.5 * camScale;
+      ctx.stroke();
+    }
+  }
+}
+
+function drawCar(x, y, stage) {
+  const s = worldToScreen(x, y);
+  const sc = camScale;
+  const isTruck = stage.carWeight > 4;
+  const cw = (isTruck ? 50 : 35) * sc;
+  const ch = (isTruck ? 22 : 16) * sc;
+  
+  // Body
+  ctx.fillStyle = isTruck ? '#e67e22' : '#3498db';
+  ctx.fillRect(s.x - cw/2, s.y - ch, cw, ch);
+  
+  // Roof / cabin
+  ctx.fillStyle = isTruck ? '#d35400' : '#2980b9';
+  const rw = cw * 0.5;
+  ctx.fillRect(s.x - cw/2 + cw * 0.35, s.y - ch - ch * 0.6, rw, ch * 0.6);
+  
+  // Window
+  ctx.fillStyle = '#aee1f9';
+  ctx.fillRect(s.x - cw/2 + cw * 0.4, s.y - ch - ch * 0.45, rw * 0.7, ch * 0.35);
+  
+  // Wheels
+  ctx.fillStyle = '#2c3e50';
+  const wr = 5 * sc;
+  ctx.beginPath();
+  ctx.arc(s.x - cw * 0.3, s.y, wr, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(s.x + cw * 0.3, s.y, wr, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawSplash() {
+  for (const p of splashParticles) {
+    const sp = worldToScreen(p.x, p.y);
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = '#87CEEB';
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, 3 * camScale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawGhostLine() {
+  if (ghostLine && dragFrom !== null) {
+    const na = nodes[dragFrom];
+    const sa = worldToScreen(na.x, na.y);
+    const sb = worldToScreen(ghostLine.x, ghostLine.y);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 3 * camScale;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Show cost
+    const dist = Math.hypot(ghostLine.x - na.x, ghostLine.y - na.y);
+    const cost = Math.round(dist / GRID * MATERIALS[currentMat].cost);
+    ctx.fillStyle = 'white';
+    ctx.font = `${12 * camScale}px sans-serif`;
+    ctx.fillText(`$${cost}`, (sa.x + sb.x) / 2, (sa.y + sb.y) / 2 - 10);
+  }
+}
+
+// ── UI Buttons ──
+let buttons = [];
+
+function addButton(x, y, w, h, label, cb, opts = {}) {
+  buttons.push({ x, y, w, h, label, cb, active: opts.active || false, disabled: opts.disabled || false, color: opts.color });
+}
+
+function drawButtons() {
+  for (const b of buttons) {
+    const radius = 8;
+    ctx.beginPath();
+    ctx.roundRect(b.x, b.y, b.w, b.h, radius);
+    if (b.disabled) {
+      ctx.fillStyle = '#555';
+    } else if (b.active) {
+      ctx.fillStyle = b.color || '#e74c3c';
+    } else {
+      ctx.fillStyle = b.color || 'rgba(255,255,255,0.15)';
+    }
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    ctx.fillStyle = b.disabled ? '#888' : 'white';
+    ctx.font = `bold ${Math.min(b.h * 0.45, 14)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2);
+  }
+  ctx.textAlign = 'left';
+}
+
+function checkButton(x, y) {
+  for (const b of buttons) {
+    if (!b.disabled && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+      b.cb();
+      return true;
+    }
+  }
+  return false;
+}
+
+// ── Title Screen ──
+function drawTitle() {
+  drawSky();
+  // Draw a decorative bridge silhouette
+  ctx.fillStyle = '#654321';
+  ctx.fillRect(0, H * 0.6, W * 0.3, H * 0.4);
+  ctx.fillRect(W * 0.7, H * 0.6, W * 0.3, H * 0.4);
+  
+  // Simple bridge silhouette
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(W * 0.3, H * 0.6);
+  ctx.quadraticCurveTo(W * 0.5, H * 0.7, W * 0.7, H * 0.6);
+  ctx.stroke();
+  
+  // Water
+  ctx.fillStyle = '#4A90D9';
+  ctx.fillRect(0, H * 0.75, W, H * 0.25);
+  
+  // Title
+  ctx.fillStyle = 'white';
+  ctx.font = `bold ${Math.min(W * 0.08, 48)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('🌉 Bridge Builder', W / 2, H * 0.2);
+  
+  ctx.font = `${Math.min(W * 0.04, 20)}px sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.fillText('橋を架けて、渡せ。', W / 2, H * 0.28);
+  
+  const bw = Math.min(200, W * 0.5);
+  addButton(W / 2 - bw / 2, H * 0.4, bw, 50, '▶ ステージ選択', () => {
+    sfxClick();
+    state = 'select';
+  }, { color: '#2ecc71' });
+  
+  ctx.textAlign = 'left';
+}
+
+// ── Stage Select ──
+function drawStageSelect() {
+  drawSky();
+  ctx.fillStyle = 'white';
+  ctx.font = `bold ${Math.min(W * 0.06, 32)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('ステージ選択', W / 2, 50);
+  
+  const s = STAGES[selectedStage];
+  const bw = Math.min(350, W * 0.85);
+  const bx = W / 2 - bw / 2;
+  const by = 80;
+  
+  // Stage card
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, H * 0.55, 12);
+  ctx.fill();
+  
+  ctx.fillStyle = 'white';
+  ctx.font = `bold ${Math.min(24, W * 0.05)}px sans-serif`;
+  ctx.fillText(`Stage ${selectedStage + 1}: ${s.name}`, W / 2, by + 40);
+  
+  ctx.font = `${Math.min(16, W * 0.035)}px sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.fillText(s.desc, W / 2, by + 75);
+  
+  ctx.fillText(`💰 予算: $${s.budget}`, W / 2, by + 110);
+  const matNames = s.materials.map(m => MATERIALS[m].name).join('  ');
+  ctx.fillText(`部材: ${matNames}`, W / 2, by + 140);
+  
+  if (stageScores[selectedStage] > 0) {
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillText(`⭐ Best: ${stageScores[selectedStage]}`, W / 2, by + 175);
+  }
+  
+  // Preview - draw mini cliffs
+  const previewY = by + 200;
+  const previewH = H * 0.25;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(bx + 10, previewY, bw - 20, previewH);
+  ctx.clip();
+  // Mini sky
+  const miniGrad = ctx.createLinearGradient(0, previewY, 0, previewY + previewH);
+  miniGrad.addColorStop(0, '#87CEEB');
+  miniGrad.addColorStop(1, '#E8F4FD');
+  ctx.fillStyle = miniGrad;
+  ctx.fillRect(bx + 10, previewY, bw - 20, previewH);
+  // Mini cliffs
+  const scaleX = (bw - 40) / 700;
+  const offsetX = bx + 20;
+  const offsetY = previewY + previewH * 0.2;
+  ctx.fillStyle = '#654321';
+  ctx.fillRect(offsetX, offsetY + s.leftCliffY * scaleX, s.leftCliffX * scaleX, previewH);
+  ctx.fillRect(offsetX + s.rightCliffX * scaleX, offsetY + s.rightCliffY * scaleX, (700 - s.rightCliffX) * scaleX, previewH);
+  // Water
+  ctx.fillStyle = '#4A90D9';
+  ctx.fillRect(bx + 10, previewY + previewH * 0.8, bw - 20, previewH * 0.2);
+  ctx.restore();
+  
+  // Nav buttons
+  const navY = H - 120;
+  if (selectedStage > 0) {
+    addButton(W / 2 - 160, navY, 60, 45, '◀', () => { sfxClick(); selectedStage--; });
+  }
+  if (selectedStage < STAGES.length - 1) {
+    addButton(W / 2 + 100, navY, 60, 45, '▶', () => { sfxClick(); selectedStage++; });
+  }
+  
+  addButton(W / 2 - 60, navY, 120, 45, '🔨 建設開始', () => {
+    sfxClick();
+    initStage(selectedStage);
+    state = 'build';
+  }, { color: '#2ecc71' });
+  
+  addButton(W / 2 - 40, navY + 55, 80, 35, '← 戻る', () => { sfxClick(); state = 'title'; });
+  
+  // Dots
+  for (let i = 0; i < STAGES.length; i++) {
+    ctx.beginPath();
+    ctx.arc(W / 2 - (STAGES.length - 1) * 10 + i * 20, navY - 20, 5, 0, Math.PI * 2);
+    ctx.fillStyle = i === selectedStage ? 'white' : (stageScores[i] > 0 ? '#f1c40f' : 'rgba(255,255,255,0.3)');
+    ctx.fill();
+  }
+  
+  ctx.textAlign = 'left';
+}
+
+// ── Build Screen ──
+function drawBuildUI() {
+  const s = STAGES[selectedStage];
+  drawSky();
+  drawWater(s.waterY);
+  drawCliffs(s);
+  drawBeamsAndNodes(nodes, beams, false);
+  drawGhostLine();
+  
+  // Top bar
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, W, 45);
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Stage ${selectedStage + 1}: ${s.name}`, 10, 18);
+  ctx.fillText(`💰 $${s.budget - budgetUsed} / $${s.budget}`, 10, 36);
+  ctx.textAlign = 'right';
+  ctx.fillText(`🔩 ${beams.length}部材`, W - 10, 28);
+  ctx.textAlign = 'left';
+  
+  // Bottom toolbar
+  const toolH = 55;
+  const toolY = H - toolH;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, toolY, W, toolH);
+  
+  const btnW = Math.min(75, (W - 20) / (s.materials.length + 3));
+  let bx = 5;
+  
+  // Material buttons
+  for (const m of s.materials) {
+    const mat = MATERIALS[m];
+    addButton(bx, toolY + 5, btnW, toolH - 10, `${mat.name.split(' ')[0]}\n$${mat.cost}`, () => {
+      sfxClick();
+      currentMat = m;
+      eraserMode = false;
+    }, { active: currentMat === m && !eraserMode, color: currentMat === m && !eraserMode ? mat.color : undefined });
+    bx += btnW + 4;
+  }
+  
+  // Eraser
+  addButton(bx, toolY + 5, btnW * 0.7, toolH - 10, '🗑️', () => {
+    sfxClick();
+    eraserMode = !eraserMode;
+    selectedNode = null;
+  }, { active: eraserMode });
+  bx += btnW * 0.7 + 4;
+  
+  // Undo
+  addButton(bx, toolY + 5, btnW * 0.7, toolH - 10, '↩️', () => {
+    if (undoStack.length > 0) {
+      sfxUndo();
+      const action = undoStack.pop();
+      if (action.type === 'addBeam') {
+        const bi = beams.findIndex(b => b.a === action.beam.a && b.b === action.beam.b);
+        if (bi >= 0) {
+          budgetUsed -= action.cost;
+          beams.splice(bi, 1);
+        }
+      } else if (action.type === 'addNode') {
+        nodes.pop();
+      } else if (action.type === 'addNodeAndBeam') {
+        const bi = beams.findIndex(b => b.a === action.beam.a && b.b === action.beam.b);
+        if (bi >= 0) {
+          budgetUsed -= action.cost;
+          beams.splice(bi, 1);
+        }
+        nodes.pop();
+      } else if (action.type === 'removeBeam') {
+        beams.push(action.beam);
+        budgetUsed += action.cost;
+      }
+      selectedNode = null;
+    }
+  }, { disabled: undoStack.length === 0 });
+  bx += btnW * 0.7 + 4;
+  
+  // Test button
+  addButton(bx, toolY + 5, btnW, toolH - 10, '▶ テスト', () => {
+    if (beams.length > 0) {
+      sfxClick();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      initSim();
+      state = 'test';
+    }
+  }, { color: '#e74c3c', disabled: beams.length === 0 });
+  
+  // Back button
+  addButton(W - 45, 5, 40, 35, '✕', () => { sfxClick(); state = 'select'; });
+}
+
+// ── Test Screen ──
+function drawTestUI() {
+  const s = STAGES[selectedStage];
+  drawSky();
+  drawWater(s.waterY);
+  drawCliffs(s);
+  drawBeamsAndNodes(simNodes, simBeams, true);
+  drawSplash();
+  
+  // Draw car
+  if (!carFell || carY < s.waterY + 50) {
+    drawCar(carX || s.leftCliffX, carY || s.leftCliffY - 20, s);
+  }
+  
+  // Top bar
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, W, 45);
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`Stage ${selectedStage + 1}: ${s.name}`, 10, 18);
+  const broken = simBeams.filter(b => b.broken).length;
+  if (broken > 0) {
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText(`💥 ${broken}部材 破断`, 10, 36);
+  }
+  ctx.textAlign = 'left';
+  
+  // Bottom
+  const toolH = 50;
+  const toolY = H - toolH;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, toolY, W, toolH);
+  
+  addButton(W / 2 - 60, toolY + 5, 120, toolH - 10, '⏪ やり直し', () => {
+    sfxClick();
+    state = 'build';
+    selectedNode = null;
+  });
+  
+  // Check for clear
+  if (carReachedGoal && clearTimer === 0) {
+    clearTimer = 1;
+  }
+  if (clearTimer > 0) {
+    clearTimer++;
+    if (clearTimer > 60) {
+      // Score calc
+      const base = 1000;
+      const budgetBonus = Math.max(0, (s.budget - budgetUsed) * 2);
+      const beamBonus = Math.max(0, (20 - beams.length) * 30);
+      const noBreakBonus = simBeams.some(b => b.broken) ? 0 : 500;
+      const total = base + budgetBonus + beamBonus + noBreakBonus;
+      if (total > stageScores[selectedStage]) {
+        stageScores[selectedStage] = total;
+        saveScores();
+      }
+      state = 'clear';
+    }
+    // CLEAR text
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, H * 0.3, W, H * 0.15);
+    ctx.fillStyle = '#f1c40f';
+    ctx.font = `bold ${Math.min(W * 0.12, 60)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('CLEAR!', W / 2, H * 0.4);
+    ctx.textAlign = 'left';
+  }
+  
+  // Check for fail
+  if (carFell && carY > s.waterY + 100 && failTimer === 0) {
+    failTimer = 1;
+  }
+  if (failTimer > 0) {
+    failTimer++;
+    if (failTimer > 120) {
+      state = 'build';
+      failTimer = 0;
+      selectedNode = null;
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, H * 0.3, W, H * 0.18);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = `bold ${Math.min(W * 0.08, 40)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('崩壊…！', W / 2, H * 0.37);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = `${Math.min(W * 0.04, 18)}px sans-serif`;
+    ctx.fillText('設計を見直して再挑戦しよう', W / 2, H * 0.43);
+    ctx.textAlign = 'left';
+  }
+}
+
+// ── Clear Screen ──
+function drawClearUI() {
+  const s = STAGES[selectedStage];
+  drawSky();
+  
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, W, H);
+  
+  ctx.fillStyle = '#f1c40f';
+  ctx.font = `bold ${Math.min(W * 0.1, 50)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('🎉 STAGE CLEAR!', W / 2, H * 0.18);
+  
+  // Score breakdown
+  const base = 1000;
+  const budgetBonus = Math.max(0, (s.budget - budgetUsed) * 2);
+  const beamBonus = Math.max(0, (20 - beams.length) * 30);
+  const noBreakBonus = simBeams.some(b => b.broken) ? 0 : 500;
+  const total = base + budgetBonus + beamBonus + noBreakBonus;
+  
+  ctx.fillStyle = 'white';
+  ctx.font = `${Math.min(W * 0.04, 18)}px sans-serif`;
+  let sy = H * 0.28;
+  ctx.fillText(`基本スコア: ${base}`, W / 2, sy); sy += 30;
+  ctx.fillText(`予算節約ボーナス: +${budgetBonus}`, W / 2, sy); sy += 30;
+  ctx.fillText(`部材効率ボーナス: +${beamBonus}`, W / 2, sy); sy += 30;
+  ctx.fillText(`無破断ボーナス: +${noBreakBonus}`, W / 2, sy); sy += 40;
+  
+  ctx.fillStyle = '#f1c40f';
+  ctx.font = `bold ${Math.min(W * 0.06, 30)}px sans-serif`;
+  ctx.fillText(`合計: ${total}`, W / 2, sy);
+  
+  const btnY = H * 0.65;
+  const bw = Math.min(180, W * 0.4);
+  
+  addButton(W / 2 - bw - 10, btnY, bw, 45, '↩️ やり直す', () => {
+    sfxClick();
+    initStage(selectedStage);
+    state = 'build';
+  });
+  
+  if (selectedStage < STAGES.length - 1) {
+    addButton(W / 2 + 10, btnY, bw, 45, '次のステージ ▶', () => {
+      sfxClick();
+      selectedStage++;
+      initStage(selectedStage);
+      state = 'build';
+    }, { color: '#2ecc71' });
+  }
+  
+  addButton(W / 2 - 50, btnY + 55, 100, 35, 'ステージ選択', () => { sfxClick(); state = 'select'; });
+  
+  ctx.textAlign = 'left';
+}
+
+// ── Input Handling ──
+function findNearestNode(wx, wy, maxDist = 25) {
+  let best = -1, bestD = maxDist;
+  for (let i = 0; i < nodes.length; i++) {
+    const d = Math.hypot(nodes[i].x - wx, nodes[i].y - wy);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+function findNearestBeam(wx, wy, maxDist = 15) {
+  let best = -1, bestD = maxDist;
+  for (let i = 0; i < beams.length; i++) {
+    const b = beams[i];
+    const na = nodes[b.a], nb = nodes[b.b];
+    // Point-to-segment distance
+    const dx = nb.x - na.x, dy = nb.y - na.y;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 > 0 ? ((wx - na.x) * dx + (wy - na.y) * dy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const px = na.x + t * dx, py = na.y + t * dy;
+    const d = Math.hypot(wx - px, wy - py);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+function addBeamBetween(a, b) {
+  if (a === b) return;
+  // Check duplicate
+  if (beams.some(beam => (beam.a === a && beam.b === b) || (beam.a === b && beam.b === a))) return;
+  
+  const s = STAGES[selectedStage];
+  const dist = Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y);
+  const cost = Math.round(dist / GRID * MATERIALS[currentMat].cost);
+  
+  if (budgetUsed + cost > s.budget) return; // Over budget
+  
+  const beam = { a, b, mat: currentMat };
+  beams.push(beam);
+  budgetUsed += cost;
+  undoStack.push({ type: 'addBeam', beam: { ...beam }, cost });
+  sfxPlace();
+}
+
+let touches = [];
+let lastTapTime = 0;
+
+function handlePointerDown(x, y) {
+  if (checkButton(x, y)) return;
+  
+  if (state !== 'build') return;
+  
+  const w = screenToWorld(x, y);
+  
+  if (eraserMode) {
+    const bi = findNearestBeam(w.x, w.y);
+    if (bi >= 0) {
+      const b = beams[bi];
+      const dist = Math.hypot(nodes[b.a].x - nodes[b.b].x, nodes[b.a].y - nodes[b.b].y);
+      const cost = Math.round(dist / GRID * MATERIALS[b.mat].cost);
+      undoStack.push({ type: 'removeBeam', beam: { ...b }, cost });
+      budgetUsed -= cost;
+      beams.splice(bi, 1);
+      sfxClick();
+    }
+    return;
+  }
+  
+  const ni = findNearestNode(w.x, w.y);
+  
+  if (ni >= 0) {
+    if (selectedNode !== null && selectedNode !== ni) {
+      // Connect two nodes
+      addBeamBetween(selectedNode, ni);
+      selectedNode = null;
+      dragFrom = null;
+    } else {
+      selectedNode = ni;
+      dragFrom = ni;
+    }
+  } else {
+    // Add new node at grid-snapped position
+    const gx = snapToGrid(w.x);
+    const gy = snapToGrid(w.y);
+    
+    // Check if within buildable area
+    const s = STAGES[selectedStage];
+    if (gx > s.leftCliffX - 40 && gx < s.rightCliffX + 40 && gy > 80 && gy < s.waterY - 20) {
+      const newIdx = nodes.length;
+      nodes.push({ x: gx, y: gy, fixed: false, prevX: gx, prevY: gy });
+      
+      if (selectedNode !== null) {
+        const dist = Math.hypot(nodes[selectedNode].x - gx, nodes[selectedNode].y - gy);
+        const cost = Math.round(dist / GRID * MATERIALS[currentMat].cost);
+        const s2 = STAGES[selectedStage];
+        if (budgetUsed + cost <= s2.budget) {
+          const beam = { a: selectedNode, b: newIdx, mat: currentMat };
+          beams.push(beam);
+          budgetUsed += cost;
+          undoStack.push({ type: 'addNodeAndBeam', beam: { ...beam }, cost });
+          sfxPlace();
+        } else {
+          undoStack.push({ type: 'addNode' });
+        }
+      } else {
+        undoStack.push({ type: 'addNode' });
+        sfxClick();
+      }
+      selectedNode = newIdx;
+      dragFrom = newIdx;
+    } else {
+      selectedNode = null;
+      dragFrom = null;
+    }
+  }
+}
+
+function handlePointerMove(x, y) {
+  if (state !== 'build' || dragFrom === null) return;
+  const w = screenToWorld(x, y);
+  const ni = findNearestNode(w.x, w.y, 25);
+  if (ni >= 0 && ni !== dragFrom) {
+    ghostLine = { x: nodes[ni].x, y: nodes[ni].y };
+  } else {
+    ghostLine = { x: snapToGrid(w.x), y: snapToGrid(w.y) };
+  }
+}
+
+function handlePointerUp(x, y) {
+  if (state !== 'build' || dragFrom === null) { ghostLine = null; return; }
+  const w = screenToWorld(x, y);
+  const ni = findNearestNode(w.x, w.y, 25);
+  
+  if (ni >= 0 && ni !== dragFrom) {
+    addBeamBetween(dragFrom, ni);
+    selectedNode = null;
+  } else if (Math.hypot(w.x - nodes[dragFrom].x, w.y - nodes[dragFrom].y) > 30) {
+    // Dragged far enough — create new node + beam
+    const gx = snapToGrid(w.x);
+    const gy = snapToGrid(w.y);
+    const s = STAGES[selectedStage];
+    if (gx > s.leftCliffX - 40 && gx < s.rightCliffX + 40 && gy > 80 && gy < s.waterY - 20) {
+      const newIdx = nodes.length;
+      nodes.push({ x: gx, y: gy, fixed: false, prevX: gx, prevY: gy });
+      const dist = Math.hypot(nodes[dragFrom].x - gx, nodes[dragFrom].y - gy);
+      const cost = Math.round(dist / GRID * MATERIALS[currentMat].cost);
+      if (budgetUsed + cost <= s.budget) {
+        const beam = { a: dragFrom, b: newIdx, mat: currentMat };
+        beams.push(beam);
+        budgetUsed += cost;
+        undoStack.push({ type: 'addNodeAndBeam', beam: { ...beam }, cost });
+        sfxPlace();
+      } else {
+        undoStack.push({ type: 'addNode' });
+      }
+      selectedNode = newIdx;
+    }
+  }
+  
+  dragFrom = null;
+  ghostLine = null;
+}
+
+// Mouse events
+canvas.addEventListener('mousedown', e => {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  handlePointerDown(e.clientX, e.clientY);
+});
+canvas.addEventListener('mousemove', e => handlePointerMove(e.clientX, e.clientY));
+canvas.addEventListener('mouseup', e => handlePointerUp(e.clientX, e.clientY));
+
+// Touch events
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  touches = [...e.touches];
+  if (e.touches.length === 1) {
+    handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+  } else if (e.touches.length === 2) {
+    // Start pinch
+    dragFrom = null;
+    ghostLine = null;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchStartDist = Math.hypot(dx, dy);
+    pinchStartScale = camScale;
+    isPanning = true;
+    panStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    panStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    camStartX = camX;
+    camStartY = camY;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && !isPanning) {
+    handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+  } else if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    camScale = Math.max(0.5, Math.min(3, pinchStartScale * (dist / pinchStartDist)));
+    
+    const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    camX = camStartX + (cx - panStartX) / camScale;
+    camY = camStartY + (cy - panStartY) / camScale;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length === 0) {
+    if (!isPanning && touches.length === 1) {
+      handlePointerUp(touches[0].clientX, touches[0].clientY);
+    }
+    isPanning = false;
+  }
+  touches = [...e.touches];
+}, { passive: false });
+
+// Mouse wheel zoom
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  camScale = Math.max(0.5, Math.min(3, camScale * delta));
+}, { passive: false });
+
+// ── Main Loop ──
+function gameLoop() {
+  buttons = [];
+  animFrame++;
+  
+  ctx.clearRect(0, 0, W, H);
+  
+  switch (state) {
+    case 'title':
+      drawTitle();
+      break;
+    case 'select':
+      drawStageSelect();
+      break;
+    case 'build':
+      drawBuildUI();
+      break;
+    case 'test':
+      simStep();
+      drawTestUI();
+      break;
+    case 'clear':
+      drawClearUI();
+      break;
+  }
+  
+  drawButtons();
+  
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
