@@ -153,6 +153,7 @@ h2{font-size:20px;color:#2F2B2A;margin-bottom:8px}
     <div class="game-footer" id="gameFooter">
       <button class="btn btn-small" id="startBtn" onclick="runSolver()">▶ スタート</button>
       <button class="btn btn-small btn-secondary" id="testRunBtn" onclick="testFloorRun()" style="display:none">🔄 この階テスト</button>
+      <button class="btn btn-small btn-secondary" id="speedBtn" onclick="cycleSpeed()" style="display:none">⏩ 1x</button>
       <button class="btn btn-small btn-secondary" onclick="undoWall()">↩️ 戻す</button>
       <button class="btn btn-small btn-secondary" onclick="resetWalls()">🗑️ リセット</button>
       <button class="btn btn-small btn-secondary" onclick="backFromGame()">🏠</button>
@@ -290,6 +291,9 @@ let dungeonSelectedFloor=0;      // selected in dungeon select screen
 let dungeonRunFloorIdx=0;        // which floor the solver is currently on during full run
 let dungeonRunning=false;        // is a full dungeon run in progress
 let dungeonTestMode=false;       // single-floor test run
+let userSpeedLevel=0;            // 0=1x, 1=2x, 2=4x
+const SPEED_LABELS=['1x','2x','4x'];
+const SPEED_MULTIPLIERS=[1,2,4];
 
 function initDungeonState(){
   dungeonWalls=[];
@@ -980,6 +984,7 @@ function updateFloorIndicator(activeFloor, totalFloors){
 function stopSolver(){
   running=false;dungeonRunning=false;
   if(animId)cancelAnimationFrame(animId);animId=null;
+  document.getElementById('speedBtn').style.display='none';
 }
 
 // ── Test run: single floor with its own algo ──
@@ -997,6 +1002,8 @@ function testFloorRun(){
   document.getElementById('startBtn').disabled=true;
   document.getElementById('testRunBtn').disabled=true;
   document.getElementById('gameName').textContent=`🔄 ${QUESTS[dungeonFloorIdx].name} テスト走行`;
+  userSpeedLevel=0;
+  {const sb=document.getElementById('speedBtn');sb.style.display='inline-block';sb.textContent='⏩ 1x';}
   const algo=QUESTS[dungeonFloorIdx].algo;
   curConfig.algo=algo;
   runAlgo(algo, walls, gridN);
@@ -1017,6 +1024,8 @@ function runSolver(){
     explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
     document.getElementById('startBtn').disabled=true;
     document.getElementById('testRunBtn').disabled=true;
+    userSpeedLevel=0;
+    {const sb=document.getElementById('speedBtn');sb.style.display='inline-block';sb.textContent='⏩ 1x';}
     const algo=QUESTS[dungeonFloorIdx].algo;
     curConfig.algo=algo;
     // Start from floor 0
@@ -1033,6 +1042,9 @@ function runSolver(){
   explored.clear();shortestPath=[];deadEndCount=0;realtimeWallPenalty=0;
   document.getElementById('startBtn').textContent='実行中…';
   document.getElementById('startBtn').disabled=true;
+  userSpeedLevel=0;
+  const speedBtn=document.getElementById('speedBtn');
+  speedBtn.style.display='inline-block';speedBtn.textContent='⏩ 1x';
   const algo=curConfig.algo;
   runAlgo(algo, walls, gridN);
 }
@@ -1088,6 +1100,7 @@ function showStairsTransition(fromFloor, toFloor, cb){
 function finishDungeonRun(){
   running=false;dungeonRunning=false;
   timer=(Date.now()-timerStart)/1000;
+  document.getElementById('speedBtn').style.display='none';
   updateUI();
 
   // Restore editing floor
@@ -1304,11 +1317,19 @@ function walkPath(path,idx){
   animateMove([r,c],speed,()=>walkPath(path,idx+1));
 }
 
+function cycleSpeed(){
+  userSpeedLevel=(userSpeedLevel+1)%SPEED_LABELS.length;
+  const btn=document.getElementById('speedBtn');
+  btn.textContent='⏩ '+SPEED_LABELS[userSpeedLevel];
+}
+
 function getSpeedMultiplier(){
+  const userMul=SPEED_MULTIPLIERS[userSpeedLevel]||1;
   const elapsed=(Date.now()-timerStart)/1000;
-  if(elapsed<10)return 1;
-  if(elapsed<20)return 1+(elapsed-10)/10*3;
-  return Math.min(8,4+(elapsed-20)/10*4);
+  let auto=1;
+  if(elapsed>=10&&elapsed<20) auto=1+(elapsed-10)/10*3;
+  else if(elapsed>=20) auto=Math.min(8,4+(elapsed-20)/10*4);
+  return auto*userMul;
 }
 
 function animateMove(target,duration,cb){
@@ -1349,6 +1370,7 @@ function finishSolver(){
 
   running=false;
   timer=(Date.now()-timerStart)/1000;
+  document.getElementById('speedBtn').style.display='none';
   updateUI();draw();
 
   // If dungeon test mode, just show toast and reset
