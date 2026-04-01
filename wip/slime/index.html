@@ -713,6 +713,66 @@ function drawFood(f,ox,oy){
   ctx.beginPath();ctx.arc(x,y,r*devicePixelRatio,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
 }
 
+// ===== PARALLAX BACKGROUND =====
+// Pre-generate random positions for background elements (seeded by index)
+const BG_SWIRLS=[];for(let i=0;i<12;i++)BG_SWIRLS.push({x:Math.random()*FIELD_W*1.5-FIELD_W*.25,y:Math.random()*FIELD_H*1.5-FIELD_H*.25,r:200+Math.random()*300,rot:Math.random()*Math.PI*2,speed:.2+Math.random()*.3,dir:Math.random()>.5?1:-1});
+const BG_CIRCLES=[];for(let i=0;i<30;i++)BG_CIRCLES.push({x:Math.random()*FIELD_W*1.3-FIELD_W*.15,y:Math.random()*FIELD_H*1.3-FIELD_H*.15,r:30+Math.random()*80,phase:Math.random()*Math.PI*2});
+const BG_DIAMONDS=[];for(let i=0;i<20;i++)BG_DIAMONDS.push({x:Math.random()*FIELD_W*1.2-FIELD_W*.1,y:Math.random()*FIELD_H*1.2-FIELD_H*.1,r:15+Math.random()*40,phase:Math.random()*Math.PI*2,speed:.5+Math.random()});
+
+function drawParallaxBG(ox,oy){
+  let sc=devicePixelRatio;
+  // Layer 0: Deep background — large swirls (parallax 0.3x)
+  let px0=ox*0.3,py0=oy*0.3;
+  ctx.save();
+  for(let sw of BG_SWIRLS){
+    let sx=(sw.x-px0)*sc,sy=(sw.y-py0)*sc,sr=sw.r*sc;
+    if(sx<-sr*2||sx>W+sr*2||sy<-sr*2||sy>H+sr*2)continue;
+    let rot=sw.rot+frameCount*0.003*sw.speed*sw.dir;
+    ctx.save();ctx.translate(sx,sy);ctx.rotate(rot);
+    // Draw spiral arms
+    ctx.strokeStyle='rgba(0,0,0,0.025)';ctx.lineWidth=sr*0.15;ctx.lineCap='round';
+    for(let arm=0;arm<3;arm++){
+      ctx.beginPath();
+      let armOff=arm*Math.PI*2/3;
+      for(let t=0;t<4;t+=0.1){
+        let angle=armOff+t,radius=sr*0.1*t;
+        let ax=Math.cos(angle)*radius,ay=Math.sin(angle)*radius;
+        if(t===0)ctx.moveTo(ax,ay);else ctx.lineTo(ax,ay);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // Layer 1: Mid background — soft circles (parallax 0.5x)
+  let px1=ox*0.5,py1=oy*0.5;
+  ctx.save();
+  for(let c of BG_CIRCLES){
+    let cx=(c.x-px1)*sc,cy=(c.y-py1)*sc,cr=c.r*sc;
+    if(cx<-cr||cx>W+cr||cy<-cr||cy>H+cr)continue;
+    let pulse=1+Math.sin(c.phase+frameCount*0.015)*0.15;
+    ctx.fillStyle='rgba(0,0,0,0.018)';
+    ctx.beginPath();ctx.arc(cx,cy,cr*pulse,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+
+  // Layer 2: Near background — floating diamonds (parallax 0.7x)
+  let px2=ox*0.7,py2=oy*0.7;
+  ctx.save();
+  for(let d of BG_DIAMONDS){
+    let dx=(d.x-px2)*sc,dy=(d.y-py2)*sc,dr=d.r*sc;
+    if(dx<-dr||dx>W+dr||dy<-dr||dy>H+dr)continue;
+    let bob=Math.sin(d.phase+frameCount*0.02*d.speed)*8*sc;
+    let rot=frameCount*0.005*d.speed;
+    ctx.save();ctx.translate(dx,dy+bob);ctx.rotate(rot);
+    ctx.fillStyle='rgba(0,0,0,0.022)';
+    ctx.beginPath();ctx.moveTo(0,-dr);ctx.lineTo(dr*0.6,0);ctx.lineTo(0,dr);ctx.lineTo(-dr*0.6,0);ctx.closePath();ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawGrid(ox,oy){
   ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=1;
   let sx=Math.floor(ox/GRID_SIZE)*GRID_SIZE,sy=Math.floor(oy/GRID_SIZE)*GRID_SIZE;
@@ -870,7 +930,7 @@ function drawSkillSelect(){
   // Draw game behind (dimmed)
   let ox=camera.x,oy=camera.y;
   ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);
-  drawGrid(ox,oy);drawFieldBorder(ox,oy);
+  drawParallaxBG(ox,oy);drawGrid(ox,oy);drawFieldBorder(ox,oy);
   for(let f of foods)if(f.alive)drawFood(f,ox,oy);
   for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
   if(player&&player.alive)drawSlime(player,ox,oy);
@@ -939,7 +999,7 @@ function drawSkillSelect(){
 // ===== SCREENS =====
 function drawTitle(){
   ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);let sc=devicePixelRatio;
-  drawGrid(0,0);
+  drawParallaxBG(0,0);drawGrid(0,0);
   let mx=W/2;
   ctx.fillStyle='#eee';ctx.font='bold '+Math.floor(40*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('🧬 Slime Merge',mx,H*.15);
@@ -970,7 +1030,7 @@ function drawGameOver(){
 }
 
 function drawPauseScreen(){
-  let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);drawFieldBorder(ox,oy);
+  let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawParallaxBG(ox,oy);drawGrid(ox,oy);drawFieldBorder(ox,oy);
   for(let f of foods)if(f.alive)drawFood(f,ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);if(player&&player.alive)drawSlime(player,ox,oy);drawHUD();drawMinimap();
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H);let sc=devicePixelRatio,mx=W/2;
   ctx.fillStyle='#fff';ctx.font='bold '+(32*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⏸ ポーズ',mx,H*.35);
@@ -1050,7 +1110,7 @@ function loop(){
   update();ctx.clearRect(0,0,W,H);
   if(state==='title')drawTitle();
   else if(state==='playing'){
-    let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);drawFieldBorder(ox,oy);
+    let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawParallaxBG(ox,oy);drawGrid(ox,oy);drawFieldBorder(ox,oy);
     // Shadow pos
     if(shadowPos){ctx.globalAlpha=.3;ctx.fillStyle='#8800ff';ctx.beginPath();ctx.arc((shadowPos.x-ox)*devicePixelRatio,(shadowPos.y-oy)*devicePixelRatio,15*devicePixelRatio,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
     for(let f of foods)if(f.alive)drawFood(f,ox,oy);
@@ -1068,8 +1128,8 @@ function loop(){
     drawScorePopups(ox,oy);drawEdgeIndicators(ox,oy);drawHUD();drawMinimap();drawJoystick();drawPauseBtn();drawSkillNotifs();drawTutorial();
   }else if(state==='skillSelect')drawSkillSelect();
   else if(state==='paused')drawPauseScreen();
-  else if(state==='gameover'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);drawGameOver()}
-  else if(state==='clear'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);if(player&&player.alive)drawSlime(player,ox,oy);drawClear()}
+  else if(state==='gameover'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawParallaxBG(ox,oy);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);drawGameOver()}
+  else if(state==='clear'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawParallaxBG(ox,oy);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);if(player&&player.alive)drawSlime(player,ox,oy);drawClear()}
   requestAnimationFrame(loop);
 }
 loop();
