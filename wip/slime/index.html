@@ -6,7 +6,7 @@
 <title>🧬 Slime Merge</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#1a1a2e;touch-action:none;user-select:none;-webkit-user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;background:#f0f0e8;touch-action:none;user-select:none;-webkit-user-select:none}
 canvas{display:block;width:100%;height:100%}
 </style>
 </head>
@@ -24,7 +24,7 @@ const BASE_LEVELS=[null,
 {r:52,color:'#9013FE',name:'メガ',speed:2.2},
 {r:66,color:'#FF69B4',name:'ギガ',speed:1.8},
 {r:82,color:'#FFD700',name:'キング',speed:1.5}];
-const MAX_LV_KING=7,MAX_LV_FREE=99,TARGET_ENEMIES=20,MAX_PARTICLES=100,MAX_FOODS=40,COMBO_WINDOW=180;
+const MAX_LV_KING=7,MAX_LV_FREE=99,TARGET_ENEMIES=20,MAX_PARTICLES=100,MAX_FOODS=40,COMBO_WINDOW=180,MINIMAP_SIZE=120;
 function getLvInfo(lv){if(lv<=7)return BASE_LEVELS[lv];let h=(lv*37)%360;return{r:Math.min(15+lv*3,200),color:'hsl('+h+',70%,50%)',name:'Lv'+lv,speed:Math.max(0.8,1.5-(lv-7)*0.008)}}
 function expNeed(lv){return lv*50}
 function eatXP(eLv){return eLv*20}
@@ -667,7 +667,7 @@ function drawFood(f,ox,oy){
 }
 
 function drawGrid(ox,oy){
-  ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=1;
+  ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=1;
   let sx=Math.floor(ox/GRID_SIZE)*GRID_SIZE,sy=Math.floor(oy/GRID_SIZE)*GRID_SIZE;
   let ex=ox+W/devicePixelRatio+GRID_SIZE,ey=oy+H/devicePixelRatio+GRID_SIZE;
   ctx.beginPath();
@@ -676,7 +676,7 @@ function drawGrid(ox,oy){
   ctx.stroke();
 }
 
-function drawFieldBorder(ox,oy){ctx.strokeStyle='#555';ctx.lineWidth=3*devicePixelRatio;ctx.strokeRect(-ox*devicePixelRatio,-oy*devicePixelRatio,FIELD_W*devicePixelRatio,FIELD_H*devicePixelRatio)}
+function drawFieldBorder(ox,oy){ctx.strokeStyle='#ccc';ctx.lineWidth=3*devicePixelRatio;ctx.strokeRect(-ox*devicePixelRatio,-oy*devicePixelRatio,FIELD_W*devicePixelRatio,FIELD_H*devicePixelRatio)}
 
 function drawEdgeIndicators(ox,oy){
   if(!player||!player.alive)return;
@@ -782,7 +782,7 @@ function drawPauseBtn(){let r=getPBR(),sc=devicePixelRatio;ctx.fillStyle='rgba(0
 function drawSkillSelect(){
   // Draw game behind (dimmed)
   let ox=camera.x,oy=camera.y;
-  ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);
   drawGrid(ox,oy);drawFieldBorder(ox,oy);
   for(let f of foods)if(f.alive)drawFood(f,ox,oy);
   for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
@@ -835,7 +835,7 @@ function drawSkillSelect(){
 
 // ===== SCREENS =====
 function drawTitle(){
-  ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);let sc=devicePixelRatio;
+  ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);let sc=devicePixelRatio;
   drawGrid(0,0);
   let mx=W/2;
   ctx.fillStyle='#eee';ctx.font='bold '+Math.floor(40*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
@@ -867,7 +867,7 @@ function drawGameOver(){
 }
 
 function drawPauseScreen(){
-  let ox=camera.x,oy=camera.y;ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);drawFieldBorder(ox,oy);
+  let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);drawFieldBorder(ox,oy);
   for(let f of foods)if(f.alive)drawFood(f,ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);if(player&&player.alive)drawSlime(player,ox,oy);drawHUD();drawMinimap();
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H);let sc=devicePixelRatio,mx=W/2;
   ctx.fillStyle='#fff';ctx.font='bold '+(32*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⏸ ポーズ',mx,H*.35);
@@ -928,7 +928,7 @@ function loop(){
   update();ctx.clearRect(0,0,W,H);
   if(state==='title')drawTitle();
   else if(state==='playing'){
-    let ox=camera.x,oy=camera.y;ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);drawFieldBorder(ox,oy);
+    let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);drawFieldBorder(ox,oy);
     // Shadow pos
     if(shadowPos){ctx.globalAlpha=.3;ctx.fillStyle='#8800ff';ctx.beginPath();ctx.arc((shadowPos.x-ox)*devicePixelRatio,(shadowPos.y-oy)*devicePixelRatio,15*devicePixelRatio,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
     for(let f of foods)if(f.alive)drawFood(f,ox,oy);
@@ -940,8 +940,8 @@ function loop(){
     drawScorePopups(ox,oy);drawEdgeIndicators(ox,oy);drawHUD();drawMinimap();drawJoystick();drawPauseBtn();drawTutorial();
   }else if(state==='skillSelect')drawSkillSelect();
   else if(state==='paused')drawPauseScreen();
-  else if(state==='gameover'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);drawGameOver()}
-  else if(state==='clear'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);if(player&&player.alive)drawSlime(player,ox,oy);drawClear()}
+  else if(state==='gameover'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);drawGameOver()}
+  else if(state==='clear'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);if(player&&player.alive)drawSlime(player,ox,oy);drawClear()}
   requestAnimationFrame(loop);
 }
 loop();
