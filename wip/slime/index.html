@@ -327,7 +327,7 @@ function doLvUp(){
 
 function playerDmg(attacker){
   if(has('fortify')&&attacker.lv-player.lv<=1){let r=slBR(player);if(player.x<=r+10||player.x>=FIELD_W-r-10||player.y<=r+10||player.y>=FIELD_H-r-10){bounceApart(player,attacker);sfxBounce();return}}
-  if(has('shield')&&(!ss.shieldCD||frameCount>=ss.shieldCD)){ss.shieldCD=frameCount+600;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'SHIELD!',true);addSkillNotif('🛡️','Shield','#4488ff');return}
+  if(has('shield')&&(!ss.shieldCD||frameCount>=ss.shieldCD)){ss.shieldCD=frameCount+600;ss.shieldFX=30;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'SHIELD!',true);addSkillNotif('🛡️','Shield','#4488ff');return}
   if(ss.barrierCharges>0){ss.barrierCharges--;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'BARRIER!('+ss.barrierCharges+')',true);return}
   if(has('mirror_shield')&&(!ss.mirrorCD||frameCount>=ss.mirrorCD)){ss.mirrorCD=frameCount+300;attacker.vx*=-3;attacker.vy*=-3;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'REFLECT!',true);addSkillNotif('🪩','Mirror Shield','#aaddff');return}
   if(has('deflect')&&(!ss.deflectCD||frameCount>=ss.deflectCD)){ss.deflectCD=frameCount+1800;bounceApart(player,attacker);sfxBounce();return}
@@ -447,6 +447,10 @@ function update(){
   clampField(player);player.phase+=.08;
   if(player.invincible>0)player.invincible--;
   if(player.mouthTimer>0){player.mouthTimer--;if(player.mouthTimer<=0)player.mouthState='smile'}
+
+  // Skill FX timers
+  if(ss.shieldFX>0)ss.shieldFX--;
+  if(ss.venomFX>0)ss.venomFX--;
 
   // Stillness
   let moving=Math.sqrt(player.vx*player.vx+player.vy*player.vy)>0.5;
@@ -658,6 +662,8 @@ function drawSlime(s,ox,oy){
   ctx.strokeText('Lv'+s.lv,0,r*.45*sc);ctx.fillStyle='rgba(255,255,255,0.85)';ctx.fillText('Lv'+s.lv,0,r*.45*sc);
   // Enemy skill icons
   if(!s.isPlayer&&s.skills.length){ctx.font=Math.floor(10*sc)+'px sans-serif';for(let i=0;i<s.skills.length;i++){let sk=SM[s.skills[i]];if(sk)ctx.fillText(sk.icon,(i-s.skills.length/2)*12*sc,-r*sc-8*sc)}}
+  // Shield FX: blue translucent barrier around player
+  if(s.isPlayer&&ss.shieldFX>0){let prog=ss.shieldFX/30,barrR=(r+12+8*(1-prog))*sc;ctx.globalAlpha=prog*0.5;ctx.strokeStyle='rgba(80,160,255,0.8)';ctx.lineWidth=(3+2*prog)*sc;ctx.beginPath();ctx.arc(0,0,barrR,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(80,160,255,0.15)';ctx.beginPath();ctx.arc(0,0,barrR,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
   ctx.restore();
 }
 
