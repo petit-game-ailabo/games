@@ -168,6 +168,7 @@ let skillOpts=[],pendLvUps=0;
 let pSkills=[],pSet=new Set(),sStk={},ss={};
 let reachedLvs=new Set(),lastEatFrame=0,stillTimer=0,totalFoodEaten=0;
 let smiteTarget=null,smiteTimer=0,shadowPos=null,shadowTimer=0;
+let dashState={lastTap:0,cooldown:0,active:0,trail:[],dir:{x:0,y:0}};
 let tutorialTimer=0,tutorialDuration=300; // 5 seconds at 60fps
 let skillNotifs=[]; // {text,icon,color,life,maxLife}
 function addSkillNotif(icon,name,color){skillNotifs.push({text:icon+' '+name+'発動！',color:color||'#fff',life:60,maxLife:60})}
@@ -226,7 +227,7 @@ function startGame(mode){
 canvas.addEventListener('mousemove',e=>{mousePos.x=e.clientX;mousePos.y=e.clientY});
 canvas.addEventListener('mousedown',e=>{initAudio();let cx=e.clientX*devicePixelRatio,cy=e.clientY*devicePixelRatio;
   if(state==='title')titleClick(cx,cy);else if(state==='gameover'||state==='clear')endClick(cx,cy);
-  else if(state==='playing')pauseBtnClick(cx,cy);else if(state==='paused')pauseScreenClick(cx,cy);
+  else if(state==='playing'){if(!pauseBtnClick(cx,cy))tryDash()}else if(state==='paused')pauseScreenClick(cx,cy);
   else if(state==='skillSelect')skillClick(cx,cy)});
 addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key==='Escape'){if(state==='playing')state='paused';else if(state==='paused')state='playing'}});
 addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
@@ -234,10 +235,29 @@ canvas.addEventListener('touchstart',e=>{e.preventDefault();initAudio();let cx=e
   if(state==='title'){titleClick(cx,cy);return}if(state==='gameover'||state==='clear'){endClick(cx,cy);return}
   if(state==='paused'){pauseScreenClick(cx,cy);return}if(state==='skillSelect'){skillClick(cx,cy);return}
   if(state!=='playing')return;if(pauseBtnClick(cx,cy))return;
+  tryDash();
   for(let t of e.changedTouches){if(!joystick.active){joystick.active=true;joystick.id=t.identifier;joystick.cx=t.clientX*devicePixelRatio;joystick.cy=t.clientY*devicePixelRatio;joystick.tx=joystick.cx;joystick.ty=joystick.cy}}},{passive:false});
 canvas.addEventListener('touchmove',e=>{e.preventDefault();for(let t of e.changedTouches){if(joystick.active&&t.identifier===joystick.id){joystick.tx=t.clientX*devicePixelRatio;joystick.ty=t.clientY*devicePixelRatio}}},{passive:false});
 canvas.addEventListener('touchend',e=>{e.preventDefault();for(let t of e.changedTouches){if(joystick.active&&t.identifier===joystick.id){joystick.active=false;joystick.id=null}}},{passive:false});
 
+function tryDash(){
+  if(!has('dash')||!player||!player.alive||dashState.cooldown>0)return;
+  let now=Date.now();
+  if(now-dashState.lastTap<350){
+    // Double tap detected — activate dash
+    dashState.active=15; // 0.25s at 60fps
+    dashState.cooldown=180; // 3s CD
+    let dx=inputDir.x||player.vx,dy=inputDir.y||player.vy;
+    let l=Math.sqrt(dx*dx+dy*dy);
+    if(l>0.01){dashState.dir={x:dx/l,y:dy/l}}else{dashState.dir={x:0,y:-1}}
+    dashState.trail=[];
+    addSkillNotif('🏃','Dash','#55ff88');
+    sfxSkill();
+    dashState.lastTap=0;
+  }else{
+    dashState.lastTap=now;
+  }
+}
 function titleClick(cx,cy){let bw=130*devicePixelRatio,bh=28*devicePixelRatio,mx=W/2;
   if(cx>mx-bw&&cx<mx+bw&&cy>H*.62-bh&&cy<H*.62+bh){startGame('king');return}
   if(cx>mx-bw&&cx<mx+bw&&cy>H*.72-bh&&cy<H*.72+bh){startGame('endless');return}}
@@ -443,6 +463,19 @@ function update(){
   player.vx+=(inputDir.x*sp-player.vx)*accel;
   player.vy+=(inputDir.y*sp-player.vy)*accel;
   if(has('drift'))sp*=1.2;
+  // Dash active: override velocity with high-speed burst + record trail
+  if(dashState.active>0){
+    let dashSpd=sp*3.5;
+    player.vx=dashState.dir.x*dashSpd;
+    player.vy=dashState.dir.y*dashSpd;
+    dashState.trail.push({x:player.x,y:player.y,r:slBR(player),color:slCol(player),life:18});
+    player.invincible=Math.max(player.invincible,2);
+    dashState.active--;
+  }
+  if(dashState.cooldown>0)dashState.cooldown--;
+  // Decay dash trail
+  for(let t of dashState.trail)t.life--;
+  dashState.trail=dashState.trail.filter(t=>t.life>0);
   player.x+=player.vx;player.y+=player.vy;
   clampField(player);player.phase+=.08;
   if(player.invincible>0)player.invincible--;
@@ -796,6 +829,7 @@ function drawHUD(){
       if(sk.id==='evasion'&&ss.evasionCD&&frameCount<ss.evasionCD)cdRemain=ss.evasionCD-frameCount;
       if(sk.id==='guardian_angel'&&ss.gaCD&&frameCount<ss.gaCD)cdRemain=ss.gaCD-frameCount;
       if(sk.id==='time_stop'&&ss.tsCD&&frameCount<ss.tsCD)cdRemain=ss.tsCD-frameCount;
+      if(sk.id==='dash'&&dashState.cooldown>0)cdRemain=dashState.cooldown;
       let onCD=cdRemain>0;
       let cdSec=onCD?Math.ceil(cdRemain/60):0;
       if(onCD)ctx.globalAlpha=0.4;
@@ -1028,6 +1062,8 @@ function loop(){
     // Magnetic attraction lines (dotted)
     if(player&&player.alive&&has('magnetic')){ctx.save();ctx.setLineDash([6*devicePixelRatio,6*devicePixelRatio]);let dashOff=frameCount*2;ctx.lineDashOffset=-dashOff;for(let e of enemies){if(!e.alive||e.lv>=player.lv)continue;let dx=player.x-e.x,dy=player.y-e.y,d=Math.sqrt(dx*dx+dy*dy);if(d<150&&d>0){let px=(player.x-ox)*devicePixelRatio,py=(player.y-oy)*devicePixelRatio,ex=(e.x-ox)*devicePixelRatio,ey=(e.y-oy)*devicePixelRatio;let alpha=0.15+0.45*(1-d/150);ctx.globalAlpha=alpha;ctx.strokeStyle='rgba(100,180,255,0.9)';ctx.lineWidth=2*devicePixelRatio;ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(ex,ey);ctx.stroke();let dotR=(3+Math.sin(frameCount*0.15+d*0.05)*1.5)*devicePixelRatio;ctx.globalAlpha=alpha*1.2;ctx.fillStyle='rgba(120,200,255,0.8)';let midX=(px+ex)/2,midY=(py+ey)/2;ctx.beginPath();ctx.arc(midX,midY,dotR,0,Math.PI*2);ctx.fill()}}ctx.setLineDash([]);ctx.globalAlpha=1;ctx.restore()}
     for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
+    // Dash afterimage trail
+    if(dashState.trail.length){for(let t of dashState.trail){let tx=(t.x-ox)*devicePixelRatio,ty=(t.y-oy)*devicePixelRatio,tr=t.r*devicePixelRatio;ctx.save();ctx.globalAlpha=t.life/18*0.4;ctx.fillStyle=t.color;ctx.beginPath();ctx.arc(tx,ty,tr*(0.7+t.life/18*0.3),0,Math.PI*2);ctx.fill();ctx.restore()}}
     if(player&&player.alive)drawSlime(player,ox,oy);
     drawScorePopups(ox,oy);drawEdgeIndicators(ox,oy);drawHUD();drawMinimap();drawJoystick();drawPauseBtn();drawSkillNotifs();drawTutorial();
   }else if(state==='skillSelect')drawSkillSelect();
