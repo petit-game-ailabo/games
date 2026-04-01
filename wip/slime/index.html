@@ -284,7 +284,7 @@ function playerEat(prey){
   if(has('phantom_strike'))player.invincible=Math.max(player.invincible,30);
   if(has('leech')&&gameMode==='king')timeLeft+=3;
   if(has('recycler'))for(let i=0;i<3;i++)foods.push(spawnFood(prey));
-  if(has('shockwave')){let hit=false;for(let e of enemies){if(!e.alive)continue;let dx=e.x-player.x,dy=e.y-player.y,d=Math.sqrt(dx*dx+dy*dy);if(d<150&&d>0){let f=8/d*150;e.vx+=dx/d*f;e.vy+=dy/d*f;hit=true}}if(hit)addSkillNotif('💥','Shockwave','#ff8844')}
+  if(has('shockwave')){let hit=false;for(let e of enemies){if(!e.alive)continue;let dx=e.x-player.x,dy=e.y-player.y,d=Math.sqrt(dx*dx+dy*dy);if(d<150&&d>0){let f=8/d*150;e.vx+=dx/d*f;e.vy+=dy/d*f;hit=true}}if(hit){addSkillNotif('💥','Shockwave','#ff8844');ss.shockwaveFX=30;ss.shockwaveX=player.x;ss.shockwaveY=player.y}}
   if(has('chain_lightning')){let chained=false;for(let e of enemies){if(!e.alive||e===prey)continue;if(e.lv===prey.lv){let d=Math.sqrt((e.x-prey.x)**2+(e.y-prey.y)**2);if(d<120){e.alive=false;addPtcl(e.x,e.y,'#ffff00',5);score+=50;chained=true}}}if(chained)addSkillNotif('⚡','Chain Lightning','#ffff00')}
   if(has('rampage')){if(frameCount-lastEatFrame<180)ss.rampageEnd=frameCount+300;lastEatFrame=frameCount}else lastEatFrame=frameCount;
   if(has('parasite'))allies.push({x:prey.x,y:prey.y,lv:1,timer:180,phase:0});
@@ -1023,6 +1023,8 @@ function loop(){
     for(let p of particles){let x=(p.x-ox)*devicePixelRatio,y=(p.y-oy)*devicePixelRatio;ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(x,y,p.size*devicePixelRatio*p.life,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
     // Allies
     for(let a of allies){let ax=(a.x-ox)*devicePixelRatio,ay=(a.y-oy)*devicePixelRatio,ar=getLvInfo(a.lv).r*.7*devicePixelRatio;ctx.globalAlpha=a.timer/180;ctx.fillStyle=getLvInfo(a.lv).color;ctx.beginPath();ctx.arc(ax,ay,ar,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
+    // Shockwave ripple effect
+    if(ss.shockwaveFX>0){let swProg=1-ss.shockwaveFX/30,swX=(ss.shockwaveX-ox)*devicePixelRatio,swY=(ss.shockwaveY-oy)*devicePixelRatio,swMaxR=150*devicePixelRatio;ctx.save();for(let ring=0;ring<3;ring++){let delay=ring*0.15,rProg=Math.max(0,Math.min(1,(swProg-delay)/(1-delay)));if(rProg<=0)continue;let rr=swMaxR*rProg,alpha=(1-rProg)*0.6;ctx.globalAlpha=alpha;ctx.strokeStyle='rgba(255,136,68,'+(alpha)+')';ctx.lineWidth=(4-ring*1)*devicePixelRatio*(1-rProg*0.5);ctx.beginPath();ctx.arc(swX,swY,rr,0,Math.PI*2);ctx.stroke()}ctx.restore();ss.shockwaveFX--}
     for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
     if(player&&player.alive)drawSlime(player,ox,oy);
     drawScorePopups(ox,oy);drawEdgeIndicators(ox,oy);drawHUD();drawMinimap();drawJoystick();drawPauseBtn();drawSkillNotifs();drawTutorial();
