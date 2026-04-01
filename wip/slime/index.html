@@ -273,18 +273,48 @@ function clampToField(s){
 function updateAI(e){
   e.aiTimer--;
   if(e.aiTimer<=0){
+    // Adaptive behavior: higher-level enemies are more aggressive, lower-level flee more
+    let nearbyThreat=false,nearbyPrey=false,nearbyMerge=false;
+    let scanR=350;
+    let targets=[player,...enemies];
+    for(let t of targets){
+      if(t===e||!t.alive)continue;
+      let d=Math.sqrt((t.x-e.x)**2+(t.y-e.y)**2);
+      if(d>scanR)continue;
+      if(t.lv-e.lv>=2)nearbyThreat=true;
+      if(e.lv-t.lv>=2)nearbyPrey=true;
+      if(t.lv===e.lv&&e.lv<MAX_LEVEL)nearbyMerge=true;
+    }
     let r=Math.random();
-    if(r<0.7)e.aiBehavior='wander';
-    else if(r<0.9)e.aiBehavior='chase';
-    else e.aiBehavior='flee';
-    e.aiTimer=60+Math.random()*120;
+    if(nearbyThreat){
+      // Danger nearby: flee 60%, wander 30%, chase 10%
+      if(r<0.6)e.aiBehavior='flee';
+      else if(r<0.9)e.aiBehavior='wander';
+      else e.aiBehavior='chase';
+    }else if(nearbyPrey){
+      // Prey nearby: chase 60%, wander 25%, merge 15%
+      if(r<0.6)e.aiBehavior='chase';
+      else if(r<0.85)e.aiBehavior='wander';
+      else e.aiBehavior=nearbyMerge?'merge':'seekFood';
+    }else if(nearbyMerge){
+      // Same-level nearby: merge 40%, seekFood 30%, wander 30%
+      if(r<0.4)e.aiBehavior='merge';
+      else if(r<0.7)e.aiBehavior='seekFood';
+      else e.aiBehavior='wander';
+    }else{
+      // Nothing interesting: seekFood 40%, wander 50%, chase 10%
+      if(r<0.4)e.aiBehavior='seekFood';
+      else if(r<0.9)e.aiBehavior='wander';
+      else e.aiBehavior='chase';
+    }
+    e.aiTimer=40+Math.random()*80;
     if(e.aiBehavior==='wander'){
       let a=Math.random()*Math.PI*2;
       e.aiDir={x:Math.cos(a),y:Math.sin(a)};
     }
   }
   if(e.aiBehavior==='chase'){
-    // Find nearest smaller target
+    // Find nearest edible target (2+ levels lower)
     let best=null,bestD=400;
     let targets=[player,...enemies];
     for(let t of targets){
@@ -299,7 +329,8 @@ function updateAI(e){
       if(len>0){e.aiDir={x:dx/len,y:dy/len}}
     }else{e.aiBehavior='wander';let a=Math.random()*Math.PI*2;e.aiDir={x:Math.cos(a),y:Math.sin(a)}}
   }else if(e.aiBehavior==='flee'){
-    let best=null,bestD=300;
+    // Flee from nearest threat (2+ levels higher)
+    let best=null,bestD=400;
     let targets=[player,...enemies];
     for(let t of targets){
       if(t===e||!t.alive)continue;
@@ -312,8 +343,36 @@ function updateAI(e){
       let dx=e.x-best.x,dy=e.y-best.y,len=Math.sqrt(dx*dx+dy*dy);
       if(len>0){e.aiDir={x:dx/len,y:dy/len}}
     }else{e.aiBehavior='wander';let a=Math.random()*Math.PI*2;e.aiDir={x:Math.cos(a),y:Math.sin(a)}}
+  }else if(e.aiBehavior==='merge'){
+    // Seek same-level slime to merge with
+    let best=null,bestD=500;
+    for(let t of enemies){
+      if(t===e||!t.alive)continue;
+      if(t.lv===e.lv&&e.lv<MAX_LEVEL){
+        let d=Math.sqrt((t.x-e.x)**2+(t.y-e.y)**2);
+        if(d<bestD){bestD=d;best=t}
+      }
+    }
+    if(best){
+      let dx=best.x-e.x,dy=best.y-e.y,len=Math.sqrt(dx*dx+dy*dy);
+      if(len>0){e.aiDir={x:dx/len,y:dy/len}}
+    }else{e.aiBehavior='seekFood';e.aiTimer=0}
+  }else if(e.aiBehavior==='seekFood'){
+    // Head toward nearest food
+    let best=null,bestD=400;
+    for(let f of foods){
+      if(!f.alive)continue;
+      let d=Math.sqrt((f.x-e.x)**2+(f.y-e.y)**2);
+      if(d<bestD){bestD=d;best=f}
+    }
+    if(best){
+      let dx=best.x-e.x,dy=best.y-e.y,len=Math.sqrt(dx*dx+dy*dy);
+      if(len>0){e.aiDir={x:dx/len,y:dy/len}}
+    }else{e.aiBehavior='wander';let a=Math.random()*Math.PI*2;e.aiDir={x:Math.cos(a),y:Math.sin(a)}}
   }
-  let sp=slimeSpeed(e)*0.7;
+  // Flee moves faster, chase slightly faster
+  let spMult=e.aiBehavior==='flee'?0.85:e.aiBehavior==='chase'||e.aiBehavior==='merge'?0.75:0.65;
+  let sp=slimeSpeed(e)*spMult;
   e.vx+=(e.aiDir.x*sp-e.vx)*0.1;
   e.vy+=(e.aiDir.y*sp-e.vy)*0.1;
   e.x+=e.vx;e.y+=e.vy;
