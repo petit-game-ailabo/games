@@ -57,7 +57,7 @@ function sfxLevelUp(){playTone(523,0.15,'sine',0.2);setTimeout(()=>playTone(659,
 function sfxBounce(){playTone(300,0.1,'triangle',0.15,200)}
 
 // --- State ---
-let state='title'; // title, playing, gameover, clear
+let state='title'; // title, playing, gameover, clear, paused
 let gameMode='king'; // king, endless
 let player=null;
 let enemies=[];
@@ -175,17 +175,27 @@ function startGame(mode){
 canvas.addEventListener('mousemove',e=>{mousePos.x=e.clientX;mousePos.y=e.clientY});
 canvas.addEventListener('mousedown',e=>{
   initAudio();
-  if(state==='title')handleTitleClick(e.clientX*devicePixelRatio,e.clientY*devicePixelRatio);
-  else if(state==='gameover'||state==='clear')handleEndClick(e.clientX*devicePixelRatio,e.clientY*devicePixelRatio);
+  let cx=e.clientX*devicePixelRatio,cy=e.clientY*devicePixelRatio;
+  if(state==='title')handleTitleClick(cx,cy);
+  else if(state==='gameover'||state==='clear')handleEndClick(cx,cy);
+  else if(state==='playing'){handlePauseButtonClick(cx,cy)}
+  else if(state==='paused'){handlePauseScreenClick(cx,cy)}
 });
-window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});
+window.addEventListener('keydown',e=>{
+  keys[e.key.toLowerCase()]=true;
+  if(e.key==='Escape'&&state==='playing'){state='paused';return}
+  if(e.key==='Escape'&&state==='paused'){state='playing';return}
+});
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
 
 canvas.addEventListener('touchstart',e=>{
   e.preventDefault();initAudio();
-  if(state==='title'){handleTitleClick(e.touches[0].clientX*devicePixelRatio,e.touches[0].clientY*devicePixelRatio);return}
-  if(state==='gameover'||state==='clear'){handleEndClick(e.touches[0].clientX*devicePixelRatio,e.touches[0].clientY*devicePixelRatio);return}
+  let tcx=e.touches[0].clientX*devicePixelRatio,tcy=e.touches[0].clientY*devicePixelRatio;
+  if(state==='title'){handleTitleClick(tcx,tcy);return}
+  if(state==='gameover'||state==='clear'){handleEndClick(tcx,tcy);return}
+  if(state==='paused'){handlePauseScreenClick(tcx,tcy);return}
   if(state!=='playing')return;
+  if(handlePauseButtonClick(tcx,tcy))return;
   for(let t of e.changedTouches){
     if(!joystick.active){
       joystick.active=true;joystick.id=t.identifier;
@@ -217,6 +227,26 @@ function handleTitleClick(cx,cy){
   // Endless button
   midY=H*0.72;
   if(cx>midX-btnW&&cx<midX+btnW&&cy>midY-btnH&&cy<midY+btnH){startGame('endless');return}
+}
+function getPauseBtnRect(){
+  let sc=devicePixelRatio;
+  let sz=40*sc,margin=12*sc;
+  return{x:W-sz-margin,y:MINIMAP_SIZE*sc+20*sc+margin,w:sz,h:sz};
+}
+function handlePauseButtonClick(cx,cy){
+  let r=getPauseBtnRect();
+  if(cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h){state='paused';return true}
+  return false;
+}
+function handlePauseScreenClick(cx,cy){
+  let sc=devicePixelRatio,midX=W/2;
+  let btnW=240*sc,btnH=52*sc;
+  // Resume
+  let y1=H*0.52;
+  if(cx>midX-btnW/2&&cx<midX+btnW/2&&cy>y1-btnH/2&&cy<y1+btnH/2){state='playing';return}
+  // Title
+  let y2=H*0.62;
+  if(cx>midX-btnW/2&&cx<midX+btnW/2&&cy>y2-btnH/2&&cy<y2+btnH/2){state='title';return}
 }
 function handleEndClick(cx,cy){
   let btnW=240*devicePixelRatio/2,btnH=52*devicePixelRatio/2;
@@ -1030,6 +1060,51 @@ function drawGameOver(){
   ctx.fillText('🏠 タイトル',midX,by2);
 }
 
+function drawPauseButton(){
+  let r=getPauseBtnRect();
+  let sc=devicePixelRatio;
+  ctx.fillStyle='rgba(0,0,0,0.4)';
+  ctx.beginPath();roundRect(ctx,r.x,r.y,r.w,r.h,8*sc);ctx.fill();
+  // Pause icon (two bars)
+  let barW=5*sc,barH=18*sc,gap=6*sc;
+  let bx=r.x+r.w/2-gap/2-barW,by=r.y+r.h/2-barH/2;
+  ctx.fillStyle='rgba(255,255,255,0.8)';
+  ctx.fillRect(bx,by,barW,barH);
+  ctx.fillRect(bx+barW+gap,by,barW,barH);
+}
+function drawPauseScreen(){
+  // Draw the game behind
+  let ox=camera.x,oy=camera.y;
+  ctx.fillStyle='#f0f8f0';ctx.fillRect(0,0,W,H);
+  drawGrid(ox,oy);
+  drawFieldBorder(ox,oy);
+  for(let f of foods)if(f.alive)drawFood(f,ox,oy);
+  for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
+  if(player&&player.alive)drawSlime(player,ox,oy);
+  drawHUD();
+  drawMinimap();
+  // Dark overlay
+  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H);
+  let sc=devicePixelRatio,midX=W/2;
+  // Title
+  ctx.fillStyle='#fff';ctx.font='bold '+(32*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('⏸ ポーズ',midX,H*0.35);
+  ctx.font=''+(16*sc)+'px sans-serif';ctx.fillStyle='#ccc';
+  ctx.fillText('ESCキーまたはボタンで再開',midX,H*0.43);
+  // Resume button
+  let btnW=240*sc,btnH=52*sc;
+  let by1=H*0.52;
+  ctx.fillStyle='#4A90D9';
+  ctx.beginPath();roundRect(ctx,midX-btnW/2,by1-btnH/2,btnW,btnH,10*sc);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold '+(18*sc)+'px sans-serif';
+  ctx.fillText('▶ つづける',midX,by1);
+  // Title button
+  let by2=H*0.62;
+  ctx.fillStyle='#666';
+  ctx.beginPath();roundRect(ctx,midX-btnW/2,by2-btnH/2,btnW,btnH,10*sc);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.fillText('🏠 タイトル',midX,by2);
+}
 function drawClear(){
   ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
   let sc=devicePixelRatio,midX=W/2;
@@ -1092,6 +1167,9 @@ function loop(){
     drawHUD();
     drawMinimap();
     drawJoystick();
+    drawPauseButton();
+  }else if(state==='paused'){
+    drawPauseScreen();
   }else if(state==='gameover'){
     // Draw game behind
     let ox=camera.x,oy=camera.y;
