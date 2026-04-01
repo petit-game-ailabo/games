@@ -749,20 +749,51 @@ function drawHUD(){
     let cc=['#ff4444','#ff8800','#ffdd00','#00ff88','#00ddff','#aa44ff','#ff44aa','#ff0000','#ffff00','#00ffff'];
     ctx.font='bold '+Math.floor(14*sc*pulse)+'px sans-serif';hText('🔥 COMBO x'+comboCount+'!',16*sc,cy,cc[Math.min(comboCount-2,cc.length-1)]);ctx.restore()}
 
-  // Skill icons (bottom-right)
+  // Skill list (bottom-right) - icon + name
   if(pSkills.length){
-    let iconSz=20*sc,gap=2*sc,perRow=8;
-    let startX=W-(iconSz+gap)*Math.min(pSkills.length,perRow)-8*sc;
-    let startY=H-iconSz-8*sc;
-    for(let i=0;i<pSkills.length;i++){
-      let sk=SM[pSkills[i]];if(!sk)continue;
-      let row=Math.floor(i/perRow),col=i%perRow;
-      let ix=startX+col*(iconSz+gap),iy=startY-row*(iconSz+gap);
-      ctx.fillStyle='rgba(0,0,0,0.5)';roundRect(ctx,ix,iy,iconSz,iconSz,3*sc);ctx.fill();
-      ctx.strokeStyle=RC[sk.rarity];ctx.lineWidth=1.5*sc;roundRect(ctx,ix,iy,iconSz,iconSz,3*sc);ctx.stroke();
-      ctx.font=Math.floor(12*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(sk.icon,ix+iconSz/2,iy+iconSz/2);
+    let rowH=18*sc,iconSz=14*sc,padX=6*sc,padY=4*sc,maxRows=12;
+    let visibleSkills=pSkills.slice(0,maxRows);
+    let hasMore=pSkills.length>maxRows;
+    let totalRows=visibleSkills.length+(hasMore?1:0);
+    // Measure max width for panel
+    ctx.font='bold '+Math.floor(10*sc)+'px sans-serif';
+    let maxTextW=0;
+    for(let i=0;i<visibleSkills.length;i++){let sk=SM[visibleSkills[i]];if(sk){let tw=ctx.measureText(sk.icon+' '+sk.name).width;if(tw>maxTextW)maxTextW=tw}}
+    let panelW=maxTextW+padX*3+iconSz;
+    let panelH=totalRows*rowH+padY*2;
+    let panelX=W-panelW-8*sc,panelY=H-panelH-8*sc;
+    // Panel background
+    ctx.save();roundRect(ctx,panelX,panelY,panelW,panelH,6*sc);
+    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.lineWidth=1*sc;roundRect(ctx,panelX,panelY,panelW,panelH,6*sc);ctx.stroke();
+    // Rows
+    for(let i=0;i<visibleSkills.length;i++){
+      let sk=SM[visibleSkills[i]];if(!sk)continue;
+      let ry=panelY+padY+i*rowH;
+      // Rarity color bar (thin left border)
+      ctx.fillStyle=RC[sk.rarity];ctx.fillRect(panelX+2*sc,ry+2*sc,2*sc,rowH-4*sc);
+      // Cooldown check - grey out if on cooldown
+      let onCD=false;
+      if(sk.id==='shield'&&ss.shieldCD&&frameCount<ss.shieldCD)onCD=true;
+      if(sk.id==='mirror_shield'&&ss.mirrorCD&&frameCount<ss.mirrorCD)onCD=true;
+      if(sk.id==='deflect'&&ss.deflectCD&&frameCount<ss.deflectCD)onCD=true;
+      if(sk.id==='warp'&&ss.warpCD&&frameCount<ss.warpCD)onCD=true;
+      if(onCD)ctx.globalAlpha=0.4;
+      // Icon + Name
+      ctx.font=Math.floor(12*sc)+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.fillStyle='#fff';ctx.fillText(sk.icon,panelX+padX+2*sc,ry+rowH/2);
+      ctx.font='bold '+Math.floor(10*sc)+'px sans-serif';
+      ctx.fillStyle=onCD?'#888':RC[sk.rarity];
+      ctx.fillText(sk.name,panelX+padX+iconSz+4*sc,ry+rowH/2);
+      if(onCD)ctx.globalAlpha=1;
     }
+    // "more" indicator
+    if(hasMore){
+      let ry=panelY+padY+visibleSkills.length*rowH;
+      ctx.font=Math.floor(10*sc)+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.fillStyle='#aaa';ctx.fillText('+'+(pSkills.length-maxRows)+' more...',panelX+padX,ry+rowH/2);
+    }
+    ctx.restore();
   }
 }
 
