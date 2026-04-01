@@ -166,6 +166,7 @@ let skillOpts=[],pendLvUps=0;
 let pSkills=[],pSet=new Set(),sStk={},ss={};
 let reachedLvs=new Set(),lastEatFrame=0,stillTimer=0,totalFoodEaten=0;
 let smiteTarget=null,smiteTimer=0,shadowPos=null,shadowTimer=0;
+let tutorialTimer=0,tutorialDuration=300; // 5 seconds at 60fps
 
 function resize(){W=canvas.width=innerWidth*devicePixelRatio;H=canvas.height=innerHeight*devicePixelRatio;canvas.style.width=innerWidth+'px';canvas.style.height=innerHeight+'px';isMobile='ontouchstart'in window||navigator.maxTouchPoints>0}
 addEventListener('resize',resize);resize();
@@ -211,6 +212,7 @@ function startGame(mode){
   reachedLvs=new Set([1]);skillOpts=[];pendLvUps=0;
   lastEatFrame=0;stillTimer=0;totalFoodEaten=0;
   smiteTarget=null;smiteTimer=0;shadowPos=null;shadowTimer=0;
+  tutorialTimer=tutorialDuration;
   for(let i=0;i<TARGET_ENEMIES;i++)enemies.push(spawnEnemy(1));
   for(let i=0;i<MAX_FOODS;i++)foods.push(spawnFood());
   state='playing';
@@ -421,6 +423,7 @@ function getInDir(){
 function update(){
   if(state!=='playing')return;
   frameCount++;
+  if(tutorialTimer>0)tutorialTimer--;
   // Timer
   if(gameMode==='king'){let decay=1/60;if(has('chronos'))decay*=.8;timeLeft-=decay;if(timeLeft<=0){timeLeft=0;playerDeath();return}}
   else survivalTime+=1/60;
@@ -884,6 +887,40 @@ function drawClear(){
   let y2=H*.69+20*sc;ctx.fillStyle='#666';roundRect(ctx,mx-bw/2,y2-bh/2,bw,bh,10*sc);ctx.fill();ctx.fillStyle='#fff';ctx.fillText('🏠 タイトル',mx,y2);
 }
 
+// ===== TUTORIAL OVERLAY =====
+function drawTutorial(){
+  if(tutorialTimer<=0)return;
+  let sc=devicePixelRatio,alpha=Math.min(1,tutorialTimer/60); // fade out in last 1 second
+  ctx.save();ctx.globalAlpha=alpha;
+  // Semi-transparent backdrop
+  let bw=320*sc,bh=200*sc,bx=(W-bw)/2,by=H*.55;
+  roundRect(ctx,bx,by,bw,bh,12*sc);ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1.5*sc;roundRect(ctx,bx,by,bw,bh,12*sc);ctx.stroke();
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  let cx=W/2,ty=by+28*sc;
+  ctx.fillStyle='#FFD700';ctx.font='bold '+Math.floor(18*sc)+'px sans-serif';
+  ctx.fillText('🎮 操作方法',cx,ty);
+  ctx.fillStyle='#fff';ctx.font=Math.floor(14*sc)+'px sans-serif';
+  let lines;
+  if(isMobile){
+    lines=['👆 画面をドラッグして移動','🟢 自分より小さい敵を食べよう','🔴 大きい敵に注意！','⬆ レベルアップでスキルを獲得'];
+  }else{
+    lines=['🖱️ マウスで移動 / WASD・矢印キー','🟢 自分より小さい敵を食べよう','🔴 大きい敵に注意！','⬆ レベルアップでスキルを獲得'];
+  }
+  for(let i=0;i<lines.length;i++){
+    ctx.fillText(lines[i],cx,ty+30*sc+i*28*sc);
+  }
+  // Progress dots
+  let dotY=by+bh-18*sc,dotR=3*sc,dotGap=10*sc,progress=1-tutorialTimer/tutorialDuration;
+  let totalDots=5;
+  for(let i=0;i<totalDots;i++){
+    let dx=cx+(i-totalDots/2+0.5)*dotGap*2;
+    ctx.fillStyle=i/totalDots<=progress?'#FFD700':'rgba(255,255,255,0.3)';
+    ctx.beginPath();ctx.arc(dx,dotY,dotR,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
 // ===== MAIN LOOP =====
 let exploredCells=new Set();
 let straightDist=0;
@@ -900,7 +937,7 @@ function loop(){
     for(let a of allies){let ax=(a.x-ox)*devicePixelRatio,ay=(a.y-oy)*devicePixelRatio,ar=getLvInfo(a.lv).r*.7*devicePixelRatio;ctx.globalAlpha=a.timer/180;ctx.fillStyle=getLvInfo(a.lv).color;ctx.beginPath();ctx.arc(ax,ay,ar,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
     for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
     if(player&&player.alive)drawSlime(player,ox,oy);
-    drawScorePopups(ox,oy);drawEdgeIndicators(ox,oy);drawHUD();drawMinimap();drawJoystick();drawPauseBtn();
+    drawScorePopups(ox,oy);drawEdgeIndicators(ox,oy);drawHUD();drawMinimap();drawJoystick();drawPauseBtn();drawTutorial();
   }else if(state==='skillSelect')drawSkillSelect();
   else if(state==='paused')drawPauseScreen();
   else if(state==='gameover'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);drawGameOver()}
