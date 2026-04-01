@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>🧬 Slime Merge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#f0f8f0;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+
+// --- Constants ---
+const FIELD_W=2000,FIELD_H=2000;
+const GRID_SIZE=50;
+const LEVELS=[
+  null,
+  {r:15,color:'#7ED321',name:'ぷち',speed:4},
+  {r:22,color:'#4A90D9',name:'ミニ',speed:3.6},
+  {r:30,color:'#F5A623',name:'ノーマル',speed:3.2},
+  {r:40,color:'#D0021B',name:'デカ',speed:2.7},
+  {r:52,color:'#9013FE',name:'メガ',speed:2.2},
+  {r:66,color:'#FF69B4',name:'ギガ',speed:1.8},
+  {r:82,color:'#FFD700',name:'キング',speed:1.5}
+];
+const MAX_LEVEL=7;
+const TARGET_ENEMIES=20;
+const MAX_PARTICLES=100;
+const MAX_FOODS=40;
+const FOOD_EAT_COUNT=10;
+const MINIMAP_SIZE=120;
+
+// --- Audio ---
+let audioCtx=null;
+function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
+function playTone(freq,dur,type,vol,slide){
+  if(!audioCtx)return;
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type||'sine';o.frequency.setValueAtTime(freq,audioCtx.currentTime);
+  if(slide)o.frequency.linearRampToValueAtTime(slide,audioCtx.currentTime+dur);
+  g.gain.setValueAtTime(vol||0.3,audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur);
+  o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);
+}
+function sfxMerge(){playTone(400,0.3,'sine',0.25,800)}
+function sfxEat(){playTone(200,0.15,'square',0.2,100)}
+function sfxDie(){playTone(600,0.4,'sawtooth',0.25,100)}
+function sfxFood(){playTone(1200,0.1,'sine',0.15)}
+function sfxLevelUp(){playTone(523,0.15,'sine',0.2);setTimeout(()=>playTone(659,0.15,'sine',0.2),150);setTimeout(()=>playTone(784,0.3,'sine',0.25),300)}
+function sfxBounce(){playTone(300,0.1,'triangle',0.15,200)}
+
+// --- State ---
+let state='title'; // title, playing, gameover, clear
+let gameMode='king'; // king, endless
+let player=null;
+let enemies=[];
+let foods=[];
+let particles=[];
+let mergeAnims=[];
+let camera={x:0,y:0};
+let score=0,eatCount=0,foodCount=0,timeLeft=180,survivalTime=0;
+let hiScoreKing=parseInt(localStorage.getItem('slimeMergeHi'))||0;
+let hiScoreEndless=parseInt(localStorage.getItem('slimeMergeHiE'))||0;
+let frameCount=0;
+let W,H;
+// Input
+let inputDir={x:0,y:0};
+let mousePos={x:0,y:0};
+let joystick={active:false,cx:0,cy:0,tx:0,ty:0,id:null};
+let keys={};
+let isMobile=false;
+// Title anim
+let titleSlime={phase:0};
+
+function resize(){
+  W=canvas.width=window.innerWidth*devicePixelRatio;
+  H=canvas.height=window.innerHeight*devicePixelRatio;
+  canvas.style.width=window.innerWidth+'px';
+  canvas.style.height=window.innerHeight+'px';
+  isMobile='ontouchstart' in window||navigator.maxTouchPoints>0;
+}
+window.addEventListener('resize',resize);
+resize();
+
+// --- Entity helpers ---
+function makeSlime(x,y,lv,isPlayer){
+  return{x,y,lv:Math.min(lv,MAX_LEVEL),vx:0,vy:0,isPlayer:!!isPlayer,
+    phase:Math.random()*Math.PI*2,mouthState:'smile',mouthTimer:0,
+    foodEaten:0,aiTimer:0,aiDir:{x:0,y:0},aiBehavior:'wander',
+    merging:false,mergePulse:0,invincible:0,alive:true};
+}
+function slimeRadius(s){return LEVELS[s.lv].r+(Math.sin(s.phase)*2)}
+function slimeBaseRadius(s){return LEVELS[s.lv].r}
+function slimeSpeed(s){return LEVELS[s.lv].speed}
+function slimeColor(s){return LEVELS[s.lv].color}
+
+function spawnFood(){
+  return{x:Math.random()*FIELD_W,y:Math.random()*FIELD_H,phase:Math.random()*Math.PI*2,alive:true};
+}
+
+function spawnEnemy(playerLv){
+  let minLv=Math.max(1,playerLv-2),maxLv=Math.min(MAX_LEVEL,playerLv+2);
+  let lv=minLv+Math.floor(Math.random()*(maxLv-minLv+1));
+  let x=Math.random()*FIELD_W,y=Math.random()*FIELD_H;
+  // Don't spawn too close to player
+  if(player){
+    let dx=x-player.x,dy=y-player.y;
+    if(Math.sqrt(dx*dx+dy*dy)<300){x=(x+FIELD_W/2)%FIELD_W;y=(y+FIELD_H/2)%FIELD_H}
+  }
+  return makeSlime(x,y,lv,false);
+}
+
+function addParticle(x,y,color,count){
+  for(let i=0;i<count&&particles.length<MAX_PARTICLES;i++){
+    let a=Math.random()*Math.PI*2,sp=Math.random()*3+1;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,color,size:Math.random()*4+2});
+  }
+}
+
+// --- Game init ---
+function startGame(mode){
+  initAudio();
+  gameMode=mode;
+  player=makeSlime(FIELD_W/2,FIELD_H/2,1,true);
+  enemies=[];
+  foods=[];
+  particles=[];
+  mergeAnims=[];
+  score=0;eatCount=0;foodCount=0;timeLeft=180;survivalTime=0;frameCount=0;
+  for(let i=0;i<TARGET_ENEMIES;i++)enemies.push(spawnEnemy(1));
+  for(let i=0;i<MAX_FOODS;i++)foods.push(spawnFood());
+  state='playing';
+}
+
+// --- Input ---
+canvas.addEventListener('mousemove',e=>{mousePos.x=e.clientX;mousePos.y=e.clientY});
+canvas.addEventListener('mousedown',e=>{
+  initAudio();
+  if(state==='title')handleTitleClick(e.clientX*devicePixelRatio,e.clientY*devicePixelRatio);
+  else if(state==='gameover'||state==='clear')handleEndClick(e.clientX*devicePixelRatio,e.clientY*devicePixelRatio);
+});
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true});
+window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});
+
+canvas.addEventListener('touchstart',e=>{
+  e.preventDefault();initAudio();
+  if(state==='title'){handleTitleClick(e.touches[0].clientX*devicePixelRatio,e.touches[0].clientY*devicePixelRatio);return}
+  if(state==='gameover'||state==='clear'){handleEndClick(e.touches[0].clientX*devicePixelRatio,e.touches[0].clientY*devicePixelRatio);return}
+  if(state!=='playing')return;
+  for(let t of e.changedTouches){
+    if(!joystick.active){
+      joystick.active=true;joystick.id=t.identifier;
+      joystick.cx=t.clientX*devicePixelRatio;joystick.cy=t.clientY*devicePixelRatio;
+      joystick.tx=joystick.cx;joystick.ty=joystick.cy;
+    }
+  }
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  for(let t of e.changedTouches){
+    if(joystick.active&&t.identifier===joystick.id){
+      joystick.tx=t.clientX*devicePixelRatio;joystick.ty=t.clientY*devicePixelRatio;
+    }
+  }
+},{passive:false});
+canvas.addEventListener('touchend',e=>{
+  e.preventDefault();
+  for(let t of e.changedTouches){
+    if(joystick.active&&t.identifier===joystick.id){joystick.active=false;joystick.id=null}
+  }
+},{passive:false});
+
+function handleTitleClick(cx,cy){
+  let btnW=280*devicePixelRatio/2,btnH=50*devicePixelRatio/2;
+  let midX=W/2,midY=H*0.62;
+  // King button
+  if(cx>midX-btnW&&cx<midX+btnW&&cy>midY-btnH&&cy<midY+btnH){startGame('king');return}
+  // Endless button
+  midY=H*0.72;
+  if(cx>midX-btnW&&cx<midX+btnW&&cy>midY-btnH&&cy<midY+btnH){startGame('endless');return}
+}
+function handleEndClick(cx,cy){
+  let btnW=200*devicePixelRatio/2,btnH=40*devicePixelRatio/2;
+  let midX=W/2;
+  if(state==='gameover'){
+    // Retry
+    let y1=H*0.58;
+    if(cx>midX-btnW&&cx<midX+btnW&&cy>y1-btnH&&cy<y1+btnH){startGame(gameMode);return}
+    // Title
+    let y2=H*0.66;
+    if(cx>midX-btnW&&cx<midX+btnW&&cy>y2-btnH&&cy<y2+btnH){state='title';return}
+  }else if(state==='clear'){
+    // Endless
+    let y1=H*0.6+20*devicePixelRatio;
+    if(cx>midX-btnW&&cx<midX+btnW&&cy>y1-btnH&&cy<y1+btnH){
+      gameMode='endless';timeLeft=9999;state='playing';return}
+    // Title
+    let y2=H*0.68+20*devicePixelRatio;
+    if(cx>midX-btnW&&cx<midX+btnW&&cy>y2-btnH&&cy<y2+btnH){state='title';return}
+  }
+}
+
+// --- Update ---
+function getInputDir(){
+  let dx=0,dy=0;
+  if(isMobile&&joystick.active){
+    dx=joystick.tx-joystick.cx;dy=joystick.ty-joystick.cy;
+    let len=Math.sqrt(dx*dx+dy*dy);
+    if(len>10){dx/=len;dy/=len}else{dx=0;dy=0}
+  }else{
+    if(keys['w']||keys['arrowup'])dy=-1;
+    if(keys['s']||keys['arrowdown'])dy=1;
+    if(keys['a']||keys['arrowleft'])dx=-1;
+    if(keys['d']||keys['arrowright'])dx=1;
+    if(dx===0&&dy===0&&!isMobile){
+      // Mouse direction
+      let sx=W/2,sy=H/2;
+      dx=mousePos.x*devicePixelRatio-sx;dy=mousePos.y*devicePixelRatio-sy;
+      let len=Math.sqrt(dx*dx+dy*dy);
+      if(len>30){dx/=len;dy/=len}else{dx=0;dy=0}
+    }
+    let len=Math.sqrt(dx*dx+dy*dy);
+    if(len>1){dx/=len;dy/=len}
+  }
+  return{x:dx,y:dy};
+}
+
+function clampToField(s){
+  let r=slimeBaseRadius(s);
+  if(s.x<r){s.x=r;s.vx=Math.abs(s.vx)*0.5}
+  if(s.x>FIELD_W-r){s.x=FIELD_W-r;s.vx=-Math.abs(s.vx)*0.5}
+  if(s.y<r){s.y=r;s.vy=Math.abs(s.vy)*0.5}
+  if(s.y>FIELD_H-r){s.y=FIELD_H-r;s.vy=-Math.abs(s.vy)*0.5}
+}
+
+function updateAI(e){
+  e.aiTimer--;
+  if(e.aiTimer<=0){
+    let r=Math.random();
+    if(r<0.7)e.aiBehavior='wander';
+    else if(r<0.9)e.aiBehavior='chase';
+    else e.aiBehavior='flee';
+    e.aiTimer=60+Math.random()*120;
+    if(e.aiBehavior==='wander'){
+      let a=Math.random()*Math.PI*2;
+      e.aiDir={x:Math.cos(a),y:Math.sin(a)};
+    }
+  }
+  if(e.aiBehavior==='chase'){
+    // Find nearest smaller target
+    let best=null,bestD=400;
+    let targets=[player,...enemies];
+    for(let t of targets){
+      if(t===e||!t.alive)continue;
+      if(e.lv-t.lv>=2){
+        let d=Math.sqrt((t.x-e.x)**2+(t.y-e.y)**2);
+        if(d<bestD){bestD=d;best=t}
+      }
+    }
+    if(best){
+      let dx=best.x-e.x,dy=best.y-e.y,len=Math.sqrt(dx*dx+dy*dy);
+      if(len>0){e.aiDir={x:dx/len,y:dy/len}}
+    }else{e.aiBehavior='wander';let a=Math.random()*Math.PI*2;e.aiDir={x:Math.cos(a),y:Math.sin(a)}}
+  }else if(e.aiBehavior==='flee'){
+    let best=null,bestD=300;
+    let targets=[player,...enemies];
+    for(let t of targets){
+      if(t===e||!t.alive)continue;
+      if(t.lv-e.lv>=2){
+        let d=Math.sqrt((t.x-e.x)**2+(t.y-e.y)**2);
+        if(d<bestD){bestD=d;best=t}
+      }
+    }
+    if(best){
+      let dx=e.x-best.x,dy=e.y-best.y,len=Math.sqrt(dx*dx+dy*dy);
+      if(len>0){e.aiDir={x:dx/len,y:dy/len}}
+    }else{e.aiBehavior='wander';let a=Math.random()*Math.PI*2;e.aiDir={x:Math.cos(a),y:Math.sin(a)}}
+  }
+  let sp=slimeSpeed(e)*0.7;
+  e.vx+=(e.aiDir.x*sp-e.vx)*0.1;
+  e.vy+=(e.aiDir.y*sp-e.vy)*0.1;
+  e.x+=e.vx;e.y+=e.vy;
+  clampToField(e);
+}
+
+function checkCollision(a,b){
+  let ra=slimeBaseRadius(a),rb=slimeBaseRadius(b);
+  let dx=b.x-a.x,dy=b.y-a.y,dist=Math.sqrt(dx*dx+dy*dy);
+  return dist<ra+rb;
+}
+
+function handleInteraction(a,b){
+  // a and b collide
+  if(!a.alive||!b.alive)return;
+  if(a.invincible>0||b.invincible>0)return;
+  let diff=a.lv-b.lv;
+  if(diff===0){
+    // Merge - both become one level higher, kept by a
+    if(a.lv>=MAX_LEVEL&&gameMode==='king'){
+      // Both at max in king mode, bounce
+      bounceApart(a,b);return;
+    }
+    if(a.lv>=MAX_LEVEL){bounceApart(a,b);return}
+    b.alive=false;
+    a.lv=Math.min(a.lv+1,MAX_LEVEL);
+    a.foodEaten=0;
+    a.mergePulse=20;
+    a.invincible=30;
+    addParticle(a.x,a.y,slimeColor(a),15);
+    sfxMerge();
+    if(a.isPlayer){
+      sfxLevelUp();
+      if(a.lv>=MAX_LEVEL&&gameMode==='king'){
+        let finalScore=a.lv*1000+eatCount*100+Math.floor(timeLeft)*10;
+        score=finalScore;
+        if(score>hiScoreKing){hiScoreKing=score;localStorage.setItem('slimeMergeHi',''+score)}
+        state='clear';return;
+      }
+    }
+  }else if(Math.abs(diff)===1){
+    // Bounce
+    bounceApart(a,b);
+    sfxBounce();
+  }else if(diff>=2){
+    // a eats b
+    b.alive=false;
+    a.mouthState='eat';a.mouthTimer=15;
+    addParticle(b.x,b.y,slimeColor(b),8);
+    sfxEat();
+    if(a.isPlayer){eatCount++;score+=100}
+  }else if(diff<=-2){
+    // b eats a
+    a.alive=false;
+    b.mouthState='eat';b.mouthTimer=15;
+    addParticle(a.x,a.y,slimeColor(a),8);
+    sfxEat();
+    if(a.isPlayer){
+      sfxDie();
+      let finalScore=a.lv*1000+eatCount*100;
+      score=finalScore;
+      state='gameover';return;
+    }
+    if(b.isPlayer){eatCount++;score+=100}
+  }
+}
+
+function bounceApart(a,b){
+  let dx=b.x-a.x,dy=b.y-a.y,dist=Math.sqrt(dx*dx+dy*dy)||1;
+  let nx=dx/dist,ny=dy/dist;
+  let force=5;
+  a.vx-=nx*force;a.vy-=ny*force;
+  b.vx+=nx*force;b.vy+=ny*force;
+  a.invincible=10;b.invincible=10;
+}
+
+function update(){
+  if(state!=='playing')return;
+  frameCount++;
+  // Timer
+  if(gameMode==='king'){
+    timeLeft-=1/60;
+    if(timeLeft<=0){
+      timeLeft=0;
+      let finalScore=player.lv*1000+eatCount*100;
+      score=finalScore;
+      state='gameover';return;
+    }
+  }else{
+    survivalTime+=1/60;
+  }
+
+  // Input
+  inputDir=getInputDir();
+  let sp=slimeSpeed(player);
+  player.vx+=(inputDir.x*sp-player.vx)*0.2;
+  player.vy+=(inputDir.y*sp-player.vy)*0.2;
+  player.x+=player.vx;player.y+=player.vy;
+  clampToField(player);
+  player.phase+=0.08;
+  if(player.invincible>0)player.invincible--;
+  if(player.mouthTimer>0){player.mouthTimer--;if(player.mouthTimer<=0)player.mouthState='smile'}
+  if(player.mergePulse>0)player.mergePulse--;
+
+  // Food pickup
+  for(let f of foods){
+    if(!f.alive)continue;
+    f.phase+=0.05;
+    let dx=f.x-player.x,dy=f.y-player.y;
+    if(Math.sqrt(dx*dx+dy*dy)<slimeBaseRadius(player)+8){
+      f.alive=false;
+      player.foodEaten++;
+      sfxFood();
+      addParticle(f.x,f.y,'#fff',3);
+      if(player.foodEaten>=FOOD_EAT_COUNT&&player.lv<MAX_LEVEL){
+        player.lv++;player.foodEaten=0;player.mergePulse=20;player.invincible=30;
+        sfxLevelUp();
+        addParticle(player.x,player.y,slimeColor(player),15);
+        if(player.lv>=MAX_LEVEL&&gameMode==='king'){
+          let finalScore=player.lv*1000+eatCount*100+Math.floor(timeLeft)*10;
+          score=finalScore;
+          if(score>hiScoreKing){hiScoreKing=score;localStorage.setItem('slimeMergeHi',''+score)}
+          state='clear';return;
+        }
+      }
+    }
+  }
+
+  // Update enemies
+  for(let e of enemies){
+    if(!e.alive)continue;
+    e.phase+=0.08;
+    if(e.invincible>0)e.invincible--;
+    if(e.mouthTimer>0){e.mouthTimer--;if(e.mouthTimer<=0)e.mouthState='smile'}
+    if(e.mergePulse>0)e.mergePulse--;
+    updateAI(e);
+    // Enemy eat food
+    for(let f of foods){
+      if(!f.alive)continue;
+      let dx=f.x-e.x,dy=f.y-e.y;
+      if(Math.sqrt(dx*dx+dy*dy)<slimeBaseRadius(e)+8){
+        f.alive=false;
+        e.foodEaten++;
+        if(e.foodEaten>=FOOD_EAT_COUNT&&e.lv<MAX_LEVEL){
+          e.lv++;e.foodEaten=0;e.mergePulse=20;e.invincible=30;
+        }
+      }
+    }
+  }
+
+  // Player-enemy collision
+  for(let e of enemies){
+    if(!e.alive||!player.alive)continue;
+    if(checkCollision(player,e)){
+      handleInteraction(player,e);
+      if(state!=='playing')return;
+    }
+  }
+
+  // Enemy-enemy collision
+  for(let i=0;i<enemies.length;i++){
+    for(let j=i+1;j<enemies.length;j++){
+      if(!enemies[i].alive||!enemies[j].alive)continue;
+      if(checkCollision(enemies[i],enemies[j])){
+        handleInteraction(enemies[i],enemies[j]);
+      }
+    }
+  }
+
+  // Remove dead enemies, respawn
+  enemies=enemies.filter(e=>e.alive);
+  while(enemies.length<TARGET_ENEMIES)enemies.push(spawnEnemy(player.lv));
+
+  // Respawn foods
+  foods=foods.filter(f=>f.alive);
+  while(foods.length<MAX_FOODS)foods.push(spawnFood());
+
+  // Update particles
+  for(let p of particles){
+    p.x+=p.vx;p.y+=p.vy;p.life-=0.03;p.vx*=0.95;p.vy*=0.95;
+  }
+  particles=particles.filter(p=>p.life>0);
+
+  // Camera
+  camera.x=player.x-W/(2*devicePixelRatio);
+  camera.y=player.y-H/(2*devicePixelRatio);
+
+  // Endless score
+  if(gameMode==='endless'){
+    score=player.lv*1000+eatCount*100+Math.floor(survivalTime)*5;
+    if(score>hiScoreEndless){hiScoreEndless=score;localStorage.setItem('slimeMergeHiE',''+score)}
+  }
+}
+
+// --- Drawing ---
+function drawSlime(s,ox,oy){
+  let x=s.x-ox,y=s.y-oy;
+  // Off screen?
+  let screenR=slimeBaseRadius(s)+20;
+  let sw=W/devicePixelRatio,sh=H/devicePixelRatio;
+  if(x<-screenR||x>sw+screenR||y<-screenR||y>sh+screenR)return;
+
+  let br=slimeBaseRadius(s);
+  let r=br+(Math.sin(s.phase)*2);
+  if(s.mergePulse>0)r+=Math.sin(s.mergePulse*0.5)*5;
+
+  ctx.save();
+  ctx.translate(x*devicePixelRatio,y*devicePixelRatio);
+  let sc=devicePixelRatio;
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.1)';
+  ctx.beginPath();
+  ctx.ellipse(0,r*sc*0.85,r*sc*0.8,r*sc*0.3,0,0,Math.PI*2);
+  ctx.fill();
+
+  // Body
+  let col=slimeColor(s);
+  if(s.invincible>0&&Math.floor(s.invincible/3)%2===0){col='rgba(255,255,255,0.7)'}
+  ctx.fillStyle=col;
+  ctx.beginPath();
+  ctx.arc(0,0,r*sc,0,Math.PI*2);
+  ctx.fill();
+
+  // Highlight
+  ctx.fillStyle='rgba(255,255,255,0.3)';
+  ctx.beginPath();
+  ctx.arc(-r*sc*0.25,-r*sc*0.25,r*sc*0.35,0,Math.PI*2);
+  ctx.fill();
+
+  // Eyes
+  let eyeOff=r*0.3*sc;
+  let eyeR=r*0.18*sc;
+  let pupilR=eyeR*0.55;
+  let lookX=(s.vx||0)*0.3*sc,lookY=(s.vy||0)*0.3*sc;
+  let lm=eyeR*0.3;
+  let ll=Math.sqrt(lookX*lookX+lookY*lookY);
+  if(ll>lm){lookX=lookX/ll*lm;lookY=lookY/ll*lm}
+  // Left eye
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(-eyeOff,-r*0.15*sc,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#333';
+  ctx.beginPath();ctx.arc(-eyeOff+lookX,-r*0.15*sc+lookY,pupilR,0,Math.PI*2);ctx.fill();
+  // Right eye
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(eyeOff,-r*0.15*sc,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#333';
+  ctx.beginPath();ctx.arc(eyeOff+lookX,-r*0.15*sc+lookY,pupilR,0,Math.PI*2);ctx.fill();
+
+  // Mouth
+  ctx.strokeStyle='#333';ctx.lineWidth=2*sc*0.7;ctx.lineCap='round';
+  if(s.mouthState==='eat'){
+    ctx.beginPath();ctx.arc(0,r*0.15*sc,r*0.2*sc,0,Math.PI*2);ctx.stroke();
+  }else if(s.mouthState==='hurt'){
+    ctx.beginPath();
+    ctx.moveTo(-r*0.15*sc,r*0.2*sc);ctx.lineTo(-r*0.05*sc,r*0.1*sc);ctx.lineTo(r*0.05*sc,r*0.2*sc);ctx.lineTo(r*0.15*sc,r*0.1*sc);
+    ctx.stroke();
+  }else{
+    ctx.beginPath();ctx.arc(0,r*0.08*sc,r*0.18*sc,0.1*Math.PI,0.9*Math.PI);ctx.stroke();
+  }
+
+  // Level text
+  ctx.fillStyle='rgba(255,255,255,0.7)';
+  ctx.font='bold '+Math.floor(r*0.5*sc)+'px sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('Lv'+s.lv,0,r*0.45*sc);
+
+  ctx.restore();
+}
+
+function drawFood(f,ox,oy){
+  let x=(f.x-ox)*devicePixelRatio,y=(f.y-oy)*devicePixelRatio;
+  if(x<-20||x>W+20||y<-20||y>H+20)return;
+  let hue=(f.phase*100+frameCount*2)%360;
+  let r=3+Math.sin(f.phase+frameCount*0.05)*1.5;
+  ctx.fillStyle='hsl('+hue+',100%,70%)';
+  ctx.globalAlpha=0.7+Math.sin(f.phase+frameCount*0.08)*0.3;
+  ctx.beginPath();ctx.arc(x,y,r*devicePixelRatio,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=1;
+}
+
+function drawParticle(p,ox,oy){
+  let x=(p.x-ox)*devicePixelRatio,y=(p.y-oy)*devicePixelRatio;
+  ctx.globalAlpha=p.life;
+  ctx.fillStyle=p.color;
+  ctx.beginPath();ctx.arc(x,y,p.size*devicePixelRatio*p.life,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=1;
+}
+
+function drawGrid(ox,oy){
+  ctx.strokeStyle='#E8E8E8';ctx.lineWidth=1;
+  let startX=Math.floor(ox/GRID_SIZE)*GRID_SIZE;
+  let startY=Math.floor(oy/GRID_SIZE)*GRID_SIZE;
+  let endX=ox+W/devicePixelRatio+GRID_SIZE;
+  let endY=oy+H/devicePixelRatio+GRID_SIZE;
+  ctx.beginPath();
+  for(let gx=startX;gx<=endX;gx+=GRID_SIZE){
+    let sx=(gx-ox)*devicePixelRatio;
+    ctx.moveTo(sx,0);ctx.lineTo(sx,H);
+  }
+  for(let gy=startY;gy<=endY;gy+=GRID_SIZE){
+    let sy=(gy-oy)*devicePixelRatio;
+    ctx.moveTo(0,sy);ctx.lineTo(W,sy);
+  }
+  ctx.stroke();
+}
+
+function drawFieldBorder(ox,oy){
+  ctx.strokeStyle='#aaa';ctx.lineWidth=3*devicePixelRatio;
+  let bx=-ox*devicePixelRatio,by=-oy*devicePixelRatio;
+  ctx.strokeRect(bx,by,FIELD_W*devicePixelRatio,FIELD_H*devicePixelRatio);
+}
+
+function drawMinimap(){
+  let ms=MINIMAP_SIZE*devicePixelRatio;
+  let mx=W-ms-10*devicePixelRatio,my=10*devicePixelRatio;
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  ctx.fillRect(mx,my,ms,ms);
+  ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1;
+  ctx.strokeRect(mx,my,ms,ms);
+  let scale=ms/FIELD_W;
+  // Enemies
+  for(let e of enemies){
+    if(!e.alive)continue;
+    ctx.fillStyle=slimeColor(e);
+    ctx.beginPath();ctx.arc(mx+e.x*scale,my+e.y*scale,Math.max(2,LEVELS[e.lv].r*scale),0,Math.PI*2);ctx.fill();
+  }
+  // Player
+  if(player&&player.alive){
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(mx+player.x*scale,my+player.y*scale,4*devicePixelRatio,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.stroke();
+  }
+}
+
+function drawHUD(){
+  let sc=devicePixelRatio;
+  let fs=16*sc;
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillRect(8*sc,8*sc,180*sc,gameMode==='king'?80*sc:70*sc);
+  ctx.fillStyle='#fff';ctx.font='bold '+fs+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+  let lvInfo=LEVELS[player.lv];
+  ctx.fillText('Lv'+player.lv+' '+lvInfo.name,16*sc,14*sc);
+  ctx.font=''+(fs*0.85)+'px sans-serif';
+  ctx.fillText('スコア: '+score,16*sc,36*sc);
+  if(gameMode==='king'){
+    let t=Math.max(0,Math.ceil(timeLeft));
+    ctx.fillText('⏱ '+t+'秒',16*sc,56*sc);
+  }else{
+    ctx.fillText('生存: '+Math.floor(survivalTime)+'秒',16*sc,56*sc);
+  }
+  // Food progress
+  if(player.lv<MAX_LEVEL){
+    let barX=16*sc,barY=gameMode==='king'?76*sc:72*sc,barW=160*sc,barH=6*sc;
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(barX,barY,barW,barH);
+    ctx.fillStyle='#7ED321';ctx.fillRect(barX,barY,barW*(player.foodEaten/FOOD_EAT_COUNT),barH);
+  }
+}
+
+function drawJoystick(){
+  if(!isMobile||state!=='playing')return;
+  let sc=devicePixelRatio;
+  let baseR=50*sc,knobR=22*sc;
+  let cx,cy;
+  if(joystick.active){
+    cx=joystick.cx;cy=joystick.cy;
+  }else{
+    cx=90*sc;cy=H-90*sc;
+  }
+  // Base
+  ctx.fillStyle='rgba(255,255,255,0.2)';
+  ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=2*sc;
+  ctx.beginPath();ctx.arc(cx,cy,baseR,0,Math.PI*2);ctx.fill();ctx.stroke();
+  // Knob
+  let kx=cx,ky=cy;
+  if(joystick.active){
+    let dx=joystick.tx-joystick.cx,dy=joystick.ty-joystick.cy;
+    let len=Math.sqrt(dx*dx+dy*dy);
+    if(len>baseR){dx=dx/len*baseR;dy=dy/len*baseR}
+    kx=cx+dx;ky=cy+dy;
+  }
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.beginPath();ctx.arc(kx,ky,knobR,0,Math.PI*2);ctx.fill();
+}
+
+// --- Screens ---
+function drawTitle(){
+  ctx.fillStyle='#f0f8f0';ctx.fillRect(0,0,W,H);
+  let sc=devicePixelRatio;
+  // Grid bg
+  ctx.strokeStyle='#E8E8E8';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=GRID_SIZE*sc){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=GRID_SIZE*sc){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+
+  let midX=W/2;
+  // Title
+  ctx.fillStyle='#333';ctx.font='bold '+Math.floor(40*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('🧬 Slime Merge',midX,H*0.15);
+  ctx.font=''+(18*sc)+'px sans-serif';ctx.fillStyle='#666';
+  ctx.fillText('合成して、最強になれ。',midX,H*0.23);
+
+  // Animated slime
+  titleSlime.phase+=0.04;
+  let tr=50+Math.sin(titleSlime.phase)*5;
+  let tsc=sc;
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.1)';
+  ctx.beginPath();ctx.ellipse(midX,H*0.43+tr*tsc*0.7,tr*tsc*0.7,tr*tsc*0.25,0,0,Math.PI*2);ctx.fill();
+  // Body
+  ctx.fillStyle='#7ED321';
+  ctx.beginPath();ctx.arc(midX,H*0.4,tr*tsc,0,Math.PI*2);ctx.fill();
+  // Highlight
+  ctx.fillStyle='rgba(255,255,255,0.3)';
+  ctx.beginPath();ctx.arc(midX-tr*tsc*0.2,H*0.4-tr*tsc*0.25,tr*tsc*0.35,0,Math.PI*2);ctx.fill();
+  // Eyes
+  let eyeR=tr*0.18*tsc,eyeOff=tr*0.3*tsc;
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(midX-eyeOff,H*0.4-tr*0.15*tsc,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(midX+eyeOff,H*0.4-tr*0.15*tsc,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#333';
+  let px=Math.sin(titleSlime.phase*0.7)*eyeR*0.2;
+  ctx.beginPath();ctx.arc(midX-eyeOff+px,H*0.4-tr*0.15*tsc,eyeR*0.55,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(midX+eyeOff+px,H*0.4-tr*0.15*tsc,eyeR*0.55,0,Math.PI*2);ctx.fill();
+  // Mouth
+  ctx.strokeStyle='#333';ctx.lineWidth=2*tsc;ctx.lineCap='round';
+  ctx.beginPath();ctx.arc(midX,H*0.4+tr*0.08*tsc,tr*0.18*tsc,0.1*Math.PI,0.9*Math.PI);ctx.stroke();
+
+  // Buttons
+  let btnW=220*sc,btnH=48*sc;
+  // King mode
+  let by1=H*0.62;
+  ctx.fillStyle='#4A90D9';
+  ctx.beginPath();
+  roundRect(ctx,midX-btnW/2,by1-btnH/2,btnW,btnH,12*sc);
+  ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold '+(18*sc)+'px sans-serif';
+  ctx.fillText('▶ キングを目指せ',midX,by1);
+
+  // Endless
+  let by2=H*0.72;
+  ctx.fillStyle='#9013FE';
+  ctx.beginPath();
+  roundRect(ctx,midX-btnW/2,by2-btnH/2,btnW,btnH,12*sc);
+  ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.fillText('♾️ エンドレス',midX,by2);
+
+  // Hiscore
+  ctx.fillStyle='#999';ctx.font=''+(14*sc)+'px sans-serif';
+  ctx.fillText('ハイスコア(キング): '+hiScoreKing+'  (エンドレス): '+hiScoreEndless,midX,H*0.85);
+}
+
+function drawGameOver(){
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
+  let sc=devicePixelRatio,midX=W/2;
+  ctx.fillStyle='#ff4444';ctx.font='bold '+(36*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('食べられた！',midX,H*0.3);
+  ctx.fillStyle='#fff';ctx.font=''+(20*sc)+'px sans-serif';
+  ctx.fillText('到達レベル: Lv'+player.lv+' '+LEVELS[player.lv].name,midX,H*0.4);
+  ctx.fillText('スコア: '+score,midX,H*0.46);
+  ctx.fillText('捕食数: '+eatCount,midX,H*0.52);
+
+  let btnW=180*sc,btnH=44*sc;
+  // Retry
+  let by1=H*0.58;
+  ctx.fillStyle='#4A90D9';
+  roundRect(ctx,midX-btnW/2,by1-btnH/2,btnW,btnH,10*sc);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold '+(16*sc)+'px sans-serif';
+  ctx.fillText('🔄 リトライ',midX,by1);
+  // Title
+  let by2=H*0.66;
+  ctx.fillStyle='#666';
+  roundRect(ctx,midX-btnW/2,by2-btnH/2,btnW,btnH,10*sc);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.fillText('🏠 タイトル',midX,by2);
+}
+
+function drawClear(){
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
+  let sc=devicePixelRatio,midX=W/2;
+  ctx.fillStyle='#FFD700';ctx.font='bold '+(36*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('👑 キング達成！',midX,H*0.28);
+  ctx.fillStyle='#fff';ctx.font=''+(20*sc)+'px sans-serif';
+  ctx.fillText('スコア: '+score,midX,H*0.38);
+  ctx.fillText('残り時間: '+Math.ceil(timeLeft)+'秒',midX,H*0.44);
+  ctx.fillText('捕食数: '+eatCount,midX,H*0.50);
+  ctx.fillStyle='#FFD700';ctx.font='bold '+(18*sc)+'px sans-serif';
+  ctx.fillText('ハイスコア: '+hiScoreKing,midX,H*0.56);
+
+  let btnW=200*sc,btnH=44*sc;
+  let by1=H*0.6+20*sc;
+  ctx.fillStyle='#9013FE';
+  roundRect(ctx,midX-btnW/2,by1-btnH/2,btnW,btnH,10*sc);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold '+(16*sc)+'px sans-serif';
+  ctx.fillText('♾️ エンドレスへ',midX,by1);
+  let by2=H*0.68+20*sc;
+  ctx.fillStyle='#666';
+  roundRect(ctx,midX-btnW/2,by2-btnH/2,btnW,btnH,10*sc);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.fillText('🏠 タイトル',midX,by2);
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+// --- Main loop ---
+function loop(){
+  update();
+  ctx.clearRect(0,0,W,H);
+
+  if(state==='title'){
+    drawTitle();
+  }else if(state==='playing'){
+    let ox=camera.x,oy=camera.y;
+    ctx.fillStyle='#f0f8f0';ctx.fillRect(0,0,W,H);
+    drawGrid(ox,oy);
+    drawFieldBorder(ox,oy);
+    // Foods
+    for(let f of foods)if(f.alive)drawFood(f,ox,oy);
+    // Particles
+    for(let p of particles)drawParticle(p,ox,oy);
+    // Enemies
+    for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
+    // Player
+    if(player.alive)drawSlime(player,ox,oy);
+    // UI
+    drawHUD();
+    drawMinimap();
+    drawJoystick();
+  }else if(state==='gameover'){
+    // Draw game behind
+    let ox=camera.x,oy=camera.y;
+    ctx.fillStyle='#f0f8f0';ctx.fillRect(0,0,W,H);
+    drawGrid(ox,oy);
+    for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
+    drawGameOver();
+  }else if(state==='clear'){
+    let ox=camera.x,oy=camera.y;
+    ctx.fillStyle='#f0f8f0';ctx.fillRect(0,0,W,H);
+    drawGrid(ox,oy);
+    for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
+    if(player.alive)drawSlime(player,ox,oy);
+    drawClear();
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// Fix clear screen button positions
+function fixClearButtons(){
+  // Adjusted in handleEndClick
+}
+
+loop();
+</script>
+</body>
+</html>
