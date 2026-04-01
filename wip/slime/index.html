@@ -15,7 +15,8 @@ canvas{display:block;width:100%;height:100%}
 <script>
 'use strict';
 const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
-const FIELD_W=2000,FIELD_H=2000,GRID_SIZE=50;
+let FIELD_W=2000,FIELD_H=2000;
+const GRID_SIZE=50;
 const BASE_LEVELS=[null,
 {r:15,color:'#7ED321',name:'ぷち',speed:4},
 {r:22,color:'#4A90D9',name:'ミニ',speed:3.6},
@@ -43,7 +44,7 @@ const SKILLS=[
 {id:'venom',name:'Venom',desc:'触れた敵を5秒間90%減速（ほぼ停止）',icon:'🐍',cat:'atk',rarity:'common'},
 {id:'shockwave',name:'Shockwave',desc:'捕食時、半径350px内の敵を画面端まで吹き飛ばす',icon:'💥',cat:'atk',rarity:'rare'},
 {id:'chain_lightning',name:'Chain Lightning',desc:'捕食時、120px内の同Lv敵も連鎖消滅',icon:'⚡',cat:'atk',rarity:'rare'},
-{id:'berserker',name:'Berserker',desc:'残り時間90秒以下で捕食範囲が2倍に',icon:'😡',cat:'atk',rarity:'common'},
+{id:'black_hole',name:'Black Hole',desc:'常時500px内の食べ物と格下敵を強力に吸引',icon:'🕳️',cat:'atk',rarity:'epic'},
 {id:'execute',name:'Execute',desc:'食べ物を食べた敵を3秒間Lv無視で捕食',icon:'🗡️',cat:'atk',rarity:'rare'},
 {id:'piercing',name:'Piercing',desc:'捕食後に減速しない（突き抜ける）',icon:'🔱',cat:'atk',rarity:'common'},
 {id:'ambush',name:'Ambush',desc:'2秒静止後の捕食スコアが3倍に',icon:'🥷',cat:'atk',rarity:'common'},
@@ -57,15 +58,15 @@ const SKILLS=[
 {id:'inferno',name:'Inferno',desc:'通った跡に炎を残し、格下敵を消滅',icon:'🔥',cat:'atk',rarity:'rare'},
 {id:'frost_bite',name:'Frost Bite',desc:'捕食時、100px内の敵を1秒間凍結',icon:'❄️',cat:'atk',rarity:'common'},
 {id:'phantom_strike',name:'Phantom Strike',desc:'捕食成功時に0.5秒間無敵になる',icon:'👤',cat:'atk',rarity:'common'},
-{id:'blood_moon',name:'Blood Moon',desc:'残り時間90秒以下で捕食スコア2倍',icon:'🌙',cat:'atk',rarity:'rare'},
+{id:'mirror_world',name:'Mirror World',desc:'自分の分身が反対方向に移動。分身も捕食する',icon:'🪞',cat:'atk',rarity:'legendary'},
 {id:'overwhelm',name:'Overwhelm',desc:'2体以上同時接触で格下を全て捕食',icon:'💀',cat:'atk',rarity:'epic'},
 {id:'reaper',name:'Reaper',desc:'10秒以上生存した同Lv以下の敵を即捕食',icon:'☠️',cat:'atk',rarity:'epic'},
 {id:'parasite',name:'Parasite',desc:'捕食位置にLv1の味方スライムを生成',icon:'🦠',cat:'atk',rarity:'rare'},
 {id:'thunderclap',name:'Thunderclap',desc:'LvUP時に200px内の同Lv以下の敵を雷撃',icon:'⛈️',cat:'atk',rarity:'rare'},
 {id:'blade_dance',name:'Blade Dance',desc:'移動速度に比例して捕食範囲が拡大',icon:'💃',cat:'atk',rarity:'rare'},
-{id:'corrosion',name:'Corrosion',desc:'1Lv上の敵に3秒接触でそのLvを1下げる',icon:'🧪',cat:'atk',rarity:'epic'},
+{id:'tsunami_wave',name:'Tsunami Wave',desc:'5秒毎に移動方向に巨大な波。当たった格下は全消滅',icon:'🌊',cat:'atk',rarity:'epic'},
 {id:'smite',name:'Smite',desc:'最高Lvの敵を5秒間マーク→Lv無視で捕食',icon:'⚔️',cat:'atk',rarity:'epic'},
-{id:'leech',name:'Leech',desc:'捕食成功のたびに制限時間+3秒',icon:'🩸',cat:'atk',rarity:'common'},
+{id:'clone_army',name:'Clone Army',desc:'捕食するたびにLv1の味方を1体生成（最大5体）',icon:'👥',cat:'atk',rarity:'epic'},
 {id:'critical_mass',name:'Critical Mass',desc:'Lv10以上で全スコア獲得量が2倍',icon:'☢️',cat:'atk',rarity:'legendary'},
 {id:'annihilation',name:'Annihilation',desc:'Lv差3以上の敵は接触するだけで即消滅',icon:'💫',cat:'atk',rarity:'legendary'},
 // DEF 20
@@ -76,12 +77,13 @@ const SKILLS=[
 {id:'resilience',name:'Resilience',desc:'被弾時Lv-1で生存（1回限り）',icon:'💪',cat:'def',rarity:'common'},
 {id:'sanctuary',name:'Sanctuary',desc:'2秒静止でバリア発動→3秒間無敵',icon:'🏛️',cat:'def',rarity:'rare'},
 {id:'evasion',name:'Evasion',desc:'格上の敵が150px内に接近で自動回避',icon:'💨',cat:'def',rarity:'common'},
-{id:'fortify',name:'Fortify',desc:'壁際にいる間、1Lv上の敵に耐えられる',icon:'🏰',cat:'def',rarity:'common'},
+{id:'infinite_series',name:'Infinite Series',desc:'∞ 敵が近づくほど減速し、ゼロ距離では速度0に。自分から近づく分にはOK',icon:'♾️',cat:'def',rarity:'legendary'},
 {id:'mirror_shield',name:'Mirror Shield',desc:'格上の敵を3倍速で弾き返す（5秒CD）',icon:'🪩',cat:'def',rarity:'rare'},
 {id:'second_wind',name:'Second Wind',desc:'死亡時にLv1で復活（1回限り）',icon:'🌬️',cat:'def',rarity:'legendary'},
 {id:'stealth',name:'Stealth',desc:'3秒間静止で透明化（敵に無視される）',icon:'🫥',cat:'def',rarity:'common'},
 {id:'warp',name:'Warp',desc:'格上接近時にランダム位置へ瞬間移動（15秒CD）',icon:'🌐',cat:'def',rarity:'rare'},
-{id:'iron_skin',name:'Iron Skin',desc:'LvUP毎に制限時間+5秒',icon:'🦾',cat:'def',rarity:'rare'},
+{id:'time_freeze',name:'Time Freeze',desc:'15秒毎に3秒間、自分以外が完全停止。画面が青白くなる',icon:'🧊',cat:'def',rarity:'legendary'},
+{id:'juggernaut',name:'Juggernaut',desc:'移動中は1Lv上の敵にも耐えられる（止まると無効）',icon:'🚂',cat:'def',rarity:'rare'},
 {id:'time_stop',name:'Time Stop',desc:'格上接近時に300px内の敵を2秒停止（20秒CD）',icon:'⏱️',cat:'def',rarity:'epic'},
 {id:'guardian_angel',name:'Guardian Angel',desc:'Lv差2以上の敵から自動ダッシュ回避',icon:'👼',cat:'def',rarity:'epic'},
 {id:'cocoon',name:'Cocoon',desc:'死亡時→繭化→Lv-2で復活（1回限り）',icon:'🐛',cat:'def',rarity:'rare'},
@@ -105,11 +107,11 @@ const SKILLS=[
 {id:'homing',name:'Homing',desc:'300px内の最寄り食べ物へ微調整移動',icon:'🧭',cat:'mov',rarity:'common'},
 {id:'rocket',name:'Rocket',desc:'3秒チャージ後に超高速直線移動',icon:'🚀',cat:'mov',rarity:'epic'},
 {id:'shadow_step',name:'Shadow Step',desc:'捕食位置に影を残し5秒後にワープ可能',icon:'👣',cat:'mov',rarity:'epic'},
-{id:'levitation',name:'Levitation',desc:'壁を3秒間通過できる（10秒CD）',icon:'🕊️',cat:'mov',rarity:'common'},
-{id:'slingshot',name:'Slingshot',desc:'壁に当たると3倍速で反射',icon:'🏹',cat:'mov',rarity:'common'},
+{id:'speed_demon',name:'Speed Demon',desc:'移動速度+200%。圧倒的に速い',icon:'👹',cat:'mov',rarity:'rare'},
+{id:'exp_magnet',name:'EXP Magnet',desc:'画面内の全食べ物を自分に引き寄せる',icon:'🧲',cat:'mov',rarity:'rare'},
 {id:'vortex',name:'Vortex',desc:'200px内の食べ物と150px内の小敵を引き寄せ',icon:'🌀',cat:'mov',rarity:'common'},
 {id:'comet',name:'Comet',desc:'直線200px以上の移動で速度+50%',icon:'☄️',cat:'mov',rarity:'rare'},
-{id:'swap',name:'Swap',desc:'最寄り同Lv敵と位置を交換（15秒CD）',icon:'🔄',cat:'mov',rarity:'rare'},
+
 // PAS 30
 {id:'lucky',name:'Lucky',desc:'フィールドの食べ物の最大数が+20個',icon:'🍀',cat:'pas',rarity:'common'},
 {id:'scavenger',name:'Scavenger',desc:'敵同士の捕食からもスコアを獲得',icon:'🦅',cat:'pas',rarity:'common'},
@@ -125,7 +127,7 @@ const SKILLS=[
 {id:'collector',name:'Collector',desc:'食べ物10個食べるごとにボーナス+200',icon:'📦',cat:'pas',rarity:'common'},
 {id:'momentum',name:'Momentum',desc:'連続移動の距離に応じてスコア倍率UP',icon:'🎢',cat:'pas',rarity:'common'},
 {id:'mutation',name:'Mutation',desc:'LvUP時10%の確率でランダムスキル追加',icon:'🧫',cat:'pas',rarity:'common'},
-{id:'overclock',name:'Overclock',desc:'残り30秒以下で移動速度が2倍',icon:'⏰',cat:'pas',rarity:'common'},
+{id:'giant',name:'Giant',desc:'サイズが常時1.5倍。圧倒的デカさ',icon:'🗻',cat:'pas',rarity:'epic'},
 {id:'catalyst',name:'Catalyst',desc:'周囲の敵のLvUPを促進させる',icon:'⚗️',cat:'pas',rarity:'common'},
 {id:'recycler',name:'Recycler',desc:'敵を捕食すると食べ物3個に変換',icon:'♻️',cat:'pas',rarity:'common'},
 {id:'gambler',name:'Gambler',desc:'LvUP時50%の確率で+1追加Lv',icon:'🎰',cat:'pas',rarity:'legendary'},
@@ -134,7 +136,7 @@ const SKILLS=[
 {id:'resonance',name:'Resonance',desc:'同じスキルを2回取ると効果が2倍に',icon:'🔔',cat:'pas',rarity:'rare'},
 {id:'overdrive',name:'Overdrive',desc:'Lv7以上で速度・範囲など全+30%',icon:'🔋',cat:'pas',rarity:'epic'},
 {id:'symbiosis',name:'Symbiosis',desc:'味方スライム1体につきスコア+100',icon:'🤝',cat:'pas',rarity:'common'},
-{id:'chronos',name:'Chronos',desc:'制限時間の減少速度が20%遅くなる',icon:'⌛',cat:'pas',rarity:'common'},
+{id:'predator_sense',name:'Predator Sense',desc:'格下の敵の位置に常時矢印ガイド表示',icon:'🎯',cat:'pas',rarity:'common'},
 {id:'feast',name:'Feast',desc:'3体以上同時捕食するとLv+1',icon:'🍖',cat:'pas',rarity:'epic'},
 {id:'echo',name:'Echo',desc:'前回の捕食時の効果をもう1回発動',icon:'📢',cat:'pas',rarity:'common'},
 {id:'amplify',name:'Amplify',desc:'所持する全スキルの効果が+30%',icon:'📡',cat:'pas',rarity:'common'},
@@ -195,7 +197,7 @@ function genSkillOpts(){
 // ===== ENTITY =====
 function mkSlime(x,y,lv,isP){return{x,y,lv:Math.min(lv,mxLv()),vx:0,vy:0,isPlayer:!!isP,phase:Math.random()*Math.PI*2,mouthState:'smile',mouthTimer:0,exp:0,aiTimer:0,aiDir:{x:0,y:0},aiBehavior:'wander',invincible:0,alive:true,spawnTime:frameCount,skills:[],frozenTimer:0,venomTimer:0,ateFoodTimer:0}}
 function slR(s){return getLvInfo(s.lv).r+Math.sin(s.phase)*2}
-function slBR(s){return getLvInfo(s.lv).r}
+function slBR(s){let r=getLvInfo(s.lv).r;if(s.isPlayer&&pSet&&pSet.has('giant'))r*=1.5;return r}
 function slSp(s){let sp=getLvInfo(s.lv).speed;if(s.frozenTimer>0)return 0;if(s.venomTimer>0)sp*=.1;return sp}
 function slCol(s){return getLvInfo(s.lv).color}
 function assignESkills(e){e.skills=[];let c=e.lv<3?0:e.lv<5?1:e.lv<7?2:3;let p=[...ENEMY_SIDS];for(let i=0;i<c&&p.length;i++){let idx=Math.floor(Math.random()*p.length);e.skills.push(p[idx]);p.splice(idx,1)}}
@@ -209,6 +211,7 @@ function addSP(x,y,text,big){scorePopups.push({x,y,text,big:!!big,life:1,startY:
 // ===== GAME INIT =====
 function startGame(mode){
   initAudio();gameMode=mode;
+  FIELD_W=2000;FIELD_H=2000;
   player=mkSlime(FIELD_W/2,FIELD_H/2,1,true);
   enemies=[];foods=[];particles=[];allies=[];
   score=0;eatCount=0;timeLeft=180;survivalTime=0;frameCount=0;gameStartTime=Date.now();
@@ -218,7 +221,7 @@ function startGame(mode){
   lastEatFrame=0;stillTimer=0;totalFoodEaten=0;
   smiteTarget=null;smiteTimer=0;shadowPos=null;shadowTimer=0;
   tutorialTimer=tutorialDuration;
-  for(let i=0;i<TARGET_ENEMIES;i++)enemies.push(spawnEnemy(1));
+  for(let i=0;i<22;i++)enemies.push(spawnEnemy(1)); // 20 + 1*2 at Lv1
   for(let i=0;i<MAX_FOODS;i++)foods.push(spawnFood());
   state='playing';
 }
@@ -276,12 +279,12 @@ function skillClick(cx,cy){let rects=getSkillRects();for(let i=0;i<rects.length;
 
 // ===== CORE LOGIC =====
 function clampField(s){let r=slBR(s);
-  if(s.x<r){s.x=r;s.vx=Math.abs(s.vx)*.5;if(s.isPlayer&&has('slingshot'))s.vx*=3}
-  if(s.x>FIELD_W-r){s.x=FIELD_W-r;s.vx=-Math.abs(s.vx)*.5;if(s.isPlayer&&has('slingshot'))s.vx*=3}
-  if(s.y<r){s.y=r;s.vy=Math.abs(s.vy)*.5;if(s.isPlayer&&has('slingshot'))s.vy*=3}
-  if(s.y>FIELD_H-r){s.y=FIELD_H-r;s.vy=-Math.abs(s.vy)*.5;if(s.isPlayer&&has('slingshot'))s.vy*=3}}
+  if(s.x<r){s.x=r;s.vx=Math.abs(s.vx)*.5}
+  if(s.x>FIELD_W-r){s.x=FIELD_W-r;s.vx=-Math.abs(s.vx)*.5}
+  if(s.y<r){s.y=r;s.vy=Math.abs(s.vy)*.5}
+  if(s.y>FIELD_H-r){s.y=FIELD_H-r;s.vy=-Math.abs(s.vy)*.5}}
 function checkColl(a,b){let ra=slBR(a),rb=slBR(b),ex=0;
-  if(a.isPlayer){if(has('predator'))ex+=ra*.8*amp('predator');if(has('blade_dance')){let spd=Math.sqrt(a.vx*a.vx+a.vy*a.vy);ex+=spd*8}if(has('berserker')&&gameMode==='king'&&timeLeft<90)ex+=ra*2}
+  if(a.isPlayer){if(has('predator'))ex+=ra*.8*amp('predator');if(has('blade_dance')){let spd=Math.sqrt(a.vx*a.vx+a.vy*a.vy);ex+=spd*8}}
   let dx=b.x-a.x,dy=b.y-a.y;return Math.sqrt(dx*dx+dy*dy)<ra+rb+ex}
 function bounceApart(a,b){let dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)||1,nx=dx/d,ny=dy/d,f=5;a.vx-=nx*f;a.vy-=ny*f;b.vx+=nx*f;b.vy+=ny*f;a.invincible=Math.max(a.invincible,10);b.invincible=Math.max(b.invincible,10)}
 
@@ -292,7 +295,6 @@ function playerEat(prey){
   comboCount++;comboTimer=COMBO_WINDOW;
   let mult=Math.min(comboCount,10),pts=100*mult;
   if(has('economy'))pts=Math.floor(pts*1.2);
-  if(has('blood_moon')&&gameMode==='king'&&timeLeft<90)pts*=2;
   if(has('critical_mass')&&player.lv>=10)pts*=2;
   if(has('synergy')&&pSkills.length>=5)pts=Math.floor(pts*1.5);
   if(has('ambush')&&stillTimer>=120)pts*=3;
@@ -302,8 +304,8 @@ function playerEat(prey){
   gainExp(xp);
   // on-eat effects
   if(has('phantom_strike'))player.invincible=Math.max(player.invincible,30);
-  if(has('leech')&&gameMode==='king')timeLeft+=3;
   if(has('recycler'))for(let i=0;i<3;i++)foods.push(spawnFood(prey));
+  if(has('clone_army')){let cloneCount=allies.filter(a=>a.isClone).length;if(cloneCount<5){allies.push({x:prey.x,y:prey.y,lv:1,timer:9999,phase:0,isClone:true});addSkillNotif('👥','Clone Army','#aaddff')}}
   if(has('shockwave')){let hit=false;for(let e of enemies){if(!e.alive)continue;let dx=e.x-player.x,dy=e.y-player.y,d=Math.sqrt(dx*dx+dy*dy);if(d<350&&d>0){let f=25/d*350;e.vx+=dx/d*f;e.vy+=dy/d*f;hit=true}}if(hit){addSkillNotif('💥','Shockwave','#ff8844');ss.shockwaveFX=45;ss.shockwaveX=player.x;ss.shockwaveY=player.y}}
   if(has('chain_lightning')){let chained=false;for(let e of enemies){if(!e.alive||e===prey)continue;if(e.lv<=prey.lv){let d=Math.sqrt((e.x-prey.x)**2+(e.y-prey.y)**2);if(d<250){e.alive=false;addPtcl(e.x,e.y,'#ffff00',10);score+=100;chained=true}}}if(chained)addSkillNotif('⚡','Chain Lightning','#ffff00')}
   if(has('rampage')){if(frameCount-lastEatFrame<180)ss.rampageEnd=frameCount+300;lastEatFrame=frameCount}else lastEatFrame=frameCount;
@@ -335,7 +337,17 @@ function doLvUp(){
   addPtcl(player.x,player.y,slCol(player),15);sfxLvUp();
   if(has('evolution')&&Math.random()<.2&&player.lv<mxLv()){player.lv++;addSP(player.x,player.y-40,'EVOLUTION!',true)}
   if(has('gambler')&&Math.random()<.5&&player.lv<mxLv()){player.lv++;addSP(player.x,player.y-40,'GAMBLE WIN!',true)}
-  if(has('iron_skin')&&gameMode==='king')timeLeft+=5;
+  // Dynamic field expansion on level up
+  let newFieldSize=2000+(player.lv-1)*200;
+  if(newFieldSize>FIELD_W){
+    let oldFW=FIELD_W,oldFH=FIELD_H;
+    FIELD_W=newFieldSize;FIELD_H=newFieldSize;
+    // Spawn new enemies and food in expanded area
+    let targetEn=20+player.lv*2;
+    while(enemies.length<targetEn)enemies.push(spawnEnemy(player.lv));
+    let foodTarget=MAX_FOODS+(has('lucky')?20:0);
+    while(foods.length<foodTarget)foods.push(spawnFood());
+  }
   if(!reachedLvs.has(player.lv)){reachedLvs.add(player.lv);score+=500;addSP(player.x,player.y-20,'PIONEER +500',true)}
   if(has('thunderclap')){let struck=false;for(let e of enemies){if(!e.alive)continue;let d=Math.sqrt((e.x-player.x)**2+(e.y-player.y)**2);if(d<400&&e.lv<=player.lv){e.alive=false;addPtcl(e.x,e.y,'#ffff00',12);score+=100;struck=true}}if(struck)addSkillNotif('⛈️','Thunderclap','#ffff44')}
   if(has('quantum_leap')){let best=null,bd=9999;for(let e of enemies){if(!e.alive||e.lv!==player.lv)continue;let d=Math.sqrt((e.x-player.x)**2+(e.y-player.y)**2);if(d<bd){bd=d;best=e}}if(best){player.x=best.x;player.y=best.y;addPtcl(player.x,player.y,'#00ffff',10)}}
@@ -346,7 +358,8 @@ function doLvUp(){
 }
 
 function playerDmg(attacker){
-  if(has('fortify')&&attacker.lv-player.lv<=1){let r=slBR(player);if(player.x<=r+10||player.x>=FIELD_W-r-10||player.y<=r+10||player.y>=FIELD_H-r-10){bounceApart(player,attacker);sfxBounce();return}}
+  // Juggernaut: moving makes you survive 1Lv above
+  if(has('juggernaut')&&attacker.lv-player.lv===1){let spd=Math.sqrt(player.vx*player.vx+player.vy*player.vy);if(spd>1){bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'JUGGERNAUT!',true);return}}
   if(has('shield')&&(!ss.shieldCD||frameCount>=ss.shieldCD)){ss.shieldCD=frameCount+600;ss.shieldFX=30;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'SHIELD!',true);addSkillNotif('🛡️','Shield','#4488ff');return}
   if(ss.barrierCharges>0){ss.barrierCharges--;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'BARRIER!('+ss.barrierCharges+')',true);return}
   if(has('mirror_shield')&&(!ss.mirrorCD||frameCount>=ss.mirrorCD)){ss.mirrorCD=frameCount+300;attacker.vx*=-3;attacker.vy*=-3;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'REFLECT!',true);addSkillNotif('🪩','Mirror Shield','#aaddff');return}
@@ -355,7 +368,6 @@ function playerDmg(attacker){
   if(has('phase_shift')){let spd=Math.sqrt(player.vx*player.vx+player.vy*player.vy);if(spd>3){bounceApart(player,attacker);return}}
   if(has('resilience')&&!ss.resUsed&&player.lv>1){ss.resUsed=true;player.lv--;player.invincible=60;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'RESILIENCE! Lv'+player.lv,true);addSkillNotif('💪','Resilience','#ff8888');return}
   if(has('undying')&&!ss.undyUsed&&player.lv>=5){ss.undyUsed=true;player.invincible=60;bounceApart(player,attacker);sfxBounce();addSP(player.x,player.y,'UNDYING!',true);return}
-  if(has('corrosion')&&attacker.lv===player.lv+1){if(ss.corrTarget!==attacker){ss.corrTarget=attacker;ss.corrTime=0}ss.corrTime=(ss.corrTime||0)+1;if(ss.corrTime>=180){attacker.lv=Math.max(1,attacker.lv-1);ss.corrTarget=null;ss.corrTime=0;addSP(attacker.x,attacker.y,'CORRODED!',true);bounceApart(player,attacker);return}bounceApart(player,attacker);return}
   playerDeath();
 }
 
@@ -449,14 +461,14 @@ function update(){
   frameCount++;
   if(tutorialTimer>0)tutorialTimer--;
   // Timer
-  if(gameMode==='king'){let decay=1/60;if(has('chronos'))decay*=.8;timeLeft-=decay;if(timeLeft<=0){timeLeft=0;playerDeath();return}}
+  if(gameMode==='king'){let decay=1/60;timeLeft-=decay;if(timeLeft<=0){timeLeft=0;playerDeath();return}}
   else survivalTime+=1/60;
 
   // Player move
   inputDir=getInDir();
   let sp=slSp(player);
   if(has('turbo'))sp*=2.0;if(has('overdrive')&&player.lv>=7)sp*=1.5;
-  if(has('overclock')&&gameMode==='king'&&timeLeft<=30)sp*=2;
+  if(has('speed_demon'))sp*=3.0;
   if(has('frenzy')&&comboCount>=5)sp*=1.5;
   if(ss.rampageEnd&&frameCount<ss.rampageEnd)sp*=1.5;
   let accel=has('drift')?.08:.2;
@@ -561,6 +573,97 @@ function update(){
   // Shadow Step warp
   if(shadowPos&&shadowTimer>0){shadowTimer--;if(shadowTimer<=0)shadowPos=null}
 
+  // Time Freeze
+  if(has('time_freeze')){
+    if(!ss.timeFreezeCD)ss.timeFreezeCD=0;
+    if(frameCount>=ss.timeFreezeCD){ss.timeFreezeActive=frameCount+180;ss.timeFreezeCD=frameCount+900;addSkillNotif('🧊','Time Freeze','#88ccff')}
+    if(ss.timeFreezeActive&&frameCount<ss.timeFreezeActive){ss.timeFreezeOn=true;for(let e of enemies){if(e.alive)e.frozenTimer=Math.max(e.frozenTimer,3)}}
+    else ss.timeFreezeOn=false;
+  }
+
+  // Infinite Series: enemies approaching player get slowed
+  if(has('infinite_series')){
+    for(let e of enemies){
+      if(!e.alive)continue;
+      let dx=e.x-player.x,dy=e.y-player.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<300){
+        // Check if enemy is moving toward player
+        let nextDx=(e.x+e.vx)-player.x,nextDy=(e.y+e.vy)-player.y;
+        let nextD=Math.sqrt(nextDx*nextDx+nextDy*nextDy);
+        if(nextD<d){ // approaching
+          let factor=Math.min(1,d/300);
+          e.vx*=factor;e.vy*=factor;
+        }
+      }
+    }
+  }
+
+  // Black Hole: attract food and weaker enemies
+  if(has('black_hole')){
+    for(let f of foods){if(!f.alive)continue;let dx=player.x-f.x,dy=player.y-f.y,d=Math.sqrt(dx*dx+dy*dy);if(d<500&&d>0){f.x+=dx/d*3;f.y+=dy/d*3}}
+    for(let e of enemies){if(!e.alive||e.lv>=player.lv)continue;let dx=player.x-e.x,dy=player.y-e.y,d=Math.sqrt(dx*dx+dy*dy);if(d<300&&d>0){let f=2.5/d*200;e.vx+=dx/d*f;e.vy+=dy/d*f}}
+  }
+
+  // Giant: handled in slBR override
+  // (we apply it in drawing and collision via getLvInfo override)
+
+  // Mirror World: manage mirror clone
+  if(has('mirror_world')){
+    let mx=FIELD_W-player.x,my=FIELD_H-player.y;
+    ss.mirrorX=mx;ss.mirrorY=my;ss.mirrorLv=player.lv;
+    // Mirror clone eats enemies
+    for(let e of enemies){
+      if(!e.alive||e.lv>=player.lv)continue;
+      let dx=mx-e.x,dy=my-e.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<slBR(player)+slBR(e)){
+        e.alive=false;addPtcl(e.x,e.y,slCol(e),8);sfxEat();
+        gainExp(eatXP(e.lv));score+=100;
+        addSP(e.x,e.y,'MIRROR +100',false);
+      }
+    }
+  }
+
+  // Tsunami Wave
+  if(has('tsunami_wave')){
+    if(!ss.tsunamiCD)ss.tsunamiCD=0;
+    if(frameCount>=ss.tsunamiCD&&(Math.abs(player.vx)>0.5||Math.abs(player.vy)>0.5)){
+      ss.tsunamiCD=frameCount+300;
+      let l=Math.sqrt(player.vx*player.vx+player.vy*player.vy)||1;
+      ss.tsunamiWave={x:player.x,y:player.y,dx:player.vx/l,dy:player.vy/l,life:60,startFrame:frameCount};
+      addSkillNotif('🌊','Tsunami Wave','#4488ff');
+    }
+    if(ss.tsunamiWave&&ss.tsunamiWave.life>0){
+      let w=ss.tsunamiWave,prog=(60-w.life)/60;
+      let waveX=w.x+w.dx*500*prog,waveY=w.y+w.dy*500*prog;
+      for(let e of enemies){
+        if(!e.alive||e.lv>=player.lv)continue;
+        let dx=e.x-waveX,dy=e.y-waveY;
+        // Check perpendicular distance to wave line
+        let perpX=-w.dy,perpY=w.dx;
+        let projPerp=Math.abs(dx*perpX+dy*perpY);
+        let projAlong=dx*w.dx+dy*w.dy;
+        if(projPerp<200&&Math.abs(projAlong)<50){
+          e.alive=false;addPtcl(e.x,e.y,'#4488ff',8);score+=80;
+        }
+      }
+      w.life--;
+    }
+  }
+
+  // EXP Magnet: attract all food on screen
+  if(has('exp_magnet')){
+    let camW=W/devicePixelRatio,camH=H/devicePixelRatio;
+    for(let f of foods){if(!f.alive)continue;
+      let dx=f.x-camera.x,dy=f.y-camera.y;
+      if(dx>-50&&dx<camW+50&&dy>-50&&dy<camH+50){
+        let fx=player.x-f.x,fy=player.y-f.y,fd=Math.sqrt(fx*fx+fy*fy);
+        if(fd>0){f.x+=fx/fd*2.5;f.y+=fy/fd*2.5}
+      }
+    }
+  }
+
+  // Predator Sense: handled in draw (arrows to nearest weak enemies off-screen)
+
   // Treasure: golden food spawns
   if(has('treasure')&&frameCount%600===0&&Math.random()<.3){let f=spawnFood();f.golden=true;foods.push(f)}
 
@@ -617,13 +720,26 @@ function update(){
 
   // Remove dead, respawn
   enemies=enemies.filter(e=>e.alive);
-  while(enemies.length<TARGET_ENEMIES)enemies.push(spawnEnemy(player.lv));
+  let targetEnemies=20+player.lv*2;
+  while(enemies.length<targetEnemies)enemies.push(spawnEnemy(player.lv));
   foods=foods.filter(f=>f.alive);
   let foodTarget=MAX_FOODS+(has('lucky')?20:0);
   while(foods.length<foodTarget)foods.push(spawnFood());
 
-  // Allies
-  for(let a of allies){a.timer--;a.phase+=.08}
+  // Allies (Clone Army logic)
+  for(let a of allies){
+    a.timer--;a.phase+=.08;
+    if(a.isClone){
+      // Chase nearest weaker enemy
+      let best=null,bd=9999;
+      for(let e of enemies){if(!e.alive||e.lv>=a.lv+1)continue;let d=Math.sqrt((e.x-a.x)**2+(e.y-a.y)**2);if(d<bd){bd=d;best=e}}
+      if(best){let dx=best.x-a.x,dy=best.y-a.y,l=Math.sqrt(dx*dx+dy*dy);if(l>0){a.x+=dx/l*2.5;a.y+=dy/l*2.5}
+        if(bd<getLvInfo(a.lv).r+slBR(best)){best.alive=false;addPtcl(best.x,best.y,slCol(best),5);sfxEat();gainExp(eatXP(best.lv));score+=50}}
+      a.timer=9999; // clones don't expire by time
+      // Clamp to field
+      a.x=Math.max(10,Math.min(FIELD_W-10,a.x));a.y=Math.max(10,Math.min(FIELD_H-10,a.y));
+    }
+  }
   allies=allies.filter(a=>a.timer>0);
 
   // Particles
@@ -637,8 +753,10 @@ function update(){
   for(let s of scorePopups){s.life-=1/30;s.y=s.startY-(1-s.life)*40}
   scorePopups=scorePopups.filter(s=>s.life>0);
 
-  // Camera
-  camera.x=player.x-W/(2*devicePixelRatio);camera.y=player.y-H/(2*devicePixelRatio);
+  // Camera with level-based zoom
+  let cameraScale=1/(1+(player.lv-1)*0.02);
+  camera.x=player.x-W/(2*devicePixelRatio*cameraScale);camera.y=player.y-H/(2*devicePixelRatio*cameraScale);
+  ss.cameraScale=cameraScale;
 
   // Endless score
   if(gameMode==='endless'){
@@ -697,8 +815,21 @@ function drawSlime(s,ox,oy){
   ctx.font='bold '+Math.floor(r*.5*sc)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=Math.max(2,r*.08)*sc;ctx.lineJoin='round';
   ctx.strokeText('Lv'+s.lv,0,r*.45*sc);ctx.fillStyle='rgba(255,255,255,0.85)';ctx.fillText('Lv'+s.lv,0,r*.45*sc);
-  // Enemy skill icons
-  if(!s.isPlayer&&s.skills.length){ctx.font=Math.floor(10*sc)+'px sans-serif';for(let i=0;i<s.skills.length;i++){let sk=SM[s.skills[i]];if(sk)ctx.fillText(sk.icon,(i-s.skills.length/2)*12*sc,-r*sc-8*sc)}}
+  // Enemy skill icons above head (max 3)
+  if(!s.isPlayer&&s.skills.length){
+    let showSkills=s.skills.slice(0,3);
+    let iconSize=Math.floor(11*sc);
+    ctx.font=iconSize+'px sans-serif';
+    for(let i=0;i<showSkills.length;i++){
+      let sk=SM[showSkills[i]];if(!sk)continue;
+      let ix=(i-showSkills.length/2+0.5)*14*sc;
+      // Glow if skill is "active" (e.g. venom timer, frozen)
+      let glowing=false;
+      if(sk.id==='venom'&&s.venomTimer>0)glowing=true;
+      if(glowing){ctx.save();ctx.shadowColor='#ffff00';ctx.shadowBlur=8*sc;ctx.fillText(sk.icon,ix,-r*sc-12*sc);ctx.restore()}
+      else ctx.fillText(sk.icon,ix,-r*sc-12*sc);
+    }
+  }
   // Shield FX: massive glowing barrier around player
   if(s.isPlayer&&ss.shieldFX>0){let prog=ss.shieldFX/30,barrR=(r+30+15*(1-prog))*sc;ctx.globalAlpha=prog*0.7;ctx.strokeStyle='rgba(80,180,255,0.9)';ctx.lineWidth=(5+4*prog)*sc;ctx.beginPath();ctx.arc(0,0,barrR,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='rgba(150,220,255,0.5)';ctx.lineWidth=(8+6*prog)*sc;ctx.beginPath();ctx.arc(0,0,barrR*1.15,0,Math.PI*2);ctx.stroke();ctx.fillStyle='rgba(80,160,255,0.25)';ctx.beginPath();ctx.arc(0,0,barrR,0,Math.PI*2);ctx.fill();let grad=ctx.createRadialGradient(0,0,barrR*0.5,0,0,barrR*1.3);grad.addColorStop(0,'rgba(100,200,255,0.1)');grad.addColorStop(0.7,'rgba(60,140,255,0.15)');grad.addColorStop(1,'rgba(40,100,255,0)');ctx.fillStyle=grad;ctx.beginPath();ctx.arc(0,0,barrR*1.3,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
   ctx.restore();
@@ -1147,22 +1278,93 @@ function loop(){
   update();ctx.clearRect(0,0,W,H);
   if(state==='title')drawTitle();
   else if(state==='playing'){
-    let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawParallaxBG(ox,oy);drawGrid(ox,oy);drawFieldBorder(ox,oy);
+    let ox=camera.x,oy=camera.y;
+    let cScale=ss.cameraScale||1;
+    ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);
+    ctx.save();
+    ctx.scale(cScale,cScale);
+    drawParallaxBG(ox,oy);drawGrid(ox,oy);drawFieldBorder(ox,oy);
     // Shadow pos
     if(shadowPos){ctx.globalAlpha=.3;ctx.fillStyle='#8800ff';ctx.beginPath();ctx.arc((shadowPos.x-ox)*devicePixelRatio,(shadowPos.y-oy)*devicePixelRatio,15*devicePixelRatio,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
     for(let f of foods)if(f.alive)drawFood(f,ox,oy);
     for(let p of particles){let x=(p.x-ox)*devicePixelRatio,y=(p.y-oy)*devicePixelRatio;ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(x,y,p.size*devicePixelRatio*p.life,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
     // Allies
-    for(let a of allies){let ax=(a.x-ox)*devicePixelRatio,ay=(a.y-oy)*devicePixelRatio,ar=getLvInfo(a.lv).r*.7*devicePixelRatio;ctx.globalAlpha=a.timer/180;ctx.fillStyle=getLvInfo(a.lv).color;ctx.beginPath();ctx.arc(ax,ay,ar,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
+    for(let a of allies){let ax=(a.x-ox)*devicePixelRatio,ay=(a.y-oy)*devicePixelRatio,ar=getLvInfo(a.lv).r*(a.isClone?0.9:0.7)*devicePixelRatio;ctx.globalAlpha=a.isClone?0.8:a.timer/180;ctx.fillStyle=a.isClone?'#88ccff':getLvInfo(a.lv).color;ctx.beginPath();ctx.arc(ax,ay,ar,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
+    // Mirror World clone
+    if(player&&player.alive&&has('mirror_world')&&ss.mirrorX!==undefined){
+      let mx=(ss.mirrorX-ox)*devicePixelRatio,my=(ss.mirrorY-oy)*devicePixelRatio,mr=slBR(player)*devicePixelRatio;
+      ctx.save();ctx.globalAlpha=0.4;ctx.fillStyle=slCol(player);ctx.beginPath();ctx.arc(mx,my,mr,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.3)';ctx.beginPath();ctx.arc(mx-mr*.25,my-mr*.25,mr*.35,0,Math.PI*2);ctx.fill();
+      ctx.font='bold '+Math.floor(mr*.5)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillText('Lv'+player.lv,mx,my+mr*.45);
+      ctx.restore();
+    }
+    // Infinite Series rings
+    if(player&&player.alive&&has('infinite_series')){
+      let px=(player.x-ox)*devicePixelRatio,py=(player.y-oy)*devicePixelRatio;
+      ctx.save();ctx.globalAlpha=0.15;ctx.strokeStyle='#fff';ctx.lineWidth=1.5*devicePixelRatio;
+      for(let ringR of[150,200,300]){ctx.beginPath();ctx.arc(px,py,ringR*devicePixelRatio,0,Math.PI*2);ctx.stroke()}
+      ctx.restore();
+    }
+    // Black Hole vortex particles
+    if(player&&player.alive&&has('black_hole')){
+      let px=(player.x-ox)*devicePixelRatio,py=(player.y-oy)*devicePixelRatio;
+      ctx.save();
+      for(let i=0;i<8;i++){
+        let angle=frameCount*0.03+i*Math.PI/4,dist=(200+Math.sin(frameCount*0.05+i)*80)*devicePixelRatio;
+        let vx=px+Math.cos(angle)*dist,vy=py+Math.sin(angle)*dist;
+        ctx.globalAlpha=0.3;ctx.fillStyle='#6600cc';ctx.beginPath();ctx.arc(vx,vy,3*devicePixelRatio,0,Math.PI*2);ctx.fill();
+      }
+      ctx.restore();
+    }
+    // Tsunami Wave visual
+    if(ss.tsunamiWave&&ss.tsunamiWave.life>0){
+      let w=ss.tsunamiWave,prog=(60-w.life)/60;
+      let waveX=(w.x+w.dx*500*prog-ox)*devicePixelRatio,waveY=(w.y+w.dy*500*prog-oy)*devicePixelRatio;
+      ctx.save();ctx.globalAlpha=0.3*(1-prog);ctx.fillStyle='rgba(68,136,255,0.5)';
+      ctx.beginPath();
+      let perpX=-w.dy*200*devicePixelRatio,perpY=w.dx*200*devicePixelRatio;
+      ctx.moveTo(waveX-perpX,waveY-perpY);ctx.lineTo(waveX+perpX,waveY+perpY);
+      ctx.lineTo(waveX+perpX+w.dx*50*devicePixelRatio,waveY+perpY+w.dy*50*devicePixelRatio);
+      ctx.lineTo(waveX-perpX+w.dx*50*devicePixelRatio,waveY-perpY+w.dy*50*devicePixelRatio);
+      ctx.closePath();ctx.fill();ctx.restore();
+    }
     // Shockwave ripple effect
     if(ss.shockwaveFX>0){let swProg=1-ss.shockwaveFX/45,swX=(ss.shockwaveX-ox)*devicePixelRatio,swY=(ss.shockwaveY-oy)*devicePixelRatio,swMaxR=350*devicePixelRatio;ctx.save();for(let ring=0;ring<5;ring++){let delay=ring*0.1,rProg=Math.max(0,Math.min(1,(swProg-delay)/(1-delay)));if(rProg<=0)continue;let rr=swMaxR*rProg,alpha=(1-rProg)*0.7;ctx.globalAlpha=alpha;ctx.strokeStyle='rgba(255,136,68,'+(alpha)+')';ctx.lineWidth=(6-ring*0.8)*devicePixelRatio*(1-rProg*0.3);ctx.beginPath();ctx.arc(swX,swY,rr,0,Math.PI*2);ctx.stroke();if(ring===0){ctx.fillStyle='rgba(255,200,100,'+(alpha*0.2)+')';ctx.beginPath();ctx.arc(swX,swY,rr,0,Math.PI*2);ctx.fill()}}ctx.restore();ss.shockwaveFX--}
     // Magnetic attraction lines (dotted)
-    if(player&&player.alive&&has('magnetic')){ctx.save();ctx.setLineDash([6*devicePixelRatio,6*devicePixelRatio]);let dashOff=frameCount*3;ctx.lineDashOffset=-dashOff;for(let e of enemies){if(!e.alive||e.lv>=player.lv)continue;let dx=player.x-e.x,dy=player.y-e.y,d=Math.sqrt(dx*dx+dy*dy);if(d<400&&d>0){let px=(player.x-ox)*devicePixelRatio,py=(player.y-oy)*devicePixelRatio,ex=(e.x-ox)*devicePixelRatio,ey=(e.y-oy)*devicePixelRatio;let alpha=0.1+0.5*(1-d/400);ctx.globalAlpha=alpha;ctx.strokeStyle='rgba(100,180,255,0.9)';ctx.lineWidth=2.5*devicePixelRatio;ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(ex,ey);ctx.stroke();let dotR=(4+Math.sin(frameCount*0.15+d*0.05)*2)*devicePixelRatio;ctx.globalAlpha=alpha*1.2;ctx.fillStyle='rgba(120,200,255,0.8)';let midX=(px+ex)/2,midY=(py+ey)/2;ctx.beginPath();ctx.arc(midX,midY,dotR,0,Math.PI*2);ctx.fill()}}ctx.setLineDash([]);ctx.globalAlpha=1;ctx.restore()}
+    if(player&&player.alive&&has('magnetic')){ctx.save();ctx.setLineDash([6*devicePixelRatio,6*devicePixelRatio]);let dashOff=frameCount*3;ctx.lineDashOffset=-dashOff;for(let e of enemies){if(!e.alive||e.lv>=player.lv)continue;let dx=player.x-e.x,dy=player.y-e.y,d=Math.sqrt(dx*dx+dy*dy);if(d<400&&d>0){let px2=(player.x-ox)*devicePixelRatio,py2=(player.y-oy)*devicePixelRatio,ex=(e.x-ox)*devicePixelRatio,ey=(e.y-oy)*devicePixelRatio;let alpha=0.1+0.5*(1-d/400);ctx.globalAlpha=alpha;ctx.strokeStyle='rgba(100,180,255,0.9)';ctx.lineWidth=2.5*devicePixelRatio;ctx.beginPath();ctx.moveTo(px2,py2);ctx.lineTo(ex,ey);ctx.stroke();let dotR=(4+Math.sin(frameCount*0.15+d*0.05)*2)*devicePixelRatio;ctx.globalAlpha=alpha*1.2;ctx.fillStyle='rgba(120,200,255,0.8)';let midX=(px2+ex)/2,midY=(py2+ey)/2;ctx.beginPath();ctx.arc(midX,midY,dotR,0,Math.PI*2);ctx.fill()}}ctx.setLineDash([]);ctx.globalAlpha=1;ctx.restore()}
     for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
     // Dash afterimage trail
     if(dashState.trail.length){for(let t of dashState.trail){let tx=(t.x-ox)*devicePixelRatio,ty=(t.y-oy)*devicePixelRatio,tr=t.r*devicePixelRatio;ctx.save();ctx.globalAlpha=t.life/18*0.4;ctx.fillStyle=t.color;ctx.beginPath();ctx.arc(tx,ty,tr*(0.7+t.life/18*0.3),0,Math.PI*2);ctx.fill();ctx.restore()}}
     if(player&&player.alive)drawSlime(player,ox,oy);
-    drawScorePopups(ox,oy);drawEdgeIndicators(ox,oy);drawHUD();drawMinimap();drawJoystick();drawPauseBtn();drawSkillNotifs();drawTutorial();
+    drawScorePopups(ox,oy);drawEdgeIndicators(ox,oy);
+    ctx.restore(); // restore camera scale
+    // Time Freeze overlay
+    if(ss.timeFreezeOn){ctx.fillStyle='rgba(100,150,255,0.15)';ctx.fillRect(0,0,W,H)}
+    // Predator Sense arrows (drawn in screen space)
+    if(player&&player.alive&&has('predator_sense')){
+      let preyList=[];
+      for(let e of enemies){if(!e.alive||e.lv>=player.lv)continue;let d=Math.sqrt((e.x-player.x)**2+(e.y-player.y)**2);preyList.push({e,d})}
+      preyList.sort((a,b)=>a.d-b.d);
+      let shown=0;
+      for(let p of preyList){
+        if(shown>=3)break;
+        let e=p.e,ex=e.x-camera.x,ey=e.y-camera.y;
+        let camW=W/devicePixelRatio/(ss.cameraScale||1),camH=H/devicePixelRatio/(ss.cameraScale||1);
+        if(ex>0&&ex<camW&&ey>0&&ey<camH)continue; // on screen, skip
+        let angle=Math.atan2(e.y-player.y,e.x-player.x);
+        let arrX=W/2+Math.cos(angle)*(W/2-50*devicePixelRatio);
+        let arrY=H/2+Math.sin(angle)*(H/2-50*devicePixelRatio);
+        arrX=Math.max(40*devicePixelRatio,Math.min(W-40*devicePixelRatio,arrX));
+        arrY=Math.max(40*devicePixelRatio,Math.min(H-40*devicePixelRatio,arrY));
+        ctx.save();ctx.translate(arrX,arrY);ctx.rotate(angle);
+        ctx.fillStyle='rgba(255,200,0,0.7)';ctx.beginPath();
+        let sz=12*devicePixelRatio;
+        ctx.moveTo(sz,0);ctx.lineTo(-sz*.6,-sz*.7);ctx.lineTo(-sz*.3,0);ctx.lineTo(-sz*.6,sz*.7);ctx.closePath();ctx.fill();
+        ctx.rotate(-angle);ctx.font='bold '+Math.floor(9*devicePixelRatio)+'px sans-serif';ctx.textAlign='center';ctx.fillStyle='#ffcc00';ctx.fillText('🎯 Lv'+e.lv,0,-15*devicePixelRatio);
+        ctx.restore();shown++;
+      }
+    }
+    drawHUD();drawMinimap();drawJoystick();drawPauseBtn();drawSkillNotifs();drawTutorial();
   }else if(state==='skillSelect')drawSkillSelect();
   else if(state==='paused')drawPauseScreen();
   else if(state==='gameover'){let ox=camera.x,oy=camera.y;ctx.fillStyle='#f0f0e8';ctx.fillRect(0,0,W,H);drawParallaxBG(ox,oy);drawGrid(ox,oy);for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);drawGameOver()}
