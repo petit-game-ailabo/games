@@ -71,6 +71,8 @@ let hiScoreEndless=parseInt(localStorage.getItem('slimeMergeHiE'))||0;
 let frameCount=0;
 let gameStartTime=0;
 let scorePopups=[];
+let comboCount=0,comboTimer=0;
+const COMBO_WINDOW=180; // 3 seconds at 60fps
 let W,H;
 // Input
 let inputDir={x:0,y:0};
@@ -163,7 +165,7 @@ function startGame(mode){
   foods=[];
   particles=[];
   mergeAnims=[];
-  score=0;eatCount=0;foodCount=0;timeLeft=180;survivalTime=0;frameCount=0;gameStartTime=Date.now();scorePopups=[];
+  score=0;eatCount=0;foodCount=0;timeLeft=180;survivalTime=0;frameCount=0;gameStartTime=Date.now();scorePopups=[];comboCount=0;comboTimer=0;
   for(let i=0;i<TARGET_ENEMIES;i++)enemies.push(spawnEnemy(1));
   for(let i=0;i<MAX_FOODS;i++)foods.push(spawnFood());
   state='playing';
@@ -405,8 +407,11 @@ function handleInteraction(a,b){
     addParticle(a.x,a.y,slimeColor(a),15);
     sfxMerge();
     if(a.isPlayer){
-      let mergeScore=500;score+=mergeScore;
-      addScorePopup(a.x,a.y,'MERGE! +'+mergeScore,true);
+      comboCount++;comboTimer=COMBO_WINDOW;
+      let mult=Math.min(comboCount,10);
+      let mergeScore=500*mult;score+=mergeScore;
+      let label=comboCount>1?'MERGE! +'+mergeScore+' x'+comboCount+'!':'MERGE! +500';
+      addScorePopup(a.x,a.y,label,true);
       sfxLevelUp();
       if(a.lv>=MAX_LEVEL&&gameMode==='king'){
         let finalScore=a.lv*1000+eatCount*100+Math.floor(timeLeft)*10;
@@ -425,7 +430,14 @@ function handleInteraction(a,b){
     a.mouthState='eat';a.mouthTimer=15;
     addParticle(b.x,b.y,slimeColor(b),8);
     sfxEat();
-    if(a.isPlayer){eatCount++;score+=100;addScorePopup(a.x,a.y,'+100',false)}
+    if(a.isPlayer){
+      comboCount++;comboTimer=COMBO_WINDOW;
+      let mult=Math.min(comboCount,10);
+      let pts=100*mult;
+      eatCount++;score+=pts;
+      let label=comboCount>1?'+'+pts+' x'+comboCount+'!':'+100';
+      addScorePopup(a.x,a.y,label,comboCount>=3);
+    }
   }else if(diff<=-2){
     // b eats a
     a.alive=false;
@@ -438,7 +450,14 @@ function handleInteraction(a,b){
       score=finalScore;
       state='gameover';return;
     }
-    if(b.isPlayer){eatCount++;score+=100;addScorePopup(b.x,b.y,'+100',false)}
+    if(b.isPlayer){
+      comboCount++;comboTimer=COMBO_WINDOW;
+      let mult=Math.min(comboCount,10);
+      let pts=100*mult;
+      eatCount++;score+=pts;
+      let label=comboCount>1?'+'+pts+' x'+comboCount+'!':'+100';
+      addScorePopup(b.x,b.y,label,comboCount>=3);
+    }
   }
 }
 
@@ -557,6 +576,9 @@ function update(){
     p.x+=p.vx;p.y+=p.vy;p.life-=0.03;p.vx*=0.95;p.vy*=0.95;
   }
   particles=particles.filter(p=>p.life>0);
+
+  // Combo timer
+  if(comboTimer>0){comboTimer--;if(comboTimer<=0)comboCount=0}
 
   // Update score popups
   for(let sp of scorePopups){
@@ -744,7 +766,7 @@ function drawMinimap(){
 function drawHUD(){
   let sc=devicePixelRatio;
   let fs=16*sc;
-  let hudH=gameMode==='king'?100*sc:90*sc;
+  let hudH=gameMode==='king'?120*sc:110*sc;
   ctx.fillStyle='rgba(0,0,0,0.6)';
   ctx.fillRect(8*sc,8*sc,200*sc,hudH);
   ctx.fillStyle='#fff';ctx.font='bold '+fs+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
@@ -779,6 +801,19 @@ function drawHUD(){
     let barY=gameMode==='king'?78*sc:74*sc;
     ctx.fillStyle='#FFD700';ctx.font='bold '+(12*sc)+'px sans-serif';
     ctx.fillText('👑 MAX LEVEL',16*sc,barY);
+  }
+  // Combo display
+  if(comboCount>=2){
+    let comboY=gameMode==='king'?104*sc:100*sc;
+    let alpha=comboTimer/COMBO_WINDOW;
+    let pulse=1+Math.sin(frameCount*0.2)*0.1;
+    ctx.save();
+    ctx.globalAlpha=Math.max(0.3,alpha);
+    let comboColors=['#ff4444','#ff8800','#ffdd00','#00ff88','#00ddff','#aa44ff','#ff44aa','#ff0000','#ffff00','#00ffff'];
+    ctx.fillStyle=comboColors[Math.min(comboCount-2,comboColors.length-1)];
+    ctx.font='bold '+Math.floor(14*sc*pulse)+'px sans-serif';
+    ctx.fillText('🔥 COMBO x'+comboCount+'!',16*sc,comboY);
+    ctx.restore();
   }
 }
 
