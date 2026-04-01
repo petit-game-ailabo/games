@@ -763,27 +763,37 @@ function drawMinimap(){
   }
 }
 
+function hudText(text,x,y,fill,outline){
+  if(outline!==false){ctx.strokeStyle=outline||'rgba(0,0,0,0.7)';ctx.lineWidth=3*devicePixelRatio;ctx.lineJoin='round';ctx.strokeText(text,x,y)}
+  ctx.fillStyle=fill||'#fff';ctx.fillText(text,x,y);
+}
 function drawHUD(){
   let sc=devicePixelRatio;
   let fs=16*sc;
   let hudH=gameMode==='king'?120*sc:110*sc;
-  ctx.fillStyle='rgba(0,0,0,0.6)';
-  ctx.fillRect(8*sc,8*sc,200*sc,hudH);
-  ctx.fillStyle='#fff';ctx.font='bold '+fs+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+  // Rounded background with border
+  ctx.save();
+  ctx.beginPath();
+  roundRect(ctx,8*sc,8*sc,200*sc,hudH,8*sc);
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1.5*sc;ctx.stroke();
+  ctx.restore();
+  ctx.font='bold '+fs+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
   let lvInfo=LEVELS[player.lv];
-  ctx.fillText('Lv'+player.lv+' '+lvInfo.name,16*sc,14*sc);
+  hudText('Lv'+player.lv+' '+lvInfo.name,16*sc,14*sc,slimeColor(player));
   ctx.font=''+(fs*0.85)+'px sans-serif';
-  ctx.fillText('スコア: '+score,16*sc,36*sc);
+  hudText('スコア: '+score,16*sc,36*sc);
   if(gameMode==='king'){
     let t=Math.max(0,Math.ceil(timeLeft));
-    ctx.fillText('⏱ '+t+'秒',16*sc,56*sc);
+    let tCol=t<=30?(t<=10?'#ff4444':'#ffaa00'):'#fff';
+    hudText('⏱ '+t+'秒',16*sc,56*sc,tCol);
   }else{
-    ctx.fillText('生存: '+Math.floor(survivalTime)+'秒',16*sc,56*sc);
+    hudText('生存: '+Math.floor(survivalTime)+'秒',16*sc,56*sc);
   }
   // Growth gauge with rainbow gradient
   if(player.lv<MAX_LEVEL){
     let barX=16*sc,barY=gameMode==='king'?78*sc:74*sc,barW=170*sc,barH=8*sc;
-    ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(barX,barY,barW,barH);
+    ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(barX,barY,barW,barH);
     let fillW=barW*(player.foodEaten/FOOD_EAT_COUNT);
     if(fillW>0){
       let grad=ctx.createLinearGradient(barX,0,barX+barW,0);
@@ -795,12 +805,12 @@ function drawHUD(){
     }
     ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;ctx.strokeRect(barX,barY,barW,barH);
     // Text
-    ctx.fillStyle='#fff';ctx.font=''+(12*sc)+'px sans-serif';
-    ctx.fillText('🍖 '+player.foodEaten+'/'+FOOD_EAT_COUNT,barX,barY+barH+3*sc);
+    ctx.font=''+(12*sc)+'px sans-serif';
+    hudText('🍖 '+player.foodEaten+'/'+FOOD_EAT_COUNT,barX,barY+barH+3*sc);
   }else{
     let barY=gameMode==='king'?78*sc:74*sc;
-    ctx.fillStyle='#FFD700';ctx.font='bold '+(12*sc)+'px sans-serif';
-    ctx.fillText('👑 MAX LEVEL',16*sc,barY);
+    ctx.font='bold '+(12*sc)+'px sans-serif';
+    hudText('👑 MAX LEVEL',16*sc,barY,'#FFD700');
   }
   // Combo display
   if(comboCount>=2){
@@ -810,9 +820,8 @@ function drawHUD(){
     ctx.save();
     ctx.globalAlpha=Math.max(0.3,alpha);
     let comboColors=['#ff4444','#ff8800','#ffdd00','#00ff88','#00ddff','#aa44ff','#ff44aa','#ff0000','#ffff00','#00ffff'];
-    ctx.fillStyle=comboColors[Math.min(comboCount-2,comboColors.length-1)];
     ctx.font='bold '+Math.floor(14*sc*pulse)+'px sans-serif';
-    ctx.fillText('🔥 COMBO x'+comboCount+'!',16*sc,comboY);
+    hudText('🔥 COMBO x'+comboCount+'!',16*sc,comboY,comboColors[Math.min(comboCount-2,comboColors.length-1)]);
     ctx.restore();
   }
 }
