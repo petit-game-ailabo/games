@@ -252,7 +252,7 @@ function pauseScreenClick(cx,cy){let s=devicePixelRatio,mx=W/2,bw=120*s,bh=26*s;
 function endClick(cx,cy){let bw=120*devicePixelRatio,bh=26*devicePixelRatio,mx=W/2;
   if(state==='gameover'){if(cx>mx-bw&&cx<mx+bw&&cy>H*.58-bh&&cy<H*.58+bh){startGame(gameMode);return}if(cx>mx-bw&&cx<mx+bw&&cy>H*.67-bh&&cy<H*.67+bh){state='title';return}}
   else if(state==='clear'){let y1=H*.6+20*devicePixelRatio;if(cx>mx-bw&&cx<mx+bw&&cy>y1-bh&&cy<y1+bh){gameMode='endless';timeLeft=9999;state='playing';return}let y2=H*.69+20*devicePixelRatio;if(cx>mx-bw&&cx<mx+bw&&cy>y2-bh&&cy<y2+bh){state='title';return}}}
-function getSkillRects(){let s=devicePixelRatio,n=skillOpts.length,cw=Math.min(W*.22,150*s),ch=cw*1.5,gap=12*s,tw=n*cw+(n-1)*gap,sx=(W-tw)/2,sy=H/2-ch/2,r=[];for(let i=0;i<n;i++)r.push({x:sx+i*(cw+gap),y:sy,w:cw,h:ch});return r}
+function getSkillRects(){let s=devicePixelRatio,n=skillOpts.length,cw=Math.min(W*.7,400*s),ch=Math.min(H/(n+1.5),120*s),gap=10*s,th=n*ch+(n-1)*gap,sx=(W-cw)/2,sy=(H-th)/2+15*s,r=[];for(let i=0;i<n;i++)r.push({x:sx,y:sy+i*(ch+gap),w:cw,h:ch});return r}
 function skillClick(cx,cy){let rects=getSkillRects();for(let i=0;i<rects.length;i++){let r=rects[i];if(cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h){let sk=skillOpts[i];addSkill(sk.id);sfxSkill();addPtcl(player.x,player.y,RC[sk.rarity],20);
   if(has('mutation')&&Math.random()<.1){let extra=SKILLS.filter(s=>!pSet.has(s.id));if(extra.length){let p=extra[Math.floor(Math.random()*extra.length)];addSkill(p.id);addSP(player.x,player.y-30,'MUTATION! +'+p.name,true)}}
   pendLvUps--;if(pendLvUps>0){skillOpts=genSkillOpts();if(!skillOpts.length){pendLvUps=0;state='playing'}}else state='playing';return}}}
@@ -1054,35 +1054,35 @@ function drawSkillSelect(){
     // Animated shimmer for legendary
     if(sk.rarity==='legendary'){let shimX=r.x+(frameCount*2%Math.floor(r.w+r.h*2));ctx.save();ctx.clip();let sg=ctx.createLinearGradient(shimX-30*sc,r.y,shimX+30*sc,r.y+r.h);sg.addColorStop(0,'transparent');sg.addColorStop(0.5,'rgba(255,220,100,0.12)');sg.addColorStop(1,'transparent');ctx.fillStyle=sg;ctx.fillRect(r.x,r.y,r.w,r.h);ctx.restore()}
     ctx.restore();
-    // Rarity ribbon at top
-    let ribH=18*sc;ctx.save();roundRect(ctx,r.x,r.y,r.w,ribH,12*sc);ctx.clip();ctx.fillStyle=rc;ctx.globalAlpha=0.2;ctx.fillRect(r.x,r.y,r.w,ribH);ctx.globalAlpha=1;
-    ctx.font='bold '+Math.floor(r.w*.07)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle=rc;let rLabel={'common':'★ COMMON','rare':'★★ RARE','epic':'★★★ EPIC','legendary':'★★★★ LEGENDARY'}[sk.rarity];
-    ctx.fillText(rLabel,r.x+r.w/2,r.y+ribH/2);ctx.restore();
-    // Icon (larger)
-    ctx.font=Math.floor(r.w*.33)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(sk.icon,r.x+r.w/2,r.y+r.h*.28);
-    // Name
-    ctx.fillStyle=rc;ctx.font='bold '+Math.floor(r.w*.13)+'px sans-serif';
+    // Horizontal card layout: [icon | name + desc + rarity]
+    let iconArea=r.h*0.85;
+    // Icon (left side, big)
+    ctx.font=Math.floor(iconArea*0.6)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(sk.icon,r.x+iconArea/2,r.y+r.h/2);
+    // Right side content
+    let textX=r.x+iconArea+8*sc,textW=r.w-iconArea-16*sc;
+    // Rarity label (top-right)
+    let rLabel={'common':'★ COMMON','rare':'★★ RARE','epic':'★★★ EPIC','legendary':'★★★★ LEGENDARY'}[sk.rarity];
+    ctx.font='bold '+Math.floor(10*sc)+'px sans-serif';ctx.textAlign='right';ctx.textBaseline='top';
+    ctx.fillStyle=rc;ctx.fillText(rLabel,r.x+r.w-10*sc,r.y+6*sc);
+    // Name (large)
+    ctx.fillStyle=rc;ctx.font='bold '+Math.floor(16*sc)+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
     ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=2*sc;ctx.lineJoin='round';
-    ctx.strokeText(sk.name,r.x+r.w/2,r.y+r.h*.47);
-    ctx.fillText(sk.name,r.x+r.w/2,r.y+r.h*.47);
+    ctx.strokeText(sk.name,textX,r.y+8*sc);
+    ctx.fillText(sk.name,textX,r.y+8*sc);
     // Category badge
-    let catLabel={atk:'⚔ 攻撃',def:'🛡 防御',mov:'🏃 移動',pas:'✨ パッシブ'}[sk.cat];
+    let catLabel={atk:'⚔攻撃',def:'🛡防御',mov:'🏃移動',pas:'✨パッシブ'}[sk.cat];
     let catCol={atk:'#ff6655',def:'#55aaff',mov:'#55ff88',pas:'#ffcc44'}[sk.cat];
-    ctx.font=Math.floor(r.w*.08)+'px sans-serif';
-    let catW=ctx.measureText(catLabel).width+8*sc,catH=14*sc;
-    roundRect(ctx,r.x+r.w/2-catW/2,r.y+r.h*.54,catW,catH,4*sc);
-    ctx.fillStyle=catCol;ctx.globalAlpha=0.2;ctx.fill();ctx.globalAlpha=1;
-    ctx.fillStyle=catCol;ctx.fillText(catLabel,r.x+r.w/2,r.y+r.h*.54+catH/2);
-    // Desc (wrap) with better styling
-    ctx.fillStyle='#e0e0e0';ctx.font=Math.floor(r.w*.09)+'px sans-serif';
-    let words=sk.desc,maxW=r.w-16*sc;
+    ctx.font=Math.floor(10*sc)+'px sans-serif';ctx.fillStyle=catCol;
+    ctx.fillText(catLabel,textX,r.y+28*sc);
+    // Desc (wrap)
+    ctx.fillStyle='#e0e0e0';ctx.font=Math.floor(12*sc)+'px sans-serif';
+    let words=sk.desc,maxW=textW;
     let lines=[],line='';
     for(let ch of words){let test=line+ch;if(ctx.measureText(test).width>maxW&&line){lines.push(line);line=ch}else line=test}
     if(line)lines.push(line);
-    let ly=r.y+r.h*.68;
-    for(let l of lines){ctx.fillText(l,r.x+r.w/2,ly);ly+=r.w*.11}
+    let ly=r.y+44*sc;
+    for(let l of lines){ctx.fillText(l,textX,ly);ly+=14*sc}
   }
 }
 
