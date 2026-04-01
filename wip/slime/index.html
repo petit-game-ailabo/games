@@ -69,6 +69,8 @@ let score=0,eatCount=0,foodCount=0,timeLeft=180,survivalTime=0;
 let hiScoreKing=parseInt(localStorage.getItem('slimeMergeHi'))||0;
 let hiScoreEndless=parseInt(localStorage.getItem('slimeMergeHiE'))||0;
 let frameCount=0;
+let gameStartTime=0;
+let scorePopups=[];
 let W,H;
 // Input
 let inputDir={x:0,y:0};
@@ -105,15 +107,39 @@ function spawnFood(){
   return{x:Math.random()*FIELD_W,y:Math.random()*FIELD_H,phase:Math.random()*Math.PI*2,alive:true};
 }
 
-function spawnEnemy(playerLv){
-  let minLv=Math.max(1,playerLv-2),maxLv=Math.min(MAX_LEVEL,playerLv+2);
-  let lv=minLv+Math.floor(Math.random()*(maxLv-minLv+1));
-  let x=Math.random()*FIELD_W,y=Math.random()*FIELD_H;
-  // Don't spawn too close to player
-  if(player){
-    let dx=x-player.x,dy=y-player.y;
-    if(Math.sqrt(dx*dx+dy*dy)<300){x=(x+FIELD_W/2)%FIELD_W;y=(y+FIELD_H/2)%FIELD_H}
+function pickEnemyLevel(playerLv){
+  let elapsed=(Date.now()-gameStartTime)/1000;
+  if(elapsed<30){
+    // First 30s: 70% Lv1, 30% Lv2
+    return Math.random()<0.7?1:2;
+  }else if(elapsed<60){
+    // 30-60s: 40% Lv1, 40% Lv2, 20% Lv3
+    let r=Math.random();
+    if(r<0.4)return 1;
+    if(r<0.8)return 2;
+    return 3;
+  }else{
+    // 60s+: player level ±2
+    let minLv=Math.max(1,playerLv-2),maxLv=Math.min(MAX_LEVEL,playerLv+2);
+    return minLv+Math.floor(Math.random()*(maxLv-minLv+1));
   }
+}
+
+function spawnEnemy(playerLv){
+  let lv=pickEnemyLevel(playerLv);
+  let x,y,attempts=0;
+  let lvDiff=player?Math.abs(lv-player.lv):0;
+  let safeDist=lvDiff>=2?300:200;
+  do{
+    x=Math.random()*FIELD_W;y=Math.random()*FIELD_H;
+    attempts++;
+    if(attempts>50)break;
+    if(player){
+      let dx=x-player.x,dy=y-player.y;
+      if(Math.sqrt(dx*dx+dy*dy)<safeDist)continue;
+    }
+    break;
+  }while(true);
   return makeSlime(x,y,lv,false);
 }
 
@@ -122,6 +148,10 @@ function addParticle(x,y,color,count){
     let a=Math.random()*Math.PI*2,sp=Math.random()*3+1;
     particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,color,size:Math.random()*4+2});
   }
+}
+
+function addScorePopup(x,y,text,big){
+  scorePopups.push({x,y,text,big:!!big,life:1,startY:y});
 }
 
 // --- Game init ---
@@ -133,7 +163,7 @@ function startGame(mode){
   foods=[];
   particles=[];
   mergeAnims=[];
-  score=0;eatCount=0;foodCount=0;timeLeft=180;survivalTime=0;frameCount=0;
+  score=0;eatCount=0;foodCount=0;timeLeft=180;survivalTime=0;frameCount=0;gameStartTime=Date.now();scorePopups=[];
   for(let i=0;i<TARGET_ENEMIES;i++)enemies.push(spawnEnemy(1));
   for(let i=0;i<MAX_FOODS;i++)foods.push(spawnFood());
   state='playing';
@@ -316,6 +346,8 @@ function handleInteraction(a,b){
     addParticle(a.x,a.y,slimeColor(a),15);
     sfxMerge();
     if(a.isPlayer){
+      let mergeScore=500;score+=mergeScore;
+      addScorePopup(a.x,a.y,'MERGE! +'+mergeScore,true);
       sfxLevelUp();
       if(a.lv>=MAX_LEVEL&&gameMode==='king'){
         let finalScore=a.lv*1000+eatCount*100+Math.floor(timeLeft)*10;
@@ -334,7 +366,7 @@ function handleInteraction(a,b){
     a.mouthState='eat';a.mouthTimer=15;
     addParticle(b.x,b.y,slimeColor(b),8);
     sfxEat();
-    if(a.isPlayer){eatCount++;score+=100}
+    if(a.isPlayer){eatCount++;score+=100;addScorePopup(a.x,a.y,'+100',false)}
   }else if(diff<=-2){
     // b eats a
     a.alive=false;
@@ -347,7 +379,7 @@ function handleInteraction(a,b){
       score=finalScore;
       state='gameover';return;
     }
-    if(b.isPlayer){eatCount++;score+=100}
+    if(b.isPlayer){eatCount++;score+=100;addScorePopup(b.x,b.y,'+100',false)}
   }
 }
 
@@ -466,6 +498,13 @@ function update(){
     p.x+=p.vx;p.y+=p.vy;p.life-=0.03;p.vx*=0.95;p.vy*=0.95;
   }
   particles=particles.filter(p=>p.life>0);
+
+  // Update score popups
+  for(let sp of scorePopups){
+    sp.life-=1/30; // 0.5s duration = ~30 frames
+    sp.y=sp.startY-(1-sp.life)*40;
+  }
+  scorePopups=scorePopups.filter(sp=>sp.life>0);
 
   // Camera
   camera.x=player.x-W/(2*devicePixelRatio);
@@ -597,6 +636,21 @@ function drawFieldBorder(ox,oy){
   ctx.strokeRect(bx,by,FIELD_W*devicePixelRatio,FIELD_H*devicePixelRatio);
 }
 
+function drawScorePopups(ox,oy){
+  let sc=devicePixelRatio;
+  for(let sp of scorePopups){
+    let x=(sp.x-ox)*sc,y=(sp.y-oy)*sc;
+    ctx.globalAlpha=Math.max(0,sp.life);
+    ctx.fillStyle=sp.big?'#FFD700':'#fff';
+    ctx.font='bold '+(sp.big?24*sc:16*sc)+'px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=3*sc;
+    ctx.strokeText(sp.text,x,y);
+    ctx.fillText(sp.text,x,y);
+  }
+  ctx.globalAlpha=1;
+}
+
 function drawMinimap(){
   let ms=MINIMAP_SIZE*devicePixelRatio;
   let mx=W-ms-10*devicePixelRatio,my=10*devicePixelRatio;
@@ -605,16 +659,25 @@ function drawMinimap(){
   ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1;
   ctx.strokeRect(mx,my,ms,ms);
   let scale=ms/FIELD_W;
-  // Enemies
+  // Enemies - size by level, color matches slime
   for(let e of enemies){
     if(!e.alive)continue;
+    let dotSize=(1+e.lv)*devicePixelRatio; // Lv1=2, Lv7=8
     ctx.fillStyle=slimeColor(e);
-    ctx.beginPath();ctx.arc(mx+e.x*scale,my+e.y*scale,Math.max(2,LEVELS[e.lv].r*scale),0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(mx+e.x*scale,my+e.y*scale,dotSize,0,Math.PI*2);ctx.fill();
   }
-  // Player
+  // Player - white dot with pulsating ring
   if(player&&player.alive){
+    let px=mx+player.x*scale,py=my+player.y*scale;
+    // Pulsating ring
+    let pulse=Math.sin(frameCount*0.08)*0.5+1.5;
+    let ringR=5*devicePixelRatio*pulse;
+    ctx.strokeStyle='rgba(255,255,255,'+(0.6-pulse*0.2)+')';
+    ctx.lineWidth=1.5*devicePixelRatio;
+    ctx.beginPath();ctx.arc(px,py,ringR,0,Math.PI*2);ctx.stroke();
+    // White dot
     ctx.fillStyle='#fff';
-    ctx.beginPath();ctx.arc(mx+player.x*scale,my+player.y*scale,4*devicePixelRatio,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(px,py,3*devicePixelRatio,0,Math.PI*2);ctx.fill();
     ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.stroke();
   }
 }
@@ -622,8 +685,9 @@ function drawMinimap(){
 function drawHUD(){
   let sc=devicePixelRatio;
   let fs=16*sc;
+  let hudH=gameMode==='king'?100*sc:90*sc;
   ctx.fillStyle='rgba(0,0,0,0.6)';
-  ctx.fillRect(8*sc,8*sc,180*sc,gameMode==='king'?80*sc:70*sc);
+  ctx.fillRect(8*sc,8*sc,200*sc,hudH);
   ctx.fillStyle='#fff';ctx.font='bold '+fs+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
   let lvInfo=LEVELS[player.lv];
   ctx.fillText('Lv'+player.lv+' '+lvInfo.name,16*sc,14*sc);
@@ -635,11 +699,27 @@ function drawHUD(){
   }else{
     ctx.fillText('生存: '+Math.floor(survivalTime)+'秒',16*sc,56*sc);
   }
-  // Food progress
+  // Growth gauge with rainbow gradient
   if(player.lv<MAX_LEVEL){
-    let barX=16*sc,barY=gameMode==='king'?76*sc:72*sc,barW=160*sc,barH=6*sc;
-    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillRect(barX,barY,barW,barH);
-    ctx.fillStyle='#7ED321';ctx.fillRect(barX,barY,barW*(player.foodEaten/FOOD_EAT_COUNT),barH);
+    let barX=16*sc,barY=gameMode==='king'?78*sc:74*sc,barW=170*sc,barH=8*sc;
+    ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(barX,barY,barW,barH);
+    let fillW=barW*(player.foodEaten/FOOD_EAT_COUNT);
+    if(fillW>0){
+      let grad=ctx.createLinearGradient(barX,0,barX+barW,0);
+      grad.addColorStop(0,'#ff0000');grad.addColorStop(0.17,'#ff8800');
+      grad.addColorStop(0.33,'#ffff00');grad.addColorStop(0.5,'#00ff00');
+      grad.addColorStop(0.67,'#0088ff');grad.addColorStop(0.83,'#8800ff');
+      grad.addColorStop(1,'#ff00ff');
+      ctx.fillStyle=grad;ctx.fillRect(barX,barY,fillW,barH);
+    }
+    ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;ctx.strokeRect(barX,barY,barW,barH);
+    // Text
+    ctx.fillStyle='#fff';ctx.font=''+(12*sc)+'px sans-serif';
+    ctx.fillText('🍖 '+player.foodEaten+'/'+FOOD_EAT_COUNT,barX,barY+barH+3*sc);
+  }else{
+    let barY=gameMode==='king'?78*sc:74*sc;
+    ctx.fillStyle='#FFD700';ctx.font='bold '+(12*sc)+'px sans-serif';
+    ctx.fillText('👑 MAX LEVEL',16*sc,barY);
   }
 }
 
@@ -815,6 +895,8 @@ function loop(){
     for(let e of enemies)if(e.alive)drawSlime(e,ox,oy);
     // Player
     if(player.alive)drawSlime(player,ox,oy);
+    // Score popups
+    drawScorePopups(ox,oy);
     // UI
     drawHUD();
     drawMinimap();
