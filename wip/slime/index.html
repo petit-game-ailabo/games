@@ -774,19 +774,27 @@ function drawHUD(){
       let ry=panelY+padY+i*rowH;
       // Rarity color bar (thin left border)
       ctx.fillStyle=RC[sk.rarity];ctx.fillRect(panelX+2*sc,ry+2*sc,2*sc,rowH-4*sc);
-      // Cooldown check - grey out if on cooldown
-      let onCD=false;
-      if(sk.id==='shield'&&ss.shieldCD&&frameCount<ss.shieldCD)onCD=true;
-      if(sk.id==='mirror_shield'&&ss.mirrorCD&&frameCount<ss.mirrorCD)onCD=true;
-      if(sk.id==='deflect'&&ss.deflectCD&&frameCount<ss.deflectCD)onCD=true;
-      if(sk.id==='warp'&&ss.warpCD&&frameCount<ss.warpCD)onCD=true;
+      // Cooldown check - grey out if on cooldown + show remaining seconds
+      let cdRemain=0;
+      if(sk.id==='shield'&&ss.shieldCD&&frameCount<ss.shieldCD)cdRemain=ss.shieldCD-frameCount;
+      if(sk.id==='mirror_shield'&&ss.mirrorCD&&frameCount<ss.mirrorCD)cdRemain=ss.mirrorCD-frameCount;
+      if(sk.id==='deflect'&&ss.deflectCD&&frameCount<ss.deflectCD)cdRemain=ss.deflectCD-frameCount;
+      if(sk.id==='warp'&&ss.warpCD&&frameCount<ss.warpCD)cdRemain=ss.warpCD-frameCount;
+      if(sk.id==='blink'&&ss.blinkCD&&frameCount<ss.blinkCD)cdRemain=ss.blinkCD-frameCount;
+      if(sk.id==='evasion'&&ss.evasionCD&&frameCount<ss.evasionCD)cdRemain=ss.evasionCD-frameCount;
+      if(sk.id==='guardian_angel'&&ss.gaCD&&frameCount<ss.gaCD)cdRemain=ss.gaCD-frameCount;
+      if(sk.id==='time_stop'&&ss.tsCD&&frameCount<ss.tsCD)cdRemain=ss.tsCD-frameCount;
+      let onCD=cdRemain>0;
+      let cdSec=onCD?Math.ceil(cdRemain/60):0;
       if(onCD)ctx.globalAlpha=0.4;
       // Icon + Name
       ctx.font=Math.floor(12*sc)+'px sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
-      ctx.fillStyle='#fff';ctx.fillText(sk.icon,panelX+padX+2*sc,ry+rowH/2);
+      ctx.fillStyle=onCD?'#666':'#fff';ctx.fillText(sk.icon,panelX+padX+2*sc,ry+rowH/2);
       ctx.font='bold '+Math.floor(10*sc)+'px sans-serif';
       ctx.fillStyle=onCD?'#888':RC[sk.rarity];
       ctx.fillText(sk.name,panelX+padX+iconSz+4*sc,ry+rowH/2);
+      // Show remaining cooldown seconds
+      if(onCD){ctx.globalAlpha=0.9;ctx.fillStyle='#ff6644';ctx.font='bold '+Math.floor(9*sc)+'px sans-serif';ctx.textAlign='right';ctx.fillText(cdSec+'s',panelX+panelW-padX,ry+rowH/2);ctx.textAlign='left'}
       if(onCD)ctx.globalAlpha=1;
     }
     // "more" indicator
