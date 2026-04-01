@@ -732,6 +732,90 @@ function drawScorePopups(ox,oy){
   ctx.globalAlpha=1;
 }
 
+function drawEdgeIndicators(ox,oy){
+  if(!player||!player.alive)return;
+  let sc=devicePixelRatio;
+  let sw=W/sc,sh=H/sc;
+  let margin=30*sc; // distance from screen edge
+  let arrowSize=10*sc;
+  let maxDist=800; // only show indicators within this distance
+
+  for(let e of enemies){
+    if(!e.alive)continue;
+    let ex=e.x-ox,ey=e.y-oy;
+    // Skip if on screen
+    let er=slimeBaseRadius(e)+10;
+    if(ex>-er&&ex<sw+er&&ey>-er&&ey<sh+er)continue;
+    // Distance check
+    let dx=e.x-player.x,dy=e.y-player.y;
+    let dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>maxDist)continue;
+
+    // Determine color based on level difference
+    let diff=player.lv-e.lv;
+    let color,alpha;
+    if(diff<=-2){
+      // Threat - red
+      color='#ff4444';alpha=0.9;
+    }else if(diff>=2){
+      // Prey - green
+      color='#44ff44';alpha=0.7;
+    }else if(diff===0){
+      // Same level - yellow (merge candidate)
+      color='#ffdd00';alpha=0.7;
+    }else{
+      // ±1 level - skip (not very interesting)
+      continue;
+    }
+
+    // Calculate screen edge position
+    let angle=Math.atan2(dy,dx);
+    let centerX=W/2,centerY=H/2;
+    // Project to screen edge
+    let ix,iy;
+    let cosA=Math.cos(angle),sinA=Math.sin(angle);
+    // Find intersection with screen rectangle
+    let hw=W/2-margin,hh=H/2-margin;
+    let tx=Math.abs(cosA)>0.001?hw/Math.abs(cosA):1e9;
+    let ty=Math.abs(sinA)>0.001?hh/Math.abs(sinA):1e9;
+    let t=Math.min(tx,ty);
+    ix=centerX+cosA*t;
+    iy=centerY+sinA*t;
+
+    // Clamp
+    ix=Math.max(margin,Math.min(W-margin,ix));
+    iy=Math.max(margin,Math.min(H-margin,iy));
+
+    // Fade by distance
+    let distFade=1-dist/maxDist;
+    ctx.save();
+    ctx.globalAlpha=alpha*distFade;
+    ctx.translate(ix,iy);
+    ctx.rotate(angle);
+
+    // Draw arrow
+    ctx.fillStyle=color;
+    ctx.beginPath();
+    ctx.moveTo(arrowSize,0);
+    ctx.lineTo(-arrowSize*0.6,-arrowSize*0.7);
+    ctx.lineTo(-arrowSize*0.3,0);
+    ctx.lineTo(-arrowSize*0.6,arrowSize*0.7);
+    ctx.closePath();
+    ctx.fill();
+
+    // Level label
+    ctx.rotate(-angle); // un-rotate for text
+    ctx.font='bold '+Math.floor(10*sc)+'px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=color;
+    ctx.strokeStyle='rgba(0,0,0,0.6)';ctx.lineWidth=2*sc;
+    ctx.strokeText('Lv'+e.lv,-Math.cos(angle)*18*sc,-Math.sin(angle)*18*sc);
+    ctx.fillText('Lv'+e.lv,-Math.cos(angle)*18*sc,-Math.sin(angle)*18*sc);
+
+    ctx.restore();
+  }
+}
+
 function drawMinimap(){
   let ms=MINIMAP_SIZE*devicePixelRatio;
   let mx=W-ms-10*devicePixelRatio,my=10*devicePixelRatio;
@@ -1000,6 +1084,8 @@ function loop(){
     if(player.alive)drawSlime(player,ox,oy);
     // Score popups
     drawScorePopups(ox,oy);
+    // Edge indicators
+    drawEdgeIndicators(ox,oy);
     // UI
     drawHUD();
     drawMinimap();
