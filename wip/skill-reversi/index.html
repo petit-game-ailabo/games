@@ -111,7 +111,11 @@ canvas{display:block;width:100%;border-radius:4px}
 <div id="resultOverlay">
 <h2 id="resultTitle"></h2>
 <div class="score" id="resultScore"></div>
-<button onclick="location.reload()">🔄 もう一度</button>
+<div id="resultDetails" style="font-size:.85em;color:#bbb;margin-bottom:12px;text-align:left;max-width:320px;line-height:1.6"></div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+<button id="replayBtn" style="padding:14px 28px;font-size:1em;border:none;border-radius:12px;background:#4a7c59;color:#fff;cursor:pointer">🔄 もう一度</button>
+<button id="changeDiffBtn" style="padding:14px 28px;font-size:1em;border:none;border-radius:12px;background:#5a5a8a;color:#fff;cursor:pointer">🎚️ 難易度変更</button>
+</div>
 </div>
 
 <script>
@@ -122,18 +126,20 @@ const B=1,W=2,EMPTY=0,WALL_B=3,WALL_W=4;
 const DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
 
 const SKILLS=[
-{id:'hanabi',icon:'🎆',name:'花火',desc:'石を置いた場所から十字に2マス展開',color:'#ff4444',power:1},
-{id:'override',icon:'🏗️',name:'上書き',desc:'相手の石の上にも置ける。置いた後に挟み判定',color:'#ff8800',power:2},
-{id:'wall',icon:'🛡️',name:'絶対防壁',desc:'この石は爆破を含む全スキルで破壊・裏返し不可。永久に残る絶対的な石',color:'#8888ff',power:3},
-{id:'bomb',icon:'💣',name:'爆破',desc:'石を置いた場所の周囲3×3の相手石を消す＋挟み判定',color:'#ff6600',power:2},
-{id:'king',icon:'👑',name:'キング',desc:'石を置いた後にもう1回置ける',color:'#ffcc00',power:2},
-{id:'tsunami',icon:'🌊',name:'津波',desc:'石を置いた位置の横一列を全て自分の色に変える',color:'#44aaff',power:3},
-{id:'thunder',icon:'⚡',name:'雷',desc:'石を置いた位置の縦一列に雷が落ち、全て自分の色に変える',color:'#ffdd00',power:3}
+{id:'hanabi',icon:'🎆',name:'花火',desc:'十字方向に最大2マス、空きに自分の石を配置。各石から挟み判定あり',color:'#ff4444',power:1},
+{id:'override',icon:'🏗️',name:'上書き',desc:'相手の石の上に自分の石を上書き配置。その位置から挟み判定が発生',color:'#ff8800',power:2},
+{id:'wall',icon:'🛡️',name:'絶対防壁',desc:'この石は裏返し・爆破・津波・雷など全スキルの効果を無効化。永久に残る',color:'#8888ff',power:3},
+{id:'bomb',icon:'💣',name:'爆破',desc:'置いた場所の周囲3×3の相手の石を全て消去。自分の石は残る',color:'#ff6600',power:2},
+{id:'king',icon:'👑',name:'キング',desc:'このターン、石を2回連続で置ける。2回とも通常の挟み判定あり',color:'#ffcc00',power:2},
+{id:'tsunami',icon:'🌊',name:'津波',desc:'置いた位置の横一列を全て自分の色に変える。空きマスにも石を配置',color:'#44aaff',power:3},
+{id:'thunder',icon:'⚡',name:'雷',desc:'置いた位置の縦一列に雷が落ち、全て自分の色に変える。空きマスにも配置',color:'#ffdd00',power:3}
 ];
 
 const SKILL_ICON_MAP={hanabi:'🎆',override:'🏗️',wall:'🛡️',bomb:'💣',king:'👑',tsunami:'🌊',thunder:'⚡'};
 
 function powerStars(p){return p===1?'★☆☆':p===2?'★★☆':'★★★'}
+function powerColor(p){return p===1?'#44cc44':p===2?'#4488ff':'#cc66ff'}
+function powerStarsHTML(p){return '<span style="color:'+powerColor(p)+'">'+powerStars(p)+'</span>'}
 
 // ===== AUDIO =====
 let audioCtx=null;
@@ -160,8 +166,12 @@ let effects=[];
 let flipAnims=[];
 let placeAnims=[];
 let particles=[];
+let totalTurnCount=0;
+let playerUsedSkills=[];
+let aiUsedSkills=[];
+let aiThinkingInterval=null;
 
-const diffSettings=[{depth:2,skillRate:.3},{depth:4,skillRate:.6},{depth:6,skillRate:.9}];
+const diffSettings=[{depth:1,skillRate:.3,cornerWeight:.3},{depth:3,skillRate:.6,cornerWeight:1},{depth:5,skillRate:.9,cornerWeight:1}];
 
 function isBlack(c){return c===B||c===WALL_B}
 function isWhite(c){return c===W||c===WALL_W}
@@ -594,9 +604,13 @@ const WEIGHT=[
 
 function evaluate(p){
 let s=0;
+let cw=diffSettings[difficulty].cornerWeight;
 for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-if(isOwn(board[r][c],p))s+=WEIGHT[r][c];
-else if(isOpp(board[r][c],p))s-=WEIGHT[r][c];
+let w=WEIGHT[r][c];
+// For easy mode, reduce corner/edge weight influence
+if(cw<1&&(Math.abs(w)>=10))w=Math.round(w*cw+(w>0?1:-1));
+if(isOwn(board[r][c],p))s+=w;
+else if(isOpp(board[r][c],p))s-=w;
 }
 return s;
 }
@@ -764,12 +778,26 @@ if(!move)move=moves[0];
 return{move,skill:null};
 }
 
+function startAiThinkingDots(){
+let dotCount=0;
+if(aiThinkingInterval)clearInterval(aiThinkingInterval);
+aiThinkingInterval=setInterval(()=>{
+dotCount=(dotCount%3)+1;
+document.getElementById('statusBar').textContent='AIが考え中'+'.'.repeat(dotCount);
+},500);
+document.getElementById('statusBar').textContent='AIが考え中.';
+}
+function stopAiThinkingDots(){
+if(aiThinkingInterval){clearInterval(aiThinkingInterval);aiThinkingInterval=null}
+}
+
 function aiTurn(){
 if(gameOver||animating)return;
 animating=true;
-setStatus('AIが考え中...');
+startAiThinkingDots();
 
 setTimeout(()=>{
+stopAiThinkingDots();
 let moves=getValidMoves(W);
 if(moves.length===0&&aiSkills.every(s=>s.id!=='override'||getValidMovesWithOverride(W).length===0)){
 passCount++;
@@ -804,6 +832,7 @@ let sk=decision.skill;
 
 if(sk){
 aiSkills.splice(decision.skillIdx,1);
+aiUsedSkills.push(sk);
 
 // New order: skill announcement → place piece → flip → skill effect
 showSkillActivation(sk.id,true,()=>{
@@ -847,6 +876,7 @@ clearEffects();
 animating=false;
 turn=B;
 aiTurnCount++;
+totalTurnCount++;
 checkSkillGainAI();
 if(checkGameEnd())return;
 nextTurn();
@@ -857,20 +887,33 @@ const canvas=document.getElementById('board');
 const ctx=canvas.getContext('2d');
 let cellSize;
 
+const COORD_MARGIN=20;
 function resize(){
 let w=Math.min(window.innerWidth-8,500);
-canvas.width=w;canvas.height=w;
+canvas.width=w+COORD_MARGIN;canvas.height=w+COORD_MARGIN;
 cellSize=w/8;
 draw();
 }
 
 function draw(){
-let w=canvas.width;
-ctx.fillStyle='#2D5F2D';ctx.fillRect(0,0,w,w);
+let bw=cellSize*8;
+let cw=canvas.width,ch=canvas.height;
+ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,cw,ch);
+ctx.save();
+// Draw coordinate labels
+ctx.fillStyle='#888';ctx.font='bold '+Math.max(10,COORD_MARGIN*0.6)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+const colLabels='abcdefgh';
+for(let i=0;i<8;i++){
+ctx.fillText(colLabels[i],COORD_MARGIN+i*cellSize+cellSize/2,COORD_MARGIN/2);
+ctx.fillText(String(i+1),COORD_MARGIN/2,COORD_MARGIN+i*cellSize+cellSize/2);
+}
+// Translate so board draws at offset
+ctx.translate(COORD_MARGIN,COORD_MARGIN);
+ctx.fillStyle='#2D5F2D';ctx.fillRect(0,0,bw,bw);
 ctx.strokeStyle='#3a7a3a';ctx.lineWidth=1;
 for(let i=0;i<=8;i++){
-ctx.beginPath();ctx.moveTo(i*cellSize,0);ctx.lineTo(i*cellSize,w);ctx.stroke();
-ctx.beginPath();ctx.moveTo(0,i*cellSize);ctx.lineTo(w,i*cellSize);ctx.stroke();
+ctx.beginPath();ctx.moveTo(i*cellSize,0);ctx.lineTo(i*cellSize,bw);ctx.stroke();
+ctx.beginPath();ctx.moveTo(0,i*cellSize);ctx.lineTo(bw,i*cellSize);ctx.stroke();
 }
 // Draw pieces
 for(let r=0;r<8;r++)for(let c=0;c<8;c++){
@@ -968,6 +1011,7 @@ drawEffects();
 drawParticles();
 drawFlipAnims();
 drawPlaceAnims();
+ctx.restore();
 }
 
 function drawEffects(){
@@ -1148,7 +1192,7 @@ showPickerAnnounce(()=>{
 picker.style.display='flex';
 choices.forEach(sk=>{
 let card=document.createElement('div');card.className='skill-card';
-card.innerHTML='<div class="icon">'+sk.icon+'</div><div class="desc"><h3>'+sk.name+'</h3><p>'+sk.desc+'</p><div class="power">パワー: '+powerStars(sk.power)+'</div></div>';
+card.innerHTML='<div class="icon">'+sk.icon+'</div><div class="desc"><h3>'+sk.name+'</h3><p>'+sk.desc+'</p><div class="power">パワー: '+powerStarsHTML(sk.power)+'</div></div>';
 card.onclick=()=>{
 playerSkills.push(sk);
 picker.style.display='none';
@@ -1221,13 +1265,27 @@ return false;
 
 function endGame(){
 gameOver=true;
+stopAiThinkingDots();
 let {b,w}=countPieces();
 let title;
 if(b>w){title='🎉 あなたの勝ち！';sfxWin()}
 else if(w>b){title='😭 AIの勝ち...';sfxLose()}
 else{title='🤝 引き分け';sfxPlace()}
 document.getElementById('resultTitle').textContent=title;
-document.getElementById('resultScore').textContent='⚫'+b+' vs ⚪'+w;
+document.getElementById('resultScore').textContent='⚫ '+b+' vs ⚪ '+w;
+// Build details
+let details='📊 ターン数: '+totalTurnCount+'<br>';
+if(playerUsedSkills.length>0){
+details+='🎮 あなたのスキル: '+playerUsedSkills.map(s=>s.icon+s.name).join(', ')+'<br>';
+}else{
+details+='🎮 あなたのスキル: なし<br>';
+}
+if(aiUsedSkills.length>0){
+details+='💻 AIのスキル: '+aiUsedSkills.map(s=>s.icon+s.name).join(', ')+'<br>';
+}else{
+details+='💻 AIのスキル: なし<br>';
+}
+document.getElementById('resultDetails').innerHTML=details;
 document.getElementById('resultOverlay').style.display='flex';
 saveRecord(b>w?'win':w>b?'lose':'draw');
 }
@@ -1267,8 +1325,11 @@ initAudio();
 let rect=canvas.getBoundingClientRect();
 let x=(e.clientX||e.touches[0].clientX)-rect.left;
 let y=(e.clientY||e.touches[0].clientY)-rect.top;
-let c=Math.floor((x/rect.width)*8);
-let r=Math.floor((y/rect.height)*8);
+let scale=rect.width/canvas.width;
+let bx=(x/scale-COORD_MARGIN);
+let by=(y/scale-COORD_MARGIN);
+let c=Math.floor(bx/cellSize);
+let r=Math.floor(by/cellSize);
 if(!inBounds(r,c))return;
 
 // King second move
@@ -1301,6 +1362,7 @@ if(!validMoves.some(([vr,vc])=>vr===r&&vc===c))return;
 
 let si=playerSkills.indexOf(sk);
 playerSkills.splice(si,1);
+playerUsedSkills.push(sk);
 loadedSkill=null;
 animating=true;
 
@@ -1333,6 +1395,7 @@ if(preFlips.length===0)return;
 
 let si=playerSkills.indexOf(sk);
 playerSkills.splice(si,1);
+playerUsedSkills.push(sk);
 loadedSkill=null;
 animating=true;
 
@@ -1368,6 +1431,7 @@ updateUI();
 if(checkGameEnd())return;
 turn=W;
 playerTurnCount++;
+totalTurnCount++;
 let needsSkill=shouldGainSkill(playerTurnCount);
 if(needsSkill){
 animating=true;
@@ -1410,6 +1474,8 @@ turn=B;playerTurnCount=0;aiTurnCount=0;passCount=0;
 playerSkills=[];aiSkills=[];
 loadedSkill=null;kingSecondMove=false;kingCallback=null;
 animating=false;gameOver=false;effects=[];flipAnims=[];placeAnims=[];particles=[];
+totalTurnCount=0;playerUsedSkills=[];aiUsedSkills=[];
+stopAiThinkingDots();
 document.getElementById('titleScreen').style.display='none';
 document.getElementById('gameScreen').style.display='flex';
 resize();updateUI();
@@ -1424,6 +1490,15 @@ b.classList.add('selected');difficulty=+b.dataset.diff;
 });
 
 document.getElementById('startBtn').onclick=startGame;
+document.getElementById('replayBtn').onclick=()=>{
+document.getElementById('resultOverlay').style.display='none';
+startGame();
+};
+document.getElementById('changeDiffBtn').onclick=()=>{
+document.getElementById('resultOverlay').style.display='none';
+document.getElementById('gameScreen').style.display='none';
+document.getElementById('titleScreen').style.display='flex';
+};
 
 canvas.addEventListener('click',handleBoardClick);
 canvas.addEventListener('touchstart',(e)=>{e.preventDefault();handleBoardClick(e)},{passive:false});
