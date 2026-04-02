@@ -21,23 +21,21 @@ body{background:#1a1a2e;color:#eee;font-family:'Segoe UI',sans-serif;overflow-x:
 .skill-stock{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:36px}
 .skill-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.2em;background:#2a2a4a;border:2px solid #444;cursor:pointer;transition:all .15s;flex-shrink:0}
 .skill-icon:hover{border-color:#aaf}
-.skill-icon.selected{border-color:#ff0;background:#4a4a2a;box-shadow:0 0 8px #ff0}
+.skill-icon.loaded{border-color:#ff0;background:#4a4a2a;box-shadow:0 0 12px #ff0;animation:pulse-glow 1s infinite alternate}
 .skill-icon.ai-icon{cursor:default;opacity:.85}
+@keyframes pulse-glow{0%{box-shadow:0 0 8px #ff0}100%{box-shadow:0 0 16px #ff0,0 0 24px rgba(255,255,0,.3)}}
 #canvasWrap{width:100%;position:relative;margin:2px 0}
 canvas{display:block;width:100%;border-radius:4px}
-.controls{width:100%;display:flex;gap:6px;padding:4px 0;justify-content:center;flex-wrap:wrap}
-.ctrl-btn{padding:8px 16px;border:2px solid #555;border-radius:10px;background:#2a2a4a;color:#eee;font-size:.9em;cursor:pointer;transition:all .15s}
-.ctrl-btn:active{transform:scale(.95)}
-.ctrl-btn.active{border-color:#ff0;background:#4a4a2a}
 #statusBar{width:100%;text-align:center;padding:6px;font-size:.95em;color:#ccc;min-height:28px}
 #skillPicker{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:100;flex-direction:column;align-items:center;justify-content:center;padding:20px}
-#skillPicker h2{color:#ff0;margin-bottom:15px;font-size:1.3em}
+#skillPicker h2{color:#ff0;margin-bottom:15px;font-size:1.3em;transition:opacity .3s}
 .skill-card{width:90%;max-width:360px;padding:16px;margin:8px 0;border-radius:14px;background:#2a2a4a;border:2px solid #555;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px}
 .skill-card:hover,.skill-card:active{border-color:#88f;background:#3a3a6a;transform:scale(1.02)}
 .skill-card .icon{font-size:2em;width:50px;text-align:center;flex-shrink:0}
 .skill-card .desc{flex:1}
 .skill-card .desc h3{font-size:1.1em;margin-bottom:4px}
 .skill-card .desc p{font-size:.8em;color:#aaa}
+.skill-card .power{font-size:.85em;color:#fc0;margin-top:4px}
 #resultOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:100;flex-direction:column;align-items:center;justify-content:center}
 #resultOverlay h2{font-size:2em;margin-bottom:10px}
 #resultOverlay .score{font-size:1.3em;margin-bottom:20px}
@@ -46,6 +44,9 @@ canvas{display:block;width:100%;border-radius:4px}
 #tsunamiPicker h2{color:#4af;margin-bottom:10px}
 .tsunami-btn{padding:10px 20px;margin:4px;border:2px solid #4af;border-radius:10px;background:#1a3a5a;color:#eee;cursor:pointer;font-size:1em}
 .tsunami-btn:active{background:#2a5a8a}
+#skillAnnounce{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:95;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+#skillAnnounce h2{color:#ff0;font-size:2em;animation:announce-pop .5s ease-out}
+@keyframes announce-pop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:1}}
 #record{position:fixed;top:4px;right:8px;font-size:.7em;color:#666;z-index:50}
 </style>
 </head>
@@ -73,21 +74,21 @@ canvas{display:block;width:100%;border-radius:4px}
 <span class="count" id="blackCount">⚫ 2</span>
 <div class="skill-stock" id="playerStock"></div>
 </div>
-<div class="controls">
-<button class="ctrl-btn active" id="normalBtn">📍 通常</button>
-<button class="ctrl-btn" id="skillBtn">⚡ スキル</button>
-</div>
 <div id="statusBar">あなたのターンです</div>
 </div>
 
 <div id="skillPicker">
-<h2>🎁 スキルを選べ！</h2>
+<h2 id="skillPickerTitle">🎁 スキルを選べ！</h2>
 <div id="skillCards"></div>
 </div>
 
 <div id="tsunamiPicker">
 <h2>🌊 津波：行 or 列を選べ</h2>
 <div id="tsunamiBtns"></div>
+</div>
+
+<div id="skillAnnounce">
+<h2>⚡ スキル選択！</h2>
 </div>
 
 <div id="resultOverlay">
@@ -104,14 +105,16 @@ const B=1,W=2,EMPTY=0,WALL_B=3,WALL_W=4,POISON_B=5,POISON_W=6;
 const DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
 
 const SKILLS=[
-{id:'hanabi',icon:'🎆',name:'花火',desc:'十字方向に2マスまで自分の石を配置',color:'#ff4444'},
-{id:'override',icon:'🏗️',name:'上書き',desc:'相手の石の上に自分の石を置ける',color:'#ff8800'},
-{id:'wall',icon:'🧱',name:'壁',desc:'裏返せない永久の石を置く',color:'#8888ff'},
-{id:'bomb',icon:'💣',name:'爆破',desc:'3×3範囲の相手の石を消す',color:'#ff6600'},
-{id:'king',icon:'👑',name:'キング',desc:'2回連続で石を置ける',color:'#ffcc00'},
-{id:'tsunami',icon:'🌊',name:'津波',desc:'1行or1列の全石を自分の色に',color:'#44aaff'},
-{id:'poison',icon:'💀',name:'毒',desc:'自分の石を毒石に。裏返すと罠発動',color:'#aa44ff'}
+{id:'hanabi',icon:'🎆',name:'花火',desc:'石を置いた場所から十字に2マス展開',color:'#ff4444',power:1},
+{id:'override',icon:'🏗️',name:'上書き',desc:'相手の石の上にも置ける。置いた後に挟み判定',color:'#ff8800',power:2},
+{id:'wall',icon:'🛡️',name:'絶対防壁',desc:'この石は爆破を含む全スキルで破壊・裏返し不可。永久に残る絶対的な石',color:'#8888ff',power:3},
+{id:'bomb',icon:'💣',name:'爆破',desc:'石を置いた場所の周囲3×3の相手石を消す＋挟み判定',color:'#ff6600',power:2},
+{id:'king',icon:'👑',name:'キング',desc:'石を置いた後にもう1回置ける',color:'#ffcc00',power:2},
+{id:'tsunami',icon:'🌊',name:'津波',desc:'石を置いた後、行or列の全相手石を自分色に',color:'#44aaff',power:3},
+{id:'poison',icon:'💀',name:'毒',desc:'石を置いた場所が毒石になる。裏返すと罠発動',color:'#aa44ff',power:1}
 ];
+
+function powerStars(p){return p===1?'★☆☆':p===2?'★★☆':'★★★'}
 
 // ===== AUDIO =====
 let audioCtx=null;
@@ -132,8 +135,8 @@ function sfxWin(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,.3
 function sfxLose(){[400,350,300,250].forEach((f,i)=>setTimeout(()=>playTone(f,.25,'sawtooth',.15),i*200))}
 
 // ===== GAME STATE =====
-let board,turn,turnCount,playerSkills,aiSkills,difficulty,selectedSkill,skillMode;
-let kingSecondMove,animating,gameOver,passCount;
+let board,turn,playerTurnCount,aiTurnCount,playerSkills,aiSkills,difficulty;
+let loadedSkill,kingSecondMove,animating,gameOver,passCount;
 let effects=[];
 
 const diffSettings=[{depth:2,skillRate:.3},{depth:4,skillRate:.6},{depth:6,skillRate:.9}];
@@ -144,7 +147,7 @@ function isWall(c){return c===WALL_B||c===WALL_W}
 function isPoison(c){return c===POISON_B||c===POISON_W}
 function colorOf(c){if(isBlack(c))return B;if(isWhite(c))return W;return EMPTY}
 function isOwn(c,p){return colorOf(c)===p}
-function isOpp(c,p){return colorOf(c)!=EMPTY&&colorOf(c)!==p}
+function isOpp(c,p){return colorOf(c)!==EMPTY&&colorOf(c)!==p}
 function inBounds(r,c){return r>=0&&r<8&&c>=0&&c<8}
 
 function initBoard(){
@@ -184,6 +187,18 @@ if(getFlips(r,c,player).length>0)moves.push([r,c]);
 return moves;
 }
 
+// Valid moves when override skill is loaded: normal moves + opponent non-wall cells
+function getValidMovesWithOverride(player){
+let moves=getValidMoves(player);
+let moveSet=new Set(moves.map(([r,c])=>r*8+c));
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+if(isOpp(board[r][c],player)&&!isWall(board[r][c])&&!moveSet.has(r*8+c)){
+moves.push([r,c]);
+}
+}
+return moves;
+}
+
 function placePiece(r,c,player){
 const flips=getFlips(r,c,player);
 board[r][c]=player;
@@ -210,67 +225,7 @@ addEffect(nr,nc,'poison');
 }
 }
 
-// ===== SKILL LOGIC =====
-function getSkillTargets(skillId,player){
-let targets=[];
-switch(skillId){
-case 'hanabi':
-for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(board[r][c]===EMPTY)targets.push([r,c]);
-break;
-case 'override':
-for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(isOpp(board[r][c],player)&&!isWall(board[r][c]))targets.push([r,c]);
-break;
-case 'wall':
-for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(board[r][c]===EMPTY)targets.push([r,c]);
-break;
-case 'bomb':
-for(let r=0;r<8;r++)for(let c=0;c<8;c++)targets.push([r,c]);
-break;
-case 'king':
-targets=getValidMoves(player);
-break;
-case 'tsunami':
-targets=[[-1,-1]];
-break;
-case 'poison':
-for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(board[r][c]===player)targets.push([r,c]);
-break;
-}
-return targets;
-}
-
-function executeSkill(skillId,r,c,player,extra){
-sfxSkill();
-switch(skillId){
-case 'hanabi': return execHanabi(r,c,player);
-case 'override': return execOverride(r,c,player);
-case 'wall': return execWall(r,c,player);
-case 'bomb': return execBomb(r,c,player);
-case 'king': return execKing(r,c,player);
-case 'tsunami': return execTsunami(extra,player);
-case 'poison': return execPoison(r,c,player);
-}
-}
-
-function execHanabi(r,c,player){
-let placed=[[r,c]];
-board[r][c]=player;
-const cross=[[-1,0],[1,0],[0,-1],[0,1]];
-for(const[dr,dc]of cross){
-for(let d=1;d<=2;d++){
-let nr=r+dr*d,nc=c+dc*d;
-if(inBounds(nr,nc)&&board[nr][nc]===EMPTY){board[nr][nc]=player;placed.push([nr,nc])}
-else break;
-}
-}
-for(const[pr,pc]of placed){
-const flips=getFlips2(pr,pc,player);
-for(const[fr,fc]of flips){if(!isWall(board[fr][fc]))board[fr][fc]=player}
-}
-for(const[pr,pc]of placed)addEffect(pr,pc,'hanabi');
-return true;
-}
-
+// ===== SKILL EXECUTION (all based on placement position) =====
 function getFlips2(r,c,player){
 let flips=[];
 for(const[dr,dc]of DIRS){
@@ -283,15 +238,43 @@ if(line.length>0&&inBounds(nr,nc)&&isOwn(board[nr][nc],player))flips.push(...lin
 return flips;
 }
 
-function execOverride(r,c,player){
-board[r][c]=player;
-addEffect(r,c,'override');
-const flips=getFlips2(r,c,player);
+// Execute skill effect AFTER placing stone at (r,c)
+function executeSkillAtPlacement(skillId,r,c,player){
+sfxSkill();
+switch(skillId){
+case 'hanabi': return execHanabi(r,c,player);
+case 'override': return true; // override effect is handled during placement
+case 'wall': return execWall(r,c,player);
+case 'bomb': return execBomb(r,c,player);
+case 'king': return 'king';
+case 'tsunami': return 'tsunami';
+case 'poison': return execPoison(r,c,player);
+}
+}
+
+function execHanabi(r,c,player){
+// Stone already placed at r,c. Expand cross from that position.
+let placed=[];
+const cross=[[-1,0],[1,0],[0,-1],[0,1]];
+for(const[dr,dc]of cross){
+for(let d=1;d<=2;d++){
+let nr=r+dr*d,nc=c+dc*d;
+if(inBounds(nr,nc)&&board[nr][nc]===EMPTY){board[nr][nc]=player;placed.push([nr,nc])}
+else break;
+}
+}
+// Check flips for each placed stone
+for(const[pr,pc]of placed){
+const flips=getFlips2(pr,pc,player);
 for(const[fr,fc]of flips){if(!isWall(board[fr][fc]))board[fr][fc]=player}
+}
+addEffect(r,c,'hanabi');
+for(const[pr,pc]of placed)addEffect(pr,pc,'hanabi');
 return true;
 }
 
 function execWall(r,c,player){
+// Convert the placed stone to a wall stone
 board[r][c]=player===B?WALL_B:WALL_W;
 addEffect(r,c,'wall');
 return true;
@@ -299,7 +282,9 @@ return true;
 
 function execBomb(r,c,player){
 sfxBomb();
+// Remove opponent stones in 3x3 around placement (walls immune)
 for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+if(dr===0&&dc===0)continue;
 let nr=r+dr,nc=c+dc;
 if(inBounds(nr,nc)&&isOpp(board[nr][nc],player)&&!isWall(board[nr][nc])){
 board[nr][nc]=EMPTY;addEffect(nr,nc,'bomb');
@@ -308,29 +293,28 @@ board[nr][nc]=EMPTY;addEffect(nr,nc,'bomb');
 return true;
 }
 
-function execKing(r,c,player){
-placePiece(r,c,player);
-addEffect(r,c,'king');
-return'king';
+function execPoison(r,c,player){
+// Convert the placed stone to a poison stone
+board[r][c]=player===B?POISON_B:POISON_W;
+addEffect(r,c,'poison_place');
+return true;
 }
 
-function execTsunami(idx,player){
+function execTsunamiLine(idx,player){
 if(idx<8){
 for(let c=0;c<8;c++){
-if(board[idx][c]!==EMPTY&&!isWall(board[idx][c])){board[idx][c]=player===B?B:W;addEffect(idx,c,'tsunami')}
+if(board[idx][c]!==EMPTY&&!isWall(board[idx][c])&&isOpp(board[idx][c],player)){
+board[idx][c]=player===B?B:W;addEffect(idx,c,'tsunami');
+}
 }
 }else{
 let col=idx-8;
 for(let r=0;r<8;r++){
-if(board[r][col]!==EMPTY&&!isWall(board[r][col])){board[r][col]=player===B?B:W;addEffect(r,col,'tsunami')}
+if(board[r][col]!==EMPTY&&!isWall(board[r][col])&&isOpp(board[r][col],player)){
+board[r][col]=player===B?B:W;addEffect(r,col,'tsunami');
 }
 }
-return true;
 }
-
-function execPoison(r,c,player){
-board[r][c]=player===B?POISON_B:POISON_W;
-addEffect(r,c,'poison_place');
 return true;
 }
 
@@ -408,56 +392,126 @@ let best=0;for(let i=1;i<scores.length;i++)if(scores[i]>scores[best])best=i;
 return choices[best];
 }
 
-function aiDecideSkillUse(){
+// AI decides which skill to use and where to place
+function aiDecideMove(){
 let settings=diffSettings[difficulty];
 let emp=emptyCount();
-if(aiSkills.length===0)return null;
-if(emp>45)return null;
-if(Math.random()>settings.skillRate)return null;
-if(emp<=15||Math.random()<.4){
-for(let sk of aiSkills){
-let targets=getSkillTargets(sk.id,W);
-if(targets.length>0)return{skill:sk,targets};
-}
-}
-return null;
+let moves=getValidMoves(W);
+
+// Corner priority (no skill)
+let cornerMoves=moves.filter(([r,c])=>(r===0||r===7)&&(c===0||c===7));
+if(cornerMoves.length>0){
+return{move:cornerMoves[0],skill:null};
 }
 
-function aiBestSkillTarget(sk,targets){
-if(sk.id==='tsunami'){
-let best=-1,bestScore=-Infinity;
-for(let i=0;i<16;i++){
+// Consider using a skill
+if(aiSkills.length>0&&emp<=45&&Math.random()<settings.skillRate){
+let bestResult=null;
+for(let si=0;si<aiSkills.length;si++){
+let sk=aiSkills[si];
+let candidateMoves=sk.id==='override'?getValidMovesWithOverride(W):moves;
+if(candidateMoves.length===0)continue;
+
+for(const[r,c]of candidateMoves){
 let saved=board.map(row=>[...row]);
-execTsunami(i,W);
-let s=evaluate(W);
+// Simulate placement + skill
+if(sk.id==='override'){
+// Place on opponent or empty
+if(board[r][c]===EMPTY){
+placePiece(r,c,W);
+}else{
+board[r][c]=W;
+let flips=getFlips2(r,c,W);
+for(const[fr,fc]of flips)if(!isWall(board[fr][fc]))board[fr][fc]=W;
+}
+}else{
+if(getFlips(r,c,W).length===0&&sk.id!=='override'){board=saved;continue}
+placePiece(r,c,W);
+}
+// Apply skill effect
+if(sk.id==='hanabi')execHanabi(r,c,W);
+else if(sk.id==='wall'){board[r][c]=WALL_W}
+else if(sk.id==='bomb'){
+for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+if(dr===0&&dc===0)continue;
+let nr=r+dr,nc=c+dc;
+if(inBounds(nr,nc)&&isOpp(board[nr][nc],W)&&!isWall(board[nr][nc]))board[nr][nc]=EMPTY;
+}
+}
+else if(sk.id==='poison'){board[r][c]=POISON_W}
+// king and tsunami evaluated separately
+
+let score=evaluate(W);
 board=saved;
-if(s>bestScore){bestScore=s;best=i}
+if(!bestResult||score>bestResult.score){
+bestResult={score,move:[r,c],skill:sk,skillIdx:si};
 }
-return{extra:best};
 }
+
+// Tsunami: try all 16 lines for each valid move
+if(sk.id==='tsunami'&&moves.length>0){
+let m=moves[0]; // pick a good move first
+let bestM=moves[0],bestMS=-Infinity;
+for(const[r,c]of moves){
+let saved2=board.map(row=>[...row]);
+placePiece(r,c,W);
+let s2=evaluate(W);
+board=saved2;
+if(s2>bestMS){bestMS=s2;bestM=[r,c]}
+}
+for(let idx=0;idx<16;idx++){
+let saved=board.map(row=>[...row]);
+placePiece(bestM[0],bestM[1],W);
+execTsunamiLine(idx,W);
+let score=evaluate(W);
+board=saved;
+if(!bestResult||score>bestResult.score){
+bestResult={score,move:bestM,skill:sk,skillIdx:si,tsunamiIdx:idx};
+}
+}
+}
+
+// King: try placing twice
 if(sk.id==='king'){
-let moves=getValidMoves(W);
-if(moves.length===0)return null;
-let best=moves[0],bestScore=-Infinity;
+for(const[r,c]of moves){
+let saved=board.map(row=>[...row]);
+placePiece(r,c,W);
+let moves2=getValidMoves(W);
+for(const[r2,c2]of moves2){
+let saved2=board.map(row=>[...row]);
+placePiece(r2,c2,W);
+let score=evaluate(W);
+board=saved2;
+if(!bestResult||score>bestResult.score){
+bestResult={score,move:[r,c],skill:sk,skillIdx:si,kingMove:[r2,c2]};
+}
+}
+board=saved;
+}
+}
+}
+if(bestResult&&bestResult.skill){
+// Compare with best no-skill move
+let noSkillBest=-Infinity;
 for(const[r,c]of moves){
 let saved=board.map(row=>[...row]);
 placePiece(r,c,W);
 let s=evaluate(W);
 board=saved;
-if(s>bestScore){bestScore=s;best=[r,c]}
+if(s>noSkillBest)noSkillBest=s;
 }
-return{r:best[0],c:best[1]};
+if(bestResult.score>noSkillBest+5){
+return bestResult;
 }
-let best=null,bestScore=-Infinity;
-for(const[r,c]of targets){
-let saved=board.map(row=>[...row]);
-executeSkill(sk.id,r,c,W);
-let s=evaluate(W);
-board=saved;
-if(s>bestScore){bestScore=s;best=[r,c]}
 }
-if(!best)return null;
-return{r:best[0],c:best[1]};
+}
+
+// No skill: use minimax
+if(moves.length===0)return null;
+let depth=diffSettings[difficulty].depth;
+let {move}=minimax(W,depth,-Infinity,Infinity,true);
+if(!move)move=moves[0];
+return{move,skill:null};
 }
 
 function aiTurn(){
@@ -466,69 +520,85 @@ animating=true;
 setStatus('AIが考え中...');
 
 setTimeout(()=>{
-let cornerMoves=getValidMoves(W).filter(([r,c])=>(r===0||r===7)&&(c===0||c===7));
-if(cornerMoves.length>0){
-let m=cornerMoves[0];
-placePiece(m[0],m[1],W);
-sfxPlace();addEffect(m[0],m[1],'place');
-afterAiMove();return;
-}
-
-let skillDecision=aiDecideSkillUse();
-if(skillDecision){
-let {skill,targets}=skillDecision;
-let target=aiBestSkillTarget(skill,targets);
-if(target){
-let idx=aiSkills.indexOf(skill);
-aiSkills.splice(idx,1);
-if(skill.id==='tsunami'){
-executeSkill('tsunami',0,0,W,target.extra);
-}else if(skill.id==='king'){
-let result=executeSkill('king',target.r,target.c,W);
-if(result==='king'){
-let moves2=getValidMoves(W);
-if(moves2.length>0){
-let best2=moves2[0],bestS=-Infinity;
-for(const[r2,c2]of moves2){
-let saved=board.map(row=>[...row]);
-placePiece(r2,c2,W);let s=evaluate(W);board=saved;
-if(s>bestS){bestS=s;best2=[r2,c2]}
-}
-placePiece(best2[0],best2[1],W);
-addEffect(best2[0],best2[1],'place');
-}
-}
-}else{
-executeSkill(skill.id,target.r,target.c,W);
-}
-afterAiMove();return;
-}
-}
-
 let moves=getValidMoves(W);
-if(moves.length===0){
+if(moves.length===0&&aiSkills.every(s=>s.id!=='override'||getValidMovesWithOverride(W).length===0)){
 passCount++;
 setStatus('AIはパスしました');
 if(passCount>=2){endGame();animating=false;return}
 animating=false;
-turn=B;turnCount++;
-checkSkillGain();
+turn=B;
+aiTurnCount++;
+checkSkillGainAI();
 nextTurn();return;
 }
 passCount=0;
-let depth=diffSettings[difficulty].depth;
-let {move}=minimax(W,depth,-Infinity,Infinity,true);
-if(!move)move=moves[0];
-placePiece(move[0],move[1],W);
-sfxPlace();addEffect(move[0],move[1],'place');
+
+let decision=aiDecideMove();
+if(!decision){
+passCount++;
+setStatus('AIはパスしました');
+if(passCount>=2){endGame();animating=false;return}
+animating=false;turn=B;
+aiTurnCount++;
+checkSkillGainAI();
+nextTurn();return;
+}
+
+let [r,c]=decision.move;
+let sk=decision.skill;
+
+if(sk){
+// Remove skill from stock
+aiSkills.splice(decision.skillIdx,1);
+
+if(sk.id==='override'){
+if(board[r][c]===EMPTY){
+placePiece(r,c,W);
+}else{
+board[r][c]=W;
+let flips=getFlips2(r,c,W);
+for(const[fr,fc]of flips)if(!isWall(board[fr][fc]))board[fr][fc]=W;
+}
+addEffect(r,c,'override');
+}else{
+placePiece(r,c,W);
+}
+sfxPlace();addEffect(r,c,'place');
+
+// Apply skill effect
+if(sk.id==='hanabi')execHanabi(r,c,W);
+else if(sk.id==='wall'){board[r][c]=WALL_W;addEffect(r,c,'wall')}
+else if(sk.id==='bomb')execBomb(r,c,W);
+else if(sk.id==='poison')execPoison(r,c,W);
+else if(sk.id==='tsunami'){
+execTsunamiLine(decision.tsunamiIdx,W);
+}
+else if(sk.id==='king'){
+addEffect(r,c,'king');
+// Second move
+if(decision.kingMove){
+let [r2,c2]=decision.kingMove;
+setTimeout(()=>{
+placePiece(r2,c2,W);sfxPlace();addEffect(r2,c2,'place');
+afterAiMove();
+},400);
+return;
+}
+}
+}else{
+placePiece(r,c,W);
+sfxPlace();addEffect(r,c,'place');
+}
+
 afterAiMove();
 },400);
 }
 
 function afterAiMove(){
 animating=false;
-turn=B;turnCount++;
-checkSkillGain();
+turn=B;
+aiTurnCount++;
+checkSkillGainAI();
 if(checkGameEnd())return;
 nextTurn();
 }
@@ -553,6 +623,7 @@ for(let i=0;i<=8;i++){
 ctx.beginPath();ctx.moveTo(i*cellSize,0);ctx.lineTo(i*cellSize,w);ctx.stroke();
 ctx.beginPath();ctx.moveTo(0,i*cellSize);ctx.lineTo(w,i*cellSize);ctx.stroke();
 }
+// Draw pieces
 for(let r=0;r<8;r++)for(let c=0;c<8;c++){
 let cell=board[r][c];if(cell===EMPTY)continue;
 let cx=c*cellSize+cellSize/2,cy=r*cellSize+cellSize/2,rad=cellSize*.38;
@@ -562,24 +633,30 @@ ctx.fill();
 ctx.shadowColor='rgba(0,0,0,.4)';ctx.shadowBlur=4;ctx.shadowOffsetY=2;
 ctx.fill();ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
 ctx.strokeStyle=isBlack(cell)?'#333':'#ccc';ctx.lineWidth=1.5;ctx.stroke();
-if(isWall(cell)){ctx.font=cellSize*.3+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#888';ctx.fillText('🧱',cx,cy)}
+if(isWall(cell)){ctx.font=cellSize*.3+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#888';ctx.fillText('🛡️',cx,cy)}
 if(isPoison(cell)){ctx.font=cellSize*.25+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#a4f';ctx.fillText('💀',cx,cy)}
 }
-if(!gameOver&&!animating&&turn===B){
-if(skillMode&&selectedSkill){
-let targets=getSkillTargets(selectedSkill.id,B);
-let sk=SKILLS.find(s=>s.id===selectedSkill.id);
-for(const[r,c]of targets){
-if(r<0)continue;
-ctx.strokeStyle=sk?sk.color:'#ff0';ctx.lineWidth=3;
+// Highlight valid moves
+if(!gameOver&&!animating&&turn===B&&!kingSecondMove){
+let sk=loadedSkill?SKILLS.find(s=>s.id===loadedSkill.id):null;
+let highlightColor=sk?sk.color:'rgba(255,255,255,.25)';
+let validMoves=loadedSkill&&loadedSkill.id==='override'?getValidMovesWithOverride(B):getValidMoves(B);
+for(const[r,c]of validMoves){
+if(loadedSkill){
+ctx.strokeStyle=highlightColor;ctx.lineWidth=3;
 ctx.strokeRect(c*cellSize+3,r*cellSize+3,cellSize-6,cellSize-6);
-}
-}else if(!skillMode){
-let moves=getValidMoves(B);
-for(const[r,c]of moves){
+}else{
 ctx.beginPath();ctx.arc(c*cellSize+cellSize/2,r*cellSize+cellSize/2,cellSize*.15,0,Math.PI*2);
 ctx.fillStyle='rgba(255,255,255,.25)';ctx.fill();
 }
+}
+}
+// King second move highlight
+if(!gameOver&&!animating&&kingSecondMove){
+let moves=getValidMoves(B);
+for(const[r,c]of moves){
+ctx.beginPath();ctx.arc(c*cellSize+cellSize/2,r*cellSize+cellSize/2,cellSize*.15,0,Math.PI*2);
+ctx.fillStyle='rgba(255,204,0,.4)';ctx.fill();
 }
 }
 drawEffects();
@@ -639,8 +716,6 @@ document.getElementById('blackCount').textContent='⚫ '+b;
 document.getElementById('whiteCount').textContent='⚪ '+w;
 renderStock('playerStock',playerSkills,false);
 renderStock('aiStock',aiSkills,true);
-document.getElementById('normalBtn').classList.toggle('active',!skillMode);
-document.getElementById('skillBtn').classList.toggle('active',skillMode);
 draw();
 }
 
@@ -648,12 +723,18 @@ function renderStock(id,skills,isAi){
 let el=document.getElementById(id);el.innerHTML='';
 skills.forEach((sk,i)=>{
 let d=document.createElement('div');
-d.className='skill-icon'+(isAi?' ai-icon':'')+(selectedSkill===sk?' selected':'');
-d.textContent=sk.icon;d.title=sk.name+': '+sk.desc;
+d.className='skill-icon'+(isAi?' ai-icon':'')+(loadedSkill===sk?' loaded':'');
+d.textContent=sk.icon;d.title=sk.name+': '+sk.desc+' (パワー: '+powerStars(sk.power)+')';
 if(!isAi)d.onclick=()=>{
-if(turn!==B||animating||gameOver)return;
-if(selectedSkill===sk){selectedSkill=null;skillMode=false}
-else{selectedSkill=sk;skillMode=true}
+if(turn!==B||animating||gameOver||kingSecondMove)return;
+if(loadedSkill===sk){
+// Toggle off
+loadedSkill=null;
+setStatus('あなたのターンです');
+}else{
+loadedSkill=sk;
+setStatus('🔫 '+sk.name+'装填中！石を置いてください');
+}
 updateUI();
 };
 el.appendChild(d);
@@ -662,7 +743,16 @@ el.appendChild(d);
 
 function setStatus(t){document.getElementById('statusBar').textContent=t}
 
-// ===== SKILL PICK =====
+// ===== SKILL PICK (with announce animation) =====
+function showSkillAnnounce(cb){
+let el=document.getElementById('skillAnnounce');
+el.style.display='flex';
+setTimeout(()=>{
+el.style.display='none';
+cb();
+},600);
+}
+
 function showSkillPicker(cb){
 let pool=[...SKILLS];
 let choices=[];
@@ -670,15 +760,19 @@ while(choices.length<3&&pool.length>0){
 let i=Math.floor(Math.random()*pool.length);
 choices.push(pool.splice(i,1)[0]);
 }
+// AI also picks from same pool
 let aiPick=aiChooseSkill([...choices]);
 aiSkills.push(aiPick);
 
 let el=document.getElementById('skillCards');el.innerHTML='';
-let picker=document.getElementById('skillPicker');picker.style.display='flex';
+let picker=document.getElementById('skillPicker');
 
+// Show announce first, then cards
+showSkillAnnounce(()=>{
+picker.style.display='flex';
 choices.forEach(sk=>{
 let card=document.createElement('div');card.className='skill-card';
-card.innerHTML='<div class="icon">'+sk.icon+'</div><div class="desc"><h3>'+sk.name+'</h3><p>'+sk.desc+'</p></div>';
+card.innerHTML='<div class="icon">'+sk.icon+'</div><div class="desc"><h3>'+sk.name+'</h3><p>'+sk.desc+'</p><div class="power">パワー: '+powerStars(sk.power)+'</div></div>';
 card.onclick=()=>{
 playerSkills.push(sk);
 picker.style.display='none';
@@ -687,6 +781,7 @@ updateUI();
 if(cb)cb();
 };
 el.appendChild(card);
+});
 });
 }
 
@@ -713,9 +808,39 @@ el.appendChild(cancelBtn);
 }
 
 // ===== GAME FLOW =====
-function checkSkillGain(){
-if(turnCount>0&&turnCount%3===0){
+// Skill gain: every 3 turns per player, starting at turn 4 (playerTurnCount >= 3, then every 3)
+function shouldGainSkill(tc){
+return tc>=3&&(tc-3)%3===0;
+}
+
+function checkSkillGainPlayer(){
+if(shouldGainSkill(playerTurnCount)){
+// Delay skill selection until animations settle
+animating=true;
+setTimeout(()=>{
+animating=false;
 showSkillPicker(()=>{updateUI()});
+},600);
+}
+}
+
+function checkSkillGainAI(){
+if(shouldGainSkill(aiTurnCount)){
+// AI auto-picks during its skill gain
+let pool=[...SKILLS];
+let choices=[];
+while(choices.length<3&&pool.length>0){
+let i=Math.floor(Math.random()*pool.length);
+choices.push(pool.splice(i,1)[0]);
+}
+let pick=aiChooseSkill(choices);
+aiSkills.push(pick);
+// Player also gets a pick (shown after AI move settles)
+animating=true;
+setTimeout(()=>{
+animating=false;
+showSkillPicker(()=>{updateUI()});
+},600);
 }
 }
 
@@ -729,7 +854,7 @@ return false;
 function endGame(){
 gameOver=true;
 let {b,w}=countPieces();
-let title,cls;
+let title;
 if(b>w){title='🎉 あなたの勝ち！';sfxWin()}
 else if(w>b){title='😭 AIの勝ち...';sfxLose()}
 else{title='🤝 引き分け';sfxPlace()}
@@ -742,16 +867,21 @@ saveRecord(b>w?'win':w>b?'lose':'draw');
 function nextTurn(){
 if(gameOver)return;
 if(turn===B){
-let moves=getValidMoves(B);
-if(moves.length===0&&!skillMode){
+let moves=loadedSkill&&loadedSkill.id==='override'?getValidMovesWithOverride(B):getValidMoves(B);
+if(moves.length===0){
 passCount++;setStatus('置ける場所がありません（パス）');
 if(passCount>=2){endGame();return}
-turn=W;turnCount++;
-checkSkillGain();
+turn=W;
+playerTurnCount++;
+checkSkillGainPlayer();
 setTimeout(aiTurn,500);return;
 }
 passCount=0;
+if(loadedSkill){
+setStatus('🔫 '+loadedSkill.name+'装填中！石を置いてください');
+}else{
 setStatus('あなたのターンです');
+}
 updateUI();
 }else{
 aiTurn();
@@ -764,49 +894,89 @@ initAudio();
 let rect=canvas.getBoundingClientRect();
 let x=(e.clientX||e.touches[0].clientX)-rect.left;
 let y=(e.clientY||e.touches[0].clientY)-rect.top;
-let c=Math.floor(x/cellSize*8/canvas.clientWidth*canvas.width/cellSize);
-let r=Math.floor(y/cellSize*8/canvas.clientHeight*canvas.height/cellSize);
-c=Math.floor((x/rect.width)*8);
-r=Math.floor((y/rect.height)*8);
+let c=Math.floor((x/rect.width)*8);
+let r=Math.floor((y/rect.height)*8);
 if(!inBounds(r,c))return;
 
-if(skillMode&&selectedSkill){
-let targets=getSkillTargets(selectedSkill.id,B);
-if(selectedSkill.id==='tsunami'){
-showTsunamiPicker(B,(idx)=>{
-if(idx<0){return}
-let si=playerSkills.indexOf(selectedSkill);
-playerSkills.splice(si,1);
-executeSkill('tsunami',0,0,B,idx);
-selectedSkill=null;skillMode=false;
-afterPlayerMove();
-});
-return;
-}
-let valid=targets.some(([tr,tc])=>tr===r&&tc===c);
-if(!valid)return;
-
-let si=playerSkills.indexOf(selectedSkill);
-let result=executeSkill(selectedSkill.id,r,c,B);
-playerSkills.splice(si,1);
-
-if(result==='king'){
-selectedSkill=null;skillMode=false;
-kingSecondMove=true;
-updateUI();
-setStatus('👑 キング！2手目を置いてください');
-return;
-}
-selectedSkill=null;skillMode=false;
-afterPlayerMove();
-}else{
+// King second move
 if(kingSecondMove){
 let flips=getFlips(r,c,B);
 if(flips.length===0)return;
 placePiece(r,c,B);sfxPlace();addEffect(r,c,'place');
 kingSecondMove=false;
-afterPlayerMove();return;
+afterPlayerMove();
+return;
 }
+
+if(loadedSkill){
+// Skill loaded: place stone + activate skill
+let sk=loadedSkill;
+
+if(sk.id==='override'){
+// Override: can place on opponent non-wall cells OR normal valid moves
+let validMoves=getValidMovesWithOverride(B);
+if(!validMoves.some(([vr,vc])=>vr===r&&vc===c))return;
+
+let si=playerSkills.indexOf(sk);
+playerSkills.splice(si,1);
+loadedSkill=null;
+
+if(board[r][c]===EMPTY){
+placePiece(r,c,B);
+}else if(isOpp(board[r][c],B)&&!isWall(board[r][c])){
+board[r][c]=B;
+let flips=getFlips2(r,c,B);
+for(const[fr,fc]of flips)if(!isWall(board[fr][fc]))board[fr][fc]=B;
+}else return;
+sfxPlace();addEffect(r,c,'place');addEffect(r,c,'override');
+sfxSkill();
+afterPlayerMove();
+return;
+}
+
+// All other skills: must be a normal valid move
+let flips=getFlips(r,c,B);
+if(flips.length===0)return;
+
+let si=playerSkills.indexOf(sk);
+playerSkills.splice(si,1);
+loadedSkill=null;
+
+// Place the stone first (normal reversi)
+placePiece(r,c,B);
+sfxPlace();addEffect(r,c,'place');
+
+// Then apply skill effect
+let result=executeSkillAtPlacement(sk.id,r,c,B);
+
+if(result==='king'){
+addEffect(r,c,'king');
+kingSecondMove=true;
+updateUI();
+setStatus('👑 キング！2手目を置いてください');
+return;
+}
+
+if(result==='tsunami'){
+sfxSkill();
+showTsunamiPicker(B,(idx)=>{
+if(idx<0){
+// Cancel: refund skill
+playerSkills.push(sk);
+updateUI();
+// Stone is already placed, just skip tsunami effect
+afterPlayerMove();
+return;
+}
+execTsunamiLine(idx,B);
+afterPlayerMove();
+});
+return;
+}
+
+afterPlayerMove();
+}else{
+// No skill: normal placement
 let flips=getFlips(r,c,B);
 if(flips.length===0)return;
 passCount=0;
@@ -818,8 +988,17 @@ afterPlayerMove();
 function afterPlayerMove(){
 updateUI();
 if(checkGameEnd())return;
-turn=W;turnCount++;
-checkSkillGain();
+turn=W;
+playerTurnCount++;
+// Check if player should gain a skill (with delay for animations)
+let needsSkill=shouldGainSkill(playerTurnCount);
+if(needsSkill){
+animating=true;
+setTimeout(()=>{
+animating=false;
+showSkillPicker(()=>{
+updateUI();
+// After skill selection, start AI turn
 setTimeout(()=>{
 if(document.getElementById('skillPicker').style.display==='flex'){
 let wait=setInterval(()=>{
@@ -828,7 +1007,12 @@ clearInterval(wait);aiTurn();
 }
 },200);
 }else{aiTurn()}
-},300);
+},100);
+});
+},600);
+}else{
+setTimeout(()=>{aiTurn()},300);
+}
 }
 
 // ===== RECORDS =====
@@ -846,9 +1030,9 @@ document.getElementById('record').textContent=rec.win+'勝 '+rec.lose+'敗 '+rec
 function startGame(){
 initAudio();
 board=null;initBoard();
-turn=B;turnCount=0;passCount=0;
+turn=B;playerTurnCount=0;aiTurnCount=0;passCount=0;
 playerSkills=[];aiSkills=[];
-selectedSkill=null;skillMode=false;kingSecondMove=false;
+loadedSkill=null;kingSecondMove=false;
 animating=false;gameOver=false;effects=[];
 document.getElementById('titleScreen').style.display='none';
 document.getElementById('gameScreen').style.display='flex';
@@ -864,16 +1048,6 @@ b.classList.add('selected');difficulty=+b.dataset.diff;
 });
 
 document.getElementById('startBtn').onclick=startGame;
-document.getElementById('normalBtn').onclick=()=>{
-if(turn!==B||animating||gameOver)return;
-skillMode=false;selectedSkill=null;updateUI();
-};
-document.getElementById('skillBtn').onclick=()=>{
-if(turn!==B||animating||gameOver)return;
-if(playerSkills.length===0){setStatus('スキルがありません');return}
-skillMode=true;updateUI();
-setStatus('スキルを選んでください');
-};
 
 canvas.addEventListener('click',handleBoardClick);
 canvas.addEventListener('touchstart',(e)=>{e.preventDefault();handleBoardClick(e)},{passive:false});
