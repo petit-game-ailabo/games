@@ -131,7 +131,7 @@ const SKILLS=[
 {id:'thunder',icon:'⚡',name:'雷',desc:'石を置いた位置の縦一列に雷が落ち、全て自分の色に変える',color:'#ffdd00',power:3}
 ];
 
-const SKILL_ICON_MAP={hanabi:'🎆',override:'🏗️',wall:'🛡️',bomb:null,king:'👑',tsunami:'🌊',thunder:'⚡'};
+const SKILL_ICON_MAP={hanabi:'🎆',override:'🏗️',wall:'🛡️',bomb:'💣',king:'👑',tsunami:'🌊',thunder:'⚡'};
 
 function powerStars(p){return p===1?'★☆☆':p===2?'★★☆':'★★★'}
 
@@ -233,7 +233,7 @@ return moves;
 function placePiece(r,c,player){
 const flips=getFlips(r,c,player);
 board[r][c]=player;
-placeAnims.push({r,c,t:0,maxT:20});
+placeAnims.push({r,c,t:0,maxT:40});
 for(const[fr,fc]of flips){
 if(isWall(board[fr][fc]))continue;
 board[fr][fc]=player;
@@ -243,7 +243,7 @@ return flips;
 
 // ===== FLIP ANIMATION =====
 function addFlipAnim(r,c,toColor){
-flipAnims.push({r,c,toColor,t:0,maxT:30});
+flipAnims.push({r,c,toColor,t:0,maxT:45});
 addParticleBurst(c*cellSize+cellSize/2,r*cellSize+cellSize/2,toColor===B?'#333':'#fff',4);
 }
 
@@ -276,11 +276,11 @@ setTimeout(callback,lastMaxT);
 return;
 }
 let [r,c]=flips[i];
-flipAnims.push({r,c,toColor:board[r][c],t:0,maxT:30});
+flipAnims.push({r,c,toColor:board[r][c],t:0,maxT:45});
 addParticleBurst(c*cellSize+cellSize/2,r*cellSize+cellSize/2,board[r][c]===B?'#333':'#fff',4);
 sfxFlip();
 i++;
-setTimeout(next,100);
+setTimeout(next,200);
 }
 next();
 }
@@ -305,7 +305,7 @@ const cross=[[-1,0],[1,0],[0,-1],[0,1]];
 for(const[dr,dc]of cross){
 for(let d=1;d<=2;d++){
 let nr=r+dr*d,nc=c+dc*d;
-if(inBounds(nr,nc)&&board[nr][nc]===EMPTY){board[nr][nc]=player;placed.push([nr,nc])}
+if(inBounds(nr,nc)&&board[nr][nc]===EMPTY){board[nr][nc]=player;placed.push([nr,nc]);boardIcons[nr][nc]='🎆'}
 else break;
 }
 }
@@ -313,6 +313,7 @@ for(const[pr,pc]of placed){
 const flips=getFlips2(pr,pc,player);
 for(const[fr,fc]of flips){if(!isWall(board[fr][fc]))board[fr][fc]=player}
 }
+boardIcons[r][c]='🎆';
 return placed;
 }
 
@@ -327,10 +328,11 @@ for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
 if(dr===0&&dc===0)continue;
 let nr=r+dr,nc=c+dc;
 if(inBounds(nr,nc)&&isOpp(board[nr][nc],player)&&!isWall(board[nr][nc])){
-board[nr][nc]=EMPTY;
+board[nr][nc]=EMPTY;boardIcons[nr][nc]=null;
 removed.push([nr,nc]);
 }
 }
+boardIcons[r][c]='💣';
 return removed;
 }
 
@@ -342,6 +344,7 @@ if(board[row][cc]===EMPTY||isOpp(board[row][cc],player)){
 let oldVal=board[row][cc];
 board[row][cc]=player;
 changed.push([row,cc,oldVal]);
+boardIcons[row][cc]='🌊';
 }
 }
 return changed;
@@ -355,6 +358,7 @@ if(board[rr][col]===EMPTY||isOpp(board[rr][col],player)){
 let oldVal=board[rr][col];
 board[rr][col]=player;
 changed.push([rr,col,oldVal]);
+boardIcons[rr][col]='⚡';
 }
 }
 return changed;
@@ -445,7 +449,7 @@ let px=cell[1]*cellSize+cellSize/2,py=cell[0]*cellSize+cellSize/2;
 addParticleBurst(px,py,'#ff6600',8,4,4,30);
 updateUI();
 if(i===removed.length-1){
-setTimeout(callback,500);
+setTimeout(callback,800);
 }
 },delay);
 delay+=100;
@@ -509,7 +513,7 @@ kingCallback=callback;
 // AI: find best 2nd move and play it
 let moves2=getValidMoves(W);
 if(moves2.length===0){
-setTimeout(callback,500);
+setTimeout(callback,800);
 return;
 }
 // Pick best move for AI
@@ -547,7 +551,7 @@ let colors={hanabi:'#ff4444',tsunami:'#44aaff',thunder:'#ffdd00'};
 addParticleBurst(px,py,colors[skillType]||'#fff',4,3,3,25);
 updateUI();
 if(i===changes.length-1){
-setTimeout(callback,500);
+setTimeout(callback,800);
 }
 },delay);
 delay+=delayMs;
@@ -810,7 +814,7 @@ if(board[r][c]===EMPTY){
 flips=placePiece(r,c,W);
 }else{
 board[r][c]=W;
-placeAnims.push({r,c,t:0,maxT:20});
+placeAnims.push({r,c,t:0,maxT:40});
 let rawFlips=getFlips2(r,c,W);
 for(const[fr,fc]of rawFlips)if(!isWall(board[fr][fc])){board[fr][fc]=W;flips.push([fr,fc])}
 }
@@ -1305,7 +1309,7 @@ if(board[r][c]===EMPTY){
 flips=placePiece(r,c,B);
 }else if(isOpp(board[r][c],B)&&!isWall(board[r][c])){
 board[r][c]=B;
-placeAnims.push({r,c,t:0,maxT:20});
+placeAnims.push({r,c,t:0,maxT:40});
 let rawFlips=getFlips2(r,c,B);
 for(const[fr,fc]of rawFlips)if(!isWall(board[fr][fc])){board[fr][fc]=B;flips.push([fr,fc])}
 }else return;
