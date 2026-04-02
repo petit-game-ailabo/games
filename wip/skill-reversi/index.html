@@ -562,17 +562,14 @@ delay+=delayMs;
 let kingCallback=null;
 
 function processAfterPlacement(r,c,skillId,player,flips,callback){
-// Animate flips sequentially, then proceed
+// Animate flips sequentially, then execute skill effect
 animateFlipsSequential(flips||[],()=>{
 if(!skillId){
 callback();
 return;
 }
-// Show skill activation announcement
-showSkillActivation(skillId,player===W,()=>{
-// Execute skill with animation
+// Execute skill with animation (announcement already shown before placement)
 executeSkillAnimated(skillId,r,c,player,callback);
-});
 });
 }
 
@@ -807,6 +804,9 @@ let sk=decision.skill;
 
 if(sk){
 aiSkills.splice(decision.skillIdx,1);
+
+// New order: skill announcement → place piece → flip → skill effect
+showSkillActivation(sk.id,true,()=>{
 let flips=[];
 
 if(sk.id==='override'){
@@ -826,9 +826,9 @@ sfxPlace();addEffect(r,c,'place');
 }
 updateUI();
 
-// Sequential: wait for flips → announce → skill effect → done
 processAfterPlacement(r,c,sk.id,W,flips,()=>{
 afterAiMove();
+});
 });
 }else{
 let flips=placePiece(r,c,W);
@@ -1303,6 +1303,9 @@ let si=playerSkills.indexOf(sk);
 playerSkills.splice(si,1);
 loadedSkill=null;
 animating=true;
+
+// New order: skill announcement → place piece → flip → skill effect
+showSkillActivation('override',false,()=>{
 let flips=[];
 
 if(board[r][c]===EMPTY){
@@ -1312,15 +1315,15 @@ board[r][c]=B;
 placeAnims.push({r,c,t:0,maxT:40});
 let rawFlips=getFlips2(r,c,B);
 for(const[fr,fc]of rawFlips)if(!isWall(board[fr][fc])){board[fr][fc]=B;flips.push([fr,fc])}
-}else return;
+}else{animating=false;return}
 boardIcons[r][c]='🏗️';
 sfxPlace();addEffect(r,c,'place');
 updateUI();
 
-// Sequential: wait for flips → announce → done (no extra effect for override)
 processAfterPlacement(r,c,'override',B,flips,()=>{
 animating=false;
 afterPlayerMove();
+});
 });
 return;
 }
@@ -1333,14 +1336,16 @@ playerSkills.splice(si,1);
 loadedSkill=null;
 animating=true;
 
+// New order: skill announcement → place piece → flip → skill effect
+showSkillActivation(sk.id,false,()=>{
 let flips=placePiece(r,c,B);
 sfxPlace();addEffect(r,c,'place');
 updateUI();
 
-// Sequential animation: wait for flips → announce → execute skill → done
 processAfterPlacement(r,c,sk.id,B,flips,()=>{
 animating=false;
 afterPlayerMove();
+});
 });
 }else{
 let preFlips=getFlips(r,c,B);
