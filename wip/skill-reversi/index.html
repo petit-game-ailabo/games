@@ -158,6 +158,7 @@ let board,boardIcons,turn,playerTurnCount,aiTurnCount,playerSkills,aiSkills,diff
 let loadedSkill,kingSecondMove,animating,gameOver,passCount;
 let effects=[];
 let flipAnims=[];
+let placeAnims=[];
 let particles=[];
 
 const diffSettings=[{depth:2,skillRate:.3},{depth:4,skillRate:.6},{depth:6,skillRate:.9}];
@@ -232,17 +233,17 @@ return moves;
 function placePiece(r,c,player){
 const flips=getFlips(r,c,player);
 board[r][c]=player;
+placeAnims.push({r,c,t:0,maxT:20});
 for(const[fr,fc]of flips){
 if(isWall(board[fr][fc]))continue;
 board[fr][fc]=player;
-addFlipAnim(fr,fc,player);
 }
 return flips;
 }
 
 // ===== FLIP ANIMATION =====
 function addFlipAnim(r,c,toColor){
-flipAnims.push({r,c,toColor,t:0,maxT:20});
+flipAnims.push({r,c,toColor,t:0,maxT:30});
 addParticleBurst(c*cellSize+cellSize/2,r*cellSize+cellSize/2,toColor===B?'#333':'#fff',4);
 }
 
@@ -257,6 +258,31 @@ color:color||'#fff',size:size||2+Math.random()*2,
 life:0,maxLife:life||20+Math.random()*10
 });
 }
+}
+
+// ===== CLEAR EFFECTS =====
+function clearEffects(){
+effects=[];
+particles=[];
+}
+
+// ===== SEQUENTIAL FLIP ANIMATION =====
+function animateFlipsSequential(flips, callback){
+let i=0;
+function next(){
+if(i>=flips.length){
+let lastMaxT=flips.length>0?500:0;
+setTimeout(callback,lastMaxT);
+return;
+}
+let [r,c]=flips[i];
+flipAnims.push({r,c,toColor:board[r][c],t:0,maxT:30});
+addParticleBurst(c*cellSize+cellSize/2,r*cellSize+cellSize/2,board[r][c]===B?'#333':'#fff',4);
+sfxFlip();
+i++;
+setTimeout(next,100);
+}
+next();
 }
 
 // ===== SKILL EXECUTION (pure logic, for AI eval) =====
@@ -497,10 +523,10 @@ if(s>bestScore){bestScore=s;bestMove=[r2,c2]}
 }
 setTimeout(()=>{
 let [r2,c2]=bestMove;
-placePiece(r2,c2,W);sfxPlace();addEffect(r2,c2,'place');
+let flips2=placePiece(r2,c2,W);sfxPlace();addEffect(r2,c2,'place');
 boardIcons[r2][c2]='👑';
 updateUI();
-setTimeout(callback,500);
+animateFlipsSequential(flips2,callback);
 },600);
 }
 }
@@ -530,11 +556,10 @@ delay+=delayMs;
 
 // ===== SEQUENTIAL MOVE PROCESSING =====
 let kingCallback=null;
-const FLIP_WAIT_MS=800;
 
-function processAfterPlacement(r,c,skillId,player,callback){
-// Wait for flip animations to finish visually
-setTimeout(()=>{
+function processAfterPlacement(r,c,skillId,player,flips,callback){
+// Animate flips sequentially, then proceed
+animateFlipsSequential(flips||[],()=>{
 if(!skillId){
 callback();
 return;
@@ -544,7 +569,7 @@ showSkillActivation(skillId,player===W,()=>{
 // Execute skill with animation
 executeSkillAnimated(skillId,r,c,player,callback);
 });
-},FLIP_WAIT_MS);
+});
 }
 
 // ===== EFFECTS =====
@@ -778,40 +803,43 @@ let sk=decision.skill;
 
 if(sk){
 aiSkills.splice(decision.skillIdx,1);
+let flips=[];
 
 if(sk.id==='override'){
 if(board[r][c]===EMPTY){
-placePiece(r,c,W);
+flips=placePiece(r,c,W);
 }else{
 board[r][c]=W;
-let flips=getFlips2(r,c,W);
-for(const[fr,fc]of flips)if(!isWall(board[fr][fc]))board[fr][fc]=W;
+placeAnims.push({r,c,t:0,maxT:20});
+let rawFlips=getFlips2(r,c,W);
+for(const[fr,fc]of rawFlips)if(!isWall(board[fr][fc])){board[fr][fc]=W;flips.push([fr,fc])}
 }
 boardIcons[r][c]='🏗️';
 sfxPlace();addEffect(r,c,'place');
 }else{
-placePiece(r,c,W);
+flips=placePiece(r,c,W);
 sfxPlace();addEffect(r,c,'place');
 }
 updateUI();
 
 // Sequential: wait for flips → announce → skill effect → done
-processAfterPlacement(r,c,sk.id,W,()=>{
+processAfterPlacement(r,c,sk.id,W,flips,()=>{
 afterAiMove();
 });
 }else{
-placePiece(r,c,W);
+let flips=placePiece(r,c,W);
 sfxPlace();addEffect(r,c,'place');
 updateUI();
-// No skill: just wait for flip animation then finish
-setTimeout(()=>{
+// No skill: animate flips sequentially then finish
+animateFlipsSequential(flips,()=>{
 afterAiMove();
-},FLIP_WAIT_MS);
+});
 }
 },400);
 }
 
 function afterAiMove(){
+clearEffects();
 animating=false;
 turn=B;
 aiTurnCount++;
@@ -882,7 +910,19 @@ else if(boardIcons[r][c]){ctx.font=cellSize*.22+'px serif';ctx.textAlign='center
 continue;
 }
 
-ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);
+// Check for place animation (landing effect)
+let pa=placeAnims.find(p=>p.r===r&&p.c===c);
+let scaleP=1;
+if(pa){
+let progress=pa.t/pa.maxT;
+// easeOutQuad: 1.5 → 1.0
+scaleP=1.5-0.5*progress*(2-progress);
+}
+
+ctx.save();
+ctx.translate(cx,cy);
+ctx.scale(scaleP,scaleP);
+ctx.beginPath();ctx.arc(0,0,rad,0,Math.PI*2);
 ctx.fillStyle=isBlack(cell)?'#111':'#eee';
 ctx.fill();
 ctx.shadowColor='rgba(0,0,0,.4)';ctx.shadowBlur=4;ctx.shadowOffsetY=2;
@@ -890,11 +930,12 @@ ctx.fill();ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
 ctx.strokeStyle=isBlack(cell)?'#333':'#ccc';ctx.lineWidth=1.5;ctx.stroke();
 // Draw skill icon on stone
 if(isWall(cell)){
-ctx.font=cellSize*.3+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#888';ctx.fillText('🛡️',cx,cy);
+ctx.font=cellSize*.3+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#888';ctx.fillText('🛡️',0,0);
 }else if(boardIcons[r][c]){
 ctx.font=cellSize*.22+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';
-ctx.fillText(boardIcons[r][c],cx,cy-rad*0.6);
+ctx.fillText(boardIcons[r][c],0,-rad*0.6);
 }
+ctx.restore();
 }
 // Highlight valid moves
 if(!gameOver&&!animating&&turn===B&&!kingSecondMove){
@@ -922,6 +963,7 @@ ctx.fillStyle='rgba(255,204,0,.4)';ctx.fill();
 drawEffects();
 drawParticles();
 drawFlipAnims();
+drawPlaceAnims();
 }
 
 function drawEffects(){
@@ -1010,7 +1052,7 @@ break;
 ctx.globalAlpha=1;
 return e.t<e.maxT;
 });
-let needsAnim=effects.length>0||flipAnims.length>0||particles.length>0;
+let needsAnim=effects.length>0||flipAnims.length>0||particles.length>0||placeAnims.length>0;
 if(needsAnim)requestAnimationFrame(draw);
 }
 
@@ -1033,7 +1075,15 @@ flipAnims=flipAnims.filter(fa=>{
 fa.t++;
 return fa.t<fa.maxT;
 });
-if(flipAnims.length>0||effects.length>0||particles.length>0)requestAnimationFrame(draw);
+if(flipAnims.length>0||effects.length>0||particles.length>0||placeAnims.length>0)requestAnimationFrame(draw);
+}
+
+function drawPlaceAnims(){
+placeAnims=placeAnims.filter(pa=>{
+pa.t++;
+return pa.t<pa.maxT;
+});
+if(placeAnims.length>0)requestAnimationFrame(draw);
 }
 
 // ===== UI =====
@@ -1086,8 +1136,6 @@ while(choices.length<3&&pool.length>0){
 let i=Math.floor(Math.random()*pool.length);
 choices.push(pool.splice(i,1)[0]);
 }
-let aiPick=aiChooseSkill([...choices]);
-aiSkills.push(aiPick);
 
 let el=document.getElementById('skillCards');el.innerHTML='';
 let picker=document.getElementById('skillPicker');
@@ -1221,22 +1269,22 @@ if(!inBounds(r,c))return;
 
 // King second move
 if(kingSecondMove){
-let flips=getFlips(r,c,B);
-if(flips.length===0)return;
+let preFlips=getFlips(r,c,B);
+if(preFlips.length===0)return;
 animating=true;
-placePiece(r,c,B);sfxPlace();addEffect(r,c,'place');
+let flips=placePiece(r,c,B);sfxPlace();addEffect(r,c,'place');
 boardIcons[r][c]='👑';
 kingSecondMove=false;
 updateUI();
-// Wait for flip animation, then finish
-setTimeout(()=>{
+// Animate flips sequentially, then finish
+animateFlipsSequential(flips,()=>{
 animating=false;
 if(kingCallback){
 let cb=kingCallback;
 kingCallback=null;
 cb();
 }
-},FLIP_WAIT_MS);
+});
 return;
 }
 
@@ -1251,59 +1299,62 @@ let si=playerSkills.indexOf(sk);
 playerSkills.splice(si,1);
 loadedSkill=null;
 animating=true;
+let flips=[];
 
 if(board[r][c]===EMPTY){
-placePiece(r,c,B);
+flips=placePiece(r,c,B);
 }else if(isOpp(board[r][c],B)&&!isWall(board[r][c])){
 board[r][c]=B;
-let flips=getFlips2(r,c,B);
-for(const[fr,fc]of flips)if(!isWall(board[fr][fc])){board[fr][fc]=B;addFlipAnim(fr,fc,B)}
+placeAnims.push({r,c,t:0,maxT:20});
+let rawFlips=getFlips2(r,c,B);
+for(const[fr,fc]of rawFlips)if(!isWall(board[fr][fc])){board[fr][fc]=B;flips.push([fr,fc])}
 }else return;
 boardIcons[r][c]='🏗️';
 sfxPlace();addEffect(r,c,'place');
 updateUI();
 
 // Sequential: wait for flips → announce → done (no extra effect for override)
-processAfterPlacement(r,c,'override',B,()=>{
+processAfterPlacement(r,c,'override',B,flips,()=>{
 animating=false;
 afterPlayerMove();
 });
 return;
 }
 
-let flips=getFlips(r,c,B);
-if(flips.length===0)return;
+let preFlips=getFlips(r,c,B);
+if(preFlips.length===0)return;
 
 let si=playerSkills.indexOf(sk);
 playerSkills.splice(si,1);
 loadedSkill=null;
 animating=true;
 
-placePiece(r,c,B);
+let flips=placePiece(r,c,B);
 sfxPlace();addEffect(r,c,'place');
 updateUI();
 
 // Sequential animation: wait for flips → announce → execute skill → done
-processAfterPlacement(r,c,sk.id,B,()=>{
+processAfterPlacement(r,c,sk.id,B,flips,()=>{
 animating=false;
 afterPlayerMove();
 });
 }else{
-let flips=getFlips(r,c,B);
-if(flips.length===0)return;
+let preFlips=getFlips(r,c,B);
+if(preFlips.length===0)return;
 passCount=0;
 animating=true;
-placePiece(r,c,B);sfxPlace();addEffect(r,c,'place');
+let flips=placePiece(r,c,B);sfxPlace();addEffect(r,c,'place');
 updateUI();
-// No skill: wait for flip animation then finish
-setTimeout(()=>{
+// No skill: animate flips sequentially then finish
+animateFlipsSequential(flips,()=>{
 animating=false;
 afterPlayerMove();
-},FLIP_WAIT_MS);
+});
 }
 }
 
 function afterPlayerMove(){
+clearEffects();
 updateUI();
 if(checkGameEnd())return;
 turn=W;
@@ -1349,7 +1400,7 @@ board=null;initBoard();
 turn=B;playerTurnCount=0;aiTurnCount=0;passCount=0;
 playerSkills=[];aiSkills=[];
 loadedSkill=null;kingSecondMove=false;kingCallback=null;
-animating=false;gameOver=false;effects=[];flipAnims=[];particles=[];
+animating=false;gameOver=false;effects=[];flipAnims=[];placeAnims=[];particles=[];
 document.getElementById('titleScreen').style.display='none';
 document.getElementById('gameScreen').style.display='flex';
 resize();updateUI();
