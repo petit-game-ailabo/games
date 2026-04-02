@@ -7,17 +7,37 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:'Segoe UI',sans-serif;color:#e0e0ff;touch-action:none}
-#gameCanvas{display:block;width:100%;cursor:crosshair}
-#ui{position:absolute;top:0;left:0;width:100%;pointer-events:none}
-#statusBar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(10,14,39,0.9);border-bottom:1px solid #1a2050;pointer-events:auto;font-size:14px;z-index:10}
+#gameCanvas{position:absolute;top:0;left:0;display:block;width:100%;height:100%;pointer-events:none;z-index:0}
+#nodeLayer{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
+.node-window{position:absolute;width:160px;background:rgba(20,25,40,0.92);border:1px solid rgba(80,120,255,0.25);border-radius:6px;box-shadow:0 0 12px rgba(60,100,255,0.15);font-size:11px;color:#ccc;pointer-events:auto;cursor:default;z-index:5;transition:box-shadow .3s}
+.node-window:hover{box-shadow:0 0 18px rgba(60,100,255,0.3)}
+.node-window.infected{box-shadow:0 0 18px rgba(255,0,0,0.5)!important;animation:infectBlink 0.6s infinite}
+.node-window.power-shortage{box-shadow:0 0 14px rgba(255,80,0,0.4)!important}
+@keyframes infectBlink{0%,100%{border-color:rgba(255,0,0,0.6)}50%{border-color:rgba(255,0,0,0.15)}}
+.node-titlebar{height:24px;line-height:24px;padding:0 8px;border-radius:5px 5px 0 0;font-size:12px;font-weight:bold;color:#fff;cursor:grab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px}
+.node-titlebar:active{cursor:grabbing}
+.node-body{padding:4px 8px 6px;display:flex;flex-direction:column;gap:2px}
+.node-row{display:flex;align-items:center;justify-content:space-between;min-height:16px;line-height:1.3}
+.node-row .label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.port{width:12px;height:12px;border-radius:50%;border:2px solid #444;background:#222;cursor:pointer;flex-shrink:0;transition:all .15s;pointer-events:auto;position:relative}
+.port:hover{border-color:#ffee55;background:#554400;box-shadow:0 0 6px #ffee55}
+.port.connected{border-color:#44dd66;background:#225533}
+.port.connected:hover{border-color:#66ff88;box-shadow:0 0 6px #44dd66}
+.port.dragging{border-color:#ffee55;background:#665500;box-shadow:0 0 10px #ffee55}
+.power-bar-wrap{width:100%;height:8px;background:#1a1a2e;border-radius:4px;overflow:hidden;margin:2px 0}
+.power-bar-inner{height:100%;border-radius:4px;transition:width 2s ease,background-color 1s ease;min-width:0}
+.power-bar-ok{background:linear-gradient(90deg,#22aa44,#44dd66)}
+.power-bar-over{background:linear-gradient(90deg,#cc3333,#ff5555)}
+
+#ui{position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:10}
+#statusBar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(10,14,39,0.9);border-bottom:1px solid #1a2050;pointer-events:auto;font-size:14px}
 #statusBar .balance{font-size:20px;font-weight:bold;color:#ffd700}
 #statusBar .difficulty{color:#88aaff;font-size:13px}
 #statusBar .hashrate{color:#44ff88;font-size:13px}
+#resetBtn{position:absolute;top:8px;right:8px;width:32px;height:32px;border:none;border-radius:6px;background:rgba(60,60,80,0.5);color:#888;font-size:18px;cursor:pointer;z-index:20;pointer-events:auto;display:flex;align-items:center;justify-content:center;transition:background .2s}
+#resetBtn:hover{background:rgba(80,80,100,0.7);color:#bbb}
 #bottomPanel{position:absolute;bottom:0;left:0;width:100%;pointer-events:auto;z-index:10}
-#modeBar{display:flex;gap:4px;padding:6px 8px;background:rgba(10,14,39,0.95);border-top:1px solid #1a2050}
-#modeBar button{flex:0 0 auto;padding:8px 16px;border:1px solid #334;border-radius:6px;background:#151a3a;color:#aac;font-size:13px;cursor:pointer;transition:all .2s}
-#modeBar button.active{background:#2a3a6a;color:#fff;border-color:#4a6aff;box-shadow:0 0 8px rgba(74,106,255,0.4)}
-#shop{display:flex;gap:6px;padding:8px;background:rgba(10,14,39,0.95);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#shop{display:flex;gap:6px;padding:8px;background:rgba(10,14,39,0.95);border-top:1px solid #1a2050;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 #shop::-webkit-scrollbar{display:none}
 .shopItem{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;padding:6px 10px;border:1px solid #334;border-radius:8px;background:#151a3a;cursor:pointer;min-width:64px;transition:all .2s}
 .shopItem.selected{border-color:#4a6aff;background:#2a3a6a;box-shadow:0 0 10px rgba(74,106,255,0.5)}
@@ -25,16 +45,19 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 .shopItem .emoji{font-size:22px}
 .shopItem .name{font-size:10px;color:#aac;margin-top:2px;white-space:nowrap}
 .shopItem .price{font-size:11px;color:#ffd700;font-weight:bold}
-#infoPanel{position:absolute;top:50px;right:10px;background:rgba(15,20,50,0.95);border:1px solid #334;border-radius:10px;padding:12px;min-width:180px;display:none;pointer-events:auto;font-size:13px;z-index:20}
-#infoPanel .title{font-size:16px;font-weight:bold;margin-bottom:6px}
-#infoPanel .stat{color:#aac;margin:3px 0}
-#infoPanel .close{position:absolute;top:4px;right:8px;cursor:pointer;color:#888;font-size:18px}
+#hintText{position:absolute;top:50px;left:50%;transform:translateX(-50%);color:rgba(150,180,255,0.8);font-size:14px;pointer-events:none;z-index:15;text-shadow:0 0 10px rgba(80,120,255,0.5);transition:opacity 1s;white-space:nowrap}
 #titleScreen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0e27;z-index:100}
 #titleScreen h1{font-size:36px;margin-bottom:8px;text-shadow:0 0 20px rgba(74,106,255,0.6)}
 #titleScreen .sub{color:#88aaff;font-size:14px;margin-bottom:40px}
 #startBtn{padding:16px 48px;font-size:22px;background:linear-gradient(135deg,#2a3a8a,#4a6aff);color:#fff;border:none;border-radius:12px;cursor:pointer;box-shadow:0 0 30px rgba(74,106,255,0.4);transition:transform .2s}
 #startBtn:hover{transform:scale(1.05)}
 #titleCanvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:-1}
+#connectPreviewSvg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4}
+@media(max-width:400px){
+  .node-window{width:140px;font-size:10px}
+  .node-titlebar{height:22px;line-height:22px;font-size:11px}
+  .port{width:10px;height:10px}
+}
 </style>
 </head>
 <body>
@@ -45,25 +68,19 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 <button id="startBtn">▶ スタート</button>
 </div>
 <canvas id="gameCanvas"></canvas>
+<svg id="connectPreviewSvg"></svg>
+<div id="nodeLayer"></div>
 <div id="ui">
 <div id="statusBar">
 <div class="balance">👛 <span id="balanceText">0</span>₱</div>
 <div class="hashrate">⚡ <span id="hashrateText">0</span> H/s</div>
 <div class="difficulty">難易度: <span id="diffText">1.00</span>x</div>
 </div>
+<button id="resetBtn" title="初期化">🔄</button>
 </div>
+<div id="hintText" style="display:none">💡 接続ポート ● をドラッグして繋げよう！</div>
 <div id="bottomPanel">
-<div id="modeBar">
-<button id="btnPlace" class="active" onclick="setMode('place')">📦 配置</button>
-<button id="btnConnect" onclick="setMode('connect')">🔗 接続</button>
-<button id="btnMove" onclick="setMode('move')">✋ 移動</button>
-</div>
 <div id="shop"></div>
-</div>
-<div id="infoPanel">
-<span class="close" onclick="closeInfo()">✕</span>
-<div class="title" id="infoTitle"></div>
-<div id="infoBody"></div>
 </div>
 <script>
 'use strict';
@@ -90,21 +107,48 @@ function playSound(type){
 
 // ===== NODE TYPES =====
 const NODE_TYPES = {
-  blockchain:{name:'ブロックチェーン',emoji:'⛓️',price:0,color:'#4488ff',shape:'hexagon',size:40,fixed:true},
-  pc:{name:'PC',emoji:'💻',price:0,color:'#44aa66',shape:'roundRect',size:30},
-  cpu:{name:'CPU',emoji:'🔲',price:5,color:'#ddcc33',shape:'rect',size:18},
-  power:{name:'電源',emoji:'🔌',price:3,color:'#dd4444',shape:'circle',size:16},
-  wallet:{name:'ウォレット',emoji:'👛',price:0,color:'#ddaa22',shape:'roundRect',size:28},
-  cooler:{name:'冷却',emoji:'🧊',price:10,color:'#66ccee',shape:'rect',size:18},
-  ssd:{name:'SSD',emoji:'💾',price:15,color:'#44bb66',shape:'rect',size:20,rectW:24,rectH:14},
-  network:{name:'ネットワーク',emoji:'📡',price:20,color:'#aa66dd',shape:'circle',size:16},
-  ai:{name:'AI',emoji:'🤖',price:50,color:'#ee66aa',shape:'octagon',size:22},
-  firewall:{name:'ファイアウォール',emoji:'🛡️',price:25,color:'#ee8833',shape:'shield',size:22},
+  blockchain:{name:'ブロックチェーン',emoji:'⛓️',price:0,color:'#3366cc',titleColor:'#2a4488',watt:0},
+  pc:{name:'PC',emoji:'💻',price:0,color:'#337744',titleColor:'#224422',watt:0},
+  cpu:{name:'CPU',emoji:'🔲',price:5,color:'#998822',titleColor:'#665510',watt:5},
+  power:{name:'電源',emoji:'🔌',price:3,color:'#993333',titleColor:'#661818',watt:0,supply:20},
+  wallet:{name:'ウォレット',emoji:'👛',price:0,color:'#886611',titleColor:'#553300',watt:0},
+  cooler:{name:'冷却',emoji:'🧊',price:10,color:'#448899',titleColor:'#2a5566',watt:3},
+  ssd:{name:'SSD',emoji:'💾',price:15,color:'#338844',titleColor:'#225522',watt:2},
+  network:{name:'ネットワーク',emoji:'📡',price:20,color:'#774499',titleColor:'#4a2266',watt:2},
+  ai:{name:'AI',emoji:'🤖',price:50,color:'#994466',titleColor:'#662244',watt:10},
+  firewall:{name:'ファイアウォール',emoji:'🛡️',price:25,color:'#996622',titleColor:'#663a11',watt:1},
 };
 
-// Connection rules: what can connect TO a PC, and what PC connects TO
 const PC_INPUTS = ['cpu','power','cooler','ssd','network','ai','firewall'];
 const PC_OUTPUTS = ['blockchain','wallet'];
+
+// Port definitions per node type
+// Each port: {key, label, role:'input'|'output', targetTypes:[...]}
+function getPortDefs(type){
+  switch(type){
+    case 'pc': return [
+      {key:'power',label:'電源',role:'input',targetTypes:['power']},
+      {key:'cpu',label:'CPU',role:'input',targetTypes:['cpu']},
+      {key:'cooler',label:'冷却',role:'input',targetTypes:['cooler']},
+      {key:'ssd',label:'SSD',role:'input',targetTypes:['ssd']},
+      {key:'network',label:'ネットワーク',role:'input',targetTypes:['network']},
+      {key:'ai',label:'AI',role:'input',targetTypes:['ai']},
+      {key:'firewall',label:'FW',role:'input',targetTypes:['firewall']},
+      {key:'blockchain',label:'BC出力',role:'output',targetTypes:['blockchain']},
+      {key:'wallet',label:'ウォレット出力',role:'output',targetTypes:['wallet']},
+    ];
+    case 'cpu': return [{key:'pc',label:'PC',role:'output',targetTypes:['pc']}];
+    case 'power': return [{key:'pc',label:'PC',role:'output',targetTypes:['pc']}];
+    case 'wallet': return [{key:'pc',label:'PC',role:'input',targetTypes:['pc']}];
+    case 'blockchain': return [{key:'pc',label:'PC',role:'input',targetTypes:['pc']}];
+    case 'cooler': return [{key:'pc',label:'PC',role:'output',targetTypes:['pc']}];
+    case 'ssd': return [{key:'pc',label:'PC',role:'output',targetTypes:['pc']}];
+    case 'network': return [{key:'pc',label:'PC',role:'output',targetTypes:['pc']}];
+    case 'ai': return [{key:'pc',label:'PC',role:'output',targetTypes:['pc']}];
+    case 'firewall': return [{key:'pc',label:'PC',role:'output',targetTypes:['pc']}];
+    default: return [];
+  }
+}
 
 // ===== GAME STATE =====
 let nodes = [];
@@ -118,18 +162,23 @@ let malwareTimer = 0;
 let blackoutTimer = 0;
 let gameTime = 0;
 let miningCheckTimer = 0;
-let mode = 'place'; // place, connect, move
 let selectedShopItem = null;
-let connectSource = null;
-let dragNode = null;
-let dragOffX = 0, dragOffY = 0;
-let isDragging = false;
 let gameStarted = false;
 let nextNodeId = 1;
 let canvasW, canvasH, gameAreaTop, gameAreaBottom;
+let hintShown = false;
+
+// Drag state for port connections
+let dragPort = null; // {nodeId, portKey, portEl, startX, startY}
+let dragLineEnd = null; // {x, y}
+
+// Drag state for window movement
+let titleDrag = null; // {nodeId, offX, offY}
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const nodeLayer = document.getElementById('nodeLayer');
+const previewSvg = document.getElementById('connectPreviewSvg');
 
 function resize(){
   const dpr = window.devicePixelRatio || 1;
@@ -142,7 +191,7 @@ function resize(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   gameAreaTop = 42;
   const bp = document.getElementById('bottomPanel');
-  gameAreaBottom = canvasH - (bp ? bp.offsetHeight : 100);
+  gameAreaBottom = canvasH - (bp ? bp.offsetHeight : 60);
 }
 window.addEventListener('resize', resize);
 
@@ -159,11 +208,9 @@ window.addEventListener('resize', resize);
     if(gameStarted)return;
     const w=window.innerWidth,h=window.innerHeight;
     tctx.fillStyle='#0a0e27';tctx.fillRect(0,0,w,h);
-    // grid
     tctx.strokeStyle='#1a2050';tctx.lineWidth=0.5;
     for(let x=0;x<w;x+=40){tctx.beginPath();tctx.moveTo(x,0);tctx.lineTo(x,h);tctx.stroke()}
     for(let y=0;y<h;y+=40){tctx.beginPath();tctx.moveTo(0,y);tctx.lineTo(w,y);tctx.stroke()}
-    // circuit lines
     const t=Date.now()*0.001;
     lines.forEach(ln=>{
       tctx.strokeStyle=`rgba(74,106,255,${0.15+0.1*Math.sin(t+ln.x)})`;
@@ -184,6 +231,20 @@ document.getElementById('startBtn').addEventListener('click', ()=>{
   initGame();
 });
 
+// ===== RESET BUTTON =====
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(confirm('初期化しますか？')){
+    localStorage.removeItem('picocoin_save');
+    // Clear DOM
+    nodeLayer.innerHTML='';
+    nodes=[];connections=[];effects=[];particles=[];
+    balance=0;difficulty=1;difficultyTimer=0;malwareTimer=0;blackoutTimer=0;gameTime=0;miningCheckTimer=0;nextNodeId=1;
+    hintShown=false;
+    selectedShopItem=null;dragPort=null;dragLineEnd=null;titleDrag=null;
+    initGame();
+  }
+});
+
 // ===== SHOP =====
 function buildShop(){
   const shop=document.getElementById('shop');
@@ -196,7 +257,6 @@ function buildShop(){
     div.innerHTML=`<span class="emoji">${nt.emoji}</span><span class="name">${nt.name}</span><span class="price">${nt.price>0?nt.price+'₱':'無料'}</span>`;
     div.onclick=()=>{
       if(balance<nt.price&&nt.price>0){playSound('error');return}
-      if(mode!=='place')setMode('place');
       selectedShopItem=selectedShopItem===t?null:t;
       buildShop();
     };
@@ -204,84 +264,84 @@ function buildShop(){
   });
 }
 
-function setMode(m){
-  mode=m;
-  selectedShopItem=null;
-  connectSource=null;
-  document.getElementById('btnPlace').className=m==='place'?'active':'';
-  document.getElementById('btnConnect').className=m==='connect'?'active':'';
-  document.getElementById('btnMove').className=m==='move'?'active':'';
-  buildShop();
-}
-
-// ===== INIT =====
-function initGame(){
-  resize();
-  const cx=canvasW/2, cy=(gameAreaTop+gameAreaBottom)/2;
-  nodes=[];connections=[];effects=[];particles=[];
-  balance=0;difficulty=1;difficultyTimer=0;malwareTimer=0;blackoutTimer=0;gameTime=0;miningCheckTimer=0;
-  // Place initial nodes: full mining setup ready to go
-  const bcNode=addNode('blockchain',cx,cy-60);
-  const pcNode=addNode('pc',cx,cy+60);
-  const walletNode=addNode('wallet',cx+130,cy+60);
-  const cpuNode=addNode('cpu',cx-100,cy+20);
-  const powerNode=addNode('power',cx-100,cy+100);
-  // Auto-connect: CPU→PC, Power→PC, PC→Blockchain, PC→Wallet
-  addConnection(cpuNode,pcNode);
-  addConnection(powerNode,pcNode);
-  addConnection(pcNode,bcNode);
-  addConnection(pcNode,walletNode);
-  buildShop();
-  updateUI();
-  requestAnimationFrame(gameLoop);
-}
-
-function addNode(type,x,y){
-  const n={id:nextNodeId++,type,x,y,scale:0,infected:false,infectedTime:0,blackout:false,blackoutTime:0,connections:[]};
-  nodes.push(n);
-  effects.push({type:'spawn',x,y,t:0,dur:0.3});
-  return n;
-}
-
-// ===== HIT TEST =====
-function nodeAt(x,y){
-  for(let i=nodes.length-1;i>=0;i--){
-    const n=nodes[i],nt=NODE_TYPES[n.type],s=nt.size+8;
-    if(Math.abs(x-n.x)<s&&Math.abs(y-n.y)<s)return n;
-  }
-  return null;
+// ===== PORT POSITION (absolute page coords) =====
+function getPortPos(nodeId, portKey){
+  const el = document.querySelector(`.port[data-node="${nodeId}"][data-port="${portKey}"]`);
+  if(!el) return null;
+  const r = el.getBoundingClientRect();
+  return {x: r.left + r.width/2, y: r.top + r.height/2};
 }
 
 // ===== CONNECTION LOGIC =====
-function canConnect(a,b){
-  if(a.id===b.id)return false;
-  // Check if already connected
-  if(connections.some(c=>(c.from===a.id&&c.to===b.id)||(c.from===b.id&&c.to===a.id)))return false;
-  // Rules: components → PC, PC → blockchain/wallet
-  if(a.type==='pc'&&PC_OUTPUTS.includes(b.type))return true;
-  if(b.type==='pc'&&PC_INPUTS.includes(a.type))return true;
-  if(a.type==='pc'&&PC_INPUTS.includes(b.type))return true;
-  if(b.type==='pc'&&PC_OUTPUTS.includes(a.type))return true;
+function canConnect(aNode, aPortKey, bNode, bPortKey){
+  if(aNode.id === bNode.id) return false;
+  // Already connected?
+  if(connections.some(c=>
+    (c.fromId===aNode.id && c.fromPort===aPortKey && c.toId===bNode.id && c.toPort===bPortKey) ||
+    (c.fromId===bNode.id && c.fromPort===bPortKey && c.toId===aNode.id && c.toPort===aPortKey)
+  )) return false;
+
+  const aType = aNode.type, bType = bNode.type;
+  // PC input port ← component output port
+  if(aType==='pc' && PC_INPUTS.includes(bType) && getPortDefs(aType).find(p=>p.key===aPortKey)?.targetTypes.includes(bType)){
+    return true;
+  }
+  if(bType==='pc' && PC_INPUTS.includes(aType) && getPortDefs(bType).find(p=>p.key===bPortKey)?.targetTypes.includes(aType)){
+    return true;
+  }
+  // PC output port → blockchain/wallet
+  if(aType==='pc' && PC_OUTPUTS.includes(bType) && getPortDefs(aType).find(p=>p.key===aPortKey)?.targetTypes.includes(bType)){
+    return true;
+  }
+  if(bType==='pc' && PC_OUTPUTS.includes(aType) && getPortDefs(bType).find(p=>p.key===bPortKey)?.targetTypes.includes(aType)){
+    return true;
+  }
+  // Component → PC
+  if(bType==='pc' && PC_INPUTS.includes(aType)){
+    return true;
+  }
+  if(aType==='pc' && PC_INPUTS.includes(bType)){
+    return true;
+  }
+  // blockchain/wallet ← PC
+  if(aType==='blockchain' && bType==='pc') return true;
+  if(bType==='blockchain' && aType==='pc') return true;
+  if(aType==='wallet' && bType==='pc') return true;
+  if(bType==='wallet' && aType==='pc') return true;
   return false;
 }
 
-function addConnection(a,b){
-  // Normalize: components connect TO pc, pc connects TO blockchain/wallet
-  let from,to,lineType;
-  if(a.type==='pc'&&PC_OUTPUTS.includes(b.type)){from=a.id;to=b.id;lineType=b.type==='wallet'?'coin':'data'}
-  else if(b.type==='pc'&&PC_OUTPUTS.includes(a.type)){from=b.id;to=a.id;lineType=a.type==='wallet'?'coin':'data'}
-  else if(b.type==='pc'){from=a.id;to=b.id;lineType=a.type==='power'?'power':'data'}
-  else if(a.type==='pc'){from=b.id;to=a.id;lineType=b.type==='power'?'power':'data'}
-  else return;
-  connections.push({from,to,lineType,progress:0});
-  effects.push({type:'connectAnim',from,to,t:0,dur:0.3});
+function addConnection(fromNode, fromPort, toNode, toPort){
+  // Normalize direction: component→pc, pc→output
+  let fromId, fromPK, toId, toPK, lineType;
+  const ft = fromNode.type, tt = toNode.type;
+  if(ft==='pc' && PC_OUTPUTS.includes(tt)){
+    fromId=fromNode.id; fromPK=fromPort; toId=toNode.id; toPK=toPort;
+    lineType=tt==='wallet'?'coin':'data';
+  } else if(tt==='pc' && PC_OUTPUTS.includes(ft)){
+    fromId=toNode.id; fromPK=toPort; toId=fromNode.id; toPK=fromPort;
+    lineType=ft==='wallet'?'coin':'data';
+  } else if(tt==='pc'){
+    fromId=fromNode.id; fromPK=fromPort; toId=toNode.id; toPK=toPort;
+    lineType=ft==='power'?'power':'data';
+  } else if(ft==='pc'){
+    fromId=toNode.id; fromPK=toPort; toId=fromNode.id; toPK=fromPort;
+    lineType=tt==='power'?'power':'data';
+  } else return;
+
+  connections.push({fromId, fromPort:fromPK, toId, toPort:toPK, lineType});
   playSound('connect');
+  // Hide hint after first connection
+  const hint = document.getElementById('hintText');
+  if(hint) hint.style.opacity='0';
+  setTimeout(()=>{if(hint) hint.style.display='none'},1000);
+  updateAllWindows();
 }
 
 // ===== PC MINING ANALYSIS =====
 function getPCStats(pc){
-  const attached=connections.filter(c=>c.to===pc.id).map(c=>nodes.find(n=>n.id===c.from)).filter(Boolean);
-  const outputs=connections.filter(c=>c.from===pc.id).map(c=>nodes.find(n=>n.id===c.to)).filter(Boolean);
+  const attached=connections.filter(c=>c.toId===pc.id).map(c=>nodes.find(n=>n.id===c.fromId)).filter(Boolean);
+  const outputs=connections.filter(c=>c.fromId===pc.id).map(c=>nodes.find(n=>n.id===c.toId)).filter(Boolean);
   const cpus=attached.filter(n=>n.type==='cpu');
   const powers=attached.filter(n=>n.type==='power'&&!n.blackout);
   const coolers=attached.filter(n=>n.type==='cooler');
@@ -291,7 +351,16 @@ function getPCStats(pc){
   const firewalls=attached.filter(n=>n.type==='firewall');
   const hasBlockchain=outputs.some(n=>n.type==='blockchain');
   const hasWallet=outputs.some(n=>n.type==='wallet');
-  const canMine=cpus.length>0&&powers.length>0&&hasBlockchain&&hasWallet;
+
+  // Power calculation
+  let totalWatt = 0;
+  attached.forEach(n=>{ totalWatt += NODE_TYPES[n.type].watt || 0; });
+  let supplyWatt = 0;
+  powers.forEach(n=>{ supplyWatt += NODE_TYPES[n.type].supply || 20; });
+  const hasPower = powers.length > 0;
+  const powerOk = hasPower && supplyWatt >= totalWatt;
+
+  const canMine=cpus.length>0 && hasPower && powerOk && hasBlockchain && hasWallet;
   let hashrate=cpus.length;
   let mult=1;
   if(coolers.length>0)mult*=1.5;
@@ -299,9 +368,286 @@ function getPCStats(pc){
   if(networks.length>0)mult*=1.2;
   if(ais.length>0&&cpus.length>=2)mult*=2;
   if(pc.infected)mult*=0.25;
+  if(!powerOk && hasPower) mult*=0.3; // Power shortage penalty
   const effectiveRate=hashrate*mult;
   const successRate=effectiveRate*0.03/difficulty;
-  return{cpus:cpus.length,powers:powers.length,coolers:coolers.length,ssds:ssds.length,networks:networks.length,ais:ais.length,firewalls:firewalls.length,hasBlockchain,hasWallet,canMine,hashrate,mult,effectiveRate,successRate,hasFW:firewalls.length>0};
+  return{cpus:cpus.length,powers:powers.length,coolers:coolers.length,ssds:ssds.length,networks:networks.length,ais:ais.length,firewalls:firewalls.length,hasBlockchain,hasWallet,canMine,hashrate,mult,effectiveRate,successRate,hasFW:firewalls.length>0,totalWatt,supplyWatt,powerOk,hasPower};
+}
+
+function getStatus(pc){
+  if(pc.infected) return {text:'🦠 感染中',cls:'infected'};
+  const s = getPCStats(pc);
+  if(!s.hasPower) return {text:'⚠️ 電源なし',cls:'power-shortage'};
+  if(!s.powerOk) return {text:'⚠️ 電力不足',cls:'power-shortage'};
+  if(s.canMine) return {text:'⛏️ マイニング中',cls:''};
+  return {text:'⏸️ 停止中',cls:''};
+}
+
+// ===== NODE WINDOW DOM =====
+function createNodeWindow(node){
+  const el = document.createElement('div');
+  el.className = 'node-window';
+  el.id = 'node-'+node.id;
+  el.style.left = node.x + 'px';
+  el.style.top = node.y + 'px';
+  el.dataset.nodeId = node.id;
+  renderWindowContent(el, node);
+  nodeLayer.appendChild(el);
+  // Tap to cure malware
+  el.addEventListener('pointerdown', (e)=>{
+    if(node.infected && !e.target.classList.contains('port')){
+      node.infected=false;
+      effects.push({type:'cure',x:node.x+80,y:node.y+40,t:0,dur:0.5});
+      playSound('cure');
+      updateAllWindows();
+    }
+  });
+  return el;
+}
+
+function renderWindowContent(el, node){
+  const nt = NODE_TYPES[node.type];
+  const status = node.type==='pc' ? getStatus(node) : null;
+  el.className = 'node-window' + (status?.cls ? ' '+status.cls : '');
+
+  let html = `<div class="node-titlebar" style="background:${nt.titleColor}" data-drag-title="${node.id}">${nt.emoji} ${nt.name}</div>`;
+  html += '<div class="node-body">';
+
+  if(node.type==='pc'){
+    const s = getPCStats(node);
+    html += `<div class="node-row"><span class="label">HR: ${s.effectiveRate.toFixed(1)} H/s</span></div>`;
+    html += `<div class="node-row"><span class="label">状態: ${status.text}</span></div>`;
+    // Power bar
+    const pctRaw = s.supplyWatt>0 ? (s.totalWatt/s.supplyWatt*100) : (s.totalWatt>0?100:0);
+    const pct = Math.min(pctRaw, 100);
+    const barCls = s.powerOk ? 'power-bar-ok' : 'power-bar-over';
+    html += `<div class="node-row"><span class="label">電力: ${s.totalWatt}W/${s.supplyWatt}W</span>`;
+    html += portHtml(node, 'power');
+    html += `</div>`;
+    html += `<div class="power-bar-wrap"><div class="power-bar-inner ${barCls}" style="width:${pct}%"></div></div>`;
+    // CPU count
+    html += `<div class="node-row"><span class="label">CPU: ${s.cpus}個</span>${portHtml(node,'cpu')}</div>`;
+    // Optional slots
+    html += `<div class="node-row"><span class="label">冷却: ${s.coolers>0?'✅':'—'}</span>${portHtml(node,'cooler')}</div>`;
+    html += `<div class="node-row"><span class="label">SSD: ${s.ssds>0?'✅':'—'}</span>${portHtml(node,'ssd')}</div>`;
+    html += `<div class="node-row"><span class="label">NET: ${s.networks>0?'✅':'—'}</span>${portHtml(node,'network')}</div>`;
+    html += `<div class="node-row"><span class="label">AI: ${s.ais>0?'✅':'—'}</span>${portHtml(node,'ai')}</div>`;
+    html += `<div class="node-row"><span class="label">FW: ${s.firewalls>0?'✅':'—'}</span>${portHtml(node,'firewall')}</div>`;
+    // Output ports
+    html += `<div class="node-row"><span class="label">→ BC</span>${portHtml(node,'blockchain')}</div>`;
+    html += `<div class="node-row"><span class="label">→ ウォレット</span>${portHtml(node,'wallet')}</div>`;
+  } else if(node.type==='cpu'){
+    html += `<div class="node-row"><span class="label">演算力: +1 H/s</span></div>`;
+    html += `<div class="node-row"><span class="label">消費: 5W</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  } else if(node.type==='power'){
+    html += `<div class="node-row"><span class="label">供給: 20W</span></div>`;
+    if(node.blackout) html += `<div class="node-row"><span class="label" style="color:#ff4444">⚡停電中</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  } else if(node.type==='wallet'){
+    html += `<div class="node-row"><span class="label">残高: ${balance}₱</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  } else if(node.type==='blockchain'){
+    html += `<div class="node-row"><span class="label">難易度: ${difficulty.toFixed(2)}x</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  } else if(node.type==='cooler'){
+    html += `<div class="node-row"><span class="label">CPU効率1.5倍</span></div>`;
+    html += `<div class="node-row"><span class="label">消費: 3W</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  } else if(node.type==='ssd'){
+    html += `<div class="node-row"><span class="label">検証速度1.3倍</span></div>`;
+    html += `<div class="node-row"><span class="label">消費: 2W</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  } else if(node.type==='network'){
+    html += `<div class="node-row"><span class="label">通信速度UP</span></div>`;
+    html += `<div class="node-row"><span class="label">消費: 2W</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  } else if(node.type==='ai'){
+    html += `<div class="node-row"><span class="label">処理速度2倍</span></div>`;
+    html += `<div class="node-row"><span class="label">消費: 10W</span></div>`;
+    html += `<div class="node-row"><span class="label">要CPU2個以上</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  } else if(node.type==='firewall'){
+    html += `<div class="node-row"><span class="label">マルウェア自動駆除</span></div>`;
+    html += `<div class="node-row"><span class="label">消費: 1W</span></div>`;
+    html += `<div class="node-row"><span class="label">PC</span>${portHtml(node,'pc')}</div>`;
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+  // Re-attach port event listeners
+  el.querySelectorAll('.port').forEach(setupPortEvents);
+  // Attach titlebar drag
+  const tb = el.querySelector('.node-titlebar');
+  if(tb) setupTitleDrag(tb, node);
+}
+
+function portHtml(node, portKey){
+  const isConn = isPortConnected(node.id, portKey);
+  return `<div class="port${isConn?' connected':''}" data-node="${node.id}" data-port="${portKey}"></div>`;
+}
+
+function isPortConnected(nodeId, portKey){
+  return connections.some(c=>
+    (c.fromId===nodeId && c.fromPort===portKey) ||
+    (c.toId===nodeId && c.toPort===portKey)
+  );
+}
+
+function updateAllWindows(){
+  nodes.forEach(n=>{
+    const el = document.getElementById('node-'+n.id);
+    if(el) renderWindowContent(el, n);
+  });
+}
+
+// ===== PORT DRAG FOR CONNECTION =====
+function setupPortEvents(portEl){
+  portEl.addEventListener('pointerdown', (e)=>{
+    e.stopPropagation();
+    e.preventDefault();
+    const nodeId = parseInt(portEl.dataset.node);
+    const portKey = portEl.dataset.port;
+    const rect = portEl.getBoundingClientRect();
+    dragPort = {
+      nodeId, portKey, portEl,
+      startX: rect.left + rect.width/2,
+      startY: rect.top + rect.height/2
+    };
+    portEl.classList.add('dragging');
+    portEl.setPointerCapture(e.pointerId);
+    dragLineEnd = {x: dragPort.startX, y: dragPort.startY};
+  });
+  portEl.addEventListener('pointermove', (e)=>{
+    if(!dragPort || parseInt(portEl.dataset.node)!==dragPort.nodeId || portEl.dataset.port!==dragPort.portKey) return;
+    dragLineEnd = {x: e.clientX, y: e.clientY};
+  });
+  portEl.addEventListener('pointerup', (e)=>{
+    if(!dragPort) return;
+    // Find target port under cursor
+    const fromNodeId = dragPort.nodeId;
+    const fromPortKey = dragPort.portKey;
+    portEl.classList.remove('dragging');
+    dragPort = null;
+    dragLineEnd = null;
+
+    // Check all ports to see if we're over one
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    if(target && target.classList.contains('port')){
+      const toNodeId = parseInt(target.dataset.node);
+      const toPortKey = target.dataset.port;
+      if(toNodeId !== fromNodeId){
+        const fromNode = nodes.find(n=>n.id===fromNodeId);
+        const toNode = nodes.find(n=>n.id===toNodeId);
+        if(fromNode && toNode && canConnect(fromNode, fromPortKey, toNode, toPortKey)){
+          addConnection(fromNode, fromPortKey, toNode, toPortKey);
+        } else {
+          playSound('error');
+        }
+      }
+    }
+  });
+  portEl.addEventListener('pointercancel', ()=>{
+    if(dragPort) portEl.classList.remove('dragging');
+    dragPort = null;
+    dragLineEnd = null;
+  });
+}
+
+// ===== TITLE BAR DRAG FOR MOVEMENT =====
+function setupTitleDrag(titleEl, node){
+  titleEl.addEventListener('pointerdown', (e)=>{
+    if(e.target.classList.contains('port')) return;
+    e.preventDefault();
+    const winEl = document.getElementById('node-'+node.id);
+    const rect = winEl.getBoundingClientRect();
+    titleDrag = {
+      nodeId: node.id,
+      offX: e.clientX - rect.left,
+      offY: e.clientY - rect.top,
+      pointerId: e.pointerId
+    };
+    titleEl.setPointerCapture(e.pointerId);
+  });
+  titleEl.addEventListener('pointermove', (e)=>{
+    if(!titleDrag || titleDrag.nodeId !== node.id) return;
+    const newX = e.clientX - titleDrag.offX;
+    const newY = Math.max(gameAreaTop, Math.min(gameAreaBottom - 40, e.clientY - titleDrag.offY));
+    node.x = newX;
+    node.y = newY;
+    const winEl = document.getElementById('node-'+node.id);
+    if(winEl){
+      winEl.style.left = newX + 'px';
+      winEl.style.top = newY + 'px';
+    }
+  });
+  titleEl.addEventListener('pointerup', ()=>{
+    titleDrag = null;
+  });
+  titleEl.addEventListener('pointercancel', ()=>{
+    titleDrag = null;
+  });
+}
+
+// ===== PLACE NODE ON CANVAS TAP =====
+document.addEventListener('pointerup', (e)=>{
+  if(!gameStarted || !selectedShopItem) return;
+  // Ignore if on UI elements
+  if(e.target.closest('#bottomPanel') || e.target.closest('#statusBar') || e.target.closest('#resetBtn') || e.target.closest('.node-window')) return;
+  const x = e.clientX;
+  const y = e.clientY;
+  if(y < gameAreaTop || y > gameAreaBottom) return;
+  const nt = NODE_TYPES[selectedShopItem];
+  if(balance < nt.price && nt.price > 0){playSound('error');return}
+  balance -= nt.price;
+  addNode(selectedShopItem, x, y);
+  playSound(nt.price > 0 ? 'buy' : 'place');
+  updateUI(); buildShop();
+  updateAllWindows();
+});
+
+// ===== INIT =====
+function initGame(){
+  resize();
+  const cx=canvasW/2, cy=(gameAreaTop+gameAreaBottom)/2;
+
+  if(loadGame()){
+    // Loaded from save - rebuild DOM
+    nodes.forEach(n=> createNodeWindow(n));
+    buildShop(); updateUI();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  nodes=[];connections=[];effects=[];particles=[];
+  balance=0;difficulty=1;difficultyTimer=0;malwareTimer=0;blackoutTimer=0;gameTime=0;miningCheckTimer=0;
+
+  // Place initial nodes UNCONNECTED
+  addNode('blockchain', cx - 10, cy - 100);
+  addNode('pc', cx - 10, cy + 30);
+  addNode('wallet', cx + 180, cy + 30);
+  addNode('cpu', cx - 190, cy - 20);
+  addNode('power', cx - 190, cy + 80);
+
+  // Show hint
+  if(!hintShown){
+    hintShown = true;
+    const hint = document.getElementById('hintText');
+    hint.style.display = 'block';
+    hint.style.opacity = '1';
+  }
+
+  buildShop();
+  updateUI();
+  requestAnimationFrame(gameLoop);
+}
+
+function addNode(type,x,y){
+  const n={id:nextNodeId++,type,x,y,infected:false,infectedTime:0,blackout:false,blackoutTime:0};
+  nodes.push(n);
+  createNodeWindow(n);
+  effects.push({type:'spawn',x:x+80,y:y+40,t:0,dur:0.3});
+  return n;
 }
 
 // ===== GAME LOOP =====
@@ -316,10 +662,8 @@ function gameLoop(ts){
   requestAnimationFrame(gameLoop);
 }
 
+let updateWindowTimer = 0;
 function update(dt){
-  // Node spawn animation
-  nodes.forEach(n=>{if(n.scale<1)n.scale=Math.min(1,n.scale+dt*5)});
-
   // Difficulty increase every 5 min
   difficultyTimer+=dt;
   if(difficultyTimer>=300){difficultyTimer=0;difficulty*=1.2}
@@ -336,12 +680,20 @@ function update(dt){
         if(Math.random()<stats.successRate){
           balance++;
           playSound('mine');
-          // Sparkle effect on PC
-          effects.push({type:'sparkle',x:pc.x,y:pc.y,t:0,dur:0.6});
-          // Coin particle to wallet
+          const winEl=document.getElementById('node-'+pc.id);
+          if(winEl){
+            const r=winEl.getBoundingClientRect();
+            effects.push({type:'sparkle',x:r.left+r.width/2,y:r.top+r.height/2,t:0,dur:0.6});
+          }
           const wallet=nodes.find(n=>n.type==='wallet');
           if(wallet){
-            particles.push({x:pc.x,y:pc.y,tx:wallet.x,ty:wallet.y,t:0,dur:0.8,text:'+1₱'});
+            const wEl=document.getElementById('node-'+wallet.id);
+            const pEl=document.getElementById('node-'+pc.id);
+            if(wEl&&pEl){
+              const wr=wEl.getBoundingClientRect();
+              const pr=pEl.getBoundingClientRect();
+              particles.push({x:pr.left+pr.width/2,y:pr.top+pr.height/2,tx:wr.left+wr.width/2,ty:wr.top+wr.height/2,t:0,dur:0.8,text:'+1₱'});
+            }
           }
           buildShop();
           updateUI();
@@ -349,6 +701,13 @@ function update(dt){
       }
     });
     document.getElementById('hashrateText').textContent=totalHash.toFixed(1);
+  }
+
+  // Periodic window update (every 2s for UI freshness)
+  updateWindowTimer += dt;
+  if(updateWindowTimer >= 2){
+    updateWindowTimer = 0;
+    updateAllWindows();
   }
 
   // Malware every 30s
@@ -359,13 +718,15 @@ function update(dt){
       if(Math.random()<0.1){
         const stats=getPCStats(pc);
         if(stats.hasFW){
-          // Auto cure
-          effects.push({type:'cure',x:pc.x,y:pc.y,t:0,dur:0.5});
+          const el=document.getElementById('node-'+pc.id);
+          if(el){const r=el.getBoundingClientRect();effects.push({type:'cure',x:r.left+r.width/2,y:r.top+r.height/2,t:0,dur:0.5})}
           playSound('cure');
         }else{
           pc.infected=true;pc.infectedTime=0;
-          effects.push({type:'malware',x:pc.x,y:pc.y,t:0,dur:1});
+          const el=document.getElementById('node-'+pc.id);
+          if(el){const r=el.getBoundingClientRect();effects.push({type:'malware',x:r.left+r.width/2,y:r.top+r.height/2,t:0,dur:1})}
           playSound('malware');
+          updateAllWindows();
         }
       }
     });
@@ -379,14 +740,16 @@ function update(dt){
     if(powers.length>0&&Math.random()<0.05){
       const p=powers[Math.floor(Math.random()*powers.length)];
       p.blackout=true;p.blackoutTime=30;
-      effects.push({type:'blackout',x:p.x,y:p.y,t:0,dur:1});
+      const el=document.getElementById('node-'+p.id);
+      if(el){const r=el.getBoundingClientRect();effects.push({type:'blackout',x:r.left+r.width/2,y:r.top+r.height/2,t:0,dur:1})}
+      updateAllWindows();
     }
   }
 
   // Update blackout timers
   nodes.filter(n=>n.blackout).forEach(n=>{
     n.blackoutTime-=dt;
-    if(n.blackoutTime<=0){n.blackout=false}
+    if(n.blackoutTime<=0){n.blackout=false;updateAllWindows()}
   });
 
   // Update effects
@@ -403,44 +766,42 @@ function updateUI(){
   document.getElementById('diffText').textContent=difficulty.toFixed(2);
 }
 
-// ===== DRAWING =====
+// ===== CANVAS DRAWING (grid, connections, effects, particles) =====
 function draw(){
-  ctx.fillStyle='#0a0e27';
-  ctx.fillRect(0,0,canvasW,canvasH);
+  ctx.clearRect(0,0,canvasW,canvasH);
   drawGrid();
   drawConnections();
-  drawNodes();
+  drawDragPreview();
   drawEffects();
   drawParticles();
-  drawConnectPreview();
 }
 
 function drawGrid(){
   ctx.strokeStyle='#1a2050';ctx.lineWidth=0.5;
-  for(let x=0;x<canvasW;x+=30){ctx.beginPath();ctx.moveTo(x,gameAreaTop);ctx.lineTo(x,gameAreaBottom);ctx.stroke()}
-  for(let y=gameAreaTop;y<gameAreaBottom;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvasW,y);ctx.stroke()}
+  for(let x=0;x<canvasW;x+=30){ctx.beginPath();ctx.moveTo(x,gameAreaTop);ctx.lineTo(x,canvasH);ctx.stroke()}
+  for(let y=gameAreaTop;y<canvasH;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvasW,y);ctx.stroke()}
 }
 
 function drawConnections(){
   const t=gameTime;
   connections.forEach(c=>{
-    const fromN=nodes.find(n=>n.id===c.from);
-    const toN=nodes.find(n=>n.id===c.to);
-    if(!fromN||!toN)return;
-    const mx=(fromN.x+toN.x)/2,my=(fromN.y+toN.y)/2-30;
-    // Line color
+    const p1 = getPortPos(c.fromId, c.fromPort);
+    const p2 = getPortPos(c.toId, c.toPort);
+    if(!p1 || !p2) return;
+
+    const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2-30;
     let col='#4488ff';
     if(c.lineType==='power')col='#dd4444';
     else if(c.lineType==='coin')col='#ddaa22';
     ctx.strokeStyle=col;ctx.lineWidth=2;ctx.globalAlpha=0.6;
-    ctx.beginPath();ctx.moveTo(fromN.x,fromN.y);ctx.quadraticCurveTo(mx,my,toN.x,toN.y);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.quadraticCurveTo(mx,my,p2.x,p2.y);ctx.stroke();
     ctx.globalAlpha=1;
     // Flowing particles
     const numDots=3;
     for(let i=0;i<numDots;i++){
       const p=((t*0.5+i/numDots)%1);
-      const px=bezierPoint(fromN.x,mx,toN.x,p);
-      const py=bezierPoint(fromN.y,my,toN.y,p);
+      const px=bezierPoint(p1.x,mx,p2.x,p);
+      const py=bezierPoint(p1.y,my,p2.y,p);
       ctx.fillStyle=col;ctx.globalAlpha=0.8;
       ctx.beginPath();ctx.arc(px,py,2.5,0,Math.PI*2);ctx.fill();
       ctx.globalAlpha=1;
@@ -450,89 +811,11 @@ function drawConnections(){
 
 function bezierPoint(p0,p1,p2,t){return(1-t)*(1-t)*p0+2*(1-t)*t*p1+t*t*p2}
 
-function drawNodes(){
-  const t=gameTime;
-  nodes.forEach(n=>{
-    const nt=NODE_TYPES[n.type];
-    const s=nt.size*n.scale;
-    ctx.save();
-    ctx.translate(n.x,n.y);
-    // Glow for blockchain
-    if(n.type==='blockchain'){
-      const pulse=0.6+0.4*Math.sin(t*3);
-      ctx.shadowColor='#4488ff';ctx.shadowBlur=20*pulse;
-    }
-    // Infected glow
-    if(n.infected){
-      const blink=Math.sin(t*8)>0?1:0.3;
-      ctx.shadowColor='#ff0000';ctx.shadowBlur=15*blink;
-    }
-    // Blackout
-    if(n.blackout){
-      ctx.globalAlpha=0.3;
-    }
-    // Draw shape
-    ctx.fillStyle=n.blackout?'#333':nt.color;
-    ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;
-    switch(nt.shape){
-      case'hexagon':drawHexagon(ctx,0,0,s);break;
-      case'roundRect':drawRoundRect(ctx,-s,-s*0.7,s*2,s*1.4,6);break;
-      case'rect':
-        const rw=nt.rectW?nt.rectW*n.scale:s;
-        const rh=nt.rectH?nt.rectH*n.scale:s;
-        ctx.fillRect(-rw,-rh,rw*2,rh*2);ctx.strokeRect(-rw,-rh,rw*2,rh*2);break;
-      case'circle':ctx.beginPath();ctx.arc(0,0,s,0,Math.PI*2);ctx.fill();ctx.stroke();break;
-      case'octagon':drawOctagon(ctx,0,0,s);break;
-      case'shield':drawShield(ctx,0,0,s);break;
-    }
-    ctx.shadowBlur=0;ctx.globalAlpha=1;
-    // Emoji
-    ctx.font=`${Math.floor(s*0.9)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(nt.emoji,0,1);
-    // Mining LED for PC
-    if(n.type==='pc'){
-      const stats=getPCStats(n);
-      if(stats.canMine&&!n.infected){
-        ctx.fillStyle=Math.sin(t*4)>0?'#44ff88':'#226644';
-        ctx.beginPath();ctx.arc(s-4,-s+6,3,0,Math.PI*2);ctx.fill();
-      }
-    }
-    // Infected skull
-    if(n.infected){
-      ctx.font='14px sans-serif';ctx.fillText('💀',s+2,-s-2);
-    }
-    // Blackout icon
-    if(n.blackout){
-      ctx.font='14px sans-serif';ctx.globalAlpha=1;ctx.fillText('⚡',0,-s-8);
-    }
-    ctx.restore();
-  });
-}
-
-function drawHexagon(ctx,cx,cy,r){
-  ctx.beginPath();
-  for(let i=0;i<6;i++){const a=Math.PI/3*i-Math.PI/2;ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a))}
-  ctx.closePath();ctx.fill();ctx.stroke();
-}
-
-function drawRoundRect(ctx,x,y,w,h,r){
-  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
-  ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
-  ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);
-  ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();ctx.fill();ctx.stroke();
-}
-
-function drawOctagon(ctx,cx,cy,r){
-  ctx.beginPath();
-  for(let i=0;i<8;i++){const a=Math.PI/4*i-Math.PI/8;ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a))}
-  ctx.closePath();ctx.fill();ctx.stroke();
-}
-
-function drawShield(ctx,cx,cy,r){
-  ctx.beginPath();ctx.moveTo(cx,cy-r);
-  ctx.lineTo(cx+r,cy-r*0.4);ctx.lineTo(cx+r*0.7,cy+r*0.6);
-  ctx.lineTo(cx,cy+r);ctx.lineTo(cx-r*0.7,cy+r*0.6);
-  ctx.lineTo(cx-r,cy-r*0.4);ctx.closePath();ctx.fill();ctx.stroke();
+function drawDragPreview(){
+  if(!dragPort || !dragLineEnd) return;
+  ctx.strokeStyle='rgba(74,106,255,0.4)';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.moveTo(dragPort.startX,dragPort.startY);ctx.lineTo(dragLineEnd.x,dragLineEnd.y);ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 function drawEffects(){
@@ -545,8 +828,6 @@ function drawEffects(){
         ctx.fillStyle=`rgba(255,215,0,${1-p})`;
         ctx.beginPath();ctx.arc(e.x+Math.cos(a)*d,e.y+Math.sin(a)*d,3*(1-p),0,Math.PI*2);ctx.fill();
       }
-      ctx.font='12px sans-serif';ctx.fillStyle=`rgba(255,215,0,${1-p})`;ctx.textAlign='center';
-      ctx.fillText('✨',e.x,e.y-15-p*20);
     }
     if(e.type==='spawn'){
       ctx.strokeStyle=`rgba(255,255,255,${0.5*(1-p)})`;ctx.lineWidth=2;
@@ -578,155 +859,14 @@ function drawParticles(){
   });
 }
 
-function drawConnectPreview(){
-  if(mode==='connect'&&connectSource){
-    // Draw a faint line from source to cursor/last touch
-    if(lastPointerX!==null){
-      ctx.strokeStyle='rgba(74,106,255,0.4)';ctx.lineWidth=2;ctx.setLineDash([5,5]);
-      ctx.beginPath();ctx.moveTo(connectSource.x,connectSource.y);ctx.lineTo(lastPointerX,lastPointerY);ctx.stroke();
-      ctx.setLineDash([]);
-    }
-  }
-}
-
-// ===== INPUT =====
-let lastPointerX=null,lastPointerY=null;
-let pointerDownTime=0;
-let pointerStartX=0,pointerStartY=0;
-
-function getPos(e){
-  const r=canvas.getBoundingClientRect();
-  const touch=e.touches?e.touches[0]:e;
-  return{x:touch.clientX-r.left,y:touch.clientY-r.top};
-}
-
-canvas.addEventListener('pointerdown',e=>{
-  ensureAudio();
-  const pos=getPos(e);
-  lastPointerX=pos.x;lastPointerY=pos.y;
-  pointerStartX=pos.x;pointerStartY=pos.y;
-  pointerDownTime=Date.now();
-  isDragging=false;
-
-  if(pos.y<gameAreaTop||pos.y>gameAreaBottom)return;
-
-  if(mode==='move'){
-    const n=nodeAt(pos.x,pos.y);
-    if(n&&!NODE_TYPES[n.type].fixed){
-      dragNode=n;dragOffX=pos.x-n.x;dragOffY=pos.y-n.y;
-    }
-    return;
-  }
-});
-
-canvas.addEventListener('pointermove',e=>{
-  const pos=getPos(e);
-  lastPointerX=pos.x;lastPointerY=pos.y;
-  if(dragNode){
-    isDragging=true;
-    dragNode.x=pos.x-dragOffX;
-    dragNode.y=Math.max(gameAreaTop+20,Math.min(gameAreaBottom-20,pos.y-dragOffY));
-  }
-});
-
-canvas.addEventListener('pointerup',e=>{
-  const pos=getPos(e);
-  const wasDrag=isDragging||Math.hypot(pos.x-pointerStartX,pos.y-pointerStartY)>10;
-
-  if(dragNode){dragNode=null;isDragging=false;return}
-  if(wasDrag){isDragging=false;return}
-
-  if(pos.y<gameAreaTop||pos.y>gameAreaBottom)return;
-
-  const clickedNode=nodeAt(pos.x,pos.y);
-
-  if(mode==='place'){
-    if(clickedNode){
-      // Tap on existing node: cure malware or show info
-      if(clickedNode.infected){
-        clickedNode.infected=false;
-        effects.push({type:'cure',x:clickedNode.x,y:clickedNode.y,t:0,dur:0.5});
-        playSound('cure');
-        return;
-      }
-      showInfo(clickedNode);
-      return;
-    }
-    if(selectedShopItem){
-      const nt=NODE_TYPES[selectedShopItem];
-      if(balance>=nt.price){
-        balance-=nt.price;
-        addNode(selectedShopItem,pos.x,pos.y);
-        playSound(nt.price>0?'buy':'place');
-        updateUI();buildShop();
-      }
-    }
-    return;
-  }
-
-  if(mode==='connect'){
-    if(!clickedNode)return;
-    if(!connectSource){
-      connectSource=clickedNode;
-      return;
-    }
-    // Try to connect
-    if(canConnect(connectSource,clickedNode)){
-      addConnection(connectSource,clickedNode);
-    }else{
-      playSound('error');
-    }
-    connectSource=null;
-    return;
-  }
-});
-
-canvas.addEventListener('pointerleave',()=>{lastPointerX=null;lastPointerY=null;dragNode=null;isDragging=false});
-
-// ===== INFO PANEL =====
-function showInfo(n){
-  const panel=document.getElementById('infoPanel');
-  const nt=NODE_TYPES[n.type];
-  document.getElementById('infoTitle').textContent=nt.emoji+' '+nt.name;
-  let body='';
-  if(n.type==='pc'){
-    const s=getPCStats(n);
-    body+=`<div class="stat">CPU: ${s.cpus}個</div>`;
-    body+=`<div class="stat">電源: ${s.powers}個</div>`;
-    body+=`<div class="stat">ハッシュレート: ${s.effectiveRate.toFixed(1)} H/s</div>`;
-    body+=`<div class="stat">倍率: ${s.mult.toFixed(2)}x</div>`;
-    body+=`<div class="stat">成功率: ${(s.successRate*100).toFixed(1)}%/s</div>`;
-    body+=`<div class="stat">マイニング: ${s.canMine?'✅ 稼働中':'❌ 停止'}</div>`;
-    if(n.infected)body+=`<div class="stat" style="color:#ff4444">🦠 感染中！タップで駆除</div>`;
-    if(s.hasFW)body+=`<div class="stat" style="color:#ee8833">🛡️ ファイアウォール有</div>`;
-  }else if(n.type==='wallet'){
-    body+=`<div class="stat">残高: ${balance}₱</div>`;
-  }else if(n.type==='blockchain'){
-    body+=`<div class="stat">難易度: ${difficulty.toFixed(2)}x</div>`;
-    const pcCount=nodes.filter(nd=>nd.type==='pc'&&connections.some(c=>c.from===nd.id&&nodes.find(nn=>nn.id===c.to)?.type==='blockchain')).length;
-    body+=`<div class="stat">接続PC: ${pcCount}台</div>`;
-  }else if(n.type==='power'&&n.blackout){
-    body+=`<div class="stat" style="color:#ff4444">⚡ 停電中 (${Math.ceil(n.blackoutTime)}s)</div>`;
-  }else{
-    body+=`<div class="stat">${getDescription(n.type)}</div>`;
-  }
-  const connCount=connections.filter(c=>c.from===n.id||c.to===n.id).length;
-  body+=`<div class="stat">接続数: ${connCount}</div>`;
-  document.getElementById('infoBody').innerHTML=body;
-  panel.style.display='block';
-}
-
-function getDescription(type){
-  const descs={cpu:'ハッシュレート+1',power:'PCの動力源',cooler:'CPU効率1.5倍',ssd:'マイニング速度1.3倍',network:'通信速度UP(1.2倍)',ai:'処理速度2倍(CPU2個必要)',firewall:'マルウェア自動駆除'};
-  return descs[type]||'';
-}
-
-function closeInfo(){document.getElementById('infoPanel').style.display='none'}
-
 // ===== SAVE/LOAD =====
 function saveGame(){
   try{
-    const data={nodes:nodes.map(n=>({id:n.id,type:n.type,x:n.x,y:n.y,infected:n.infected})),connections:connections.map(c=>({from:c.from,to:c.to,lineType:c.lineType})),balance,difficulty,gameTime,nextNodeId};
+    const data={
+      nodes:nodes.map(n=>({id:n.id,type:n.type,x:n.x,y:n.y,infected:n.infected,blackout:n.blackout,blackoutTime:n.blackoutTime})),
+      connections:connections.map(c=>({fromId:c.fromId,fromPort:c.fromPort,toId:c.toId,toPort:c.toPort,lineType:c.lineType})),
+      balance,difficulty,gameTime,nextNodeId,hintShown
+    };
     localStorage.setItem('picocoin_save',JSON.stringify(data));
   }catch(e){}
 }
@@ -736,32 +876,16 @@ function loadGame(){
     const raw=localStorage.getItem('picocoin_save');
     if(!raw)return false;
     const data=JSON.parse(raw);
-    nodes=data.nodes.map(n=>({...n,scale:1,infectedTime:0,blackout:false,blackoutTime:0,connections:[]}));
-    connections=data.connections.map(c=>({...c,progress:1}));
+    nodes=data.nodes.map(n=>({...n,infectedTime:0,blackout:n.blackout||false,blackoutTime:n.blackoutTime||0}));
+    connections=data.connections||[];
     balance=data.balance;difficulty=data.difficulty;gameTime=data.gameTime||0;nextNodeId=data.nextNodeId||100;
+    hintShown=data.hintShown||false;
     return true;
   }catch(e){return false}
 }
 
 // Auto-save every 30s
 setInterval(saveGame,30000);
-
-// Try loading on start
-document.getElementById('startBtn').addEventListener('click',function loadOnce(){
-  // Already handled in initGame flow
-},{once:true});
-
-// Override initGame to try load first
-const origInit=initGame;
-initGame=function(){
-  resize();
-  if(!loadGame()){
-    origInit();
-    return;
-  }
-  buildShop();updateUI();
-  requestAnimationFrame(gameLoop);
-};
 
 resize();
 </script>
