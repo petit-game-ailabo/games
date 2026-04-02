@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🪙 PicoCoin Miner</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:'Segoe UI',sans-serif;color:#e0e0ff;touch-action:none}
+#gameCanvas{display:block;width:100%;cursor:crosshair}
+#ui{position:absolute;top:0;left:0;width:100%;pointer-events:none}
+#statusBar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(10,14,39,0.9);border-bottom:1px solid #1a2050;pointer-events:auto;font-size:14px;z-index:10}
+#statusBar .balance{font-size:20px;font-weight:bold;color:#ffd700}
+#statusBar .difficulty{color:#88aaff;font-size:13px}
+#statusBar .hashrate{color:#44ff88;font-size:13px}
+#bottomPanel{position:absolute;bottom:0;left:0;width:100%;pointer-events:auto;z-index:10}
+#modeBar{display:flex;gap:4px;padding:6px 8px;background:rgba(10,14,39,0.95);border-top:1px solid #1a2050}
+#modeBar button{flex:0 0 auto;padding:8px 16px;border:1px solid #334;border-radius:6px;background:#151a3a;color:#aac;font-size:13px;cursor:pointer;transition:all .2s}
+#modeBar button.active{background:#2a3a6a;color:#fff;border-color:#4a6aff;box-shadow:0 0 8px rgba(74,106,255,0.4)}
+#shop{display:flex;gap:6px;padding:8px;background:rgba(10,14,39,0.95);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#shop::-webkit-scrollbar{display:none}
+.shopItem{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;padding:6px 10px;border:1px solid #334;border-radius:8px;background:#151a3a;cursor:pointer;min-width:64px;transition:all .2s}
+.shopItem.selected{border-color:#4a6aff;background:#2a3a6a;box-shadow:0 0 10px rgba(74,106,255,0.5)}
+.shopItem.disabled{opacity:0.35;cursor:not-allowed}
+.shopItem .emoji{font-size:22px}
+.shopItem .name{font-size:10px;color:#aac;margin-top:2px;white-space:nowrap}
+.shopItem .price{font-size:11px;color:#ffd700;font-weight:bold}
+#infoPanel{position:absolute;top:50px;right:10px;background:rgba(15,20,50,0.95);border:1px solid #334;border-radius:10px;padding:12px;min-width:180px;display:none;pointer-events:auto;font-size:13px;z-index:20}
+#infoPanel .title{font-size:16px;font-weight:bold;margin-bottom:6px}
+#infoPanel .stat{color:#aac;margin:3px 0}
+#infoPanel .close{position:absolute;top:4px;right:8px;cursor:pointer;color:#888;font-size:18px}
+#titleScreen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0e27;z-index:100}
+#titleScreen h1{font-size:36px;margin-bottom:8px;text-shadow:0 0 20px rgba(74,106,255,0.6)}
+#titleScreen .sub{color:#88aaff;font-size:14px;margin-bottom:40px}
+#startBtn{padding:16px 48px;font-size:22px;background:linear-gradient(135deg,#2a3a8a,#4a6aff);color:#fff;border:none;border-radius:12px;cursor:pointer;box-shadow:0 0 30px rgba(74,106,255,0.4);transition:transform .2s}
+#startBtn:hover{transform:scale(1.05)}
+#titleCanvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:-1}
+</style>
+</head>
+<body>
+<div id="titleScreen">
+<canvas id="titleCanvas"></canvas>
+<h1>🪙 PicoCoin Miner</h1>
+<div class="sub">仮想通貨マイニングシミュレーター</div>
+<button id="startBtn">▶ スタート</button>
+</div>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+<div id="statusBar">
+<div class="balance">👛 <span id="balanceText">0</span>₱</div>
+<div class="hashrate">⚡ <span id="hashrateText">0</span> H/s</div>
+<div class="difficulty">難易度: <span id="diffText">1.00</span>x</div>
+</div>
+</div>
+<div id="bottomPanel">
+<div id="modeBar">
+<button id="btnPlace" class="active" onclick="setMode('place')">📦 配置</button>
+<button id="btnConnect" onclick="setMode('connect')">🔗 接続</button>
+<button id="btnMove" onclick="setMode('move')">✋ 移動</button>
+</div>
+<div id="shop"></div>
+</div>
+<div id="infoPanel">
+<span class="close" onclick="closeInfo()">✕</span>
+<div class="title" id="infoTitle"></div>
+<div id="infoBody"></div>
+</div>
+<script>
+'use strict';
+
+// ===== AUDIO =====
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
+function playSound(type){
+  ensureAudio();
+  const ctx=audioCtx,now=ctx.currentTime;
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.connect(g);g.connect(ctx.destination);
+  switch(type){
+    case'place':o.type='sine';o.frequency.setValueAtTime(600,now);o.frequency.exponentialRampToValueAtTime(900,now+0.08);g.gain.setValueAtTime(0.3,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.15);o.start(now);o.stop(now+0.15);break;
+    case'connect':o.type='sawtooth';o.frequency.setValueAtTime(1200,now);o.frequency.exponentialRampToValueAtTime(400,now+0.12);g.gain.setValueAtTime(0.15,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.12);o.start(now);o.stop(now+0.12);break;
+    case'mine':o.type='sine';o.frequency.setValueAtTime(800,now);o.frequency.setValueAtTime(1000,now+0.05);o.frequency.setValueAtTime(1200,now+0.1);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.3);o.start(now);o.stop(now+0.3);break;
+    case'malware':o.type='square';o.frequency.setValueAtTime(150,now);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.4);o.start(now);o.stop(now+0.4);break;
+    case'cure':o.type='sine';o.frequency.setValueAtTime(500,now);o.frequency.exponentialRampToValueAtTime(2000,now+0.15);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.2);o.start(now);o.stop(now+0.2);break;
+    case'buy':o.type='triangle';o.frequency.setValueAtTime(400,now);o.frequency.setValueAtTime(600,now+0.05);o.frequency.setValueAtTime(800,now+0.1);g.gain.setValueAtTime(0.25,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.15);o.start(now);o.stop(now+0.15);break;
+    case'error':o.type='square';o.frequency.setValueAtTime(200,now);g.gain.setValueAtTime(0.15,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.15);o.start(now);o.stop(now+0.15);break;
+  }
+}
+
+// ===== NODE TYPES =====
+const NODE_TYPES = {
+  blockchain:{name:'ブロックチェーン',emoji:'⛓️',price:0,color:'#4488ff',shape:'hexagon',size:40,fixed:true},
+  pc:{name:'PC',emoji:'💻',price:0,color:'#44aa66',shape:'roundRect',size:30},
+  cpu:{name:'CPU',emoji:'🔲',price:5,color:'#ddcc33',shape:'rect',size:18},
+  power:{name:'電源',emoji:'🔌',price:3,color:'#dd4444',shape:'circle',size:16},
+  wallet:{name:'ウォレット',emoji:'👛',price:0,color:'#ddaa22',shape:'roundRect',size:28},
+  cooler:{name:'冷却',emoji:'🧊',price:10,color:'#66ccee',shape:'rect',size:18},
+  ssd:{name:'SSD',emoji:'💾',price:15,color:'#44bb66',shape:'rect',size:20,rectW:24,rectH:14},
+  network:{name:'ネットワーク',emoji:'📡',price:20,color:'#aa66dd',shape:'circle',size:16},
+  ai:{name:'AI',emoji:'🤖',price:50,color:'#ee66aa',shape:'octagon',size:22},
+  firewall:{name:'ファイアウォール',emoji:'🛡️',price:25,color:'#ee8833',shape:'shield',size:22},
+};
+
+// Connection rules: what can connect TO a PC, and what PC connects TO
+const PC_INPUTS = ['cpu','power','cooler','ssd','network','ai','firewall'];
+const PC_OUTPUTS = ['blockchain','wallet'];
+
+// ===== GAME STATE =====
+let nodes = [];
+let connections = [];
+let effects = [];
+let particles = [];
+let balance = 0;
+let difficulty = 1.0;
+let difficultyTimer = 0;
+let malwareTimer = 0;
+let blackoutTimer = 0;
+let gameTime = 0;
+let miningCheckTimer = 0;
+let mode = 'place'; // place, connect, move
+let selectedShopItem = null;
+let connectSource = null;
+let dragNode = null;
+let dragOffX = 0, dragOffY = 0;
+let isDragging = false;
+let gameStarted = false;
+let nextNodeId = 1;
+let canvasW, canvasH, gameAreaTop, gameAreaBottom;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize(){
+  const dpr = window.devicePixelRatio || 1;
+  canvasW = window.innerWidth;
+  canvasH = window.innerHeight;
+  canvas.width = canvasW * dpr;
+  canvas.height = canvasH * dpr;
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  gameAreaTop = 42;
+  const bp = document.getElementById('bottomPanel');
+  gameAreaBottom = canvasH - (bp ? bp.offsetHeight : 100);
+}
+window.addEventListener('resize', resize);
+
+// ===== TITLE SCREEN =====
+(function titleAnim(){
+  const tc = document.getElementById('titleCanvas');
+  const tctx = tc.getContext('2d');
+  const dpr = window.devicePixelRatio||1;
+  function resizeTitle(){tc.width=window.innerWidth*dpr;tc.height=window.innerHeight*dpr;tctx.setTransform(dpr,0,0,dpr,0,0)}
+  resizeTitle();
+  const lines=[];
+  for(let i=0;i<30;i++)lines.push({x:Math.random()*window.innerWidth,y:Math.random()*window.innerHeight,l:50+Math.random()*100,a:Math.random()*Math.PI*2,s:0.2+Math.random()*0.5});
+  function drawTitle(){
+    if(gameStarted)return;
+    const w=window.innerWidth,h=window.innerHeight;
+    tctx.fillStyle='#0a0e27';tctx.fillRect(0,0,w,h);
+    // grid
+    tctx.strokeStyle='#1a2050';tctx.lineWidth=0.5;
+    for(let x=0;x<w;x+=40){tctx.beginPath();tctx.moveTo(x,0);tctx.lineTo(x,h);tctx.stroke()}
+    for(let y=0;y<h;y+=40){tctx.beginPath();tctx.moveTo(0,y);tctx.lineTo(w,y);tctx.stroke()}
+    // circuit lines
+    const t=Date.now()*0.001;
+    lines.forEach(ln=>{
+      tctx.strokeStyle=`rgba(74,106,255,${0.15+0.1*Math.sin(t+ln.x)})`;
+      tctx.lineWidth=1;
+      tctx.beginPath();tctx.moveTo(ln.x,ln.y);
+      tctx.lineTo(ln.x+Math.cos(ln.a)*ln.l,ln.y+Math.sin(ln.a)*ln.l);
+      tctx.stroke();
+    });
+    requestAnimationFrame(drawTitle);
+  }
+  drawTitle();
+})();
+
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  ensureAudio();
+  document.getElementById('titleScreen').style.display='none';
+  gameStarted=true;
+  initGame();
+});
+
+// ===== SHOP =====
+function buildShop(){
+  const shop=document.getElementById('shop');
+  shop.innerHTML='';
+  const items=['pc','cpu','power','wallet','cooler','ssd','network','ai','firewall'];
+  items.forEach(t=>{
+    const nt=NODE_TYPES[t];
+    const div=document.createElement('div');
+    div.className='shopItem'+(balance<nt.price&&nt.price>0?' disabled':'')+(selectedShopItem===t?' selected':'');
+    div.innerHTML=`<span class="emoji">${nt.emoji}</span><span class="name">${nt.name}</span><span class="price">${nt.price>0?nt.price+'₱':'無料'}</span>`;
+    div.onclick=()=>{
+      if(balance<nt.price&&nt.price>0){playSound('error');return}
+      if(mode!=='place')setMode('place');
+      selectedShopItem=selectedShopItem===t?null:t;
+      buildShop();
+    };
+    shop.appendChild(div);
+  });
+}
+
+function setMode(m){
+  mode=m;
+  selectedShopItem=null;
+  connectSource=null;
+  document.getElementById('btnPlace').className=m==='place'?'active':'';
+  document.getElementById('btnConnect').className=m==='connect'?'active':'';
+  document.getElementById('btnMove').className=m==='move'?'active':'';
+  buildShop();
+}
+
+// ===== INIT =====
+function initGame(){
+  resize();
+  const cx=canvasW/2, cy=(gameAreaTop+gameAreaBottom)/2;
+  nodes=[];connections=[];effects=[];particles=[];
+  balance=0;difficulty=1;difficultyTimer=0;malwareTimer=0;blackoutTimer=0;gameTime=0;miningCheckTimer=0;
+  // Place initial nodes
+  addNode('blockchain',cx,cy);
+  addNode('pc',cx-120,cy+60);
+  addNode('wallet',cx+120,cy+60);
+  buildShop();
+  updateUI();
+  requestAnimationFrame(gameLoop);
+}
+
+function addNode(type,x,y){
+  const n={id:nextNodeId++,type,x,y,scale:0,infected:false,infectedTime:0,blackout:false,blackoutTime:0,connections:[]};
+  nodes.push(n);
+  effects.push({type:'spawn',x,y,t:0,dur:0.3});
+  return n;
+}
+
+// ===== HIT TEST =====
+function nodeAt(x,y){
+  for(let i=nodes.length-1;i>=0;i--){
+    const n=nodes[i],nt=NODE_TYPES[n.type],s=nt.size+8;
+    if(Math.abs(x-n.x)<s&&Math.abs(y-n.y)<s)return n;
+  }
+  return null;
+}
+
+// ===== CONNECTION LOGIC =====
+function canConnect(a,b){
+  if(a.id===b.id)return false;
+  // Check if already connected
+  if(connections.some(c=>(c.from===a.id&&c.to===b.id)||(c.from===b.id&&c.to===a.id)))return false;
+  // Rules: components → PC, PC → blockchain/wallet
+  if(a.type==='pc'&&PC_OUTPUTS.includes(b.type))return true;
+  if(b.type==='pc'&&PC_INPUTS.includes(a.type))return true;
+  if(a.type==='pc'&&PC_INPUTS.includes(b.type))return true;
+  if(b.type==='pc'&&PC_OUTPUTS.includes(a.type))return true;
+  return false;
+}
+
+function addConnection(a,b){
+  // Normalize: components connect TO pc, pc connects TO blockchain/wallet
+  let from,to,lineType;
+  if(a.type==='pc'&&PC_OUTPUTS.includes(b.type)){from=a.id;to=b.id;lineType=b.type==='wallet'?'coin':'data'}
+  else if(b.type==='pc'&&PC_OUTPUTS.includes(a.type)){from=b.id;to=a.id;lineType=a.type==='wallet'?'coin':'data'}
+  else if(b.type==='pc'){from=a.id;to=b.id;lineType=a.type==='power'?'power':'data'}
+  else if(a.type==='pc'){from=b.id;to=a.id;lineType=b.type==='power'?'power':'data'}
+  else return;
+  connections.push({from,to,lineType,progress:0});
+  effects.push({type:'connectAnim',from,to,t:0,dur:0.3});
+  playSound('connect');
+}
+
+// ===== PC MINING ANALYSIS =====
+function getPCStats(pc){
+  const attached=connections.filter(c=>c.to===pc.id).map(c=>nodes.find(n=>n.id===c.from)).filter(Boolean);
+  const outputs=connections.filter(c=>c.from===pc.id).map(c=>nodes.find(n=>n.id===c.to)).filter(Boolean);
+  const cpus=attached.filter(n=>n.type==='cpu');
+  const powers=attached.filter(n=>n.type==='power'&&!n.blackout);
+  const coolers=attached.filter(n=>n.type==='cooler');
+  const ssds=attached.filter(n=>n.type==='ssd');
+  const networks=attached.filter(n=>n.type==='network');
+  const ais=attached.filter(n=>n.type==='ai');
+  const firewalls=attached.filter(n=>n.type==='firewall');
+  const hasBlockchain=outputs.some(n=>n.type==='blockchain');
+  const hasWallet=outputs.some(n=>n.type==='wallet');
+  const canMine=cpus.length>0&&powers.length>0&&hasBlockchain&&hasWallet;
+  let hashrate=cpus.length;
+  let mult=1;
+  if(coolers.length>0)mult*=1.5;
+  if(ssds.length>0)mult*=1.3;
+  if(networks.length>0)mult*=1.2;
+  if(ais.length>0&&cpus.length>=2)mult*=2;
+  if(pc.infected)mult*=0.25;
+  const effectiveRate=hashrate*mult;
+  const successRate=effectiveRate*0.03/difficulty;
+  return{cpus:cpus.length,powers:powers.length,coolers:coolers.length,ssds:ssds.length,networks:networks.length,ais:ais.length,firewalls:firewalls.length,hasBlockchain,hasWallet,canMine,hashrate,mult,effectiveRate,successRate,hasFW:firewalls.length>0};
+}
+
+// ===== GAME LOOP =====
+let lastTime=0;
+function gameLoop(ts){
+  if(!gameStarted)return;
+  const dt=Math.min((ts-(lastTime||ts))/1000,0.1);
+  lastTime=ts;
+  gameTime+=dt;
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function update(dt){
+  // Node spawn animation
+  nodes.forEach(n=>{if(n.scale<1)n.scale=Math.min(1,n.scale+dt*5)});
+
+  // Difficulty increase every 5 min
+  difficultyTimer+=dt;
+  if(difficultyTimer>=300){difficultyTimer=0;difficulty*=1.2}
+
+  // Mining check every second
+  miningCheckTimer+=dt;
+  if(miningCheckTimer>=1){
+    miningCheckTimer=0;
+    let totalHash=0;
+    nodes.filter(n=>n.type==='pc').forEach(pc=>{
+      const stats=getPCStats(pc);
+      totalHash+=stats.effectiveRate;
+      if(stats.canMine){
+        if(Math.random()<stats.successRate){
+          balance++;
+          playSound('mine');
+          // Sparkle effect on PC
+          effects.push({type:'sparkle',x:pc.x,y:pc.y,t:0,dur:0.6});
+          // Coin particle to wallet
+          const wallet=nodes.find(n=>n.type==='wallet');
+          if(wallet){
+            particles.push({x:pc.x,y:pc.y,tx:wallet.x,ty:wallet.y,t:0,dur:0.8,text:'+1₱'});
+          }
+          buildShop();
+          updateUI();
+        }
+      }
+    });
+    document.getElementById('hashrateText').textContent=totalHash.toFixed(1);
+  }
+
+  // Malware every 30s
+  malwareTimer+=dt;
+  if(malwareTimer>=30){
+    malwareTimer=0;
+    nodes.filter(n=>n.type==='pc'&&!n.infected).forEach(pc=>{
+      if(Math.random()<0.1){
+        const stats=getPCStats(pc);
+        if(stats.hasFW){
+          // Auto cure
+          effects.push({type:'cure',x:pc.x,y:pc.y,t:0,dur:0.5});
+          playSound('cure');
+        }else{
+          pc.infected=true;pc.infectedTime=0;
+          effects.push({type:'malware',x:pc.x,y:pc.y,t:0,dur:1});
+          playSound('malware');
+        }
+      }
+    });
+  }
+
+  // Blackout every 2 min
+  blackoutTimer+=dt;
+  if(blackoutTimer>=120){
+    blackoutTimer=0;
+    const powers=nodes.filter(n=>n.type==='power'&&!n.blackout);
+    if(powers.length>0&&Math.random()<0.05){
+      const p=powers[Math.floor(Math.random()*powers.length)];
+      p.blackout=true;p.blackoutTime=30;
+      effects.push({type:'blackout',x:p.x,y:p.y,t:0,dur:1});
+    }
+  }
+
+  // Update blackout timers
+  nodes.filter(n=>n.blackout).forEach(n=>{
+    n.blackoutTime-=dt;
+    if(n.blackoutTime<=0){n.blackout=false}
+  });
+
+  // Update effects
+  effects.forEach(e=>e.t+=dt);
+  effects=effects.filter(e=>e.t<e.dur);
+
+  // Update particles
+  particles.forEach(p=>p.t+=dt);
+  particles=particles.filter(p=>p.t<p.dur);
+}
+
+function updateUI(){
+  document.getElementById('balanceText').textContent=balance;
+  document.getElementById('diffText').textContent=difficulty.toFixed(2);
+}
+
+// ===== DRAWING =====
+function draw(){
+  ctx.fillStyle='#0a0e27';
+  ctx.fillRect(0,0,canvasW,canvasH);
+  drawGrid();
+  drawConnections();
+  drawNodes();
+  drawEffects();
+  drawParticles();
+  drawConnectPreview();
+}
+
+function drawGrid(){
+  ctx.strokeStyle='#1a2050';ctx.lineWidth=0.5;
+  for(let x=0;x<canvasW;x+=30){ctx.beginPath();ctx.moveTo(x,gameAreaTop);ctx.lineTo(x,gameAreaBottom);ctx.stroke()}
+  for(let y=gameAreaTop;y<gameAreaBottom;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvasW,y);ctx.stroke()}
+}
+
+function drawConnections(){
+  const t=gameTime;
+  connections.forEach(c=>{
+    const fromN=nodes.find(n=>n.id===c.from);
+    const toN=nodes.find(n=>n.id===c.to);
+    if(!fromN||!toN)return;
+    const mx=(fromN.x+toN.x)/2,my=(fromN.y+toN.y)/2-30;
+    // Line color
+    let col='#4488ff';
+    if(c.lineType==='power')col='#dd4444';
+    else if(c.lineType==='coin')col='#ddaa22';
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.globalAlpha=0.6;
+    ctx.beginPath();ctx.moveTo(fromN.x,fromN.y);ctx.quadraticCurveTo(mx,my,toN.x,toN.y);ctx.stroke();
+    ctx.globalAlpha=1;
+    // Flowing particles
+    const numDots=3;
+    for(let i=0;i<numDots;i++){
+      const p=((t*0.5+i/numDots)%1);
+      const px=bezierPoint(fromN.x,mx,toN.x,p);
+      const py=bezierPoint(fromN.y,my,toN.y,p);
+      ctx.fillStyle=col;ctx.globalAlpha=0.8;
+      ctx.beginPath();ctx.arc(px,py,2.5,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=1;
+    }
+  });
+}
+
+function bezierPoint(p0,p1,p2,t){return(1-t)*(1-t)*p0+2*(1-t)*t*p1+t*t*p2}
+
+function drawNodes(){
+  const t=gameTime;
+  nodes.forEach(n=>{
+    const nt=NODE_TYPES[n.type];
+    const s=nt.size*n.scale;
+    ctx.save();
+    ctx.translate(n.x,n.y);
+    // Glow for blockchain
+    if(n.type==='blockchain'){
+      const pulse=0.6+0.4*Math.sin(t*3);
+      ctx.shadowColor='#4488ff';ctx.shadowBlur=20*pulse;
+    }
+    // Infected glow
+    if(n.infected){
+      const blink=Math.sin(t*8)>0?1:0.3;
+      ctx.shadowColor='#ff0000';ctx.shadowBlur=15*blink;
+    }
+    // Blackout
+    if(n.blackout){
+      ctx.globalAlpha=0.3;
+    }
+    // Draw shape
+    ctx.fillStyle=n.blackout?'#333':nt.color;
+    ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;
+    switch(nt.shape){
+      case'hexagon':drawHexagon(ctx,0,0,s);break;
+      case'roundRect':drawRoundRect(ctx,-s,-s*0.7,s*2,s*1.4,6);break;
+      case'rect':
+        const rw=nt.rectW?nt.rectW*n.scale:s;
+        const rh=nt.rectH?nt.rectH*n.scale:s;
+        ctx.fillRect(-rw,-rh,rw*2,rh*2);ctx.strokeRect(-rw,-rh,rw*2,rh*2);break;
+      case'circle':ctx.beginPath();ctx.arc(0,0,s,0,Math.PI*2);ctx.fill();ctx.stroke();break;
+      case'octagon':drawOctagon(ctx,0,0,s);break;
+      case'shield':drawShield(ctx,0,0,s);break;
+    }
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+    // Emoji
+    ctx.font=`${Math.floor(s*0.9)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(nt.emoji,0,1);
+    // Mining LED for PC
+    if(n.type==='pc'){
+      const stats=getPCStats(n);
+      if(stats.canMine&&!n.infected){
+        ctx.fillStyle=Math.sin(t*4)>0?'#44ff88':'#226644';
+        ctx.beginPath();ctx.arc(s-4,-s+6,3,0,Math.PI*2);ctx.fill();
+      }
+    }
+    // Infected skull
+    if(n.infected){
+      ctx.font='14px sans-serif';ctx.fillText('💀',s+2,-s-2);
+    }
+    // Blackout icon
+    if(n.blackout){
+      ctx.font='14px sans-serif';ctx.globalAlpha=1;ctx.fillText('⚡',0,-s-8);
+    }
+    ctx.restore();
+  });
+}
+
+function drawHexagon(ctx,cx,cy,r){
+  ctx.beginPath();
+  for(let i=0;i<6;i++){const a=Math.PI/3*i-Math.PI/2;ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a))}
+  ctx.closePath();ctx.fill();ctx.stroke();
+}
+
+function drawRoundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();ctx.fill();ctx.stroke();
+}
+
+function drawOctagon(ctx,cx,cy,r){
+  ctx.beginPath();
+  for(let i=0;i<8;i++){const a=Math.PI/4*i-Math.PI/8;ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a))}
+  ctx.closePath();ctx.fill();ctx.stroke();
+}
+
+function drawShield(ctx,cx,cy,r){
+  ctx.beginPath();ctx.moveTo(cx,cy-r);
+  ctx.lineTo(cx+r,cy-r*0.4);ctx.lineTo(cx+r*0.7,cy+r*0.6);
+  ctx.lineTo(cx,cy+r);ctx.lineTo(cx-r*0.7,cy+r*0.6);
+  ctx.lineTo(cx-r,cy-r*0.4);ctx.closePath();ctx.fill();ctx.stroke();
+}
+
+function drawEffects(){
+  effects.forEach(e=>{
+    const p=e.t/e.dur;
+    if(e.type==='sparkle'){
+      for(let i=0;i<6;i++){
+        const a=Math.PI*2*i/6+gameTime;
+        const d=20*p;
+        ctx.fillStyle=`rgba(255,215,0,${1-p})`;
+        ctx.beginPath();ctx.arc(e.x+Math.cos(a)*d,e.y+Math.sin(a)*d,3*(1-p),0,Math.PI*2);ctx.fill();
+      }
+      ctx.font='12px sans-serif';ctx.fillStyle=`rgba(255,215,0,${1-p})`;ctx.textAlign='center';
+      ctx.fillText('✨',e.x,e.y-15-p*20);
+    }
+    if(e.type==='spawn'){
+      ctx.strokeStyle=`rgba(255,255,255,${0.5*(1-p)})`;ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(e.x,e.y,30*p,0,Math.PI*2);ctx.stroke();
+    }
+    if(e.type==='malware'){
+      ctx.fillStyle=`rgba(255,0,0,${0.3*(1-p)})`;
+      ctx.beginPath();ctx.arc(e.x,e.y,40*p,0,Math.PI*2);ctx.fill();
+    }
+    if(e.type==='cure'){
+      ctx.strokeStyle=`rgba(0,255,200,${1-p})`;ctx.lineWidth=2;
+      for(let i=0;i<4;i++){
+        const a=Math.PI/2*i+p*2;
+        ctx.beginPath();ctx.moveTo(e.x,e.y);
+        ctx.lineTo(e.x+Math.cos(a)*30*p,e.y+Math.sin(a)*30*p);ctx.stroke();
+      }
+    }
+  });
+}
+
+function drawParticles(){
+  particles.forEach(p=>{
+    const prog=p.t/p.dur;
+    const ease=1-Math.pow(1-prog,3);
+    const px=p.x+(p.tx-p.x)*ease;
+    const py=p.y+(p.ty-p.y)*ease-Math.sin(prog*Math.PI)*30;
+    ctx.font='bold 14px sans-serif';ctx.fillStyle=`rgba(255,215,0,${1-prog*0.5})`;
+    ctx.textAlign='center';ctx.fillText(p.text,px,py);
+  });
+}
+
+function drawConnectPreview(){
+  if(mode==='connect'&&connectSource){
+    // Draw a faint line from source to cursor/last touch
+    if(lastPointerX!==null){
+      ctx.strokeStyle='rgba(74,106,255,0.4)';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+      ctx.beginPath();ctx.moveTo(connectSource.x,connectSource.y);ctx.lineTo(lastPointerX,lastPointerY);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+}
+
+// ===== INPUT =====
+let lastPointerX=null,lastPointerY=null;
+let pointerDownTime=0;
+let pointerStartX=0,pointerStartY=0;
+
+function getPos(e){
+  const r=canvas.getBoundingClientRect();
+  const touch=e.touches?e.touches[0]:e;
+  return{x:touch.clientX-r.left,y:touch.clientY-r.top};
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  ensureAudio();
+  const pos=getPos(e);
+  lastPointerX=pos.x;lastPointerY=pos.y;
+  pointerStartX=pos.x;pointerStartY=pos.y;
+  pointerDownTime=Date.now();
+  isDragging=false;
+
+  if(pos.y<gameAreaTop||pos.y>gameAreaBottom)return;
+
+  if(mode==='move'){
+    const n=nodeAt(pos.x,pos.y);
+    if(n&&!NODE_TYPES[n.type].fixed){
+      dragNode=n;dragOffX=pos.x-n.x;dragOffY=pos.y-n.y;
+    }
+    return;
+  }
+});
+
+canvas.addEventListener('pointermove',e=>{
+  const pos=getPos(e);
+  lastPointerX=pos.x;lastPointerY=pos.y;
+  if(dragNode){
+    isDragging=true;
+    dragNode.x=pos.x-dragOffX;
+    dragNode.y=Math.max(gameAreaTop+20,Math.min(gameAreaBottom-20,pos.y-dragOffY));
+  }
+});
+
+canvas.addEventListener('pointerup',e=>{
+  const pos=getPos(e);
+  const wasDrag=isDragging||Math.hypot(pos.x-pointerStartX,pos.y-pointerStartY)>10;
+
+  if(dragNode){dragNode=null;isDragging=false;return}
+  if(wasDrag){isDragging=false;return}
+
+  if(pos.y<gameAreaTop||pos.y>gameAreaBottom)return;
+
+  const clickedNode=nodeAt(pos.x,pos.y);
+
+  if(mode==='place'){
+    if(clickedNode){
+      // Tap on existing node: cure malware or show info
+      if(clickedNode.infected){
+        clickedNode.infected=false;
+        effects.push({type:'cure',x:clickedNode.x,y:clickedNode.y,t:0,dur:0.5});
+        playSound('cure');
+        return;
+      }
+      showInfo(clickedNode);
+      return;
+    }
+    if(selectedShopItem){
+      const nt=NODE_TYPES[selectedShopItem];
+      if(balance>=nt.price){
+        balance-=nt.price;
+        addNode(selectedShopItem,pos.x,pos.y);
+        playSound(nt.price>0?'buy':'place');
+        updateUI();buildShop();
+      }
+    }
+    return;
+  }
+
+  if(mode==='connect'){
+    if(!clickedNode)return;
+    if(!connectSource){
+      connectSource=clickedNode;
+      return;
+    }
+    // Try to connect
+    if(canConnect(connectSource,clickedNode)){
+      addConnection(connectSource,clickedNode);
+    }else{
+      playSound('error');
+    }
+    connectSource=null;
+    return;
+  }
+});
+
+canvas.addEventListener('pointerleave',()=>{lastPointerX=null;lastPointerY=null;dragNode=null;isDragging=false});
+
+// ===== INFO PANEL =====
+function showInfo(n){
+  const panel=document.getElementById('infoPanel');
+  const nt=NODE_TYPES[n.type];
+  document.getElementById('infoTitle').textContent=nt.emoji+' '+nt.name;
+  let body='';
+  if(n.type==='pc'){
+    const s=getPCStats(n);
+    body+=`<div class="stat">CPU: ${s.cpus}個</div>`;
+    body+=`<div class="stat">電源: ${s.powers}個</div>`;
+    body+=`<div class="stat">ハッシュレート: ${s.effectiveRate.toFixed(1)} H/s</div>`;
+    body+=`<div class="stat">倍率: ${s.mult.toFixed(2)}x</div>`;
+    body+=`<div class="stat">成功率: ${(s.successRate*100).toFixed(1)}%/s</div>`;
+    body+=`<div class="stat">マイニング: ${s.canMine?'✅ 稼働中':'❌ 停止'}</div>`;
+    if(n.infected)body+=`<div class="stat" style="color:#ff4444">🦠 感染中！タップで駆除</div>`;
+    if(s.hasFW)body+=`<div class="stat" style="color:#ee8833">🛡️ ファイアウォール有</div>`;
+  }else if(n.type==='wallet'){
+    body+=`<div class="stat">残高: ${balance}₱</div>`;
+  }else if(n.type==='blockchain'){
+    body+=`<div class="stat">難易度: ${difficulty.toFixed(2)}x</div>`;
+    const pcCount=nodes.filter(nd=>nd.type==='pc'&&connections.some(c=>c.from===nd.id&&nodes.find(nn=>nn.id===c.to)?.type==='blockchain')).length;
+    body+=`<div class="stat">接続PC: ${pcCount}台</div>`;
+  }else if(n.type==='power'&&n.blackout){
+    body+=`<div class="stat" style="color:#ff4444">⚡ 停電中 (${Math.ceil(n.blackoutTime)}s)</div>`;
+  }else{
+    body+=`<div class="stat">${getDescription(n.type)}</div>`;
+  }
+  const connCount=connections.filter(c=>c.from===n.id||c.to===n.id).length;
+  body+=`<div class="stat">接続数: ${connCount}</div>`;
+  document.getElementById('infoBody').innerHTML=body;
+  panel.style.display='block';
+}
+
+function getDescription(type){
+  const descs={cpu:'ハッシュレート+1',power:'PCの動力源',cooler:'CPU効率1.5倍',ssd:'マイニング速度1.3倍',network:'通信速度UP(1.2倍)',ai:'処理速度2倍(CPU2個必要)',firewall:'マルウェア自動駆除'};
+  return descs[type]||'';
+}
+
+function closeInfo(){document.getElementById('infoPanel').style.display='none'}
+
+// ===== SAVE/LOAD =====
+function saveGame(){
+  try{
+    const data={nodes:nodes.map(n=>({id:n.id,type:n.type,x:n.x,y:n.y,infected:n.infected})),connections:connections.map(c=>({from:c.from,to:c.to,lineType:c.lineType})),balance,difficulty,gameTime,nextNodeId};
+    localStorage.setItem('picocoin_save',JSON.stringify(data));
+  }catch(e){}
+}
+
+function loadGame(){
+  try{
+    const raw=localStorage.getItem('picocoin_save');
+    if(!raw)return false;
+    const data=JSON.parse(raw);
+    nodes=data.nodes.map(n=>({...n,scale:1,infectedTime:0,blackout:false,blackoutTime:0,connections:[]}));
+    connections=data.connections.map(c=>({...c,progress:1}));
+    balance=data.balance;difficulty=data.difficulty;gameTime=data.gameTime||0;nextNodeId=data.nextNodeId||100;
+    return true;
+  }catch(e){return false}
+}
+
+// Auto-save every 30s
+setInterval(saveGame,30000);
+
+// Try loading on start
+document.getElementById('startBtn').addEventListener('click',function loadOnce(){
+  // Already handled in initGame flow
+},{once:true});
+
+// Override initGame to try load first
+const origInit=initGame;
+initGame=function(){
+  resize();
+  if(!loadGame()){
+    origInit();
+    return;
+  }
+  buildShop();updateUI();
+  requestAnimationFrame(gameLoop);
+};
+
+resize();
+</script>
+</body>
+</html>
