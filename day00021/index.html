@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Skill Reversi</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#1a1a2e;color:#eee;font-family:'Segoe UI',sans-serif;overflow-x:hidden;display:flex;flex-direction:column;align-items:center;min-height:100vh;user-select:none}
+#titleScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;width:100%;padding:20px;text-align:center}
+#titleScreen h1{font-size:2.5em;margin-bottom:5px}
+#titleScreen .sub{color:#aaa;font-size:1em;margin-bottom:30px}
+.diff-btn{padding:12px 24px;margin:6px;border:2px solid #555;border-radius:12px;background:#2a2a4a;color:#eee;font-size:1.1em;cursor:pointer;transition:all .2s}
+.diff-btn:hover,.diff-btn:active{background:#3a3a6a;border-color:#88f}
+.diff-btn.selected{border-color:#88f;background:#3a3a6a}
+#startBtn{margin-top:20px;padding:16px 48px;font-size:1.3em;border:none;border-radius:16px;background:linear-gradient(135deg,#4a7c59,#2d5f2d);color:#fff;cursor:pointer;font-weight:bold;transition:transform .1s}
+#startBtn:active{transform:scale(.95)}
+#gameScreen{display:none;flex-direction:column;align-items:center;width:100%;max-width:500px;padding:4px}
+.info-bar{width:100%;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;font-size:.9em;flex-wrap:wrap}
+.info-bar .count{font-size:1.2em;font-weight:bold}
+.skill-stock{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:36px}
+.skill-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.2em;background:#2a2a4a;border:2px solid #444;cursor:pointer;transition:all .15s;flex-shrink:0}
+.skill-icon:hover{border-color:#aaf}
+.skill-icon.loaded{border-color:#ff0;background:#4a4a2a;box-shadow:0 0 12px #ff0;animation:pulse-glow 1s infinite alternate}
+.skill-icon.ai-icon{cursor:default;opacity:.85}
+@keyframes pulse-glow{0%{box-shadow:0 0 8px #ff0}100%{box-shadow:0 0 16px #ff0,0 0 24px rgba(255,255,0,.3)}}
+#canvasWrap{width:100%;position:relative;margin:2px 0}
+canvas{display:block;width:100%;border-radius:4px}
+#statusBar{width:100%;text-align:center;padding:6px;font-size:.95em;color:#ccc;min-height:28px}
+#skillPicker{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:100;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#skillPicker h2{color:#ff0;margin-bottom:15px;font-size:1.3em;transition:opacity .3s}
+.skill-card{width:90%;max-width:360px;padding:16px;margin:8px 0;border-radius:14px;background:#2a2a4a;border:2px solid #555;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px}
+.skill-card:hover,.skill-card:active{border-color:#88f;background:#3a3a6a;transform:scale(1.02)}
+.skill-card .icon{font-size:2em;width:50px;text-align:center;flex-shrink:0}
+.skill-card .desc{flex:1}
+.skill-card .desc h3{font-size:1.1em;margin-bottom:4px}
+.skill-card .desc p{font-size:.8em;color:#aaa}
+.skill-card .desc .power{font-size:.85em;color:#fc0;margin-top:4px}
+#resultOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:100;flex-direction:column;align-items:center;justify-content:center}
+#resultOverlay h2{font-size:2em;margin-bottom:10px}
+#resultOverlay .score{font-size:1.3em;margin-bottom:20px}
+#resultOverlay button{padding:14px 40px;font-size:1.1em;border:none;border-radius:12px;background:#4a7c59;color:#fff;cursor:pointer}
+#tsunamiPicker{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:90;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+#tsunamiPicker h2{color:#4af;margin-bottom:10px}
+.tsunami-btn{padding:10px 20px;margin:4px;border:2px solid #4af;border-radius:10px;background:#1a3a5a;color:#eee;cursor:pointer;font-size:1em}
+.tsunami-btn:active{background:#2a5a8a}
+#skillAnnounce{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:95;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+#skillAnnounce h2{color:#ff0;font-size:2em;animation:announce-pop .5s ease-out}
+@keyframes announce-pop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:1}}
+#passMessage{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.55);z-index:96;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+#passMessage h2{color:#fff;font-size:1.5em;text-shadow:0 0 20px rgba(255,255,255,.5);animation:announce-pop .4s ease-out}
+#skillActivation{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:97;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .15s}
+#skillActivation.show{opacity:1}
+#skillActivation .sa-icon{font-size:80px;line-height:1;animation:announce-pop .4s ease-out}
+#skillActivation .sa-name{font-size:36px;color:#fff;font-weight:bold;margin-top:8px;text-shadow:0 0 20px rgba(255,255,255,.5)}
+#skillActivation .sa-sub{font-size:20px;color:#ff0;margin-top:4px}
+#record{position:fixed;top:4px;right:8px;font-size:.7em;color:#666;z-index:50}
+</style>
+</head>
+<body>
+<div id="titleScreen">
+<h1>♟️ Skill Reversi</h1>
+<div class="sub">ぶっ壊れスキルで盤面を支配しろ</div>
+<div>
+<button class="diff-btn selected" data-diff="0">😊 やさしい</button>
+<button class="diff-btn" data-diff="1">😤 ふつう</button>
+<button class="diff-btn" data-diff="2">👿 つよい</button>
+</div>
+<button id="startBtn">▶ スタート</button>
+<div id="record"></div>
+</div>
+
+<div id="gameScreen">
+<div class="info-bar">
+<span>💻 AI</span>
+<div class="skill-stock" id="aiStock"></div>
+<span class="count" id="whiteCount">⚪ 2</span>
+</div>
+<div id="canvasWrap"><canvas id="board"></canvas></div>
+<div class="info-bar">
+<span class="count" id="blackCount">⚫ 2</span>
+<div class="skill-stock" id="playerStock"></div>
+</div>
+<div id="statusBar">あなたのターンです</div>
+</div>
+
+<div id="skillPicker">
+<h2 id="skillPickerTitle">🎁 スキルを選べ！</h2>
+<div id="skillCards"></div>
+</div>
+
+<div id="tsunamiPicker">
+<h2>🌊 津波：行 or 列を選べ</h2>
+<div id="tsunamiBtns"></div>
+</div>
+
+<div id="skillAnnounce">
+<h2>⚡ スキル選択！</h2>
+</div>
+
+<div id="passMessage">
+<h2 id="passText"></h2>
+</div>
+
+<div id="skillActivation">
+<div class="sa-icon" id="saIcon"></div>
+<div class="sa-name" id="saName"></div>
+<div class="sa-sub" id="saSub"></div>
+</div>
+
+<div id="resultOverlay">
+<h2 id="resultTitle"></h2>
+<div class="score" id="resultScore"></div>
+<div id="resultDetails" style="font-size:.85em;color:#bbb;margin-bottom:12px;text-align:left;max-width:320px;line-height:1.6"></div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+<button id="replayBtn" style="padding:14px 28px;font-size:1em;border:none;border-radius:12px;background:#4a7c59;color:#fff;cursor:pointer">🔄 もう一度</button>
+<button id="changeDiffBtn" style="padding:14px 28px;font-size:1em;border:none;border-radius:12px;background:#5a5a8a;color:#fff;cursor:pointer">🎚️ 難易度変更</button>
+</div>
+</div>
+
+<script>
+'use strict';
+
+// ===== CONSTANTS =====
+const B=1,W=2,EMPTY=0,WALL_B=3,WALL_W=4;
+const DIRS=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+const SKILLS=[
+{id:'hanabi',icon:'🎆',name:'花火',desc:'十字方向に最大2マス、空きに自分の石を配置。各石から挟み判定あり',color:'#ff4444',power:1},
+{id:'override',icon:'🏗️',name:'上書き',desc:'相手の石の上に自分の石を上書き配置。その位置から挟み判定が発生',color:'#ff8800',power:2},
+{id:'wall',icon:'🛡️',name:'絶対防壁',desc:'この石は裏返し・爆破・津波・雷など全スキルの効果を無効化。永久に残る',color:'#8888ff',power:3},
+{id:'bomb',icon:'💣',name:'爆破',desc:'置いた場所の周囲3×3の相手の石を全て消去。自分の石は残る',color:'#ff6600',power:2},
+{id:'king',icon:'👑',name:'キング',desc:'このターン、石を2回連続で置ける。2回とも通常の挟み判定あり',color:'#ffcc00',power:2},
+{id:'tsunami',icon:'🌊',name:'津波',desc:'置いた位置の横一列を全て自分の色に変える。空きマスにも石を配置',color:'#44aaff',power:3},
+{id:'thunder',icon:'⚡',name:'雷',desc:'置いた位置の縦一列に雷が落ち、全て自分の色に変える。空きマスにも配置',color:'#ffdd00',power:3}
+];
+
+const SKILL_ICON_MAP={hanabi:'🎆',override:'🏗️',wall:'🛡️',bomb:'💣',king:'👑',tsunami:'🌊',thunder:'⚡'};
+
+function powerStars(p){return p===1?'★☆☆':p===2?'★★☆':'★★★'}
+function powerColor(p){return p===1?'#44cc44':p===2?'#4488ff':'#cc66ff'}
+function powerStarsHTML(p){return '<span style="color:'+powerColor(p)+'">'+powerStars(p)+'</span>'}
+
+// ===== AUDIO =====
+let audioCtx=null;
+function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)()}
+function playTone(freq,dur,type,vol){
+if(!audioCtx)return;
+const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+o.type=type||'sine';o.frequency.value=freq;
+g.gain.setValueAtTime(vol||.15,audioCtx.currentTime);
+g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);
+o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);
+}
+function sfxPlace(){playTone(600,.12,'sine',.2);setTimeout(()=>playTone(800,.08,'sine',.15),50)}
+function sfxFlip(){playTone(400,.06,'square',.1);setTimeout(()=>playTone(500,.06,'square',.1),60)}
+function sfxSkill(){playTone(1200,.08,'sawtooth',.15);setTimeout(()=>playTone(1600,.1,'sawtooth',.12),80);setTimeout(()=>playTone(2000,.15,'sawtooth',.1),160)}
+function sfxBomb(){playTone(100,.3,'sawtooth',.25);setTimeout(()=>playTone(60,.4,'square',.2),100)}
+function sfxWin(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,.3,'sine',.2),i*150))}
+function sfxLose(){[400,350,300,250].forEach((f,i)=>setTimeout(()=>playTone(f,.25,'sawtooth',.15),i*200))}
+
+// ===== GAME STATE =====
+let board,boardIcons,turn,playerTurnCount,aiTurnCount,playerSkills,aiSkills,difficulty;
+// Expose for Playwright automation
+Object.defineProperty(window,'_gs',{get:()=>({board,turn,B,W,EMPTY,gameOver,animating,playerSkills,loadedSkill,getValidMoves,getValidMovesWithOverride})});
+let loadedSkill,kingSecondMove,animating,gameOver,passCount;
+let effects=[];
+let flipAnims=[];
+let placeAnims=[];
+let particles=[];
+let totalTurnCount=0;
+let playerUsedSkills=[];
+let aiUsedSkills=[];
+let aiThinkingInterval=null;
+
+const diffSettings=[{depth:1,skillRate:.3,cornerWeight:.3},{depth:3,skillRate:.6,cornerWeight:1},{depth:5,skillRate:.9,cornerWeight:1}];
+
+function isBlack(c){return c===B||c===WALL_B}
+function isWhite(c){return c===W||c===WALL_W}
+function isWall(c){return c===WALL_B||c===WALL_W}
+function colorOf(c){if(isBlack(c))return B;if(isWhite(c))return W;return EMPTY}
+function isOwn(c,p){return colorOf(c)===p}
+function isOpp(c,p){return colorOf(c)!==EMPTY&&colorOf(c)!==p}
+function inBounds(r,c){return r>=0&&r<8&&c>=0&&c<8}
+
+function initBoard(){
+board=Array.from({length:8},()=>Array(8).fill(EMPTY));
+boardIcons=Array.from({length:8},()=>Array(8).fill(null));
+board[3][3]=W;board[3][4]=B;board[4][3]=B;board[4][4]=W;
+}
+
+function countPieces(){
+let b=0,w=0;
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(isBlack(board[r][c]))b++;if(isWhite(board[r][c]))w++}
+return{b,w};
+}
+
+function emptyCount(){
+let e=0;for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(board[r][c]===EMPTY)e++;return e;
+}
+
+// ===== PASS MESSAGE =====
+function showPassMessage(text,duration){
+return new Promise(resolve=>{
+let el=document.getElementById('passMessage');
+document.getElementById('passText').textContent=text;
+el.style.display='flex';
+setTimeout(()=>{el.style.display='none';resolve()},duration||1500);
+});
+}
+
+// ===== OTHELLO LOGIC =====
+function getFlips(r,c,player){
+if(board[r][c]!==EMPTY)return[];
+let flips=[];
+for(const[dr,dc]of DIRS){
+let line=[],nr=r+dr,nc=c+dc;
+while(inBounds(nr,nc)&&isOpp(board[nr][nc],player)&&!isWall(board[nr][nc])){
+line.push([nr,nc]);nr+=dr;nc+=dc;
+}
+if(line.length>0&&inBounds(nr,nc)&&isOwn(board[nr][nc],player))flips.push(...line);
+}
+return flips;
+}
+
+function getValidMoves(player){
+let moves=[];
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+if(getFlips(r,c,player).length>0)moves.push([r,c]);
+}
+return moves;
+}
+
+function getValidMovesWithOverride(player){
+let moves=getValidMoves(player);
+let moveSet=new Set(moves.map(([r,c])=>r*8+c));
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+if(isOpp(board[r][c],player)&&!isWall(board[r][c])&&!moveSet.has(r*8+c)){
+moves.push([r,c]);
+}
+}
+return moves;
+}
+
+function placePiece(r,c,player){
+const flips=getFlips(r,c,player);
+board[r][c]=player;
+placeAnims.push({r,c,t:0,maxT:40});
+for(const[fr,fc]of flips){
+if(isWall(board[fr][fc]))continue;
+board[fr][fc]=player;
+}
+return flips;
+}
+
+// ===== FLIP ANIMATION =====
+function addFlipAnim(r,c,toColor){
+flipAnims.push({r,c,toColor,t:0,maxT:45});
+addParticleBurst(c*cellSize+cellSize/2,r*cellSize+cellSize/2,toColor===B?'#333':'#fff',4);
+}
+
+// ===== PARTICLE SYSTEM =====
+function addParticleBurst(x,y,color,count,size,speed,life){
+for(let i=0;i<(count||6);i++){
+let a=Math.random()*Math.PI*2;
+let spd=(speed||2)+Math.random()*2;
+particles.push({
+x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,
+color:color||'#fff',size:size||2+Math.random()*2,
+life:0,maxLife:life||20+Math.random()*10
+});
+}
+}
+
+// ===== CLEAR EFFECTS =====
+function clearEffects(){
+effects=[];
+particles=[];
+}
+
+// ===== SEQUENTIAL FLIP ANIMATION =====
+function animateFlipsSequential(flips, callback){
+let i=0;
+function next(){
+if(i>=flips.length){
+let lastMaxT=flips.length>0?500:0;
+setTimeout(callback,lastMaxT);
+return;
+}
+let [r,c]=flips[i];
+flipAnims.push({r,c,toColor:board[r][c],t:0,maxT:45});
+addParticleBurst(c*cellSize+cellSize/2,r*cellSize+cellSize/2,board[r][c]===B?'#333':'#fff',4);
+sfxFlip();
+i++;
+setTimeout(next,200);
+}
+next();
+}
+
+// ===== SKILL EXECUTION (pure logic, for AI eval) =====
+function getFlips2(r,c,player){
+let flips=[];
+for(const[dr,dc]of DIRS){
+let line=[],nr=r+dr,nc=c+dc;
+while(inBounds(nr,nc)&&isOpp(board[nr][nc],player)&&!isWall(board[nr][nc])){
+line.push([nr,nc]);nr+=dr;nc+=dc;
+}
+if(line.length>0&&inBounds(nr,nc)&&isOwn(board[nr][nc],player))flips.push(...line);
+}
+return flips;
+}
+
+// Silent versions for AI evaluation (no effects, no sounds)
+function execHanabi(r,c,player,silent){
+let placed=[];
+const cross=[[-1,0],[1,0],[0,-1],[0,1]];
+for(const[dr,dc]of cross){
+for(let d=1;d<=2;d++){
+let nr=r+dr*d,nc=c+dc*d;
+if(inBounds(nr,nc)&&board[nr][nc]===EMPTY){board[nr][nc]=player;placed.push([nr,nc]);boardIcons[nr][nc]='🎆'}
+else break;
+}
+}
+for(const[pr,pc]of placed){
+const flips=getFlips2(pr,pc,player);
+for(const[fr,fc]of flips){if(!isWall(board[fr][fc]))board[fr][fc]=player}
+}
+boardIcons[r][c]='🎆';
+return placed;
+}
+
+function execWall(r,c,player,silent){
+board[r][c]=player===B?WALL_B:WALL_W;
+return true;
+}
+
+function execBomb(r,c,player,silent){
+let removed=[];
+for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+if(dr===0&&dc===0)continue;
+let nr=r+dr,nc=c+dc;
+if(inBounds(nr,nc)&&isOpp(board[nr][nc],player)&&!isWall(board[nr][nc])){
+board[nr][nc]=EMPTY;boardIcons[nr][nc]=null;
+removed.push([nr,nc]);
+}
+}
+boardIcons[r][c]='💣';
+return removed;
+}
+
+function execTsunamiRow(row,c,player,silent){
+let changed=[];
+for(let cc=0;cc<8;cc++){
+if(isWall(board[row][cc]))continue;
+if(board[row][cc]===EMPTY||isOpp(board[row][cc],player)){
+let oldVal=board[row][cc];
+board[row][cc]=player;
+changed.push([row,cc,oldVal]);
+boardIcons[row][cc]='🌊';
+}
+}
+return changed;
+}
+
+function execThunderCol(r,col,player,silent){
+let changed=[];
+for(let rr=0;rr<8;rr++){
+if(isWall(board[rr][col]))continue;
+if(board[rr][col]===EMPTY||isOpp(board[rr][col],player)){
+let oldVal=board[rr][col];
+board[rr][col]=player;
+changed.push([rr,col,oldVal]);
+boardIcons[rr][col]='⚡';
+}
+}
+return changed;
+}
+
+// ===== SKILL ACTIVATION ANNOUNCEMENT =====
+function showSkillActivation(skillId,isAI,callback){
+let sk=SKILLS.find(s=>s.id===skillId);
+if(!sk){callback();return}
+sfxSkill();
+let el=document.getElementById('skillActivation');
+document.getElementById('saIcon').textContent=sk.icon;
+document.getElementById('saName').textContent=sk.name;
+document.getElementById('saSub').textContent=(isAI?'AIが':'')+'発動！';
+el.style.display='flex';
+requestAnimationFrame(()=>{el.classList.add('show')});
+setTimeout(()=>{
+el.classList.remove('show');
+setTimeout(()=>{el.style.display='none';callback()},150);
+},800);
+}
+
+// ===== ANIMATED SKILL EXECUTION =====
+function executeSkillAnimated(skillId,r,c,player,callback){
+switch(skillId){
+case 'hanabi': animateHanabi(r,c,player,callback);break;
+case 'override': callback();break;
+case 'wall': animateWall(r,c,player,callback);break;
+case 'bomb': animateBomb(r,c,player,callback);break;
+case 'king': handleKingAnim(r,c,player,callback);break;
+case 'tsunami': animateTsunami(r,c,player,callback);break;
+case 'thunder': animateThunder(r,c,player,callback);break;
+default: callback();
+}
+}
+
+function animateHanabi(r,c,player,callback){
+// Calculate what would change
+let savedBoard=board.map(row=>[...row]);
+execHanabi(r,c,player,true);
+let changes=[];
+for(let rr=0;rr<8;rr++)for(let cc=0;cc<8;cc++){
+if(board[rr][cc]!==savedBoard[rr][cc]){
+changes.push({r:rr,c:cc,newVal:board[rr][cc]});
+}
+}
+board=savedBoard;
+
+// Sort by distance from center (cross pattern outward)
+changes.sort((a,b)=>{
+let da=Math.abs(a.r-r)+Math.abs(a.c-c);
+let db=Math.abs(b.r-r)+Math.abs(b.c-c);
+return da-db;
+});
+
+applyChangesSequentially(changes,'hanabi',100,callback);
+}
+
+function animateWall(r,c,player,callback){
+board[r][c]=player===B?WALL_B:WALL_W;
+boardIcons[r][c]='🛡️';
+addEffect(r,c,'wall');
+updateUI();
+setTimeout(callback,600);
+}
+
+function animateBomb(r,c,player,callback){
+sfxBomb();
+let savedBoard=board.map(row=>[...row]);
+let removed=execBomb(r,c,player,true);
+board=savedBoard;
+
+// Sort by distance from center outward
+removed.sort((a,b)=>{
+let da=Math.abs(a[0]-r)+Math.abs(a[1]-c);
+let db=Math.abs(b[0]-r)+Math.abs(b[1]-c);
+return da-db;
+});
+
+let delay=0;
+if(removed.length===0){callback();return}
+removed.forEach((cell,i)=>{
+setTimeout(()=>{
+board[cell[0]][cell[1]]=EMPTY;
+boardIcons[cell[0]][cell[1]]=null;
+addEffect(cell[0],cell[1],'bomb');
+let px=cell[1]*cellSize+cellSize/2,py=cell[0]*cellSize+cellSize/2;
+addParticleBurst(px,py,'#ff6600',8,4,4,30);
+updateUI();
+if(i===removed.length-1){
+setTimeout(callback,800);
+}
+},delay);
+delay+=100;
+});
+}
+
+function animateTsunami(r,c,player,callback){
+let savedBoard=board.map(row=>[...row]);
+execTsunamiRow(r,c,player,true);
+let changes=[];
+for(let cc=0;cc<8;cc++){
+if(board[r][cc]!==savedBoard[r][cc]){
+changes.push({r:r,c:cc,newVal:board[r][cc]});
+}
+}
+board=savedBoard;
+
+// Already sorted left to right by column
+changes.sort((a,b)=>a.c-b.c);
+
+applyChangesSequentially(changes,'tsunami',100,callback);
+}
+
+function animateThunder(r,c,player,callback){
+let savedBoard=board.map(row=>[...row]);
+execThunderCol(r,c,player,true);
+let changes=[];
+for(let rr=0;rr<8;rr++){
+if(board[rr][c]!==savedBoard[rr][c]){
+changes.push({r:rr,c:c,newVal:board[rr][c]});
+}
+}
+board=savedBoard;
+
+// Sort top to bottom
+changes.sort((a,b)=>a.r-b.r);
+
+applyChangesSequentially(changes,'thunder',100,callback);
+}
+
+function handleKingAnim(r,c,player,callback){
+boardIcons[r][c]='👑';
+addEffect(r,c,'king');
+updateUI();
+if(player===B){
+// Player: enable 2nd move
+kingSecondMove=true;
+let moves2=getValidMoves(B);
+if(moves2.length===0){
+setStatus('👑 2手目：置ける場所がありません');
+kingSecondMove=false;
+setTimeout(callback,1500);
+return;
+}
+setStatus('👑 キング！2手目を置いてください');
+animating=false;
+// Don't call callback - wait for player's 2nd click
+// Store callback for later
+kingCallback=callback;
+}else{
+// AI: find best 2nd move and play it
+let moves2=getValidMoves(W);
+if(moves2.length===0){
+setTimeout(callback,800);
+return;
+}
+// Pick best move for AI
+let bestScore=-Infinity,bestMove=moves2[0];
+for(const[r2,c2]of moves2){
+let saved2=board.map(row=>[...row]);
+placePiece(r2,c2,W);
+let s=evaluate(W);
+board=saved2;
+if(s>bestScore){bestScore=s;bestMove=[r2,c2]}
+}
+setTimeout(()=>{
+let [r2,c2]=bestMove;
+let flips2=placePiece(r2,c2,W);sfxPlace();addEffect(r2,c2,'place');
+boardIcons[r2][c2]='👑';
+updateUI();
+animateFlipsSequential(flips2,callback);
+},600);
+}
+}
+
+function applyChangesSequentially(changes,skillType,delayMs,callback){
+if(changes.length===0){callback();return}
+let delay=0;
+let iconEmoji=SKILL_ICON_MAP[skillType];
+changes.forEach((ch,i)=>{
+setTimeout(()=>{
+board[ch.r][ch.c]=ch.newVal;
+if(iconEmoji&&ch.newVal!==EMPTY){
+boardIcons[ch.r][ch.c]=iconEmoji;
+}
+addEffect(ch.r,ch.c,skillType);
+let px=ch.c*cellSize+cellSize/2,py=ch.r*cellSize+cellSize/2;
+let colors={hanabi:'#ff4444',tsunami:'#44aaff',thunder:'#ffdd00'};
+addParticleBurst(px,py,colors[skillType]||'#fff',4,3,3,25);
+updateUI();
+if(i===changes.length-1){
+setTimeout(callback,800);
+}
+},delay);
+delay+=delayMs;
+});
+}
+
+// ===== SEQUENTIAL MOVE PROCESSING =====
+let kingCallback=null;
+
+function processAfterPlacement(r,c,skillId,player,flips,callback){
+// Animate flips sequentially, then execute skill effect
+animateFlipsSequential(flips||[],()=>{
+if(!skillId){
+callback();
+return;
+}
+// Execute skill with animation (announcement already shown before placement)
+executeSkillAnimated(skillId,r,c,player,callback);
+});
+}
+
+// ===== EFFECTS =====
+function addEffect(r,c,type){
+let maxT=type==='thunder'||type==='tsunami'?80:60;
+effects.push({r,c,type,t:0,maxT});
+if(type!=='place')effects.push({r,c,type:'flash',t:0,maxT:30});
+}
+
+// ===== AI =====
+const WEIGHT=[
+[100,-20,10,5,5,10,-20,100],
+[-20,-50,-2,-2,-2,-2,-50,-20],
+[10,-2,1,1,1,1,-2,10],
+[5,-2,1,0,0,1,-2,5],
+[5,-2,1,0,0,1,-2,5],
+[10,-2,1,1,1,1,-2,10],
+[-20,-50,-2,-2,-2,-2,-50,-20],
+[100,-20,10,5,5,10,-20,100]
+];
+
+function evaluate(p){
+let s=0;
+let cw=diffSettings[difficulty].cornerWeight;
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+let w=WEIGHT[r][c];
+// For easy mode, reduce corner/edge weight influence
+if(cw<1&&(Math.abs(w)>=10))w=Math.round(w*cw+(w>0?1:-1));
+if(isOwn(board[r][c],p))s+=w;
+else if(isOpp(board[r][c],p))s-=w;
+}
+return s;
+}
+
+function minimax(p,depth,alpha,beta,maximizing){
+let moves=getValidMoves(p);
+let opp=p===B?W:B;
+if(depth===0||moves.length===0)return{score:evaluate(W)};
+if(maximizing){
+let best=-Infinity,bestMove=null;
+for(const[r,c]of moves){
+let saved=board.map(row=>[...row]);
+placePiece(r,c,p);
+let {score}=minimax(opp,depth-1,alpha,beta,false);
+board=saved;
+if(score>best){best=score;bestMove=[r,c]}
+alpha=Math.max(alpha,best);if(alpha>=beta)break;
+}
+return{score:best,move:bestMove};
+}else{
+let best=Infinity,bestMove=null;
+for(const[r,c]of moves){
+let saved=board.map(row=>[...row]);
+placePiece(r,c,p);
+let {score}=minimax(opp,depth-1,alpha,beta,true);
+board=saved;
+if(score<best){best=score;bestMove=[r,c]}
+beta=Math.min(beta,best);if(alpha>=beta)break;
+}
+return{score:best,move:bestMove};
+}
+}
+
+function aiChooseSkill(choices){
+let emp=emptyCount();
+let {b,w}=countPieces();
+let scores=choices.map(sk=>{
+let s=Math.random()*2;
+if(sk.id==='tsunami'){s+=emp<30?4:2}
+if(sk.id==='thunder'){s+=emp<30?4:2}
+if(sk.id==='hanabi'){s+=w<b?3:1}
+if(sk.id==='override'){
+let corners=[[0,0],[0,7],[7,0],[7,7]];
+if(corners.some(([r,c])=>isBlack(board[r][c])))s+=3;
+}
+if(sk.id==='bomb'){s+=emp<20?4:1}
+if(sk.id==='wall'){s+=2}
+if(sk.id==='king'){s+=2}
+return s;
+});
+let best=0;for(let i=1;i<scores.length;i++)if(scores[i]>scores[best])best=i;
+return choices[best];
+}
+
+function aiDecideMove(){
+let settings=diffSettings[difficulty];
+let emp=emptyCount();
+let moves=getValidMoves(W);
+
+let cornerMoves=moves.filter(([r,c])=>(r===0||r===7)&&(c===0||c===7));
+if(cornerMoves.length>0){
+return{move:cornerMoves[0],skill:null};
+}
+
+if(aiSkills.length>0&&emp<=45&&Math.random()<settings.skillRate){
+let bestResult=null;
+for(let si=0;si<aiSkills.length;si++){
+let sk=aiSkills[si];
+let candidateMoves=sk.id==='override'?getValidMovesWithOverride(W):moves;
+if(candidateMoves.length===0)continue;
+
+for(const[r,c]of candidateMoves){
+let saved=board.map(row=>[...row]);
+if(sk.id==='override'){
+if(board[r][c]===EMPTY){
+placePiece(r,c,W);
+}else{
+board[r][c]=W;
+let flips=getFlips2(r,c,W);
+for(const[fr,fc]of flips)if(!isWall(board[fr][fc]))board[fr][fc]=W;
+}
+}else{
+if(getFlips(r,c,W).length===0){board=saved;continue}
+placePiece(r,c,W);
+}
+if(sk.id==='hanabi')execHanabi(r,c,W,true);
+else if(sk.id==='wall'){board[r][c]=WALL_W}
+else if(sk.id==='bomb'){
+for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+if(dr===0&&dc===0)continue;
+let nr=r+dr,nc=c+dc;
+if(inBounds(nr,nc)&&isOpp(board[nr][nc],W)&&!isWall(board[nr][nc]))board[nr][nc]=EMPTY;
+}
+}
+
+let score=evaluate(W);
+board=saved;
+if(!bestResult||score>bestResult.score){
+bestResult={score,move:[r,c],skill:sk,skillIdx:si};
+}
+}
+
+if(sk.id==='tsunami'&&moves.length>0){
+for(const[r,c]of moves){
+let saved=board.map(row=>[...row]);
+placePiece(r,c,W);
+execTsunamiRow(r,c,W,true);
+let score=evaluate(W);
+board=saved;
+if(!bestResult||score>bestResult.score){
+bestResult={score,move:[r,c],skill:sk,skillIdx:si};
+}
+}
+}
+if(sk.id==='thunder'&&moves.length>0){
+for(const[r,c]of moves){
+let saved=board.map(row=>[...row]);
+placePiece(r,c,W);
+execThunderCol(r,c,W,true);
+let score=evaluate(W);
+board=saved;
+if(!bestResult||score>bestResult.score){
+bestResult={score,move:[r,c],skill:sk,skillIdx:si};
+}
+}
+}
+
+if(sk.id==='king'){
+for(const[r,c]of moves){
+let saved=board.map(row=>[...row]);
+placePiece(r,c,W);
+let moves2=getValidMoves(W);
+for(const[r2,c2]of moves2){
+let saved2=board.map(row=>[...row]);
+placePiece(r2,c2,W);
+let score=evaluate(W);
+board=saved2;
+if(!bestResult||score>bestResult.score){
+bestResult={score,move:[r,c],skill:sk,skillIdx:si,kingMove:[r2,c2]};
+}
+}
+board=saved;
+}
+}
+}
+if(bestResult&&bestResult.skill){
+let noSkillBest=-Infinity;
+for(const[r,c]of moves){
+let saved=board.map(row=>[...row]);
+placePiece(r,c,W);
+let s=evaluate(W);
+board=saved;
+if(s>noSkillBest)noSkillBest=s;
+}
+if(bestResult.score>noSkillBest+5){
+return bestResult;
+}
+}
+}
+
+if(moves.length===0)return null;
+let depth=diffSettings[difficulty].depth;
+let {move}=minimax(W,depth,-Infinity,Infinity,true);
+if(!move)move=moves[0];
+return{move,skill:null};
+}
+
+function startAiThinkingDots(){
+let dotCount=0;
+if(aiThinkingInterval)clearInterval(aiThinkingInterval);
+aiThinkingInterval=setInterval(()=>{
+dotCount=(dotCount%3)+1;
+document.getElementById('statusBar').textContent='AIが考え中'+'.'.repeat(dotCount);
+},500);
+document.getElementById('statusBar').textContent='AIが考え中.';
+}
+function stopAiThinkingDots(){
+if(aiThinkingInterval){clearInterval(aiThinkingInterval);aiThinkingInterval=null}
+}
+
+function aiTurn(){
+if(gameOver||animating)return;
+animating=true;
+startAiThinkingDots();
+
+setTimeout(()=>{
+stopAiThinkingDots();
+let moves=getValidMoves(W);
+if(moves.length===0&&aiSkills.every(s=>s.id!=='override'||getValidMovesWithOverride(W).length===0)){
+passCount++;
+if(passCount>=2){endGame();animating=false;return}
+animating=false;
+showPassMessage('AIは置ける場所がありません。ターン終了',1500).then(()=>{
+turn=B;
+aiTurnCount++;
+checkSkillGainAI();
+nextTurn();
+});
+return;
+}
+passCount=0;
+
+let decision=aiDecideMove();
+if(!decision){
+passCount++;
+if(passCount>=2){endGame();animating=false;return}
+animating=false;
+showPassMessage('AIは置ける場所がありません。ターン終了',1500).then(()=>{
+turn=B;
+aiTurnCount++;
+checkSkillGainAI();
+nextTurn();
+});
+return;
+}
+
+let [r,c]=decision.move;
+let sk=decision.skill;
+
+if(sk){
+aiSkills.splice(decision.skillIdx,1);
+aiUsedSkills.push(sk);
+
+// New order: skill announcement → place piece → flip → skill effect
+showSkillActivation(sk.id,true,()=>{
+let flips=[];
+
+if(sk.id==='override'){
+if(board[r][c]===EMPTY){
+flips=placePiece(r,c,W);
+}else{
+board[r][c]=W;
+placeAnims.push({r,c,t:0,maxT:40});
+let rawFlips=getFlips2(r,c,W);
+for(const[fr,fc]of rawFlips)if(!isWall(board[fr][fc])){board[fr][fc]=W;flips.push([fr,fc])}
+}
+boardIcons[r][c]='🏗️';
+sfxPlace();addEffect(r,c,'place');
+}else{
+flips=placePiece(r,c,W);
+sfxPlace();addEffect(r,c,'place');
+}
+updateUI();
+
+processAfterPlacement(r,c,sk.id,W,flips,()=>{
+afterAiMove();
+});
+});
+}else{
+let flips=placePiece(r,c,W);
+sfxPlace();addEffect(r,c,'place');
+updateUI();
+// No skill: animate flips sequentially then finish
+animateFlipsSequential(flips,()=>{
+afterAiMove();
+});
+}
+},400);
+}
+
+function afterAiMove(){
+clearEffects();
+animating=false;
+turn=B;
+aiTurnCount++;
+totalTurnCount++;
+checkSkillGainAI();
+if(checkGameEnd())return;
+nextTurn();
+}
+
+// ===== DRAWING =====
+const canvas=document.getElementById('board');
+const ctx=canvas.getContext('2d');
+let cellSize;
+
+const COORD_MARGIN=20;
+function resize(){
+let w=Math.min(window.innerWidth-8,500);
+canvas.width=w+COORD_MARGIN;canvas.height=w+COORD_MARGIN;
+cellSize=w/8;
+draw();
+}
+
+function draw(){
+let bw=cellSize*8;
+let cw=canvas.width,ch=canvas.height;
+ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,cw,ch);
+ctx.save();
+// Draw coordinate labels
+ctx.fillStyle='#888';ctx.font='bold '+Math.max(10,COORD_MARGIN*0.6)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+const colLabels='abcdefgh';
+for(let i=0;i<8;i++){
+ctx.fillText(colLabels[i],COORD_MARGIN+i*cellSize+cellSize/2,COORD_MARGIN/2);
+ctx.fillText(String(i+1),COORD_MARGIN/2,COORD_MARGIN+i*cellSize+cellSize/2);
+}
+// Translate so board draws at offset
+ctx.translate(COORD_MARGIN,COORD_MARGIN);
+ctx.fillStyle='#2D5F2D';ctx.fillRect(0,0,bw,bw);
+ctx.strokeStyle='#3a7a3a';ctx.lineWidth=1;
+for(let i=0;i<=8;i++){
+ctx.beginPath();ctx.moveTo(i*cellSize,0);ctx.lineTo(i*cellSize,bw);ctx.stroke();
+ctx.beginPath();ctx.moveTo(0,i*cellSize);ctx.lineTo(bw,i*cellSize);ctx.stroke();
+}
+// Draw pieces
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+let cell=board[r][c];if(cell===EMPTY)continue;
+let cx=c*cellSize+cellSize/2,cy=r*cellSize+cellSize/2,rad=cellSize*.38;
+
+// Check if this cell has an active flip animation
+let fa=flipAnims.find(f=>f.r===r&&f.c===c);
+if(fa){
+let progress=fa.t/fa.maxT;
+let scaleX,showColor;
+if(progress<0.3){
+let p2=progress/0.3;
+scaleX=1+p2*0.15;
+showColor=fa.toColor===B?W:B;
+}else if(progress<0.5){
+let p2=(progress-0.3)/0.2;
+scaleX=(1.15)*(1-p2);
+showColor=fa.toColor===B?W:B;
+}else if(progress<0.7){
+let p2=(progress-0.5)/0.2;
+scaleX=p2*1.15;
+showColor=fa.toColor;
+}else{
+let p2=(progress-0.7)/0.3;
+scaleX=1.15-p2*0.15;
+showColor=fa.toColor;
+}
+scaleX=Math.max(0.02,scaleX);
+ctx.save();
+ctx.translate(cx,cy);
+ctx.scale(scaleX,1);
+ctx.beginPath();ctx.arc(0,0,rad,0,Math.PI*2);
+ctx.fillStyle=showColor===B?'#111':'#eee';
+ctx.fill();
+ctx.strokeStyle=showColor===B?'#333':'#ccc';ctx.lineWidth=1.5;ctx.stroke();
+ctx.restore();
+// Draw icon even during flip
+if(isWall(cell)){ctx.font=cellSize*.3+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#888';ctx.fillText('🛡️',cx,cy)}
+else if(boardIcons[r][c]){ctx.font=cellSize*.22+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(boardIcons[r][c],cx,cy-rad*0.6)}
+continue;
+}
+
+// Check for place animation (landing effect)
+let pa=placeAnims.find(p=>p.r===r&&p.c===c);
+let scaleP=1;
+if(pa){
+let progress=pa.t/pa.maxT;
+// easeOutQuad: 1.5 → 1.0
+scaleP=1.5-0.5*progress*(2-progress);
+}
+
+ctx.save();
+ctx.translate(cx,cy);
+ctx.scale(scaleP,scaleP);
+ctx.beginPath();ctx.arc(0,0,rad,0,Math.PI*2);
+ctx.fillStyle=isBlack(cell)?'#111':'#eee';
+ctx.fill();
+ctx.shadowColor='rgba(0,0,0,.4)';ctx.shadowBlur=4;ctx.shadowOffsetY=2;
+ctx.fill();ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+ctx.strokeStyle=isBlack(cell)?'#333':'#ccc';ctx.lineWidth=1.5;ctx.stroke();
+// Draw skill icon on stone
+if(isWall(cell)){
+ctx.font=cellSize*.3+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#888';ctx.fillText('🛡️',0,0);
+}else if(boardIcons[r][c]){
+ctx.font=cellSize*.22+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText(boardIcons[r][c],0,-rad*0.6);
+}
+ctx.restore();
+}
+// Highlight valid moves
+if(!gameOver&&!animating&&turn===B&&!kingSecondMove){
+let sk=loadedSkill?SKILLS.find(s=>s.id===loadedSkill.id):null;
+let highlightColor=sk?sk.color:'rgba(255,255,255,.25)';
+let validMoves=loadedSkill&&loadedSkill.id==='override'?getValidMovesWithOverride(B):getValidMoves(B);
+for(const[r,c]of validMoves){
+if(loadedSkill){
+ctx.strokeStyle=highlightColor;ctx.lineWidth=3;
+ctx.strokeRect(c*cellSize+3,r*cellSize+3,cellSize-6,cellSize-6);
+}else{
+ctx.beginPath();ctx.arc(c*cellSize+cellSize/2,r*cellSize+cellSize/2,cellSize*.15,0,Math.PI*2);
+ctx.fillStyle='rgba(255,255,255,.25)';ctx.fill();
+}
+}
+}
+// King second move highlight
+if(!gameOver&&!animating&&kingSecondMove){
+let moves=getValidMoves(B);
+for(const[r,c]of moves){
+ctx.beginPath();ctx.arc(c*cellSize+cellSize/2,r*cellSize+cellSize/2,cellSize*.15,0,Math.PI*2);
+ctx.fillStyle='rgba(255,204,0,.4)';ctx.fill();
+}
+}
+drawEffects();
+drawParticles();
+drawFlipAnims();
+drawPlaceAnims();
+ctx.restore();
+}
+
+function drawEffects(){
+effects=effects.filter(e=>{
+e.t++;
+let cx=e.c*cellSize+cellSize/2,cy=e.r*cellSize+cellSize/2;
+let p=e.t/e.maxT;
+ctx.globalAlpha=1-p;
+switch(e.type){
+case 'place':
+ctx.strokeStyle='#fff';ctx.lineWidth=3;
+ctx.beginPath();ctx.arc(cx,cy,cellSize*.4*(1+p*.3),0,Math.PI*2);ctx.stroke();break;
+case 'flash':
+ctx.fillStyle='rgba(255,255,255,'+(1-p)*0.7+')';
+ctx.fillRect(e.c*cellSize,e.r*cellSize,cellSize,cellSize);break;
+case 'hanabi':
+ctx.fillStyle='#ff4444';
+for(let i=0;i<12;i++){
+let a=i*Math.PI/6+p*0.5,d=cellSize*p*1.8;
+let sz=3*(1-p);
+ctx.beginPath();ctx.arc(cx+Math.cos(a)*d,cy+Math.sin(a)*d,sz,0,Math.PI*2);ctx.fill();
+}
+ctx.fillStyle='rgba(255,50,50,'+(1-p)*0.3+')';
+ctx.fillRect(e.c*cellSize,e.r*cellSize,cellSize,cellSize);break;
+case 'bomb':
+ctx.fillStyle='rgba(255,100,0,'+(1-p)*0.6+')';
+ctx.beginPath();ctx.arc(cx,cy,cellSize*.7*(0.5+p*0.5),0,Math.PI*2);ctx.fill();
+if(Math.floor(e.t/3)%2===0){
+ctx.fillStyle='rgba(255,30,30,0.4)';
+ctx.fillRect(e.c*cellSize,e.r*cellSize,cellSize,cellSize);
+}
+break;
+case 'tsunami':
+let waveX=e.c*cellSize+cellSize*p*1.5-cellSize*0.25;
+ctx.fillStyle='rgba(68,170,255,'+(1-p)*0.5+')';
+ctx.fillRect(e.c*cellSize,e.r*cellSize,cellSize,cellSize);
+ctx.strokeStyle='rgba(100,200,255,'+(1-p)*0.8+')';
+ctx.lineWidth=3;
+ctx.beginPath();
+for(let xx=e.c*cellSize;xx<e.c*cellSize+cellSize;xx+=2){
+let yy=e.r*cellSize+cellSize/2+Math.sin((xx-waveX)*0.15)*cellSize*0.2*(1-p);
+if(xx===e.c*cellSize)ctx.moveTo(xx,yy);else ctx.lineTo(xx,yy);
+}
+ctx.stroke();
+break;
+case 'thunder':
+ctx.fillStyle='rgba(255,221,0,'+(1-p)*0.4+')';
+ctx.fillRect(e.c*cellSize,e.r*cellSize,cellSize,cellSize);
+ctx.strokeStyle='rgba(255,255,100,'+(1-p)*0.9+')';
+ctx.lineWidth=2+Math.random()*2;
+ctx.beginPath();
+let lx=e.c*cellSize+cellSize/2;
+let topY=e.r*cellSize;
+ctx.moveTo(lx+Math.random()*6-3,topY);
+for(let seg=1;seg<=4;seg++){
+lx=e.c*cellSize+cellSize/2+(Math.random()*cellSize*0.4-cellSize*0.2);
+ctx.lineTo(lx,topY+cellSize*seg/4);
+}
+ctx.stroke();
+if(p<0.3){
+ctx.fillStyle='rgba(255,255,200,'+(1-p/0.3)*0.6+')';
+ctx.beginPath();ctx.arc(e.c*cellSize+cellSize/2,e.r*cellSize+cellSize/2,cellSize*0.3,0,Math.PI*2);ctx.fill();
+}
+break;
+case 'wall':
+ctx.strokeStyle='rgba(255,215,0,'+(1-p)*0.9+')';ctx.lineWidth=4;
+ctx.strokeRect(e.c*cellSize+4,e.r*cellSize+4,cellSize-8,cellSize-8);
+ctx.fillStyle='rgba(255,215,0,'+(1-p)*0.2+')';
+ctx.fillRect(e.c*cellSize,e.r*cellSize,cellSize,cellSize);
+break;
+case 'override':
+ctx.fillStyle='rgba(50,100,255,'+(1-p)*0.7+')';
+for(let i=0;i<8;i++){
+let a=i*Math.PI/4+p*2,d=cellSize*.4*p;
+let sz=4*(1-p);
+ctx.beginPath();ctx.arc(cx+Math.cos(a)*d,cy+Math.sin(a)*d,sz,0,Math.PI*2);ctx.fill();
+}
+ctx.fillStyle='rgba(50,100,255,'+(1-p)*0.25+')';
+ctx.fillRect(e.c*cellSize,e.r*cellSize,cellSize,cellSize);
+break;
+case 'king':
+ctx.fillStyle='rgba(255,204,0,'+(1-p)+')';ctx.font=(cellSize*.5*(1+p*0.3))+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText('👑',cx,cy-cellSize*p*.6);
+break;
+}
+ctx.globalAlpha=1;
+return e.t<e.maxT;
+});
+let needsAnim=effects.length>0||flipAnims.length>0||particles.length>0||placeAnims.length>0;
+if(needsAnim)requestAnimationFrame(draw);
+}
+
+function drawParticles(){
+particles=particles.filter(pt=>{
+pt.life++;
+pt.x+=pt.vx;pt.y+=pt.vy;
+pt.vy+=0.1;
+let p=pt.life/pt.maxLife;
+ctx.globalAlpha=(1-p)*0.8;
+ctx.fillStyle=pt.color;
+ctx.beginPath();ctx.arc(pt.x,pt.y,pt.size*(1-p*0.5),0,Math.PI*2);ctx.fill();
+ctx.globalAlpha=1;
+return pt.life<pt.maxLife;
+});
+}
+
+function drawFlipAnims(){
+flipAnims=flipAnims.filter(fa=>{
+fa.t++;
+return fa.t<fa.maxT;
+});
+if(flipAnims.length>0||effects.length>0||particles.length>0||placeAnims.length>0)requestAnimationFrame(draw);
+}
+
+function drawPlaceAnims(){
+placeAnims=placeAnims.filter(pa=>{
+pa.t++;
+return pa.t<pa.maxT;
+});
+if(placeAnims.length>0)requestAnimationFrame(draw);
+}
+
+// ===== UI =====
+function updateUI(){
+let {b,w}=countPieces();
+document.getElementById('blackCount').textContent='⚫ '+b;
+document.getElementById('whiteCount').textContent='⚪ '+w;
+renderStock('playerStock',playerSkills,false);
+renderStock('aiStock',aiSkills,true);
+draw();
+}
+
+function renderStock(id,skills,isAi){
+let el=document.getElementById(id);el.innerHTML='';
+skills.forEach((sk,i)=>{
+let d=document.createElement('div');
+d.className='skill-icon'+(isAi?' ai-icon':'')+(loadedSkill===sk?' loaded':'');
+d.textContent=sk.icon;d.title=sk.name+': '+sk.desc+' (パワー: '+powerStars(sk.power)+')';
+if(!isAi)d.onclick=()=>{
+if(turn!==B||animating||gameOver||kingSecondMove)return;
+if(loadedSkill===sk){
+loadedSkill=null;
+setStatus('あなたのターンです');
+}else{
+loadedSkill=sk;
+setStatus('🔫 '+loadedSkill.name+'装填中！石を置いてください');
+}
+updateUI();
+};
+el.appendChild(d);
+});
+}
+
+function setStatus(t){document.getElementById('statusBar').textContent=t}
+
+// ===== SKILL PICK =====
+function showPickerAnnounce(cb){
+let el=document.getElementById('skillAnnounce');
+el.style.display='flex';
+setTimeout(()=>{
+el.style.display='none';
+cb();
+},600);
+}
+
+function showSkillPicker(cb){
+let pool=[...SKILLS];
+let choices=[];
+while(choices.length<3&&pool.length>0){
+let i=Math.floor(Math.random()*pool.length);
+choices.push(pool.splice(i,1)[0]);
+}
+
+let el=document.getElementById('skillCards');el.innerHTML='';
+let picker=document.getElementById('skillPicker');
+
+showPickerAnnounce(()=>{
+picker.style.display='flex';
+choices.forEach(sk=>{
+let card=document.createElement('div');card.className='skill-card';
+card.innerHTML='<div class="icon">'+sk.icon+'</div><div class="desc"><h3>'+sk.name+'</h3><p>'+sk.desc+'</p><div class="power">パワー: '+powerStarsHTML(sk.power)+'</div></div>';
+card.onclick=()=>{
+playerSkills.push(sk);
+picker.style.display='none';
+sfxPlace();
+updateUI();
+if(cb)cb();
+};
+el.appendChild(card);
+});
+});
+}
+
+// ===== TSUNAMI PICKER =====
+function showTsunamiPicker(player,cb){
+let el=document.getElementById('tsunamiBtns');el.innerHTML='';
+let picker=document.getElementById('tsunamiPicker');picker.style.display='flex';
+for(let i=0;i<8;i++){
+let btn=document.createElement('button');btn.className='tsunami-btn';
+btn.textContent='行 '+(i+1);
+btn.onclick=()=>{picker.style.display='none';cb(i)};
+el.appendChild(btn);
+}
+for(let i=0;i<8;i++){
+let btn=document.createElement('button');btn.className='tsunami-btn';
+btn.textContent='列 '+(i+1);
+btn.onclick=()=>{picker.style.display='none';cb(8+i)};
+el.appendChild(btn);
+}
+let cancelBtn=document.createElement('button');cancelBtn.className='tsunami-btn';
+cancelBtn.textContent='❌ キャンセル';cancelBtn.style.borderColor='#f44';
+cancelBtn.onclick=()=>{picker.style.display='none';cb(-1)};
+el.appendChild(cancelBtn);
+}
+
+// ===== GAME FLOW =====
+function shouldGainSkill(tc){
+return tc>=3&&(tc-3)%3===0;
+}
+
+function checkSkillGainPlayer(){
+if(shouldGainSkill(playerTurnCount)){
+animating=true;
+setTimeout(()=>{
+animating=false;
+showSkillPicker(()=>{updateUI()});
+},600);
+}
+}
+
+function checkSkillGainAI(){
+if(shouldGainSkill(aiTurnCount)){
+let pool=[...SKILLS];
+let choices=[];
+while(choices.length<3&&pool.length>0){
+let i=Math.floor(Math.random()*pool.length);
+choices.push(pool.splice(i,1)[0]);
+}
+let pick=aiChooseSkill(choices);
+aiSkills.push(pick);
+updateUI();
+}
+}
+
+function checkGameEnd(){
+if(emptyCount()===0||passCount>=2){endGame();return true}
+let bm=getValidMoves(B),wm=getValidMoves(W);
+if(bm.length===0&&wm.length===0){endGame();return true}
+return false;
+}
+
+function endGame(){
+gameOver=true;
+stopAiThinkingDots();
+let {b,w}=countPieces();
+let title;
+if(b>w){title='🎉 あなたの勝ち！';sfxWin()}
+else if(w>b){title='😭 AIの勝ち...';sfxLose()}
+else{title='🤝 引き分け';sfxPlace()}
+document.getElementById('resultTitle').textContent=title;
+document.getElementById('resultScore').textContent='⚫ '+b+' vs ⚪ '+w;
+// Build details
+let details='📊 ターン数: '+totalTurnCount+'<br>';
+if(playerUsedSkills.length>0){
+details+='🎮 あなたのスキル: '+playerUsedSkills.map(s=>s.icon+s.name).join(', ')+'<br>';
+}else{
+details+='🎮 あなたのスキル: なし<br>';
+}
+if(aiUsedSkills.length>0){
+details+='💻 AIのスキル: '+aiUsedSkills.map(s=>s.icon+s.name).join(', ')+'<br>';
+}else{
+details+='💻 AIのスキル: なし<br>';
+}
+document.getElementById('resultDetails').innerHTML=details;
+document.getElementById('resultOverlay').style.display='flex';
+saveRecord(b>w?'win':w>b?'lose':'draw');
+}
+
+function nextTurn(){
+if(gameOver)return;
+if(turn===B){
+let moves=loadedSkill&&loadedSkill.id==='override'?getValidMovesWithOverride(B):getValidMoves(B);
+if(moves.length===0){
+passCount++;
+if(passCount>=2){endGame();return}
+animating=true;
+showPassMessage('置ける場所がありません。ターン終了',1500).then(()=>{
+animating=false;
+turn=W;
+playerTurnCount++;
+checkSkillGainPlayer();
+setTimeout(aiTurn,300);
+});
+return;
+}
+passCount=0;
+if(loadedSkill){
+setStatus('🔫 '+loadedSkill.name+'装填中！石を置いてください');
+}else{
+setStatus('あなたのターンです');
+}
+updateUI();
+}else{
+aiTurn();
+}
+}
+
+function handleBoardClick(e){
+if(turn!==B||animating||gameOver)return;
+initAudio();
+let rect=canvas.getBoundingClientRect();
+let x=(e.clientX||e.touches[0].clientX)-rect.left;
+let y=(e.clientY||e.touches[0].clientY)-rect.top;
+let scale=rect.width/canvas.width;
+let bx=(x/scale-COORD_MARGIN);
+let by=(y/scale-COORD_MARGIN);
+let c=Math.floor(bx/cellSize);
+let r=Math.floor(by/cellSize);
+if(!inBounds(r,c))return;
+
+// King second move
+if(kingSecondMove){
+let preFlips=getFlips(r,c,B);
+if(preFlips.length===0)return;
+animating=true;
+let flips=placePiece(r,c,B);sfxPlace();addEffect(r,c,'place');
+boardIcons[r][c]='👑';
+kingSecondMove=false;
+updateUI();
+// Animate flips sequentially, then finish
+animateFlipsSequential(flips,()=>{
+animating=false;
+if(kingCallback){
+let cb=kingCallback;
+kingCallback=null;
+cb();
+}
+});
+return;
+}
+
+if(loadedSkill){
+let sk=loadedSkill;
+
+if(sk.id==='override'){
+let validMoves=getValidMovesWithOverride(B);
+if(!validMoves.some(([vr,vc])=>vr===r&&vc===c))return;
+
+let si=playerSkills.indexOf(sk);
+playerSkills.splice(si,1);
+playerUsedSkills.push(sk);
+loadedSkill=null;
+animating=true;
+
+// New order: skill announcement → place piece → flip → skill effect
+showSkillActivation('override',false,()=>{
+let flips=[];
+
+if(board[r][c]===EMPTY){
+flips=placePiece(r,c,B);
+}else if(isOpp(board[r][c],B)&&!isWall(board[r][c])){
+board[r][c]=B;
+placeAnims.push({r,c,t:0,maxT:40});
+let rawFlips=getFlips2(r,c,B);
+for(const[fr,fc]of rawFlips)if(!isWall(board[fr][fc])){board[fr][fc]=B;flips.push([fr,fc])}
+}else{animating=false;return}
+boardIcons[r][c]='🏗️';
+sfxPlace();addEffect(r,c,'place');
+updateUI();
+
+processAfterPlacement(r,c,'override',B,flips,()=>{
+animating=false;
+afterPlayerMove();
+});
+});
+return;
+}
+
+let preFlips=getFlips(r,c,B);
+if(preFlips.length===0)return;
+
+let si=playerSkills.indexOf(sk);
+playerSkills.splice(si,1);
+playerUsedSkills.push(sk);
+loadedSkill=null;
+animating=true;
+
+// New order: skill announcement → place piece → flip → skill effect
+showSkillActivation(sk.id,false,()=>{
+let flips=placePiece(r,c,B);
+sfxPlace();addEffect(r,c,'place');
+updateUI();
+
+processAfterPlacement(r,c,sk.id,B,flips,()=>{
+animating=false;
+afterPlayerMove();
+});
+});
+}else{
+let preFlips=getFlips(r,c,B);
+if(preFlips.length===0)return;
+passCount=0;
+animating=true;
+let flips=placePiece(r,c,B);sfxPlace();addEffect(r,c,'place');
+updateUI();
+// No skill: animate flips sequentially then finish
+animateFlipsSequential(flips,()=>{
+animating=false;
+afterPlayerMove();
+});
+}
+}
+
+function afterPlayerMove(){
+clearEffects();
+animating=true;
+playerTurnCount++;
+totalTurnCount++;
+updateUI();
+if(checkGameEnd()){animating=false;return}
+let needsSkill=shouldGainSkill(playerTurnCount);
+if(needsSkill){
+setTimeout(()=>{
+showSkillPicker(()=>{
+animating=false;
+turn=W;
+updateUI();
+setTimeout(()=>{aiTurn()},300);
+});
+},600);
+}else{
+animating=false;
+turn=W;
+updateUI();
+setTimeout(()=>{aiTurn()},300);
+}
+}
+
+// ===== RECORDS =====
+function saveRecord(result){
+let rec=JSON.parse(localStorage.getItem('skillReversiRecord')||'{"win":0,"lose":0,"draw":0}');
+rec[result]++;localStorage.setItem('skillReversiRecord',JSON.stringify(rec));
+showRecord();
+}
+function showRecord(){
+let rec=JSON.parse(localStorage.getItem('skillReversiRecord')||'{"win":0,"lose":0,"draw":0}');
+document.getElementById('record').textContent=rec.win+'勝 '+rec.lose+'敗 '+rec.draw+'分';
+}
+
+// ===== INIT =====
+function startGame(){
+initAudio();
+board=null;initBoard();
+turn=B;playerTurnCount=0;aiTurnCount=0;passCount=0;
+playerSkills=[];aiSkills=[];
+loadedSkill=null;kingSecondMove=false;kingCallback=null;
+animating=false;gameOver=false;effects=[];flipAnims=[];placeAnims=[];particles=[];
+totalTurnCount=0;playerUsedSkills=[];aiUsedSkills=[];
+stopAiThinkingDots();
+document.getElementById('titleScreen').style.display='none';
+document.getElementById('gameScreen').style.display='flex';
+resize();updateUI();
+setStatus('あなたのターンです（黒）');
+}
+
+document.querySelectorAll('.diff-btn').forEach(b=>{
+b.onclick=()=>{
+document.querySelectorAll('.diff-btn').forEach(x=>x.classList.remove('selected'));
+b.classList.add('selected');difficulty=+b.dataset.diff;
+}
+});
+
+document.getElementById('startBtn').onclick=startGame;
+document.getElementById('replayBtn').onclick=()=>{
+document.getElementById('resultOverlay').style.display='none';
+startGame();
+};
+document.getElementById('changeDiffBtn').onclick=()=>{
+document.getElementById('resultOverlay').style.display='none';
+document.getElementById('gameScreen').style.display='none';
+document.getElementById('titleScreen').style.display='flex';
+};
+
+canvas.addEventListener('click',handleBoardClick);
+canvas.addEventListener('touchstart',(e)=>{e.preventDefault();handleBoardClick(e)},{passive:false});
+window.addEventListener('resize',()=>{if(board)resize()});
+difficulty=0;showRecord();
+</script>
+</body>
+</html>
