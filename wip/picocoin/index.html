@@ -96,10 +96,11 @@ const NODE_TYPES = {
   ai:{name:'AI',emoji:'🤖',price:50,titleColor:'#aa4477',watt:10},
   firewall:{name:'ファイアウォール',emoji:'🛡️',price:25,titleColor:'#bb6622',watt:1},
   ln:{name:'LNノード',emoji:'⚡',price:30,titleColor:'#ff9900',watt:0},
+  exchange:{name:'取引所',emoji:'🏦',price:100,titleColor:'#6633cc',watt:0},
 };
 
 const PC_INPUTS = ['cpu','power','cooler','ssd','network','ai','firewall'];
-const PC_OUTPUTS = ['blockchain','wallet','ln'];
+const PC_OUTPUTS = ['blockchain','wallet','ln','exchange'];
 
 // ===== GAME STATE =====
 let nodes = [];
@@ -203,6 +204,7 @@ function getNodeLines(n){
     lines.push({text: '→ ブロックチェーン', port:'blockchain'});
     lines.push({text: '→ ウォレット', port:'wallet'});
     lines.push({text: '→ LNノード', port:'ln'});
+    lines.push({text: '→ 取引所', port:'exchange'});
   } else if(n.type === 'cpu'){
     lines.push({text: '演算力: +1'});
     lines.push({text: '消費電力: '+nt.watt+'W'});
@@ -243,6 +245,20 @@ function getNodeLines(n){
     lines.push({text: 'LN残高: '+lnBal.toFixed(1)+'₱'});
     lines.push({text: '手数料収入: +'+(lnBal>=5?'0.1':'0')+'₱/s'});
     lines.push({text: '← PC接続', port:'pc'});
+  } else if(n.type === 'exchange'){
+    const exBal = n.exBalance || 0;
+    const locked = n.exLocked || 0;
+    const lockTime = n.exLockTime || 0;
+    const hacked = n.exHacked || false;
+    let statusText = '状態: ';
+    if(hacked) statusText += '🔓 ハッキング！';
+    else if(locked > 0) statusText += '🔒 ロック中('+Math.ceil(lockTime)+'s)';
+    else statusText += '📈 運用中';
+    lines.push({text: statusText});
+    lines.push({text: '預金: '+exBal.toFixed(1)+'₱'});
+    lines.push({text: 'ロック: '+locked.toFixed(1)+'₱'});
+    lines.push({text: '利率: 5%/30s'});
+    lines.push({text: '← PC接続', port:'pc'});
   }
   return lines;
 }
@@ -278,6 +294,7 @@ function isPortConnected(n, portType){
     if(portType === 'blockchain') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='blockchain');
     if(portType === 'wallet') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='wallet');
     if(portType === 'ln') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='ln');
+    if(portType === 'exchange') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='exchange');
   } else {
     if(portType === 'pc'){
       if(PC_INPUTS.includes(n.type)) return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='pc');
@@ -340,6 +357,8 @@ function canConnectPorts(portA, portB){
   if(nB.type==='pc' && portB.portType==='wallet' && nA.type==='wallet') return true;
   if(nA.type==='pc' && portA.portType==='ln' && nB.type==='ln') return true;
   if(nB.type==='pc' && portB.portType==='ln' && nA.type==='ln') return true;
+  if(nA.type==='pc' && portA.portType==='exchange' && nB.type==='exchange') return true;
+  if(nB.type==='pc' && portB.portType==='exchange' && nA.type==='exchange') return true;
   // PC cpu port accepts any PC_INPUT type
   if(nA.type==='pc' && portA.portType==='cpu' && PC_INPUTS.includes(nB.type)) return true;
   if(nB.type==='pc' && portB.portType==='cpu' && PC_INPUTS.includes(nA.type)) return true;
@@ -354,9 +373,9 @@ function canConnectPorts(portA, portB){
 function addConnection(nA, nB){
   let from, to, lineType;
   if(nA.type==='pc' && PC_OUTPUTS.includes(nB.type)){
-    from=nA.id; to=nB.id; lineType=nB.type==='wallet'?'coin':(nB.type==='ln'?'lightning':'data');
+    from=nA.id; to=nB.id; lineType=nB.type==='wallet'?'coin':(nB.type==='ln'?'lightning':(nB.type==='exchange'?'exchange':'data'));
   } else if(nB.type==='pc' && PC_OUTPUTS.includes(nA.type)){
-    from=nB.id; to=nA.id; lineType=nA.type==='wallet'?'coin':(nA.type==='ln'?'lightning':'data');
+    from=nB.id; to=nA.id; lineType=nA.type==='wallet'?'coin':(nA.type==='ln'?'lightning':(nA.type==='exchange'?'exchange':'data'));
   } else if(nB.type==='pc'){
     from=nA.id; to=nB.id; lineType=nA.type==='power'?'power':'data';
   } else if(nA.type==='pc'){
@@ -410,7 +429,7 @@ function getPCStats(pc){
 function buildShop(){
   const shop = document.getElementById('shop');
   shop.innerHTML = '';
-  const items = ['pc','cpu','power','wallet','ln','cooler','ssd','network','ai','firewall'];
+  const items = ['pc','cpu','power','wallet','ln','exchange','cooler','ssd','network','ai','firewall'];
   items.forEach(t=>{
     const nt = NODE_TYPES[t];
     const div = document.createElement('div');
@@ -528,6 +547,83 @@ function update(dt){
     }
   });
 
+  // Exchange: auto-drain from wallet, lock & interest, hacking
+  nodes.filter(n=>n.type==='exchange').forEach(ex=>{
+    if(!ex.exBalance) ex.exBalance = 0;
+    if(!ex.exLocked) ex.exLocked = 0;
+    if(!ex.exLockTime) ex.exLockTime = 0;
+    if(!ex.exLockCooldown) ex.exLockCooldown = 0;
+    if(!ex.exHacked) ex.exHacked = false;
+    if(!ex.exHackTime) ex.exHackTime = 0;
+
+    const connectedPC = connections.some(c=>c.from!==ex.id&&c.to===ex.id&&nodes.find(nd=>nd.id===c.from)?.type==='pc');
+    if(!connectedPC) return;
+
+    // Hacking recovery
+    if(ex.exHacked){
+      ex.exHackTime -= dt;
+      if(ex.exHackTime <= 0){
+        ex.exHacked = false;
+      }
+      return;
+    }
+
+    // Auto-drain: slowly move from wallet to exchange (0.5₱/s)
+    if(balance >= 1){
+      const drain = Math.min(0.5 * dt, balance);
+      balance -= drain;
+      ex.exBalance += drain;
+      updateUI(); buildShop();
+      if(Math.random() < 0.03){
+        particles.push({x:ex.x,y:ex.y+getNodeHeight(ex),tx:ex.x+WIN_W/2,ty:ex.y+TITLE_H/2,t:0,dur:0.6,text:'💰'});
+      }
+    }
+
+    // Lock: when balance >= 10, lock it every 30s
+    ex.exLockCooldown -= dt;
+    if(ex.exBalance >= 10 && ex.exLocked <= 0 && ex.exLockCooldown <= 0){
+      ex.exLocked = ex.exBalance;
+      ex.exBalance = 0;
+      ex.exLockTime = 30;
+      effects.push({type:'sparkle',x:ex.x+WIN_W/2,y:ex.y+TITLE_H/2,t:0,dur:0.5});
+    }
+
+    // Lock countdown & interest payout
+    if(ex.exLocked > 0){
+      ex.exLockTime -= dt;
+      if(ex.exLockTime <= 0){
+        const interest = ex.exLocked * 0.05;
+        const payout = ex.exLocked + interest;
+        balance += Math.floor(payout);
+        effects.push({type:'sparkle',x:ex.x+WIN_W/2,y:ex.y+TITLE_H/2,t:0,dur:0.6});
+        const wallet = nodes.find(n=>n.type==='wallet');
+        if(wallet){
+          particles.push({x:ex.x+WIN_W/2,y:ex.y+TITLE_H,tx:wallet.x+WIN_W/2,ty:wallet.y+TITLE_H,t:0,dur:0.8,text:'+'+Math.floor(interest)+'₱利息'});
+        }
+        playSound('mine');
+        ex.exLocked = 0;
+        ex.exLockTime = 0;
+        ex.exLockCooldown = 10;
+        updateUI(); buildShop();
+      }
+    }
+
+    // Hacking event: ~2% chance per 30s cycle check
+    if(Math.random() < 0.0007 && (ex.exBalance > 0 || ex.exLocked > 0)){
+      const stolen = ex.exBalance + ex.exLocked;
+      ex.exBalance = 0;
+      ex.exLocked = 0;
+      ex.exLockTime = 0;
+      ex.exHacked = true;
+      ex.exHackTime = 15;
+      effects.push({type:'malware',x:ex.x+WIN_W/2,y:ex.y+30,t:0,dur:1});
+      playSound('malware');
+      if(stolen > 0){
+        particles.push({x:ex.x+WIN_W/2,y:ex.y,tx:ex.x+WIN_W/2,ty:ex.y-50,t:0,dur:1,text:'-'+stolen.toFixed(0)+'₱ 盗難!'});
+      }
+    }
+  });
+
   // Malware every 30s
   malwareTimer += dt;
   if(malwareTimer >= 30){
@@ -624,6 +720,7 @@ function drawConnections(){
         if(toN.type === 'blockchain' && p.portType === 'blockchain') return true;
         if(toN.type === 'wallet' && p.portType === 'wallet') return true;
         if(toN.type === 'ln' && p.portType === 'ln') return true;
+        if(toN.type === 'exchange' && p.portType === 'exchange') return true;
         return false;
       });
       const inPort = toPorts.find(p => p.portType === 'pc');
@@ -654,6 +751,7 @@ function drawConnections(){
     if(c.lineType === 'power') col = '#dd4444';
     else if(c.lineType === 'coin') col = '#ddaa22';
     else if(c.lineType === 'lightning') col = '#ff9900';
+    else if(c.lineType === 'exchange') col = '#9966ff';
 
     ctx.strokeStyle = col;
     ctx.lineWidth = 2;
@@ -1033,7 +1131,7 @@ canvas.addEventListener('pointerleave', ()=>{
 function saveGame(){
   try{
     const data = {
-      nodes: nodes.map(n=>({id:n.id, type:n.type, x:n.x, y:n.y, infected:n.infected, blackout:n.blackout, blackoutTime:n.blackoutTime, lnBalance:n.lnBalance||0})),
+      nodes: nodes.map(n=>({id:n.id, type:n.type, x:n.x, y:n.y, infected:n.infected, blackout:n.blackout, blackoutTime:n.blackoutTime, lnBalance:n.lnBalance||0, exBalance:n.exBalance||0, exLocked:n.exLocked||0, exLockTime:n.exLockTime||0, exHacked:n.exHacked||false, exHackTime:n.exHackTime||0})),
       connections: connections.map(c=>({from:c.from, to:c.to, lineType:c.lineType})),
       balance, difficulty, gameTime, nextNodeId
     };
@@ -1046,7 +1144,7 @@ function loadGame(){
     const raw = localStorage.getItem('picocoin_save');
     if(!raw) return false;
     const data = JSON.parse(raw);
-    nodes = data.nodes.map(n=>({...n, scale:1, infectedTime:0, blackout:n.blackout||false, blackoutTime:n.blackoutTime||0, lnBalance:n.lnBalance||0}));
+    nodes = data.nodes.map(n=>({...n, scale:1, infectedTime:0, blackout:n.blackout||false, blackoutTime:n.blackoutTime||0, lnBalance:n.lnBalance||0, exBalance:n.exBalance||0, exLocked:n.exLocked||0, exLockTime:n.exLockTime||0, exHacked:n.exHacked||false, exHackTime:n.exHackTime||0}));
     connections = data.connections.map(c=>({...c, progress:1}));
     balance = data.balance;
     difficulty = data.difficulty;
