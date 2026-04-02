@@ -110,7 +110,8 @@ const SKILLS=[
 {id:'wall',icon:'🛡️',name:'絶対防壁',desc:'この石は爆破を含む全スキルで破壊・裏返し不可。永久に残る絶対的な石',color:'#8888ff',power:3},
 {id:'bomb',icon:'💣',name:'爆破',desc:'石を置いた場所の周囲3×3の相手石を消す＋挟み判定',color:'#ff6600',power:2},
 {id:'king',icon:'👑',name:'キング',desc:'石を置いた後にもう1回置ける',color:'#ffcc00',power:2},
-{id:'tsunami',icon:'🌊',name:'津波',desc:'石を置いた後、行or列の全相手石を自分色に',color:'#44aaff',power:3},
+{id:'tsunami',icon:'🌊',name:'津波',desc:'石を置いた位置の横一列を全て自分の色に変える',color:'#44aaff',power:3},
+{id:'earthquake',icon:'⚡',name:'地割れ',desc:'石を置いた位置の縦一列を全て自分の色に変える',color:'#ff4444',power:3},
 {id:'poison',icon:'💀',name:'毒',desc:'石を置いた場所が毒石になる。裏返すと罠発動',color:'#aa44ff',power:1}
 ];
 
@@ -247,7 +248,8 @@ case 'override': return true; // override effect is handled during placement
 case 'wall': return execWall(r,c,player);
 case 'bomb': return execBomb(r,c,player);
 case 'king': return 'king';
-case 'tsunami': return 'tsunami';
+case 'tsunami': return execTsunamiRow(r,c,player);
+case 'earthquake': return execEarthquakeCol(r,c,player);
 case 'poison': return execPoison(r,c,player);
 }
 }
@@ -300,22 +302,32 @@ addEffect(r,c,'poison_place');
 return true;
 }
 
-function execTsunamiLine(idx,player){
-if(idx<8){
-for(let c=0;c<8;c++){
-if(board[idx][c]!==EMPTY&&!isWall(board[idx][c])&&isOpp(board[idx][c],player)){
-board[idx][c]=player===B?B:W;addEffect(idx,c,'tsunami');
-}
-}
-}else{
-let col=idx-8;
-for(let r=0;r<8;r++){
-if(board[r][col]!==EMPTY&&!isWall(board[r][col])&&isOpp(board[r][col],player)){
-board[r][col]=player===B?B:W;addEffect(r,col,'tsunami');
-}
+function execTsunamiRow(row,c,player){
+// 置いた位置の横一列を全て自分色に（空きマスも自分色、壁は除外）
+for(let cc=0;cc<8;cc++){
+if(isWall(board[row][cc]))continue;
+if(board[row][cc]===EMPTY||isOpp(board[row][cc],player)){
+board[row][cc]=player;addEffect(row,cc,'tsunami');
 }
 }
 return true;
+}
+
+function execEarthquakeCol(r,col,player){
+// 置いた位置の縦一列を全て自分色に（空きマスも自分色、壁は除外）
+for(let rr=0;rr<8;rr++){
+if(isWall(board[rr][col]))continue;
+if(board[rr][col]===EMPTY||isOpp(board[rr][col],player)){
+board[rr][col]=player;addEffect(rr,col,'tsunami');
+}
+}
+return true;
+}
+
+// Legacy wrapper for AI evaluation
+function execTsunamiLine(idx,player){
+if(idx<8) return execTsunamiRow(idx,0,player);
+else return execEarthquakeCol(0,idx-8,player);
 }
 
 // ===== EFFECTS =====
@@ -377,6 +389,7 @@ let {b,w}=countPieces();
 let scores=choices.map(sk=>{
 let s=Math.random()*2;
 if(sk.id==='tsunami'){s+=emp<30?4:2}
+if(sk.id==='earthquake'){s+=emp<30?4:2}
 if(sk.id==='hanabi'){s+=w<b?3:1}
 if(sk.id==='override'){
 let corners=[[0,0],[0,7],[7,0],[7,7]];
@@ -448,25 +461,29 @@ bestResult={score,move:[r,c],skill:sk,skillIdx:si};
 }
 }
 
-// Tsunami: try all 16 lines for each valid move
+// Tsunami: auto horizontal line at placed row
 if(sk.id==='tsunami'&&moves.length>0){
-let m=moves[0]; // pick a good move first
-let bestM=moves[0],bestMS=-Infinity;
 for(const[r,c]of moves){
-let saved2=board.map(row=>[...row]);
-placePiece(r,c,W);
-let s2=evaluate(W);
-board=saved2;
-if(s2>bestMS){bestMS=s2;bestM=[r,c]}
-}
-for(let idx=0;idx<16;idx++){
 let saved=board.map(row=>[...row]);
-placePiece(bestM[0],bestM[1],W);
-execTsunamiLine(idx,W);
+placePiece(r,c,W);
+execTsunamiRow(r,c,W);
 let score=evaluate(W);
 board=saved;
 if(!bestResult||score>bestResult.score){
-bestResult={score,move:bestM,skill:sk,skillIdx:si,tsunamiIdx:idx};
+bestResult={score,move:[r,c],skill:sk,skillIdx:si};
+}
+}
+}
+// Earthquake: auto vertical line at placed col
+if(sk.id==='earthquake'&&moves.length>0){
+for(const[r,c]of moves){
+let saved=board.map(row=>[...row]);
+placePiece(r,c,W);
+execEarthquakeCol(r,c,W);
+let score=evaluate(W);
+board=saved;
+if(!bestResult||score>bestResult.score){
+bestResult={score,move:[r,c],skill:sk,skillIdx:si};
 }
 }
 }
@@ -571,7 +588,10 @@ else if(sk.id==='wall'){board[r][c]=WALL_W;addEffect(r,c,'wall')}
 else if(sk.id==='bomb')execBomb(r,c,W);
 else if(sk.id==='poison')execPoison(r,c,W);
 else if(sk.id==='tsunami'){
-execTsunamiLine(decision.tsunamiIdx,W);
+execTsunamiRow(r,c,W);
+}
+else if(sk.id==='earthquake'){
+execEarthquakeCol(r,c,W);
 }
 else if(sk.id==='king'){
 addEffect(r,c,'king');
@@ -952,18 +972,8 @@ setStatus('👑 キング！2手目を置いてください');
 return;
 }
 
-if(result==='tsunami'){
-sfxSkill();
-showTsunamiPicker(B,(idx)=>{
-if(idx<0){
-// Cancel: refund skill
-playerSkills.push(sk);
-updateUI();
-// Stone is already placed, just skip tsunami effect
-afterPlayerMove();
-return;
-}
-execTsunamiLine(idx,B);
+if(false){
+// Tsunami is now auto-applied via execTsunamiRow, no picker needed
 afterPlayerMove();
 });
 return;
