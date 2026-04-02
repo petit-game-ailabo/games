@@ -95,10 +95,11 @@ const NODE_TYPES = {
   network:{name:'ネットワーク',emoji:'📡',price:20,titleColor:'#7744aa',watt:2},
   ai:{name:'AI',emoji:'🤖',price:50,titleColor:'#aa4477',watt:10},
   firewall:{name:'ファイアウォール',emoji:'🛡️',price:25,titleColor:'#bb6622',watt:1},
+  ln:{name:'LNノード',emoji:'⚡',price:30,titleColor:'#ff9900',watt:0},
 };
 
 const PC_INPUTS = ['cpu','power','cooler','ssd','network','ai','firewall'];
-const PC_OUTPUTS = ['blockchain','wallet'];
+const PC_OUTPUTS = ['blockchain','wallet','ln'];
 
 // ===== GAME STATE =====
 let nodes = [];
@@ -201,6 +202,7 @@ function getNodeLines(n){
     lines.push({text: 'CPU: '+stats.cpus+'個', port:'cpu'});
     lines.push({text: '→ ブロックチェーン', port:'blockchain'});
     lines.push({text: '→ ウォレット', port:'wallet'});
+    lines.push({text: '→ LNノード', port:'ln'});
   } else if(n.type === 'cpu'){
     lines.push({text: '演算力: +1'});
     lines.push({text: '消費電力: '+nt.watt+'W'});
@@ -236,6 +238,11 @@ function getNodeLines(n){
     lines.push({text: '効果: マルウェア自動駆除'});
     lines.push({text: '消費電力: '+nt.watt+'W'});
     lines.push({text: '→ PC接続', port:'pc'});
+  } else if(n.type === 'ln'){
+    const lnBal = n.lnBalance || 0;
+    lines.push({text: 'LN残高: '+lnBal.toFixed(1)+'₱'});
+    lines.push({text: '手数料収入: +'+(lnBal>=5?'0.1':'0')+'₱/s'});
+    lines.push({text: '← PC接続', port:'pc'});
   }
   return lines;
 }
@@ -270,6 +277,7 @@ function isPortConnected(n, portType){
     if(portType === 'cpu') return connections.some(c=>c.to===n.id&&nodes.find(nd=>nd.id===c.from)?.type==='cpu');
     if(portType === 'blockchain') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='blockchain');
     if(portType === 'wallet') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='wallet');
+    if(portType === 'ln') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='ln');
   } else {
     if(portType === 'pc'){
       if(PC_INPUTS.includes(n.type)) return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='pc');
@@ -330,6 +338,8 @@ function canConnectPorts(portA, portB){
   if(nB.type==='pc' && portB.portType==='blockchain' && nA.type==='blockchain') return true;
   if(nA.type==='pc' && portA.portType==='wallet' && nB.type==='wallet') return true;
   if(nB.type==='pc' && portB.portType==='wallet' && nA.type==='wallet') return true;
+  if(nA.type==='pc' && portA.portType==='ln' && nB.type==='ln') return true;
+  if(nB.type==='pc' && portB.portType==='ln' && nA.type==='ln') return true;
   // PC cpu port accepts any PC_INPUT type
   if(nA.type==='pc' && portA.portType==='cpu' && PC_INPUTS.includes(nB.type)) return true;
   if(nB.type==='pc' && portB.portType==='cpu' && PC_INPUTS.includes(nA.type)) return true;
@@ -344,9 +354,9 @@ function canConnectPorts(portA, portB){
 function addConnection(nA, nB){
   let from, to, lineType;
   if(nA.type==='pc' && PC_OUTPUTS.includes(nB.type)){
-    from=nA.id; to=nB.id; lineType=nB.type==='wallet'?'coin':'data';
+    from=nA.id; to=nB.id; lineType=nB.type==='wallet'?'coin':(nB.type==='ln'?'lightning':'data');
   } else if(nB.type==='pc' && PC_OUTPUTS.includes(nA.type)){
-    from=nB.id; to=nA.id; lineType=nA.type==='wallet'?'coin':'data';
+    from=nB.id; to=nA.id; lineType=nA.type==='wallet'?'coin':(nA.type==='ln'?'lightning':'data');
   } else if(nB.type==='pc'){
     from=nA.id; to=nB.id; lineType=nA.type==='power'?'power':'data';
   } else if(nA.type==='pc'){
@@ -400,7 +410,7 @@ function getPCStats(pc){
 function buildShop(){
   const shop = document.getElementById('shop');
   shop.innerHTML = '';
-  const items = ['pc','cpu','power','wallet','cooler','ssd','network','ai','firewall'];
+  const items = ['pc','cpu','power','wallet','ln','cooler','ssd','network','ai','firewall'];
   items.forEach(t=>{
     const nt = NODE_TYPES[t];
     const div = document.createElement('div');
@@ -437,7 +447,7 @@ function initGame(){
 }
 
 function addNode(type, x, y){
-  const n = {id:nextNodeId++, type, x, y, scale:0, infected:false, infectedTime:0, blackout:false, blackoutTime:0};
+  const n = {id:nextNodeId++, type, x, y, scale:0, infected:false, infectedTime:0, blackout:false, blackoutTime:0, lnBalance:0};
   nodes.push(n);
   effects.push({type:'spawn',x:x+WIN_W/2,y:y+30,t:0,dur:0.3});
   return n;
@@ -501,6 +511,22 @@ function update(dt){
     });
     document.getElementById('hashrateText').textContent = totalHash.toFixed(1);
   }
+
+  // LN routing fee income
+  nodes.filter(n=>n.type==='ln').forEach(ln=>{
+    if(!ln.lnBalance) ln.lnBalance = 0;
+    // Check if connected to a PC
+    const connectedPC = connections.some(c=>c.from!==ln.id&&c.to===ln.id&&nodes.find(nd=>nd.id===c.from)?.type==='pc');
+    if(connectedPC && ln.lnBalance >= 5){
+      // Earn routing fees proportional to balance (more balance = route bigger txs)
+      const fee = 0.1 * dt * Math.min(ln.lnBalance / 20, 3);
+      ln.lnBalance += fee;
+      // Periodically show routing animation
+      if(Math.random() < 0.02){
+        effects.push({type:'sparkle',x:ln.x+WIN_W/2,y:ln.y+TITLE_H/2,t:0,dur:0.4});
+      }
+    }
+  });
 
   // Malware every 30s
   malwareTimer += dt;
@@ -597,6 +623,7 @@ function drawConnections(){
       const outPort = fromPorts.find(p => {
         if(toN.type === 'blockchain' && p.portType === 'blockchain') return true;
         if(toN.type === 'wallet' && p.portType === 'wallet') return true;
+        if(toN.type === 'ln' && p.portType === 'ln') return true;
         return false;
       });
       const inPort = toPorts.find(p => p.portType === 'pc');
@@ -626,6 +653,7 @@ function drawConnections(){
     let col = '#4488ff';
     if(c.lineType === 'power') col = '#dd4444';
     else if(c.lineType === 'coin') col = '#ddaa22';
+    else if(c.lineType === 'lightning') col = '#ff9900';
 
     ctx.strokeStyle = col;
     ctx.lineWidth = 2;
@@ -910,13 +938,25 @@ canvas.addEventListener('pointerdown', e=>{
     return;
   }
 
-  // Priority 3: Click on node body (cure malware)
+  // Priority 3: Click on node body (cure malware / deposit to LN)
   const bodyHit = hitTestNode(pos.x, pos.y);
   if(bodyHit){
     if(bodyHit.infected){
       bodyHit.infected = false;
       effects.push({type:'cure',x:bodyHit.x+WIN_W/2,y:bodyHit.y+30,t:0,dur:0.5});
       playSound('cure');
+    } else if(bodyHit.type === 'ln'){
+      // Deposit 1₱ from wallet to LN
+      if(balance >= 1){
+        balance -= 1;
+        if(!bodyHit.lnBalance) bodyHit.lnBalance = 0;
+        bodyHit.lnBalance += 1;
+        effects.push({type:'sparkle',x:bodyHit.x+WIN_W/2,y:bodyHit.y+TITLE_H/2,t:0,dur:0.4});
+        playSound('buy');
+        updateUI(); buildShop();
+      } else {
+        playSound('error');
+      }
     }
     return;
   }
@@ -993,7 +1033,7 @@ canvas.addEventListener('pointerleave', ()=>{
 function saveGame(){
   try{
     const data = {
-      nodes: nodes.map(n=>({id:n.id, type:n.type, x:n.x, y:n.y, infected:n.infected, blackout:n.blackout, blackoutTime:n.blackoutTime})),
+      nodes: nodes.map(n=>({id:n.id, type:n.type, x:n.x, y:n.y, infected:n.infected, blackout:n.blackout, blackoutTime:n.blackoutTime, lnBalance:n.lnBalance||0})),
       connections: connections.map(c=>({from:c.from, to:c.to, lineType:c.lineType})),
       balance, difficulty, gameTime, nextNodeId
     };
@@ -1006,7 +1046,7 @@ function loadGame(){
     const raw = localStorage.getItem('picocoin_save');
     if(!raw) return false;
     const data = JSON.parse(raw);
-    nodes = data.nodes.map(n=>({...n, scale:1, infectedTime:0, blackout:n.blackout||false, blackoutTime:n.blackoutTime||0}));
+    nodes = data.nodes.map(n=>({...n, scale:1, infectedTime:0, blackout:n.blackout||false, blackoutTime:n.blackoutTime||0, lnBalance:n.lnBalance||0}));
     connections = data.connections.map(c=>({...c, progress:1}));
     balance = data.balance;
     difficulty = data.difficulty;
