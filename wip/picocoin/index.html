@@ -35,6 +35,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 #resetTitleBtn:hover{color:#999;border-color:#555}
 #titleCanvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:-1}
 #hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,39,0.8);color:#fff;font-size:14px;pointer-events:none;z-index:5;text-align:center;padding:12px 24px;border-radius:8px;text-shadow:0 0 10px #4af;opacity:0;transition:opacity 1s}
+#connectionGuide{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:6;opacity:0;transition:opacity 0.5s}
+#connectionGuide.visible{opacity:1}
+#connectionGuide .guide-bubble{position:absolute;background:rgba(74,106,255,0.85);color:#fff;padding:8px 16px;border-radius:12px;font-size:13px;font-weight:bold;white-space:nowrap;box-shadow:0 0 20px rgba(74,106,255,0.5);animation:guidePulse 1.5s ease-in-out infinite}
+#connectionGuide .guide-arrow{position:absolute;font-size:28px;color:#4a6aff;filter:drop-shadow(0 0 8px #4a6aff);animation:guideSlide 1.5s ease-in-out infinite}
+@keyframes guidePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes guideSlide{0%,100%{opacity:0.4;transform:translateX(0)}50%{opacity:1;transform:translateX(10px)}}
 #researchBtn{position:absolute;top:8px;right:8px;width:32px;height:32px;background:rgba(80,80,100,0.4);border:1px solid rgba(100,100,130,0.3);border-radius:6px;color:#aac;font-size:16px;cursor:pointer;pointer-events:auto;z-index:20;display:flex;align-items:center;justify-content:center}
 #researchBtn:hover{background:rgba(100,100,130,0.6);color:#fff}
 #researchPanel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;max-height:80vh;background:rgba(15,20,45,0.97);border:1px solid #334;border-radius:12px;z-index:50;pointer-events:auto;overflow-y:auto;padding:0;box-shadow:0 0 30px rgba(40,60,150,0.4)}
@@ -77,7 +83,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 </div>
 <div id="researchBtn" onclick="toggleResearch()">🔬</div>
 </div>
-<div id="hint">🔗 左●から右●へドラッグして接続！</div>
+<div id="hint">🔗 ●から●へドラッグして接続！</div>
+<div id="connectionGuide">
+  <div class="guide-bubble" id="guideBubble">🔗 ポートをドラッグして接続！</div>
+  <div class="guide-arrow" id="guideArrow">→→→</div>
+</div>
 <div id="researchPanel"></div>
 <div id="bottomPanel">
 <div id="shopTabs">
@@ -111,11 +121,101 @@ function playSound(type){
 }
 
 // ===== CONSTANTS =====
-const WIN_W = 170;
-const TITLE_H = 26;
-const LINE_H = 22;
-const FONT_SIZE = 11;
-const PORT_R = 7;
+const WIN_W = 195;
+const TITLE_H = 32;
+const LINE_H = 24;
+const FONT_SIZE = 12;
+const PORT_R = 8;
+
+// Port category colors
+const PORT_CATEGORY_COLORS = {
+  power: '#dd4444',   // 赤
+  data: '#4488ff',    // 青
+  coin: '#ddaa22',    // 金
+  network: '#9944dd', // 紫
+  connected: '#44cc66' // 緑（接続済み）
+};
+
+// Port icons by type
+const PORT_ICONS = {
+  cpu: '🔲', power: '🔌', cooler: '🧊', ssd: '💾', firewall: '🛡️',
+  network: '📡', ai: '🤖',
+  blockchain: '⛓️', wallet: '👛',
+  to_pc: '→💻', to_lnwallet: '→💰',
+  from_pc: '←💻', from_server: '←🖥️', from_ln: '←⚡', from_wallet: '←👛',
+  ln_node: '⚡'
+};
+
+// Port category mapping
+function getPortCategory(portType){
+  if(['power','to_pc'].indexOf(portType)>=0){
+    // to_pc is generic, check the node type
+    return null; // will be resolved per-node
+  }
+  if(['power'].indexOf(portType)>=0) return 'power';
+  if(['cpu','cooler','ssd','firewall','ai','from_pc','from_server'].indexOf(portType)>=0) return 'data';
+  if(['wallet','to_lnwallet','from_wallet','from_ln'].indexOf(portType)>=0) return 'coin';
+  if(['blockchain','network','ln_node'].indexOf(portType)>=0) return 'network';
+  return 'data';
+}
+
+function getPortCategoryForNode(nodeType, portType){
+  // For to_pc ports, use the node's own type to determine category
+  if(portType === 'to_pc'){
+    if(nodeType === 'power') return 'power';
+    return 'data';
+  }
+  // For PC/server input ports
+  if(portType === 'power') return 'power';
+  if(['cpu','cooler','ssd','firewall','ai'].indexOf(portType)>=0) return 'data';
+  if(['blockchain','from_pc'].indexOf(portType)>=0) return 'network';
+  if(['wallet','to_lnwallet','from_wallet','from_ln'].indexOf(portType)>=0) return 'coin';
+  if(['network','ln_node','from_server'].indexOf(portType)>=0) return 'network';
+  return 'data';
+}
+
+// Check if a port allows multiple connections
+function isMultiPort(nodeType, portType){
+  // PC's CPU port can accept multiple CPUs
+  if(nodeType === 'mining_pc' && portType === 'cpu') return true;
+  // PC's power port - multiple PSUs
+  if(nodeType === 'mining_pc' && portType === 'power') return true;
+  // Blockchain accepts multiple PCs
+  if(nodeType === 'blockchain' && portType === 'from_pc') return true;
+  // Wallet accepts multiple PCs
+  if(nodeType === 'wallet' && portType === 'from_pc') return true;
+  // Server CPU
+  if(nodeType === 'server' && portType === 'cpu') return true;
+  return false;
+}
+
+// Count connections to a specific port
+function countPortConnections(nodeId, portType, side){
+  return connections.filter(function(c){
+    if(side === 'right') return c.to === nodeId && c.toPort === portType;
+    return c.from === nodeId && c.fromPort === portType;
+  }).length;
+}
+
+// Get all compatible ports for a given dragging port
+var compatiblePorts = [];
+function updateCompatiblePorts(fromPort){
+  compatiblePorts = [];
+  if(!fromPort) return;
+  nodes.forEach(function(n){
+    var ports = getNodePortPositions(n);
+    ports.forEach(function(p){
+      if(fromPort.side === 'left' && p.side === 'right'){
+        if(canConnect(fromPort, p)) compatiblePorts.push({nodeId:p.nodeId, defIndex:p.defIndex});
+      } else if(fromPort.side === 'right' && p.side === 'left'){
+        if(canConnect(p, fromPort)) compatiblePorts.push({nodeId:p.nodeId, defIndex:p.defIndex});
+      }
+    });
+  });
+}
+function isCompatiblePort(nodeId, defIndex){
+  return compatiblePorts.some(function(cp){return cp.nodeId===nodeId && cp.defIndex===defIndex});
+}
 
 // ===== NODE TYPES =====
 const NODE_TYPES = {
@@ -620,6 +720,45 @@ function buildShop(){
   });
 }
 
+// ===== CONNECTION GUIDE =====
+function showConnectionGuide(){
+  var guide = document.getElementById('connectionGuide');
+  var bubble = document.getElementById('guideBubble');
+  var arrow = document.getElementById('guideArrow');
+  if(!guide) return;
+
+  // Position guide between CPU output port and PC input port
+  var cpu = nodes.find(function(n){return n.type==='cpu'});
+  var pc = nodes.find(function(n){return n.type==='mining_pc'});
+  if(!cpu || !pc){guide.style.display='none';return;}
+
+  var cpuPorts = getNodePortPositions(cpu);
+  var pcPorts = getNodePortPositions(pc);
+  var cpuOut = cpuPorts.find(function(p){return p.type==='to_pc'});
+  var pcIn = pcPorts.find(function(p){return p.type==='cpu'});
+  if(!cpuOut || !pcIn){guide.style.display='none';return;}
+
+  // Convert world to screen coords
+  var sp1 = worldToScreen(cpuOut.x, cpuOut.y);
+  var sp2 = worldToScreen(pcIn.x, pcIn.y);
+  var midX = (sp1.x + sp2.x) / 2;
+  var midY = (sp1.y + sp2.y) / 2;
+
+  bubble.style.left = midX + 'px';
+  bubble.style.top = (midY - 40) + 'px';
+  bubble.style.transform = 'translateX(-50%)';
+
+  arrow.style.left = (sp1.x + 10) + 'px';
+  arrow.style.top = (sp1.y - 14) + 'px';
+
+  guide.classList.add('visible');
+
+  setTimeout(function(){
+    guide.classList.remove('visible');
+    setTimeout(function(){guide.style.display='none';}, 600);
+  }, 5000);
+}
+
 // ===== INIT =====
 function initGame(){
   resize();
@@ -645,7 +784,7 @@ function initGame(){
   buildShop();
   updateUI();
 
-  // --- Fix #4: Hint fade in then out after 5s ---
+  // --- Hint fade in then out after 5s ---
   var hintEl = document.getElementById('hint');
   hintEl.style.opacity = '0';
   hintFadeState = 'waiting';
@@ -663,6 +802,9 @@ function initGame(){
       }, 5000);
     }
   }, 300);
+
+  // --- Connection Guide: show for 5 seconds ---
+  showConnectionGuide();
 
   // --- Fix #6: Center camera on blockchain ---
   centerCameraOnBlockchain();
@@ -975,15 +1117,19 @@ function drawConnections(){
     var fx = fp.x, fy = fp.y, tx = tp.x, ty = tp.y;
 
     var col = '#4488ff';
-    if(c.lineType === 'power') col = '#dd4444';
-    else if(c.lineType === 'coin') col = '#ddaa22';
-    else if(c.lineType === 'lightning') col = '#ff9900';
+    var lineW = 1.5;
+    var dashStyle = null;
+    if(c.lineType === 'power'){ col = '#dd4444'; lineW = 2.5; }
+    else if(c.lineType === 'coin'){ col = '#ddaa22'; lineW = 1.5; dashStyle = [6,4]; }
+    else if(c.lineType === 'lightning'){ col = '#9944dd'; lineW = 1.5; }
 
     // Draw L-shaped connection line
     ctx.strokeStyle = col;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = lineW;
+    ctx.globalAlpha = 0.7;
+    if(dashStyle) ctx.setLineDash(dashStyle);
     drawLPath(fx, fy, tx, ty);
+    if(dashStyle) ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
     // Flowing particles along L-path
@@ -1023,10 +1169,10 @@ function drawNodes(){
     if(n.blackout) ctx.globalAlpha = (ctx.globalAlpha || 1) * 0.4;
 
     // Body
-    ctx.fillStyle = 'rgba(20,25,40,0.9)';
-    ctx.strokeStyle = 'rgba(60,80,180,0.4)';
-    ctx.lineWidth = 1;
-    roundRect(ctx, n.x, n.y, WIN_W, h, 4);
+    ctx.fillStyle = 'rgba(20,25,45,0.92)';
+    ctx.strokeStyle = 'rgba(70,90,190,0.45)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, n.x, n.y, WIN_W, h, 6);
     ctx.fill();
     ctx.stroke();
     ctx.shadowBlur = 0;
@@ -1039,11 +1185,15 @@ function drawNodes(){
     ctx.lineTo(n.x,n.y+TITLE_H);ctx.lineTo(n.x,n.y+4);ctx.arcTo(n.x,n.y,n.x+4,n.y,4);
     ctx.closePath();ctx.fill();
 
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold '+FONT_SIZE+'px sans-serif';
+    // Big emoji
+    ctx.font = '18px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(nt.emoji+' '+nt.name, n.x+6, n.y+TITLE_H/2+1);
+    ctx.fillText(nt.emoji, n.x+6, n.y+TITLE_H/2+1);
+    // Name text
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold '+FONT_SIZE+'px sans-serif';
+    ctx.fillText(nt.name, n.x+28, n.y+TITLE_H/2+1);
 
     // Lines
     var nodeLines = getNodeLines(n);
@@ -1052,60 +1202,66 @@ function drawNodes(){
     nodeLines.forEach(function(line, i){
       var ly = n.y + TITLE_H + i * LINE_H;
       if(i > 0){
-        ctx.strokeStyle = 'rgba(60,80,140,0.2)';
+        ctx.strokeStyle = 'rgba(60,80,140,0.15)';
         ctx.lineWidth = 0.5;
-        ctx.beginPath();ctx.moveTo(n.x+4,ly);ctx.lineTo(n.x+WIN_W-4,ly);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(n.x+6,ly);ctx.lineTo(n.x+WIN_W-6,ly);ctx.stroke();
       }
 
       if(line.text){
-        ctx.fillStyle = '#ccc';
+        ctx.fillStyle = '#d8d8f0';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(line.text, n.x+8, ly+LINE_H/2);
+        ctx.fillText(line.text, n.x+10, ly+LINE_H/2);
       }
 
-      // Power bar
+      // Power bar (thicker, vivid)
       if(line.bar !== undefined){
-        var barX = n.x + WIN_W - 56;
-        var barY = ly + 6;
-        var barW = 36;
-        var barH = 10;
+        var barX = n.x + WIN_W - 62;
+        var barY = ly + 5;
+        var barW = 44;
+        var barH = 14;
         var animated = animatedPower[n.id] || 0;
         var fillW = Math.min(animated, 1) * barW;
-        ctx.fillStyle = 'rgba(40,50,80,0.8)';
-        ctx.fillRect(barX, barY, barW, barH);
-        ctx.fillStyle = line.barOk ? '#44cc66' : '#dd4444';
-        ctx.fillRect(barX, barY, fillW, barH);
-        ctx.strokeStyle = 'rgba(80,100,160,0.5)';
-        ctx.lineWidth = 0.5;
+        ctx.fillStyle = 'rgba(30,35,60,0.9)';
+        roundRect(ctx, barX, barY, barW, barH, 3);ctx.fill();
+        if(fillW > 0){
+          var bGrad = ctx.createLinearGradient(barX, barY, barX+fillW, barY);
+          if(line.barOk){ bGrad.addColorStop(0,'#22aa44');bGrad.addColorStop(1,'#66ee88'); }
+          else { bGrad.addColorStop(0,'#cc2222');bGrad.addColorStop(1,'#ff5544'); }
+          ctx.fillStyle = bGrad;
+          ctx.fillRect(barX+1, barY+1, fillW-2, barH-2);
+        }
+        ctx.strokeStyle = line.barOk ? 'rgba(80,200,120,0.6)' : 'rgba(220,80,80,0.6)';
+        ctx.lineWidth = 1;
         ctx.strokeRect(barX, barY, barW, barH);
       }
 
-      // --- Fix #2: Mining gauge ---
+      // --- Mining gauge (thicker, vivid) ---
       if(line.miningGauge !== undefined){
         var gx = n.x + 8;
-        var gy = ly + 6;
+        var gy = ly + 4;
         var gw = WIN_W - 16;
-        var gh = 10;
+        var gh = 16;
         var prog = Math.min(line.miningGauge, 1);
         // Background
-        ctx.fillStyle = 'rgba(40,50,80,0.8)';
-        ctx.fillRect(gx, gy, gw, gh);
-        // Gradient fill: blue → green
+        ctx.fillStyle = 'rgba(30,35,60,0.9)';
+        roundRect(ctx, gx, gy, gw, gh, 4);ctx.fill();
+        // Gradient fill: blue → cyan → green
         if(prog > 0){
           var grad = ctx.createLinearGradient(gx, gy, gx + gw * prog, gy);
           grad.addColorStop(0, '#2266ff');
-          grad.addColorStop(1, '#22cc66');
+          grad.addColorStop(0.5, '#22aacc');
+          grad.addColorStop(1, '#22ee66');
           ctx.fillStyle = grad;
-          ctx.fillRect(gx, gy, gw * prog, gh);
+          ctx.fillRect(gx+2, gy+2, (gw-4) * prog, gh-4);
         }
-        // Border
-        ctx.strokeStyle = line.isMining ? 'rgba(100,200,160,0.6)' : 'rgba(80,100,160,0.5)';
-        ctx.lineWidth = 0.5;
+        // Border glow when mining
+        ctx.strokeStyle = line.isMining ? 'rgba(80,220,140,0.8)' : 'rgba(80,100,160,0.4)';
+        ctx.lineWidth = line.isMining ? 1.5 : 0.5;
         ctx.strokeRect(gx, gy, gw, gh);
         // Percentage text
         ctx.fillStyle = '#fff';
-        ctx.font = '9px sans-serif';
+        ctx.font = 'bold 10px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(Math.floor(prog*100)+'%', n.x+WIN_W/2, gy+gh/2);
@@ -1118,26 +1274,77 @@ function drawNodes(){
     ports.forEach(function(p){
       var connected = isPortConnected(n, p);
       var isHover = hoverPort && hoverPort.nodeId === n.id && hoverPort.defIndex === p.defIndex;
+      var isCompat = dragMode === 'port' && isCompatiblePort(n.id, p.defIndex);
+      var category = getPortCategoryForNode(n.type, p.type);
+      var catColor = PORT_CATEGORY_COLORS[category] || '#4466aa';
+      var multi = isMultiPort(n.type, p.type);
+      var connCount = countPortConnections(n.id, p.type, p.side);
 
+      // Compatible port glow during drag
+      if(isCompat){
+        ctx.save();
+        ctx.shadowColor = '#ffee44';
+        ctx.shadowBlur = 14;
+        ctx.beginPath();ctx.arc(p.x, p.y, PORT_R+4, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255,238,68,0.25)';ctx.fill();
+        ctx.restore();
+      }
+      // Dim incompatible ports during drag
+      if(dragMode === 'port' && !isCompat && p.nodeId !== dragPort.nodeId){
+        ctx.globalAlpha = 0.3;
+      }
+
+      // Multi-port: draw outer ring
+      if(multi){
+        ctx.beginPath();ctx.arc(p.x, p.y, PORT_R+3, 0, Math.PI*2);
+        ctx.strokeStyle = connected ? PORT_CATEGORY_COLORS.connected : catColor;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      // Main port circle
       ctx.beginPath();
       ctx.arc(p.x, p.y, PORT_R, 0, Math.PI*2);
       if(connected){
-        ctx.fillStyle = '#44cc66';
-      } else if(isHover){
+        ctx.fillStyle = PORT_CATEGORY_COLORS.connected;
+      } else if(isHover || isCompat){
         ctx.fillStyle = '#ddcc44';
       } else {
-        ctx.fillStyle = p.side === 'left' ? '#4466aa' : '#444455';
+        ctx.fillStyle = catColor;
       }
       ctx.fill();
-      ctx.strokeStyle = 'rgba(100,120,180,0.6)';
+      ctx.strokeStyle = 'rgba(150,170,220,0.7)';
       ctx.lineWidth = 1;
       ctx.stroke();
 
+      // Direction arrow inside port
       ctx.fillStyle = '#fff';
-      ctx.font = '8px sans-serif';
+      ctx.font = 'bold 9px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(p.side === 'left' ? '→' : '←', p.x, p.y);
+
+      // Multi-port connection count
+      if(multi && connCount > 0){
+        ctx.font = 'bold 8px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.strokeText(connCount+'', p.x + PORT_R + 3, p.y - PORT_R - 1);
+        ctx.fillText(connCount+'', p.x + PORT_R + 3, p.y - PORT_R - 1);
+      }
+
+      // Port icon label
+      var icon = PORT_ICONS[p.type] || '';
+      if(icon){
+        ctx.font = '9px sans-serif';
+        ctx.fillStyle = 'rgba(200,210,240,0.8)';
+        ctx.textAlign = p.side === 'left' ? 'right' : 'left';
+        var iconX = p.side === 'left' ? p.x - PORT_R - 5 : p.x + PORT_R + 5;
+        ctx.fillText(icon, iconX, p.y);
+      }
+
+      ctx.globalAlpha = 1;
     });
 
     // Mining LED
@@ -1379,6 +1586,7 @@ canvas.addEventListener('pointerdown', function(e){
     dragMode = 'port';
     dragPort = portHit;
     dragLineEnd = {x:world.x, y:world.y};
+    updateCompatiblePorts(portHit);
     var idx = nodes.indexOf(nodes.find(function(nd){return nd.id===portHit.nodeId}));
     if(idx >= 0){nodes.push(nodes.splice(idx,1)[0])}
     return;
@@ -1482,6 +1690,7 @@ canvas.addEventListener('pointerup', function(e){
   dragPort = null;
   dragLineEnd = null;
   hoverPort = null;
+  compatiblePorts = [];
 });
 
 canvas.addEventListener('pointerleave', function(){
