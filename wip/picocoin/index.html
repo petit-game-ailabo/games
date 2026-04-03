@@ -34,7 +34,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 #resetTitleBtn{padding:8px 20px;font-size:13px;background:transparent;color:#666;border:1px solid #333;border-radius:8px;cursor:pointer;transition:all .2s}
 #resetTitleBtn:hover{color:#999;border-color:#555}
 #titleCanvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:-1}
-#hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:rgba(150,170,255,0.7);font-size:14px;pointer-events:none;z-index:5;text-align:center;transition:opacity 1s}
+#hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,39,0.8);color:#fff;font-size:14px;pointer-events:none;z-index:5;text-align:center;padding:12px 24px;border-radius:8px;text-shadow:0 0 10px #4af;opacity:0;transition:opacity 1s}
 #researchBtn{position:absolute;top:8px;right:8px;width:32px;height:32px;background:rgba(80,80,100,0.4);border:1px solid rgba(100,100,130,0.3);border-radius:6px;color:#aac;font-size:16px;cursor:pointer;pointer-events:auto;z-index:20;display:flex;align-items:center;justify-content:center}
 #researchBtn:hover{background:rgba(100,100,130,0.6);color:#fff}
 #researchPanel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;max-height:80vh;background:rgba(15,20,45,0.97);border:1px solid #334;border-radius:12px;z-index:50;pointer-events:auto;overflow-y:auto;padding:0;box-shadow:0 0 30px rgba(40,60,150,0.4)}
@@ -118,8 +118,6 @@ const FONT_SIZE = 11;
 const PORT_R = 7;
 
 // ===== NODE TYPES =====
-// Ports: left=output, right=input
-// For PC/Server: right ports receive from parts, left ports output to network nodes
 const NODE_TYPES = {
   mining_pc:{name:'マイニングPC',emoji:'💻',price:0,titleColor:'#2a7a4a',watt:0,category:'pc'},
   server:{name:'サーバー',emoji:'🖥️',price:30,titleColor:'#2a5a7a',watt:0,category:'pc'},
@@ -137,32 +135,23 @@ const NODE_TYPES = {
   exchange:{name:'取引所',emoji:'🏦',price:100,titleColor:'#6633cc',watt:0,category:'network'},
 };
 
-// Connection rules: which types can connect where
-// mining_pc inputs (right ports): cpu, power, cooler, ssd, firewall
-// mining_pc outputs (left ports): blockchain, wallet
-// server inputs (right ports): cpu, power, network, firewall
-// server outputs (left ports): ln_node
-// Parts (cpu, power, cooler, ssd, network, ai, firewall): left port only → connects to PC/server right port
-// blockchain: right port only ← from mining_pc left port
-// wallet: right port only ← from mining_pc left port, AND left port → ln_wallet right port
-// ln_node: right port ← from server left port, left port → ln_wallet right port
-// ln_wallet: right ports ← from ln_node left port AND wallet left port
-
 const MINING_PC_INPUTS = ['cpu','power','cooler','ssd','firewall'];
 const MINING_PC_OUTPUTS = ['blockchain','wallet'];
 const SERVER_INPUTS = ['cpu','power','network','firewall'];
 const SERVER_OUTPUTS = ['ln_node'];
 
 // ===== PORT DEFINITIONS PER NODE TYPE =====
-// Each port: {side:'left'|'right', type:string, label:string}
+// Order matters: right ports map to display rows top-to-bottom, left ports likewise
 function getPortDefs(nodeType){
   switch(nodeType){
     case 'mining_pc': return [
+      // Upper: enhancement inputs (right ports)
       {side:'right',type:'cpu',label:'CPU'},
-      {side:'right',type:'power',label:'電源'},
       {side:'right',type:'cooler',label:'冷却'},
       {side:'right',type:'ssd',label:'SSD'},
       {side:'right',type:'firewall',label:'FW'},
+      {side:'right',type:'power',label:'電源'},
+      // Lower: outputs (left ports)
       {side:'left',type:'blockchain',label:'BC'},
       {side:'left',type:'wallet',label:'ウォレット'},
     ];
@@ -234,12 +223,14 @@ let nextNodeId = 1;
 let canvasW, canvasH, gameAreaTop, gameAreaBottom;
 let hintShown = true;
 let hintTimer = 0;
+let hintFadeState = 'waiting'; // 'waiting' | 'visible' | 'fading' | 'hidden'
+let hintFadeTimer = 0;
 
 // Drag state
-let dragMode = null; // 'move' | 'port' | 'camera' | null
+let dragMode = null;
 let dragNode = null;
 let dragOffX = 0, dragOffY = 0;
-let dragPort = null; // {node, portDef, portIndex, x, y}
+let dragPort = null;
 let dragLineEnd = null;
 let hoverPort = null;
 let lastPointerX = null, lastPointerY = null;
@@ -285,6 +276,16 @@ function worldToScreen(wx, wy){
     x: (wx - camera.x - canvasW/2) * camera.zoom + canvasW/2,
     y: (wy - camera.y - canvasH/2) * camera.zoom + canvasH/2
   };
+}
+
+// ===== CAMERA CENTERING =====
+function centerCameraOnBlockchain(){
+  var bc = nodes.find(function(n){return n.type === 'blockchain'});
+  if(bc){
+    camera.x = bc.x + WIN_W/2 - canvasW/2;
+    camera.y = bc.y + 30 - canvasH/2;
+  }
+  camera.zoom = 1.0;
 }
 
 // ===== TITLE SCREEN =====
@@ -337,19 +338,24 @@ function getNodeLines(n){
   if(n.type === 'mining_pc'){
     var stats = getPCStats(n);
     var isMining = stats.canMine && !n.infected && stats.powerOk;
-    lines.push({text:'状態: '+(n.infected?'🦠感染':(isMining?'⛏️マイニング中':'⏹停止'))});
-    lines.push({text:'ハッシュレート: '+stats.effectiveRate.toFixed(1), rightPort:0}); // CPU port
-    lines.push({text:'電力: '+stats.powerUsed+'/'+stats.powerSupply+'W', bar:stats.powerSupply>0?Math.min(stats.powerUsed/stats.powerSupply,1.5):0, barOk:stats.powerOk, rightPort:1}); // power port
-    // left ports at bottom
-    lines.push({text:'', leftPort:0}); // blockchain
-    lines.push({text:'', leftPort:1}); // wallet
+    // Upper section: enhancement inputs (right ports)
+    // Port def order: cpu, cooler, ssd, firewall, power
+    lines.push({text:'CPU: '+stats.cpus+'個 ⚡'+stats.effectiveRate.toFixed(1)+'H/s', rightPort:0});
+    lines.push({text:'冷却: '+(stats.coolers>0?'✅ x'+stats.coolers:'—'), rightPort:1});
+    lines.push({text:'SSD: '+(stats.ssds>0?'✅ x'+stats.ssds:'—'), rightPort:2});
+    lines.push({text:'FW: '+(stats.firewalls>0?'🛡️ x'+stats.firewalls:'—'), rightPort:3});
+    lines.push({text:'電力: '+stats.powerUsed+'/'+stats.powerSupply+'W', bar:stats.powerSupply>0?Math.min(stats.powerUsed/stats.powerSupply,1.5):0, barOk:stats.powerOk, rightPort:4});
+    // Lower section: outputs (left ports)
+    // Port def order: blockchain, wallet
+    lines.push({text:(isMining?'⛏':'⏹')+' マイニング', miningGauge:n.miningProgress||0, isMining:isMining, leftPort:0});
+    lines.push({text:'→ ウォレット', leftPort:1});
   } else if(n.type === 'server'){
     var stats = getServerStats(n);
     var isRouting = stats.canRoute && !n.infected && stats.powerOk;
     lines.push({text:'状態: '+(n.infected?'🦠感染':(isRouting?'📡ルーティング中':'⏹停止'))});
-    lines.push({text:'処理力: '+stats.processingPower, rightPort:0}); // CPU
-    lines.push({text:'電力: '+stats.powerUsed+'/'+stats.powerSupply+'W', bar:stats.powerSupply>0?Math.min(stats.powerUsed/stats.powerSupply,1.5):0, barOk:stats.powerOk, rightPort:1}); // power
-    lines.push({text:'', leftPort:0}); // ln_node
+    lines.push({text:'処理力: '+stats.processingPower, rightPort:0});
+    lines.push({text:'電力: '+stats.powerUsed+'/'+stats.powerSupply+'W', bar:stats.powerSupply>0?Math.min(stats.powerUsed/stats.powerSupply,1.5):0, barOk:stats.powerOk, rightPort:1});
+    lines.push({text:'', leftPort:0});
   } else if(n.type === 'cpu'){
     lines.push({text:'演算力: +1 / '+nt.watt+'W', leftPort:0});
   } else if(n.type === 'power'){
@@ -373,16 +379,16 @@ function getNodeLines(n){
     lines.push({text:'PC接続: '+pcCount+'台', rightPort:0});
   } else if(n.type === 'wallet'){
     lines.push({text:'残高: '+balance+'₱', rightPort:0});
-    lines.push({text:'', leftPort:0}); // to ln_wallet
+    lines.push({text:'', leftPort:0});
   } else if(n.type === 'ln_node'){
     var lnBal = n.lnBalance || 0;
     lines.push({text:'ルーティング手数料', rightPort:0});
     lines.push({text:'チャネル容量: '+lnBal.toFixed(1)+'₱'});
-    lines.push({text:'', leftPort:0}); // to ln_wallet
+    lines.push({text:'', leftPort:0});
   } else if(n.type === 'ln_wallet'){
     var lnwBal = n.lnwBalance || 0;
-    lines.push({text:'残高: '+lnwBal.toFixed(1)+'₱', rightPort:0}); // from ln
-    lines.push({text:'', rightPort:1}); // from wallet
+    lines.push({text:'残高: '+lnwBal.toFixed(1)+'₱', rightPort:0});
+    lines.push({text:'', rightPort:1});
   } else if(n.type === 'exchange'){
     var exBal = n.exBalance || 0;
     var locked = n.exLocked || 0;
@@ -399,14 +405,11 @@ function getNodeHeight(n){
 }
 
 // ===== PORT POSITIONS =====
-// Returns actual port positions based on node position and port definitions
 function getNodePortPositions(n){
   var portDefs = getPortDefs(n.type);
   var nodeLines = getNodeLines(n);
   var result = [];
-  var leftIdx = 0, rightIdx = 0;
 
-  // Count left and right ports from lines
   var leftPorts = [];
   var rightPorts = [];
   nodeLines.forEach(function(line, i){
@@ -414,7 +417,6 @@ function getNodePortPositions(n){
     if(line.rightPort !== undefined) rightPorts.push({lineIdx:i, portIdx:line.rightPort});
   });
 
-  // Map port defs to positions
   var leftDefIdx = 0, rightDefIdx = 0;
   portDefs.forEach(function(pd, pi){
     var px, py;
@@ -447,7 +449,6 @@ function getNodePortPositions(n){
 
 // ===== CONNECTION VALIDATION =====
 function canConnect(fromPort, toPort){
-  // Must be left→right
   if(fromPort.side !== 'left' || toPort.side !== 'right') return false;
   if(fromPort.nodeId === toPort.nodeId) return false;
 
@@ -455,7 +456,6 @@ function canConnect(fromPort, toPort){
   var toNode = nodes.find(function(nd){return nd.id===toPort.nodeId});
   if(!fromNode || !toNode) return false;
 
-  // Check duplicate connection between same nodes with same port types
   var exists = connections.some(function(c){
     return c.from===fromPort.nodeId && c.to===toPort.nodeId && c.fromPort===fromPort.type && c.toPort===toPort.type;
   });
@@ -469,7 +469,7 @@ function canConnect(fromPort, toPort){
   if(['cpu','power','network','firewall'].indexOf(fromNode.type) >= 0 && fromPort.type === 'to_pc'){
     if(toNode.type === 'server' && toPort.type === fromNode.type) return true;
   }
-  // AI → mining_pc (via cpu port since AI needs CPU)
+  // AI → mining_pc (via cpu port)
   if(fromNode.type === 'ai' && fromPort.type === 'to_pc'){
     if(toNode.type === 'mining_pc' && toPort.type === 'cpu') return true;
   }
@@ -518,7 +518,7 @@ function addConnection(fromPort, toPort){
     lineType: lineType
   });
   playSound('connect');
-  if(hintShown){hintShown=false;document.getElementById('hint').style.opacity='0';}
+  if(hintShown){hintShown=false;hintFadeState='hidden';document.getElementById('hint').style.opacity='0';}
 }
 
 // ===== PC STATS =====
@@ -554,12 +554,12 @@ function getPCStats(pc){
   if(pc.infected) mult *= 0.25;
   if(researchCompleted.indexOf('quantum')>=0) mult *= 3;
   var effectiveRate = hashrate * mult;
-  var successRate = effectiveRate * 0.03 / difficulty;
-  if(researchCompleted.indexOf('ai_mining')>=0) successRate *= 2;
+  var gaugeSpeed = effectiveRate * 0.03 / difficulty;
+  if(researchCompleted.indexOf('ai_mining')>=0) gaugeSpeed *= 2;
 
   return {cpus:cpus.length,powers:powers.length,coolers:coolers.length,ssds:ssds.length,ais:ais.length,
     firewalls:firewalls.length,hasBlockchain:hasBlockchain,hasWallet:hasWallet,canMine:canMine,
-    hashrate:hashrate,mult:mult,effectiveRate:effectiveRate,successRate:successRate,
+    hashrate:hashrate,mult:mult,effectiveRate:effectiveRate,gaugeSpeed:gaugeSpeed,
     hasFW:firewalls.length>0,powerUsed:powerUsed,powerSupply:powerSupply,powerOk:powerOk};
 }
 
@@ -623,27 +623,55 @@ function buildShop(){
 // ===== INIT =====
 function initGame(){
   resize();
-  var cx = canvasW/2, cy = (gameAreaTop + gameAreaBottom)/2;
+  var cy = (gameAreaTop + gameAreaBottom)/2;
   nodes=[];connections=[];effects=[];particles=[];animatedPower={};
   balance=0;difficulty=1;difficultyTimer=0;malwareTimer=0;blackoutTimer=0;gameTime=0;miningCheckTimer=0;
-  nextNodeId=1;selectedShopItem=null;hintShown=true;hintTimer=0;researchCompleted=['basic_mining'];
+  nextNodeId=1;selectedShopItem=null;hintShown=true;hintTimer=0;hintFadeState='waiting';hintFadeTimer=0;researchCompleted=['basic_mining'];
   camera={x:0,y:0,zoom:1};
-  document.getElementById('hint').style.opacity='1';
 
-  // Place initial nodes UNCONNECTED, spread out
-  addNode('blockchain', cx + 120, cy - 140);
-  addNode('wallet', cx + 120, cy + 100);
-  addNode('mining_pc', cx - WIN_W/2, cy - 40);
-  addNode('cpu', cx - 250, cy - 100);
-  addNode('power', cx - 250, cy + 60);
+  // --- Fix #5: Initial layout ---
+  // BC ← PC → CPU/Power, PC → Wallet
+  // blockchain: far left
+  addNode('blockchain', 100, cy);
+  // mining_pc: right of blockchain
+  addNode('mining_pc', 350, cy);
+  // cpu: right-above PC
+  addNode('cpu', 550, cy - 60);
+  // power: right-below PC
+  addNode('power', 550, cy + 60);
+  // wallet: below PC
+  addNode('wallet', 350, cy + 120);
 
   buildShop();
   updateUI();
+
+  // --- Fix #4: Hint fade in then out after 5s ---
+  var hintEl = document.getElementById('hint');
+  hintEl.style.opacity = '0';
+  hintFadeState = 'waiting';
+  hintFadeTimer = 0;
+  setTimeout(function(){
+    if(hintShown){
+      hintEl.style.opacity = '1';
+      hintFadeState = 'visible';
+      setTimeout(function(){
+        if(hintShown){
+          hintEl.style.opacity = '0';
+          hintFadeState = 'fading';
+          setTimeout(function(){hintShown=false;hintFadeState='hidden';},1000);
+        }
+      }, 5000);
+    }
+  }, 300);
+
+  // --- Fix #6: Center camera on blockchain ---
+  centerCameraOnBlockchain();
+
   requestAnimationFrame(gameLoop);
 }
 
 function addNode(type, x, y){
-  var n = {id:nextNodeId++, type:type, x:x, y:y, scale:0, infected:false, infectedTime:0, blackout:false, blackoutTime:0, lnBalance:0, lnwBalance:0, exBalance:0, exLocked:0, exLockTime:0, exHacked:false, exHackTime:0, exLockCooldown:0};
+  var n = {id:nextNodeId++, type:type, x:x, y:y, scale:0, infected:false, infectedTime:0, blackout:false, blackoutTime:0, lnBalance:0, lnwBalance:0, exBalance:0, exLocked:0, exLockTime:0, exHacked:false, exHackTime:0, exLockCooldown:0, miningProgress:0};
   nodes.push(n);
   effects.push({type:'spawn',x:x+WIN_W/2,y:y+30,t:0,dur:0.3});
   return n;
@@ -692,6 +720,30 @@ function doResearch(id){
   updateUI();buildShop();renderResearchPanel();
 }
 
+// ===== L-SHAPED PATH UTILITIES =====
+// Get point along L-shaped path (fromX,fromY) -> (midX,fromY) -> (midX,toY) -> (toX,toY)
+function getLPathPoint(fromX, fromY, toX, toY, t){
+  var midX = (fromX + toX) / 2;
+  var seg1 = Math.abs(midX - fromX);
+  var seg2 = Math.abs(toY - fromY);
+  var seg3 = Math.abs(toX - midX);
+  var total = seg1 + seg2 + seg3;
+  if(total === 0) return {x:fromX, y:fromY};
+  var d = t * total;
+  if(d <= seg1){
+    var p = seg1 > 0 ? d / seg1 : 0;
+    return {x: fromX + (midX - fromX) * p, y: fromY};
+  }
+  d -= seg1;
+  if(d <= seg2){
+    var p = seg2 > 0 ? d / seg2 : 0;
+    return {x: midX, y: fromY + (toY - fromY) * p};
+  }
+  d -= seg2;
+  var p = seg3 > 0 ? d / seg3 : 0;
+  return {x: midX + (toX - midX) * p, y: toY};
+}
+
 // ===== GAME LOOP =====
 var lastTime = 0;
 function gameLoop(ts){
@@ -718,24 +770,41 @@ function update(dt){
   difficultyTimer += dt;
   if(difficultyTimer >= 300){difficultyTimer=0;difficulty*=1.2;}
 
+  // --- Fix #2: Mining gauge replaces random mining ---
+  var totalHash = 0;
+  nodes.filter(function(n){return n.type==='mining_pc'}).forEach(function(pc){
+    var stats = getPCStats(pc);
+    totalHash += stats.effectiveRate;
+    if(!pc.miningProgress) pc.miningProgress = 0;
+
+    if(stats.canMine && !pc.infected && stats.powerOk){
+      // Gauge fills deterministically based on hashrate
+      pc.miningProgress += stats.gaugeSpeed * dt;
+      if(pc.miningProgress >= 1){
+        pc.miningProgress = 0;
+        balance++;
+        playSound('mine');
+        // Gold particles from gauge area
+        var gaugeLineIdx = 5; // mining gauge is line index 5 in mining_pc
+        var gaugeY = pc.y + TITLE_H + gaugeLineIdx * LINE_H + LINE_H/2;
+        for(var gi=0;gi<6;gi++){
+          var angle = Math.random()*Math.PI*2;
+          effects.push({type:'gold_burst',x:pc.x+WIN_W/2,y:gaugeY,t:0,dur:0.7,angle:angle,dist:15+Math.random()*25});
+        }
+        effects.push({type:'sparkle',x:pc.x+WIN_W/2,y:pc.y+TITLE_H/2,t:0,dur:0.6});
+        var wallet = nodes.find(function(n){return n.type==='wallet'});
+        if(wallet) particles.push({x:pc.x+WIN_W/2,y:pc.y+TITLE_H,tx:wallet.x+WIN_W/2,ty:wallet.y+TITLE_H,t:0,dur:0.8,text:'+1₱'});
+        updateUI();buildShop();
+      }
+    } else {
+      // Slowly decay when not mining
+      pc.miningProgress = Math.max(0, pc.miningProgress - 0.05 * dt);
+    }
+  });
+
   miningCheckTimer += dt;
   if(miningCheckTimer >= 1){
     miningCheckTimer = 0;
-    var totalHash = 0;
-    nodes.filter(function(n){return n.type==='mining_pc'}).forEach(function(pc){
-      var stats = getPCStats(pc);
-      totalHash += stats.effectiveRate;
-      if(stats.canMine && !pc.infected && stats.powerOk){
-        if(Math.random() < stats.successRate){
-          balance++;
-          playSound('mine');
-          effects.push({type:'sparkle',x:pc.x+WIN_W/2,y:pc.y+TITLE_H/2,t:0,dur:0.6});
-          var wallet = nodes.find(function(n){return n.type==='wallet'});
-          if(wallet) particles.push({x:pc.x+WIN_W/2,y:pc.y+TITLE_H,tx:wallet.x+WIN_W/2,ty:wallet.y+TITLE_H,t:0,dur:0.8,text:'+1₱'});
-          buildShop();updateUI();
-        }
-      }
-    });
     document.getElementById('hashrateText').textContent = totalHash.toFixed(1);
   }
 
@@ -831,8 +900,6 @@ function update(dt){
   }
   nodes.filter(function(n){return n.blackout}).forEach(function(n){n.blackoutTime-=dt;if(n.blackoutTime<=0)n.blackout=false});
 
-  if(hintShown){hintTimer+=dt;if(hintTimer>10){hintShown=false;document.getElementById('hint').style.opacity='0'}}
-
   effects.forEach(function(e){e.t+=dt});
   effects = effects.filter(function(e){return e.t<e.dur});
   particles.forEach(function(p){p.t+=dt});
@@ -850,7 +917,6 @@ function draw(){
   ctx.fillRect(0, 0, canvasW, canvasH);
 
   ctx.save();
-  // Apply camera
   ctx.translate(canvasW/2, canvasH/2);
   ctx.scale(camera.zoom, camera.zoom);
   ctx.translate(-canvasW/2 - camera.x, -canvasH/2 - camera.y);
@@ -877,18 +943,15 @@ function drawGrid(){
   for(var y=startY;y<endY;y+=step){ctx.beginPath();ctx.moveTo(startX,y);ctx.lineTo(endX,y);ctx.stroke()}
 }
 
-function drawBezier(fromX, fromY, toX, toY){
-  var dx = Math.abs(toX - fromX) * 0.5;
-  if(dx < 40) dx = 40;
+// --- Fix #1: L-shaped (right-angle) connections ---
+function drawLPath(fromX, fromY, toX, toY){
+  var midX = (fromX + toX) / 2;
   ctx.beginPath();
   ctx.moveTo(fromX, fromY);
-  ctx.bezierCurveTo(fromX - dx, fromY, toX + dx, toY, toX, toY);
+  ctx.lineTo(midX, fromY);
+  ctx.lineTo(midX, toY);
+  ctx.lineTo(toX, toY);
   ctx.stroke();
-}
-
-function bezierPointCubic(p0, c1, c2, p3, t){
-  var mt = 1-t;
-  return mt*mt*mt*p0 + 3*mt*mt*t*c1 + 3*mt*t*t*c2 + t*t*t*p3;
 }
 
 function drawConnections(){
@@ -910,33 +973,26 @@ function drawConnections(){
     if(!fp || !tp) return;
 
     var fx = fp.x, fy = fp.y, tx = tp.x, ty = tp.y;
-    var dx = Math.abs(tx - fx) * 0.5;
-    if(dx < 40) dx = 40;
-    var c1x = fx - dx, c1y = fy;
-    var c2x = tx + dx, c2y = ty;
 
     var col = '#4488ff';
     if(c.lineType === 'power') col = '#dd4444';
     else if(c.lineType === 'coin') col = '#ddaa22';
     else if(c.lineType === 'lightning') col = '#ff9900';
 
+    // Draw L-shaped connection line
     ctx.strokeStyle = col;
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.bezierCurveTo(c1x, c1y, c2x, c2y, tx, ty);
-    ctx.stroke();
+    drawLPath(fx, fy, tx, ty);
     ctx.globalAlpha = 1;
 
-    // Flowing particles along bezier
+    // Flowing particles along L-path
     for(var i=0;i<3;i++){
       var p = ((t*0.5+i/3)%1);
-      var px = bezierPointCubic(fx, c1x, c2x, tx, p);
-      var py = bezierPointCubic(fy, c1y, c2y, ty, p);
+      var pt = getLPathPoint(fx, fy, tx, ty, p);
       ctx.fillStyle = col;
       ctx.globalAlpha = 0.8;
-      ctx.beginPath();ctx.arc(px,py,2.5,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(pt.x,pt.y,2.5,0,Math.PI*2);ctx.fill();
       ctx.globalAlpha = 1;
     }
   });
@@ -1024,6 +1080,37 @@ function drawNodes(){
         ctx.lineWidth = 0.5;
         ctx.strokeRect(barX, barY, barW, barH);
       }
+
+      // --- Fix #2: Mining gauge ---
+      if(line.miningGauge !== undefined){
+        var gx = n.x + 8;
+        var gy = ly + 6;
+        var gw = WIN_W - 16;
+        var gh = 10;
+        var prog = Math.min(line.miningGauge, 1);
+        // Background
+        ctx.fillStyle = 'rgba(40,50,80,0.8)';
+        ctx.fillRect(gx, gy, gw, gh);
+        // Gradient fill: blue → green
+        if(prog > 0){
+          var grad = ctx.createLinearGradient(gx, gy, gx + gw * prog, gy);
+          grad.addColorStop(0, '#2266ff');
+          grad.addColorStop(1, '#22cc66');
+          ctx.fillStyle = grad;
+          ctx.fillRect(gx, gy, gw * prog, gh);
+        }
+        // Border
+        ctx.strokeStyle = line.isMining ? 'rgba(100,200,160,0.6)' : 'rgba(80,100,160,0.5)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(gx, gy, gw, gh);
+        // Percentage text
+        ctx.fillStyle = '#fff';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.floor(prog*100)+'%', n.x+WIN_W/2, gy+gh/2);
+        ctx.font = FONT_SIZE+'px sans-serif';
+      }
     });
 
     // Draw ports
@@ -1046,7 +1133,6 @@ function drawNodes(){
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Small direction indicator
       ctx.fillStyle = '#fff';
       ctx.font = '8px sans-serif';
       ctx.textAlign = 'center';
@@ -1129,6 +1215,14 @@ function drawEffects(){
         ctx.lineTo(e.x+Math.cos(a)*30*p,e.y+Math.sin(a)*30*p);ctx.stroke();
       }
     }
+    // --- Fix #2: Gold burst particles from mining gauge ---
+    if(e.type === 'gold_burst'){
+      var ease = 1 - Math.pow(1-p, 2);
+      var dx = Math.cos(e.angle) * e.dist * ease;
+      var dy = Math.sin(e.angle) * e.dist * ease;
+      ctx.fillStyle = 'rgba(255,215,0,'+(1-p)+')';
+      ctx.beginPath();ctx.arc(e.x+dx, e.y+dy, 3*(1-p*0.5), 0, Math.PI*2);ctx.fill();
+    }
   });
 }
 
@@ -1145,23 +1239,22 @@ function drawParticles(){
   });
 }
 
+// --- Fix #1: L-shaped drag line ---
 function drawDragLine(){
   if(dragMode === 'port' && dragPort && dragLineEnd){
     var fx = dragPort.x, fy = dragPort.y;
     var tx = dragLineEnd.x, ty = dragLineEnd.y;
-    var dx = Math.abs(tx - fx) * 0.5;
-    if(dx < 40) dx = 40;
+    var midX = (fx + tx) / 2;
 
     ctx.strokeStyle = 'rgba(74,106,255,0.6)';
     ctx.lineWidth = 2;
     ctx.setLineDash([5,5]);
-    if(dragPort.side === 'left'){
-      ctx.beginPath();ctx.moveTo(fx,fy);
-      ctx.bezierCurveTo(fx-dx,fy,tx+dx,ty,tx,ty);ctx.stroke();
-    } else {
-      ctx.beginPath();ctx.moveTo(fx,fy);
-      ctx.bezierCurveTo(fx+dx,fy,tx-dx,ty,tx,ty);ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(midX, fy);
+    ctx.lineTo(midX, ty);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
     ctx.setLineDash([]);
   }
 }
@@ -1220,7 +1313,7 @@ canvas.addEventListener('touchstart', function(e){
     pinchDist = Math.hypot(t2.clientX-t1.clientX, t2.clientY-t1.clientY);
     pinchMidX = (t1.clientX+t2.clientX)/2;
     pinchMidY = (t1.clientY+t2.clientY)/2;
-    dragMode = null; // Cancel any single-finger drag
+    dragMode = null;
   }
 }, {passive:false});
 
@@ -1235,7 +1328,6 @@ canvas.addEventListener('touchmove', function(e){
     var scale = newDist / pinchDist;
     var newZoom = Math.max(0.3, Math.min(3.0, camera.zoom * scale));
 
-    // Zoom toward pinch center
     var r = canvas.getBoundingClientRect();
     var wx = (pinchMidX - r.left - canvasW/2) / camera.zoom + camera.x + canvasW/2;
     var wy = (pinchMidY - r.top - canvasH/2) / camera.zoom + camera.y + canvasH/2;
@@ -1375,7 +1467,6 @@ canvas.addEventListener('pointerup', function(e){
   if(dragMode === 'port' && dragPort){
     var tp = hitTestPort(world.x, world.y);
     if(tp && tp.nodeId !== dragPort.nodeId){
-      // Try both directions
       if(canConnect(dragPort, tp)){
         addConnection(dragPort, tp);
       } else if(canConnect(tp, dragPort)){
@@ -1401,7 +1492,7 @@ canvas.addEventListener('pointerleave', function(){
 function saveGame(){
   try{
     var data = {
-      nodes: nodes.map(function(n){return{id:n.id,type:n.type,x:n.x,y:n.y,infected:n.infected,blackout:n.blackout,blackoutTime:n.blackoutTime||0,lnBalance:n.lnBalance||0,lnwBalance:n.lnwBalance||0,exBalance:n.exBalance||0,exLocked:n.exLocked||0,exLockTime:n.exLockTime||0,exHacked:n.exHacked||false,exHackTime:n.exHackTime||0}}),
+      nodes: nodes.map(function(n){return{id:n.id,type:n.type,x:n.x,y:n.y,infected:n.infected,blackout:n.blackout,blackoutTime:n.blackoutTime||0,lnBalance:n.lnBalance||0,lnwBalance:n.lnwBalance||0,exBalance:n.exBalance||0,exLocked:n.exLocked||0,exLockTime:n.exLockTime||0,exHacked:n.exHacked||false,exHackTime:n.exHackTime||0,miningProgress:n.miningProgress||0}}),
       connections: connections.map(function(c){return{from:c.from,to:c.to,fromPort:c.fromPort,toPort:c.toPort,fromDefIndex:c.fromDefIndex,toDefIndex:c.toDefIndex,lineType:c.lineType}}),
       balance:balance, difficulty:difficulty, gameTime:gameTime, nextNodeId:nextNodeId, researchCompleted:researchCompleted,
       camera:{x:camera.x,y:camera.y,zoom:camera.zoom}
@@ -1415,14 +1506,13 @@ function loadGame(){
     var raw = localStorage.getItem('picocoin_save');
     if(!raw) return false;
     var data = JSON.parse(raw);
-    nodes = data.nodes.map(function(n){return Object.assign({scale:1,infectedTime:0}, n)});
+    nodes = data.nodes.map(function(n){return Object.assign({scale:1,infectedTime:0,miningProgress:0}, n)});
     connections = data.connections;
     balance = data.balance;
     difficulty = data.difficulty;
     gameTime = data.gameTime || 0;
     nextNodeId = data.nextNodeId || 100;
     researchCompleted = data.researchCompleted || ['basic_mining'];
-    if(data.camera){camera.x=data.camera.x;camera.y=data.camera.y;camera.zoom=data.camera.zoom}
     animatedPower = {};
     return true;
   }catch(e){return false}
@@ -1438,8 +1528,11 @@ initGame = function(){
     return;
   }
   hintShown = false;
+  hintFadeState = 'hidden';
   document.getElementById('hint').style.opacity = '0';
   buildShop();updateUI();
+  // --- Fix #6: Center camera on blockchain after load ---
+  centerCameraOnBlockchain();
   requestAnimationFrame(gameLoop);
 };
 
