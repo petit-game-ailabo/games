@@ -31,6 +31,30 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 #startBtn:hover{transform:scale(1.05)}
 #titleCanvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:-1}
 #hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:rgba(150,170,255,0.7);font-size:14px;pointer-events:none;z-index:5;text-align:center;transition:opacity 1s}
+#researchBtn{position:absolute;top:8px;right:44px;width:32px;height:32px;background:rgba(80,80,100,0.4);border:1px solid rgba(100,100,130,0.3);border-radius:6px;color:#aac;font-size:16px;cursor:pointer;pointer-events:auto;z-index:20;display:flex;align-items:center;justify-content:center}
+#researchBtn:hover{background:rgba(100,100,130,0.6);color:#fff}
+#researchPanel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;max-height:80vh;background:rgba(15,20,45,0.97);border:1px solid #334;border-radius:12px;z-index:50;pointer-events:auto;overflow-y:auto;padding:0;box-shadow:0 0 30px rgba(40,60,150,0.4)}
+#researchPanel.open{display:block}
+#researchPanel .rp-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #2a3060;background:rgba(30,40,80,0.8);border-radius:12px 12px 0 0}
+#researchPanel .rp-header h3{margin:0;font-size:16px;color:#aaccff}
+#researchPanel .rp-close{background:none;border:none;color:#888;font-size:18px;cursor:pointer}
+#researchPanel .rp-close:hover{color:#fff}
+.research-item{padding:12px 16px;border-bottom:1px solid rgba(60,80,140,0.2);transition:background .2s}
+.research-item:last-child{border-bottom:none}
+.research-item .ri-top{display:flex;align-items:center;gap:8px}
+.research-item .ri-emoji{font-size:20px}
+.research-item .ri-name{font-size:13px;font-weight:bold;color:#dde}
+.research-item .ri-status{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px}
+.ri-status.done{background:#1a4a2a;color:#44cc66}
+.ri-status.available{background:#3a3a1a;color:#ddcc44}
+.ri-status.locked{background:#2a2a3a;color:#666}
+.research-item .ri-desc{font-size:11px;color:#889;margin-top:4px}
+.research-item .ri-cost{font-size:11px;color:#ffd700;margin-top:2px}
+.research-item .ri-arrow{text-align:center;color:#334;font-size:16px;padding:2px 0}
+.ri-btn{display:inline-block;margin-top:6px;padding:4px 14px;font-size:12px;background:linear-gradient(135deg,#2a3a6a,#4a6aff);color:#fff;border:none;border-radius:6px;cursor:pointer}
+.ri-btn:hover{background:linear-gradient(135deg,#3a4a8a,#5a7aff)}
+.ri-btn:disabled{opacity:0.3;cursor:not-allowed}
+.research-connector{text-align:center;color:#334;font-size:14px;padding:0 16px}
 </style>
 </head>
 <body>
@@ -47,9 +71,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 <div class="hashrate">⚡ <span id="hashrateText">0</span> H/s</div>
 <div class="difficulty">難易度: <span id="diffText">1.00</span>x</div>
 </div>
+<div id="researchBtn" onclick="toggleResearch()">🔬</div>
 <div id="resetBtn" onclick="resetGame()">🔄</div>
 </div>
 <div id="hint">🔗 ポートをドラッグして接続しよう！</div>
+<div id="researchPanel"></div>
 <div id="bottomPanel">
 <div id="shop"></div>
 </div>
@@ -101,6 +127,18 @@ const NODE_TYPES = {
 
 const PC_INPUTS = ['cpu','power','cooler','ssd','network','ai','firewall'];
 const PC_OUTPUTS = ['blockchain','wallet','ln','exchange'];
+
+// ===== RESEARCH TREE =====
+const RESEARCH_TREE = [
+  {id:'basic_mining', name:'基本マイニング', emoji:'⛏️', desc:'マイニングの基礎を習得', cost:0, prereq:null, effect:'初期状態で解放済み'},
+  {id:'gpu_boost', name:'GPU最適化', emoji:'🎮', desc:'CPU効率+50%アップ', cost:20, prereq:'basic_mining', effect:'全CPUの演算力1.5倍'},
+  {id:'ai_mining', name:'AIマイニング', emoji:'🧠', desc:'AI補助で採掘精度向上', cost:80, prereq:'gpu_boost', effect:'マイニング成功率2倍'},
+  {id:'quantum', name:'量子コンピュータ', emoji:'⚛️', desc:'究極の演算力を解放', cost:200, prereq:'ai_mining', effect:'全ハッシュレート3倍'},
+  {id:'overclock', name:'オーバークロック', emoji:'🔥', desc:'CPUを限界まで回す', cost:30, prereq:'basic_mining', effect:'CPU消費電力+2W、演算力2倍'},
+  {id:'green_energy', name:'省エネ技術', emoji:'🌱', desc:'電力効率を改善', cost:40, prereq:'overclock', effect:'全パーツ消費電力-30%'},
+];
+
+let researchCompleted = ['basic_mining']; // Unlocked by default
 
 // ===== GAME STATE =====
 let nodes = [];
@@ -407,22 +445,34 @@ function getPCStats(pc){
   attached.forEach(n => { powerUsed += NODE_TYPES[n.type].watt || 0; });
   let powerSupply = 0;
   powers.forEach(n => { powerSupply += NODE_TYPES[n.type].supply || 0; });
-  const powerOk = powerSupply >= powerUsed && powerSupply > 0;
+  // Research: green_energy reduces power usage by 30%
+  if(researchCompleted.includes('green_energy')){
+    powerUsed = Math.ceil(powerUsed * 0.7);
+  }
+  const powerOk2 = powerSupply >= powerUsed && powerSupply > 0;
 
-  const canMine = cpus.length>0 && powers.length>0 && hasBlockchain && hasWallet && powerOk;
+  const canMine = cpus.length>0 && powers.length>0 && hasBlockchain && hasWallet && powerOk2;
   let hashrate = cpus.length;
+  // Research: overclock doubles CPU output
+  if(researchCompleted.includes('overclock')) hashrate *= 2;
   let mult = 1;
+  // Research: gpu_boost gives 1.5x CPU efficiency
+  if(researchCompleted.includes('gpu_boost')) mult *= 1.5;
   if(coolers.length>0) mult *= 1.5;
   if(ssds.length>0) mult *= 1.3;
   if(networks.length>0) mult *= 1.2;
   if(ais.length>0 && cpus.length>=2) mult *= 2;
   if(pc.infected) mult *= 0.25;
+  // Research: quantum gives 3x everything
+  if(researchCompleted.includes('quantum')) mult *= 3;
   const effectiveRate = hashrate * mult;
-  const successRate = effectiveRate * 0.03 / difficulty;
+  let successRate = effectiveRate * 0.03 / difficulty;
+  // Research: ai_mining doubles success rate
+  if(researchCompleted.includes('ai_mining')) successRate *= 2;
   return {cpus:cpus.length, powers:powers.length, coolers:coolers.length, ssds:ssds.length,
     networks:networks.length, ais:ais.length, firewalls:firewalls.length,
     hasBlockchain, hasWallet, canMine, hashrate, mult, effectiveRate, successRate,
-    hasFW: firewalls.length>0, powerUsed, powerSupply, powerOk};
+    hasFW: firewalls.length>0, powerUsed, powerSupply, powerOk: powerOk2};
 }
 
 // ===== SHOP =====
@@ -450,7 +500,7 @@ function initGame(){
   const cx = canvasW/2, cy = (gameAreaTop + gameAreaBottom)/2;
   nodes=[];connections=[];effects=[];particles=[];animatedPower={};
   balance=0;difficulty=1;difficultyTimer=0;malwareTimer=0;blackoutTimer=0;gameTime=0;miningCheckTimer=0;
-  nextNodeId=1;selectedShopItem=null;hintShown=true;hintTimer=0;
+  nextNodeId=1;selectedShopItem=null;hintShown=true;hintTimer=0;researchCompleted=['basic_mining'];
   document.getElementById('hint').style.opacity='1';
 
   // Place initial nodes UNCONNECTED
@@ -470,6 +520,68 @@ function addNode(type, x, y){
   nodes.push(n);
   effects.push({type:'spawn',x:x+WIN_W/2,y:y+30,t:0,dur:0.3});
   return n;
+}
+
+// ===== RESEARCH UI =====
+function toggleResearch(){
+  const panel = document.getElementById('researchPanel');
+  if(panel.classList.contains('open')){
+    panel.classList.remove('open');
+  } else {
+    renderResearchPanel();
+    panel.classList.add('open');
+  }
+}
+
+function renderResearchPanel(){
+  const panel = document.getElementById('researchPanel');
+  let html = '<div class="rp-header"><h3>🔬 研究ツリー</h3><button class="rp-close" onclick="toggleResearch()">✕</button></div>';
+  RESEARCH_TREE.forEach((r, i)=>{
+    const done = researchCompleted.includes(r.id);
+    const prereqMet = !r.prereq || researchCompleted.includes(r.prereq);
+    const canAfford = balance >= r.cost;
+    const available = !done && prereqMet;
+    let statusClass = done ? 'done' : (available ? 'available' : 'locked');
+    let statusText = done ? '✅ 完了' : (available ? '🔓 解放可能' : '🔒 未解放');
+
+    if(i > 0 && RESEARCH_TREE[i-1].prereq !== r.prereq){
+      // Visual connector between branches - skip for same-prereq items
+    }
+    if(r.prereq && !done){
+      const prereqR = RESEARCH_TREE.find(x=>x.id===r.prereq);
+      if(prereqR){
+        html += '<div class="research-connector">↓</div>';
+      }
+    }
+
+    html += '<div class="research-item">';
+    html += '<div class="ri-top"><span class="ri-emoji">'+r.emoji+'</span><span class="ri-name">'+r.name+'</span><span class="ri-status '+statusClass+'">'+statusText+'</span></div>';
+    html += '<div class="ri-desc">'+r.desc+'</div>';
+    html += '<div class="ri-desc" style="color:#aaf">効果: '+r.effect+'</div>';
+    if(!done){
+      html += '<div class="ri-cost">コスト: '+r.cost+'₱</div>';
+      if(available){
+        html += '<button class="ri-btn" '+(canAfford?'onclick="doResearch(\''+r.id+'\')"':'disabled')+'>'+
+          (canAfford?'研究する':'資金不足')+'</button>';
+      }
+    }
+    html += '</div>';
+  });
+  panel.innerHTML = html;
+}
+
+function doResearch(id){
+  const r = RESEARCH_TREE.find(x=>x.id===id);
+  if(!r) return;
+  if(researchCompleted.includes(id)) return;
+  if(r.prereq && !researchCompleted.includes(r.prereq)) return;
+  if(balance < r.cost) return;
+  balance -= r.cost;
+  researchCompleted.push(id);
+  playSound('buy');
+  effects.push({type:'sparkle', x:canvasW/2, y:canvasH/2, t:0, dur:0.8});
+  updateUI(); buildShop();
+  renderResearchPanel();
 }
 
 function resetGame(){
@@ -1133,7 +1245,7 @@ function saveGame(){
     const data = {
       nodes: nodes.map(n=>({id:n.id, type:n.type, x:n.x, y:n.y, infected:n.infected, blackout:n.blackout, blackoutTime:n.blackoutTime, lnBalance:n.lnBalance||0, exBalance:n.exBalance||0, exLocked:n.exLocked||0, exLockTime:n.exLockTime||0, exHacked:n.exHacked||false, exHackTime:n.exHackTime||0})),
       connections: connections.map(c=>({from:c.from, to:c.to, lineType:c.lineType})),
-      balance, difficulty, gameTime, nextNodeId
+      balance, difficulty, gameTime, nextNodeId, researchCompleted
     };
     localStorage.setItem('picocoin_save', JSON.stringify(data));
   }catch(e){}
@@ -1150,6 +1262,7 @@ function loadGame(){
     difficulty = data.difficulty;
     gameTime = data.gameTime || 0;
     nextNodeId = data.nextNodeId || 100;
+    researchCompleted = data.researchCompleted || ['basic_mining'];
     animatedPower = {};
     return true;
   }catch(e){return false}
