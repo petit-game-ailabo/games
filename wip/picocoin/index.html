@@ -20,12 +20,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 .shopTab.active{color:#fff;background:rgba(40,50,100,0.9);font-weight:bold}
 #shop{display:flex;gap:6px;padding:8px;background:rgba(10,14,39,0.95);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 #shop::-webkit-scrollbar{display:none}
-.shopItem{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;padding:6px 10px;border:1px solid #334;border-radius:8px;background:#151a3a;cursor:pointer;min-width:64px;transition:all .2s}
-.shopItem.selected{border-color:#4a6aff;background:#2a3a6a;box-shadow:0 0 10px rgba(74,106,255,0.5)}
+.shopItem{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;padding:6px 10px;border:1px solid #334;border-radius:8px;background:#151a3a;cursor:grab;min-width:64px;transition:all .2s;touch-action:none}
 .shopItem.disabled{opacity:0.35;cursor:not-allowed}
-.shopItem .emoji{font-size:22px}
-.shopItem .name{font-size:10px;color:#aac;margin-top:2px;white-space:nowrap}
-.shopItem .price{font-size:11px;color:#ffd700;font-weight:bold}
+.shopItem .emoji{font-size:22px;pointer-events:none}
+.shopItem .name{font-size:10px;color:#aac;margin-top:2px;white-space:nowrap;pointer-events:none}
+.shopItem .price{font-size:11px;color:#ffd700;font-weight:bold;pointer-events:none}
+#shopDragPreview{position:fixed;pointer-events:none;z-index:200;opacity:0.7;display:none;padding:8px 14px;border:2px solid #4a6aff;border-radius:10px;background:rgba(20,25,50,0.9);box-shadow:0 0 20px rgba(74,106,255,0.6);text-align:center;font-size:18px;transform:translate(-50%,-50%)}
+#shopDragPreview .sdp-name{font-size:10px;color:#aac;margin-top:2px}
 #titleScreen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0e27;z-index:100}
 #titleScreen h1{font-size:36px;margin-bottom:8px;text-shadow:0 0 20px rgba(74,106,255,0.6)}
 #titleScreen .sub{color:#88aaff;font-size:14px;margin-bottom:40px}
@@ -43,27 +44,34 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 @keyframes guideSlide{0%,100%{opacity:0.4;transform:translateX(0)}50%{opacity:1;transform:translateX(10px)}}
 #researchBtn{position:absolute;top:8px;right:8px;width:32px;height:32px;background:rgba(80,80,100,0.4);border:1px solid rgba(100,100,130,0.3);border-radius:6px;color:#aac;font-size:16px;cursor:pointer;pointer-events:auto;z-index:20;display:flex;align-items:center;justify-content:center}
 #researchBtn:hover{background:rgba(100,100,130,0.6);color:#fff}
-#researchPanel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;max-height:80vh;background:rgba(15,20,45,0.97);border:1px solid #334;border-radius:12px;z-index:50;pointer-events:auto;overflow-y:auto;padding:0;box-shadow:0 0 30px rgba(40,60,150,0.4)}
+#researchPanel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;max-height:85vh;background:rgba(15,20,45,0.97);border:1px solid #334;border-radius:12px;z-index:50;pointer-events:auto;overflow-y:auto;padding:0;box-shadow:0 0 30px rgba(40,60,150,0.4)}
 #researchPanel.open{display:block}
 #researchPanel .rp-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #2a3060;background:rgba(30,40,80,0.8);border-radius:12px 12px 0 0}
 #researchPanel .rp-header h3{margin:0;font-size:16px;color:#aaccff}
 #researchPanel .rp-close{background:none;border:none;color:#888;font-size:18px;cursor:pointer}
 #researchPanel .rp-close:hover{color:#fff}
-.research-item{padding:12px 16px;border-bottom:1px solid rgba(60,80,140,0.2);transition:background .2s}
-.research-item:last-child{border-bottom:none}
-.research-item .ri-top{display:flex;align-items:center;gap:8px}
-.research-item .ri-emoji{font-size:20px}
-.research-item .ri-name{font-size:13px;font-weight:bold;color:#dde}
-.research-item .ri-status{margin-left:auto;font-size:11px;padding:2px 8px;border-radius:10px}
-.ri-status.done{background:#1a4a2a;color:#44cc66}
-.ri-status.available{background:#3a3a1a;color:#ddcc44}
-.ri-status.locked{background:#2a2a3a;color:#666}
-.research-item .ri-desc{font-size:11px;color:#889;margin-top:4px}
-.research-item .ri-cost{font-size:11px;color:#ffd700;margin-top:2px}
-.research-connector{text-align:center;color:#334;font-size:14px;padding:0 16px}
-.ri-btn{display:inline-block;margin-top:6px;padding:4px 14px;font-size:12px;background:linear-gradient(135deg,#2a3a6a,#4a6aff);color:#fff;border:none;border-radius:6px;cursor:pointer}
+.rp-tabs{display:flex;border-bottom:1px solid #2a3060}
+.rp-tab{flex:1;padding:8px 4px;text-align:center;font-size:12px;color:#668;background:none;border:none;cursor:pointer;transition:all .2s}
+.rp-tab.active{color:#fff;background:rgba(40,50,100,0.6);font-weight:bold;border-bottom:2px solid #4a6aff}
+.rp-tree-container{position:relative;padding:16px;min-height:200px}
+.rp-tree-container svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.rp-tree-node{position:absolute;width:110px;padding:6px 4px;border:2px solid #334;border-radius:8px;background:rgba(25,30,55,0.95);text-align:center;cursor:pointer;transition:all .2s;font-size:11px}
+.rp-tree-node:hover{transform:scale(1.05)}
+.rp-tree-node.done{border-color:#44cc66;box-shadow:0 0 8px rgba(68,204,102,0.3)}
+.rp-tree-node.available{border-color:#ddcc44;box-shadow:0 0 8px rgba(221,204,68,0.3)}
+.rp-tree-node.locked{border-color:#444;opacity:0.5}
+.rp-tree-node .rtn-emoji{font-size:18px}
+.rp-tree-node .rtn-name{font-size:10px;font-weight:bold;color:#dde;margin-top:2px}
+.rp-tree-node .rtn-cost{font-size:9px;color:#ffd700}
+.rp-detail-popup{position:absolute;bottom:0;left:0;right:0;background:rgba(20,25,50,0.98);border-top:1px solid #4a6aff;padding:12px 16px;border-radius:0 0 12px 12px;z-index:5}
+.rp-detail-popup .rdp-name{font-size:14px;font-weight:bold;color:#aaccff;margin-bottom:4px}
+.rp-detail-popup .rdp-desc{font-size:11px;color:#889;margin-bottom:2px}
+.rp-detail-popup .rdp-effect{font-size:11px;color:#aaf;margin-bottom:4px}
+.rp-detail-popup .rdp-cost{font-size:12px;color:#ffd700;margin-bottom:6px}
+.ri-btn{display:inline-block;padding:6px 16px;font-size:12px;background:linear-gradient(135deg,#2a3a6a,#4a6aff);color:#fff;border:none;border-radius:6px;cursor:pointer}
 .ri-btn:hover{background:linear-gradient(135deg,#3a4a8a,#5a7aff)}
 .ri-btn:disabled{opacity:0.3;cursor:not-allowed}
+.rdp-close-btn{background:none;border:none;color:#888;font-size:14px;cursor:pointer;float:right}
 </style>
 </head>
 <body>
@@ -97,6 +105,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 </div>
 <div id="shop"></div>
 </div>
+<div id="shopDragPreview"></div>
 <script>
 'use strict';
 
@@ -117,6 +126,7 @@ function playSound(type){
     case'cure':o.type='sine';o.frequency.setValueAtTime(500,now);o.frequency.exponentialRampToValueAtTime(2000,now+0.15);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.2);o.start(now);o.stop(now+0.2);break;
     case'buy':o.type='triangle';o.frequency.setValueAtTime(400,now);o.frequency.setValueAtTime(600,now+0.05);o.frequency.setValueAtTime(800,now+0.1);g.gain.setValueAtTime(0.25,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.15);o.start(now);o.stop(now+0.15);break;
     case'error':o.type='square';o.frequency.setValueAtTime(200,now);g.gain.setValueAtTime(0.15,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.15);o.start(now);o.stop(now+0.15);break;
+    case'delete':o.type='sawtooth';o.frequency.setValueAtTime(400,now);o.frequency.exponentialRampToValueAtTime(100,now+0.2);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.25);o.start(now);o.stop(now+0.25);break;
   }
 }
 
@@ -127,16 +137,14 @@ const LINE_H = 24;
 const FONT_SIZE = 12;
 const PORT_R = 8;
 
-// Port category colors
 const PORT_CATEGORY_COLORS = {
-  power: '#dd4444',   // 赤
-  data: '#4488ff',    // 青
-  coin: '#ddaa22',    // 金
-  network: '#9944dd', // 紫
-  connected: '#44cc66' // 緑（接続済み）
+  power: '#dd4444',
+  data: '#4488ff',
+  coin: '#ddaa22',
+  network: '#9944dd',
+  connected: '#44cc66'
 };
 
-// Port icons by type
 const PORT_ICONS = {
   cpu: '🔲', power: '🔌', cooler: '🧊', ssd: '💾', firewall: '🛡️',
   network: '📡', ai: '🤖',
@@ -146,12 +154,7 @@ const PORT_ICONS = {
   ln_node: '⚡'
 };
 
-// Port category mapping
 function getPortCategory(portType){
-  if(['power','to_pc'].indexOf(portType)>=0){
-    // to_pc is generic, check the node type
-    return null; // will be resolved per-node
-  }
   if(['power'].indexOf(portType)>=0) return 'power';
   if(['cpu','cooler','ssd','firewall','ai','from_pc','from_server'].indexOf(portType)>=0) return 'data';
   if(['wallet','to_lnwallet','from_wallet','from_ln'].indexOf(portType)>=0) return 'coin';
@@ -160,12 +163,10 @@ function getPortCategory(portType){
 }
 
 function getPortCategoryForNode(nodeType, portType){
-  // For to_pc ports, use the node's own type to determine category
   if(portType === 'to_pc'){
     if(nodeType === 'power') return 'power';
     return 'data';
   }
-  // For PC/server input ports
   if(portType === 'power') return 'power';
   if(['cpu','cooler','ssd','firewall','ai'].indexOf(portType)>=0) return 'data';
   if(['blockchain','from_pc'].indexOf(portType)>=0) return 'network';
@@ -174,22 +175,15 @@ function getPortCategoryForNode(nodeType, portType){
   return 'data';
 }
 
-// Check if a port allows multiple connections
 function isMultiPort(nodeType, portType){
-  // PC's CPU port can accept multiple CPUs
   if(nodeType === 'mining_pc' && portType === 'cpu') return true;
-  // PC's power port - multiple PSUs
   if(nodeType === 'mining_pc' && portType === 'power') return true;
-  // Blockchain accepts multiple PCs
   if(nodeType === 'blockchain' && portType === 'from_pc') return true;
-  // Wallet accepts multiple PCs
   if(nodeType === 'wallet' && portType === 'from_pc') return true;
-  // Server CPU
   if(nodeType === 'server' && portType === 'cpu') return true;
   return false;
 }
 
-// Count connections to a specific port
 function countPortConnections(nodeId, portType, side){
   return connections.filter(function(c){
     if(side === 'right') return c.to === nodeId && c.toPort === portType;
@@ -197,7 +191,6 @@ function countPortConnections(nodeId, portType, side){
   }).length;
 }
 
-// Get all compatible ports for a given dragging port
 var compatiblePorts = [];
 function updateCompatiblePorts(fromPort){
   compatiblePorts = [];
@@ -240,18 +233,14 @@ const MINING_PC_OUTPUTS = ['blockchain','wallet'];
 const SERVER_INPUTS = ['cpu','power','network','firewall'];
 const SERVER_OUTPUTS = ['ln_node'];
 
-// ===== PORT DEFINITIONS PER NODE TYPE =====
-// Order matters: right ports map to display rows top-to-bottom, left ports likewise
 function getPortDefs(nodeType){
   switch(nodeType){
     case 'mining_pc': return [
-      // Upper: enhancement inputs (right ports)
       {side:'right',type:'cpu',label:'CPU'},
       {side:'right',type:'cooler',label:'冷却'},
       {side:'right',type:'ssd',label:'SSD'},
       {side:'right',type:'firewall',label:'FW'},
       {side:'right',type:'power',label:'電源'},
-      // Lower: outputs (left ports)
       {side:'left',type:'blockchain',label:'BC'},
       {side:'left',type:'wallet',label:'ウォレット'},
     ];
@@ -289,14 +278,24 @@ function getPortDefs(nodeType){
   }
 }
 
-// ===== RESEARCH TREE =====
+// ===== RESEARCH TREE (NEW) =====
 const RESEARCH_TREE = [
-  {id:'basic_mining',name:'基本マイニング',emoji:'⛏️',desc:'マイニングの基礎を習得',cost:0,prereq:null,effect:'初期状態で解放済み'},
-  {id:'gpu_boost',name:'GPU最適化',emoji:'🎮',desc:'CPU効率+50%アップ',cost:20,prereq:'basic_mining',effect:'全CPUの演算力1.5倍'},
-  {id:'ai_mining',name:'AIマイニング',emoji:'🧠',desc:'AI補助で採掘精度向上',cost:80,prereq:'gpu_boost',effect:'マイニング成功率2倍'},
-  {id:'quantum',name:'量子コンピュータ',emoji:'⚛️',desc:'究極の演算力を解放',cost:200,prereq:'ai_mining',effect:'全ハッシュレート3倍'},
-  {id:'overclock',name:'オーバークロック',emoji:'🔥',desc:'CPUを限界まで回す',cost:30,prereq:'basic_mining',effect:'CPU演算力2倍'},
-  {id:'green_energy',name:'省エネ技術',emoji:'🌱',desc:'電力効率を改善',cost:40,prereq:'overclock',effect:'全パーツ消費電力-30%'},
+  // Mining tree
+  {id:'basic_mining',name:'基本マイニング',emoji:'⛏️',desc:'マイニングの基礎を習得',cost:0,prereq:null,effect:'初期状態で解放済み',tree:'mining',row:0,col:1},
+  {id:'gpu_boost',name:'GPU最適化',emoji:'🎮',desc:'CPU効率+50%アップ',cost:20,prereq:'basic_mining',effect:'全CPUの演算力1.5倍',tree:'mining',row:1,col:1},
+  {id:'ai_mining',name:'AIマイニング',emoji:'🧠',desc:'AI補助で採掘精度向上',cost:80,prereq:'gpu_boost',effect:'マイニング成功率2倍',tree:'mining',row:2,col:0},
+  {id:'cooling_tech',name:'冷却技術',emoji:'🧊',desc:'冷却効率を大幅改善',cost:40,prereq:'gpu_boost',effect:'冷却効果2倍',tree:'mining',row:2,col:2},
+  {id:'quantum',name:'量子コンピュータ',emoji:'⚛️',desc:'究極の演算力を解放',cost:200,prereq:'ai_mining',effect:'全体効率2倍',tree:'mining',row:3,col:0},
+  {id:'liquid_nitrogen',name:'液体窒素冷却',emoji:'❄️',desc:'極限冷却で更に高速化',cost:100,prereq:'cooling_tech',effect:'冷却効果3倍',tree:'mining',row:3,col:2},
+  {id:'tpu_boost',name:'TPU最適化',emoji:'🔧',desc:'専用チップで圧倒的演算力',cost:500,prereq:'quantum',effect:'全ハッシュレート5倍',tree:'mining',row:4,col:0},
+  // Power tree
+  {id:'green_energy',name:'電力効率改善',emoji:'🌱',desc:'電力効率を改善',cost:30,prereq:null,effect:'全パーツ消費電力-30%',tree:'power',row:0,col:0},
+  {id:'solar_panel',name:'ソーラーパネル',emoji:'☀️',desc:'自然エネルギーで電力UP',cost:60,prereq:'green_energy',effect:'電源供給+50%',tree:'power',row:1,col:0},
+  {id:'fusion_power',name:'核融合電源',emoji:'🔥',desc:'無限に近いエネルギー源',cost:300,prereq:'solar_panel',effect:'電源供給3倍',tree:'power',row:2,col:0},
+  // Network tree
+  {id:'ln_basics',name:'Lightning基礎',emoji:'⚡',desc:'LNルーティングの基礎',cost:50,prereq:null,effect:'LN手数料+50%',tree:'network',row:0,col:0},
+  {id:'channel_opt',name:'チャネル最適化',emoji:'📡',desc:'チャネル容量を最適化',cost:120,prereq:'ln_basics',effect:'LN手数料2倍',tree:'network',row:1,col:0},
+  {id:'distributed_routing',name:'分散型ルーティング',emoji:'🌐',desc:'高度な分散ルーティング',cost:250,prereq:'channel_opt',effect:'LN手数料3倍',tree:'network',row:2,col:0},
 ];
 
 let researchCompleted = ['basic_mining'];
@@ -323,7 +322,7 @@ let nextNodeId = 1;
 let canvasW, canvasH, gameAreaTop, gameAreaBottom;
 let hintShown = true;
 let hintTimer = 0;
-let hintFadeState = 'waiting'; // 'waiting' | 'visible' | 'fading' | 'hidden'
+let hintFadeState = 'waiting';
 let hintFadeTimer = 0;
 
 // Drag state
@@ -345,6 +344,17 @@ let pinchMidX = 0, pinchMidY = 0;
 // Animated power display per PC
 let animatedPower = {};
 
+// Double-tap detection for delete
+let lastTapTime = 0;
+let lastTapNodeId = null;
+
+// Shop drag & drop state
+let isShopDragging = false;
+let shopDragType = null;
+let shopDragStartX = 0;
+let shopDragStartY = 0;
+let shopDragMoved = false;
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -363,7 +373,6 @@ function resize(){
 }
 window.addEventListener('resize', resize);
 
-// ===== COORDINATE TRANSFORMS =====
 function screenToWorld(sx, sy){
   return {
     x: (sx - canvasW/2) / camera.zoom + camera.x + canvasW/2,
@@ -378,7 +387,6 @@ function worldToScreen(wx, wy){
   };
 }
 
-// ===== CAMERA CENTERING =====
 function centerCameraOnBlockchain(){
   var bc = nodes.find(function(n){return n.type === 'blockchain'});
   if(bc){
@@ -438,15 +446,11 @@ function getNodeLines(n){
   if(n.type === 'mining_pc'){
     var stats = getPCStats(n);
     var isMining = stats.canMine && !n.infected && stats.powerOk;
-    // Upper section: enhancement inputs (right ports)
-    // Port def order: cpu, cooler, ssd, firewall, power
     lines.push({text:'CPU: '+stats.cpus+'個 ⚡'+stats.effectiveRate.toFixed(1)+'H/s', rightPort:0});
     lines.push({text:'冷却: '+(stats.coolers>0?'✅ x'+stats.coolers:'—'), rightPort:1});
     lines.push({text:'SSD: '+(stats.ssds>0?'✅ x'+stats.ssds:'—'), rightPort:2});
     lines.push({text:'FW: '+(stats.firewalls>0?'🛡️ x'+stats.firewalls:'—'), rightPort:3});
     lines.push({text:'電力: '+stats.powerUsed+'/'+stats.powerSupply+'W', bar:stats.powerSupply>0?Math.min(stats.powerUsed/stats.powerSupply,1.5):0, barOk:stats.powerOk, rightPort:4});
-    // Lower section: outputs (left ports)
-    // Port def order: blockchain, wallet
     lines.push({text:(isMining?'⛏':'⏹')+' マイニング', miningGauge:n.miningProgress||0, isMining:isMining, leftPort:0});
     lines.push({text:'→ ウォレット', leftPort:1});
   } else if(n.type === 'server'){
@@ -561,35 +565,27 @@ function canConnect(fromPort, toPort){
   });
   if(exists) return false;
 
-  // Parts → mining_pc
   if(['cpu','power','cooler','ssd','firewall'].indexOf(fromNode.type) >= 0 && fromPort.type === 'to_pc'){
     if(toNode.type === 'mining_pc' && toPort.type === fromNode.type) return true;
   }
-  // Parts → server
   if(['cpu','power','network','firewall'].indexOf(fromNode.type) >= 0 && fromPort.type === 'to_pc'){
     if(toNode.type === 'server' && toPort.type === fromNode.type) return true;
   }
-  // AI → mining_pc (via cpu port)
   if(fromNode.type === 'ai' && fromPort.type === 'to_pc'){
     if(toNode.type === 'mining_pc' && toPort.type === 'cpu') return true;
   }
-  // mining_pc → blockchain
   if(fromNode.type === 'mining_pc' && fromPort.type === 'blockchain'){
     if(toNode.type === 'blockchain' && toPort.type === 'from_pc') return true;
   }
-  // mining_pc → wallet
   if(fromNode.type === 'mining_pc' && fromPort.type === 'wallet'){
     if(toNode.type === 'wallet' && toPort.type === 'from_pc') return true;
   }
-  // server → ln_node
   if(fromNode.type === 'server' && fromPort.type === 'ln_node'){
     if(toNode.type === 'ln_node' && toPort.type === 'from_server') return true;
   }
-  // ln_node → ln_wallet
   if(fromNode.type === 'ln_node' && fromPort.type === 'to_lnwallet'){
     if(toNode.type === 'ln_wallet' && toPort.type === 'from_ln') return true;
   }
-  // wallet → ln_wallet
   if(fromNode.type === 'wallet' && fromPort.type === 'to_lnwallet'){
     if(toNode.type === 'ln_wallet' && toPort.type === 'from_wallet') return true;
   }
@@ -621,7 +617,7 @@ function addConnection(fromPort, toPort){
   if(hintShown){hintShown=false;hintFadeState='hidden';document.getElementById('hint').style.opacity='0';}
 }
 
-// ===== PC STATS =====
+// ===== PC STATS (with new research effects) =====
 function getPCStats(pc){
   if(pc.type !== 'mining_pc') return {};
   var attached = connections.filter(function(c){return c.to===pc.id}).map(function(c){return nodes.find(function(n){return n.id===c.from})}).filter(Boolean);
@@ -640,19 +636,29 @@ function getPCStats(pc){
   attached.forEach(function(n){powerUsed += NODE_TYPES[n.type].watt || 0;});
   var powerSupply = 0;
   powers.forEach(function(n){powerSupply += NODE_TYPES[n.type].supply || 0;});
+  // Research: power efficiency
   if(researchCompleted.indexOf('green_energy')>=0) powerUsed = Math.ceil(powerUsed * 0.7);
+  // Research: power supply boost
+  if(researchCompleted.indexOf('fusion_power')>=0) powerSupply = Math.floor(powerSupply * 3);
+  else if(researchCompleted.indexOf('solar_panel')>=0) powerSupply = Math.floor(powerSupply * 1.5);
   var powerOk = powerSupply >= powerUsed && powerSupply > 0;
   var canMine = cpus.length > 0 && powers.length > 0 && hasBlockchain && hasWallet && powerOk;
 
   var hashrate = cpus.length;
-  if(researchCompleted.indexOf('overclock')>=0) hashrate *= 2;
   var mult = 1;
   if(researchCompleted.indexOf('gpu_boost')>=0) mult *= 1.5;
-  if(coolers.length>0) mult *= 1.5;
+  // Cooler research: cooling_tech → 2x, liquid_nitrogen → 3x (replaces)
+  if(coolers.length>0){
+    if(researchCompleted.indexOf('liquid_nitrogen')>=0) mult *= 3;
+    else if(researchCompleted.indexOf('cooling_tech')>=0) mult *= 2;
+    else mult *= 1.5;
+  }
   if(ssds.length>0) mult *= 1.3;
   if(ais.length>0 && cpus.length>=2) mult *= 2;
   if(pc.infected) mult *= 0.25;
-  if(researchCompleted.indexOf('quantum')>=0) mult *= 3;
+  // Research: quantum → 2x, tpu_boost → 5x (stacks)
+  if(researchCompleted.indexOf('quantum')>=0) mult *= 2;
+  if(researchCompleted.indexOf('tpu_boost')>=0) mult *= 5;
   var effectiveRate = hashrate * mult;
   var gaugeSpeed = effectiveRate * 0.06 / difficulty;
   if(researchCompleted.indexOf('ai_mining')>=0) gaugeSpeed *= 2;
@@ -679,6 +685,8 @@ function getServerStats(sv){
   var powerSupply = 0;
   powers.forEach(function(n){powerSupply += NODE_TYPES[n.type].supply || 0;});
   if(researchCompleted.indexOf('green_energy')>=0) powerUsed = Math.ceil(powerUsed * 0.7);
+  if(researchCompleted.indexOf('fusion_power')>=0) powerSupply = Math.floor(powerSupply * 3);
+  else if(researchCompleted.indexOf('solar_panel')>=0) powerSupply = Math.floor(powerSupply * 1.5);
   var powerOk = powerSupply >= powerUsed && powerSupply > 0;
   var processingPower = cpus.length + (networks.length > 0 ? 2 : 0);
   var canRoute = cpus.length > 0 && powers.length > 0 && hasLN && powerOk;
@@ -688,7 +696,7 @@ function getServerStats(sv){
     hasFW:firewalls.length>0,powerUsed:powerUsed,powerSupply:powerSupply,powerOk:powerOk};
 }
 
-// ===== SHOP =====
+// ===== SHOP (Drag & Drop) =====
 var SHOP_TABS = {
   pc: ['mining_pc','server'],
   parts: ['cpu','power','cooler','ssd','network','ai','firewall'],
@@ -708,16 +716,84 @@ function buildShop(){
   var items = SHOP_TABS[currentShopTab] || [];
   items.forEach(function(t){
     var nt = NODE_TYPES[t];
+    var canBuy = balance >= nt.price || nt.price === 0;
     var div = document.createElement('div');
-    div.className = 'shopItem' + (balance<nt.price&&nt.price>0?' disabled':'') + (selectedShopItem===t?' selected':'');
+    div.className = 'shopItem' + (canBuy ? '' : ' disabled');
+    div.setAttribute('data-type', t);
     div.innerHTML = '<span class="emoji">'+nt.emoji+'</span><span class="name">'+nt.name+'</span><span class="price">'+(nt.price>0?nt.price+'₱':'無料')+'</span>';
-    div.onclick = function(){
-      if(balance<nt.price&&nt.price>0){playSound('error');return}
-      selectedShopItem = selectedShopItem===t ? null : t;
-      buildShop();
-    };
+    // Drag start handler
+    div.addEventListener('pointerdown', function(e){
+      if(!canBuy){playSound('error');return}
+      e.preventDefault();
+      e.stopPropagation();
+      ensureAudio();
+      isShopDragging = true;
+      shopDragType = t;
+      shopDragStartX = e.clientX;
+      shopDragStartY = e.clientY;
+      shopDragMoved = false;
+      var preview = document.getElementById('shopDragPreview');
+      preview.innerHTML = '<span class="rtn-emoji">'+nt.emoji+'</span><div class="sdp-name">'+nt.name+'</div>';
+      preview.style.left = e.clientX + 'px';
+      preview.style.top = e.clientY + 'px';
+      preview.style.display = 'block';
+    });
     shop.appendChild(div);
   });
+}
+
+// Global handlers for shop drag
+document.addEventListener('pointermove', function(e){
+  if(!isShopDragging) return;
+  var dx = e.clientX - shopDragStartX;
+  var dy = e.clientY - shopDragStartY;
+  if(Math.abs(dx) > 5 || Math.abs(dy) > 5) shopDragMoved = true;
+  var preview = document.getElementById('shopDragPreview');
+  preview.style.left = e.clientX + 'px';
+  preview.style.top = e.clientY + 'px';
+});
+
+document.addEventListener('pointerup', function(e){
+  if(!isShopDragging) return;
+  isShopDragging = false;
+  var preview = document.getElementById('shopDragPreview');
+  preview.style.display = 'none';
+  if(!shopDragMoved || !shopDragType) return;
+  // Check if drop position is over the game canvas area
+  var r = canvas.getBoundingClientRect();
+  var sx = e.clientX - r.left;
+  var sy = e.clientY - r.top;
+  if(sx < 0 || sy < 0 || sx > r.width || sy > r.height) return;
+  if(sy < gameAreaTop || sy > gameAreaBottom) return;
+  var nt = NODE_TYPES[shopDragType];
+  if(balance < nt.price && nt.price > 0){playSound('error');return}
+  var world = screenToWorld(sx, sy);
+  balance -= nt.price;
+  addNode(shopDragType, world.x - WIN_W/2, world.y - 20);
+  playSound(nt.price > 0 ? 'buy' : 'place');
+  updateUI();buildShop();
+});
+
+// ===== DELETE FUNCTIONALITY =====
+function deleteNodeConfirm(node){
+  if(node.type === 'blockchain' || node.type === 'wallet'){
+    alert('システムノードは削除できません');
+    return;
+  }
+  var nt = NODE_TYPES[node.type];
+  var refund = Math.floor(nt.price * 0.5);
+  var msg = nt.emoji + ' ' + nt.name + ' を削除しますか？';
+  if(refund > 0) msg += '\n（返金: ' + refund + '₱）';
+  if(confirm(msg)){
+    connections = connections.filter(function(c){
+      return c.from !== node.id && c.to !== node.id;
+    });
+    nodes = nodes.filter(function(n){return n.id !== node.id});
+    balance += refund;
+    playSound('delete');
+    effects.push({type:'spawn',x:node.x+WIN_W/2,y:node.y+30,t:0,dur:0.4});
+    updateUI();buildShop();
+  }
 }
 
 // ===== CONNECTION GUIDE =====
@@ -726,33 +802,24 @@ function showConnectionGuide(){
   var bubble = document.getElementById('guideBubble');
   var arrow = document.getElementById('guideArrow');
   if(!guide) return;
-
-  // Position guide between CPU output port and PC input port
   var cpu = nodes.find(function(n){return n.type==='cpu'});
   var pc = nodes.find(function(n){return n.type==='mining_pc'});
   if(!cpu || !pc){guide.style.display='none';return;}
-
   var cpuPorts = getNodePortPositions(cpu);
   var pcPorts = getNodePortPositions(pc);
   var cpuOut = cpuPorts.find(function(p){return p.type==='to_pc'});
   var pcIn = pcPorts.find(function(p){return p.type==='cpu'});
   if(!cpuOut || !pcIn){guide.style.display='none';return;}
-
-  // Convert world to screen coords
   var sp1 = worldToScreen(cpuOut.x, cpuOut.y);
   var sp2 = worldToScreen(pcIn.x, pcIn.y);
   var midX = (sp1.x + sp2.x) / 2;
   var midY = (sp1.y + sp2.y) / 2;
-
   bubble.style.left = midX + 'px';
   bubble.style.top = (midY - 40) + 'px';
   bubble.style.transform = 'translateX(-50%)';
-
   arrow.style.left = (sp1.x + 10) + 'px';
   arrow.style.top = (sp1.y - 14) + 'px';
-
   guide.classList.add('visible');
-
   setTimeout(function(){
     guide.classList.remove('visible');
     setTimeout(function(){guide.style.display='none';}, 600);
@@ -768,23 +835,15 @@ function initGame(){
   nextNodeId=1;selectedShopItem=null;hintShown=true;hintTimer=0;hintFadeState='waiting';hintFadeTimer=0;researchCompleted=['basic_mining'];
   camera={x:0,y:0,zoom:1};
 
-  // --- Fix #5: Initial layout ---
-  // BC ← PC → CPU/Power, PC → Wallet
-  // blockchain: far left
   addNode('blockchain', 100, cy);
-  // mining_pc: right of blockchain
   addNode('mining_pc', 350, cy);
-  // cpu: right-above PC
   addNode('cpu', 550, cy - 60);
-  // power: right-below PC
   addNode('power', 550, cy + 60);
-  // wallet: below PC
   addNode('wallet', 350, cy + 120);
 
   buildShop();
   updateUI();
 
-  // --- Hint fade in then out after 5s ---
   var hintEl = document.getElementById('hint');
   hintEl.style.opacity = '0';
   hintFadeState = 'waiting';
@@ -803,12 +862,8 @@ function initGame(){
     }
   }, 300);
 
-  // --- Connection Guide: show for 5 seconds ---
   showConnectionGuide();
-
-  // --- Fix #6: Center camera on blockchain ---
   centerCameraOnBlockchain();
-
   requestAnimationFrame(gameLoop);
 }
 
@@ -819,35 +874,118 @@ function addNode(type, x, y){
   return n;
 }
 
-// ===== RESEARCH UI =====
+// ===== RESEARCH UI (TREE) =====
+let currentResearchTab = 'mining';
+let selectedResearchId = null;
+
 function toggleResearch(){
   var panel = document.getElementById('researchPanel');
-  if(panel.classList.contains('open')){panel.classList.remove('open')}
+  if(panel.classList.contains('open')){panel.classList.remove('open');selectedResearchId=null}
   else{renderResearchPanel();panel.classList.add('open')}
 }
 
 function renderResearchPanel(){
   var panel = document.getElementById('researchPanel');
   var html = '<div class="rp-header"><h3>🔬 研究ツリー</h3><button class="rp-close" onclick="toggleResearch()">✕</button></div>';
-  RESEARCH_TREE.forEach(function(r,i){
-    var done = researchCompleted.indexOf(r.id)>=0;
-    var prereqMet = !r.prereq || researchCompleted.indexOf(r.prereq)>=0;
-    var canAfford = balance >= r.cost;
+  // Tabs
+  html += '<div class="rp-tabs">';
+  html += '<button class="rp-tab'+(currentResearchTab==='mining'?' active':'')+'" onclick="switchResearchTab(\'mining\')">⛏️ マイニング</button>';
+  html += '<button class="rp-tab'+(currentResearchTab==='power'?' active':'')+'" onclick="switchResearchTab(\'power\')">⚡ 電力</button>';
+  html += '<button class="rp-tab'+(currentResearchTab==='network'?' active':'')+'" onclick="switchResearchTab(\'network\')">🌐 ネットワーク</button>';
+  html += '</div>';
+
+  // Get items for current tree
+  var treeItems = RESEARCH_TREE.filter(function(r){return r.tree === currentResearchTab});
+
+  // Determine layout dimensions
+  var nodeW = 110, nodeH = 50, gapX = 15, gapY = 20, padX = 16, padY = 16;
+  var maxRow = 0, maxCol = 0;
+  treeItems.forEach(function(r){
+    if(r.row > maxRow) maxRow = r.row;
+    if(r.col > maxCol) maxCol = r.col;
+  });
+  // For mining tree: 3 columns (0,1,2), for others: 1 column (0)
+  var cols = maxCol + 1;
+  var containerW = 400 - 32; // panel width minus padding
+  var colW = cols > 1 ? containerW / cols : containerW;
+  var containerH = (maxRow + 1) * (nodeH + gapY) + padY * 2;
+
+  html += '<div class="rp-tree-container" style="height:'+containerH+'px">';
+  // SVG for lines
+  html += '<svg style="width:100%;height:'+containerH+'px">';
+  treeItems.forEach(function(r){
+    if(!r.prereq) return;
+    var parent = treeItems.find(function(p){return p.id === r.prereq});
+    if(!parent) return;
+    var px1 = padX + parent.col * colW + (colW - nodeW) / 2 + nodeW / 2;
+    var py1 = padY + parent.row * (nodeH + gapY) + nodeH;
+    var px2 = padX + r.col * colW + (colW - nodeW) / 2 + nodeW / 2;
+    var py2 = padY + r.row * (nodeH + gapY);
+    var done = researchCompleted.indexOf(r.id) >= 0;
+    var prereqMet = researchCompleted.indexOf(r.prereq) >= 0;
+    var lineColor = done ? '#44cc66' : (prereqMet ? '#ddcc44' : '#333');
+    html += '<line x1="'+px1+'" y1="'+py1+'" x2="'+px2+'" y2="'+py2+'" stroke="'+lineColor+'" stroke-width="2" stroke-dasharray="'+(done?'':'4,3')+'"/>';
+  });
+  html += '</svg>';
+
+  // Nodes
+  treeItems.forEach(function(r){
+    var done = researchCompleted.indexOf(r.id) >= 0;
+    var prereqMet = !r.prereq || researchCompleted.indexOf(r.prereq) >= 0;
     var available = !done && prereqMet;
-    var statusClass = done ? 'done' : (available ? 'available' : 'locked');
-    var statusText = done ? '✅完了' : (available ? '🔓解放可能' : '🔒未解放');
-    if(r.prereq && !done) html += '<div class="research-connector">↓</div>';
-    html += '<div class="research-item">';
-    html += '<div class="ri-top"><span class="ri-emoji">'+r.emoji+'</span><span class="ri-name">'+r.name+'</span><span class="ri-status '+statusClass+'">'+statusText+'</span></div>';
-    html += '<div class="ri-desc">'+r.desc+'</div>';
-    html += '<div class="ri-desc" style="color:#aaf">効果: '+r.effect+'</div>';
-    if(!done){
-      html += '<div class="ri-cost">コスト: '+r.cost+'₱</div>';
-      if(available) html += '<button class="ri-btn" '+(canAfford?'onclick="doResearch(\''+r.id+'\')"':'disabled')+'>'+(canAfford?'研究する':'資金不足')+'</button>';
-    }
+    var cls = done ? 'done' : (available ? 'available' : 'locked');
+    var nx = padX + r.col * colW + (colW - nodeW) / 2;
+    var ny = padY + r.row * (nodeH + gapY);
+    var selected = selectedResearchId === r.id;
+    var borderExtra = selected ? ';outline:2px solid #fff;outline-offset:2px' : '';
+    html += '<div class="rp-tree-node '+cls+'" style="left:'+nx+'px;top:'+ny+'px;width:'+nodeW+'px'+borderExtra+'" onclick="selectResearch(\''+r.id+'\')">';
+    html += '<div class="rtn-emoji">'+r.emoji+'</div>';
+    html += '<div class="rtn-name">'+r.name+'</div>';
+    if(!done && r.cost > 0) html += '<div class="rtn-cost">'+r.cost+'₱</div>';
+    if(done) html += '<div class="rtn-cost" style="color:#44cc66">✅</div>';
     html += '</div>';
   });
+
+  html += '</div>'; // rp-tree-container
+
+  // Detail popup for selected research
+  if(selectedResearchId){
+    var sr = RESEARCH_TREE.find(function(r){return r.id === selectedResearchId});
+    if(sr){
+      var done = researchCompleted.indexOf(sr.id) >= 0;
+      var prereqMet = !sr.prereq || researchCompleted.indexOf(sr.prereq) >= 0;
+      var available = !done && prereqMet;
+      var canAfford = balance >= sr.cost;
+      html += '<div class="rp-detail-popup">';
+      html += '<button class="rdp-close-btn" onclick="selectedResearchId=null;renderResearchPanel()">✕</button>';
+      html += '<div class="rdp-name">'+sr.emoji+' '+sr.name+(done?' ✅':'')+'</div>';
+      html += '<div class="rdp-desc">'+sr.desc+'</div>';
+      html += '<div class="rdp-effect">効果: '+sr.effect+'</div>';
+      if(!done){
+        html += '<div class="rdp-cost">コスト: '+sr.cost+'₱'+(sr.cost===0?' (無料)':'')+'</div>';
+        if(available){
+          html += '<button class="ri-btn" '+(canAfford?'onclick="doResearch(\''+sr.id+'\')"':'disabled')+'>'+(canAfford?'🔬 研究する':'💰 資金不足')+'</button>';
+        } else {
+          var prereqName = RESEARCH_TREE.find(function(r){return r.id===sr.prereq});
+          html += '<div style="font-size:11px;color:#888;margin-top:4px">🔒 前提: '+(prereqName?prereqName.name:'不明')+'</div>';
+        }
+      }
+      html += '</div>';
+    }
+  }
+
   panel.innerHTML = html;
+}
+
+function switchResearchTab(tab){
+  currentResearchTab = tab;
+  selectedResearchId = null;
+  renderResearchPanel();
+}
+
+function selectResearch(id){
+  selectedResearchId = (selectedResearchId === id) ? null : id;
+  renderResearchPanel();
 }
 
 function doResearch(id){
@@ -859,11 +997,11 @@ function doResearch(id){
   researchCompleted.push(id);
   playSound('buy');
   effects.push({type:'sparkle',x:canvasW/2,y:canvasH/2,t:0,dur:0.8});
+  selectedResearchId = null;
   updateUI();buildShop();renderResearchPanel();
 }
 
 // ===== L-SHAPED PATH UTILITIES =====
-// Get point along L-shaped path (fromX,fromY) -> (midX,fromY) -> (midX,toY) -> (toX,toY)
 function getLPathPoint(fromX, fromY, toX, toY, t){
   var midX = (fromX + toX) / 2;
   var seg1 = Math.abs(midX - fromX);
@@ -901,7 +1039,6 @@ function gameLoop(ts){
 function update(dt){
   nodes.forEach(function(n){if(n.scale<1)n.scale=Math.min(1,n.scale+dt*5)});
 
-  // Animated power bars
   nodes.filter(function(n){return n.type==='mining_pc'||n.type==='server'}).forEach(function(pc){
     var stats = pc.type==='mining_pc' ? getPCStats(pc) : getServerStats(pc);
     var target = stats.powerSupply > 0 ? stats.powerUsed / stats.powerSupply : 0;
@@ -909,10 +1046,11 @@ function update(dt){
     animatedPower[pc.id] = cur + (target - cur) * Math.min(1, dt * 2);
   });
 
+  // Difficulty: 10 min intervals, 1.15x multiplier (was 5min/1.2x)
   difficultyTimer += dt;
-  if(difficultyTimer >= 300){difficultyTimer=0;difficulty*=1.2;}
+  if(difficultyTimer >= 600){difficultyTimer=0;difficulty*=1.15;}
 
-  // --- Fix #2: Mining gauge replaces random mining ---
+  // Mining gauge
   var totalHash = 0;
   nodes.filter(function(n){return n.type==='mining_pc'}).forEach(function(pc){
     var stats = getPCStats(pc);
@@ -920,14 +1058,12 @@ function update(dt){
     if(!pc.miningProgress) pc.miningProgress = 0;
 
     if(stats.canMine && !pc.infected && stats.powerOk){
-      // Gauge fills deterministically based on hashrate
       pc.miningProgress += stats.gaugeSpeed * dt;
       if(pc.miningProgress >= 1){
         pc.miningProgress = 0;
         balance++;
         playSound('mine');
-        // Gold particles from gauge area
-        var gaugeLineIdx = 5; // mining gauge is line index 5 in mining_pc
+        var gaugeLineIdx = 5;
         var gaugeY = pc.y + TITLE_H + gaugeLineIdx * LINE_H + LINE_H/2;
         for(var gi=0;gi<6;gi++){
           var angle = Math.random()*Math.PI*2;
@@ -939,7 +1075,6 @@ function update(dt){
         updateUI();buildShop();
       }
     } else {
-      // Slowly decay when not mining
       pc.miningProgress = Math.max(0, pc.miningProgress - 0.05 * dt);
     }
   });
@@ -950,12 +1085,16 @@ function update(dt){
     document.getElementById('hashrateText').textContent = totalHash.toFixed(1);
   }
 
-  // LN routing fee income
+  // LN routing fee income (with research bonuses)
   nodes.filter(function(n){return n.type==='ln_node'}).forEach(function(ln){
     if(!ln.lnBalance) ln.lnBalance = 0;
     var connectedServer = connections.some(function(c){return c.to===ln.id && nodes.find(function(nd){return nd.id===c.from&&nd.type==='server'})});
     if(connectedServer && ln.lnBalance >= 5){
       var fee = 0.1 * dt * Math.min(ln.lnBalance / 20, 3);
+      // Research: LN fee multipliers
+      if(researchCompleted.indexOf('distributed_routing')>=0) fee *= 3;
+      else if(researchCompleted.indexOf('channel_opt')>=0) fee *= 2;
+      else if(researchCompleted.indexOf('ln_basics')>=0) fee *= 1.5;
       ln.lnBalance += fee;
       if(Math.random() < 0.02) effects.push({type:'sparkle',x:ln.x+WIN_W/2,y:ln.y+TITLE_H/2,t:0,dur:0.4});
     }
@@ -1085,7 +1224,6 @@ function drawGrid(){
   for(var y=startY;y<endY;y+=step){ctx.beginPath();ctx.moveTo(startX,y);ctx.lineTo(endX,y);ctx.stroke()}
 }
 
-// --- Fix #1: L-shaped (right-angle) connections ---
 function drawLPath(fromX, fromY, toX, toY){
   var midX = (fromX + toX) / 2;
   ctx.beginPath();
@@ -1123,7 +1261,6 @@ function drawConnections(){
     else if(c.lineType === 'coin'){ col = '#ddaa22'; lineW = 1.5; dashStyle = [6,4]; }
     else if(c.lineType === 'lightning'){ col = '#9944dd'; lineW = 1.5; }
 
-    // Draw L-shaped connection line
     ctx.strokeStyle = col;
     ctx.lineWidth = lineW;
     ctx.globalAlpha = 0.7;
@@ -1132,7 +1269,6 @@ function drawConnections(){
     if(dashStyle) ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
-    // Flowing particles along L-path
     for(var i=0;i<3;i++){
       var p = ((t*0.5+i/3)%1);
       var pt = getLPathPoint(fx, fy, tx, ty, p);
@@ -1168,7 +1304,6 @@ function drawNodes(){
     }
     if(n.blackout) ctx.globalAlpha = (ctx.globalAlpha || 1) * 0.4;
 
-    // Body
     ctx.fillStyle = 'rgba(20,25,45,0.92)';
     ctx.strokeStyle = 'rgba(70,90,190,0.45)';
     ctx.lineWidth = 1.5;
@@ -1177,7 +1312,6 @@ function drawNodes(){
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Title bar
     ctx.fillStyle = n.blackout ? '#333' : nt.titleColor;
     ctx.beginPath();
     ctx.moveTo(n.x+4,n.y);ctx.lineTo(n.x+WIN_W-4,n.y);
@@ -1185,17 +1319,14 @@ function drawNodes(){
     ctx.lineTo(n.x,n.y+TITLE_H);ctx.lineTo(n.x,n.y+4);ctx.arcTo(n.x,n.y,n.x+4,n.y,4);
     ctx.closePath();ctx.fill();
 
-    // Big emoji
     ctx.font = '18px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(nt.emoji, n.x+6, n.y+TITLE_H/2+1);
-    // Name text
     ctx.fillStyle = '#fff';
     ctx.font = 'bold '+FONT_SIZE+'px sans-serif';
     ctx.fillText(nt.name, n.x+28, n.y+TITLE_H/2+1);
 
-    // Lines
     var nodeLines = getNodeLines(n);
     ctx.font = FONT_SIZE+'px sans-serif';
 
@@ -1214,7 +1345,6 @@ function drawNodes(){
         ctx.fillText(line.text, n.x+10, ly+LINE_H/2);
       }
 
-      // Power bar (thicker, vivid)
       if(line.bar !== undefined){
         var barX = n.x + WIN_W - 62;
         var barY = ly + 5;
@@ -1236,17 +1366,14 @@ function drawNodes(){
         ctx.strokeRect(barX, barY, barW, barH);
       }
 
-      // --- Mining gauge (thicker, vivid) ---
       if(line.miningGauge !== undefined){
         var gx = n.x + 8;
         var gy = ly + 4;
         var gw = WIN_W - 16;
         var gh = 16;
         var prog = Math.min(line.miningGauge, 1);
-        // Background
         ctx.fillStyle = 'rgba(30,35,60,0.9)';
         roundRect(ctx, gx, gy, gw, gh, 4);ctx.fill();
-        // Gradient fill: blue → cyan → green
         if(prog > 0){
           var grad = ctx.createLinearGradient(gx, gy, gx + gw * prog, gy);
           grad.addColorStop(0, '#2266ff');
@@ -1255,11 +1382,9 @@ function drawNodes(){
           ctx.fillStyle = grad;
           ctx.fillRect(gx+2, gy+2, (gw-4) * prog, gh-4);
         }
-        // Border glow when mining
         ctx.strokeStyle = line.isMining ? 'rgba(80,220,140,0.8)' : 'rgba(80,100,160,0.4)';
         ctx.lineWidth = line.isMining ? 1.5 : 0.5;
         ctx.strokeRect(gx, gy, gw, gh);
-        // Percentage text
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 10px sans-serif';
         ctx.textAlign = 'center';
@@ -1280,7 +1405,6 @@ function drawNodes(){
       var multi = isMultiPort(n.type, p.type);
       var connCount = countPortConnections(n.id, p.type, p.side);
 
-      // Compatible port glow during drag
       if(isCompat){
         ctx.save();
         ctx.shadowColor = '#ffee44';
@@ -1289,12 +1413,10 @@ function drawNodes(){
         ctx.fillStyle = 'rgba(255,238,68,0.25)';ctx.fill();
         ctx.restore();
       }
-      // Dim incompatible ports during drag
       if(dragMode === 'port' && !isCompat && p.nodeId !== dragPort.nodeId){
         ctx.globalAlpha = 0.3;
       }
 
-      // Multi-port: draw outer ring
       if(multi){
         ctx.beginPath();ctx.arc(p.x, p.y, PORT_R+3, 0, Math.PI*2);
         ctx.strokeStyle = connected ? PORT_CATEGORY_COLORS.connected : catColor;
@@ -1302,7 +1424,6 @@ function drawNodes(){
         ctx.stroke();
       }
 
-      // Main port circle
       ctx.beginPath();
       ctx.arc(p.x, p.y, PORT_R, 0, Math.PI*2);
       if(connected){
@@ -1317,14 +1438,12 @@ function drawNodes(){
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Direction arrow inside port
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 9px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(p.side === 'left' ? '→' : '←', p.x, p.y);
 
-      // Multi-port connection count
       if(multi && connCount > 0){
         ctx.font = 'bold 8px sans-serif';
         ctx.fillStyle = '#fff';
@@ -1334,7 +1453,6 @@ function drawNodes(){
         ctx.fillText(connCount+'', p.x + PORT_R + 3, p.y - PORT_R - 1);
       }
 
-      // Port icon label
       var icon = PORT_ICONS[p.type] || '';
       if(icon){
         ctx.font = '9px sans-serif';
@@ -1347,7 +1465,6 @@ function drawNodes(){
       ctx.globalAlpha = 1;
     });
 
-    // Mining LED
     if(n.type === 'mining_pc'){
       var stats = getPCStats(n);
       if(stats.canMine && !n.infected && stats.powerOk){
@@ -1355,7 +1472,6 @@ function drawNodes(){
         ctx.beginPath();ctx.arc(n.x+WIN_W-10, n.y+TITLE_H/2, 3, 0, Math.PI*2);ctx.fill();
       }
     }
-    // Server LED
     if(n.type === 'server'){
       var svStats = getServerStats(n);
       if(svStats.canRoute && !n.infected && svStats.powerOk){
@@ -1422,7 +1538,6 @@ function drawEffects(){
         ctx.lineTo(e.x+Math.cos(a)*30*p,e.y+Math.sin(a)*30*p);ctx.stroke();
       }
     }
-    // --- Fix #2: Gold burst particles from mining gauge ---
     if(e.type === 'gold_burst'){
       var ease = 1 - Math.pow(1-p, 2);
       var dx = Math.cos(e.angle) * e.dist * ease;
@@ -1446,7 +1561,6 @@ function drawParticles(){
   });
 }
 
-// --- Fix #1: L-shaped drag line ---
 function drawDragLine(){
   if(dragMode === 'port' && dragPort && dragLineEnd){
     var fx = dragPort.x, fy = dragPort.y;
@@ -1570,7 +1684,7 @@ canvas.addEventListener('wheel', function(e){
 }, {passive:false});
 
 canvas.addEventListener('pointerdown', function(e){
-  if(pinching) return;
+  if(pinching || isShopDragging) return;
   ensureAudio();
   var screen = getScreenPos(e);
   var world = screenToWorld(screen.x, screen.y);
@@ -1590,6 +1704,24 @@ canvas.addEventListener('pointerdown', function(e){
     var idx = nodes.indexOf(nodes.find(function(nd){return nd.id===portHit.nodeId}));
     if(idx >= 0){nodes.push(nodes.splice(idx,1)[0])}
     return;
+  }
+
+  // Double-tap detection for delete
+  var nodeHit = hitTestNode(world.x, world.y);
+  if(nodeHit){
+    var now = Date.now();
+    if(lastTapNodeId === nodeHit.id && now - lastTapTime < 400){
+      // Double tap detected
+      deleteNodeConfirm(nodeHit);
+      lastTapNodeId = null;
+      lastTapTime = 0;
+      return;
+    }
+    lastTapNodeId = nodeHit.id;
+    lastTapTime = now;
+  } else {
+    lastTapNodeId = null;
+    lastTapTime = 0;
   }
 
   // Title bar move
@@ -1623,26 +1755,14 @@ canvas.addEventListener('pointerdown', function(e){
     return;
   }
 
-  // Place from shop or camera drag
-  if(selectedShopItem){
-    var nt = NODE_TYPES[selectedShopItem];
-    if(balance >= nt.price){
-      balance -= nt.price;
-      addNode(selectedShopItem, world.x - WIN_W/2, world.y - 20);
-      playSound(nt.price > 0 ? 'buy' : 'place');
-      updateUI();buildShop();
-    }
-    return;
-  }
-
-  // Camera drag
+  // Camera drag (no more shop tap-to-place)
   dragMode = 'camera';
   cameraStartX = camera.x;
   cameraStartY = camera.y;
 });
 
 canvas.addEventListener('pointermove', function(e){
-  if(pinching) return;
+  if(pinching || isShopDragging) return;
   var screen = getScreenPos(e);
   var world = screenToWorld(screen.x, screen.y);
 
@@ -1668,7 +1788,7 @@ canvas.addEventListener('pointermove', function(e){
 });
 
 canvas.addEventListener('pointerup', function(e){
-  if(pinching) return;
+  if(pinching || isShopDragging) return;
   var screen = getScreenPos(e);
   var world = screenToWorld(screen.x, screen.y);
 
@@ -1740,7 +1860,6 @@ initGame = function(){
   hintFadeState = 'hidden';
   document.getElementById('hint').style.opacity = '0';
   buildShop();updateUI();
-  // --- Fix #6: Center camera on blockchain after load ---
   centerCameraOnBlockchain();
   requestAnimationFrame(gameLoop);
 };
