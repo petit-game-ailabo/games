@@ -124,9 +124,10 @@ const NODE_TYPES = {
   ln:{name:'LNノード',emoji:'⚡',price:30,titleColor:'#ff9900',watt:0},
   exchange:{name:'取引所',emoji:'🏦',price:100,titleColor:'#6633cc',watt:0},
   pool:{name:'マイニングプール',emoji:'🏊',price:40,titleColor:'#2299aa',watt:0},
+  gpu:{name:'GPU',emoji:'🎮',price:25,titleColor:'#66aa33',watt:15},
 };
 
-const PC_INPUTS = ['cpu','power','cooler','ssd','network','ai','firewall'];
+const PC_INPUTS = ['cpu','power','cooler','ssd','network','ai','firewall','gpu'];
 const PC_OUTPUTS = ['blockchain','wallet','ln','exchange','pool'];
 
 // ===== RESEARCH TREE =====
@@ -239,7 +240,7 @@ function getNodeLines(n){
     const used = stats.powerUsed;
     const supply = stats.powerSupply;
     lines.push({text: '電力: '+used+'/'+supply+'W', bar: supply>0?Math.min(used/supply,1.5):0, barOk: used<=supply, port:'power'});
-    lines.push({text: 'CPU: '+stats.cpus+'個', port:'cpu'});
+    lines.push({text: 'CPU: '+stats.cpus+'個 GPU: '+stats.gpus+'個', port:'cpu'});
     lines.push({text: '→ ブロックチェーン', port:'blockchain'});
     lines.push({text: '→ ウォレット', port:'wallet'});
     lines.push({text: '→ LNノード', port:'ln'});
@@ -278,6 +279,10 @@ function getNodeLines(n){
     lines.push({text: '→ PC接続', port:'pc'});
   } else if(n.type === 'firewall'){
     lines.push({text: '効果: マルウェア自動駆除'});
+    lines.push({text: '消費電力: '+nt.watt+'W'});
+    lines.push({text: '→ PC接続', port:'pc'});
+  } else if(n.type === 'gpu'){
+    lines.push({text: '演算力: +5'});
     lines.push({text: '消費電力: '+nt.watt+'W'});
     lines.push({text: '→ PC接続', port:'pc'});
   } else if(n.type === 'ln'){
@@ -454,6 +459,7 @@ function getPCStats(pc){
   const networks = attached.filter(n=>n.type==='network');
   const ais = attached.filter(n=>n.type==='ai');
   const firewalls = attached.filter(n=>n.type==='firewall');
+  const gpus = attached.filter(n=>n.type==='gpu');
   const hasBlockchain = outputs.some(n=>n.type==='blockchain');
   const hasWallet = outputs.some(n=>n.type==='wallet');
 
@@ -468,8 +474,8 @@ function getPCStats(pc){
   }
   const powerOk2 = powerSupply >= powerUsed && powerSupply > 0;
 
-  const canMine = cpus.length>0 && powers.length>0 && hasBlockchain && hasWallet && powerOk2;
-  let hashrate = cpus.length;
+  const canMine = (cpus.length>0 || gpus.length>0) && powers.length>0 && hasBlockchain && hasWallet && powerOk2;
+  let hashrate = cpus.length + gpus.length * 5;
   // Research: overclock doubles CPU output
   if(researchCompleted.includes('overclock')) hashrate *= 2;
   let mult = 1;
@@ -487,7 +493,7 @@ function getPCStats(pc){
   // Research: ai_mining doubles success rate
   if(researchCompleted.includes('ai_mining')) successRate *= 2;
   return {cpus:cpus.length, powers:powers.length, coolers:coolers.length, ssds:ssds.length,
-    networks:networks.length, ais:ais.length, firewalls:firewalls.length,
+    networks:networks.length, ais:ais.length, firewalls:firewalls.length, gpus:gpus.length,
     hasBlockchain, hasWallet, canMine, hashrate, mult, effectiveRate, successRate,
     hasFW: firewalls.length>0, powerUsed, powerSupply, powerOk: powerOk2};
 }
@@ -496,7 +502,7 @@ function getPCStats(pc){
 function buildShop(){
   const shop = document.getElementById('shop');
   shop.innerHTML = '';
-  const items = ['pc','cpu','power','wallet','ln','exchange','pool','cooler','ssd','network','ai','firewall'];
+  const items = ['pc','cpu','gpu','power','wallet','ln','exchange','pool','cooler','ssd','network','ai','firewall'];
   items.forEach(t=>{
     const nt = NODE_TYPES[t];
     const div = document.createElement('div');
