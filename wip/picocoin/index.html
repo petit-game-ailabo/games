@@ -123,10 +123,11 @@ const NODE_TYPES = {
   firewall:{name:'ファイアウォール',emoji:'🛡️',price:25,titleColor:'#bb6622',watt:1},
   ln:{name:'LNノード',emoji:'⚡',price:30,titleColor:'#ff9900',watt:0},
   exchange:{name:'取引所',emoji:'🏦',price:100,titleColor:'#6633cc',watt:0},
+  pool:{name:'マイニングプール',emoji:'🏊',price:40,titleColor:'#2299aa',watt:0},
 };
 
 const PC_INPUTS = ['cpu','power','cooler','ssd','network','ai','firewall'];
-const PC_OUTPUTS = ['blockchain','wallet','ln','exchange'];
+const PC_OUTPUTS = ['blockchain','wallet','ln','exchange','pool'];
 
 // ===== RESEARCH TREE =====
 const RESEARCH_TREE = [
@@ -243,6 +244,7 @@ function getNodeLines(n){
     lines.push({text: '→ ウォレット', port:'wallet'});
     lines.push({text: '→ LNノード', port:'ln'});
     lines.push({text: '→ 取引所', port:'exchange'});
+    lines.push({text: '→ プール', port:'pool'});
   } else if(n.type === 'cpu'){
     lines.push({text: '演算力: +1'});
     lines.push({text: '消費電力: '+nt.watt+'W'});
@@ -297,6 +299,18 @@ function getNodeLines(n){
     lines.push({text: 'ロック: '+locked.toFixed(1)+'₱'});
     lines.push({text: '利率: 5%/30s'});
     lines.push({text: '← PC接続', port:'pc'});
+  } else if(n.type === 'pool'){
+    const poolPCs = connections.filter(c=>c.from!==n.id&&c.to===n.id&&nodes.find(nd=>nd.id===c.from)?.type==='pc');
+    let totalPoolHash = 0;
+    poolPCs.forEach(c=>{
+      const pc = nodes.find(nd=>nd.id===c.from);
+      if(pc){ const s=getPCStats(pc); if(s.canMine&&!pc.infected&&s.powerOk) totalPoolHash+=s.effectiveRate; }
+    });
+    lines.push({text: '接続PC: '+poolPCs.length+'台'});
+    lines.push({text: '合算HR: '+totalPoolHash.toFixed(1)+' H/s'});
+    const poolBonus = poolPCs.length >= 2 ? 1.3 : 1.0;
+    lines.push({text: 'ボーナス: x'+poolBonus.toFixed(1)});
+    lines.push({text: '← PC接続', port:'pc'});
   }
   return lines;
 }
@@ -333,6 +347,7 @@ function isPortConnected(n, portType){
     if(portType === 'wallet') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='wallet');
     if(portType === 'ln') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='ln');
     if(portType === 'exchange') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='exchange');
+    if(portType === 'pool') return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='pool');
   } else {
     if(portType === 'pc'){
       if(PC_INPUTS.includes(n.type)) return connections.some(c=>c.from===n.id&&nodes.find(nd=>nd.id===c.to)?.type==='pc');
@@ -397,6 +412,8 @@ function canConnectPorts(portA, portB){
   if(nB.type==='pc' && portB.portType==='ln' && nA.type==='ln') return true;
   if(nA.type==='pc' && portA.portType==='exchange' && nB.type==='exchange') return true;
   if(nB.type==='pc' && portB.portType==='exchange' && nA.type==='exchange') return true;
+  if(nA.type==='pc' && portA.portType==='pool' && nB.type==='pool') return true;
+  if(nB.type==='pc' && portB.portType==='pool' && nA.type==='pool') return true;
   // PC cpu port accepts any PC_INPUT type
   if(nA.type==='pc' && portA.portType==='cpu' && PC_INPUTS.includes(nB.type)) return true;
   if(nB.type==='pc' && portB.portType==='cpu' && PC_INPUTS.includes(nA.type)) return true;
@@ -411,9 +428,9 @@ function canConnectPorts(portA, portB){
 function addConnection(nA, nB){
   let from, to, lineType;
   if(nA.type==='pc' && PC_OUTPUTS.includes(nB.type)){
-    from=nA.id; to=nB.id; lineType=nB.type==='wallet'?'coin':(nB.type==='ln'?'lightning':(nB.type==='exchange'?'exchange':'data'));
+    from=nA.id; to=nB.id; lineType=nB.type==='wallet'?'coin':(nB.type==='ln'?'lightning':(nB.type==='exchange'?'exchange':(nB.type==='pool'?'pool':'data')));
   } else if(nB.type==='pc' && PC_OUTPUTS.includes(nA.type)){
-    from=nB.id; to=nA.id; lineType=nA.type==='wallet'?'coin':(nA.type==='ln'?'lightning':(nA.type==='exchange'?'exchange':'data'));
+    from=nB.id; to=nA.id; lineType=nA.type==='wallet'?'coin':(nA.type==='ln'?'lightning':(nA.type==='exchange'?'exchange':(nA.type==='pool'?'pool':'data')));
   } else if(nB.type==='pc'){
     from=nA.id; to=nB.id; lineType=nA.type==='power'?'power':'data';
   } else if(nA.type==='pc'){
@@ -479,7 +496,7 @@ function getPCStats(pc){
 function buildShop(){
   const shop = document.getElementById('shop');
   shop.innerHTML = '';
-  const items = ['pc','cpu','power','wallet','ln','exchange','cooler','ssd','network','ai','firewall'];
+  const items = ['pc','cpu','power','wallet','ln','exchange','pool','cooler','ssd','network','ai','firewall'];
   items.forEach(t=>{
     const nt = NODE_TYPES[t];
     const div = document.createElement('div');
@@ -628,7 +645,17 @@ function update(dt){
       const stats = getPCStats(pc);
       totalHash += stats.effectiveRate;
       if(stats.canMine && !pc.infected){
-        if(Math.random() < stats.successRate){
+        // Pool bonus: if connected to a pool with 2+ PCs, 1.3x success
+        let poolBonus = 1;
+        const poolConn = connections.find(c=>c.from===pc.id&&nodes.find(nd=>nd.id===c.to)?.type==='pool');
+        if(poolConn){
+          const pool = nodes.find(nd=>nd.id===poolConn.to);
+          if(pool){
+            const poolPCCount = connections.filter(c=>c.to===pool.id&&nodes.find(nd=>nd.id===c.from)?.type==='pc').length;
+            if(poolPCCount >= 2) poolBonus = 1.3;
+          }
+        }
+        if(Math.random() < stats.successRate * poolBonus){
           balance++;
           playSound('mine');
           effects.push({type:'sparkle',x:pc.x+WIN_W/2,y:pc.y+TITLE_H/2,t:0,dur:0.6});
@@ -833,6 +860,7 @@ function drawConnections(){
         if(toN.type === 'wallet' && p.portType === 'wallet') return true;
         if(toN.type === 'ln' && p.portType === 'ln') return true;
         if(toN.type === 'exchange' && p.portType === 'exchange') return true;
+        if(toN.type === 'pool' && p.portType === 'pool') return true;
         return false;
       });
       const inPort = toPorts.find(p => p.portType === 'pc');
@@ -864,6 +892,7 @@ function drawConnections(){
     else if(c.lineType === 'coin') col = '#ddaa22';
     else if(c.lineType === 'lightning') col = '#ff9900';
     else if(c.lineType === 'exchange') col = '#9966ff';
+    else if(c.lineType === 'pool') col = '#22bbcc';
 
     ctx.strokeStyle = col;
     ctx.lineWidth = 2;
@@ -1243,7 +1272,7 @@ canvas.addEventListener('pointerleave', ()=>{
 function saveGame(){
   try{
     const data = {
-      nodes: nodes.map(n=>({id:n.id, type:n.type, x:n.x, y:n.y, infected:n.infected, blackout:n.blackout, blackoutTime:n.blackoutTime, lnBalance:n.lnBalance||0, exBalance:n.exBalance||0, exLocked:n.exLocked||0, exLockTime:n.exLockTime||0, exHacked:n.exHacked||false, exHackTime:n.exHackTime||0})),
+      nodes: nodes.map(n=>({id:n.id, type:n.type, x:n.x, y:n.y, infected:n.infected, blackout:n.blackout, blackoutTime:n.blackoutTime||0, lnBalance:n.lnBalance||0, exBalance:n.exBalance||0, exLocked:n.exLocked||0, exLockTime:n.exLockTime||0, exHacked:n.exHacked||false, exHackTime:n.exHackTime||0})),
       connections: connections.map(c=>({from:c.from, to:c.to, lineType:c.lineType})),
       balance, difficulty, gameTime, nextNodeId, researchCompleted
     };
