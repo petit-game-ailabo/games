@@ -43,8 +43,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 #connectionGuide .guide-arrow{position:absolute;font-size:28px;color:#4a6aff;filter:drop-shadow(0 0 8px #4a6aff);animation:guideSlide 1.5s ease-in-out infinite}
 @keyframes guidePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 @keyframes guideSlide{0%,100%{opacity:0.4;transform:translateX(0)}50%{opacity:1;transform:translateX(10px)}}
-#researchBtn{position:absolute;top:8px;right:8px;width:32px;height:32px;background:rgba(80,80,100,0.4);border:1px solid rgba(100,100,130,0.3);border-radius:6px;color:#aac;font-size:16px;cursor:pointer;pointer-events:auto;z-index:20;display:flex;align-items:center;justify-content:center}
-#researchBtn:hover{background:rgba(100,100,130,0.6);color:#fff}
+#researchBtn{display:inline-flex;align-items:center;gap:4px;height:36px;padding:0 14px;background:linear-gradient(135deg,#5a2d82,#7b3fa0);border:1px solid rgba(160,100,220,0.5);border-radius:8px;color:#fff;font-size:13px;font-weight:bold;cursor:pointer;pointer-events:auto;z-index:20;position:relative;white-space:nowrap;margin-left:auto;flex-shrink:0;transition:box-shadow .3s}
+#researchBtn:hover{box-shadow:0 0 12px rgba(140,80,220,0.6)}
+#researchBtn .research-badge{position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#ff4444;border-radius:50%;font-size:10px;font-weight:bold;color:#fff;display:flex;align-items:center;justify-content:center;line-height:1}
+#researchBtn.pulse{animation:researchPulse 1.5s ease-in-out infinite}
+@keyframes researchPulse{0%,100%{box-shadow:0 0 8px rgba(140,80,220,0.3)}50%{box-shadow:0 0 20px rgba(140,80,220,0.8)}}
+.shop-nav-btn{width:32px;height:100%;background:rgba(30,40,80,0.9);border:1px solid #334;color:#aac;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:2}
+.shop-nav-btn:hover{background:rgba(50,60,110,0.9);color:#fff}
+.shop-nav-btn:active{background:rgba(70,80,130,0.9)}
+#shopContainer{display:flex;align-items:stretch;background:rgba(10,14,39,0.95)}
 #researchPanel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:420px;max-width:95vw;max-height:85vh;background:rgba(15,20,45,0.97);border:1px solid #334;border-radius:12px;z-index:50;pointer-events:auto;overflow-y:auto;padding:0;box-shadow:0 0 30px rgba(40,60,150,0.4)}
 #researchPanel.open{display:block}
 #researchPanel .rp-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #2a3060;background:rgba(30,40,80,0.8);border-radius:12px 12px 0 0}
@@ -90,11 +97,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 <div id="ui">
 <div id="statusBar">
 <div class="balance">👛 <span id="balanceText">0</span>₱</div>
-<div class="hashrate">⚡ <span id="hashrateText">0</span> H/s</div>
+<div class="hashrate">⛏️ 成功:<span id="minedText">0</span></div>
 <div class="rp-display">🔬 RP: <span id="rpText">0</span></div>
-<div class="difficulty">難易度: <span id="diffText">1.00</span>x</div>
-</div>
-<div id="researchBtn" onclick="toggleResearch()">🔬</div>
+<div class="difficulty">📊 難易度: <span id="diffText">1.00</span>x</div>
+<div id="researchBtn" onclick="toggleResearch()">🔬 研究</div>
 </div>
 <div id="hint">🔗 ●から●へドラッグして接続！</div>
 <div id="connectionGuide">
@@ -108,7 +114,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:
 <button class="shopTab" onclick="switchTab('parts',this)">パーツ</button>
 <button class="shopTab" onclick="switchTab('network',this)">ネットワーク</button>
 </div>
+<div id="shopContainer">
+<button class="shop-nav-btn" onclick="scrollShop(-1)">◀</button>
 <div id="shop"></div>
+<button class="shop-nav-btn" onclick="scrollShop(1)">▶</button>
+</div>
 </div>
 <div id="shopDragPreview"></div>
 <div id="unlockMsg"></div>
@@ -207,12 +217,12 @@ var NODE_TYPES = {
   power_mk2:{name:'電源Mk2',emoji:'🔌',price:5,titleColor:'#cc4444',watt:0,supply:50,category:'parts',requireResearch:'hi_power'},
   solar_power:{name:'ソーラー電源',emoji:'☀️',price:8,titleColor:'#ccaa22',watt:0,supply:10,isSolar:true,category:'parts',requireResearch:'solar_panel'},
   fusion_power:{name:'核融合電源',emoji:'⚛️',price:100,titleColor:'#cc6622',watt:0,supply:200,category:'parts',requireResearch:'fusion_power'},
-  cooler:{name:'冷却',emoji:'🧊',price:3,titleColor:'#4499aa',watt:3,category:'parts'},
-  ssd:{name:'SSD',emoji:'💾',price:5,titleColor:'#339955',watt:2,category:'parts'},
-  network:{name:'ネットワーク',emoji:'📡',price:8,titleColor:'#7744aa',watt:2,category:'parts'},
-  ai:{name:'AI',emoji:'🤖',price:30,titleColor:'#aa4477',watt:10,category:'parts'},
+  cooler:{name:'冷却',emoji:'🧊',price:3,titleColor:'#4499aa',watt:3,category:'parts',requireResearch:'cooling_tech'},
+  ssd:{name:'SSD',emoji:'💾',price:5,titleColor:'#339955',watt:2,category:'parts',requireResearch:'storage_opt'},
+  network:{name:'ネットワーク',emoji:'📡',price:8,titleColor:'#7744aa',watt:2,category:'parts',requireResearch:'network_tech'},
+  ai:{name:'AI',emoji:'🤖',price:30,titleColor:'#aa4477',watt:10,category:'parts',requireResearch:'ai_mining'},
   tpu:{name:'TPU',emoji:'🔧',price:50,titleColor:'#6688cc',watt:15,category:'parts',requireResearch:'tpu_boost'},
-  firewall:{name:'FW',emoji:'🛡️',price:10,titleColor:'#bb6622',watt:1,category:'parts'},
+  firewall:{name:'FW',emoji:'🛡️',price:10,titleColor:'#bb6622',watt:1,category:'parts',requireResearch:'security_basics'},
   blockchain:{name:'ブロックチェーン',emoji:'⛓️',price:0,titleColor:'#3366cc',watt:0,category:'network'},
   wallet:{name:'ウォレット',emoji:'👛',price:0,titleColor:'#aa8822',watt:0,category:'network'},
   research_lab:{name:'研究施設',emoji:'🔬',price:10,titleColor:'#2288aa',watt:0,category:'network',requireResearch:'_lab_unlock'},
@@ -299,23 +309,39 @@ var RESEARCH_TREE = [
     desc:'📝 始め方:\n1. CPU🔲の左ポートをPC💻の右ポートにドラッグ\n2. 電源🔌の左ポートをPC💻の右ポートにドラッグ\n3. PC💻の左ポートをブロックチェーン⛓️の右ポートにドラッグ\n4. PC💻の左ポートをウォレット👛の右ポートにドラッグ\n5. マイニング開始！ゲージが100%になるとコイン獲得',
     cost:0,prereq:null,effect:'初期解放済み',
     conditions:null},
-  {id:'gpu_boost',name:'GPU最適化',emoji:'🎮',tree:'mining',row:1,col:0,
+  {id:'_lab_unlock',name:'研究施設建設',emoji:'🔬',tree:'mining',row:1,col:0,
+    desc:'🔬研究施設が購入可能に。PCを接続すると研究ポイント(RP)が蓄積される。RPで更なる研究を解放しよう！',
+    cost:0,prereq:'basic_mining',effect:'🔬研究施設ノードがショップに追加',
+    conditions:{minTotalMined:5}},
+  {id:'gpu_boost',name:'GPU最適化',emoji:'🎮',tree:'mining',row:2,col:0,
     desc:'CPUの演算力が1.5倍に。より多くのCPUをPCに接続しよう',
-    cost:30,prereq:'basic_mining',effect:'全CPU演算力1.5倍',
+    cost:30,prereq:'_lab_unlock',effect:'全CPU演算力1.5倍',
     conditions:null},
-  {id:'hi_cpu',name:'高性能CPU',emoji:'🔲',tree:'mining',row:2,col:0,
+  {id:'cooling_tech',name:'冷却技術',emoji:'🧊',tree:'mining',row:3,col:0,
+    desc:'🧊冷却ノードが購入可能に。PCに接続するとマイニング効率1.5倍',
+    cost:20,prereq:'gpu_boost',effect:'🧊冷却ノードがショップに追加',
+    conditions:null},
+  {id:'storage_opt',name:'ストレージ最適化',emoji:'💾',tree:'mining',row:3,col:1,
+    desc:'💾SSDノードが購入可能に。PCに接続するとマイニング速度1.3倍',
+    cost:25,prereq:'gpu_boost',effect:'💾SSDノードがショップに追加',
+    conditions:null},
+  {id:'hi_cpu',name:'高性能CPU',emoji:'🔲',tree:'mining',row:4,col:0,
     desc:'CPU Mk2が購入可能に。演算力+3/消費8W。ショップのパーツタブに追加',
-    cost:80,prereq:'gpu_boost',effect:'CPU Mk2ノードがショップに追加',
+    cost:80,prereq:'cooling_tech',effect:'CPU Mk2ノードがショップに追加',
     conditions:{minNodeCount:{cpu:5}}},
-  {id:'ai_mining',name:'AIマイニング',emoji:'🧠',tree:'mining',row:3,col:0,
-    desc:'AIノード🤖がPC接続時に処理速度3倍に強化。CPUが2個以上必要',
-    cost:150,prereq:'hi_cpu',effect:'AIノード効果が2倍→3倍',
+  {id:'ai_mining',name:'AIマイニング',emoji:'🧠',tree:'mining',row:5,col:0,
+    desc:'🤖AIノードが購入可能に。PC接続時に処理速度2倍（研究後は3倍）。CPUが2個以上必要',
+    cost:150,prereq:'hi_cpu',effect:'🤖AIノードがショップに追加＋AI効果3倍',
     conditions:{minTotalMined:50}},
-  {id:'quantum',name:'量子コンピュータ',emoji:'💎',tree:'mining',row:4,col:0,
+  {id:'security_basics',name:'セキュリティ基礎',emoji:'🛡️',tree:'mining',row:5,col:1,
+    desc:'🛡️ファイアウォール(FW)ノードが購入可能に。PCに接続するとマルウェアを自動駆除',
+    cost:40,prereq:'storage_opt',effect:'🛡️FWノードがショップに追加',
+    conditions:null},
+  {id:'quantum',name:'量子コンピュータ',emoji:'💎',tree:'mining',row:6,col:0,
     desc:'量子CPUが購入可能に。演算力+20/消費25W。ショップに追加',
     cost:500,prereq:'ai_mining',effect:'量子CPUノードがショップに追加',
     conditions:{minNodeCount:{mining_pc:5}}},
-  {id:'tpu_boost',name:'TPU最適化',emoji:'🔧',tree:'mining',row:5,col:0,
+  {id:'tpu_boost',name:'TPU最適化',emoji:'🔧',tree:'mining',row:7,col:0,
     desc:'TPUが購入可能に。AI処理を5倍高速化。AI+TPUの両方をPCに接続',
     cost:1000,prereq:'quantum',effect:'TPUノードがショップに追加',
     conditions:null},
@@ -338,21 +364,25 @@ var RESEARCH_TREE = [
     cost:800,prereq:'solar_panel',effect:'核融合電源ノードがショップに追加',
     conditions:{minTotalMined:200}},
 
-  // Network/Revenue tree
-  {id:'ln_basics',name:'Lightning基礎',emoji:'⚡',tree:'network',row:0,col:0,
-    desc:'サーバー🖥️をLNノード⚡に接続→LNウォレット💰でルーティング手数料を稼ぐ',
-    cost:50,prereq:null,effect:'サーバー、LNノード、LNウォレットがショップに追加',
+  // Network tree
+  {id:'network_tech',name:'ネットワーク技術',emoji:'📡',tree:'network',row:0,col:0,
+    desc:'📡ネットワークノードが購入可能に。サーバーに接続すると通信能力UP',
+    cost:35,prereq:null,effect:'📡ネットワークノードがショップに追加',
+    conditions:{minTotalMined:10}},
+  {id:'ln_basics',name:'Lightning基礎',emoji:'⚡',tree:'network',row:1,col:0,
+    desc:'🖥️サーバー、⚡LNノード、💰LNウォレットが購入可能に。サーバーをLNノードに接続→LNウォレットでルーティング手数料を稼ぐ',
+    cost:50,prereq:'network_tech',effect:'🖥️サーバー、⚡LNノード、💰LNウォレットがショップに追加',
     conditions:{minTotalCoins:10}},
-  {id:'channel_opt',name:'チャネル最適化',emoji:'📡',tree:'network',row:1,col:0,
+  {id:'channel_opt',name:'チャネル最適化',emoji:'📡',tree:'network',row:2,col:0,
     desc:'LNルーティング手数料が2倍に',
     cost:200,prereq:'ln_basics',effect:'LN手数料2倍',
     conditions:null},
-  {id:'dist_routing',name:'分散型ルーティング',emoji:'🌐',tree:'network',row:2,col:0,
+  {id:'dist_routing',name:'分散型ルーティング',emoji:'🌐',tree:'network',row:3,col:0,
     desc:'LNルーティング手数料が3倍に。複数サーバーで並列ルーティング',
     cost:600,prereq:'channel_opt',effect:'LN手数料3倍',
     conditions:{minNodeCount:{server:3}}},
 
-  // New Revenue tree
+  // Revenue tree
   {id:'staking_intro',name:'ステーキング入門',emoji:'📌',tree:'revenue',row:0,col:0,
     desc:'ステーキングノード📌が購入可能。ウォレット👛→ステーキング📌に接続すると、預けたコインに利息がつく（年利5%相当/秒換算）',
     cost:100,prereq:null,effect:'ステーキングノードがショップに追加',
@@ -868,7 +898,6 @@ function isNodeUnlocked(type){
   var nt = NODE_TYPES[type];
   if(!nt) return false;
   if(!nt.requireResearch) return true;
-  if(nt.requireResearch==='_lab_unlock') return labUnlocked;
   return researchCompleted.indexOf(nt.requireResearch) >= 0;
 }
 
@@ -1152,6 +1181,7 @@ function doResearch(id){
   if(stats.researchPoints < r.cost) return;
   stats.researchPoints -= r.cost;
   researchCompleted.push(id);
+  if(id==='_lab_unlock'){labUnlocked=true;labUnlockShown=true;}
   playSound('research');
   effects.push({type:'sparkle',x:canvasW/2,y:canvasH/2,t:0,dur:0.8});
   showUnlockMsg('🔬 研究完了: '+r.name+'！');
@@ -1213,15 +1243,6 @@ function update(dt){
     }
   });
 
-  // Lab unlock check
-  if(!labUnlocked && stats.totalCoinsEarned >= 5){
-    labUnlocked = true;
-    if(!labUnlockShown){
-      labUnlockShown = true;
-      showUnlockMsg('🔬 研究施設が解放されました！ネットワークタブで配置できます');
-    }
-  }
-
   // Mining
   var totalHash = 0;
   nodes.filter(function(n){return n.type==='mining_pc'}).forEach(function(pc){
@@ -1255,8 +1276,10 @@ function update(dt){
   miningCheckTimer += dt;
   if(miningCheckTimer >= 1){
     miningCheckTimer = 0;
-    document.getElementById('hashrateText').textContent = totalHash.toFixed(1);
     document.getElementById('rpText').textContent = Math.floor(stats.researchPoints);
+    var minedEl = document.getElementById('minedText');
+    if(minedEl) minedEl.textContent = stats.totalMined;
+    updateResearchBtn();
   }
 
   // LN routing
@@ -1406,10 +1429,43 @@ function update(dt){
   particles=particles.filter(function(p){return p.t<p.dur});
 }
 
+function scrollShop(dir){
+  var shop = document.getElementById('shop');
+  shop.scrollBy({left:dir*120,behavior:'smooth'});
+}
+
 function updateUI(){
   document.getElementById('balanceText').textContent = balance;
   document.getElementById('diffText').textContent = difficulty.toFixed(2);
   document.getElementById('rpText').textContent = Math.floor(stats.researchPoints);
+  var minedEl = document.getElementById('minedText');
+  if(minedEl) minedEl.textContent = stats.totalMined;
+  updateResearchBtn();
+}
+
+function updateResearchBtn(){
+  var btn = document.getElementById('researchBtn');
+  if(!btn) return;
+  var hasAvailable = false;
+  var canAffordAny = false;
+  RESEARCH_TREE.forEach(function(r){
+    if(researchCompleted.indexOf(r.id)>=0) return;
+    var prereqMet = !r.prereq || researchCompleted.indexOf(r.prereq)>=0;
+    if(!prereqMet) return;
+    var condResult = checkResearchConditions(r);
+    if(condResult.met){
+      hasAvailable = true;
+      if(stats.researchPoints >= r.cost) canAffordAny = true;
+    }
+  });
+  var badge = btn.querySelector('.research-badge');
+  if(hasAvailable){
+    if(!badge){badge=document.createElement('span');badge.className='research-badge';badge.textContent='!';btn.appendChild(badge)}
+  } else {
+    if(badge) badge.remove();
+  }
+  if(canAffordAny) btn.classList.add('pulse');
+  else btn.classList.remove('pulse');
 }
 
 // ===== DRAWING =====
@@ -1797,6 +1853,8 @@ function loadGame(){
     researchCompleted=data.researchCompleted||['basic_mining'];
     stats=data.stats||{totalMined:0,totalCoinsEarned:0,researchPoints:0};
     labUnlocked=data.labUnlocked||false;labUnlockShown=data.labUnlockShown||false;
+    // Migrate old saves: if lab was unlocked but research not completed, add it
+    if(labUnlocked && researchCompleted.indexOf('_lab_unlock')<0) researchCompleted.push('_lab_unlock');
     animatedPower={};
     return true;
   }catch(e2){return false}
