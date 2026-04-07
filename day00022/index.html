@@ -1,0 +1,2481 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🪙 PicoCoin Miner</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0e27;font-family:'Segoe UI',sans-serif;color:#e0e0ff;touch-action:none}
+#gameCanvas{display:block;width:100%;cursor:default}
+#ui{position:absolute;top:0;left:0;width:100%;pointer-events:none}
+#statusBar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(10,14,39,0.9);border-bottom:1px solid #1a2050;pointer-events:auto;font-size:14px;z-index:10;flex-wrap:wrap;gap:4px}
+#statusBar .balance{font-size:20px;font-weight:bold;color:#ffd700}
+#statusBar .difficulty{color:#88aaff;font-size:13px}
+#statusBar .hashrate{color:#44ff88;font-size:13px}
+#statusBar .rp-display{color:#44ddff;font-size:13px}
+#bottomPanel{position:fixed;bottom:0;left:0;width:100%;pointer-events:auto;z-index:10}
+#shopTabs{display:flex;gap:0;background:rgba(15,20,45,1);border-top:1px solid #1a2050;border-bottom:1px solid #1a2050}
+.shopTab{flex:1;padding:8px 4px;text-align:center;font-size:12px;color:#668;background:rgba(15,20,45,1);border:none;cursor:pointer;transition:all .2s;border-right:1px solid #1a2050}
+.shopTab:last-child{border-right:none}
+.shopTab.active{color:#fff;background:rgba(40,50,100,0.9);font-weight:bold}
+#shop{display:flex;gap:6px;padding:8px;background:rgba(10,14,39,1);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#shop::-webkit-scrollbar{display:none}
+.shopItem{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;padding:6px 10px;border:1px solid #334;border-radius:8px;background:#151a3a;cursor:grab;min-width:64px;transition:all .2s;touch-action:none}
+.shopItem.disabled{opacity:0.35;cursor:not-allowed}
+.shopItem .emoji{font-size:22px;pointer-events:none}
+.shopItem .name{font-size:10px;color:#aac;margin-top:2px;white-space:nowrap;pointer-events:none}
+.shopItem .price{font-size:11px;color:#ffd700;font-weight:bold;pointer-events:none}
+#shopDragPreview{position:fixed;pointer-events:none;z-index:200;opacity:0.7;display:none;padding:8px 14px;border:2px solid #4a6aff;border-radius:10px;background:rgba(20,25,50,0.9);box-shadow:0 0 20px rgba(74,106,255,0.6);text-align:center;font-size:18px;transform:translate(-50%,-50%)}
+#shopDragPreview .sdp-name{font-size:10px;color:#aac;margin-top:2px}
+#titleScreen{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0e27;z-index:100}
+#titleScreen h1{font-size:36px;margin-bottom:8px;text-shadow:0 0 20px rgba(74,106,255,0.6)}
+#titleScreen .sub{color:#88aaff;font-size:14px;margin-bottom:40px}
+#startBtn{padding:16px 48px;font-size:22px;background:linear-gradient(135deg,#2a3a8a,#4a6aff);color:#fff;border:none;border-radius:12px;cursor:pointer;box-shadow:0 0 30px rgba(74,106,255,0.4);transition:transform .2s;margin-bottom:16px}
+#startBtn:hover{transform:scale(1.05)}
+#resetTitleBtn{padding:8px 20px;font-size:13px;background:transparent;color:#666;border:1px solid #333;border-radius:8px;cursor:pointer;transition:all .2s}
+#resetTitleBtn:hover{color:#999;border-color:#555}
+#titleCanvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:-1}
+#hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,39,0.8);color:#fff;font-size:14px;pointer-events:none;z-index:5;text-align:center;padding:12px 24px;border-radius:8px;text-shadow:0 0 10px #4af;opacity:0;transition:opacity 1s}
+#connectionGuide{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:6;opacity:0;transition:opacity 0.5s}
+#connectionGuide.visible{opacity:1}
+#connectionGuide .guide-bubble{position:absolute;background:rgba(74,106,255,0.85);color:#fff;padding:8px 16px;border-radius:12px;font-size:13px;font-weight:bold;white-space:nowrap;box-shadow:0 0 20px rgba(74,106,255,0.5);animation:guidePulse 1.5s ease-in-out infinite}
+#connectionGuide .guide-arrow{position:absolute;font-size:28px;color:#4a6aff;filter:drop-shadow(0 0 8px #4a6aff);animation:guideSlide 1.5s ease-in-out infinite}
+@keyframes guidePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes guideSlide{0%,100%{opacity:0.4;transform:translateX(0)}50%{opacity:1;transform:translateX(10px)}}
+#researchBtn{display:inline-flex;align-items:center;gap:4px;height:36px;padding:0 14px;background:linear-gradient(135deg,#5a2d82,#7b3fa0);border:1px solid rgba(160,100,220,0.5);border-radius:8px;color:#fff;font-size:13px;font-weight:bold;cursor:pointer;pointer-events:auto;z-index:20;position:relative;white-space:nowrap;margin-left:auto;flex-shrink:0;transition:box-shadow .3s}
+#researchBtn:hover{box-shadow:0 0 12px rgba(140,80,220,0.6)}
+#researchBtn .research-badge{position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#ff4444;border-radius:50%;font-size:10px;font-weight:bold;color:#fff;display:flex;align-items:center;justify-content:center;line-height:1}
+#researchBtn.pulse{animation:researchPulse 1.5s ease-in-out infinite}
+@keyframes researchPulse{0%,100%{box-shadow:0 0 8px rgba(140,80,220,0.3)}50%{box-shadow:0 0 20px rgba(140,80,220,0.8)}}
+.shop-nav-btn{width:32px;height:100%;background:rgba(30,40,80,0.9);border:1px solid #334;color:#aac;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:2}
+.shop-nav-btn:hover{background:rgba(50,60,110,0.9);color:#fff}
+.shop-nav-btn:active{background:rgba(70,80,130,0.9)}
+#shopContainer{display:flex;align-items:stretch;background:rgba(10,14,39,1)}
+#researchPanel{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:660px;max-width:98vw;max-height:75vh;background:rgba(15,20,45,0.97);border:1px solid #334;border-radius:12px;z-index:50;pointer-events:auto;overflow-y:auto;padding:0;box-shadow:0 0 30px rgba(40,60,150,0.4)}
+#researchPanel.open{display:block}
+#researchPanel .rp-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #2a3060;background:rgba(30,40,80,0.8);border-radius:12px 12px 0 0}
+#researchPanel .rp-header h3{margin:0;font-size:16px;color:#aaccff}
+#researchPanel .rp-close{background:none;border:none;color:#888;font-size:18px;cursor:pointer}
+#researchPanel .rp-close:hover{color:#fff}
+.rp-tabs{display:flex;border-bottom:1px solid #2a3060}
+.rp-tab{flex:1;padding:8px 4px;text-align:center;font-size:11px;color:#668;background:none;border:none;cursor:pointer;transition:all .2s}
+.rp-tab.active{color:#fff;background:rgba(40,50,100,0.6);font-weight:bold;border-bottom:2px solid #4a6aff}
+.rp-tree-container{position:relative;padding:16px;min-height:200px}
+.rp-tree-container svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.rp-tree-node{position:absolute;width:88px;padding:2px 3px;border:2px solid #334;border-radius:8px;background:rgba(25,30,55,0.95);text-align:center;cursor:pointer;transition:all .2s;font-size:9px}
+.rp-tree-node:hover{filter:brightness(1.2)}
+.rp-tree-node.done{border-color:#44cc66;box-shadow:0 0 8px rgba(68,204,102,0.3)}
+.rp-tree-node.available{border-color:#ddcc44;box-shadow:0 0 8px rgba(221,204,68,0.3)}
+.rp-tree-node.locked{border-color:#444;opacity:0.5}
+.rp-tree-node .rtn-emoji{font-size:13px;line-height:1.3}
+.rp-tree-node .rtn-name{font-size:8px;font-weight:bold;color:#dde;margin-top:1px;line-height:1.2}
+.rp-tree-node .rtn-cost{font-size:7px;color:#ffd700;line-height:1.2}
+.ri-btn{display:inline-block;padding:8px 20px;font-size:13px;background:linear-gradient(135deg,#2a3a6a,#4a6aff);color:#fff;border:none;border-radius:6px;cursor:pointer}
+.ri-btn:hover{background:linear-gradient(135deg,#3a4a8a,#5a7aff)}
+.ri-btn:disabled{opacity:0.3;cursor:not-allowed}
+#researchDetail{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:480px;max-width:96vw;background:rgba(12,16,40,0.98);border:1px solid #4a6aff;border-radius:14px;z-index:60;pointer-events:auto;box-shadow:0 0 40px rgba(74,106,255,0.5);padding:0}
+#researchDetail.open{display:block}
+#researchDetail .rd-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px 10px;border-bottom:1px solid #2a3060}
+#researchDetail .rd-title{font-size:18px;font-weight:bold;color:#aaccff}
+#researchDetail .rd-close{background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1}
+#researchDetail .rd-close:hover{color:#fff}
+#researchDetail .rd-diagram{background:rgba(8,12,32,0.8);margin:12px 14px;border-radius:10px;border:1px solid #223;overflow:hidden}
+#researchDetail .rd-diagram svg{display:block}
+#researchDetail .rd-body{padding:0 18px 16px}
+#researchDetail .rd-effect{font-size:13px;color:#88aaff;margin-bottom:8px;padding:6px 10px;background:rgba(40,60,120,0.3);border-radius:6px;border-left:3px solid #4a6aff}
+#researchDetail .rd-cost{font-size:14px;color:#ffd700;font-weight:bold;margin-bottom:10px}
+#researchDetail .rd-cond{font-size:12px;color:#f88;margin-bottom:10px;line-height:1.5}
+#researchDetail .rd-prereq{font-size:12px;color:#888;margin-bottom:10px}
+#modalBackdrop{display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:45;background:rgba(0,0,0,0.4);cursor:pointer}
+#modalBackdrop.open{display:block}
+body.modal-open #gameCanvas{pointer-events:none}
+#unlockMsg{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(30,60,120,0.95);color:#fff;padding:12px 24px;border-radius:10px;border:1px solid #4a6aff;font-size:14px;z-index:100;pointer-events:none;opacity:0;transition:opacity 0.5s;text-align:center;box-shadow:0 0 20px rgba(74,106,255,0.5)}
+#unlockMsg.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="titleScreen">
+<canvas id="titleCanvas"></canvas>
+<h1>🪙 PicoCoin Miner</h1>
+<div class="sub">仮想通貨マイニングシミュレーター</div>
+<button id="startBtn">▶ スタート</button>
+<button id="resetTitleBtn" onclick="resetGame()">🔄 データ初期化</button>
+</div>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+<div id="statusBar">
+<div class="balance">👛 <span id="balanceText">0</span>₱</div>
+<div class="hashrate">⛏️ 成功:<span id="minedText">0</span></div>
+<div class="rp-display">🔬 RP: <span id="rpText">0</span></div>
+<div id="researchBtn" onclick="toggleResearch()">🔬 研究</div>
+</div>
+<div id="hint">🔗 ●から●へドラッグして接続！</div>
+<div id="connectionGuide">
+  <div class="guide-bubble" id="guideBubble">🔗 ポートをドラッグして接続！</div>
+  <div class="guide-arrow" id="guideArrow">→→→</div>
+</div>
+<div id="researchPanel"></div>
+<div id="bottomPanel">
+<div id="shopTabs">
+<button class="shopTab active" onclick="switchTab('pc',this)">PC</button>
+<button class="shopTab" onclick="switchTab('parts',this)">パーツ</button>
+<button class="shopTab" onclick="switchTab('network',this)">ネットワーク</button>
+</div>
+<div id="shopContainer">
+<button class="shop-nav-btn" onclick="scrollShop(-1)">◀</button>
+<div id="shop"></div>
+<button class="shop-nav-btn" onclick="scrollShop(1)">▶</button>
+</div>
+</div>
+<div id="modalBackdrop" onclick="closeAllModals()"></div>
+<div id="shopDragPreview"></div>
+<div id="unlockMsg"></div>
+<div id="researchDetail">
+  <div class="rd-header">
+    <div class="rd-title" id="rdTitle"></div>
+    <button class="rd-close" onclick="closeResearchDetail()">✕</button>
+  </div>
+  <div class="rd-diagram" id="rdDiagram"></div>
+  <div class="rd-body">
+    <div class="rd-effect" id="rdEffect"></div>
+    <div class="rd-cost" id="rdCost"></div>
+    <div class="rd-cond" id="rdCond" style="display:none"></div>
+    <div class="rd-prereq" id="rdPrereq" style="display:none"></div>
+    <div id="rdBtn"></div>
+  </div>
+</div>
+<script>
+'use strict';
+
+// ===== AUDIO =====
+var AudioCtx = window.AudioContext || window.webkitAudioContext;
+var audioCtx = null;
+function ensureAudio(){if(!audioCtx)audioCtx=new AudioCtx()}
+function playSound(type){
+  ensureAudio();
+  var ctx2=audioCtx,now=ctx2.currentTime;
+  var o=ctx2.createOscillator(),g=ctx2.createGain();
+  o.connect(g);g.connect(ctx2.destination);
+  switch(type){
+    case'place':o.type='sine';o.frequency.setValueAtTime(600,now);o.frequency.exponentialRampToValueAtTime(900,now+0.08);g.gain.setValueAtTime(0.3,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.15);o.start(now);o.stop(now+0.15);break;
+    case'connect':o.type='sawtooth';o.frequency.setValueAtTime(1200,now);o.frequency.exponentialRampToValueAtTime(400,now+0.12);g.gain.setValueAtTime(0.15,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.12);o.start(now);o.stop(now+0.12);break;
+    case'mine':o.type='sine';o.frequency.setValueAtTime(800,now);o.frequency.setValueAtTime(1000,now+0.05);o.frequency.setValueAtTime(1200,now+0.1);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.3);o.start(now);o.stop(now+0.3);break;
+    case'malware':o.type='square';o.frequency.setValueAtTime(150,now);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.4);o.start(now);o.stop(now+0.4);break;
+    case'cure':o.type='sine';o.frequency.setValueAtTime(500,now);o.frequency.exponentialRampToValueAtTime(2000,now+0.15);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.2);o.start(now);o.stop(now+0.2);break;
+    case'buy':o.type='triangle';o.frequency.setValueAtTime(400,now);o.frequency.setValueAtTime(600,now+0.05);o.frequency.setValueAtTime(800,now+0.1);g.gain.setValueAtTime(0.25,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.15);o.start(now);o.stop(now+0.15);break;
+    case'error':o.type='square';o.frequency.setValueAtTime(200,now);g.gain.setValueAtTime(0.15,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.15);o.start(now);o.stop(now+0.15);break;
+    case'delete':o.type='sawtooth';o.frequency.setValueAtTime(400,now);o.frequency.exponentialRampToValueAtTime(100,now+0.2);g.gain.setValueAtTime(0.2,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.25);o.start(now);o.stop(now+0.25);break;
+    case'research':o.type='sine';o.frequency.setValueAtTime(600,now);o.frequency.setValueAtTime(900,now+0.1);o.frequency.setValueAtTime(1200,now+0.2);g.gain.setValueAtTime(0.25,now);g.gain.exponentialRampToValueAtTime(0.01,now+0.4);o.start(now);o.stop(now+0.4);break;
+  }
+}
+
+// ===== CONSTANTS =====
+var WIN_W = 195;
+var TITLE_H = 32;
+var LINE_H = 24;
+var FONT_SIZE = 12;
+var PORT_R = 8;
+
+// LN mini network graph constants
+var LN_GN = [ // 18 nodes relative to graph center (190x90 box)
+  {x:-85,y:-28}, // 0  outer-left
+  {x:-58,y:-50}, // 1  outer top-left
+  {x:-22,y:-58}, // 2  outer top
+  {x: 18,y:-55}, // 3  outer top-right
+  {x: 55,y:-45}, // 4  outer right-top
+  {x: 82,y:-18}, // 5  outer right
+  {x: 80,y: 15}, // 6  outer right-bottom
+  {x: 58,y: 40}, // 7  outer bottom-right
+  {x: 18,y: 48}, // 8  outer bottom
+  {x:-22,y: 45}, // 9  outer bottom-left
+  {x:-62,y: 25}, // 10 outer left-bottom
+  {x:-82,y: -2}, // 11 outer left
+  {x:-45,y:-22}, // 12 inner-left
+  {x:-12,y:-28}, // 13 inner-center
+  {x: 25,y:-20}, // 14 inner-center-right
+  {x: 55,y:  8}, // 15 inner-right
+  {x: 20,y: 18}, // 16 OUR NODE ← center
+  {x:-20,y: 15}, // 17 inner-center-bottom
+];
+var LN_GE = [
+  // outer ring
+  [0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,0],
+  // spokes outer→inner
+  [0,12],[1,12],[2,13],[3,13],[3,14],[4,14],[4,15],[5,15],[6,15],[7,16],[8,16],[9,17],[10,17],[10,12],[11,12],
+  // inner mesh
+  [12,13],[13,14],[14,15],[15,16],[16,13],[16,17],[17,12],[17,13],[13,16],[14,16]
+];
+var LN_GOur = 16;
+// Routes THROUGH our node 16 (sender≠16, receiver≠16)
+var LN_GRouteThru = [
+  [7,16,13,2],[8,16,15,5],[17,16,15,4],[13,16,7,6],[15,16,7,8],[9,17,16,15],[2,13,16,7],[5,15,16,17]
+];
+// Routes BYPASSING our node (no node 16)
+var LN_GRouteBpass = [
+  [0,1,2,13],[5,4,14,13],[11,12,13,3],[10,17,12,1],[6,15,14,3],[0,11,10,9],[4,5,6,7],[2,3,14,15],[8,9,17,13],[1,12,17,9],[3,13,12,0],[7,8,9,10]
+];
+
+var PORT_CATEGORY_COLORS = {
+  power:'#dd4444', data:'#4488ff', coin:'#ddaa22', network:'#9944dd', connected:'#44cc66'
+};
+
+function getPortCategoryForNode(nodeType, portType){
+  if(portType==='to_pc'){
+    if(nodeType==='power'||nodeType==='power_mk2'||nodeType==='solar_power'||nodeType==='fusion_power') return 'power';
+    return 'data';
+  }
+  if(portType==='power') return 'power';
+  if(['cpu','cooler','ssd','firewall','ai','tpu','virusbuster','to_sv'].indexOf(portType)>=0) return 'data';
+  if(['blockchain','from_pc'].indexOf(portType)>=0) return 'network';
+  if(['wallet','to_lnwallet','from_wallet','from_ln','to_exchange'].indexOf(portType)>=0) return 'coin';
+  if(['network','ln_node','from_server','from_research'].indexOf(portType)>=0) return 'network';
+  return 'data';
+}
+
+function isMultiPort(nodeType, portType){
+  if(nodeType==='mining_pc' && (portType==='cpu'||portType==='power'||portType==='cooler')) return true;
+  if(nodeType==='blockchain' && portType==='from_pc') return true;
+  if(nodeType==='wallet' && portType==='from_pc') return true;
+  if(nodeType==='server' && (portType==='network'||portType==='firewall'||portType==='virusbuster')) return true;
+  if(nodeType==='research_lab' && portType==='from_pc') return true;
+  return false;
+}
+
+function countPortConnections(nodeId, portType, side){
+  return connections.filter(function(c){
+    if(side==='right') return c.to===nodeId && c.toPort===portType;
+    return c.from===nodeId && c.fromPort===portType;
+  }).length;
+}
+
+var compatiblePorts = [];
+function updateCompatiblePorts(fromPort){
+  compatiblePorts = [];
+  if(!fromPort) return;
+  nodes.forEach(function(n){
+    var ports = getNodePortPositions(n);
+    ports.forEach(function(p){
+      if(fromPort.side==='left' && p.side==='right'){
+        if(canConnect(fromPort,p)) compatiblePorts.push({nodeId:p.nodeId,defIndex:p.defIndex});
+      } else if(fromPort.side==='right' && p.side==='left'){
+        if(canConnect(p,fromPort)) compatiblePorts.push({nodeId:p.nodeId,defIndex:p.defIndex});
+      }
+    });
+  });
+}
+function isCompatiblePort(nodeId, defIndex){
+  return compatiblePorts.some(function(cp){return cp.nodeId===nodeId && cp.defIndex===defIndex});
+}
+
+// ===== NODE TYPES =====
+var NODE_TYPES = {
+  mining_pc:{name:'マイニングPC',emoji:'💻',price:0,titleColor:'#2a7a4a',watt:0,category:'pc'},
+  server:{name:'サーバー',emoji:'🖥️',price:30,titleColor:'#2a5a7a',watt:0,category:'pc',requireResearch:'ln_basics'},
+  cpu:{name:'CPU',emoji:'🔲',price:1,titleColor:'#aa9922',watt:5,category:'parts'},
+  cpu_mk2:{name:'CPU Mk2',emoji:'🔲',price:5,titleColor:'#ccaa22',watt:8,category:'parts',requireResearch:'hi_cpu'},
+  quantum_cpu:{name:'量子CPU',emoji:'💎',price:80,titleColor:'#8844cc',watt:25,category:'parts',requireResearch:'quantum'},
+  power:{name:'電源',emoji:'🔌',price:1,titleColor:'#aa3333',watt:0,supply:20,category:'parts'},
+  power_mk2:{name:'電源Mk2',emoji:'🔌',price:5,titleColor:'#cc4444',watt:0,supply:50,category:'parts',requireResearch:'hi_power'},
+  solar_power:{name:'ソーラー電源',emoji:'☀️',price:8,titleColor:'#ccaa22',watt:0,supply:10,isSolar:true,category:'parts',requireResearch:'solar_panel'},
+  fusion_power:{name:'核融合電源',emoji:'⚛️',price:100,titleColor:'#cc6622',watt:0,supply:200,category:'parts',requireResearch:'fusion_power'},
+  cooler:{name:'空冷ファン',emoji:'🌀',price:3,titleColor:'#4499aa',watt:2,cooling:15,category:'parts'},
+  water_cooler:{name:'水冷',emoji:'💧',price:15,titleColor:'#2255cc',watt:5,cooling:40,category:'parts',requireResearch:'cooling_tech'},
+  loop_cooler:{name:'カスタム水冷',emoji:'🔵',price:40,titleColor:'#1133aa',watt:8,cooling:70,category:'parts',requireResearch:'loop_cooling'},
+  ssd:{name:'SSD',emoji:'💾',price:5,titleColor:'#339955',watt:2,category:'parts',requireResearch:'storage_opt'},
+  network:{name:'ネットワーク',emoji:'📡',price:8,titleColor:'#7744aa',watt:2,category:'parts',requireResearch:'ln_basics'},
+  ai:{name:'AI',emoji:'🤖',price:30,titleColor:'#aa4477',watt:10,category:'parts',requireResearch:'ai_mining'},
+  tpu:{name:'TPU',emoji:'🔧',price:50,titleColor:'#6688cc',watt:15,category:'parts',requireResearch:'tpu_boost'},
+  firewall:{name:'FW',emoji:'🛡️',price:10,titleColor:'#bb6622',watt:1,category:'parts',requireResearch:'ln_basics'},
+  custom_pc_bundle:{name:'高性能マイニングPC',emoji:'🖥',price:50,titleColor:'#225522',watt:0,category:'pc',requireResearch:'custom_pc'},
+  blockchain:{name:'ブロックチェーン',emoji:'⛓️',price:0,titleColor:'#3366cc',watt:0,category:'network'},
+  wallet:{name:'ウォレット',emoji:'👛',price:0,titleColor:'#aa8822',watt:0,category:'network'},
+  research_lab:{name:'研究施設',emoji:'🔬',price:10,titleColor:'#2288aa',watt:0,category:'network',requireResearch:'_lab_unlock'},
+  ln_node:{name:'Lightning Network',emoji:'⚡',price:30,titleColor:'#ff9900',watt:0,category:'network',requireResearch:'ln_basics'},
+  ln_wallet:{name:'LNウォレット',emoji:'💰',price:20,titleColor:'#ddaa00',watt:0,category:'network',requireResearch:'ln_basics'},
+  virusbuster:{name:'ウイルスバスター',emoji:'🛡',price:20,titleColor:'#226633',watt:3,category:'parts',requireResearch:'virusbuster_tech'},
+  nft:{name:'NFT',emoji:'🎨',price:20,titleColor:'#cc44aa',watt:0,category:'network',requireResearch:'nft_market'},
+  exchange:{name:'取引所',emoji:'🏦',price:40,titleColor:'#6633cc',watt:0,category:'network',requireResearch:'exchange'},
+};
+
+function getPortDefs(nodeType){
+  switch(nodeType){
+    case 'mining_pc': return [
+      {side:'right',type:'cpu',label:'CPU'},
+      {side:'right',type:'cooler',label:'冷却'},
+      {side:'right',type:'ssd',label:'SSD'},
+      {side:'right',type:'llm',label:'LLM'},
+      {side:'right',type:'power',label:'電源'},
+      {side:'left',type:'blockchain',label:'BC'},
+      {side:'left',type:'wallet',label:'ウォレット'},
+      {side:'left',type:'to_nft',label:'NFT'},
+      {side:'left',type:'to_research',label:'研究'},
+    ];
+    case 'server': return [
+      {side:'right',type:'power',label:'電源'},
+      {side:'right',type:'network',label:'NET'},
+      {side:'right',type:'virusbuster',label:'VB'},
+      {side:'right',type:'firewall',label:'FW'},
+      {side:'left',type:'ln_node',label:'LN'},
+    ];
+    case 'cpu': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'cpu_mk2': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'quantum_cpu': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'power': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'power_mk2': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'solar_power': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'fusion_power': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'cooler': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'water_cooler': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'loop_cooler': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'ssd': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'network': return [{side:'left',type:'to_pc',label:'→SV'}];
+    case 'ai': return [{side:'left',type:'to_llm',label:'→LLM'}];
+    case 'tpu': return [{side:'left',type:'to_llm',label:'→LLM'}];
+    case 'firewall': return [{side:'left',type:'to_pc',label:'→PC'}];
+    case 'virusbuster': return [{side:'left',type:'to_sv',label:'→SV'}];
+    case 'blockchain': return [{side:'right',type:'from_pc',label:'←PC'}];
+    case 'wallet': return [
+      {side:'right',type:'from_pc',label:'←PC'},
+      {side:'left',type:'to_lnwallet',label:'→LNW'},
+      {side:'left',type:'to_exchange',label:'→取引所'},
+    ];
+    case 'research_lab': return [
+      {side:'right',type:'from_pc',label:'←PC'},
+    ];
+    case 'ln_node': return [
+      {side:'right',type:'from_server',label:'←SV'},
+    ];
+    case 'ln_wallet': return [
+      {side:'right',type:'from_ln',label:'←LN'},
+      {side:'right',type:'from_wallet',label:'←ウォレット'},
+    ];
+    case 'nft': return [
+      {side:'right',type:'from_pc',label:'←PC'},
+    ];
+    case 'exchange': return [
+      {side:'right',type:'from_wallet',label:'←ウォレット'},
+    ];
+    default: return [];
+  }
+}
+
+// ===== RESEARCH TREE =====
+var RESEARCH_TREE = [
+  // Mining tree
+  {id:'basic_mining',name:'マイニング入門',emoji:'🎓',tree:'mining',row:0,col:0,
+    desc:'📝 始め方:\n1. CPU🔲の左ポートをPC💻の右ポートにドラッグ\n2. 電源🔌の左ポートをPC💻の右ポートにドラッグ\n3. PC💻の左ポートをブロックチェーン⛓️の右ポートにドラッグ\n4. PC💻の左ポートをウォレット👛の右ポートにドラッグ\n5. マイニング開始！ゲージが100%になるとコイン獲得',
+    cost:0,prereq:null,effect:'初期解放済み',
+    conditions:null},
+  {id:'_lab_unlock',name:'研究施設建設',emoji:'🔬',tree:'mining',row:1,col:0,
+    desc:'🔬研究施設が購入可能に。PCを接続すると研究ポイント(RP)が蓄積される。RPで更なる研究を解放しよう！',
+    cost:0,prereq:'basic_mining',effect:'🔬研究施設ノードがショップに追加',
+    conditions:{minTotalMined:5}},
+  // 研究施設から3方向に分岐
+  {id:'cooling_tech',name:'水冷システム',emoji:'💧',tree:'mining',row:2,col:1,
+    desc:'水冷💧が購入可能に。空冷ファンより強力な冷却で高負荷マシンも安定稼働（発熱-40/s）',
+    cost:40,prereq:'_lab_unlock',effect:'水冷💧がショップに追加（発熱-40/s）',
+    conditions:{minNodeCount:{cooler:1}}},
+  {id:'hi_power',name:'高出力電源',emoji:'🔌',tree:'mining',row:2,col:2,
+    desc:'電源Mk2が購入可能に。供給50W。ショップのパーツタブに追加',
+    cost:60,prereq:'_lab_unlock',effect:'電源Mk2がショップに追加',
+    conditions:{minNodeCount:{power:2}}},
+  {id:'hi_cpu',name:'高性能CPU',emoji:'🔲',tree:'mining',row:2,col:3,
+    desc:'CPU Mk2が購入可能に。演算力+3/消費8W。ショップのパーツタブに追加',
+    cost:80,prereq:'_lab_unlock',effect:'CPU Mk2ノードがショップに追加',
+    conditions:{minNodeCount:{cpu:3}}},
+
+  // 各ブランチの2段目
+  {id:'loop_cooling',name:'カスタム水冷',emoji:'🔵',tree:'mining',row:3,col:1,
+    desc:'カスタム水冷🔵が購入可能に。プロ仕様の冷却システムで最高の安定性（発熱-70/s）',
+    cost:150,prereq:'cooling_tech',effect:'カスタム水冷🔵がショップに追加（発熱-70/s）',
+    conditions:{minNodeCount:{water_cooler:1}}},
+  {id:'solar_panel',name:'ソーラーパネル',emoji:'☀️',tree:'mining',row:3,col:2,
+    desc:'ソーラー電源が購入可能。無料の電力だが供給は5-15Wで変動',
+    cost:120,prereq:'hi_power',effect:'ソーラーパネルノードがショップに追加',
+    conditions:null},
+  {id:'ai_mining',name:'AIマイニング',emoji:'🧠',tree:'mining',row:3,col:3,
+    desc:'🤖AIノードが購入可能に。PCのLLMポートに接続。処理速度3倍。CPUが2個以上必要',
+    cost:150,prereq:'hi_cpu',effect:'🤖AIノードがショップに追加＋AI効果3倍',
+    conditions:{minTotalMined:30}},
+
+  // 3ブランチの先からカスタムPCに収束
+  {id:'custom_pc',name:'高性能マイニングPC',emoji:'🖥',tree:'mining',row:4,col:1,
+    desc:'カスタム水冷・高性能CPU・ソーラー電源が全て接続されたPCをワンタップ設置！毎回組み立て不要。ショップのPCタブから購入できる',
+    cost:300,prereq:'solar_panel',effect:'高性能マイニングPCがショップに追加',
+    conditions:{researchDone:['loop_cooling','ai_mining']}},
+
+  // 続き（量子・TPU）
+  {id:'fusion_power',name:'核融合電源',emoji:'⚛️',tree:'mining',row:4,col:2,
+    desc:'核融合電源が購入可能。供給200W。これ1つで全て賄える',
+    cost:800,prereq:'solar_panel',effect:'核融合電源ノードがショップに追加',
+    conditions:{minTotalMined:200}},
+  {id:'quantum',name:'量子コンピュータ',emoji:'💎',tree:'mining',row:4,col:3,
+    desc:'量子CPUが購入可能に。演算力+20/消費25W。ショップに追加',
+    cost:500,prereq:'ai_mining',effect:'量子CPUノードがショップに追加',
+    conditions:{minNodeCount:{mining_pc:5}}},
+  {id:'tpu_boost',name:'TPU最適化',emoji:'🔧',tree:'mining',row:5,col:3,
+    desc:'TPUが購入可能に。AI処理を5倍高速化。AIとTPUの両方をPCのLLMポートに接続',
+    cost:1000,prereq:'quantum',effect:'TPUノードがショップに追加',
+    conditions:null},
+
+  // 右端の最適化ライン（縦並び）
+  {id:'gpu_boost',name:'GPU最適化',emoji:'🎮',tree:'mining',row:2,col:5,
+    desc:'CPUの演算力が1.5倍に。より多くのCPUをPCに接続しよう',
+    cost:30,prereq:'_lab_unlock',effect:'全CPU演算力1.5倍',
+    conditions:null},
+  {id:'power_eff',name:'電力効率改善',emoji:'🌱',tree:'mining',row:3,col:5,
+    desc:'全電源の供給量が+25%。電源🔌をPCに接続して使う',
+    cost:20,prereq:'gpu_boost',effect:'電源供給20W→25W',
+    conditions:null},
+  {id:'storage_opt',name:'ストレージ最適化',emoji:'💾',tree:'mining',row:4,col:5,
+    desc:'💾SSDノードが購入可能に。PCに接続するとマイニング速度1.3倍',
+    cost:25,prereq:'power_eff',effect:'💾SSDノードがショップに追加',
+    conditions:null},
+
+  // Network tree
+  {id:'ln_basics',name:'オフチェーン取引への参加',emoji:'⚡',tree:'network',row:0,col:0,
+    desc:'⚡ サーバー🖥️とLightning Network⚡が購入可能に。サーバーに電源・ネットワーク📡を接続し、Lightning Networkをつなごう。資金を入金するとルーティング手数料が自動で貯まる。1000₱入金→毎秒1₱の手数料収入（要出金）',
+    cost:0,prereq:null,effect:'🖥️サーバー・⚡Lightning Network・📡ネットワークがショップに追加',
+    conditions:{minTotalMined:5}},
+  {id:'virusbuster_tech',name:'ウイルスバスター',emoji:'🛡',tree:'network',row:1,col:0,
+    desc:'🛡 ウイルスバスターノードが購入可能に。サーバーに接続するとウイルスを自動で除去（60秒）。ウイルス感染時はLN残高の10%が盗まれる危険あり！完全な防御には冗長構成が必要',
+    cost:80,prereq:'ln_basics',effect:'ウイルスバスターノードがショップに追加',
+    conditions:{minNodeCount:{server:1}}},
+  {id:'vb_upgrade1',name:'VB強化 Lv2',emoji:'🛡',tree:'network',row:2,col:0,
+    desc:'ウイルスバスターの駆除時間が60秒→40秒に短縮。ただし0秒には絶対できない。完全な対策には冗長構成（サーバーを複数LNに接続）が必要',
+    cost:150,prereq:'virusbuster_tech',effect:'VB駆除時間40秒に短縮',
+    conditions:{minNodeCount:{virusbuster:1}}},
+  {id:'vb_upgrade2',name:'VB強化 Lv3',emoji:'🛡',tree:'network',row:3,col:0,
+    desc:'ウイルスバスターの駆除時間が40秒→20秒に短縮。これ以上の短縮は不可。サーバーを複数LNに接続する冗長構成でウイルス感染中も稼働継続が可能',
+    cost:300,prereq:'vb_upgrade1',effect:'VB駆除時間20秒に短縮',
+    conditions:{minNodeCount:{virusbuster:1}}},
+  {id:'channel_opt',name:'チャネル最適化',emoji:'📡',tree:'network',row:1,col:1,
+    desc:'LNルーティング手数料が2倍に',
+    cost:200,prereq:'ln_basics',effect:'LN手数料2倍',
+    conditions:null},
+  {id:'dist_routing',name:'分散型ルーティング',emoji:'🌐',tree:'network',row:2,col:1,
+    desc:'LNルーティング手数料が3倍に。Lightning Networkに複数サーバーを接続することで冗長構成が可能。バックアップサーバーがあれば、感染サーバーがあっても正常なサーバーでルーティングを継続できる',
+    cost:600,prereq:'channel_opt',effect:'LN手数料3倍・冗長サーバー構成が可能',
+    conditions:{minNodeCount:{server:3}}},
+
+  // Revenue tree
+  {id:'nft_market',name:'NFTマーケット',emoji:'🎨',tree:'revenue',row:0,col:0,
+    desc:'NFTノード🎨が購入可能。PC💻→NFT🎨で定期的にNFT生成。生成されたNFTが自動で売れてコインに。売値はランダム（1-10₱）',
+    cost:200,prereq:null,effect:'NFTノードがショップに追加',
+    conditions:null},
+  {id:'exchange',name:'取引所',emoji:'🏦',tree:'revenue',row:1,col:0,
+    desc:'取引所ノード🏦が購入可能。ウォレット👛→取引所🏦でレンディング。一定額ロック→利息付き返却。ハッキングリスクあり',
+    cost:400,prereq:null,effect:'取引所ノードがショップに追加',
+    conditions:{minTotalCoins:100}},
+];
+
+var researchCompleted = ['basic_mining'];
+
+// ===== STATISTICS =====
+var stats = {
+  totalMined: 0,
+  totalCoinsEarned: 0,
+  researchPoints: 0,
+};
+
+function getNodeCounts(){
+  var counts = {};
+  nodes.forEach(function(n){
+    counts[n.type] = (counts[n.type]||0) + 1;
+  });
+  return counts;
+}
+
+// ===== CAMERA =====
+var camera = {x:0, y:0, zoom:1};
+
+// ===== GAME STATE =====
+var nodes = [];
+var connections = [];
+var effects = [];
+var particles = [];
+var balance = 0;
+var difficulty = 1.0;
+var malwareTimer = 0;
+var blackoutTimer = 0;
+var researchPanelTimer = 0;
+var gameTime = 0;
+var miningCheckTimer = 0;
+var selectedShopItem = null;
+var currentShopTab = 'pc';
+var gameStarted = false;
+var nextNodeId = 1;
+var canvasW, canvasH, gameAreaTop, gameAreaBottom;
+var hintShown = true;
+var hintTimer = 0;
+var hintFadeState = 'waiting';
+var hintFadeTimer = 0;
+var labUnlocked = false;
+var labUnlockShown = false;
+
+// Drag state
+var dragMode = null;
+var dragNode = null;
+var dragOffX = 0, dragOffY = 0;
+var dragPort = null;
+var dragLineEnd = null;
+var hoverPort = null;
+var lastPointerX = null, lastPointerY = null;
+var cameraStartX = 0, cameraStartY = 0;
+var pointerStartX = 0, pointerStartY = 0;
+
+// Pinch state
+var pinchDist = 0;
+var pinching = false;
+var pinchMidX = 0, pinchMidY = 0;
+
+// Animated power display per PC
+var animatedPower = {};
+
+// Double-tap detection for delete
+var lastTapTime = 0;
+var lastTapNodeId = null;
+
+// Shop drag & drop state
+var isShopDragging = false;
+var shopDragType = null;
+var shopDragStartX = 0;
+var shopDragStartY = 0;
+var shopDragMoved = false;
+
+var canvas = document.getElementById('gameCanvas');
+var ctx = canvas.getContext('2d');
+
+function resize(){
+  var dpr = window.devicePixelRatio || 1;
+  canvasW = window.innerWidth;
+  canvasH = window.innerHeight;
+  canvas.width = canvasW * dpr;
+  canvas.height = canvasH * dpr;
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  gameAreaTop = 42;
+  var bp = document.getElementById('bottomPanel');
+  gameAreaBottom = canvasH - (bp ? bp.offsetHeight : 80);
+}
+window.addEventListener('resize', resize);
+
+function screenToWorld(sx, sy){
+  return {
+    x: (sx - canvasW/2) / camera.zoom + camera.x + canvasW/2,
+    y: (sy - canvasH/2) / camera.zoom + camera.y + canvasH/2
+  };
+}
+
+function worldToScreen(wx, wy){
+  return {
+    x: (wx - camera.x - canvasW/2) * camera.zoom + canvasW/2,
+    y: (wy - camera.y - canvasH/2) * camera.zoom + canvasH/2
+  };
+}
+
+function centerCameraOnBlockchain(){
+  if(nodes.length === 0) return;
+  var sumX = 0, sumY = 0;
+  nodes.forEach(function(n){ sumX += n.x + WIN_W/2; sumY += n.y + 30; });
+  var cx = sumX / nodes.length;
+  var cy = sumY / nodes.length;
+  camera.x = cx - canvasW/2;
+  camera.y = cy - canvasH/2;
+  camera.zoom = 1;
+}
+
+// ===== UNLOCK MESSAGE =====
+function showUnlockMsg(text){
+  var el = document.getElementById('unlockMsg');
+  el.textContent = text;
+  el.classList.add('show');
+  setTimeout(function(){el.classList.remove('show')},3000);
+}
+
+// ===== TITLE SCREEN =====
+(function titleAnim(){
+  var tc = document.getElementById('titleCanvas');
+  var tctx = tc.getContext('2d');
+  var dpr = window.devicePixelRatio||1;
+  function resizeTitle(){tc.width=window.innerWidth*dpr;tc.height=window.innerHeight*dpr;tctx.setTransform(dpr,0,0,dpr,0,0)}
+  resizeTitle();
+  var lines=[];
+  for(var i=0;i<30;i++)lines.push({x:Math.random()*window.innerWidth,y:Math.random()*window.innerHeight,l:50+Math.random()*100,a:Math.random()*Math.PI*2,s:0.2+Math.random()*0.5});
+  function drawTitle(){
+    if(gameStarted)return;
+    var w=window.innerWidth,h=window.innerHeight;
+    tctx.fillStyle='#0a0e27';tctx.fillRect(0,0,w,h);
+    tctx.strokeStyle='#1a2050';tctx.lineWidth=0.5;
+    for(var x=0;x<w;x+=40){tctx.beginPath();tctx.moveTo(x,0);tctx.lineTo(x,h);tctx.stroke()}
+    for(var y2=0;y2<h;y2+=40){tctx.beginPath();tctx.moveTo(0,y2);tctx.lineTo(w,y2);tctx.stroke()}
+    var t=Date.now()*0.001;
+    lines.forEach(function(ln){
+      tctx.strokeStyle='rgba(74,106,255,'+(0.15+0.1*Math.sin(t+ln.x))+')';
+      tctx.lineWidth=1;
+      tctx.beginPath();tctx.moveTo(ln.x,ln.y);
+      tctx.lineTo(ln.x+Math.cos(ln.a)*ln.l,ln.y+Math.sin(ln.a)*ln.l);
+      tctx.stroke();
+    });
+    requestAnimationFrame(drawTitle);
+  }
+  drawTitle();
+})();
+
+document.getElementById('startBtn').addEventListener('click', function(){
+  ensureAudio();
+  document.getElementById('titleScreen').style.display='none';
+  gameStarted=true;
+  initGame();
+});
+
+function resetGame(){
+  if(confirm('全データを初期化しますか？')){
+    localStorage.removeItem('picocoin_save');
+    location.reload();
+  }
+}
+
+// ===== NODE DISPLAY LINES =====
+function getNodeLines(n){
+  var nt = NODE_TYPES[n.type];
+  var lines = [];
+  if(n.type==='mining_pc'){
+    var s = getPCStats(n);
+    var isMining = s.canMine && !n.infected && s.powerOk;
+    var heatPct = Math.round(s.heat||0);
+    var heatLabel = s.heatGenRate===0?'—':heatPct+'% '+(heatPct>=80?'🔥':heatPct>=60?'⚠️':'✅');
+    lines.push({text:'CPU: '+s.cpus+'個 ⚡'+s.effectiveRate.toFixed(1)+'H/s', rightPort:0});
+    lines.push({text:'🌡 '+heatLabel, bar:(s.heat||0)/100, barOk:(s.heat||0)<60, barHeat:true, rightPort:1});
+    lines.push({text:'SSD: '+(s.ssds>0?'✅ x'+s.ssds:'—'), rightPort:2});
+    var aiCount = s.ais||0; var tpuCount = s.tpus||0;
+    lines.push({text:'LLM: '+(aiCount>0?'🤖 AI×'+aiCount+(tpuCount>0?' TPU×'+tpuCount:''):'—'), rightPort:3});
+    lines.push({text:'電力: '+s.powerUsed+'/'+s.powerSupply+'W', bar:s.powerSupply>0?Math.min(s.powerUsed/s.powerSupply,1.5):0, barOk:s.powerOk, rightPort:4});
+    lines.push({text:(isMining?'⛏':'⏹')+' マイニング', miningGauge:n.miningProgress||0, isMining:isMining, leftPort:0});
+    lines.push({text:'→ ウォレット', leftPort:1});
+    lines.push({text:'→ NFT', leftPort:2});
+    lines.push({text:'→ 研究施設', leftPort:3});
+  } else if(n.type==='server'){
+    var sv = getServerStats(n);
+    var isRedundant = isRedundantServer(n);
+    var isRouting = sv.canRoute && !n.infected && sv.powerOk;
+    var statusLabel = n.infected ? '🦠ウイルス感染！' : (isRedundant ? '🔄冗長待機中' : (isRouting ? '📡稼働中' : '⏹停止'));
+    lines.push({text:'状態: '+statusLabel});
+    lines.push({text:'電力: '+sv.powerUsed+'/'+sv.powerSupply+'W', bar:sv.powerSupply>0?Math.min(sv.powerUsed/sv.powerSupply,1.5):0, barOk:sv.powerOk, rightPort:0});
+    lines.push({text:'NET: '+(sv.networks>0?'✅ x'+sv.networks:'—'), rightPort:1});
+    if(n.infected && sv.hasVB){
+      var vbNodes2=connections.filter(function(c2){return c2.to===n.id}).map(function(c2){return nodes.find(function(n3){return n3.id===c2.from&&n3.type==='virusbuster'})}).filter(Boolean);
+      var vbLvShow=vbNodes2.reduce(function(a,vb){return a+(vb.vbLevel||1)},0)||1;
+      var cureBase=researchCompleted.indexOf('vb_upgrade2')>=0?20:researchCompleted.indexOf('vb_upgrade1')>=0?40:60;
+      var cureTimeShow=Math.max(5,cureBase/vbLvShow);
+      lines.push({text:'VB駆除中: '+Math.min(100,Math.floor((n.virusCureTimer||0)/cureTimeShow*100))+'%', bar:(n.virusCureTimer||0)/cureTimeShow, barOk:true, rightPort:2});
+    } else {
+      lines.push({text:'VB: '+(sv.hasVB?'✅ 監視中':'—'), rightPort:2});
+    }
+    lines.push({text:n.infected&&!sv.hasFW&&!sv.hasVB?'🚨 FW接続で駆除！':'FW: '+(sv.hasFW?'✅':'—'), rightPort:3});
+    lines.push({text:'→ Lightning', leftPort:0});
+  } else if(n.type==='cpu'){
+    var gpuB = researchCompleted.indexOf('gpu_boost')>=0;
+    lines.push({text:'演算力: +1'+(gpuB?' × 1.5':'')+'  消費'+nt.watt+'W  🔥+'+nt.watt+'/s', leftPort:0});
+  } else if(n.type==='cpu_mk2'){
+    var gpuB2 = researchCompleted.indexOf('gpu_boost')>=0;
+    lines.push({text:'演算力: +3'+(gpuB2?' × 1.5':'')+'  消費'+nt.watt+'W  🔥+'+nt.watt+'/s', leftPort:0});
+  } else if(n.type==='quantum_cpu'){
+    lines.push({text:'演算力: +20  消費'+nt.watt+'W  🔥+'+nt.watt+'/s', leftPort:0});
+  } else if(n.type==='power'){
+    var sup = getEffectiveSupply(n);
+    lines.push({text:'供給: '+(n.blackout?'0':sup)+'W'+(n.blackout?' ⚡停電':''), leftPort:0});
+  } else if(n.type==='power_mk2'){
+    var sup2 = getEffectiveSupply(n);
+    lines.push({text:'供給: '+(n.blackout?'0':sup2)+'W'+(n.blackout?' ⚡停電':''), leftPort:0});
+  } else if(n.type==='solar_power'){
+    var sv2 = n.solarOutput||10;
+    lines.push({text:'供給: '+sv2+'W (変動)', leftPort:0});
+  } else if(n.type==='fusion_power'){
+    lines.push({text:'供給: 200W', leftPort:0});
+  } else if(n.type==='cooler'){
+    lines.push({text:'冷却-15/s / '+nt.watt+'W', leftPort:0});
+  } else if(n.type==='water_cooler'){
+    lines.push({text:'冷却-40/s / '+nt.watt+'W', leftPort:0});
+  } else if(n.type==='loop_cooler'){
+    lines.push({text:'冷却-70/s / '+nt.watt+'W', leftPort:0});
+  } else if(n.type==='ssd'){
+    lines.push({text:'速度1.3倍 / '+nt.watt+'W', leftPort:0});
+  } else if(n.type==='network'){
+    lines.push({text:'→サーバーへ接続 / '+nt.watt+'W', leftPort:0});
+  } else if(n.type==='ai'){
+    var aiMult = researchCompleted.indexOf('ai_mining')>=0 ? 3 : 2;
+    lines.push({text:'LLM処理'+aiMult+'倍  🔥+'+nt.watt+'/s (CPU2個必要)', leftPort:0});
+  } else if(n.type==='tpu'){
+    lines.push({text:'LLM推論5倍  🔥+'+nt.watt+'/s', leftPort:0});
+  } else if(n.type==='virusbuster'){
+    var vbLv = n.vbLevel || 1;
+    var cureTime = Math.max(5, 60 / vbLv);
+    lines.push({text:'自動駆除: '+cureTime.toFixed(0)+'秒 / '+nt.watt+'W', leftPort:0});
+  } else if(n.type==='firewall'){
+    lines.push({text:'自動駆除 / '+nt.watt+'W', leftPort:0});
+  } else if(n.type==='blockchain'){
+    var pcCount = connections.filter(function(c){
+      var fromN = nodes.find(function(nd){return nd.id===c.from});
+      return fromN && fromN.type==='mining_pc' && c.to===n.id;
+    }).length;
+    lines.push({text:'PC接続: '+pcCount+'台', rightPort:0});
+  } else if(n.type==='wallet'){
+    lines.push({text:'残高: '+balance+'₱', rightPort:0});
+    lines.push({text:'→ LNW', leftPort:0});
+    lines.push({text:'→ 取引所', leftPort:1});
+  } else if(n.type==='research_lab'){
+    var rpRate = getLabRPRate(n);
+    lines.push({text:'RP蓄積: '+rpRate.toFixed(1)+' RP/s', rightPort:0});
+    lines.push({text:'🔬 RP生成中', miningGauge:n.rpProgress||0, isMining:rpRate>0});
+  } else if(n.type==='ln_node'){
+    var lnBal = n.lnBalance || 0;
+    var lnEarned = n.lnEarned || 0;
+    var routeRate = lnBal / 1000;
+    lines.push({text:'入金残高: '+lnBal.toFixed(0)+'₱', rightPort:0});
+    lines.push({text:'ルート: '+(routeRate >= 0.001 ? routeRate.toFixed(3)+'/秒' : '待機中')});
+    lines.push({text:'未出金手数料: '+lnEarned.toFixed(2)+'₱'});
+    lines.push({text:'[＋入金 10₱]',    lnDeposit:10});
+    lines.push({text:'[＋入金 100₱]',   lnDeposit:100});
+    lines.push({text:'[＋入金 1000₱]',  lnDeposit:1000});
+    lines.push({text:'[＋入金 10000₱]', lnDeposit:10000});
+    lines.push({text:'[← 手数料を出金]',  lnWithdraw:'fee'});
+    lines.push({text:'[← 残高含め出金]',  lnWithdraw:'all'});
+  } else if(n.type==='ln_wallet'){
+    var lnwBal = n.lnwBalance || 0;
+    lines.push({text:'残高: '+lnwBal.toFixed(1)+'₱', rightPort:0});
+    lines.push({text:'', rightPort:1});
+  } else if(n.type==='nft'){
+    var nftCount = n.nftCount || 0;
+    lines.push({text:'生成済NFT: '+nftCount, rightPort:0});
+    lines.push({text:'次の生成: '+Math.max(0,(n.nftTimer||10)-0).toFixed(0)+'s'});
+  } else if(n.type==='exchange'){
+    var exBal = n.exBalance || 0;
+    var locked = n.exLocked || 0;
+    var hacked = n.exHacked || false;
+    var statusText = hacked ? '🔓ハッキング！' : (locked>0 ? '🔒ロック中' : '📈運用中');
+    lines.push({text:statusText});
+    lines.push({text:'預金: '+exBal.toFixed(1)+'₱', rightPort:0});
+  }
+  return lines;
+}
+
+function getNodeHeight(n){
+  return TITLE_H + getNodeLines(n).length * LINE_H + 4;
+}
+
+function getEffectiveSupply(n){
+  var base = NODE_TYPES[n.type].supply || 0;
+  if(n.type==='solar_power') return n.solarOutput || 10;
+  if(researchCompleted.indexOf('power_eff')>=0) base = Math.floor(base * 1.25);
+  return base;
+}
+
+function getLabRPRate(lab){
+  var connectedPCs = connections.filter(function(c){return c.to===lab.id && c.toPort==='from_pc'});
+  var totalRate = 0;
+  connectedPCs.forEach(function(conn){
+    var pc = nodes.find(function(nd){return nd.id===conn.from});
+    if(pc && pc.type==='mining_pc'){
+      var s = getPCStats(pc);
+      totalRate += s.effectiveRate * 0.1;
+    }
+  });
+  return totalRate;
+}
+
+// ===== PORT POSITIONS =====
+function getNodePortPositions(n){
+  var portDefs = getPortDefs(n.type);
+  var nodeLines = getNodeLines(n);
+  var result = [];
+  var leftPorts = [];
+  var rightPorts = [];
+  nodeLines.forEach(function(line, i){
+    if(line.leftPort !== undefined) leftPorts.push({lineIdx:i, portIdx:line.leftPort});
+    if(line.rightPort !== undefined) rightPorts.push({lineIdx:i, portIdx:line.rightPort});
+  });
+
+  var leftDefIdx = 0, rightDefIdx = 0;
+  portDefs.forEach(function(pd, pi){
+    var px, py;
+    if(pd.side==='left'){
+      var lp = leftPorts.find(function(p){return p.portIdx===leftDefIdx});
+      if(lp){ px = n.x; py = n.y + TITLE_H + lp.lineIdx * LINE_H + LINE_H/2; }
+      else { px = n.x; py = n.y + TITLE_H + (nodeLines.length-1)*LINE_H + LINE_H/2; }
+      leftDefIdx++;
+    } else {
+      var rp = rightPorts.find(function(p){return p.portIdx===rightDefIdx});
+      if(rp){ px = n.x + WIN_W; py = n.y + TITLE_H + rp.lineIdx * LINE_H + LINE_H/2; }
+      else { px = n.x + WIN_W; py = n.y + TITLE_H + (nodeLines.length-1)*LINE_H + LINE_H/2; }
+      rightDefIdx++;
+    }
+    result.push({x:px, y:py, side:pd.side, type:pd.type, label:pd.label, defIndex:pi, nodeId:n.id, nodeType:n.type});
+  });
+  return result;
+}
+
+// ===== CONNECTION VALIDATION =====
+function canConnect(fromPort, toPort){
+  if(fromPort.side!=='left' || toPort.side!=='right') return false;
+  if(fromPort.nodeId===toPort.nodeId) return false;
+  var fromNode = nodes.find(function(nd){return nd.id===fromPort.nodeId});
+  var toNode = nodes.find(function(nd){return nd.id===toPort.nodeId});
+  if(!fromNode || !toNode) return false;
+  var exists = connections.some(function(c){
+    return c.from===fromPort.nodeId && c.to===toPort.nodeId && c.fromPort===fromPort.type && c.toPort===toPort.type;
+  });
+  if(exists) return false;
+
+  var cpuTypes = ['cpu','cpu_mk2','quantum_cpu'];
+  var powerTypes = ['power','power_mk2','solar_power','fusion_power'];
+  var partTypes = cpuTypes.concat(powerTypes).concat(['cooler','water_cooler','loop_cooler','ssd','network','firewall','ai','tpu']);
+
+  // Parts → PC
+  if(partTypes.indexOf(fromNode.type)>=0 && fromPort.type==='to_pc'){
+    if(toNode.type==='mining_pc'){
+      if(cpuTypes.indexOf(fromNode.type)>=0 && toPort.type==='cpu') return true;
+      if(powerTypes.indexOf(fromNode.type)>=0 && toPort.type==='power') return true;
+      if((fromNode.type==='cooler'||fromNode.type==='water_cooler'||fromNode.type==='loop_cooler') && toPort.type==='cooler') return true;
+      if(fromNode.type==='ssd' && toPort.type==='ssd') return true;
+      if(fromNode.type==='firewall' && toPort.type==='firewall') return true;
+      if((fromNode.type==='ai'||fromNode.type==='tpu') && toPort.type==='llm') return true;
+    }
+    if(toNode.type==='server'){
+      if(powerTypes.indexOf(fromNode.type)>=0 && toPort.type==='power') return true;
+      if(fromNode.type==='network' && toPort.type==='network') return true;
+      if(fromNode.type==='firewall' && toPort.type==='firewall') return true;
+    }
+  }
+  // PC → Blockchain/Wallet/NFT/Research
+  if(fromNode.type==='mining_pc'){
+    if(fromPort.type==='blockchain' && toNode.type==='blockchain' && toPort.type==='from_pc') return true;
+    if(fromPort.type==='wallet' && toNode.type==='wallet' && toPort.type==='from_pc') return true;
+    if(fromPort.type==='to_nft' && toNode.type==='nft' && toPort.type==='from_pc') return true;
+    if(fromPort.type==='to_research' && toNode.type==='research_lab' && toPort.type==='from_pc') return true;
+  }
+  // Server → LN
+  if(fromNode.type==='server' && fromPort.type==='ln_node' && toNode.type==='ln_node' && toPort.type==='from_server') return true;
+  // Virusbuster → Server
+  if(fromNode.type==='virusbuster' && fromPort.type==='to_sv' && toNode.type==='server' && toPort.type==='virusbuster') return true;
+  // Wallet → Exchange
+  if(fromNode.type==='wallet' && fromPort.type==='to_exchange' && toNode.type==='exchange' && toPort.type==='from_wallet') return true;
+
+  return false;
+}
+
+function addConnection(fromPort, toPort){
+  var lineType = 'data';
+  var fromNode = nodes.find(function(nd){return nd.id===fromPort.nodeId});
+  if(fromPort.type==='to_pc' && fromNode){
+    var powerTypes = ['power','power_mk2','solar_power','fusion_power'];
+    if(powerTypes.indexOf(fromNode.type)>=0) lineType = 'power';
+  }
+  if(fromPort.type==='wallet'||fromPort.type==='to_lnwallet'||fromPort.type==='to_exchange') lineType = 'coin';
+  if(fromPort.type==='ln_node') lineType = 'lightning';
+  if(fromPort.type==='blockchain') lineType = 'data';
+  if(fromPort.type==='to_nft'||fromPort.type==='to_research') lineType = 'data';
+
+  connections.push({
+    from:fromPort.nodeId, to:toPort.nodeId,
+    fromPort:fromPort.type, toPort:toPort.type,
+    fromDefIndex:fromPort.defIndex, toDefIndex:toPort.defIndex,
+    lineType:lineType
+  });
+  playSound('connect');
+  if(hintShown){hintShown=false;hintFadeState='hidden';document.getElementById('hint').style.opacity='0';}
+}
+
+// ===== PC STATS =====
+function getPCStats(pc){
+  if(pc.type!=='mining_pc') return {};
+  var attached = connections.filter(function(c){return c.to===pc.id}).map(function(c){return nodes.find(function(n2){return n2.id===c.from})}).filter(Boolean);
+  var outputs = connections.filter(function(c){return c.from===pc.id}).map(function(c){return nodes.find(function(n2){return n2.id===c.to})}).filter(Boolean);
+
+  var cpuTypes = ['cpu','cpu_mk2','quantum_cpu'];
+  var powerTypes = ['power','power_mk2','solar_power','fusion_power'];
+
+  var cpuNodes = attached.filter(function(n2){return cpuTypes.indexOf(n2.type)>=0});
+  var powerNodes = attached.filter(function(n2){return powerTypes.indexOf(n2.type)>=0 && !n2.blackout});
+  var coolerTypes = ['cooler','water_cooler','loop_cooler'];
+  var coolers = attached.filter(function(n2){return coolerTypes.indexOf(n2.type)>=0});
+  var ssds = attached.filter(function(n2){return n2.type==='ssd'});
+  var ais = attached.filter(function(n2){return n2.type==='ai'});
+  var tpus = attached.filter(function(n2){return n2.type==='tpu'});
+  var firewalls = attached.filter(function(n2){return n2.type==='firewall'});
+  var hasBlockchain = outputs.some(function(n2){return n2.type==='blockchain'});
+  var hasWallet = outputs.some(function(n2){return n2.type==='wallet'});
+  var hasNFT = outputs.some(function(n2){return n2.type==='nft'});
+  var hasResearch = outputs.some(function(n2){return n2.type==='research_lab'});
+
+  var powerUsed = 0;
+  attached.forEach(function(n2){
+    var share = Math.max(1, connections.filter(function(c){return c.from===n2.id&&c.fromPort==='to_pc'}).length);
+    powerUsed += (NODE_TYPES[n2.type].watt || 0) / share;
+  });
+  var powerSupply = 0;
+  powerNodes.forEach(function(n2){
+    var share = Math.max(1, connections.filter(function(c){return c.from===n2.id&&c.fromPort==='to_pc'}).length);
+    powerSupply += getEffectiveSupply(n2) / share;
+  });
+  var powerOk = powerSupply >= powerUsed && powerSupply > 0;
+  var canMine = cpuNodes.length > 0 && powerNodes.length > 0 && hasBlockchain && hasWallet && powerOk;
+
+  var hashrate = 0;
+  cpuNodes.forEach(function(c){
+    var share = Math.max(1, connections.filter(function(conn){return conn.from===c.id&&conn.fromPort==='to_pc'}).length);
+    var base = c.type==='cpu' ? 1 : (c.type==='cpu_mk2' ? 3 : 20);
+    hashrate += base / share;
+  });
+  var mult = 1;
+  if(researchCompleted.indexOf('gpu_boost')>=0) mult *= 1.5;
+  if(coolers.length>0) mult *= 1.5;
+  if(ssds.length>0) mult *= 1.3;
+  var aiMult = researchCompleted.indexOf('ai_mining')>=0 ? 3 : 2;
+  if(ais.length>0 && cpuNodes.length>=2){
+    var aiEff = aiMult;
+    if(tpus.length>0) aiEff *= 5;
+    mult *= aiEff;
+  }
+  if(pc.infected) mult *= 0.25;
+
+  // Heat calculation
+  var heatGenRate = 0;
+  cpuNodes.forEach(function(c){
+    var share = Math.max(1, connections.filter(function(conn){return conn.from===c.id&&conn.fromPort==='to_pc'}).length);
+    heatGenRate += (NODE_TYPES[c.type].watt||0) / share;
+  });
+  var coolingRate = 0;
+  coolers.forEach(function(c){
+    var share = Math.max(1, connections.filter(function(conn){return conn.from===c.id&&conn.fromPort==='to_pc'}).length);
+    coolingRate += (NODE_TYPES[c.type].cooling||15) / share;
+  });
+  var heat = pc.heat || 0;
+  var heatMult = heat>=100 ? 0 : heat>=80 ? 0.5 : heat>=60 ? 0.8 : 1;
+  if(pc.heatShutdown) heatMult = 0;
+
+  var effectiveRate = hashrate * mult * heatMult;
+  var gaugeSpeed = effectiveRate * 0.06 / difficulty;
+
+  return {cpus:cpuNodes.length,powers:powerNodes.length,coolers:coolers.length,ssds:ssds.length,ais:ais.length,tpus:tpus.length,
+    firewalls:firewalls.length,hasBlockchain:hasBlockchain,hasWallet:hasWallet,hasNFT:hasNFT,hasResearch:hasResearch,canMine:canMine,
+    hashrate:hashrate,mult:mult,effectiveRate:effectiveRate,gaugeSpeed:gaugeSpeed,
+    hasFW:firewalls.length>0,powerUsed:powerUsed,powerSupply:powerSupply,powerOk:powerOk,
+    heat:heat,heatGenRate:heatGenRate,coolingRate:coolingRate};
+}
+
+function getVBCureTime(vbLevel){
+  var base = researchCompleted.indexOf('vb_upgrade2')>=0 ? 20 : researchCompleted.indexOf('vb_upgrade1')>=0 ? 40 : 60;
+  return Math.max(5, base / (vbLevel||1));
+}
+
+// Returns true if this server is a backup (redundant) server for an LN node
+function isRedundantServer(sv){
+  var lnConns = connections.filter(function(c){return c.from===sv.id && nodes.find(function(n){return n.id===c.to&&n.type==='ln_node'})});
+  return lnConns.some(function(lnC){
+    var ln = nodes.find(function(n){return n.id===lnC.to});
+    if(!ln) return false;
+    var allSrvConns = connections.filter(function(c){return c.to===ln.id && nodes.find(function(n){return n.id===c.from&&n.type==='server'})});
+    if(allSrvConns.length < 2) return false;
+    var healthySrvIds = allSrvConns.map(function(c){return nodes.find(function(n){return n.id===c.from})}).filter(function(s){return s&&!s.infected}).map(function(s){return s.id});
+    var primaryId = healthySrvIds.length > 0 ? healthySrvIds[0] : null;
+    return sv.id !== primaryId;
+  });
+}
+
+function getServerStats(sv){
+  if(sv.type!=='server') return {};
+  var attached = connections.filter(function(c){return c.to===sv.id}).map(function(c){return nodes.find(function(n2){return n2.id===c.from})}).filter(Boolean);
+  var outputs = connections.filter(function(c){return c.from===sv.id}).map(function(c){return nodes.find(function(n2){return n2.id===c.to})}).filter(Boolean);
+  var powerTypes = ['power','power_mk2','solar_power','fusion_power'];
+  var powerNodes = attached.filter(function(n2){return powerTypes.indexOf(n2.type)>=0 && !n2.blackout});
+  var networks = attached.filter(function(n2){return n2.type==='network'});
+  var firewalls = attached.filter(function(n2){return n2.type==='firewall'});
+  var virusbusters = attached.filter(function(n2){return n2.type==='virusbuster'});
+  var hasLN = outputs.some(function(n2){return n2.type==='ln_node'});
+  var powerUsed = 0;
+  attached.forEach(function(n2){powerUsed += NODE_TYPES[n2.type].watt || 0});
+  var powerSupply = 0;
+  powerNodes.forEach(function(n2){powerSupply += getEffectiveSupply(n2)});
+  var powerOk = powerSupply >= powerUsed && powerSupply > 0;
+  var canRoute = powerNodes.length > 0 && hasLN && powerOk;
+  return {powers:powerNodes.length,networks:networks.length,firewalls:firewalls.length,virusbusters:virusbusters.length,
+    hasLN:hasLN,canRoute:canRoute,
+    hasFW:firewalls.length>0,hasVB:virusbusters.length>0,powerUsed:powerUsed,powerSupply:powerSupply,powerOk:powerOk};
+}
+
+// ===== SHOP =====
+var SHOP_TABS = {
+  pc:['mining_pc','custom_pc_bundle','server'],
+  parts:['cpu','cpu_mk2','quantum_cpu','power','power_mk2','solar_power','fusion_power','cooler','water_cooler','loop_cooler','ssd','network','ai','tpu','firewall','virusbuster'],
+  network:['blockchain','wallet','research_lab','ln_node','nft','exchange']
+};
+
+function isNodeUnlocked(type){
+  var nt = NODE_TYPES[type];
+  if(!nt) return false;
+  if(!nt.requireResearch) return true;
+  return researchCompleted.indexOf(nt.requireResearch) >= 0;
+}
+
+function switchTab(tab, el){
+  currentShopTab = tab;
+  document.querySelectorAll('.shopTab').forEach(function(t){t.classList.remove('active')});
+  el.classList.add('active');
+  buildShop();
+}
+
+function buildShop(){
+  var shop = document.getElementById('shop');
+  shop.innerHTML = '';
+  var items = SHOP_TABS[currentShopTab] || [];
+  items.forEach(function(t){
+    if(!isNodeUnlocked(t)) return;
+    var nt = NODE_TYPES[t];
+    var canBuy = balance >= nt.price || nt.price === 0;
+    var div = document.createElement('div');
+    div.className = 'shopItem' + (canBuy ? '' : ' disabled');
+    div.setAttribute('data-type', t);
+    div.innerHTML = '<span class="emoji">'+nt.emoji+'</span><span class="name">'+nt.name+'</span><span class="price">'+(nt.price>0?nt.price+'₱':'無料')+'</span>';
+    div.addEventListener('pointerdown', function(e){
+      if(!canBuy){playSound('error');return}
+      e.preventDefault();e.stopPropagation();ensureAudio();
+      isShopDragging = true;shopDragType = t;
+      shopDragStartX = e.clientX;shopDragStartY = e.clientY;shopDragMoved = false;
+      var preview = document.getElementById('shopDragPreview');
+      preview.innerHTML = '<span class="rtn-emoji">'+nt.emoji+'</span><div class="sdp-name">'+nt.name+'</div>';
+      preview.style.left = e.clientX + 'px';preview.style.top = e.clientY + 'px';preview.style.display = 'block';
+    });
+    shop.appendChild(div);
+  });
+}
+
+document.addEventListener('pointermove', function(e){
+  if(!isShopDragging) return;
+  var dx = e.clientX - shopDragStartX;
+  var dy = e.clientY - shopDragStartY;
+  if(Math.abs(dx)>5||Math.abs(dy)>5) shopDragMoved = true;
+  var preview = document.getElementById('shopDragPreview');
+  preview.style.left = e.clientX + 'px';preview.style.top = e.clientY + 'px';
+});
+
+document.addEventListener('pointerup', function(e){
+  if(!isShopDragging) return;
+  isShopDragging = false;
+  document.getElementById('shopDragPreview').style.display = 'none';
+  if(!shopDragMoved || !shopDragType) return;
+  var r = canvas.getBoundingClientRect();
+  var sx = e.clientX - r.left;
+  var sy = e.clientY - r.top;
+  if(sx<0||sy<0||sx>r.width||sy>r.height) return;
+  if(sy<gameAreaTop||sy>gameAreaBottom) return;
+  var nt = NODE_TYPES[shopDragType];
+  if(balance<nt.price&&nt.price>0){playSound('error');return}
+  var world = screenToWorld(sx, sy);
+  var GRID=32;
+  var snapX=Math.round((world.x-WIN_W/2)/GRID)*GRID;
+  var snapY=Math.round((world.y-20)/GRID)*GRID;
+  balance -= nt.price;
+  if(shopDragType==='custom_pc_bundle'){
+    placeCustomPCBundle(snapX, snapY);
+  } else {
+    addNode(shopDragType, snapX, snapY);
+  }
+  playSound(nt.price>0?'buy':'place');
+  updateUI();buildShop();
+});
+
+// ===== DELETE =====
+function deleteNodeConfirm(node){
+  if(node.type==='blockchain'||node.type==='wallet'){alert('システムノードは削除できません');return}
+  var nt = NODE_TYPES[node.type];
+  var refund = Math.floor(nt.price * 0.5);
+  var msg = nt.emoji+' '+nt.name+' を削除しますか？';
+  if(refund>0) msg += '\n（返金: '+refund+'₱）';
+  if(confirm(msg)){
+    connections = connections.filter(function(c){return c.from!==node.id && c.to!==node.id});
+    nodes = nodes.filter(function(n2){return n2.id!==node.id});
+    balance += refund;
+    playSound('delete');
+    effects.push({type:'spawn',x:node.x+WIN_W/2,y:node.y+30,t:0,dur:0.4});
+    updateUI();buildShop();
+  }
+}
+
+// ===== CONNECTION GUIDE =====
+function showConnectionGuide(){
+  var guide = document.getElementById('connectionGuide');
+  var bubble = document.getElementById('guideBubble');
+  if(!guide) return;
+  var cpu = nodes.find(function(n2){return n2.type==='cpu'});
+  var pc = nodes.find(function(n2){return n2.type==='mining_pc'});
+  if(!cpu||!pc){guide.style.display='none';return}
+  var cpuPorts = getNodePortPositions(cpu);
+  var pcPorts = getNodePortPositions(pc);
+  var cpuOut = cpuPorts.find(function(p){return p.type==='to_pc'});
+  var pcIn = pcPorts.find(function(p){return p.type==='cpu'});
+  if(!cpuOut||!pcIn){guide.style.display='none';return}
+  var sp1 = worldToScreen(cpuOut.x, cpuOut.y);
+  var sp2 = worldToScreen(pcIn.x, pcIn.y);
+  var midX = (sp1.x+sp2.x)/2;
+  var midY = (sp1.y+sp2.y)/2;
+  bubble.style.left = midX+'px';bubble.style.top = (midY-40)+'px';bubble.style.transform = 'translateX(-50%)';
+  var arrow = document.getElementById('guideArrow');
+  arrow.style.left = (sp1.x+10)+'px';arrow.style.top = (sp1.y-14)+'px';
+  guide.classList.add('visible');
+  setTimeout(function(){guide.classList.remove('visible');setTimeout(function(){guide.style.display='none'},600)},5000);
+}
+
+// ===== INIT =====
+function initGame(){
+  resize();
+  var cy = (gameAreaTop + gameAreaBottom)/2;
+  nodes=[];connections=[];effects=[];particles=[];animatedPower={};
+  balance=0;difficulty=1;malwareTimer=0;blackoutTimer=0;gameTime=0;miningCheckTimer=0;
+  nextNodeId=1;selectedShopItem=null;hintShown=true;hintTimer=0;hintFadeState='waiting';hintFadeTimer=0;
+  researchCompleted=['basic_mining'];
+  stats={totalMined:0,totalCoinsEarned:0,researchPoints:0};
+  labUnlocked=false;labUnlockShown=false;
+  camera={x:0,y:0,zoom:1};
+
+  var G=64; var gy=Math.round(cy/G)*G;
+  addNode('blockchain', -6*G, gy - G);
+  addNode('wallet',     -6*G, gy + G);
+  addNode('mining_pc',  -3*G, gy);
+  addNode('cpu',         1*G, gy - 2*G);
+  addNode('cooler',      1*G, gy);
+  addNode('power',       1*G, gy + 2*G);
+
+  buildShop();updateUI();
+
+  var hintEl = document.getElementById('hint');
+  hintEl.style.opacity = '0';hintFadeState = 'waiting';hintFadeTimer = 0;
+  setTimeout(function(){
+    if(hintShown){hintEl.style.opacity='1';hintFadeState='visible';
+      setTimeout(function(){if(hintShown){hintEl.style.opacity='0';hintFadeState='fading';
+        setTimeout(function(){hintShown=false;hintFadeState='hidden'},1000)}},5000)}
+  }, 300);
+
+  showConnectionGuide();
+  centerCameraOnBlockchain();
+  requestAnimationFrame(gameLoop);
+}
+
+function addNode(type, x, y){
+  var n = {id:nextNodeId++, type:type, x:x, y:y, scale:0, infected:false, infectedTime:0, blackout:false, blackoutTime:0,
+    lnBalance:0, lnwBalance:0, exBalance:0, exLocked:0, exLockTime:0, exHacked:false, exHackTime:0, exLockCooldown:0,
+    miningProgress:0, solarOutput:10, nftCount:0, nftTimer:15,
+    virusTimer:60, virusCureTimer:0, lnRouteTimer:0, lnLastRoute:-999, lnInfectedTimer:0, vbLevel:1};
+  nodes.push(n);
+  effects.push({type:'spawn',x:x+WIN_W/2,y:y+30,t:0,dur:0.3});
+  return n;
+}
+
+function placeCustomPCBundle(bx, by){
+  // Layout (32px grid):
+  // PC is 195px wide. Place parts 7 grids (224px) to the right so no overlap.
+  // Part node height = 32 + 1*24 + 4 = 60px. Space 64px (2G) apart vertically.
+  // Port on each part (leftPort:0) is at node.y + 44.
+  // PC rightPorts: CPU at by+44, cooler at by+68, SSD at by+92, power at by+140.
+  // Parts stacked: cpu at by+0, cool at by+64, ssd at by+128, pwr at by+192.
+  var G = 32;
+  var pc   = addNode('mining_pc',    bx,        by);
+  var cpu  = addNode('cpu_mk2',      bx + 7*G,  by);
+  var cool = addNode('water_cooler', bx + 7*G,  by + 2*G);
+  var ssd  = addNode('ssd',          bx + 7*G,  by + 4*G);
+  var pwr  = addNode('power_mk2',    bx + 7*G,  by + 6*G);
+
+  // Helper to connect
+  function conn(fromN, fromPort, toN, toPort){
+    var fPorts = getPortDefs(fromN.type);
+    var tPorts = getPortDefs(toN.type);
+    var fDef = fPorts.find(function(p){return p.side==='left'&&p.type===fromPort});
+    var tDef = tPorts.find(function(p){return p.side==='right'&&p.type===toPort});
+    if(!fDef||!tDef) return;
+    var fIdx = fPorts.indexOf(fDef);
+    var tIdx = tPorts.indexOf(tDef);
+    addConnection(
+      {nodeId:fromN.id, side:'left', type:fromPort, portIdx:fIdx, defIndex:fIdx},
+      {nodeId:toN.id,   side:'right',type:toPort,   portIdx:tIdx, defIndex:tIdx}
+    );
+  }
+  conn(cpu,  'to_pc', pc, 'cpu');
+  conn(cool, 'to_pc', pc, 'cooler');
+  conn(ssd,  'to_pc', pc, 'ssd');
+  conn(pwr,  'to_pc', pc, 'power');
+  updateUI(); buildShop();
+}
+
+// ===== RESEARCH UI =====
+var currentResearchTab = 'mining';
+var selectedResearchId = null;
+
+function toggleResearch(){
+  var panel = document.getElementById('researchPanel');
+  if(panel.classList.contains('open')){closeAllModals()}
+  else{renderResearchPanel();panel.classList.add('open');document.getElementById('modalBackdrop').classList.add('open');document.body.classList.add('modal-open')}
+}
+
+function closeAllModals(){
+  document.getElementById('researchPanel').classList.remove('open');
+  document.getElementById('researchDetail').classList.remove('open');
+  document.getElementById('modalBackdrop').classList.remove('open');
+  document.body.classList.remove('modal-open');
+  selectedResearchId=null;
+  renderResearchPanel();
+}
+
+function checkResearchConditions(r){
+  if(!r.conditions) return {met:true, text:'', items:[]};
+  var conds = r.conditions;
+  var items = [];
+  var allMet = true;
+  if(conds.minTotalMined!==undefined){
+    var ok = stats.totalMined >= conds.minTotalMined;
+    if(!ok) allMet = false;
+    items.push({met:ok, text:(ok?'✅':'❌')+' マイニング成功'+conds.minTotalMined+'回以上 (現在:'+stats.totalMined+')'});
+  }
+  if(conds.minTotalCoins!==undefined){
+    var ok2 = stats.totalCoinsEarned >= conds.minTotalCoins;
+    if(!ok2) allMet = false;
+    items.push({met:ok2, text:(ok2?'✅':'❌')+' 累計'+conds.minTotalCoins+'₱獲得 (現在:'+stats.totalCoinsEarned.toFixed(0)+')'});
+  }
+  if(conds.minNodeCount){
+    var counts = getNodeCounts();
+    for(var ntt in conds.minNodeCount){
+      var need = conds.minNodeCount[ntt];
+      var have = counts[ntt]||0;
+      var ok3 = have >= need;
+      if(!ok3) allMet = false;
+      var nname = NODE_TYPES[ntt] ? NODE_TYPES[ntt].name : ntt;
+      items.push({met:ok3, text:(ok3?'✅':'❌')+' '+nname+need+'個以上設置 (現在:'+have+')'});
+    }
+  }
+  if(conds.researchDone){
+    conds.researchDone.forEach(function(rid){
+      var done2 = researchCompleted.indexOf(rid)>=0;
+      if(!done2) allMet = false;
+      var rr = RESEARCH_TREE.find(function(r){return r.id===rid});
+      items.push({met:done2, text:(done2?'✅':'❌')+' 研究完了: '+(rr?rr.name:rid)});
+    });
+  }
+  return {met:allMet, text:items.map(function(i){return i.text}).join('\n'), items:items};
+}
+
+function renderResearchPanel(){
+  var panel = document.getElementById('researchPanel');
+  var html = '<div class="rp-header"><h3>🔬 研究ツリー (RP: '+Math.floor(stats.researchPoints)+')</h3><button class="rp-close" onclick="toggleResearch()">✕</button></div>';
+  html += '<div class="rp-tabs">';
+  var tabs = [{id:'mining',emoji:'⛏️',label:'マイニング'},{id:'network',emoji:'🌐',label:'ネットワーク'},{id:'revenue',emoji:'💰',label:'収益'}];
+  tabs.forEach(function(tab){
+    html += '<button class="rp-tab'+(currentResearchTab===tab.id?' active':'')+'" onclick="switchResearchTab(\''+tab.id+'\')">'+tab.emoji+' '+tab.label+'</button>';
+  });
+  html += '</div>';
+
+  var treeItems = RESEARCH_TREE.filter(function(r){return r.tree===currentResearchTab});
+  var nodeW = 88, nodeH = 42, gapY = 18, padX = 16, padY = 12;
+  var maxRow = 0, maxCol = 0;
+  treeItems.forEach(function(r){if(r.row>maxRow)maxRow=r.row;if(r.col>maxCol)maxCol=r.col});
+  var cols = maxCol + 1;
+  var containerW = 660 - 32;
+  var colW = Math.max(nodeW + 8, cols > 1 ? containerW / cols : containerW);
+  var containerH = (maxRow+1)*(nodeH+gapY)+padY*2;
+
+  html += '<div class="rp-tree-container" style="height:'+containerH+'px">';
+  html += '<svg style="width:100%;height:'+containerH+'px">';
+  treeItems.forEach(function(r){
+    if(!r.prereq) return;
+    var parent = treeItems.find(function(p){return p.id===r.prereq});
+    if(!parent) return;
+    var px1 = padX + parent.col*colW + (colW-nodeW)/2 + nodeW/2;
+    var py1 = padY + parent.row*(nodeH+gapY) + nodeH;
+    var px2 = padX + r.col*colW + (colW-nodeW)/2 + nodeW/2;
+    var py2 = padY + r.row*(nodeH+gapY);
+    var done = researchCompleted.indexOf(r.id)>=0;
+    var prereqMet = researchCompleted.indexOf(r.prereq)>=0;
+    var lineColor = done ? '#44cc66' : (prereqMet ? '#ddcc44' : '#333');
+    var midY = (py1 + py2) / 2;
+    var pathD = 'M '+px1+' '+py1+' L '+px1+' '+midY+' L '+px2+' '+midY+' L '+px2+' '+py2;
+    html += '<path d="'+pathD+'" fill="none" stroke="'+lineColor+'" stroke-width="2" stroke-dasharray="'+(done?'':'4,3')+'"/>';
+  });
+  html += '</svg>';
+
+  treeItems.forEach(function(r){
+    var done = researchCompleted.indexOf(r.id)>=0;
+    var prereqMet = !r.prereq || researchCompleted.indexOf(r.prereq)>=0;
+    var condResult = checkResearchConditions(r);
+    var available = !done && prereqMet && condResult.met;
+    var cls = done ? 'done' : (available ? 'available' : 'locked');
+    var nx = padX + r.col*colW + (colW-nodeW)/2;
+    var ny = padY + r.row*(nodeH+gapY);
+    var selected = selectedResearchId===r.id;
+    var borderExtra = selected ? ';outline:2px solid #fff;outline-offset:2px' : '';
+    html += '<div class="rp-tree-node '+cls+'" style="left:'+nx+'px;top:'+ny+'px;width:'+nodeW+'px'+borderExtra+'" onclick="selectResearch(\''+r.id+'\')">';
+    html += '<div class="rtn-emoji">'+r.emoji+'</div>';
+    html += '<div class="rtn-name">'+r.name+'</div>';
+    if(!done && r.cost>0) html += '<div class="rtn-cost">RP:'+r.cost+'</div>';
+    if(done) html += '<div class="rtn-cost" style="color:#44cc66">✅</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  panel.innerHTML = html;
+}
+
+function switchResearchTab(tab){currentResearchTab=tab;selectedResearchId=null;renderResearchPanel()}
+function selectResearch(id){selectedResearchId=id;renderResearchPanel();showResearchDetail(id)}
+
+// ===== RESEARCH DETAIL OVERLAY =====
+function closeResearchDetail(){
+  document.getElementById('researchDetail').classList.remove('open');
+  // keep backdrop if research panel is still open
+  if(!document.getElementById('researchPanel').classList.contains('open')){
+    document.getElementById('modalBackdrop').classList.remove('open');
+    document.body.classList.remove('modal-open');
+  }
+  selectedResearchId=null;
+  renderResearchPanel();
+}
+
+function buildDiagramSVG(id){
+  var W=448,H=150;
+  // node helper: {x,y,w,h,emoji,label,color,borderColor}
+  function node(x,y,w,h,emoji,label,color,bcolor){
+    return '<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="6" fill="'+color+'" stroke="'+(bcolor||'#334')+'" stroke-width="1.5"/>'
+      +'<text x="'+(x+w/2)+'" y="'+(y+h/2-6)+'" text-anchor="middle" fill="#fff" font-size="15" font-family="sans-serif">'+emoji+'</text>'
+      +'<text x="'+(x+w/2)+'" y="'+(y+h/2+10)+'" text-anchor="middle" fill="#ccd" font-size="9" font-family="sans-serif">'+label+'</text>';
+  }
+  function arrow(x1,y1,x2,y2,col){
+    col=col||'#4a6aff';
+    var dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+    var ux=dx/len,uy=dy/len;
+    var hx=x2-ux*8,hy=y2-uy*8;
+    return '<line x1="'+x1+'" y1="'+y1+'" x2="'+hx+'" y2="'+hy+'" stroke="'+col+'" stroke-width="2"/>'
+      +'<polygon points="'+x2+','+(y2)+' '+(x2-uy*5-ux*8)+','+(y2+ux*5-uy*8)+' '+(x2+uy*5-ux*8)+','+(y2-ux*5-uy*8)+'" fill="'+col+'"/>';
+  }
+  function label(x,y,text,col){
+    return '<text x="'+x+'" y="'+y+'" text-anchor="middle" fill="'+(col||'#88aaff')+'" font-size="10" font-family="sans-serif">'+text+'</text>';
+  }
+  var svg='<svg width="'+W+'" height="'+H+'" xmlns="http://www.w3.org/2000/svg">';
+  var diagrams={
+    'basic_mining': function(){
+      var s=svg;
+      s+=node(10,55,75,45,'⛓️','ブロック\nチェーン','#1a3a6a','#2255aa');
+      s+=node(185,30,75,40,'🔲','CPU','#2a3060','#4a6aff');
+      s+=node(185,80,75,40,'🔌','電源','#601a1a','#aa2222');
+      s+=node(100,52,75,50,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=arrow(175+10,50,175,65,'#4a6aff');
+      s+=arrow(175+10,100,175,80,'#cc4444');
+      s+=arrow(100,75,85,75,'#44cc88');
+      s+=label(W/2,18,'CPU・電源をPCに接続 → PCをブロックチェーンへ','#88aaff');
+      return s+'</svg>';
+    },
+    '_lab_unlock': function(){
+      var s=svg;
+      s+=node(30,55,75,40,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=node(165,55,75,40,'🔬','研究施設','#2a1a45','#8844cc');
+      s+=node(300,55,75,40,'🔬','RP蓄積','#1a2535','#445599');
+      s+=arrow(105,75,165,75,'#8844cc');
+      s+=arrow(240,75,300,75,'#44ccff');
+      s+=label(W/2,25,'PCを研究施設に接続するとRPが貯まる','#88aaff');
+      s+=label(W/2,135,'RPを使って研究ツリーを開放しよう！','#66aa88');
+      return s+'</svg>';
+    },
+    'gpu_boost': function(){
+      var s=svg;
+      s+=node(290,30,80,38,'🔲','CPU','#2a3060','#4a6aff');
+      s+=node(290,80,80,38,'🔲','CPU','#2a3060','#4a6aff');
+      s+=node(150,52,80,42,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=arrow(290,49,230,62,'#4a6aff');
+      s+=arrow(290,99,230,78,'#4a6aff');
+      s+=label(W/2,18,'複数CPUをPCに接続 → 演算力アップ！','#88aaff');
+      s+=label(325,125,'研究後 ×1.5倍','#44ff88');
+      return s+'</svg>';
+    },
+    'cooling_tech': function(){
+      var s=svg;
+      s+=node(280,20,85,38,'🔲','CPU (+熱)','#3a2020','#aa4422');
+      s+=node(280,75,85,38,'💧','水冷','#102040','#2255cc');
+      s+=node(130,47,85,46,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=arrow(280,39,215,58,'#ff6644');
+      s+=arrow(280,94,215,80,'#2288ff');
+      s+=label(165,110,'🌡 発熱-40/s','#44aaff');
+      s+=label(W/2,18,'CPUの熱を水冷で冷やしてPCを安定稼働','#88aaff');
+      return s+'</svg>';
+    },
+    'loop_cooling': function(){
+      var s=svg;
+      s+=node(280,20,85,38,'🔲×複数','CPU大量','#3a2020','#cc3300');
+      s+=node(280,75,85,38,'🔵','カスタム水冷','#0d1a3a','#1133aa');
+      s+=node(130,47,85,46,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=arrow(280,39,215,58,'#ff4400');
+      s+=arrow(280,94,215,80,'#1166ff');
+      s+=label(165,110,'🌡 発熱-70/s','#4488ff');
+      s+=label(W/2,18,'カスタム水冷で最高レベルの冷却性能','#88aaff');
+      return s+'</svg>';
+    },
+    'storage_opt': function(){
+      var s=svg;
+      s+=node(280,57,85,38,'💾','SSD','#1a3020','#336633');
+      s+=node(130,47,85,46,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=arrow(280,76,215,73,'#44cc88');
+      s+=label(W/2,18,'SSDをPCに接続 → マイニング速度1.3倍','#88aaff');
+      s+=label(165,110,'速度 ×1.3','#44ff88');
+      return s+'</svg>';
+    },
+    'hi_cpu': function(){
+      var s=svg;
+      s+=node(280,35,85,38,'🔲','CPU Mk2','#1a2060','#5566ff');
+      s+=node(280,85,85,38,'🔲','CPU','#2a3060','#4a6aff');
+      s+=node(130,47,85,46,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=arrow(280,54,215,65,'#5566ff');
+      s+=arrow(280,104,215,80,'#4a6aff');
+      s+=label(325,32,'演算力+3/8W','#aaccff');
+      s+=label(W/2,18,'CPU Mk2は通常CPUより3倍の演算力','#88aaff');
+      return s+'</svg>';
+    },
+    'ai_mining': function(){
+      var s=svg;
+      s+=node(295,10,85,35,'🔲','CPU','#2a3060','#4a6aff');
+      s+=node(295,52,85,35,'🔲','CPU','#2a3060','#4a6aff');
+      s+=node(295,94,85,35,'🤖','AI','#1a3020','#22aa44');
+      s+=node(140,47,85,46,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=arrow(295,28,225,63,'#4a6aff');
+      s+=arrow(295,70,225,73,'#4a6aff');
+      s+=arrow(295,112,225,80,'#22aa44');
+      s+=label(W/2,15,'CPU×2以上+AIをPCに → 処理速度3倍！','#88aaff');
+      return s+'</svg>';
+    },
+    'security_basics': function(){
+      var s=svg;
+      s+=node(280,57,85,38,'🛡️','ファイアウォール','#1a2030','#337744');
+      s+=node(130,47,85,46,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=node(15,57,80,38,'🦠','マルウェア','#301010','#aa2222');
+      s+=arrow(280,76,215,73,'#44cc88');
+      s+=arrow(95,76,80,76,'#cc4444');
+      s+=label(57,110,'🚫 自動駆除','#ff4444');
+      s+=label(W/2,18,'FWをPCに接続 → マルウェアを自動で駆除','#88aaff');
+      return s+'</svg>';
+    },
+    'power_eff': function(){
+      var s=svg;
+      s+=node(50,57,85,38,'🔌','電源 20W','#601a1a','#aa2222');
+      s+=node(250,57,85,38,'🔌','電源 25W','#3a1a0a','#cc5522');
+      s+=label(175,76,'→ 研究後','#ffaa44');
+      s+=label(W/2,18,'既存の電源の供給量が+25%に増加','#88aaff');
+      s+=label(W/2,130,'全ての電源🔌に自動適用','#88aa88');
+      return s+'</svg>';
+    },
+    'hi_power': function(){
+      var s=svg;
+      s+=node(280,57,85,38,'🔌','電源 Mk2','#4a2a0a','#cc6622');
+      s+=node(130,47,85,46,'💻','マイニングPC','#1a2545','#3355aa');
+      s+=arrow(280,76,215,73,'#cc6622');
+      s+=label(325,108,'供給50W','#ffaa44');
+      s+=label(W/2,18,'電源Mk2をPCに接続 → 大容量50W供給','#88aaff');
+      return s+'</svg>';
+    },
+    'network_tech': function(){
+      var s=svg;
+      s+=node(290,57,80,38,'📡','ネットワーク','#1a1a30','#7744aa');
+      s+=node(155,47,85,46,'🖥️','サーバー','#1a2030','#445566');
+      s+=node(20,57,75,38,'⚡','LNノード','#1a2a20','#228844');
+      s+=arrow(290,76,240,73,'#7744aa');
+      s+=arrow(155,76,95,76,'#445566');
+      s+=label(W/2,18,'ネットワーク📡→サーバー🖥️→LNノード⚡へ接続','#88aaff');
+      s+=label(W/2,135,'ルーティング手数料を稼ごう','#66aa88');
+      return s+'</svg>';
+    },
+    'ln_basics': function(){
+      var s=svg;
+      // Server in center with parts on right, LN on left
+      s+=node(165,35,85,44,'🖥️','サーバー','#1a2030','#4488aa');
+      // Right side: power, network
+      s+=node(310,15,85,35,'🔌','電源','#601a1a','#aa2222');
+      s+=node(310,58,85,35,'📡','ネット','#1a1a30','#7744aa');
+      // Left side: LN
+      s+=node(15,45,85,44,'⚡','Lightning\nNetwork','#1a2a10','#ff9900');
+      // Arrows: parts→server
+      s+=arrow(310,33,250,50,'#aa2222');
+      s+=arrow(310,76,250,65,'#7744aa');
+      // Arrow: server→LN
+      s+=arrow(165,57,100,57,'#ff9900');
+      s+=label(W/2,10,'電源・ネットワーク→サーバー → Lightning Networkへ接続','#88aaff');
+      s+=label(W/2,130,'Lightning Networkに入金 → ルーティング手数料が貯まる','#ffcc44');
+      return s+'</svg>';
+    },
+  };
+  var fn=diagrams[id];
+  if(fn) return fn();
+  // fallback: just show effect icon
+  return '<svg width="'+W+'" height="60" xmlns="http://www.w3.org/2000/svg">'
+    +'<text x="'+(W/2)+'" y="38" text-anchor="middle" fill="#88aaff" font-size="13" font-family="sans-serif">✨ この研究を完了すると新しいノードが解放されます</text>'
+    +'</svg>';
+}
+
+function showResearchDetail(id){
+  var sr=RESEARCH_TREE.find(function(r){return r.id===id});
+  if(!sr) return;
+  var done=researchCompleted.indexOf(sr.id)>=0;
+  var prereqMet=!sr.prereq||researchCompleted.indexOf(sr.prereq)>=0;
+  var condResult=checkResearchConditions(sr);
+  var available=!done&&prereqMet&&condResult.met;
+  var canAfford=stats.researchPoints>=sr.cost;
+  document.getElementById('rdTitle').textContent=sr.emoji+' '+sr.name+(done?' ✅':'');
+  document.getElementById('rdDiagram').innerHTML=buildDiagramSVG(id);
+  document.getElementById('rdEffect').textContent='効果: '+sr.effect;
+  var costEl=document.getElementById('rdCost');
+  costEl.textContent=done?'✅ 研究済み':(sr.cost>0?'コスト: '+sr.cost+' RP（所持: '+Math.floor(stats.researchPoints)+' RP）':'コスト: 無料');
+  var condEl=document.getElementById('rdCond');
+  if(!done&&condResult.items&&condResult.items.length>0){
+    condEl.style.display='block';
+    condEl.innerHTML='<div style="margin-bottom:2px;color:#aac">条件:</div>'+condResult.items.map(function(item){
+      return '<div style="color:'+(item.met?'#ddd':'#f88')+'">'+item.text+'</div>';
+    }).join('');
+  }else{condEl.style.display='none'}
+  var prereqEl=document.getElementById('rdPrereq');
+  if(!done&&!prereqMet){
+    var pname=RESEARCH_TREE.find(function(r){return r.id===sr.prereq});
+    prereqEl.style.display='block';prereqEl.textContent='🔒 前提: '+(pname?pname.name:'不明');
+  }else{prereqEl.style.display='none'}
+  var btnEl=document.getElementById('rdBtn');
+  if(!done&&available){
+    btnEl.innerHTML='<button class="ri-btn" '+(canAfford?'onclick="doResearchFromDetail(\''+id+'\')"':'disabled')+'>'+(canAfford?'🔬 研究する ('+sr.cost+' RP)':'🔬 RP不足')+'</button>';
+  }else if(done){
+    btnEl.innerHTML='';
+  }else{
+    btnEl.innerHTML='<div style="font-size:12px;color:#888">🔒 条件未達成</div>';
+  }
+  document.getElementById('researchDetail').classList.add('open');
+  document.getElementById('modalBackdrop').classList.add('open');
+  document.body.classList.add('modal-open');
+}
+
+function doResearchFromDetail(id){
+  doResearch(id);
+  showResearchDetail(id);
+}
+
+function doResearch(id){
+  var r = RESEARCH_TREE.find(function(x){return x.id===id});
+  if(!r||researchCompleted.indexOf(id)>=0) return;
+  if(r.prereq && researchCompleted.indexOf(r.prereq)<0) return;
+  var condResult = checkResearchConditions(r);
+  if(!condResult.met) return;
+  if(stats.researchPoints < r.cost) return;
+  stats.researchPoints -= r.cost;
+  researchCompleted.push(id);
+  if(id==='_lab_unlock'){labUnlocked=true;labUnlockShown=true;}
+  playSound('research');
+  effects.push({type:'sparkle',x:canvasW/2,y:canvasH/2,t:0,dur:0.8});
+  showUnlockMsg('🔬 研究完了: '+r.name+'！');
+  selectedResearchId = null;
+  updateUI();buildShop();renderResearchPanel();
+}
+
+// ===== L-SHAPED PATH =====
+function getLPathPoint(fromX, fromY, toX, toY, t){
+  var midX = (fromX+toX)/2;
+  var seg1 = Math.abs(midX-fromX);
+  var seg2 = Math.abs(toY-fromY);
+  var seg3 = Math.abs(toX-midX);
+  var total = seg1+seg2+seg3;
+  if(total===0) return {x:fromX,y:fromY};
+  var d = t*total;
+  if(d<=seg1){var p=seg1>0?d/seg1:0;return{x:fromX+(midX-fromX)*p,y:fromY}}
+  d-=seg1;if(d<=seg2){var p=seg2>0?d/seg2:0;return{x:midX,y:fromY+(toY-fromY)*p}}
+  d-=seg2;var p=seg3>0?d/seg3:0;return{x:midX+(toX-midX)*p,y:toY};
+}
+
+// ===== GAME LOOP =====
+var lastTime = 0;
+function gameLoop(ts){
+  if(!gameStarted) return;
+  var dt = Math.min((ts-(lastTime||ts))/1000, 0.1);
+  lastTime = ts;
+  gameTime += dt;
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function update(dt){
+  nodes.forEach(function(n){if(n.scale<1)n.scale=Math.min(1,n.scale+dt*5)});
+
+  nodes.filter(function(n){return n.type==='mining_pc'||n.type==='server'}).forEach(function(pc){
+    var s = pc.type==='mining_pc' ? getPCStats(pc) : getServerStats(pc);
+    var target = s.powerSupply>0 ? s.powerUsed/s.powerSupply : 0;
+    var cur = animatedPower[pc.id]||0;
+    animatedPower[pc.id] = cur + (target-cur)*Math.min(1,dt*2);
+  });
+
+  // Solar variation
+  nodes.filter(function(n){return n.type==='solar_power'}).forEach(function(n){
+    n.solarOutput = Math.round(5 + Math.sin(gameTime*0.3+n.id)*5 + Math.random()*2);
+    n.solarOutput = Math.max(5, Math.min(15, n.solarOutput));
+  });
+
+  // Research lab RP generation
+  nodes.filter(function(n){return n.type==='research_lab'}).forEach(function(lab){
+    var rpRate = getLabRPRate(lab);
+    if(rpRate > 0){
+      stats.researchPoints += rpRate * dt;
+      lab.rpProgress = (lab.rpProgress||0) + rpRate * dt * 0.2;
+      if(lab.rpProgress >= 1) lab.rpProgress = 0;
+    } else {
+      lab.rpProgress = 0;
+    }
+  });
+
+  // Research panel live update (every 0.5s)
+  researchPanelTimer += dt;
+  if(researchPanelTimer >= 0.5){
+    researchPanelTimer = 0;
+    document.getElementById('rpText').textContent = Math.floor(stats.researchPoints);
+    updateResearchBtn();
+    var rp = document.getElementById('researchPanel');
+    if(rp && rp.classList.contains('open')) renderResearchPanel();
+    // Sync detail panel RP display
+    var rdCostEl = document.getElementById('rdCost');
+    var rdDetail = document.getElementById('researchDetail');
+    if(rdDetail && rdDetail.classList.contains('open') && selectedResearchId && rdCostEl){
+      var sr2 = RESEARCH_TREE.find(function(r){return r.id===selectedResearchId});
+      if(sr2 && researchCompleted.indexOf(sr2.id)<0 && sr2.cost>0){
+        rdCostEl.textContent = 'コスト: '+sr2.cost+' RP（所持: '+Math.floor(stats.researchPoints)+' RP）';
+        // Also update button state
+        var rdBtn2 = document.getElementById('rdBtn');
+        var canAfford2 = stats.researchPoints >= sr2.cost;
+        var prereqMet2 = !sr2.prereq || researchCompleted.indexOf(sr2.prereq)>=0;
+        var cond2 = checkResearchConditions(sr2);
+        if(rdBtn2 && prereqMet2 && cond2.met){
+          rdBtn2.innerHTML = '<button class="ri-btn" '+(canAfford2?'onclick="doResearchFromDetail(\''+sr2.id+'\')"':'disabled')+'>'+(canAfford2?'🔬 研究する ('+sr2.cost+' RP)':'🔬 RP不足')+'</button>';
+        }
+      }
+    }
+  }
+
+  // Mining
+  var totalHash = 0;
+  nodes.filter(function(n){return n.type==='mining_pc'}).forEach(function(pc){
+    var s = getPCStats(pc);
+    totalHash += s.effectiveRate;
+    if(!pc.miningProgress) pc.miningProgress = 0;
+    if(s.canMine && !pc.infected && s.powerOk){
+      pc.miningProgress += s.gaugeSpeed * dt;
+      if(pc.miningProgress >= 1){
+        pc.miningProgress = 0;
+        balance++;
+        stats.totalMined++;
+        stats.totalCoinsEarned++;
+        playSound('mine');
+        var gaugeLineIdx = 5;
+        var gaugeY = pc.y + TITLE_H + gaugeLineIdx*LINE_H + LINE_H/2;
+        for(var gi=0;gi<6;gi++){
+          var angle = Math.random()*Math.PI*2;
+          effects.push({type:'gold_burst',x:pc.x+WIN_W/2,y:gaugeY,t:0,dur:0.7,angle:angle,dist:15+Math.random()*25});
+        }
+        effects.push({type:'sparkle',x:pc.x+WIN_W/2,y:pc.y+TITLE_H/2,t:0,dur:0.6});
+        var wallet = nodes.find(function(n2){return n2.type==='wallet'});
+        if(wallet) particles.push({x:pc.x+WIN_W/2,y:pc.y+TITLE_H,tx:wallet.x+WIN_W/2,ty:wallet.y+TITLE_H,t:0,dur:0.8,text:'+1₱'});
+        updateUI();buildShop();
+      }
+    } else {
+      pc.miningProgress = Math.max(0, pc.miningProgress - 0.05*dt);
+    }
+  });
+
+  miningCheckTimer += dt;
+  if(miningCheckTimer >= 1){
+    miningCheckTimer = 0;
+    document.getElementById('rpText').textContent = Math.floor(stats.researchPoints);
+    var minedEl = document.getElementById('minedText');
+    if(minedEl) minedEl.textContent = stats.totalMined;
+    updateResearchBtn();
+  }
+
+  // LN routing
+  nodes.filter(function(n){return n.type==='ln_node'}).forEach(function(ln){
+    if(!ln.lnBalance) ln.lnBalance = 0;
+    if(!ln.lnEarned) ln.lnEarned = 0;
+    var allSrvConns = connections.filter(function(c){return c.to===ln.id && nodes.find(function(nd){return nd.id===c.from&&nd.type==='server'})});
+    var connServer = allSrvConns.find(function(c){var s=nodes.find(function(nd){return nd.id===c.from});return s&&!s.infected});
+    var connectedServer = !!connServer;
+    if(connectedServer && ln.lnBalance >= 1){
+      // ルート選択頻度: lnBalance/1000 回/秒（1000₱ → 1回/秒）
+      ln.lnRouteTimer = (ln.lnRouteTimer||0) + (ln.lnBalance / 1000) * dt;
+      if(ln.lnRouteTimer >= 1){
+        var routeCount = Math.floor(ln.lnRouteTimer);
+        ln.lnRouteTimer -= routeCount;
+        // 1ルートにつき1₱ → lnEarnedに積立（オフチェーン）
+        var feePerRoute = 1;
+        if(researchCompleted.indexOf('dist_routing')>=0) feePerRoute *= 3;
+        else if(researchCompleted.indexOf('channel_opt')>=0) feePerRoute *= 2;
+        ln.lnEarned += routeCount * feePerRoute;
+        ln.lnLastRoute = gameTime;
+        ln.lnPendingThru = (ln.lnPendingThru||0) + routeCount; // queue through-us animations
+      }
+      updateUI();
+    }
+    // Mini graph animation state update (3-4 routes/sec)
+    if(!ln.lnAnim) ln.lnAnim={phase:'idle',timer:0.1+Math.random()*0.15,route:[],progress:0,throughUs:false,pathCol:'#4488ff',dotCol:'#88ccff'};
+    var anim=ln.lnAnim;
+    anim.timer-=dt;
+    if(anim.phase==='idle'&&anim.timer<=0){
+      // Use pending through-us route if available, otherwise bypass
+      var useThru=(ln.lnPendingThru||0)>0&&connectedServer;
+      if(useThru) ln.lnPendingThru--;
+      var routes=useThru?LN_GRouteThru:LN_GRouteBpass;
+      anim.route=routes[Math.floor(Math.random()*routes.length)];
+      anim.throughUs=useThru;
+      anim.progress=0;anim.phase='flow';
+      anim.pathCol=useThru?'#ffcc00':'#4488ff';
+      anim.dotCol=useThru?'#ffee44':'#88ccff';
+    } else if(anim.phase==='flow'){
+      anim.progress+=dt*5; // ~0.2s per route (5 routes/sec capacity)
+      if(anim.progress>=1){anim.phase='done';anim.timer=0.05;}
+    } else if(anim.phase==='done'&&anim.timer<=0){
+      // 3-4 cycles/sec: total cycle ~0.25-0.33s → idle gap = cycle - flow(0.2)
+      anim.phase='idle';anim.timer=connectedServer?(0.05+Math.random()*0.1):0.3+Math.random()*0.5;
+    }
+    // 全サーバーが感染中なら10%盗難（感染直後フラグ）
+    if(allSrvConns.length > 0){
+      var allInfected = allSrvConns.every(function(c){var s=nodes.find(function(nd){return nd.id===c.from});return !s||s.infected});
+      if(allInfected && ln.lnBalance >= 1){
+        ln.lnInfectedTimer = (ln.lnInfectedTimer||0) + dt;
+        if(ln.lnInfectedTimer >= 15){
+          ln.lnInfectedTimer = 0;
+          var stolen = Math.ceil(ln.lnBalance * 0.1);
+          if(stolen > 0){
+            ln.lnBalance = Math.max(0, ln.lnBalance - stolen);
+            effects.push({type:'malware',x:ln.x+WIN_W/2,y:ln.y+30,t:0,dur:0.8});
+            showUnlockMsg('🦠 ウイルス感染！LN残高の10%（'+stolen+'₱）が盗まれた！冗長構成で防御を！');
+          }
+        }
+      } else {
+        ln.lnInfectedTimer = 0;
+      }
+    }
+  });
+
+  // Server virus infection
+  nodes.filter(function(n){return n.type==='server'}).forEach(function(sv){
+    if(!sv.virusTimer) sv.virusTimer = 30 + Math.random()*60;
+    if(sv.infected){
+      var svStats = getServerStats(sv);
+      if(svStats.hasVB){
+        var vbNodes = connections.filter(function(c){return c.to===sv.id}).map(function(c){return nodes.find(function(n2){return n2.id===c.from&&n2.type==='virusbuster'})}).filter(Boolean);
+        var vbLevel = vbNodes.reduce(function(acc,vb){return acc + (vb.vbLevel||1)},0);
+        sv.virusCureTimer = (sv.virusCureTimer||0) + dt * vbLevel;
+        var cureTime = getVBCureTime(vbLevel);
+        if(sv.virusCureTimer >= cureTime){
+          sv.infected = false;
+          sv.virusCureTimer = 0;
+          showUnlockMsg('✅ ウイルスバスターがウイルスを駆除しました！');
+        }
+      }
+    } else {
+      var svStats2 = getServerStats(sv);
+      if(svStats2.hasLN){
+        sv.virusTimer -= dt;
+        if(sv.virusTimer <= 0){
+          sv.infected = true;
+          sv.virusTimer = 30 + Math.random()*60;
+          sv.virusCureTimer = 0;
+          effects.push({type:'malware',x:sv.x+WIN_W/2,y:sv.y+30,t:0,dur:1});
+          playSound('malware');
+          showUnlockMsg('🦠 サーバーがウイルスに感染！LN残高の10%が15秒ごとに盗まれる！VBで自動駆除 or 冗長構成で継続稼働を！');
+        }
+      }
+    }
+  });
+
+  // NFT
+  nodes.filter(function(n){return n.type==='nft'}).forEach(function(nf){
+    if(!nf.nftTimer) nf.nftTimer = 15;
+    if(!nf.nftCount) nf.nftCount = 0;
+    var connPC = connections.some(function(c){return c.to===nf.id && c.toPort==='from_pc'});
+    if(connPC){
+      nf.nftTimer -= dt;
+      if(nf.nftTimer <= 0){
+        nf.nftTimer = 10 + Math.random()*10;
+        nf.nftCount++;
+        var salePrice = 1 + Math.floor(Math.random()*10);
+        balance += salePrice;
+        stats.totalCoinsEarned += salePrice;
+        effects.push({type:'sparkle',x:nf.x+WIN_W/2,y:nf.y+TITLE_H/2,t:0,dur:0.6});
+        particles.push({x:nf.x+WIN_W/2,y:nf.y,tx:nf.x+WIN_W/2,ty:nf.y-40,t:0,dur:1,text:'🎨+'+salePrice+'₱'});
+        playSound('mine');
+        updateUI();buildShop();
+      }
+    }
+  });
+
+  // Exchange
+  nodes.filter(function(n){return n.type==='exchange'}).forEach(function(ex){
+    if(!ex.exBalance) ex.exBalance = 0;
+    if(!ex.exLocked) ex.exLocked = 0;
+    if(!ex.exLockTime) ex.exLockTime = 0;
+    if(!ex.exLockCooldown) ex.exLockCooldown = 0;
+    if(!ex.exHacked) ex.exHacked = false;
+    if(!ex.exHackTime) ex.exHackTime = 0;
+    var connWallet = connections.some(function(c){return c.to===ex.id && c.toPort==='from_wallet'});
+    if(!connWallet) return;
+    if(ex.exHacked){ex.exHackTime-=dt;if(ex.exHackTime<=0)ex.exHacked=false;return}
+    if(balance >= 1){
+      var drain = Math.min(0.5*dt, balance);
+      balance -= drain;ex.exBalance += drain;updateUI();buildShop();
+    }
+    ex.exLockCooldown -= dt;
+    if(ex.exBalance>=10&&ex.exLocked<=0&&ex.exLockCooldown<=0){
+      ex.exLocked=ex.exBalance;ex.exBalance=0;ex.exLockTime=30;
+      effects.push({type:'sparkle',x:ex.x+WIN_W/2,y:ex.y+TITLE_H/2,t:0,dur:0.5});
+    }
+    if(ex.exLocked>0){
+      ex.exLockTime-=dt;
+      if(ex.exLockTime<=0){
+        var interest=ex.exLocked*0.05;var payout=ex.exLocked+interest;
+        balance+=Math.floor(payout);stats.totalCoinsEarned+=payout;
+        effects.push({type:'sparkle',x:ex.x+WIN_W/2,y:ex.y+TITLE_H/2,t:0,dur:0.6});
+        playSound('mine');ex.exLocked=0;ex.exLockTime=0;ex.exLockCooldown=10;
+        updateUI();buildShop();
+      }
+    }
+    if(Math.random()<0.0007&&(ex.exBalance>0||ex.exLocked>0)){
+      ex.exBalance=0;ex.exLocked=0;ex.exLockTime=0;
+      ex.exHacked=true;ex.exHackTime=15;
+      effects.push({type:'malware',x:ex.x+WIN_W/2,y:ex.y+30,t:0,dur:1});
+      playSound('malware');showUnlockMsg('🔓 取引所がハッキングされました！');
+    }
+  });
+
+  // Heat update
+  nodes.filter(function(n){return n.type==='mining_pc'}).forEach(function(pc){
+    var s = getPCStats(pc);
+    var net = s.heatGenRate - s.coolingRate;
+    if(!pc.heat) pc.heat = 0;
+    pc.heat = Math.max(0, Math.min(100, pc.heat + net * dt * 1.5));
+    if(pc.heat >= 100 && !pc.heatShutdown){
+      pc.heatShutdown = true;
+      pc.heatShutdownTimer = 20;
+      showUnlockMsg('🔥 '+NODE_TYPES.mining_pc.name+'が過熱！緊急シャットダウン（20秒）');
+      playSound('malware');
+    }
+    if(pc.heatShutdown){
+      pc.heatShutdownTimer = (pc.heatShutdownTimer||0) - dt;
+      if(pc.heatShutdownTimer <= 0){ pc.heatShutdown = false; pc.heat = 60; }
+    }
+  });
+
+  // Malware / Blackout: disabled until unlocked via research
+
+  effects.forEach(function(e){e.t+=dt});
+  effects=effects.filter(function(e){return e.t<e.dur});
+  particles.forEach(function(p){p.t+=dt});
+  particles=particles.filter(function(p){return p.t<p.dur});
+}
+
+function scrollShop(dir){
+  var shop = document.getElementById('shop');
+  shop.scrollBy({left:dir*120,behavior:'smooth'});
+}
+
+function updateUI(){
+  document.getElementById('balanceText').textContent = balance;
+  document.getElementById('rpText').textContent = Math.floor(stats.researchPoints);
+  var minedEl = document.getElementById('minedText');
+  if(minedEl) minedEl.textContent = stats.totalMined;
+  updateResearchBtn();
+}
+
+function updateResearchBtn(){
+  var btn = document.getElementById('researchBtn');
+  if(!btn) return;
+  var hasAvailable = false;
+  var canAffordAny = false;
+  RESEARCH_TREE.forEach(function(r){
+    if(researchCompleted.indexOf(r.id)>=0) return;
+    var prereqMet = !r.prereq || researchCompleted.indexOf(r.prereq)>=0;
+    if(!prereqMet) return;
+    var condResult = checkResearchConditions(r);
+    if(condResult.met){
+      hasAvailable = true;
+      if(stats.researchPoints >= r.cost) canAffordAny = true;
+    }
+  });
+  var badge = btn.querySelector('.research-badge');
+  if(canAffordAny){
+    if(!badge){badge=document.createElement('span');badge.className='research-badge';badge.textContent='!';btn.appendChild(badge)}
+    btn.classList.add('pulse');
+  } else {
+    if(badge) badge.remove();
+    btn.classList.remove('pulse');
+  }
+}
+
+// ===== DRAWING =====
+function draw(){
+  ctx.fillStyle = '#0a0e27';
+  ctx.fillRect(0,0,canvasW,canvasH);
+  ctx.save();
+  ctx.translate(canvasW/2,canvasH/2);
+  ctx.scale(camera.zoom,camera.zoom);
+  ctx.translate(-canvasW/2-camera.x,-canvasH/2-camera.y);
+  drawGrid();drawConnections();drawNodes();drawEffects();drawParticles();drawDragLine();
+  ctx.restore();
+}
+
+function drawGrid(){
+  ctx.strokeStyle='#0f1535';ctx.lineWidth=0.5;
+  var step=30;
+  var startX=Math.floor((camera.x-canvasW/camera.zoom)/step)*step;
+  var endX=camera.x+canvasW*2/camera.zoom;
+  var startY=Math.floor((camera.y-canvasH/camera.zoom)/step)*step;
+  var endY=camera.y+canvasH*2/camera.zoom;
+  for(var x=startX;x<endX;x+=step){ctx.beginPath();ctx.moveTo(x,startY);ctx.lineTo(x,endY);ctx.stroke()}
+  for(var y=startY;y<endY;y+=step){ctx.beginPath();ctx.moveTo(startX,y);ctx.lineTo(endX,y);ctx.stroke()}
+}
+
+function drawLPath(fromX,fromY,toX,toY){
+  var midX=(fromX+toX)/2;
+  ctx.beginPath();ctx.moveTo(fromX,fromY);ctx.lineTo(midX,fromY);ctx.lineTo(midX,toY);ctx.lineTo(toX,toY);ctx.stroke();
+}
+
+function drawConnections(){
+  var t=gameTime;
+  connections.forEach(function(c){
+    var fromN=nodes.find(function(n){return n.id===c.from});
+    var toN=nodes.find(function(n){return n.id===c.to});
+    if(!fromN||!toN) return;
+    var fromPorts=getNodePortPositions(fromN);
+    var toPorts=getNodePortPositions(toN);
+    var fp=fromPorts.find(function(p){return p.type===c.fromPort&&p.defIndex===c.fromDefIndex});
+    var tp=toPorts.find(function(p){return p.type===c.toPort&&p.defIndex===c.toDefIndex});
+    if(!fp) fp=fromPorts.find(function(p){return p.type===c.fromPort});
+    if(!tp) tp=toPorts.find(function(p){return p.type===c.toPort});
+    if(!fp||!tp) return;
+    var fx=fp.x,fy=fp.y,tx=tp.x,ty=tp.y;
+    var col='#4488ff';var lineW=1.5;var dashStyle=null;
+    if(c.lineType==='power'){col='#dd4444';lineW=2.5}
+    else if(c.lineType==='coin'){col='#ddaa22';lineW=1.5;dashStyle=[6,4]}
+    else if(c.lineType==='lightning'){col='#9944dd';lineW=1.5}
+    // 冗長サーバー接続はグレー表示・粒なし
+    var isRedundantConn = (toN.type==='ln_node' && fromN.type==='server' && isRedundantServer(fromN));
+    if(isRedundantConn){col='#446';lineW=1;dashStyle=[3,5]}
+    ctx.strokeStyle=col;ctx.lineWidth=lineW;ctx.globalAlpha=isRedundantConn?0.4:0.7;
+    if(dashStyle) ctx.setLineDash(dashStyle);
+    drawLPath(fx,fy,tx,ty);
+    if(dashStyle) ctx.setLineDash([]);
+    ctx.globalAlpha=1;
+    if(!isRedundantConn){
+    for(var i=0;i<3;i++){
+      var p=((t*0.5+i/3)%1);
+      var pt=getLPathPoint(fx,fy,tx,ty,p);
+      ctx.fillStyle=col;ctx.globalAlpha=0.8;
+      ctx.beginPath();ctx.arc(pt.x,pt.y,2.5,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=1;
+    }}
+  });
+}
+
+function drawNodes(){
+  nodes.forEach(function(n){
+    var nt=NODE_TYPES[n.type];
+    if(!nt) return;
+    var h=getNodeHeight(n);
+    var s=n.scale;
+    if(s<0.01) return;
+    ctx.save();
+    if(s<1){ctx.globalAlpha=s;ctx.translate(n.x+WIN_W/2,n.y+h/2);ctx.scale(s,s);ctx.translate(-(n.x+WIN_W/2),-(n.y+h/2))}
+    ctx.shadowColor='rgba(60,80,180,0.3)';ctx.shadowBlur=8;
+    if(n.infected){var blink=Math.sin(gameTime*8)>0?1:0.3;ctx.shadowColor='rgba(255,0,0,'+blink+')';ctx.shadowBlur=12}
+    if(n.blackout) ctx.globalAlpha=(ctx.globalAlpha||1)*0.4;
+    ctx.fillStyle='rgba(20,25,45,0.92)';ctx.strokeStyle='rgba(70,90,190,0.45)';ctx.lineWidth=1.5;
+    roundRect(ctx,n.x,n.y,WIN_W,h,6);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle=n.blackout?'#333':nt.titleColor;
+    ctx.beginPath();ctx.moveTo(n.x+4,n.y);ctx.lineTo(n.x+WIN_W-4,n.y);
+    ctx.arcTo(n.x+WIN_W,n.y,n.x+WIN_W,n.y+4,4);ctx.lineTo(n.x+WIN_W,n.y+TITLE_H);
+    ctx.lineTo(n.x,n.y+TITLE_H);ctx.lineTo(n.x,n.y+4);ctx.arcTo(n.x,n.y,n.x+4,n.y,4);
+    ctx.closePath();ctx.fill();
+    ctx.font='18px sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText(nt.emoji,n.x+6,n.y+TITLE_H/2+1);
+    ctx.fillStyle='#fff';ctx.font='bold '+FONT_SIZE+'px sans-serif';
+    var displayName = nt.name;
+    if(n.type==='server' && isRedundantServer(n)) displayName='サーバー(冗長)';
+    ctx.fillText(displayName,n.x+28,n.y+TITLE_H/2+1);
+
+    var nodeLines=getNodeLines(n);
+    ctx.font=FONT_SIZE+'px sans-serif';
+    nodeLines.forEach(function(line,i){
+      var ly=n.y+TITLE_H+i*LINE_H;
+      if(i>0){ctx.strokeStyle='rgba(60,80,140,0.15)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(n.x+6,ly);ctx.lineTo(n.x+WIN_W-6,ly);ctx.stroke()}
+      if(line.lnDeposit){ctx.fillStyle='rgba(0,180,80,0.3)';ctx.fillRect(n.x+2,ly,WIN_W-4,LINE_H-1);ctx.fillStyle='#44ff88';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(line.text,n.x+10,ly+LINE_H/2)}
+      else if(line.lnWithdraw){ctx.fillStyle='rgba(255,100,0,0.3)';ctx.fillRect(n.x+2,ly,WIN_W-4,LINE_H-1);ctx.fillStyle='#ffaa44';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(line.text,n.x+10,ly+LINE_H/2)}
+      else if(line.text){ctx.fillStyle='#d8d8f0';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(line.text,n.x+10,ly+LINE_H/2)}
+      if(line.bar!==undefined){
+        var barX=n.x+WIN_W-62,barY=ly+5,barW=44,barH=14;
+        var animated=line.barHeat?(line.bar||0):(animatedPower[n.id]||0);var fillW=Math.min(animated,1)*barW;
+        ctx.fillStyle='rgba(30,35,60,0.9)';roundRect(ctx,barX,barY,barW,barH,3);ctx.fill();
+        if(fillW>0){
+          var bGrad=ctx.createLinearGradient(barX,barY,barX+fillW,barY);
+          if(line.barHeat){
+            var hv=line.bar||0;
+            var c1=hv>=0.8?'#cc2200':hv>=0.6?'#cc8800':'#22aa44';
+            var c2=hv>=0.8?'#ff5500':hv>=0.6?'#ffcc00':'#66ee88';
+            bGrad.addColorStop(0,c1);bGrad.addColorStop(1,c2);
+          } else if(line.barOk){bGrad.addColorStop(0,'#22aa44');bGrad.addColorStop(1,'#66ee88')}
+          else{bGrad.addColorStop(0,'#cc2222');bGrad.addColorStop(1,'#ff5544')}
+          ctx.fillStyle=bGrad;ctx.fillRect(barX+1,barY+1,fillW-2,barH-2);
+        }
+        var heatOk=line.barHeat?line.barOk:line.barOk;
+        ctx.strokeStyle=heatOk?'rgba(80,200,120,0.6)':'rgba(220,80,80,0.6)';ctx.lineWidth=1;ctx.strokeRect(barX,barY,barW,barH);
+      }
+      if(line.miningGauge!==undefined){
+        var gx=n.x+8,gy=ly+4,gw=WIN_W-16,gh=16;var prog=Math.min(line.miningGauge,1);
+        ctx.fillStyle='rgba(30,35,60,0.9)';roundRect(ctx,gx,gy,gw,gh,4);ctx.fill();
+        if(prog>0){
+          var grad=ctx.createLinearGradient(gx,gy,gx+gw*prog,gy);
+          grad.addColorStop(0,'#2266ff');grad.addColorStop(0.5,'#22aacc');grad.addColorStop(1,'#22ee66');
+          ctx.fillStyle=grad;ctx.fillRect(gx+2,gy+2,(gw-4)*prog,gh-4);
+        }
+        ctx.strokeStyle=line.isMining?'rgba(80,220,140,0.8)':'rgba(80,100,160,0.4)';
+        ctx.lineWidth=line.isMining?1.5:0.5;ctx.strokeRect(gx,gy,gw,gh);
+        ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(Math.floor(prog*100)+'%',n.x+WIN_W/2,gy+gh/2);ctx.font=FONT_SIZE+'px sans-serif';
+      }
+    });
+
+    // Draw ports
+    var ports=getNodePortPositions(n);
+    ports.forEach(function(p){
+      var connected=isPortConnected(n,p);
+      var isCompat=dragMode==='port'&&isCompatiblePort(n.id,p.defIndex);
+      var category=getPortCategoryForNode(n.type,p.type);
+      var catColor=PORT_CATEGORY_COLORS[category]||'#4466aa';
+      var multi=isMultiPort(n.type,p.type);
+      var connCount=countPortConnections(n.id,p.type,p.side);
+
+      if(isCompat){
+        ctx.save();ctx.shadowColor='#ffee44';ctx.shadowBlur=14;
+        ctx.beginPath();ctx.arc(p.x,p.y,PORT_R+4,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,238,68,0.25)';ctx.fill();ctx.restore();
+      }
+      if(dragMode==='port'&&!isCompat&&p.nodeId!==dragPort.nodeId) ctx.globalAlpha=0.3;
+      if(multi){ctx.beginPath();ctx.arc(p.x,p.y,PORT_R+3,0,Math.PI*2);ctx.strokeStyle=connected?PORT_CATEGORY_COLORS.connected:catColor;ctx.lineWidth=1.5;ctx.stroke()}
+      ctx.beginPath();ctx.arc(p.x,p.y,PORT_R,0,Math.PI*2);
+      if(connected) ctx.fillStyle=PORT_CATEGORY_COLORS.connected;
+      else if(isCompat) ctx.fillStyle='#ddcc44';
+      else ctx.fillStyle=catColor;
+      ctx.fill();ctx.strokeStyle='rgba(150,170,220,0.7)';ctx.lineWidth=1;ctx.stroke();
+      ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(p.side==='left'?'→':'←',p.x,p.y);
+      if(multi&&connCount>0){ctx.font='bold 8px sans-serif';ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.strokeText(connCount+'',p.x+PORT_R+3,p.y-PORT_R-1);ctx.fillText(connCount+'',p.x+PORT_R+3,p.y-PORT_R-1)}
+      ctx.globalAlpha=1;
+    });
+
+    if(n.type==='mining_pc'){var ms=getPCStats(n);if(ms.canMine&&!n.infected&&ms.powerOk&&!n.heatShutdown){ctx.fillStyle=Math.sin(gameTime*4)>0?'#44ff88':'#226644';ctx.beginPath();ctx.arc(n.x+WIN_W-10,n.y+TITLE_H/2,3,0,Math.PI*2);ctx.fill()}
+      if(n.heatShutdown){ctx.font='14px sans-serif';ctx.textAlign='center';ctx.fillText('🔥',n.x+WIN_W/2,n.y-8)}
+      else if((n.heat||0)>=60){ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillStyle=(n.heat||0)>=80?'#ff4400':'#ffaa00';ctx.fillText('▲ HOT'+(Math.floor(n.heatShutdownTimer||0)>0?'':'')+''+(Math.sin(gameTime*6)>0?'':' '),n.x+WIN_W/2,n.y-8)}}
+    if(n.type==='server'){
+      if(n.infected){ctx.save();ctx.globalAlpha=0.3+0.3*Math.abs(Math.sin(gameTime*5));ctx.fillStyle='#ff2200';ctx.fillRect(n.x,n.y,WIN_W,getNodeHeight(n));ctx.restore()}
+      var svs=getServerStats(n);if(svs.canRoute&&!n.infected&&svs.powerOk){ctx.fillStyle=Math.sin(gameTime*4)>0?'#4488ff':'#223366';ctx.beginPath();ctx.arc(n.x+WIN_W-10,n.y+TITLE_H/2,3,0,Math.PI*2);ctx.fill()}
+    }
+    if(n.type==='research_lab'){var rpRate=getLabRPRate(n);if(rpRate>0){ctx.fillStyle=Math.sin(gameTime*3)>0?'#44ddff':'#225566';ctx.beginPath();ctx.arc(n.x+WIN_W-10,n.y+TITLE_H/2,3,0,Math.PI*2);ctx.fill()}}
+    if(n.type==='ln_node'){
+      // Mini LN network graph drawn ABOVE the node
+      var GH=100; // graph box height
+      var gx=n.x+WIN_W/2, gy=n.y-GH/2-8; // center of graph
+      ctx.save();
+      // Background box
+      ctx.fillStyle='rgba(6,10,28,0.92)';
+      roundRect(ctx,n.x+1,n.y-GH-10,WIN_W-2,GH+4,6);ctx.fill();
+      ctx.strokeStyle='rgba(50,70,160,0.35)';ctx.lineWidth=1;ctx.stroke();
+
+      var anim2=n.lnAnim||{phase:'idle',route:[],progress:0,throughUs:false,pathCol:'#4488ff',dotCol:'#88ccff'};
+      var activeSet={};
+      if(anim2.route) anim2.route.forEach(function(idx){activeSet[idx]=true;});
+      var sIdx=anim2.route&&anim2.route.length>0?anim2.route[0]:-1;
+      var rIdx=anim2.route&&anim2.route.length>0?anim2.route[anim2.route.length-1]:-1;
+
+      // Draw edges
+      LN_GE.forEach(function(e){
+        var a=LN_GN[e[0]],b=LN_GN[e[1]];
+        ctx.strokeStyle='#1e2a40';ctx.lineWidth=1;ctx.globalAlpha=0.9;
+        ctx.beginPath();ctx.moveTo(gx+a.x,gy+a.y);ctx.lineTo(gx+b.x,gy+b.y);ctx.stroke();
+        ctx.globalAlpha=1;
+      });
+
+      // Draw animated path edges
+      if(anim2.phase==='flow'||anim2.phase==='done'){
+        var totalSegs=anim2.route.length-1;
+        var segProg=Math.min(anim2.progress*totalSegs, totalSegs);
+        var curSeg=Math.floor(segProg);
+        // Already-passed edges: bright
+        for(var s2=0;s2<curSeg&&s2<totalSegs;s2++){
+          var na3=LN_GN[anim2.route[s2]],nb3=LN_GN[anim2.route[s2+1]];
+          ctx.strokeStyle=anim2.pathCol;ctx.lineWidth=2;ctx.globalAlpha=0.9;
+          ctx.beginPath();ctx.moveTo(gx+na3.x,gy+na3.y);ctx.lineTo(gx+nb3.x,gy+nb3.y);ctx.stroke();
+          ctx.globalAlpha=1;
+        }
+        // Current segment partial
+        if(curSeg<totalSegs&&anim2.phase==='flow'){
+          var fracSeg=segProg-curSeg;
+          var na4=LN_GN[anim2.route[curSeg]],nb4=LN_GN[anim2.route[curSeg+1]];
+          var dpx=na4.x+(nb4.x-na4.x)*fracSeg, dpy=na4.y+(nb4.y-na4.y)*fracSeg;
+          ctx.strokeStyle=anim2.pathCol;ctx.lineWidth=2;ctx.globalAlpha=0.85;
+          ctx.beginPath();ctx.moveTo(gx+na4.x,gy+na4.y);ctx.lineTo(gx+dpx,gy+dpy);ctx.stroke();
+          ctx.globalAlpha=1;
+          // Moving glow dot
+          ctx.shadowColor=anim2.dotCol;ctx.shadowBlur=10;
+          ctx.fillStyle=anim2.dotCol;
+          ctx.beginPath();ctx.arc(gx+dpx,gy+dpy,5,0,Math.PI*2);ctx.fill();
+          ctx.shadowBlur=0;
+        }
+      }
+
+      // Draw nodes
+      // Determine which segment is currently being animated
+      var animTotalSegs2=anim2.route.length>0?anim2.route.length-1:0;
+      var animSegProg2=Math.min((anim2.progress||0)*animTotalSegs2,animTotalSegs2);
+      var animCurSeg2=Math.floor(animSegProg2);
+      // Nodes already passed (index 0..curSeg in route, but NOT sender/receiver label)
+      var passedSet={};
+      for(var pi=1;pi<animCurSeg2&&pi<anim2.route.length-1;pi++) passedSet[anim2.route[pi]]=true;
+      // Current leading node
+      var leadNode=animCurSeg2<animTotalSegs2?anim2.route[animCurSeg2]:-1;
+
+      LN_GN.forEach(function(gnd,idx){
+        var isOur=idx===LN_GOur;
+        // sender = route[0], receiver = route[last] (never OUR)
+        var isSender=(anim2.phase!=='idle')&&anim2.route.length>0&&idx===anim2.route[0];
+        var isReceiver=(anim2.phase!=='idle')&&anim2.route.length>0&&idx===anim2.route[anim2.route.length-1];
+        var isPassed=passedSet[idx]&&!isOur;
+        var isOurLit=isOur&&anim2.throughUs&&(anim2.phase==='flow'||anim2.phase==='done')&&activeSet[idx];
+        var r2=isOur?7:4;
+        var col2;
+        if(isOur) col2=isOurLit?'#ffee44':'#cc9900';
+        else if(isSender) col2='#4499ff';
+        else if(isReceiver) col2='#44dd88';
+        else if(isPassed) col2='#8899bb';
+        else col2='#2a3550';
+        ctx.shadowBlur=0;
+        if(isOurLit){ctx.shadowColor='#ffcc00';ctx.shadowBlur=14;}
+        else if(isOur){ctx.shadowColor='#aa7700';ctx.shadowBlur=5;}
+        else if(isSender){ctx.shadowColor='#4499ff';ctx.shadowBlur=7;}
+        else if(isReceiver){ctx.shadowColor='#44dd88';ctx.shadowBlur=7;}
+        ctx.fillStyle=col2;
+        ctx.beginPath();ctx.arc(gx+gnd.x,gy+gnd.y,r2,0,Math.PI*2);ctx.fill();
+        ctx.shadowBlur=0;
+        if(isOur){
+          ctx.strokeStyle=isOurLit?'rgba(255,220,0,0.7)':'rgba(180,130,0,0.4)';ctx.lineWidth=1.5;
+          ctx.beginPath();ctx.arc(gx+gnd.x,gy+gnd.y,r2+3,0,Math.PI*2);ctx.stroke();
+        }
+      });
+      // Label "YOU" on our node
+      ctx.fillStyle='#cc9900';ctx.font='bold 7px sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+      ctx.fillText('YOU',gx+LN_GN[LN_GOur].x,gy+LN_GN[LN_GOur].y+9);
+      ctx.restore();
+    }
+    if(n.infected){
+      ctx.font='28px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      var blink2=0.6+0.4*Math.abs(Math.sin(gameTime*4));
+      ctx.globalAlpha=blink2;
+      ctx.fillText('💀',n.x+WIN_W/2,n.y-18);
+      ctx.globalAlpha=1;
+      ctx.font='bold 10px sans-serif';ctx.fillStyle='#ff4444';
+      ctx.fillText('⚠ LN残高-10%/15秒',n.x+WIN_W/2,n.y-4);
+    }
+    if(n.blackout){ctx.globalAlpha=1;ctx.font='14px sans-serif';ctx.textAlign='center';ctx.fillText('⚡',n.x+WIN_W/2,n.y-8)}
+    ctx.restore();
+  });
+}
+
+function isPortConnected(n,port){
+  return connections.some(function(c){
+    if(port.side==='left') return c.from===n.id&&c.fromPort===port.type&&c.fromDefIndex===port.defIndex;
+    return c.to===n.id&&c.toPort===port.type&&c.toDefIndex===port.defIndex;
+  });
+}
+
+function roundRect(ctx2,x,y,w,h,r){
+  ctx2.beginPath();ctx2.moveTo(x+r,y);ctx2.lineTo(x+w-r,y);ctx2.arcTo(x+w,y,x+w,y+r,r);
+  ctx2.lineTo(x+w,y+h-r);ctx2.arcTo(x+w,y+h,x+w-r,y+h,r);ctx2.lineTo(x+r,y+h);ctx2.arcTo(x,y+h,x,y+h-r,r);
+  ctx2.lineTo(x,y+r);ctx2.arcTo(x,y,x+r,y,r);ctx2.closePath();
+}
+
+function drawEffects(){
+  effects.forEach(function(e){
+    var p=e.t/e.dur;
+    if(e.type==='sparkle'){for(var i=0;i<6;i++){var a=Math.PI*2*i/6+gameTime;var d=20*p;ctx.fillStyle='rgba(255,215,0,'+(1-p)+')';ctx.beginPath();ctx.arc(e.x+Math.cos(a)*d,e.y+Math.sin(a)*d,3*(1-p),0,Math.PI*2);ctx.fill()}}
+    if(e.type==='spawn'){ctx.strokeStyle='rgba(255,255,255,'+(0.5*(1-p))+')';ctx.lineWidth=2;ctx.beginPath();ctx.arc(e.x,e.y,30*p,0,Math.PI*2);ctx.stroke()}
+    if(e.type==='malware'){ctx.fillStyle='rgba(255,0,0,'+(0.3*(1-p))+')';ctx.beginPath();ctx.arc(e.x,e.y,40*p,0,Math.PI*2);ctx.fill()}
+    if(e.type==='cure'){ctx.strokeStyle='rgba(0,255,200,'+(1-p)+')';ctx.lineWidth=2;for(var i=0;i<4;i++){var a=Math.PI/2*i+p*2;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x+Math.cos(a)*30*p,e.y+Math.sin(a)*30*p);ctx.stroke()}}
+    if(e.type==='gold_burst'){var ease=1-Math.pow(1-p,2);var dx=Math.cos(e.angle)*e.dist*ease;var dy=Math.sin(e.angle)*e.dist*ease;ctx.fillStyle='rgba(255,215,0,'+(1-p)+')';ctx.beginPath();ctx.arc(e.x+dx,e.y+dy,3*(1-p*0.5),0,Math.PI*2);ctx.fill()}
+  });
+}
+
+function drawParticles(){
+  particles.forEach(function(p){
+    var prog=p.t/p.dur;var ease=1-Math.pow(1-prog,3);
+    var px=p.x+(p.tx-p.x)*ease;var py=p.y+(p.ty-p.y)*ease-Math.sin(prog*Math.PI)*30;
+    ctx.font='bold 14px sans-serif';ctx.fillStyle='rgba(255,215,0,'+(1-prog*0.5)+')';
+    ctx.textAlign='center';ctx.fillText(p.text,px,py);
+  });
+}
+
+function drawDragLine(){
+  if(dragMode==='port'&&dragPort&&dragLineEnd){
+    var fx=dragPort.x,fy=dragPort.y,tx=dragLineEnd.x,ty=dragLineEnd.y;
+    var midX=(fx+tx)/2;
+    ctx.strokeStyle='rgba(74,106,255,0.6)';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+    ctx.beginPath();ctx.moveTo(fx,fy);ctx.lineTo(midX,fy);ctx.lineTo(midX,ty);ctx.lineTo(tx,ty);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+// ===== INPUT =====
+function getScreenPos(e){
+  var r=canvas.getBoundingClientRect();
+  var touch=e.touches?e.touches[0]:e;
+  return{x:touch.clientX-r.left,y:touch.clientY-r.top};
+}
+
+function hitTestPort(wx,wy){
+  for(var i=nodes.length-1;i>=0;i--){
+    var ports=getNodePortPositions(nodes[i]);
+    for(var j=0;j<ports.length;j++){
+      var p=ports[j];
+      if(Math.hypot(wx-p.x,wy-p.y)<PORT_R+6) return p;
+    }
+  }
+  return null;
+}
+
+function hitTestTitleBar(wx,wy){
+  for(var i=nodes.length-1;i>=0;i--){
+    var n=nodes[i];
+    if(wx>=n.x&&wx<=n.x+WIN_W&&wy>=n.y&&wy<=n.y+TITLE_H) return n;
+  }
+  return null;
+}
+
+function hitTestNode(wx,wy){
+  for(var i=nodes.length-1;i>=0;i--){
+    var n=nodes[i];var h=getNodeHeight(n);
+    if(wx>=n.x&&wx<=n.x+WIN_W&&wy>=n.y&&wy<=n.y+h) return n;
+  }
+  return null;
+}
+
+canvas.addEventListener('touchstart',function(e){
+  if(e.touches.length===2){
+    e.preventDefault();pinching=true;
+    var t1=e.touches[0],t2=e.touches[1];
+    pinchDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+    pinchMidX=(t1.clientX+t2.clientX)/2;pinchMidY=(t1.clientY+t2.clientY)/2;
+    dragMode=null;
+  }
+},{passive:false});
+
+canvas.addEventListener('touchmove',function(e){
+  if(pinching&&e.touches.length===2){
+    e.preventDefault();
+    var t1=e.touches[0],t2=e.touches[1];
+    var newDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+    var scale=newDist/pinchDist;
+    var newZoom=Math.max(0.3,Math.min(3.0,camera.zoom*scale));
+    var r=canvas.getBoundingClientRect();
+    var wx=(pinchMidX-r.left-canvasW/2)/camera.zoom+camera.x+canvasW/2;
+    var wy=(pinchMidY-r.top-canvasH/2)/camera.zoom+camera.y+canvasH/2;
+    camera.zoom=newZoom;
+    camera.x=wx-canvasW/2-(pinchMidX-r.left-canvasW/2)/camera.zoom;
+    camera.y=wy-canvasH/2-(pinchMidY-r.top-canvasH/2)/camera.zoom;
+    pinchDist=newDist;
+  }
+},{passive:false});
+
+canvas.addEventListener('touchend',function(e){if(e.touches.length<2)pinching=false},{passive:false});
+
+canvas.addEventListener('wheel',function(e){
+  e.preventDefault();
+  var r=canvas.getBoundingClientRect();var sx=e.clientX-r.left;var sy=e.clientY-r.top;
+  var wx=(sx-canvasW/2)/camera.zoom+camera.x+canvasW/2;
+  var wy=(sy-canvasH/2)/camera.zoom+camera.y+canvasH/2;
+  var factor=e.deltaY>0?0.9:1.1;
+  camera.zoom=Math.max(0.3,Math.min(3.0,camera.zoom*factor));
+  camera.x=wx-canvasW/2-(sx-canvasW/2)/camera.zoom;
+  camera.y=wy-canvasH/2-(sy-canvasH/2)/camera.zoom;
+},{passive:false});
+
+canvas.addEventListener('pointerdown',function(e){
+  if(pinching||isShopDragging) return;
+  ensureAudio();
+  var screen=getScreenPos(e);var world=screenToWorld(screen.x,screen.y);
+  lastPointerX=screen.x;lastPointerY=screen.y;pointerStartX=screen.x;pointerStartY=screen.y;
+
+  var portHit=hitTestPort(world.x,world.y);
+  if(portHit){
+    dragMode='port';dragPort=portHit;dragLineEnd={x:world.x,y:world.y};
+    updateCompatiblePorts(portHit);
+    var idx=nodes.indexOf(nodes.find(function(nd){return nd.id===portHit.nodeId}));
+    if(idx>=0){nodes.push(nodes.splice(idx,1)[0])}
+    return;
+  }
+
+  // LN deposit/withdraw click（ダブルタップ削除より先に判定）
+  var lnButtonClicked = false;
+  for(var li=0;li<nodes.length;li++){
+    var lnn=nodes[li];
+    if(lnn.type!=='ln_node') continue;
+    var llines=getNodeLines(lnn);
+    for(var lj=0;lj<llines.length;lj++){
+      if(!llines[lj].lnDeposit&&!llines[lj].lnWithdraw) continue;
+      var btnY=lnn.y+TITLE_H+lj*LINE_H;
+      if(world.x>=lnn.x&&world.x<=lnn.x+WIN_W&&world.y>=btnY&&world.y<=btnY+LINE_H){
+        var amt = llines[lj].lnDeposit;
+        if(amt && balance>=amt){
+          balance-=amt; lnn.lnBalance=(lnn.lnBalance||0)+amt;
+          effects.push({type:'sparkle',x:lnn.x+WIN_W/2,y:btnY,t:0,dur:0.4});
+          playSound('buy');updateUI();buildShop();
+        } else if(amt && balance<amt){
+          playSound('error');
+        } else if(llines[lj].lnWithdraw){
+          var wType = llines[lj].lnWithdraw;
+          var earned2 = lnn.lnEarned||0;
+          if(wType==='fee'){
+            if(earned2>=0.01){
+              var wAmt=Math.floor(earned2*100)/100;
+              lnn.lnEarned=0;
+              balance+=wAmt; stats.totalCoinsEarned+=wAmt;
+              effects.push({type:'sparkle',x:lnn.x+WIN_W/2,y:btnY,t:0,dur:0.6});
+              particles.push({x:lnn.x+WIN_W/2,y:btnY,tx:lnn.x+WIN_W/2,ty:lnn.y-20,t:0,dur:1,text:'+'+wAmt.toFixed(2)+'₱'});
+              playSound('mine');updateUI();buildShop();
+            } else {playSound('error')}
+          } else if(wType==='all'){
+            var total = earned2 + (lnn.lnBalance||0);
+            if(total>=0.01){
+              lnn.lnEarned=0; lnn.lnBalance=0; lnn.lnRouteTimer=0;
+              var wAmt2=Math.floor(total*100)/100;
+              balance+=wAmt2; stats.totalCoinsEarned+=wAmt2;
+              effects.push({type:'sparkle',x:lnn.x+WIN_W/2,y:btnY,t:0,dur:0.6});
+              particles.push({x:lnn.x+WIN_W/2,y:btnY,tx:lnn.x+WIN_W/2,ty:lnn.y-20,t:0,dur:1,text:'+'+wAmt2.toFixed(2)+'₱'});
+              playSound('mine');updateUI();buildShop();
+            } else {playSound('error')}
+          }
+        }
+        lnButtonClicked=true; lastTapNodeId=null; lastTapTime=0; return;
+      }
+    }
+  }
+
+  var nodeHit=hitTestNode(world.x,world.y);
+  if(nodeHit){
+    var now=Date.now();
+    if(lastTapNodeId===nodeHit.id&&now-lastTapTime<400){
+      deleteNodeConfirm(nodeHit);lastTapNodeId=null;lastTapTime=0;return;
+    }
+    lastTapNodeId=nodeHit.id;lastTapTime=now;
+  } else {lastTapNodeId=null;lastTapTime=0}
+
+  var titleHit=hitTestTitleBar(world.x,world.y);
+  if(titleHit){
+    dragMode='move';dragNode=titleHit;dragOffX=world.x-titleHit.x;dragOffY=world.y-titleHit.y;
+    var idx2=nodes.indexOf(titleHit);if(idx2>=0){nodes.push(nodes.splice(idx2,1)[0])}
+    return;
+  }
+
+  var bodyHit=hitTestNode(world.x,world.y);
+  if(bodyHit){
+    if(bodyHit.infected){bodyHit.infected=false;bodyHit.virusCureTimer=0;effects.push({type:'cure',x:bodyHit.x+WIN_W/2,y:bodyHit.y+30,t:0,dur:0.5});playSound('cure');showUnlockMsg('🛠️ ウイルスを手動で駆除しました')}
+    return;
+  }
+
+  dragMode='camera';cameraStartX=camera.x;cameraStartY=camera.y;
+});
+
+canvas.addEventListener('pointermove',function(e){
+  if(pinching||isShopDragging) return;
+  var screen=getScreenPos(e);var world=screenToWorld(screen.x,screen.y);
+  if(dragMode==='move'&&dragNode){var GRID=32;dragNode.x=Math.round((world.x-dragOffX)/GRID)*GRID;dragNode.y=Math.round((world.y-dragOffY)/GRID)*GRID;}
+  else if(dragMode==='port'){
+    dragLineEnd={x:world.x,y:world.y};
+    var tp=hitTestPort(world.x,world.y);
+    hoverPort=(tp&&tp.nodeId!==dragPort.nodeId)?tp:null;
+  }
+  else if(dragMode==='camera'){
+    var dx=screen.x-pointerStartX;var dy=screen.y-pointerStartY;
+    camera.x=cameraStartX-dx/camera.zoom;camera.y=cameraStartY-dy/camera.zoom;
+  }
+  else{var ph=hitTestPort(world.x,world.y);hoverPort=ph||null}
+  lastPointerX=screen.x;lastPointerY=screen.y;
+});
+
+canvas.addEventListener('pointerup',function(e){
+  if(pinching||isShopDragging) return;
+  var screen=getScreenPos(e);var world=screenToWorld(screen.x,screen.y);
+  if(dragMode==='port'&&dragPort){
+    var tp=hitTestPort(world.x,world.y);
+    if(tp&&tp.nodeId!==dragPort.nodeId){
+      if(canConnect(dragPort,tp)) addConnection(dragPort,tp);
+      else if(canConnect(tp,dragPort)) addConnection(tp,dragPort);
+      else playSound('error');
+    }
+  }
+  dragMode=null;dragNode=null;dragPort=null;dragLineEnd=null;hoverPort=null;compatiblePorts=[];
+});
+
+canvas.addEventListener('pointerleave',function(){dragMode=null;dragNode=null;dragPort=null;dragLineEnd=null;hoverPort=null});
+
+// ===== SAVE/LOAD =====
+function saveGame(){
+  try{
+    var data={
+      nodes:nodes.map(function(n){return{id:n.id,type:n.type,x:n.x,y:n.y,infected:n.infected,blackout:n.blackout,blackoutTime:n.blackoutTime||0,
+        lnBalance:n.lnBalance||0,lnwBalance:n.lnwBalance||0,exBalance:n.exBalance||0,exLocked:n.exLocked||0,exLockTime:n.exLockTime||0,
+        exHacked:n.exHacked||false,exHackTime:n.exHackTime||0,miningProgress:n.miningProgress||0,solarOutput:n.solarOutput||10,
+        nftCount:n.nftCount||0,nftTimer:n.nftTimer||15,
+        heat:n.heat||0,heatShutdown:n.heatShutdown||false,heatShutdownTimer:n.heatShutdownTimer||0}}),
+      connections:connections.map(function(c){return{from:c.from,to:c.to,fromPort:c.fromPort,toPort:c.toPort,fromDefIndex:c.fromDefIndex,toDefIndex:c.toDefIndex,lineType:c.lineType}}),
+      balance:balance,difficulty:difficulty,gameTime:gameTime,nextNodeId:nextNodeId,
+      researchCompleted:researchCompleted,stats:stats,labUnlocked:labUnlocked,labUnlockShown:labUnlockShown,
+      camera:{x:camera.x,y:camera.y,zoom:camera.zoom}
+    };
+    localStorage.setItem('picocoin_save',JSON.stringify(data));
+  }catch(e2){}
+}
+
+function loadGame(){
+  try{
+    var raw=localStorage.getItem('picocoin_save');
+    if(!raw) return false;
+    var data=JSON.parse(raw);
+    nodes=data.nodes.map(function(n){return Object.assign({scale:1,infectedTime:0,miningProgress:0,solarOutput:10,nftCount:0,nftTimer:15,heat:0,heatShutdown:false,heatShutdownTimer:0},n,{infected:false,blackout:false,blackoutTime:0})});
+    connections=data.connections;
+    balance=data.balance;difficulty=data.difficulty;gameTime=data.gameTime||0;nextNodeId=data.nextNodeId||100;
+    researchCompleted=data.researchCompleted||['basic_mining'];
+    stats=data.stats||{totalMined:0,totalCoinsEarned:0,researchPoints:0};
+    labUnlocked=data.labUnlocked||false;labUnlockShown=data.labUnlockShown||false;
+    // Migrate old saves: if lab was unlocked but research not completed, add it
+    if(labUnlocked && researchCompleted.indexOf('_lab_unlock')<0) researchCompleted.push('_lab_unlock');
+    animatedPower={};
+    return true;
+  }catch(e2){return false}
+}
+
+setInterval(saveGame,30000);
+
+var origInit=initGame;
+initGame=function(){
+  resize();
+  if(!loadGame()){origInit();return}
+  hintShown=false;hintFadeState='hidden';
+  document.getElementById('hint').style.opacity='0';
+  buildShop();updateUI();centerCameraOnBlockchain();
+  requestAnimationFrame(gameLoop);
+};
+
+resize();
+</script>
+</body>
+</html>
