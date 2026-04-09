@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>🧱 ブロック落とし防衛</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;background:#0a0818;color:#eee;font-family:'Segoe UI',sans-serif;overflow:hidden}
+#app{display:flex;flex-direction:column;align-items:center;height:100%;max-width:420px;margin:0 auto}
+#hud{width:100%;display:flex;justify-content:space-around;align-items:center;padding:5px 8px;background:rgba(0,0,0,0.6);border-bottom:1px solid #221a40;flex-shrink:0}
+.hi{text-align:center}
+.hi .lbl{font-size:9px;color:#777}
+.hi .val{font-size:17px;font-weight:bold;line-height:1.1}
+#gameArea{position:relative;flex:1;display:flex;align-items:center;justify-content:center;width:100%;min-height:0;overflow:hidden}
+#gc{display:block;touch-action:none}
+#nextPanel{width:100%;display:flex;align-items:center;gap:8px;padding:4px 10px;background:rgba(0,0,0,0.5);border-top:1px solid #221a40;flex-shrink:0}
+#nextPanel .nlbl{font-size:10px;color:#777;flex-shrink:0}
+#nextCanvas{flex-shrink:0;border-radius:4px}
+#nextInfo{font-size:10px;color:#ccc;line-height:1.5}
+.ntype{font-weight:bold}
+#keys{font-size:9px;color:#555;margin-left:auto;line-height:1.6;text-align:right;flex-shrink:0}
+#pieceList{width:100%;padding:2px 8px;background:rgba(0,0,0,0.4);border-top:1px solid #1a1230;flex-shrink:0;display:flex;flex-wrap:wrap;gap:2px 6px}
+.pl{font-size:8px;color:#aaa;white-space:nowrap}
+#log{height:28px;overflow-y:auto;width:100%;padding:2px 7px;font-size:10px;color:#bbb;background:#06040f;scrollbar-width:thin;flex-shrink:0;border-top:1px solid #150d2a}
+.le{padding:1px 0}.le.d{color:#ff5544}.le.g{color:#44ee88}.le.i{color:#7799ff}.le.w{color:#ffcc33}
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;align-items:center;justify-content:center;z-index:100}
+.ovbox{background:#10082a;border:2px solid #ffd700;border-radius:14px;padding:20px 24px;text-align:center;max-width:260px;width:90%}
+.ovbox h2{font-size:24px;margin-bottom:8px}.ovbox p{color:#ccc;font-size:13px;margin-bottom:16px;white-space:pre-wrap;line-height:1.7}
+.ovbox button{padding:10px 26px;border:none;border-radius:10px;background:#ffd700;color:#000;font-size:14px;font-weight:bold;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="hi"><div class="lbl">🔥 連勝</div><div class="val" id="hStreak" style="color:#ff9900">0</div></div>
+    <div class="hi"><div class="lbl">🌊 ウェーブ</div><div class="val" id="hWave" style="color:#88ccff">1</div></div>
+    <div class="hi"><div class="lbl">👾 残り敵</div><div class="val" id="hEnemy" style="color:#ff9944">0</div></div>
+    <div class="hi"><div class="lbl">💥 強化行</div><div class="val" id="hPow" style="color:#ffcc44">0</div></div>
+    <div class="hi"><div class="lbl">⭐ スコア</div><div class="val" id="hScore" style="color:#ffd700">0</div></div>
+  </div>
+  <div id="gameArea"><canvas id="gc"></canvas></div>
+  <div id="nextPanel">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+      <div class="nlbl">HOLD</div>
+      <canvas id="holdCanvas" width="48" height="48" style="border-radius:4px;border:1px solid #332255"></canvas>
+      <div style="font-size:8px;color:#555">C/Shift</div>
+    </div>
+    <div class="nlbl" style="margin-left:4px">NEXT</div>
+    <canvas id="nextCanvas" width="64" height="64"></canvas>
+    <div id="nextInfo"></div>
+    <div id="keys">←→: 移動<br>↑/Space: 即落下<br>↓: 高速<br>X/Z: 回転</div>
+  </div>
+  <div id="pieceList">
+    <span class="pl">🧱城壁 耐久↑↑</span>
+    <span class="pl">🏰要塞 超耐久</span>
+    <span class="pl">⚡電撃 着地爆発+定期放電3列</span>
+    <span class="pl">⚔️剣 高速連撃</span>
+    <span class="pl">❄️氷 スロー3列・脆弱×1.5</span>
+    <span class="pl">💣爆弾 死亡爆発3×3</span>
+    <span class="pl">🔥炎 継続ダメ3列</span>
+  </div>
+  <div id="log"></div>
+</div>
+<div id="overlay">
+  <div class="ovbox"><h2 id="ovTitle"></h2><p id="ovBody"></p><button id="ovBtn" onclick="restart()">もう一度</button></div>
+</div>
+<div id="startScreen" style="position:fixed;inset:0;background:rgba(0,0,0,.93);display:flex;align-items:center;justify-content:center;z-index:200;overflow-y:auto">
+  <div style="background:#10082a;border:2px solid #ffd700;border-radius:14px;padding:16px 18px;max-width:310px;width:92%;text-align:left;font-size:12px;color:#ccc;line-height:1.7">
+    <h2 style="text-align:center;font-size:20px;margin-bottom:10px">🧱 ブロック落とし防衛</h2>
+    <div style="margin-bottom:6px;color:#88ccff;font-weight:bold">🎮 遊び方</div>
+    <div>ブロックを積んで、下から来る敵を倒そう！</div>
+    <div>上から2段目にブロックが置かれたら敵が動き出す。</div>
+    <div>1体でも敵を通したらゲームオーバー。何連勝できるか挑戦！</div>
+    <div style="margin-top:6px;color:#ffcc44;font-weight:bold">⚡ 強化ライン</div>
+    <div>横一列全部埋めると<b style="color:#ffcc44">その行が強化</b>され攻撃力・耐久力UP！</div>
+    <div style="margin-top:6px;color:#aaa;font-size:11px">←→:移動 ↑/Space:即落下 ↓:高速 X/Z:回転 C:ホールド</div>
+    <div style="margin-top:8px;color:#ff9944;font-weight:bold">🟦 ピース効果</div>
+    <div style="font-size:11px;line-height:2">
+      <div>🧱 城壁 ― 高耐久(HP12)。壊れにくい盾</div>
+      <div>🏰 要塞 ― 超高耐久(HP20)。最強の防壁</div>
+      <div>⚡ 電撃 ― 2.5秒ごとに同列に大ダメージ放電</div>
+      <div>⚔️ 剣　― 接触敵に高速連撃。凍結敵は1.5倍</div>
+      <div>❄️ 氷　― 周囲1マスの敵を永続凍結（速度70%減）</div>
+      <div>💣 爆弾 ― 破壊時に3×3範囲爆発</div>
+      <div>🔥 炎　― 周囲1マスに継続ダメ。凍結敵は1.8倍</div>
+    </div>
+    <div style="text-align:center;margin-top:14px">
+      <button onclick="document.getElementById('startScreen').style.display='none'" style="padding:10px 30px;border:none;border-radius:10px;background:#ffd700;color:#000;font-size:15px;font-weight:bold;cursor:pointer">はじめる！</button>
+    </div>
+  </div>
+</div>
+<script>
+// ══════════════════════════════════════
+// 定数
+// ══════════════════════════════════════
+const COLS=8, BLOCK_ROWS=12, SPAWN_ROWS=3, ROWS=BLOCK_ROWS+SPAWN_ROWS;
+let CW=32;
+
+// ── テトリス7種 (回転前の基本形、[row,col])
+const SHAPES={
+  I:{ cells:[[0,0],[0,1],[0,2],[0,3]], type:'wall',    e:'🧱', col:'#4a8aee', desc:'城壁・高耐久', hp:12,dmg:2 },
+  O:{ cells:[[0,0],[0,1],[1,0],[1,1]], type:'fort',    e:'🏰', col:'#eeaa22', desc:'要塞・超耐久', hp:20,dmg:1 },
+  T:{ cells:[[0,1],[1,0],[1,1],[1,2]], type:'thunder', e:'⚡', col:'#aa44ee', desc:'電撃・着地爆発',hp:5, dmg:8 },
+  L:{ cells:[[0,0],[1,0],[2,0],[2,1]], type:'spike',   e:'⚔️', col:'#44aa44', desc:'剣・高速連撃(0.35s)・凍結で威力↑', hp:6, dmg:6 },
+  J:{ cells:[[0,1],[1,1],[2,0],[2,1]], type:'ice',     e:'❄️', col:'#2266cc', desc:'氷・スロー＆凍結脆弱×1.5', hp:5, dmg:3 },
+  S:{ cells:[[0,1],[0,2],[1,0],[1,1]], type:'bomb',    e:'💣', col:'#cc6611', desc:'爆弾・爆発',   hp:3, dmg:15},
+  Z:{ cells:[[0,0],[0,1],[1,1],[1,2]], type:'fire',    e:'🔥', col:'#cc3311', desc:'炎・継続ダメ', hp:5, dmg:4 },
+};
+const TKEYS=Object.keys(SHAPES);
+
+// 回転（時計回り）: [r,c] → [c, maxR-r]
+function rotateCells(cells){
+  const maxR=Math.max(...cells.map(([r])=>r));
+  return cells.map(([r,c])=>[c, maxR-r]);
+}
+
+// ── モンスター
+const MT={
+  goblin:{e:'💀',hp:18, spd:9,  dmg:4,  r:1},
+  orc:   {e:'👹',hp:50, spd:6,  dmg:8,  r:3},
+  bat:   {e:'🦇',hp:10, spd:14, dmg:2,  r:2},
+  slime: {e:'🟢',hp:35, spd:7,  dmg:5,  r:2},
+  boss:  {e:'🐉',hp:100,spd:5,  dmg:9,  r:20},
+};
+const WAVES=[
+  [{t:'slime',n:3},{t:'goblin',n:2}],
+  [{t:'goblin',n:2},{t:'orc',n:2},{t:'bat',n:2}],
+  [{t:'orc',n:2},{t:'bat',n:1},{t:'boss',n:2},{t:'goblin',n:1}],
+];
+
+// ══════════════════════════════════════
+// 状態
+// ══════════════════════════════════════
+let S={};
+let streak=0; // 連続クリア数（リスタート跨ぎで保持）
+
+function init(){
+  refillBag();
+  S={
+    grid: Array.from({length:ROWS},()=>Array(COLS).fill(null)),
+    monsters:[],
+    spawnList:[],spawnTimer:5,allSpawned:false,waveClearing:false,
+    waveIdx:0,
+    score:0,boostedRows:0,
+    fp:null,       // 落下ピース {key, cells:[[r,c]...], pr, pc} pr/pc=アンカー位置
+    fpTimer:0,     // 自動落下タイマー
+    fpInterval:0.7,// 自動落下間隔（秒）
+    nextKey:rndTet(),
+    holdKey:null,  // ホールド中のピース
+    holdUsed:false,// 1ピースにつき1回のみホールド可能
+    particles:[],popups:[],
+    over:false,
+    battlePhase:false, // false=配置フェーズ、true=戦闘フェーズ
+    countdownNum:-1,   // -1=なし 3,2,1,0=カウントダウン中(0=GO!)
+    countdownTimer:0,
+  };
+  // 全ウェーブの敵列配置をゲーム開始時に一括確定（種類・数固定、列だけランダム・重複なし）
+  S.allWaveEnemies = WAVES.map(waveDef=>{
+    const types=[];
+    waveDef.forEach(g=>{for(let i=0;i<g.n;i++) types.push(g.t);});
+    // 列をシャッフルして順番に割り当て（1マス1敵）
+    const cols=Array.from({length:COLS},(_,i)=>i).sort(()=>Math.random()-.5);
+    return types.slice(0,COLS).map((t,i)=>({t,col:cols[i]}));
+  });
+  startWave(0);
+  eid('log').innerHTML='';
+  log('←→移動 ↑/Space即落下 ↓高速 X/Z回転 C/Shiftホールド','i');
+  updateHUD(); renderNext(); renderHold();
+}
+
+// バッグシステム：全種類を1ループとして順番に出す
+let tetBag=[], tetBagIdx=0;
+function refillBag(){tetBag=[...TKEYS].sort(()=>Math.random()-.5); tetBagIdx=0;}
+function rndTet(){
+  if(tetBagIdx>=tetBag.length) refillBag();
+  return tetBag[tetBagIdx++];
+}
+
+function spawnNext(){
+  if(S.battlePhase) return; // 戦闘フェーズ中はピース出さない
+  const key=S.nextKey; S.nextKey=rndTet();
+  const def=SHAPES[key];
+  const cells=[...def.cells.map(c=>[...c])]; // deep copy
+  const minC=Math.min(...cells.map(([,c])=>c));
+  const maxC=Math.max(...cells.map(([,c])=>c));
+  const startC=Math.floor((COLS-(maxC-minC+1))/2)-minC;
+  const startR=-Math.max(...cells.map(([r])=>r))-1;
+  const fp={key, cells, pr:startR, pc:startC};
+  S.fp=fp; S.fpTimer=0;
+  renderNext();
+}
+
+function beginCountdown(){
+  // 配置終了→カウントダウン開始。敵は全員waitingのまま
+  S.battlePhase=true; // ピース生成を止める
+  S.fp=null;
+  S.countdownNum=3;
+  S.countdownTimer=0.9;
+}
+function releaseEnemies(){
+  S.monsters.forEach(m=>m.waiting=false);
+  log('⚔️ 迎撃開始！','d');
+}
+
+function startWave(w){
+  S.waveIdx=w;
+  // 全ウェーブ、敵はwaitingで生成しカウントダウン後に解放
+  if(w===0) S.battlePhase=false;
+  S.monsters=[];
+  S.allWaveEnemies[w].forEach(e=>spawnMonster(e.t,e.col,true)); // 常にwaiting=true
+  S.allSpawned=false; S.waveClearing=false;
+  S.waveTotal=S.monsters.length;
+  eid('hWave').textContent=w+1;
+  log(`🌊 ウェーブ${w+1}開始！`,'w');
+  if(w===0){
+    spawnNext(); // 最初のウェーブのみピース配置
+  } else {
+    beginCountdown(); // wave2以降はすぐカウントダウン
+  }
+}
+
+// ══════════════════════════════════════
+// ピース操作ヘルパー
+// ══════════════════════════════════════
+
+// ピースの絶対座標リスト [r,c]
+function absCells(fp){
+  return fp.cells.map(([dr,dc])=>[fp.pr+dr, fp.pc+dc]);
+}
+
+// 指定位置・形状が有効か（グリッドと衝突しない）
+function isValid(cells, pr, pc){
+  for(const [dr,dc] of cells){
+    const r=pr+dr, c=pc+dc;
+    if(c<0||c>=COLS) return false;
+    // r < 0 は画面上（OK）、BLOCK_ROWS以上はスポーンゾーン（不可）
+    if(r>=BLOCK_ROWS) return false;
+    if(r>=0&&S.grid[r][c]) return false;
+  }
+  return true;
+}
+
+// ピースを1段下に動かせるか
+function canFall(fp){
+  return isValid(fp.cells, fp.pr+1, fp.pc);
+}
+
+// ウォールキック試行（SRS簡易版）
+const KICKS=[[0,0],[0,-1],[0,1],[0,-2],[0,2]];
+function tryRotate(fp){
+  const newCells=rotateCells(fp.cells);
+  for(const [dr,dc] of KICKS){
+    if(isValid(newCells, fp.pr+dr, fp.pc+dc)){
+      return {cells:newCells, pr:fp.pr+dr, pc:fp.pc+dc};
+    }
+  }
+  return null;
+}
+
+function lockPiece(){
+  const fp=S.fp;
+  const def=SHAPES[fp.key];
+  for(const [dr,dc] of fp.cells){
+    const r=fp.pr+dr, c=fp.pc+dc;
+    if(r>=0&&r<BLOCK_ROWS&&!S.grid[r][c]){
+      S.grid[r][c]={type:def.type,hp:def.hp,maxHp:def.hp,dmg:def.dmg,
+        e:def.e,col:def.col,boosted:false,atkTimer:0,spikeTimer:0,hitTimer:0};
+      spark(c*CW+CW/2,r*CW+CW/2,'#ffffff',4);
+      // 着地即発動系（バトル開始後のみ）
+      if(S.battlePhase&&def.type==='thunder') doThunder(c,r);
+      if(S.battlePhase&&def.type==='ice') S.monsters.forEach(m=>{
+        if(Math.abs(m.col-c)<=1&&Math.abs(m.rowF-r)<=1) m.frozen=true;
+      });
+    }
+  }
+  checkLineBoost();
+  // 上3行（row 0-2）にピースが置かれたらバトル開始
+  const topFilled=fp.cells.some(([dr,dc])=>fp.pr+dr<=1&&fp.pr+dr>=0);
+  S.fp=null;
+  S.holdUsed=false; // 次のピースではホールド可能にリセット
+  if(topFilled&&!S.battlePhase){
+    beginCountdown();
+  } else {
+    spawnNext();
+  }
+}
+
+function hardDrop(){
+  if(!S.fp) return;
+  while(canFall(S.fp)) S.fp.pr++;
+  lockPiece();
+}
+
+function checkLineBoost(){
+  for(let r=0;r<BLOCK_ROWS;r++){
+    if(S.grid[r].every(b=>b)&&!S.grid[r].every(b=>b?.boosted)){
+      S.boostedRows++;
+      S.grid[r].forEach(b=>{
+        b.boosted=true;
+        b.hp*=2; b.maxHp*=2; b.dmg=Math.floor(b.dmg*1.5);
+      });
+      updateHUD();
+      log(`💪 ${BLOCK_ROWS-r}段目が強化！`,'w');
+      spark(COLS*CW/2,r*CW+CW/2,'#ffd700',18);
+    }
+  }
+}
+
+// ══════════════════════════════════════
+// ゲームループ
+// ══════════════════════════════════════
+const canvas=eid('gc');
+const ctx=canvas.getContext('2d');
+let last=0,rafId=0;
+
+function loop(ts){
+  const dt=Math.min((ts-last)/1000,.05); last=ts;
+  if(!S.over) update(dt);
+  render();
+  rafId=requestAnimationFrame(loop);
+}
+
+function update(dt){
+  if(S.over) return;
+
+  // ── 落下ピース自動落下 ──
+  if(S.fp){
+    S.fpTimer+=dt;
+    if(S.fpTimer>=S.fpInterval){
+      S.fpTimer=0;
+      if(canFall(S.fp)) S.fp.pr++;
+      else lockPiece();
+    }
+  }
+
+  // ── カウントダウン ──
+  if(S.countdownNum>=0){
+    S.countdownTimer-=dt;
+    if(S.countdownTimer<=0){
+      S.countdownNum--;
+      S.countdownTimer=0.9;
+      if(S.countdownNum<0) releaseEnemies(); // GO!後に解放
+    }
+  }
+
+  if(S.battlePhase&&S.countdownNum<0) for(let r=0;r<BLOCK_ROWS;r++) for(let c=0;c<COLS;c++){
+    const b=S.grid[r][c];
+    if(!b||b.hp<=0) continue;
+    if(b.hitTimer>0) b.hitTimer=Math.max(0,b.hitTimer-dt);
+    const enemies=monstersAt(c,r);
+    // 凍結脆弱: 凍結中の敵は全ダメージ1.5倍（炎は1.8倍）
+    if(b.type==='fire'){
+      for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
+        const tc=c+dc; if(tc<0||tc>=COLS) continue;
+        monstersAt(tc,r+dr).forEach(m=>{
+          const mult=m.frozen?1.8:1;
+          m.hp-=b.dmg*0.8*mult*dt;
+          dmgPop(m,'🔥');
+          if(Math.random()<0.15) spark(m.col*CW+CW/2,(m.rowF-0.5)*CW,'#ff6600',2);
+          if(Math.random()<0.08) spark(m.col*CW+CW/2,(m.rowF-0.5)*CW,'#ffcc00',1);
+          if(m.hp<=0)killMonster(m);
+        });
+      }
+    }
+    if(b.type==='thunder'){
+      b.thunderTimer=(b.thunderTimer||0)+dt;
+      if(b.thunderTimer>=2.5){
+        b.thunderTimer=0;
+        S.monsters.filter(m=>!m.dead&&m.col===c).forEach(m=>{
+          m.hp-=b.dmg*0.6;
+          if(m.hp<=0)killMonster(m);
+          dmgPop(m,'⚡');
+          spark(c*CW+CW/2,m.rowF*CW,'#cc88ff',8);
+          spark(c*CW+CW/2,m.rowF*CW,'#ffffff',4);
+        });
+        for(let tr=0;tr<r;tr+=2) S.particles.push({x:c*CW+CW/2+(Math.random()-.5)*8,y:tr*CW,vx:0,vy:60,life:0.2,color:'#cc88ff'});
+        spark(c*CW+CW/2,r*CW,'#cc88ff',12);
+        spark(c*CW+CW/2,r*CW,'#ffffff',6);
+      }
+    }
+    if(b.type==='spike'){
+      b.spikeTimer=(b.spikeTimer||0)+dt;
+      if(b.spikeTimer>=0.35){
+        b.spikeTimer=0;
+        // 同マス＋上下左右1マス（斜めなし）
+        const spikeDirs=[[0,0],[0,1],[0,-1],[-1,0],[1,0]];
+        spikeDirs.forEach(([dr,dc])=>{
+          const tc=c+dc; if(tc<0||tc>=COLS) return;
+          monstersAt(tc,r+dr).forEach(m=>{
+            const mult=m.frozen?1.5:1;
+            const dmg=b.dmg*(dr===0&&dc===0?1:0.6)*mult; // 隣接は60%
+            m.hp-=dmg;
+            dmgPop(m,'⚔️');
+            spark(m.col*CW+CW/2,m.rowF*CW,'#44ff88',4);
+            spark(m.col*CW+CW/2,m.rowF*CW,'#ffffff',2);
+            if(m.hp<=0)killMonster(m);
+          });
+        });
+      }
+    }
+    if(enemies.length>0){
+      b.atkTimer=(b.atkTimer||0)+dt;
+      if(b.atkTimer>=0.5){
+        b.atkTimer=0;
+        enemies.forEach(m=>{
+          b.hp-=m.dmg; spark(c*CW+CW/2,r*CW,'#ff4433',3);
+        });
+        if(b.hp>0) b.hitTimer=0.2;
+        if(b.hp<=0){
+          if(b.type==='bomb') doBomb(c,r);
+          log(`💥 ${c+1}列${BLOCK_ROWS-r}段 壊れた`,'d');
+          S.grid[r][c]=null;
+        }
+      }
+    }
+  }
+
+  // ── モンスター移動（カウントダウン中は停止）──
+  if(S.countdownNum<0) for(let i=S.monsters.length-1;i>=0;i--){
+    const m=S.monsters[i];
+    if(m.dead){S.monsters.splice(i,1);continue;}
+    if(m.waiting) continue; // 配置フェーズ中は動かない
+    // 凍結は永続（一度凍ったら解けない）、slowTimerはtimerベース
+    if(!m.frozen) m.slowTimer=Math.max(0,(m.slowTimer||0)-dt);
+    const spd=(m.frozen||m.slowTimer>0)?m.spd*0.3:m.spd;
+    const blockAboveRow=findBlockAbove(m.col,Math.floor(m.rowF));
+    if(blockAboveRow>=0&&m.rowF-blockAboveRow<1.1){
+      m.rowF=blockAboveRow+0.9;
+      const b=S.grid[blockAboveRow][m.col];
+      if(b&&b.type==='ice'){
+        if(!m.frozen) dmgPop(m,'❄️');
+        m.frozen=true; // 永続凍結
+        if(Math.random()<0.12) spark(m.col*CW+CW/2,m.rowF*CW,'#44aaff',3);
+        if(Math.random()<0.06) spark(m.col*CW+CW/2,m.rowF*CW,'#aaddff',2);
+      }
+    } else {
+      m.rowF-=spd*dt;
+    }
+    m.row=Math.floor(m.rowF);
+    if(m.rowF<1.5){
+      m.dead=true;
+      log(`💔 ${MT[m.type].e}が突破！ゲームオーバー`,'d');
+      endGame(false);return;
+    }
+  }
+
+  // パーティクル
+  for(let i=S.particles.length-1;i>=0;i--){
+    const p=S.particles[i];
+    p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt;
+    if(p.life<=0) S.particles.splice(i,1);
+  }
+  for(let i=S.popups.length-1;i>=0;i--){
+    const p=S.popups[i];
+    p.life-=dt;
+    if(p.life<=0) S.popups.splice(i,1);
+  }
+
+  // HUD更新（残り敵数）
+  updateHUD();
+
+  // ウェーブクリア（戦闘フェーズ中、全敵撃破）
+  if(S.battlePhase&&S.monsters.filter(m=>!m.dead).length===0&&!S.waveClearing){
+    S.waveClearing=true;
+    S.score+=100*(S.waveIdx+1); updateHUD();
+    log(`✨ ウェーブ${S.waveIdx+1}クリア！+${100*(S.waveIdx+1)}pt`,'g');
+    if(S.waveIdx>=WAVES.length-1){endGame(true);return;}
+    setTimeout(()=>{if(!S.over)startWave(S.waveIdx+1);},2500);
+  }
+}
+
+function spawnMonster(type,col,waiting=false,startRow=null){
+  const d=MT[type];
+  // startRowが指定されていなければウェーブインデックスに応じた行（W1=12, W2=13, W3=14）
+  const spawnRow=startRow!==null?startRow:BLOCK_ROWS+S.waveIdx;
+  S.monsters.push({type,e:d.e,hp:d.hp,maxHp:d.hp,spd:d.spd,dmg:d.dmg,r:d.r,
+    col,row:spawnRow,rowF:spawnRow,slowTimer:0,dead:false,waiting});
+}
+function killMonster(m){
+  if(m.dead) return; m.dead=true;
+  S.score+=m.r*10; updateHUD();
+  spark(m.col*CW+CW/2,m.rowF*CW,'#ffaa44',8);
+}
+function findBlockAbove(col,row){
+  for(let r=row;r>=0;r--) if(S.grid[r]?.[col]?.hp>0) return r;
+  return -1;
+}
+function monstersAt(col,row){
+  return S.monsters.filter(m=>!m.dead&&m.col===col&&Math.abs(m.rowF-row)<1.0);
+}
+function doBomb(c,r){
+  spark(c*CW+CW/2,r*CW,'#ff8800',16);
+  log('💣 爆発！','w');
+  for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
+    const nc=c+dc,nr=r+dr;
+    if(nc<0||nc>=COLS||nr<0||nr>=BLOCK_ROWS) continue;
+    if(S.grid[nr][nc]){S.grid[nr][nc].hp-=8;if(S.grid[nr][nc].hp<=0)S.grid[nr][nc]=null;}
+  }
+  S.monsters.forEach(m=>{
+    if(Math.abs(m.col-c)+Math.abs(m.rowF-r)<2.5){m.hp-=20;if(m.hp<=0)killMonster(m);}
+  });
+}
+function doThunder(c,r){
+  spark(c*CW+CW/2,r*CW,'#ddaaff',14);
+  S.monsters.filter(m=>m.col===c).forEach(m=>{m.hp-=12;m.slowTimer=3;if(m.hp<=0)killMonster(m);});
+  log('⚡ 電撃！','w');
+}
+
+// ══════════════════════════════════════
+// 描画
+// ══════════════════════════════════════
+function render(){
+  const W=COLS*CW, H=ROWS*CW;
+  ctx.clearRect(0,0,W,H);
+
+  // 背景
+  const bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#07051a'); bg.addColorStop(0.78,'#110608'); bg.addColorStop(1,'#1a0808');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+  // スポーンゾーン背景
+  ctx.fillStyle='rgba(150,30,30,0.13)'; ctx.fillRect(0,BLOCK_ROWS*CW,W,SPAWN_ROWS*CW);
+  ctx.strokeStyle='rgba(200,60,60,0.4)'; ctx.lineWidth=1.5; ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(0,BLOCK_ROWS*CW);ctx.lineTo(W,BLOCK_ROWS*CW);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // スポーンゾーン = 3行 × 3ウェーブ の敵配置予告
+  // battlePhase中はwi=0（最前行）を空欄に。wave2,3は行位置を変えない
+  for(let wi=0;wi<SPAWN_ROWS;wi++){
+    if(wi===0&&S.battlePhase&&S.countdownNum<0) continue; // 敵が実際に動き出した後のみ消す
+    const wIdx=S.waveIdx+wi;
+    if(!S.allWaveEnemies||wIdx>=S.allWaveEnemies.length) break;
+    // 行位置はwaveの絶対インデックスで固定（W1=12, W2=13, W3=14）
+    const row=BLOCK_ROWS+wIdx;
+    if(row>=ROWS) break;
+    const alpha=wIdx===0?0.95:wIdx===1?0.45:0.2;
+    const enemies=S.allWaveEnemies[wIdx];
+    // ウェーブ番号ラベル
+    ctx.globalAlpha=alpha*0.8;
+    ctx.font=`bold 7px sans-serif`; ctx.fillStyle=wIdx===0?'#88ccff':'#886688';
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(`W${wIdx+1}`,2,row*CW+2);
+    // 各列に1体だけアイコン表示（数字なし）
+    const colShown={};
+    enemies.forEach(e=>{
+      if(colShown[e.col]) return; // 同列は最初の1体のみ
+      colShown[e.col]=true;
+      const x=e.col*CW+CW/2, y=row*CW+CW/2;
+      ctx.globalAlpha=alpha;
+      em(MT[e.t].e,x,y,CW*0.58);
+    });
+    ctx.globalAlpha=1;
+    // 行区切り線
+    if(wi<SPAWN_ROWS-1){
+      ctx.strokeStyle='rgba(100,50,50,0.3)'; ctx.lineWidth=1; ctx.setLineDash([2,3]);
+      ctx.beginPath();ctx.moveTo(0,(row+1)*CW);ctx.lineTo(W,(row+1)*CW);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  // ウェーブ進行バー（スポーンゾーン最下部）
+  if(S.battlePhase&&S.waveTotal>0){
+    const barY=ROWS*CW-5, barW=COLS*CW-4;
+    const aliveCount=S.monsters.filter(m=>!m.dead).length;
+    const prog=1-(aliveCount/S.waveTotal);
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(2,barY,barW,4);
+    ctx.fillStyle=prog>=1?'#44ee88':prog>=0.5?'#ffcc00':'#ff6644';
+    ctx.fillRect(2,barY,barW*Math.min(1,prog),4);
+    ctx.globalAlpha=1;
+  }
+
+  // 危険ライン
+  ctx.fillStyle='rgba(255,50,50,0.07)'; ctx.fillRect(0,0,W,CW*2);
+  ctx.strokeStyle='rgba(255,80,80,0.4)'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(0,CW*2);ctx.lineTo(W,CW*2);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font='bold 8px sans-serif'; ctx.fillStyle='rgba(255,80,80,0.6)';
+  ctx.textAlign='left'; ctx.textBaseline='top'; ctx.fillText('⚠ 危険',2,2);
+
+  // グリッド線
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+  for(let c=0;c<=COLS;c++){ctx.beginPath();ctx.moveTo(c*CW,0);ctx.lineTo(c*CW,H);ctx.stroke();}
+  for(let r=0;r<=ROWS;r++){ctx.beginPath();ctx.moveTo(0,r*CW);ctx.lineTo(W,r*CW);ctx.stroke();}
+
+
+  // ゴーストピース
+  if(S.fp){
+    let ghost={...S.fp};
+    while(canFall(ghost)) ghost={...ghost,pr:ghost.pr+1};
+    const def=SHAPES[S.fp.key];
+    ctx.globalAlpha=0.28;
+    ghost.cells.forEach(([dr,dc])=>{
+      const r=ghost.pr+dr,c=ghost.pc+dc;
+      if(r<0||r>=BLOCK_ROWS) return;
+      ctx.fillStyle=def.col; rr(c*CW+1,r*CW+1,CW-2,CW-2,3); ctx.fill();
+    });
+    ctx.globalAlpha=1;
+  }
+
+  // 静止ブロック
+  for(let r=0;r<BLOCK_ROWS;r++) for(let c=0;c<COLS;c++){
+    const b=S.grid[r][c];
+    if(!b||b.hp<=0) continue;
+    drawBlock(b,c*CW,r*CW);
+  }
+
+  // 落下ピース
+  if(S.fp){
+    const def=SHAPES[S.fp.key];
+    S.fp.cells.forEach(([dr,dc])=>{
+      const r=S.fp.pr+dr,c=S.fp.pc+dc;
+      if(c<0||c>=COLS) return;
+      const y=r*CW;
+      // 画面外上部はクリップ
+      ctx.save();
+      ctx.beginPath();ctx.rect(0,0,COLS*CW,BLOCK_ROWS*CW);ctx.clip();
+      const bobj={type:def.type,e:def.e,col:def.col,hp:def.hp,maxHp:def.hp,boosted:false};
+      drawBlock(bobj,c*CW,y,true);
+      ctx.restore();
+    });
+  }
+
+  // モンスター（待機中はスポーンゾーン描画で表示するのでスキップ）
+  S.monsters.forEach(m=>{
+    if(m.dead||m.waiting) return;
+    const x=m.col*CW+CW/2, y=m.rowF*CW+CW/2;
+    const hpR=Math.max(0,m.hp/m.maxHp);
+    if(m.slowTimer>0){ctx.fillStyle='rgba(100,180,255,0.2)';ctx.beginPath();ctx.arc(x,y,CW*.45,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(x-CW*.4,y-CW*.45,CW*.8,4);
+    ctx.fillStyle=hpR>.5?'#44ee88':hpR>.25?'#ffcc00':'#ff4444';
+    ctx.fillRect(x-CW*.4,y-CW*.45,CW*.8*hpR,4);
+    em(m.e,x,y,CW*.6);
+    ctx.font=`bold ${Math.round(CW*.24)}px sans-serif`;
+    ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(Math.ceil(m.hp),x,y+CW*.38);
+  });
+
+  // パーティクル
+  S.particles.forEach(p=>{
+    ctx.globalAlpha=Math.max(0,p.life*2.5);
+    ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,2.5,0,Math.PI*2);ctx.fill();
+  });
+  ctx.globalAlpha=1;
+
+  // ダメージポップアップ（攻撃元アイコン）
+  S.popups.forEach(p=>{
+    const m=p.m; if(m.dead) return;
+    const elapsed=0.8-p.life;
+    const x=m.col*CW+CW/2;
+    const y=m.rowF*CW-CW*0.5-elapsed*CW*1.2;
+    ctx.globalAlpha=Math.min(1,p.life*2);
+    ctx.font=`${Math.round(CW*0.55)}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(p.icon,x,y);
+  });
+  ctx.globalAlpha=1;
+
+  // ── カウントダウン表示 ──
+  if(S.countdownNum>=0){
+    const W=COLS*CW, H=BLOCK_ROWS*CW;
+    const cx=W/2, cy=H/2;
+    const label=S.countdownNum===0?'防衛開始':`${S.countdownNum}`;
+    const progress=1-(S.countdownTimer/0.9); // 0→1 (1秒で次へ)
+    const scale=1+progress*0.4;
+    const alpha=Math.max(0,1-progress*0.6);
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.scale(scale,scale);
+    ctx.globalAlpha=0.45*alpha;
+    ctx.fillStyle='#000';
+    ctx.beginPath();ctx.arc(0,0,CW*2.2,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=alpha;
+    ctx.font=`bold ${S.countdownNum===0?Math.round(CW*1.4):Math.round(CW*2.8)}px sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=S.countdownNum===0?'#44ff88':'#ffd700';
+    ctx.strokeStyle='rgba(0,0,0,0.8)';ctx.lineWidth=6;
+    ctx.strokeText(label,0,0);
+    ctx.fillText(label,0,0);
+    ctx.restore();
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawBlock(b,x,y,falling=false){
+  const hpR=Math.max(0,b.hp/b.maxHp);
+  ctx.fillStyle=b.col; rr(x+1,y+1,CW-2,CW-2,3); ctx.fill();
+  if(b.boosted){ctx.strokeStyle='rgba(255,215,0,0.8)';ctx.lineWidth=2;rr(x+1,y+1,CW-2,CW-2,3);ctx.stroke();}
+  if(falling){ctx.strokeStyle='rgba(255,255,200,0.5)';ctx.lineWidth=1.5;rr(x+1,y+1,CW-2,CW-2,3);ctx.stroke();}
+  ctx.fillStyle='rgba(255,255,255,0.18)';rr(x+1,y+1,CW-2,4,2);ctx.fill();
+  if(hpR<1){ctx.fillStyle=`rgba(0,0,0,${(1-hpR)*.65})`;rr(x+1,y+1,CW-2,CW-2,3);ctx.fill();}
+  if(b.hitTimer>0){ctx.fillStyle=`rgba(255,60,60,${b.hitTimer*3})`;rr(x+1,y+1,CW-2,CW-2,3);ctx.fill();}
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(x+2,y+CW-5,CW-4,4);
+  ctx.fillStyle=hpR>.5?'#44ee88':hpR>.25?'#ffcc00':'#ff4444';
+  ctx.fillRect(x+2,y+CW-5,(CW-4)*hpR,4);
+  em(b.e,x+CW/2,y+CW/2-1,CW*.52);
+}
+
+function rr(x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
+}
+function em(e,x,y,s){ctx.font=`${Math.round(s)}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(e,x,y);}
+function spark(x,y,col,n){for(let i=0;i<n;i++)S.particles.push({x,y,vx:(Math.random()-.5)*120,vy:(Math.random()-.5)*120,life:.4+Math.random()*.3,color:col});}
+function dmgPop(m,icon){
+  // 同じアイコンのポップアップが直近0.3s以内にあれば更新のみ
+  const ex=S.popups.find(p=>p.m===m&&p.icon===icon&&p.life>0.5);
+  if(ex){ex.life=0.8;return;}
+  S.popups.push({m,icon,life:0.8,vy:-CW*1.5});
+}
+
+
+function doHold(){
+  if(!S.fp||S.holdUsed) return;
+  S.holdUsed=true;
+  const cur=S.fp.key;
+  if(S.holdKey===null){
+    S.holdKey=cur;
+    S.fp=null;
+    spawnNext();
+  } else {
+    const swapped=S.holdKey;
+    S.holdKey=cur;
+    // ホールドから取り出して即スポーン
+    const def=SHAPES[swapped];
+    const cells=[...def.cells.map(c=>[...c])];
+    const startC=Math.floor((COLS-Math.max(...cells.map(([,c])=>c))-1)/2);
+    const startR=-Math.max(...cells.map(([r])=>r))-1;
+    S.fp={key:swapped,cells,pr:startR,pc:startC};
+    S.fpTimer=0;
+  }
+  renderHold();
+}
+function renderHold(){
+  const hc=eid('holdCanvas'); if(!hc) return;
+  const hx=hc.getContext('2d');
+  hx.clearRect(0,0,hc.width,hc.height);
+  hx.fillStyle='#0d0a22'; hx.fillRect(0,0,hc.width,hc.height);
+  if(!S||!S.holdKey) return;
+  const def=SHAPES[S.holdKey];
+  const cs=14;
+  const minR=Math.min(...def.cells.map(([r])=>r)),minC=Math.min(...def.cells.map(([,c])=>c));
+  hx.globalAlpha=S.holdUsed?0.4:1.0;
+  def.cells.forEach(([r,c])=>{
+    const x=(c-minC)*cs+4,y=(r-minR)*cs+4;
+    hx.fillStyle=def.col; hx.beginPath();hx.roundRect(x,y,cs-1,cs-1,2);hx.fill();
+    hx.fillStyle='rgba(255,255,255,0.2)';hx.beginPath();hx.roundRect(x,y,cs-1,3,1);hx.fill();
+    hx.font=`${cs*.7}px serif`;hx.textAlign='center';hx.textBaseline='middle';
+    hx.fillText(def.e,x+cs/2,y+cs/2);
+  });
+  hx.globalAlpha=1.0;
+}
+
+function renderNext(){
+  const nc=eid('nextCanvas'), nx=nc.getContext('2d');
+  nx.clearRect(0,0,nc.width,nc.height);
+  if(!S||!S.nextKey) return;
+  const def=SHAPES[S.nextKey];
+  const cs=14;
+  const minR=Math.min(...def.cells.map(([r])=>r)),minC=Math.min(...def.cells.map(([,c])=>c));
+  nx.fillStyle='#0d0a22';nx.fillRect(0,0,nc.width,nc.height);
+  def.cells.forEach(([r,c])=>{
+    const x=(c-minC)*cs+4,y=(r-minR)*cs+4;
+    nx.fillStyle=def.col; nx.beginPath();nx.roundRect(x,y,cs-1,cs-1,2);nx.fill();
+    nx.fillStyle='rgba(255,255,255,0.2)';nx.beginPath();nx.roundRect(x,y,cs-1,3,1);nx.fill();
+    nx.font=`${cs*.7}px serif`;nx.textAlign='center';nx.textBaseline='middle';
+    nx.fillText(def.e,x+cs/2,y+cs/2);
+  });
+  const typeNames={wall:'城壁',fort:'要塞',thunder:'電撃',spike:'棘',ice:'氷',bomb:'爆弾',fire:'炎'};
+  eid('nextInfo').innerHTML=`<div class="ntype" style="color:${def.col}">${def.e} ${typeNames[def.type]||def.type}</div><div style="font-size:9px;color:#777">${def.desc}</div>`;
+}
+
+// ══════════════════════════════════════
+// リサイズ
+// ══════════════════════════════════════
+function resize(){
+  const wrap=eid('gameArea');
+  const maxW=Math.min(wrap.clientWidth||280,420);
+  const maxH=wrap.clientHeight||500;
+  CW=Math.floor(Math.min(maxW/COLS, maxH/ROWS));
+  canvas.width=COLS*CW; canvas.height=ROWS*CW;
+  canvas.style.width=canvas.width+'px'; canvas.style.height=canvas.height+'px';
+}
+
+// ══════════════════════════════════════
+// 入力
+// ══════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(S.over||!S.fp) return;
+  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A'){
+    e.preventDefault();
+    if(isValid(S.fp.cells,S.fp.pr,S.fp.pc-1)) S.fp.pc--;
+  } else if(e.key==='ArrowRight'||e.key==='d'||e.key==='D'){
+    e.preventDefault();
+    if(isValid(S.fp.cells,S.fp.pr,S.fp.pc+1)) S.fp.pc++;
+  } else if(e.key==='ArrowDown'||e.key==='s'||e.key==='S'){
+    e.preventDefault();
+    if(canFall(S.fp)) S.fp.pr++; else lockPiece();
+    S.fpTimer=0;
+  } else if(e.key===' '||e.key==='ArrowUp'){
+    e.preventDefault(); hardDrop();
+  } else if(e.key==='z'||e.key==='Z'||e.key==='x'||e.key==='X'){
+    // X: 時計回り, Z: 反時計回り(=時計回り×3)
+    e.preventDefault();
+    const isCW=(e.key==='x'||e.key==='X');
+    const baseFp=isCW?S.fp:{...S.fp,cells:rotateCells(rotateCells(S.fp.cells))};
+    const rotated=tryRotate(baseFp);
+    if(rotated){S.fp.cells=rotated.cells;S.fp.pr=rotated.pr;S.fp.pc=rotated.pc;}
+  } else if(e.key==='c'||e.key==='C'||e.key==='Shift'){
+    e.preventDefault(); doHold();
+  }
+});
+
+// タッチ：左半分タップで左移動、右半分で右移動、長押しで即落下
+let touchStartX=null,touchStartTime=0;
+canvas.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  touchStartX=e.touches[0].clientX;
+  touchStartTime=Date.now();
+},{passive:false});
+canvas.addEventListener('touchend',e=>{
+  e.preventDefault();
+  if(!S.fp||touchStartX===null) return;
+  const dx=e.changedTouches[0].clientX-touchStartX;
+  const dt2=Date.now()-touchStartTime;
+  if(dt2>400){hardDrop();return;}
+  if(Math.abs(dx)<15){
+    // タップ → 回転
+    const result=tryRotate(S.fp);
+    if(result){S.fp.cells=result.cells;S.fp.pr=result.pr;S.fp.pc=result.pc;}
+  } else if(dx<0){
+    if(isValid(S.fp.cells,S.fp.pr,S.fp.pc-1)) S.fp.pc--;
+  } else {
+    if(isValid(S.fp.cells,S.fp.pr,S.fp.pc+1)) S.fp.pc++;
+  }
+},{passive:false});
+
+function updateHUD(){
+  eid('hScore').textContent=S.score; eid('hPow').textContent=S.boostedRows;
+  const remaining=S.monsters.filter(m=>!m.dead).length;
+  eid('hEnemy').textContent=remaining;
+  eid('hStreak').textContent=streak;
+}
+function endGame(win){
+  S.over=true;
+  if(win) streak++; else streak=0;
+  eid('overlay').style.display='flex';
+  eid('ovTitle').textContent=win?'🎉 勝利！':'💀 敗北...';
+  const streakLine=win?`\n🔥 連続クリア: ${streak}回！`:`\n連続クリア: ${streak}回でリセット`;
+  eid('ovBody').innerHTML=win
+    ?`<div style="font-size:36px;font-weight:bold;color:#ff6600;margin:4px 0">🔥 ${streak}連勝</div><div style="font-size:13px;color:#ccc">スコア: ${S.score} ／ 強化行数: ${S.boostedRows}</div>`
+    :`<div style="font-size:28px;font-weight:bold;color:#ff4444;margin:4px 0">連敗リセット</div><div style="font-size:13px;color:#ccc">スコア: ${S.score} ／ ウェーブ: ${S.waveIdx+1}/3</div>`;
+}
+function restart(){cancelAnimationFrame(rafId);eid('overlay').style.display='none';resize();init();rafId=requestAnimationFrame(t=>{last=t;loop(t);});}
+function log(msg,type=''){const el=eid('log'),d=document.createElement('div');d.className='le '+type;d.textContent=msg;el.appendChild(d);el.scrollTop=el.scrollHeight;}
+function eid(id){return document.getElementById(id);}
+
+resize();
+window.addEventListener('resize',()=>{resize();});
+init();
+rafId=requestAnimationFrame(t=>{last=t;loop(t);});
+</script>
+</body>
+</html>
