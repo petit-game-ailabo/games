@@ -255,8 +255,22 @@ function killEnemy(e,fromChain,isDash) {
   comboCount++; comboTimer=2.0;
   if(comboCount>comboPeak) comboPeak=comboCount;
   playExplosion();
-  addPart(e.x,e.y,e.col,16+(Math.random()*8|0));
+  addPart(e.x,e.y,e.col,20+(Math.random()*12|0));
   xpOrbs.push({x:e.x,y:e.y,r:5,life:1,val:Math.ceil(e.score/50)});
+  // 連鎖爆発リング（周囲80px内の敵にダメージ）
+  if(!fromChain){
+    rings.push({x:e.x,y:e.y,r:12,life:1,maxR:80,col:e.col});
+    for(let i=enemies.length-1;i>=0;i--){
+      const ne=enemies[i];
+      if(ne===e) continue;
+      const dd=(ne.x-e.x)**2+(ne.y-e.y)**2;
+      if(dd<80*80){
+        ne.hp--;
+        addPart(ne.x,ne.y,ne.col,6);
+        if(ne.hp<=0) killEnemy(ne,true,isDash);
+      }
+    }
+  }
   if(!fromChain && player.chainLight) chainZap(e.x,e.y,3,[e.id]);
   if(e.type==='splitter'){
     for(let i=0;i<3;i++){
@@ -304,15 +318,6 @@ function update(rawDt) {
     const km=Math.sqrt(kx*kx+ky*ky);
     player.x+=kx/km*spd*dt;
     player.y+=ky/km*spd*dt;
-  } else if(mouseTarget){
-    // マウス: カーソル位置へ直接追従
-    const mdx=mouseTarget.x-player.x, mdy=mouseTarget.y-player.y;
-    const md=Math.sqrt(mdx*mdx+mdy*mdy);
-    if(md>1){
-      const move=Math.min(md, spd*dt);
-      player.x+=mdx/md*move;
-      player.y+=mdy/md*move;
-    }
   } else {
     // タッチドラッグ（相対移動）
     const mag=Math.sqrt(player.vx*player.vx+player.vy*player.vy);
@@ -464,10 +469,12 @@ function update(rawDt) {
     if(lightnings[i].life<=0) lightnings.splice(i,1);
   }
 
-  // Rings
+  // Rings (explosion rings expand to maxR if set, else 130px/s)
   for(let i=rings.length-1;i>=0;i--){
-    rings[i].r+=130*dt; rings[i].life-=dt*2;
-    if(rings[i].life<=0) rings.splice(i,1);
+    const rg=rings[i];
+    const spd=rg.maxR ? rg.maxR*2.5 : 130;
+    rg.r+=spd*dt; rg.life-=dt*2.5;
+    if(rg.life<=0) rings.splice(i,1);
   }
   for(let i=lvRings.length-1;i>=0;i--){
     lvRings[i].r+=200*dt; lvRings[i].life-=dt*1.5;
@@ -514,8 +521,16 @@ function update(rawDt) {
   // OVERLOAD発動キー (SPACE)
   if(keys[' '] && !keys['_overloadUsed'] && overloadMeter>=100 && !overloadActive){
     keys['_overloadUsed']=true;
-    overloadActive=true; overloadTimer=2.5; overloadMeter=0; overloadFlash=0.25;
-    shakeT=0.4; shakeMag=12;
+    overloadActive=true; overloadTimer=2.5; overloadMeter=0; overloadFlash=0.4;
+    shakeT=0.5; shakeMag=16;
+    // 発動時: 全敵を外へ吹き飛ばす
+    for(const e of enemies){
+      const dx=e.x-player.x||1, dy=e.y-player.y||0;
+      const d=Math.sqrt(dx*dx+dy*dy)||1;
+      e.x+=dx/d*120; e.y+=dy/d*120;
+    }
+    // 大型ショックウェーブリング
+    for(let i=0;i<3;i++) setTimeout(()=>lvRings.push({x:player.x,y:player.y,r:10,life:1}),i*120);
     playOverload();
   }
   if(!keys[' ']) keys['_overloadUsed']=false;
@@ -608,7 +623,7 @@ function getPos(e){
 // マウス: カーソル位置を追従（クリック不要、常に追従）
 canvas.addEventListener('mousemove',e=>{ mouseTarget=getPos(e); resumeAC(); });
 canvas.addEventListener('mouseleave',()=>{ mouseTarget=null; });
-canvas.addEventListener('mousedown',e=>{ resumeAC(); if(e.button===0){ const p=getPos(e); doPhaseDash(p.x,p.y); } if(e.button===2 && overloadMeter>=100 && !overloadActive && gState===S_PLAY){ overloadActive=true; overloadTimer=2.5; overloadMeter=0; overloadFlash=0.25; shakeT=0.4; shakeMag=12; playOverload(); } });
+canvas.addEventListener('mousedown',e=>{ resumeAC(); if(e.button===0){ const p=getPos(e); doPhaseDash(p.x,p.y); } if(e.button===2 && overloadMeter>=100 && !overloadActive && gState===S_PLAY){ overloadActive=true; overloadTimer=2.5; overloadMeter=0; overloadFlash=0.4; shakeT=0.5; shakeMag=16; for(const en of enemies){const dx=en.x-player.x||1,dy=en.y-player.y||0,d=Math.sqrt(dx*dx+dy*dy)||1;en.x+=dx/d*120;en.y+=dy/d*120;} for(let i=0;i<3;i++) setTimeout(()=>lvRings.push({x:player.x,y:player.y,r:10,life:1}),i*120); playOverload(); } });
 canvas.addEventListener('contextmenu',e=>{ e.preventDefault(); });
 canvas.addEventListener('touchstart',e=>{ e.preventDefault(); mouseTarget=null; const p=getPos(e); dragging=true; dLastX=p.x; dLastY=p.y; touchStartX=p.x; touchStartY=p.y; resumeAC(); },{passive:false});
 canvas.addEventListener('touchmove',e=>{ e.preventDefault(); if(!dragging)return; const p=getPos(e); if(gState===S_PLAY){ player.vx=p.x-dLastX; player.vy=p.y-dLastY; } dLastX=p.x; dLastY=p.y; },{passive:false});
@@ -679,11 +694,11 @@ function drawTitle(W,H){
 
   const fs2=Math.floor(W*0.038);
   ctx.font=`${fs2}px sans-serif`; ctx.fillStyle='#88aacc';
-  ctx.fillText('マウス移動/WASD で移動　レーザーが自動回転で敵を倒す',W/2,H*0.36);
+  ctx.fillText('WASD/矢印 で移動　レーザーが自動回転で敵を倒す',W/2,H*0.36);
   ctx.fillStyle='#00ffff'; ctx.shadowBlur=8; ctx.shadowColor='#00aaff';
   ctx.fillText('クリック/タップ : PHASE DASH（瞬間移動で敵を一掃）',W/2,H*0.41);
   ctx.fillStyle='#ffaa00'; ctx.shadowBlur=8; ctx.shadowColor='#ff6600';
-  ctx.fillText('SPACE/右クリック : OVERLOAD（メーター満タン時に全画面爆発）',W/2,H*0.455);
+  ctx.fillText('SPACE/右クリック : OVERLOAD（メーター満タン時に爆発）',W/2,H*0.455);
   ctx.shadowBlur=0;
   ctx.fillStyle='#aabbcc';
   ctx.fillText('120秒生き残れ！',W/2,H*0.5);
@@ -721,11 +736,12 @@ function drawGame(W,H){
   }
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
-  // Barrier rings
+  // Barrier/explosion rings
   for(const r of rings){
-    ctx.globalAlpha=r.life; ctx.strokeStyle='#00ffff';
-    ctx.shadowBlur=10; ctx.shadowColor='#00ffff';
-    ctx.lineWidth=2; ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,Math.PI*2); ctx.stroke();
+    const rc=r.col||'#00ffff';
+    ctx.globalAlpha=r.life*0.8; ctx.strokeStyle=rc;
+    ctx.shadowBlur=r.col?18:10; ctx.shadowColor=rc;
+    ctx.lineWidth=r.col?2.5:2; ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,Math.PI*2); ctx.stroke();
   }
   ctx.globalAlpha=1; ctx.shadowBlur=0;
 
