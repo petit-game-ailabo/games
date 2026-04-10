@@ -184,6 +184,8 @@ function initGame() {
   lastTS=null; laserCD={}; flashT=0; spawnT=0; barrierT=0;
   eid=0; mouseTarget=null; Object.keys(keys).forEach(k=>delete keys[k]);
   dashCD=0; overloadMeter=0; overloadActive=false; overloadTimer=0; overloadFlash=0;
+  comboCount=0; comboTimer=0; comboPeak=0;
+  shakeT=0; shakeMag=0;
 }
 
 // ── Spawn ──────────────────────────────────────────────────────────
@@ -564,12 +566,43 @@ function applyPU(id){
 }
 
 // ── End Game ──────────────────────────────────────────────────────
+function calcRank(sc, lv, combo, win){
+  // スコア・レベル・コンボ・クリアで総合ランク
+  let pts = sc/100 + lv*20 + combo*5 + (win?200:0);
+  if(pts>=600) return {r:'S',col:'#ffd700',glow:'#ffaa00'};
+  if(pts>=350) return {r:'A',col:'#88ffaa',glow:'#00ff88'};
+  if(pts>=180) return {r:'B',col:'#88aaff',glow:'#4466ff'};
+  if(pts>=80)  return {r:'C',col:'#cccccc',glow:'#888888'};
+  return                {r:'D',col:'#888888',glow:'#555555'};
+}
+
+let endRank = null;
+
 function endGame(win) {
   gState=win?S_CLEAR:S_OVER;
   levelupDiv.style.display='none';
   const hs=parseInt(localStorage.getItem('neonswarm_hs')||'0');
   if(score>hs) localStorage.setItem('neonswarm_hs',score);
+  endRank = calcRank(score, player.level, comboPeak, win);
+  showShareBtn(win);
 }
+
+function showShareBtn(win){
+  const existing=document.getElementById('shareBtn');
+  if(existing) existing.remove();
+  const text=`⚡ NEON SWARM ${win?'CLEAR':'GAME OVER'} | ランク${endRank.r} | ${score.toLocaleString()}点 | 最大${comboPeak}コンボ | https://marimo.one/day00024/ #NeonSwarm`;
+  const btn=document.createElement('button');
+  btn.id='shareBtn';
+  btn.textContent='𝕏 スコアをシェア';
+  btn.style.cssText='position:absolute;bottom:14%;left:50%;transform:translateX(-50%);background:#000;color:#fff;border:1.5px solid #1d9bf0;border-radius:24px;padding:10px 24px;font-size:15px;font-family:monospace;cursor:pointer;z-index:10;white-space:nowrap;box-shadow:0 0 12px #1d9bf066';
+  btn.onclick=()=>{
+    const url='https://twitter.com/intent/tweet?text='+encodeURIComponent(text);
+    if(navigator.share){ navigator.share({text}); } else { window.open(url,'_blank'); }
+  };
+  wrap.appendChild(btn);
+}
+
+function hideShareBtn(){ const b=document.getElementById('shareBtn'); if(b) b.remove(); }
 
 // ── Input ─────────────────────────────────────────────────────────
 let dragging=false, dLastX=0, dLastY=0;
@@ -648,7 +681,7 @@ canvas.addEventListener('click',e=>{
   }
 });
 
-function startGame(){ initGame(); gState=S_PLAY; lastTS=null; requestAnimationFrame(loop); }
+function startGame(){ hideShareBtn(); initGame(); gState=S_PLAY; lastTS=null; requestAnimationFrame(loop); }
 
 // ── Draw helpers ──────────────────────────────────────────────────
 function roundRect(x,y,w,h,r){
@@ -972,35 +1005,52 @@ function drawGame(W,H){
 }
 
 function drawEnd(win,W,H){
-  ctx.fillStyle='rgba(0,0,0,0.82)'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(0,0,0,0.86)'; ctx.fillRect(0,0,W,H);
   ctx.textAlign='center';
-  ctx.font=`bold ${Math.min(W*0.1,40)}px monospace`;
-  ctx.fillStyle=win?'#ffff44':'#ff4444';
-  ctx.shadowBlur=20; ctx.shadowColor=win?'#ffff00':'#ff0000';
-  ctx.fillText(win?'CLEAR!':'GAME OVER',W/2,H*0.22); ctx.shadowBlur=0;
 
-  const lfs=Math.floor(W*0.045);
+  // RESULT / CLEAR
+  ctx.font=`bold ${Math.min(W*0.085,36)}px monospace`;
+  ctx.fillStyle=win?'#ffff44':'#ff4444';
+  ctx.shadowBlur=18; ctx.shadowColor=win?'#ffff00':'#ff0000';
+  ctx.fillText(win?'CLEAR!':'RESULT',W/2,H*0.12); ctx.shadowBlur=0;
+
+  // ランク 大きく中央
+  if(endRank){
+    const rfs=Math.min(W*0.28,130);
+    ctx.font=`bold ${rfs}px monospace`;
+    ctx.shadowBlur=40; ctx.shadowColor=endRank.glow;
+    ctx.fillStyle=endRank.col;
+    ctx.fillText(endRank.r,W/2,H*0.38);
+    ctx.shadowBlur=0;
+    ctx.font=`bold ${Math.floor(W*0.04)}px monospace`;
+    ctx.fillStyle='#aaaaaa';
+    ctx.fillText('RANK',W/2,H*0.42);
+  }
+
+  // スタッツ
+  const lfs=Math.floor(W*0.042);
   ctx.font=`${lfs}px monospace`; ctx.fillStyle='#ccddff';
-  ctx.fillText(`スコア: ${score.toLocaleString()}`,W/2,H*0.35);
-  ctx.fillText(`レベル: ${player.level}`,W/2,H*0.42);
-  ctx.fillText(`撃破数: ${kills}`,W/2,H*0.49);
+  ctx.fillText(`${score.toLocaleString()} pt`,W/2,H*0.51);
+  ctx.font=`${Math.floor(lfs*0.85)}px monospace`; ctx.fillStyle='#99aabb';
+  ctx.fillText(`Lv.${player.level}　撃破 ${kills}　最大コンボ ${comboPeak}`,W/2,H*0.57);
 
   const hs=parseInt(localStorage.getItem('neonswarm_hs')||'0');
   if(score>0&&score>=hs){
-    ctx.font=`bold ${Math.floor(W*0.055)}px monospace`;
-    ctx.fillStyle='#ffd700'; ctx.shadowBlur=20; ctx.shadowColor='#ffd700';
-    ctx.fillText('NEW RECORD!',W/2,H*0.57); ctx.shadowBlur=0;
+    ctx.font=`bold ${Math.floor(W*0.05)}px monospace`;
+    ctx.fillStyle='#ffd700'; ctx.shadowBlur=18; ctx.shadowColor='#ffd700';
+    ctx.fillText('🏆 NEW RECORD!',W/2,H*0.64); ctx.shadowBlur=0;
   } else if(hs>0){
-    ctx.font=`${lfs}px monospace`; ctx.fillStyle='#777';
-    ctx.fillText(`BEST: ${hs.toLocaleString()}`,W/2,H*0.57);
+    ctx.font=`${Math.floor(lfs*0.85)}px monospace`; ctx.fillStyle='#666';
+    ctx.fillText(`BEST: ${hs.toLocaleString()}`,W/2,H*0.64);
   }
 
-  const bw=W*0.6,bh=54,bx=W/2-W*0.3,by=H*0.68;
+  // もう一度ボタン
+  const bw=W*0.55,bh=48,bx=W/2-W*0.275,by=H*0.73;
   ctx.fillStyle='rgba(20,0,40,0.92)'; ctx.strokeStyle=win?'#ffff44':'#ff4444';
-  ctx.lineWidth=2; ctx.shadowBlur=12; ctx.shadowColor=win?'#ffff44':'#ff4444';
+  ctx.lineWidth=2; ctx.shadowBlur=10; ctx.shadowColor=win?'#ffff44':'#ff4444';
   roundRect(bx,by,bw,bh,8); ctx.fill(); ctx.stroke(); ctx.shadowBlur=0;
-  ctx.font=`bold ${Math.floor(W*0.052)}px monospace`; ctx.fillStyle='#ffffff';
-  ctx.fillText('もう一度',W/2,by+36);
+  ctx.font=`bold ${Math.floor(W*0.048)}px monospace`; ctx.fillStyle='#ffffff';
+  ctx.fillText('もう一度',W/2,by+32);
 }
 
 // ── Main Loop ─────────────────────────────────────────────────────
