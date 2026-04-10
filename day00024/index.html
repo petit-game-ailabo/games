@@ -625,7 +625,16 @@ canvas.addEventListener('mousemove',e=>{ mouseTarget=getPos(e); resumeAC(); });
 canvas.addEventListener('mouseleave',()=>{ mouseTarget=null; });
 canvas.addEventListener('mousedown',e=>{ resumeAC(); if(e.button===0){ const p=getPos(e); doPhaseDash(p.x,p.y); } if(e.button===2 && overloadMeter>=100 && !overloadActive && gState===S_PLAY){ overloadActive=true; overloadTimer=2.5; overloadMeter=0; overloadFlash=0.4; shakeT=0.5; shakeMag=16; for(const en of enemies){const dx=en.x-player.x||1,dy=en.y-player.y||0,d=Math.sqrt(dx*dx+dy*dy)||1;en.x+=dx/d*120;en.y+=dy/d*120;} for(let i=0;i<3;i++) setTimeout(()=>lvRings.push({x:player.x,y:player.y,r:10,life:1}),i*120); playOverload(); } });
 canvas.addEventListener('contextmenu',e=>{ e.preventDefault(); });
-canvas.addEventListener('touchstart',e=>{ e.preventDefault(); mouseTarget=null; const p=getPos(e); dragging=true; dLastX=p.x; dLastY=p.y; touchStartX=p.x; touchStartY=p.y; resumeAC(); },{passive:false});
+canvas.addEventListener('touchstart',e=>{ e.preventDefault(); resumeAC();
+  // 2本指タップ → OVERLOAD発動
+  if(e.touches.length>=2 && overloadMeter>=100 && !overloadActive && gState===S_PLAY){
+    overloadActive=true; overloadTimer=2.5; overloadMeter=0; overloadFlash=0.4; shakeT=0.5; shakeMag=16;
+    for(const en of enemies){const dx=en.x-player.x||1,dy=en.y-player.y||0,d=Math.sqrt(dx*dx+dy*dy)||1;en.x+=dx/d*120;en.y+=dy/d*120;}
+    for(let i=0;i<3;i++) setTimeout(()=>lvRings.push({x:player.x,y:player.y,r:10,life:1}),i*120);
+    playOverload(); return;
+  }
+  mouseTarget=null; const p=getPos(e); dragging=true; dLastX=p.x; dLastY=p.y; touchStartX=p.x; touchStartY=p.y;
+},{passive:false});
 canvas.addEventListener('touchmove',e=>{ e.preventDefault(); if(!dragging)return; const p=getPos(e); if(gState===S_PLAY){ player.vx=p.x-dLastX; player.vy=p.y-dLastY; } dLastX=p.x; dLastY=p.y; },{passive:false});
 canvas.addEventListener('touchend',e=>{ e.preventDefault(); dragging=false; if(gState===S_PLAY){ player.vx=0; player.vy=0; const dx=dLastX-touchStartX,dy=dLastY-touchStartY; if(dx*dx+dy*dy<400) doPhaseDash(touchStartX,touchStartY); } },{passive:false});
 
@@ -694,11 +703,11 @@ function drawTitle(W,H){
 
   const fs2=Math.floor(W*0.038);
   ctx.font=`${fs2}px sans-serif`; ctx.fillStyle='#88aacc';
-  ctx.fillText('WASD/矢印 で移動　レーザーが自動回転で敵を倒す',W/2,H*0.36);
+  ctx.fillText('ドラッグ/WASD で移動　レーザーが自動で敵を倒す',W/2,H*0.36);
   ctx.fillStyle='#00ffff'; ctx.shadowBlur=8; ctx.shadowColor='#00aaff';
-  ctx.fillText('クリック/タップ : PHASE DASH（瞬間移動で敵を一掃）',W/2,H*0.41);
+  ctx.fillText('タップ/クリック : PHASE DASH（瞬間移動で敵を一掃）',W/2,H*0.41);
   ctx.fillStyle='#ffaa00'; ctx.shadowBlur=8; ctx.shadowColor='#ff6600';
-  ctx.fillText('SPACE/右クリック : OVERLOAD（メーター満タン時に爆発）',W/2,H*0.455);
+  ctx.fillText('2本指タップ/SPACE : OVERLOAD（メーター満タン時に爆発）',W/2,H*0.455);
   ctx.shadowBlur=0;
   ctx.fillStyle='#aabbcc';
   ctx.fillText('120秒生き残れ！',W/2,H*0.5);
