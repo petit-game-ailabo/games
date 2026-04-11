@@ -172,23 +172,23 @@ const TREE_NODES=[
   // R13
   {id:'cannon2',  x:C0,y:R13,name:'砲台×3',      desc:'3方向から同時支援射撃',            cost:20000, parent:'cannon'},
   {id:'ghost',    x:C1,y:R13,name:'スペクトラル', desc:'倒した敵がゴーストになり3秒間コインを放出', cost:15000, parent:'leech'},
-  {id:'mapx5',    x:C2,y:R13,name:'アリーナ超拡張',desc:'世界が0.75倍サイズに縮小し極広に', cost:15000, parent:'mapx4'},
+  {id:'mapx5',    x:C2,y:R13,name:'アリーナ超拡張',desc:'極広に拡張 分母+62 リポップ+3/tick 上限180', cost:15000, parent:'mapx4'},
   {id:'erp9',     x:C3,y:R13,name:'爆発リポップ', desc:'復活時5体同時に出現',             cost:18000, parent:'erp8'},
   {id:'timestop', x:C4,y:R13,name:'タイムストップ',desc:'全敵が時々完全停止する(3秒)',     cost:25000, parent:'timewarp'},
   // R14
   {id:'overdrive',x:C0,y:R14,name:'オーバードライブ',desc:'レーザー数2倍・幅2倍',        cost:40000, parent:'cannon2'},
   {id:'endless',  x:C1,y:R14,name:'不滅の群れ',   desc:'敵は死なない。撃つたびにコイン獲得', cost:50000, parent:'ghost'},
-  {id:'mapx6',    x:C2,y:R14,name:'アリーナ極拡張',desc:'世界が0.60倍に縮小',           cost:40000, parent:'mapx5'},
+  {id:'mapx6',    x:C2,y:R14,name:'アリーナ極拡張',desc:'さらに拡張 分母+112 リポップ+6/tick 上限260', cost:40000, parent:'mapx5'},
   {id:'nova',     x:C4,y:R14,name:'ノヴァ爆発',   desc:'10秒ごとに全敵を巻き込む大爆発', cost:60000, parent:'timestop'},
   // R15
   {id:'cannon3',  x:C0,y:R15,name:'軌道砲',       desc:'毎秒、最も近い敵を自動で全滅',    cost:100000,parent:'overdrive'},
   {id:'cascade',  x:C1,y:R15,name:'カスケード',   desc:'コイン獲得のたびに追加+1コイン', cost:80000, parent:'endless'},
-  {id:'mapx7',    x:C2,y:R15,name:'アリーナ神域', desc:'世界が0.45倍に縮小し銀河規模',  cost:100000,parent:'mapx6'},
+  {id:'mapx7',    x:C2,y:R15,name:'アリーナ神域', desc:'銀河規模に拡張 分母+162 リポップ+9/tick 上限340', cost:100000,parent:'mapx6'},
   {id:'meganova', x:C4,y:R15,name:'メガノヴァ',   desc:'5秒ごとに超大爆発+連鎖コイン',  cost:200000,parent:'nova'},
   // R16
   {id:'godbeam',  x:C0,y:R16,name:'GOD BEAM',     desc:'レーザーが画面全体を貫通する',   cost:300000,parent:'cannon3'},
   {id:'coinbomb', x:C1,y:R16,name:'コインボム',   desc:'50撃破ごとに+500コイン',        cost:250000,parent:'cascade'},
-  {id:'mapx8',    x:C2,y:R16,name:'∞アリーナ',   desc:'最終拡張。銀河が戦場になる',    cost:300000,parent:'mapx7'},
+  {id:'mapx8',    x:C2,y:R16,name:'∞アリーナ',   desc:'最終拡張 分母+212 リポップ+12/tick 上限420', cost:300000,parent:'mapx7'},
   {id:'eternal',  x:C4,y:R16,name:'エターナル',   desc:'敵を倒すたびに時間が+2秒延長',  cost:500000,parent:'meganova'},
 ];
 const TREE_W=C5+NW+12;
@@ -235,10 +235,11 @@ function lv(id){return skills[id]||0;}
 function available(){return totalCoins-spentCoins;}
 function getArenaLevel(){return lv('mapx')+lv('mapx2')+lv('mapx3')+lv('mapx4')+lv('mapx5')+lv('mapx6')+lv('mapx7')+lv('mapx8');}
 function getRoundTime(){return 5+lv('t1')*5+lv('t2')*5+lv('t3')*10;}
+function getEnemyCap(){return 100+Math.max(0,getArenaLevel()-4)*80;}
 function getInitCount(){
   const al=getArenaLevel();
-  // アリーナ拡張ごとに敵数が自動増加 (+12/段階)
-  return 10+lv('e1')*5+lv('emore')*8+lv('e2')*8+lv('e3')*10+lv('e4')*12+al*12+lv('e5')*20+lv('erp6')*15+lv('erp7')*20+lv('erp8')*30+lv('erp9')*40;
+  const highBonus=Math.max(0,al-4)*50; // mapx5以降: +50/段階
+  return 10+lv('e1')*5+lv('emore')*8+lv('e2')*8+lv('e3')*10+lv('e4')*12+al*12+highBonus+lv('e5')*20+lv('erp6')*15+lv('erp7')*20+lv('erp8')*30+lv('erp9')*40;
 }
 function getCoinMult(){return 1;} // コイン倍率なし。稼ぎはアリーナ規模と敵分母で決まる
 function getLaserN(){const base=Math.min(8,2+lv('core')+lv('wl2'));return lv('overdrive')>0?Math.min(16,base*2):base;}
@@ -600,10 +601,12 @@ function update(rawDt){
     const al=getArenaLevel();
     // アリーナ拡張ごとにリポップも加速 (-0.15秒/段階)
     const freq=Math.max(0.08,1.2-lv('erp2')*0.32-lv('erp3')*0.32-lv('erp4')*0.32-lv('erp5')*0.22-al*0.15);
+    const cap=getEnemyCap();
     repopT+=dt;
-    if(repopT>=freq&&enemies.length<100){
-      const n=lv('erp9')>0?5:lv('erp8')>0?4:lv('emass')>0?3:lv('erep2x')>0?2:1;
-      for(let i=0;i<n&&enemies.length<100;i++) spawnEnemy();
+    if(repopT>=freq&&enemies.length<cap){
+      const baseN=lv('erp9')>0?5:lv('erp8')>0?4:lv('emass')>0?3:lv('erep2x')>0?2:1;
+      const n=baseN+Math.max(0,al-4)*3; // mapx5以降: +3/段階
+      for(let i=0;i<n&&enemies.length<cap;i++) spawnEnemy();
       repopT=0;
     }
   }
