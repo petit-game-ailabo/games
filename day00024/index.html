@@ -70,6 +70,11 @@ function playLevelUp(){resumeAC();[523,659,784,1047].forEach((f,i)=>{const t=AC.
 function playTick(last){resumeAC();const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.frequency.value=last?880:440;g.gain.setValueAtTime(last?0.18:0.10,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.12);o.start();o.stop(AC.currentTime+0.12);}
 function playDash(){resumeAC();const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.type='sawtooth';o.frequency.setValueAtTime(440,AC.currentTime);o.frequency.exponentialRampToValueAtTime(130,AC.currentTime+0.13);g.gain.setValueAtTime(0.09,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.13);o.start();o.stop(AC.currentTime+0.13);}
 function playBeacon(){resumeAC();[523,659,784,1047,1319].forEach((f,i)=>{const t=AC.currentTime+i*0.055,o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.frequency.value=f;g.gain.setValueAtTime(0.09,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.15);o.start(t);o.stop(t+0.16);});}
+function playCannonFire(){resumeAC();
+  // ズドン！という重い砲撃音
+  [80,60,50].forEach((f,i)=>{const t=AC.currentTime+i*0.04,o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.type='sawtooth';o.frequency.setValueAtTime(f*2,t);o.frequency.exponentialRampToValueAtTime(f*0.3,t+0.4);g.gain.setValueAtTime(0.22,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.45);o.start(t);o.stop(t+0.45);});
+  // 高周波の轟音レイヤー
+  const o2=AC.createOscillator(),g2=AC.createGain();o2.connect(g2);g2.connect(AC.destination);o2.type='square';o2.frequency.setValueAtTime(440,AC.currentTime);o2.frequency.exponentialRampToValueAtTime(80,AC.currentTime+0.3);g2.gain.setValueAtTime(0.14,AC.currentTime);g2.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.3);o2.start();o2.stop(AC.currentTime+0.3);}
 function playArenaExpand(){resumeAC();[220,330,440,660,880,1100].forEach((f,i)=>{const t=AC.currentTime+i*0.09,o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.type='triangle';o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*1.5,t+0.18);g.gain.setValueAtTime(0.13,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.28);o.start(t);o.stop(t+0.28);});}
 
 // ── Enemy Tiers ────────────────────────────────────────────────────
@@ -201,6 +206,7 @@ let skills={};
 let eliteTimer=0,hunterTimer=0;
 let beacons=[];
 let lastTS,repopT,lastRemSec=99,roundCoins=0,roundStartT=0,prevArenaLevel=0;
+let cannonPending=[],cannonFiring=[];
 let shakeT=0,shakeMag=0;
 let comboCount=0,comboTimer=0,comboPeak=0;
 let dashCD=0,timeScale=1;
@@ -430,7 +436,7 @@ function initRound(){
   const W=canvas.width,H=canvas.height;
   player={x:W/2,y:H/2,r:18,vx:0,vy:0,speed:2.8,trail:[],
     laserN:getLaserN(),laserL:getLaserL(),laserW:getLaserW(),laserRS:getLaserRS(),laserA:Math.random()*Math.PI*2};
-  enemies=[];coinsArr=[];particles=[];lightnings=[];rings=[];flyCoins=[];
+  enemies=[];coinsArr=[];particles=[];lightnings=[];rings=[];flyCoins=[];cannonPending=[];cannonFiring=[];
   roundTime=getRoundTime();roundElapsed=0;
   timeScale=lv('ts')?0.8:1;
   repopT=0;eliteTimer=0;hunterTimer=0;dashCD=0;eid=0;lastRemSec=99;
@@ -602,36 +608,58 @@ function update(rawDt){
     }
   }
 
-  // Cannon: support fire from arena corners
+  // Cannon: 画面外からのビーム砲撃 (予告→発射)
   if(lv('cannon')>0){
     if(!player._cannonT) player._cannonT=0;
     player._cannonT-=dt;
-    if(player._cannonT<=0){
-      const nCannons=lv('cannon3')>0?999:lv('cannon2')>0?3:1;
-      const corners=[
-        {x:ar.x,y:ar.y},{x:ar.x+ar.w,y:ar.y},
-        {x:ar.x,y:ar.y+ar.h},{x:ar.x+ar.w,y:ar.y+ar.h}
-      ];
-      let killed=0;
-      for(let ci=0;ci<Math.min(nCannons,corners.length);ci++){
-        const c=corners[ci];
-        let nearest=null,nd=Infinity;
-        for(const e of enemies){
-          if(e.hunter) continue;
-          const d=(e.x-c.x)**2+(e.y-c.y)**2;
-          if(d<nd){nd=d;nearest=e;}
-        }
-        if(nearest){
-          addZap(c.x,c.y,nearest.x,nearest.y);
-          if(lv('endless')>0){
-            totalCoins+=nearest.val;addPart(nearest.x,nearest.y,nearest.col,8);
-          } else {
-            killEnemy(nearest,new Set());
-          }
-          killed++;
-        }
+    const W=canvas.width,H=canvas.height;
+    const nShots=lv('cannon3')>0?4:lv('cannon2')>0?3:1;
+    const warnDur=lv('cannon3')>0?1.0:1.8;
+    const cooldown=lv('cannon3')>0?1.4:lv('cannon2')>0?2.5:4.0;
+    if(player._cannonT<=0&&cannonPending.length<6){
+      const valid=enemies.filter(e=>!e.hunter);
+      const cols=['#00ccff','#ff44ff','#ffcc00','#ff6644'];
+      for(let i=0;i<nShots&&valid.length>0;i++){
+        // ターゲット: ランダムに選択
+        const tgt=valid[Math.floor(Math.random()*valid.length)];
+        // 発射源: 画面外の4辺からランダム
+        const side=Math.floor(Math.random()*4);
+        let sx,sy;
+        if(side===0){sx=Math.random()*W;sy=-80;}
+        else if(side===1){sx=W+80;sy=Math.random()*H;}
+        else if(side===2){sx=Math.random()*W;sy=H+80;}
+        else{sx=-80;sy=Math.random()*H;}
+        cannonPending.push({sx,sy,tx:tgt.x,ty:tgt.y,warn:warnDur,col:cols[i%cols.length],w:20});
       }
-      player._cannonT=lv('cannon3')>0?0.3:lv('cannon2')>0?1.2:3.0;
+      player._cannonT=cooldown;
+    }
+    // 予告フェーズ更新
+    for(let i=cannonPending.length-1;i>=0;i--){
+      const p=cannonPending[i];
+      p.warn-=dt;
+      if(p.warn<=0){
+        // 発射！ ビームラインを登録
+        const dx=p.tx-p.sx,dy=p.ty-p.sy,len=Math.sqrt(dx*dx+dy*dy)||1;
+        const ex=p.sx+(dx/len)*(len+900),ey=p.sy+(dy/len)*(len+900);
+        cannonFiring.push({sx:p.sx,sy:p.sy,ex,ey,tx:p.tx,ty:p.ty,t:1,col:p.col,w:p.w});
+        // ビーム経路上の全敵を消滅
+        const beamR=p.w*0.6+10;
+        const snap=[...enemies];
+        for(const e of snap){
+          if(e.hunter) continue;
+          if(ptSegDSq(e.x,e.y,p.sx,p.sy,ex,ey)<beamR*beamR){
+            if(lv('endless')>0){totalCoins+=e.val;roundCoins+=e.val;addPart(e.x,e.y,e.col,8);}
+            else killEnemy(e,new Set());
+          }
+        }
+        playCannonFire();
+        cannonPending.splice(i,1);
+      }
+    }
+    // 発射ビーム フェードアウト
+    for(let i=cannonFiring.length-1;i>=0;i--){
+      cannonFiring[i].t-=dt*2.5;
+      if(cannonFiring[i].t<=0)cannonFiring.splice(i,1);
     }
   }
 
@@ -871,6 +899,46 @@ function drawBattle(W,H){
     ctx.font=`bold ${afs}px monospace`;
     ctx.fillStyle='#ffaa00';ctx.shadowBlur=12;ctx.shadowColor='#ff6600';
     ctx.fillText(`ARENA Lv${getArenaLevel()}`,W/2,ar.y+ar.h*0.5+afs*1.4);
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
+
+  // 砲台 予告ライン描画
+  const now=Date.now();
+  for(const p of cannonPending){
+    const progress=(p.warn<1.8?1.8-p.warn:0)/1.8;
+    const flicker=0.5+0.5*Math.sin(now*0.025);
+    // 予告ライン (画面外→ターゲット)
+    ctx.globalAlpha=Math.min(1,progress*2)*0.55*flicker;
+    ctx.strokeStyle=p.col;ctx.lineWidth=1.5;ctx.setLineDash([8,5]);
+    ctx.shadowBlur=8;ctx.shadowColor=p.col;
+    ctx.beginPath();ctx.moveTo(p.sx,p.sy);ctx.lineTo(p.tx,p.ty);ctx.stroke();
+    ctx.setLineDash([]);ctx.shadowBlur=0;
+    // ターゲットサークル (点滅・収縮)
+    const cr=30-(p.warn/1.8)*14;
+    ctx.globalAlpha=Math.min(1,progress*3)*flicker;
+    ctx.strokeStyle=p.col;ctx.lineWidth=2.5;ctx.shadowBlur=14;ctx.shadowColor=p.col;
+    ctx.beginPath();ctx.arc(p.tx,p.ty,Math.max(6,cr),0,Math.PI*2);ctx.stroke();
+    // 十字マーカー
+    const cs=8;
+    ctx.beginPath();ctx.moveTo(p.tx-cs,p.ty);ctx.lineTo(p.tx+cs,p.ty);
+    ctx.moveTo(p.tx,p.ty-cs);ctx.lineTo(p.tx,p.ty+cs);ctx.stroke();
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
+  // 砲台 発射ビーム描画
+  for(const f of cannonFiring){
+    const a=Math.min(1,f.t*2);
+    // 外側グロー
+    ctx.globalAlpha=a*0.35;ctx.strokeStyle=f.col;ctx.lineWidth=f.w*3.5;
+    ctx.shadowBlur=40;ctx.shadowColor=f.col;
+    ctx.beginPath();ctx.moveTo(f.sx,f.sy);ctx.lineTo(f.ex,f.ey);ctx.stroke();
+    // 中間グロー
+    ctx.globalAlpha=a*0.7;ctx.strokeStyle=f.col;ctx.lineWidth=f.w;
+    ctx.shadowBlur=20;ctx.shadowColor=f.col;
+    ctx.beginPath();ctx.moveTo(f.sx,f.sy);ctx.lineTo(f.ex,f.ey);ctx.stroke();
+    // コア白線
+    ctx.globalAlpha=a;ctx.strokeStyle='#ffffff';ctx.lineWidth=f.w*0.35;
+    ctx.shadowBlur=10;ctx.shadowColor='#fff';
+    ctx.beginPath();ctx.moveTo(f.sx,f.sy);ctx.lineTo(f.ex,f.ey);ctx.stroke();
     ctx.shadowBlur=0;ctx.globalAlpha=1;
   }
 
