@@ -177,7 +177,7 @@ const TREE_NODES=[
   {id:'timestop', x:C4,y:R13,name:'タイムストップ',desc:'全敵が時々完全停止する(3秒)',     cost:25000, parent:'timewarp'},
   // R14
   {id:'overdrive',x:C0,y:R14,name:'オーバードライブ',desc:'レーザー数2倍・幅2倍',        cost:40000, parent:'cannon2'},
-  {id:'endless',  x:C1,y:R14,name:'不滅の群れ',   desc:'敵は死なない。撃つたびにコイン獲得', cost:50000, parent:'ghost'},
+  {id:'endless',  x:C1,y:R14,name:'不滅の群れ',   desc:'撃つたびにコイン獲得。リポップ大幅加速', cost:50000, parent:'ghost'},
   {id:'mapx6',    x:C2,y:R14,name:'アリーナ極拡張',desc:'さらに拡張 分母+112 リポップ+6/tick 上限260', cost:40000, parent:'mapx5'},
   {id:'nova',     x:C4,y:R14,name:'ノヴァ爆発',   desc:'10秒ごとに全敵を巻き込む大爆発', cost:60000, parent:'timestop'},
   // R15
@@ -600,7 +600,7 @@ function update(rawDt){
   if(lv('erep')>0){
     const al=getArenaLevel();
     // アリーナ拡張ごとにリポップも加速 (-0.15秒/段階)
-    const freq=Math.max(0.08,1.2-lv('erp2')*0.32-lv('erp3')*0.32-lv('erp4')*0.32-lv('erp5')*0.22-al*0.15);
+    const freq=Math.max(0.04,1.2-lv('erp2')*0.32-lv('erp3')*0.32-lv('erp4')*0.32-lv('erp5')*0.22-al*0.15-(lv('endless')>0?0.5:0));
     const cap=getEnemyCap();
     repopT+=dt;
     if(repopT>=freq&&enemies.length<cap){
@@ -651,10 +651,8 @@ function update(rawDt){
         for(const e of snap){
           if(e.hunter) continue;
           if(ptSegDSq(e.x,e.y,p.sx,p.sy,ex,ey)<beamR*beamR){
-            if(lv('endless')>0){
-              totalCoins+=e.val;roundCoins+=e.val;addPart(e.x,e.y,e.col,8);
-              rings.push({x:e.x,y:e.y,r:8,life:1,col:e.col});spawnEnemy();
-            } else killEnemy(e,new Set());
+            if(lv('endless')>0){totalCoins+=e.val;roundCoins+=e.val;addPart(e.x,e.y,e.col,8);}
+            else killEnemy(e,new Set());
           }
         }
         playCannonFire();
@@ -702,7 +700,7 @@ function update(rawDt){
         if(e.hunter) continue;
         const d=Math.sqrt((e.x-player.x)**2+(e.y-player.y)**2);
         if(d<novaR){
-          if(lv('endless')>0){totalCoins+=e.val;roundCoins+=e.val;addPart(e.x,e.y,e.col,5);rings.push({x:e.x,y:e.y,r:8,life:1,col:e.col});spawnEnemy();}
+          if(lv('endless')>0){totalCoins+=e.val;roundCoins+=e.val;addPart(e.x,e.y,e.col,5);}
           else killEnemy(e,new Set());
         }
       }
@@ -730,22 +728,13 @@ function update(rawDt){
           const earn=e.val*(lv('cascade')>0?2:1);
           totalCoins+=earn;roundCoins+=earn;
           comboCount++;comboTimer=1.8;if(comboCount>comboPeak)comboPeak=comboCount;
-          // 演出: パーティクル・音・コイン飛翔・リング (killEnemy と同じ体験)
-          addPart(e.x,e.y,e.col,10+Math.random()*8|0);
+          addPart(e.x,e.y,e.col,8);
           rings.push({x:e.x,y:e.y,r:8,life:1,col:e.col});
           playKill();
           const nfly=Math.min(earn,3);
           for(let fi=0;fi<nfly;fi++)
             flyCoins.push({x:e.x+(Math.random()-0.5)*10,y:e.y+(Math.random()-0.5)*10,
               tx:canvas.width*0.07,ty:26,col:e.col,prog:0,spd:1.2+Math.random()*0.6});
-          if(coinsArr.length<300){
-            for(let ci=0;ci<e.val;ci++){
-              const a=Math.random()*Math.PI*2,d=Math.random()*20;
-              coinsArr.push({x:e.x+Math.cos(a)*d,y:e.y+Math.sin(a)*d,r:4,life:6,col:e.col});
-            }
-          }
-          // 即リスポーン (疑似不滅)
-          spawnEnemy();
           vis.add(e.id);
         } else {
           killEnemy(e,vis);
