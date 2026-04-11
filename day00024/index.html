@@ -161,7 +161,7 @@ const TREE_NODES=[
   // ── 超高額帯 ─────────────────────────────────────────────────────
   // R12 ─ 新メカニクス解放
   {id:'cannon',   x:C0,y:R12,name:'支援砲台',    desc:'アリーナ外から支援ビームが自動射撃', cost:8000,  parent:'mapx4'},
-  {id:'leech',    x:C1,y:R12,name:'コインドレイン',desc:'近くの敵から毎秒コインを奪う',     cost:5000,  parent:'bcount'},
+  {id:'leech',    x:C1,y:R12,name:'コインドレイン',desc:'ハンターに触れると毎秒40コイン奪取',  cost:5000,  parent:'bcount'},
   {id:'erp8',     x:C3,y:R12,name:'超密集',       desc:'初期敵+30体, リポップ×4',         cost:6000,  parent:'e5'},
   {id:'timewarp', x:C4,y:R12,name:'タイムワープ', desc:'全敵が40%スローになる',            cost:8000,  parent:'wrot2'},
   // R13
@@ -635,19 +635,23 @@ function update(rawDt){
     }
   }
 
-  // Leech: drain coins from nearby enemies
+  // Leech: ハンターに触れてコインを大量ドレイン
   if(lv('leech')>0){
     if(!player._leechFlyT)player._leechFlyT=0;
     player._leechFlyT-=dt;
     for(const e of enemies){
-      if(e.hunter||e.elite) continue;
+      if(!e.hunter) continue;
       const d=Math.sqrt((player.x-e.x)**2+(player.y-e.y)**2);
-      if(d<80*ws){
-        const rate=lv('cascade')>0?3:1;
-        totalCoins+=rate*dt;roundCoins+=rate*dt;
+      if(d<(player.r+e.r)*ws){
+        const rate=lv('cascade')>0?120:40;
+        const earn=rate*dt;
+        totalCoins+=earn;roundCoins+=earn;
         if(player._leechFlyT<=0){
-          flyCoins.push({x:e.x,y:e.y,tx:canvas.width*0.07,ty:26,col:'#44ffdd',prog:0,spd:1.4+Math.random()*0.4});
-          player._leechFlyT=0.25;
+          // コイン飛翔 (紫: ハンターの色)
+          for(let fi=0;fi<3;fi++)
+            flyCoins.push({x:e.x+(Math.random()-0.5)*20,y:e.y+(Math.random()-0.5)*20,
+              tx:canvas.width*0.07,ty:26,col:'#cc88ff',prog:0,spd:1.6+Math.random()*0.5});
+          player._leechFlyT=0.12;
         }
       }
     }
@@ -759,7 +763,7 @@ function endBattle(){
 
 // ── Skill Tree UI ──────────────────────────────────────────────────
 function buildSkillTree(){
-  document.getElementById('st-coins').textContent=`🪙 ${Math.floor(available())}`;
+  document.getElementById('st-coins').innerHTML=`<span style="display:inline-block;width:11px;height:11px;background:#ffdd44;border-radius:50%;vertical-align:middle;margin-right:5px;box-shadow:0 0 6px #ffaa00"></span>${Math.floor(available())}`;
   const hint=document.getElementById('st-hint');
   hint.textContent=roundCoins>0?`このラウンドで +${Math.floor(roundCoins)} コイン獲得！　ノードをタップして強化。`:'ノードをタップして強化。上流スキルが必要です。';
   document.getElementById('st-next').textContent=`▶ ラウンド ${round+1} 開始`;
@@ -804,7 +808,8 @@ function buildSkillTree(){
     const parentOk=!node.parent||lv(node.parent)>0;
     const canBuy=parentOk&&!bought&&available()>=node.cost;
     let cls='st-node'+(bought?' sn-bought':!parentOk?' sn-blocked':canBuy?' sn-avail':'')+(node.id===cheapestAvail?' sn-cheapest':'');
-    const costLabel=bought?'✓':parentOk?`🪙${node.cost}`:'🔒';
+    const coinDot=`<span style="display:inline-block;width:8px;height:8px;background:#ffdd44;border-radius:50%;vertical-align:middle;margin-right:3px"></span>`;
+    const costLabel=bought?'✓':parentOk?`${coinDot}${node.cost}`:'🔒';
     html+=`<div class="${cls}" style="left:${node.x}px;top:${node.y}px" data-id="${node.id}" data-cost="${node.cost}">
       <div class="sn-name">${node.name}</div>
       <div class="sn-desc">${node.desc}</div>
