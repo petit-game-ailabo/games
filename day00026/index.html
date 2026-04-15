@@ -1,0 +1,2172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>DRIFT ISLAND ~漂流島からの脱出~</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0d1117;overflow:hidden;touch-action:manipulation;font-family:'Segoe UI',sans-serif}
+#wrap{position:relative;width:800px;height:660px;margin:0 auto;overflow:hidden;background:#0d1117;display:flex;flex-direction:column}
+#topRow{display:flex;flex-direction:row;width:800px;height:500px;flex-shrink:0;overflow:hidden}
+#leftCol{display:flex;flex-direction:column;width:480px;flex-shrink:0;position:relative}
+#rightCol{width:320px;flex-shrink:0;overflow-y:auto;display:flex;flex-direction:column;background:#161b22}
+#bottomBar{display:flex;flex-direction:row;width:800px;height:160px;flex-shrink:0;background:#0d1117;border-top:1px solid #21262d}
+#equipPanelBottom{width:480px;flex-shrink:0;padding:6px 8px;display:flex;flex-direction:column;border-right:1px solid #21262d}
+#equipPanelBottom .ep-title{font-size:11px;color:#aaa;margin-bottom:5px}
+#equipGridArea{display:flex;flex-wrap:wrap;gap:5px;}
+.equip-slot-h{background:#161b22;border:1px dashed #30363d;border-radius:6px;padding:4px 6px;font-size:11px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px;min-width:130px;flex:1;max-width:145px}
+.equip-slot-h.filled{border-color:#58a6ff;color:#fff;background:#1f3a5a}
+.equip-slot-h:hover{border-color:#8b949e}
+#logPanelBottom{flex:1;padding:5px 8px;overflow-y:auto;background:#0d1117}
+#logPanelBottom p{font-size:10px;color:#bbb;margin:1px 0;line-height:1.3}
+#logPanelBottom p.warn{color:#f8a}
+#logPanelBottom p.good{color:#8f8}
+#logPanelBottom p.turn-sep{color:#666;text-align:center;font-size:9px}
+/* ホーム倉庫ビュー (rightCol内) */
+#homeStorageView{flex:1;overflow-y:auto;padding:5px 8px;border-top:1px solid #21262d}
+#homeStorageViewTitle{font-size:10px;color:#f0c040;font-weight:bold;margin-bottom:4px}
+#homeStorageViewItems{display:flex;flex-wrap:wrap;gap:3px}
+#header{text-align:center;padding:6px 0 2px;color:#fff}
+#header h1{font-size:15px;letter-spacing:2px;color:#58a6ff}
+#turnInfo{font-size:11px;color:#aaa}
+#statusBar{display:flex;justify-content:center;gap:8px;padding:3px 8px}
+.stat{font-size:11px;color:#fff;background:#21262d;border-radius:8px;padding:2px 8px;display:flex;align-items:center;gap:4px}
+.stat-bar{width:50px;height:7px;background:#333;border-radius:4px;overflow:hidden}
+.stat-fill{height:100%;border-radius:4px;transition:width .3s}
+.stat-flash{animation:statFlash .4s}
+@keyframes statFlash{0%,100%{background:#21262d}50%{background:#5a2020}}
+.stat-danger .stat-fill{animation:dangerBlink 1s infinite}
+@keyframes dangerBlink{0%,100%{opacity:1}50%{opacity:.3}}
+#gameCanvas{display:block;cursor:pointer}
+#actionPanel{background:#161b22;margin:3px 8px;border-radius:8px;padding:6px 8px}
+#currentTile{font-size:11px;color:#ccc;margin-bottom:4px;text-align:center}
+#facilityInfo{font-size:10px;color:#8af;text-align:center;margin-bottom:4px}
+#actionBtns{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+#actionBtns button{background:#21262d;color:#fff;border:none;border-radius:6px;padding:8px 0;font-size:11px;cursor:pointer;width:96px;box-sizing:border-box;text-align:center;}
+#actionBtns button:hover{background:#30363d}
+#actionBtns button:active{background:#30363d}
+#actionBtns button:disabled{opacity:.4}
+#actionBtns button.active-modal{background:#1f3a5a;border:1px solid #58a6ff;}
+.btn-escape{background:#f0c040 !important;color:#000 !important;font-weight:bold}
+#gatherToast{position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:6px;z-index:200;}
+.gather-item{background:rgba(0,0,0,0.78);border:1px solid #58a6ff;border-radius:10px;padding:8px 18px;font-size:20px;font-weight:bold;color:#fff;white-space:nowrap;animation:gatherPop 2.4s ease forwards;}
+@keyframes gatherPop{0%{opacity:1;transform:translateY(0) scale(1.1);}20%{opacity:1;transform:translateY(-10px) scale(1);}75%{opacity:1;transform:translateY(-24px);}100%{opacity:0;transform:translateY(-44px);}}
+#inventoryPanel{background:#161b22;margin:3px 8px;border-radius:8px;padding:5px 8px}
+#invTitle{font-size:10px;color:#aaa;margin-bottom:3px}
+#invList{display:flex;flex-wrap:wrap;gap:4px;padding-bottom:3px;min-height:32px;align-items:flex-start}
+.inv-item{width:72px;height:52px;background:#21262d;border:1px solid #30363d;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:default;flex-shrink:0;overflow:hidden}
+.inv-item .inv-emoji{font-size:20px;line-height:1}
+.inv-item .inv-name{font-size:8px;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68px;text-align:center}
+.inv-item .inv-count{font-size:11px;color:#fff;font-weight:bold}
+.inv-item.cat-tool{border-color:#58a6ff}
+.inv-item.cat-food{border-color:#3fb950}
+.inv-item.cat-material{border-color:#8b949e}
+.inv-item.cat-escape{border-color:#f0c040}
+#logPanel{background:#0d1117;margin:3px 8px;border-radius:8px;padding:5px 8px;flex:1;overflow-y:auto}
+#logPanel p{font-size:10px;color:#bbb;margin:1px 0;line-height:1.3}
+#logPanel p.warn{color:#f8a}
+#logPanel p.good{color:#8f8}
+#logPanel p.turn-sep{color:#666;text-align:center;font-size:9px}
+#overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:10}
+#overlay h2{color:#f0c040;font-size:28px;margin-bottom:10px}
+#overlay p{color:#ccc;font-size:14px;margin-bottom:20px;text-align:center;padding:0 20px;white-space:pre-line}
+#overlay button{background:#f0c040;color:#000;border:none;border-radius:8px;padding:10px 30px;font-size:16px;cursor:pointer}
+.modal{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(13,17,23,0.97);display:none;flex-direction:column;z-index:9;overflow:hidden}
+.modal h3{color:#f0c040;text-align:center;padding:10px 0 4px;font-size:15px;flex-shrink:0}
+.modal-list{padding:6px 8px;display:flex;flex-direction:column;gap:3px;flex:1;overflow-y:auto}
+.modal-row{background:#21262d;border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.modal-row .info{font-size:11px;color:#ddd;flex:1}
+.modal-row .mats{font-size:9px;color:#999;margin-top:1px}
+.modal-row button{background:#4a4a8a;color:#fff;border:none;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;flex-shrink:0}
+.modal-row button:disabled{opacity:.3}
+.modal-row button.use-btn{background:#4a8a4a}
+.modal-close{text-align:center;padding:8px;flex-shrink:0}
+.modal-close button{background:#555;color:#fff;border:none;border-radius:6px;padding:7px 24px;font-size:13px;cursor:pointer}
+/* クラフトモーダル - スロット式 */
+#craftModal { flex-direction: column; }
+#craftInvSlots { display:flex; flex-wrap:wrap; gap:4px; padding:8px; border-bottom:1px solid #30363d; }
+.craft-inv-btn { background:#21262d; border:1px solid #30363d; border-radius:6px; padding:4px 0; font-size:11px; color:#ccc; cursor:pointer; width:80px; text-align:center; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.craft-inv-btn:hover { background:#30363d; border-color:#58a6ff; }
+.craft-inv-btn.used { opacity:0.5; }
+#craftSlots { display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; }
+.craft-slot { width:64px; height:64px; background:#161b22; border:2px dashed #30363d; border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; font-size:22px; position:relative; transition:border-color .2s,background .2s; }
+.craft-slot.filled { border-color:#58a6ff; background:#1f3a5a; }
+.craft-slot .slot-count { position:absolute; bottom:2px; right:4px; font-size:9px; color:#8b949e; }
+.craft-slot-sep { font-size:20px; color:#444; }
+#craftResult { padding:10px 12px; min-height:60px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+#craftResultText { font-size:13px; color:#3fb950; font-weight:bold; text-align:center; }
+#craftResultDesc { font-size:10px; color:#8b949e; margin-top:2px; }
+#craftResultHint { font-size:10px; color:#e3b341; margin-top:4px; }
+#craftExecBtn { margin:8px 12px; background:#238636; color:#fff; border:none; border-radius:8px; padding:10px; font-size:14px; font-weight:bold; cursor:pointer; width:calc(100% - 24px); }
+#craftExecBtn:disabled { background:#21262d; color:#555; cursor:default; }
+/* インベントリカテゴリ色分け */
+.inv-tool{border-color:#58a6ff !important}
+.inv-food{border-color:#3fb950 !important}
+.inv-mat{border-color:#8b949e !important}
+.inv-escape{border-color:#f0c040 !important}
+/* 時間帯バッジ */
+#dayNightBadge{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:bold}
+.badge-dawn{background:#1a1a40;color:#8899ff}
+.badge-morning{background:#3a2800;color:#ffb830}
+.badge-day{background:#3a3000;color:#f0e030}
+.badge-evening{background:#3a1400;color:#ff7030}
+.badge-dusk{background:#280800;color:#cc4420}
+.badge-night{background:#0a0a25;color:#6680cc}
+/* エンディング統計 */
+#endStats{font-size:12px;color:#aaa;margin-top:8px;text-align:center;line-height:1.6}
+/* 装備スロット (旧 - 互換性のため残す) */
+#equipPanel { padding: 4px 8px; flex-shrink: 0; display:none; }
+#logPanel { display:none; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="titleScreen" style="
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    background:#0d1117; z-index:500;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+  ">
+    <div style="font-size:28px; font-weight:bold; color:#f0c040; text-shadow:0 0 20px rgba(240,192,64,0.5);">⛵ DRIFT ISLAND</div>
+    <div style="font-size:14px; color:#8b949e;">〜漂流島からの脱出〜</div>
+    <div style="font-size:48px; margin:10px 0;">🏝️</div>
+    <div id="titleBtns" style="display:flex; flex-direction:column; gap:12px; width:200px;">
+      <!-- つづきから / はじめから ボタンをJSで動的追加 -->
+    </div>
+    <div style="font-size:10px; color:#444; margin-top:20px;">ダブルクリックで装備・使用・廃棄 | クラフトは組み合わせ式</div>
+  </div>
+  <div id="topRow">
+  <div id="leftCol">
+    <canvas id="gameCanvas" width="480" height="420"></canvas>
+    <div id="gatherToast"></div>
+    <div id="dropConfirmModal" class="modal" style="display:none; flex-direction:column; align-items:center; justify-content:center; gap:12px;">
+      <div id="dropConfirmTitle" style="font-size:16px; font-weight:bold; color:#fff;"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+        <button id="dropOne" style="background:#c0392b;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">×1 捨てる</button>
+        <button id="dropAll" style="background:#922b21;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">全部捨てる</button>
+        <button onclick="closeDropConfirm()" style="background:#444;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">キャンセル</button>
+      </div>
+    </div>
+    <div class="modal" id="craftModal" style="flex-direction:column;padding:0;">
+      <div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid #30363d;flex-shrink:0">
+        <span style="color:#f0c040;font-size:13px;font-weight:bold;flex:1">🔨 クラフト（ターン消費なし）</span>
+        <button onclick="closeCraft()" style="background:none;border:none;color:#8b949e;font-size:18px;cursor:pointer">×</button>
+      </div>
+      <div style="padding:4px 8px;flex-shrink:0;border-bottom:1px solid #21262d;">
+        <input id="craftSearch" type="text" placeholder="🔍 アイテム名で検索…" oninput="renderCraftableList()"
+          style="width:100%;box-sizing:border-box;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:5px 8px;color:#ccc;font-size:11px;outline:none;">
+      </div>
+      <div style="padding:3px 10px;font-size:10px;color:#555;flex-shrink:0" id="craftableTitle"></div>
+      <div id="craftableList" style="overflow-y:auto;flex:1;padding:4px 8px;display:flex;flex-direction:column;gap:3px;"></div>
+    </div>
+    <div class="modal" id="homeStorageModal" style="display:none; flex-direction:column;"></div>
+    <div class="modal" id="useModal"><h3>アイテム使用（ターン消費なし）</h3><div class="modal-list" id="useList"></div><div class="modal-close"><button onclick="closeUse()">閉じる</button></div></div>
+    <div class="modal" id="encycModal">
+      <div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid #30363d;flex-shrink:0">
+        <span style="color:#f0c040;font-size:14px;font-weight:bold;flex:1">📖 図鑑</span>
+        <button onclick="closeEncyc()" style="background:none;border:none;color:#8b949e;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div style="font-size:10px;color:#8b949e;padding:4px 12px;flex-shrink:0" id="encycCount"></div>
+      <div id="encycInner" style="display:flex;flex:1;overflow:hidden;">
+        <div id="encycLeft" style="width:140px;flex-shrink:0;overflow-y:auto;border-right:1px solid #30363d;padding:4px;display:flex;flex-direction:column;gap:3px;"></div>
+        <div id="encycRight" style="flex:1;padding:12px;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+  <div id="rightCol">
+    <div id="header" style="display:flex;align-items:center;padding:4px 8px;gap:4px;">
+      <div style="flex:1;text-align:left">
+        <button onclick="if(confirm('タイトルに戻りますか？')){ saveGame(); showTitleScreen(); }" style="background:none;border:1px solid #333;border-radius:4px;color:#666;font-size:10px;cursor:pointer;padding:2px 6px;">🏠 タイトル</button>
+      </div>
+      <div style="flex:2;text-align:center">
+        <div style="font-size:12px;font-weight:bold;color:#58a6ff;letter-spacing:1px;">⛵ DRIFT ISLAND</div>
+      </div>
+      <div style="flex:1;text-align:right">
+        <div id="turnInfo" style="font-size:10px;color:#aaa;">ターン 1 <span id="dayNightBadge" class="badge-day">☀️昼</span></div>
+      </div>
+    </div>
+    <div id="statusBar">
+      <div class="stat">❤️<div class="stat-bar"><div class="stat-fill" id="hpBar" style="width:80%;background:#e44"></div></div><span id="hpVal">80</span></div>
+      <div class="stat">🍖<div class="stat-bar"><div class="stat-fill" id="hunBar" style="width:60%;background:#fa0"></div></div><span id="hunVal">60</span></div>
+      <div class="stat">💧<div class="stat-bar"><div class="stat-fill" id="thiBar" style="width:80%;background:#4af"></div></div><span id="thiVal">80</span></div>
+    </div>
+    <div id="actionPanel">
+      <div id="currentTile"></div>
+      <div id="facilityInfo"></div>
+      <div id="actionBtns"></div>
+    </div>
+    <div id="inventoryPanel">
+      <div id="invTitle">インベントリ (0/20)</div>
+      <div id="invList"></div>
+    </div>
+    <div id="homeStorageView" style="display:none">
+      <div id="homeStorageViewTitle">📦 ホーム倉庫</div>
+      <div id="homeStorageViewItems"></div>
+    </div>
+    <div id="equipPanel" style="display:none"><div id="equipTitle"></div><div id="equipArea"></div></div>
+    <div id="logPanel" style="display:none"></div>
+  </div>
+  </div><!-- /topRow -->
+  <div id="bottomBar">
+    <div id="equipPanelBottom">
+      <div class="ep-title">⚔️ 装備スロット <span id="equipCharIcon" style="float:right;font-size:18px">🧍‍♂️</span></div>
+      <div id="equipGridArea"></div>
+    </div>
+    <div id="logPanelBottom"></div>
+  </div>
+  <div id="overlay"><h2 id="ovTitle"></h2><p id="ovMsg"></p><div id="endStats"></div><button onclick="restartGame()">もう一度</button></div>
+</div>
+<script>
+const BASE_W=800,BASE_H=660;
+const TILE_W=64,TILE_H=32;
+const MAP=[
+[0,0,0,0,0,0,0,0,0,0],
+[0,7,7,7,7,7,7,7,7,0],
+[0,1,2,2,3,3,5,5,1,0],
+[0,1,2,2,2,2,2,5,1,0],
+[0,1,4,4,2,3,3,5,1,0],
+[0,1,4,2,2,3,3,5,1,0],
+[0,1,2,2,2,2,5,5,1,0],
+[0,1,2,2,3,3,5,1,1,0],
+[0,1,1,1,1,1,1,1,1,0],
+[0,0,0,0,0,0,0,0,0,0]
+];
+const TILE_NAMES=['海','砂浜','草地','森','川','岩場','ホーム','山岳'];
+const TILE_EMOJI=['🌊','🏖️','🌿','🌲','💧','🪨','🏕️','⛰️'];
+const TILE_COLORS=['#1a3a5c','#e8c87a','#5aaa4a','#1a5a1a','#4a8adc','#9a9a9a','#8a6a3a','#e8e8f0'];
+const TILE_COLORS_DARK=['#0d2040','#e8c87a','#3a8a2a','#0d3a0d','#2a5aac','#6a6a6a','#8a6a3a','#a0a0b0'];
+const TILE_DECO={
+  0:[],
+  1:['🏖️'],
+  2:['🌿','🌱'],
+  3:['🌲','🌳'],
+  4:['💧'],
+  5:['🪨','⛰️'],
+  6:['🏕️'],
+  7:['⛰️','🏔️']
+};
+
+const BLOCK_SIDE_H=20;
+const BLOCK_STYLES={
+  0:{topColor:'#2a6aaa',leftColor:'#1a4a7a',rightColor:'#1a3a6a',sideH:8,offsetY:0},
+  1:{topColor:'#e8d08a',leftColor:'#c8a850',rightColor:'#b89840',sideH:14,offsetY:8},
+  2:{topColor:'#5ab84a',leftColor:'#7a5a2a',rightColor:'#6a4a1a',sideH:16,offsetY:10},
+  3:{topColor:'#3a7a2a',leftColor:'#6a4a1a',rightColor:'#5a3a0a',sideH:18,offsetY:12},
+  4:{topColor:'#4a8adc',leftColor:'#2a5aac',rightColor:'#1a4a9c',sideH:10,offsetY:4},
+  5:{topColor:'#aaaaaa',leftColor:'#666666',rightColor:'#555555',sideH:22,offsetY:16},
+  6:{topColor:'#c8a060',leftColor:'#8a6030',rightColor:'#7a5020',sideH:16,offsetY:10},
+  7:{topColor:'#e8e8f0',leftColor:'#7a7a8a',rightColor:'#5a5a6a',sideH:50,offsetY:40}
+};
+
+function tileAt(r,c){
+  if(G.homeR===r && G.homeC===c) return 6;
+  return MAP[r][c];
+}
+
+let canvas,ctx;
+let G={};// game state
+
+const ITEMS_EMOJI={
+  '木材':'🪵','石':'🪨','草':'🌿','砂':'🏖️','繊維':'🧵',
+  '果実':'🍎','水(生)':'💧','鉄鉱石':'⛏️','貝殻':'🐚','魚':'🐟',
+  '鉄':'🔩',
+  '石斧':'🪓','石のつるはし':'⛏️','釣り竿':'🎣','鉄斧':'🪓',
+  '焼き魚':'🍽️','果実サラダ':'🥗','煮沸水':'🥤','保存食':'🥫',
+  'かまど':'🔥','木の倉庫':'📦','ベッド':'🛏️','鍬':'🌾','井戸':'🪣','防寒着':'🧥',
+  '自動伐採機':'⚙️','自動採石機':'⚙️','貯水タンク':'🛢️',
+  '船の骨格':'🚢','完成した船':'⛵',
+  '木の棒':'🪄','石のナイフ':'🗡️','松明':'🔦','木の弓':'🏹','投石器':'🪃',
+  '竹ざお':'🎋','石のノコギリ':'🔪','鉄のナイフ':'🔪','鉄のつるはし':'⛏️',
+  '盾':'🛡️','木製バケツ':'🪣','鉄バケツ':'🪣','ランタン':'🏮','コンパス':'🧭',
+  '縄梯子':'🪜','鉄の鎧':'🛡️',
+  '干し魚':'🐟','貝のスープ':'🍲','果実ジュース':'🥤','スモーク魚':'🍣',
+  '魚の塩漬け':'🐟','木の実の酒':'🍶','ハーブティー':'🍵','野草サラダ':'🥗',
+  '岩塩':'🧂','塩焼き魚':'🍽️','果実パイ':'🥧','浄水':'💧',
+  '木の板':'🪵','石レンガ':'🧱','鉄板':'⬜','木炭':'⬛','ガラス':'🔮',
+  '布':'🧣','皮ひも':'🧶','セメント':'🪣','鉄くぎ':'📌',
+  '物見台':'🗼','作業台':'🔧','医務室':'🏥','食料庫':'🏪','鍛冶場':'⚒️',
+  '農場':'🌾','採水場':'💦','灯台':'🗽','防波堤':'🏗️','自動農場':'🤖',
+  '地図':'🗺️','信号弾':'🚀','救命胴衣':'🦺','いかだ':'🛶',
+  '水晶':'💎','希少鉱石':'✨','登山装備':'🧗',
+  '水晶の剣':'💎','希少合金':'✨','水晶の羅針盤':'🧭','希少合金の船':'⛵','水晶のランタン':'🏮',
+  'リュック':'🎒'
+};
+
+const RECIPES=[
+  {name:'石斧',mats:{石:2,草:1},type:'tool',desc:'木材採集量+1'},
+  {name:'石のつるはし',mats:{石:3,草:1},type:'tool',desc:'鉄鉱石採掘解放'},
+  {name:'釣り竿',mats:{木材:2,繊維:2},type:'tool',desc:'川で魚が採れる'},
+  {name:'鉄斧',mats:{鉄:2,木材:1},type:'tool',desc:'木材採集量さらに+2'},
+  {name:'焼き魚',mats:{魚:1},type:'food',need:'かまど',desc:'空腹+30'},
+  {name:'果実サラダ',mats:{果実:2},type:'food',desc:'空腹+20, 水分+10'},
+  {name:'煮沸水',mats:{'水(生)':2},type:'food',need:'かまど',desc:'水分+30'},
+  {name:'保存食',mats:{焼き魚:1,貝殻:1},type:'food',desc:'空腹+20'},
+  {name:'鉄',mats:{'鉄鉱石':2},type:'material',need:'かまど',desc:'鉄鉱石2個→鉄1個に精錬'},
+  {name:'かまど',mats:{石:5,砂:2},type:'facility',desc:'調理・煮沸・精錬を解放'},
+  {name:'木の倉庫',mats:{木材:6},type:'facility',desc:'ホーム倉庫+30枠'},
+  {name:'ベッド',mats:{木材:4,草:3,繊維:2},type:'facility',desc:'ホームで睡眠できる。夜を安全に朝まで過ごせる'},
+  {name:'井戸',mats:{石:8,木材:2},type:'facility',desc:'ホームで水汲み可'},
+  {name:'自動伐採機',mats:{木材:10,鉄:5},type:'auto',need:'鉄斧',desc:'毎ターン木材+1'},
+  {name:'自動採石機',mats:{石:10,鉄:5},type:'auto',desc:'毎ターン石+1'},
+  {name:'貯水タンク',mats:{石:5,鉄:3},type:'auto',desc:'毎ターン水(生)+2'},
+  {name:'船の骨格',mats:{木材:20,鉄:10},type:'escape',desc:'脱出用'},
+  {name:'完成した船',mats:{船の骨格:1,繊維:15,草:10},type:'escape',desc:'脱出！'},
+  // --- 道具・武器 ---
+  {name:'木の棒',mats:{木材:1},type:'material',desc:'様々な道具の材料'},
+  {name:'石のナイフ',mats:{石:1,'木の棒':1},type:'tool',desc:'採集量+0.5、魚を素早くさばける'},
+  {name:'松明',mats:{'木の棒':1,草:1},type:'tool',desc:'夜の寒さを和らげる（HP損失-1に軽減）'},
+  {name:'木の弓',mats:{木材:2,繊維:3},type:'tool',desc:'遠距離採集（岩場から石+1）'},
+  {name:'投石器',mats:{石:2,繊維:2},type:'tool',desc:'海から魚を狙える（川なし釣り）'},
+  {name:'竹ざお',mats:{木材:1,繊維:1},type:'tool',desc:'釣り竿の簡易版（魚40%）'},
+  {name:'石のノコギリ',mats:{石:3,'木の棒':1},type:'tool',desc:'木材採集時に繊維も取れる'},
+  {name:'鉄のナイフ',mats:{鉄:1,'木の棒':1},type:'tool',desc:'採集量+1、調理不要で魚を食べられる'},
+  {name:'鉄のつるはし',mats:{鉄:3,木材:1},type:'tool',desc:'鉄鉱石2個採掘可能'},
+  {name:'防寒着',mats:{布:2,繊維:2},type:'tool',desc:'夜の寒さを和らげる（夜のHP損失-1に軽減）'},
+  {name:'木製バケツ',mats:{木材:2,繊維:1},type:'tool',desc:'川で水を3個取れる'},
+  {name:'鉄バケツ',mats:{鉄:2,木材:1},type:'tool',desc:'川で水を5個取れる'},
+  {name:'ランタン',mats:{鉄:1,草:2},type:'tool',desc:'夜の寒さを完全に防ぐ（夜のHP損失なし）'},
+  {name:'コンパス',mats:{鉄:1,貝殻:2},type:'tool',desc:'霧の解消範囲+1'},
+  {name:'縄梯子',mats:{繊維:3,木材:2},type:'tool',desc:'岩場への移動コスト不要'},
+  {name:'鉄の鎧',mats:{鉄:5,繊維:3},type:'tool',desc:'全ダメージ-5'},
+  // --- 食料・飲料 ---
+  {name:'干し魚',mats:{魚:2},type:'food',desc:'空腹+25、3ターン保存可（かまど不要）'},
+  {name:'貝のスープ',mats:{貝殻:2,'水(生)':1},type:'food',need:'かまど',desc:'空腹+20、水分+20'},
+  {name:'果実ジュース',mats:{果実:3,'木の棒':1},type:'food',desc:'水分+40'},
+  {name:'スモーク魚',mats:{魚:1,草:2},type:'food',need:'かまど',desc:'空腹+35'},
+  {name:'魚の塩漬け',mats:{魚:1,砂:2},type:'food',desc:'空腹+15、5ターン保存'},
+  {name:'木の実の酒',mats:{果実:3,'水(生)':1},type:'food',desc:'水分+25、HP+5、一時的に空腹+5'},
+  {name:'ハーブティー',mats:{草:3,'水(生)':1},type:'food',need:'かまど',desc:'水分+25、HP+10'},
+  {name:'野草サラダ',mats:{草:2,果実:1},type:'food',desc:'空腹+15、水分+5'},
+  {name:'岩塩',mats:{砂:3,石:1},type:'material',desc:'調理の下ごしらえ素材'},
+  {name:'塩焼き魚',mats:{魚:1,岩塩:1},type:'food',need:'かまど',desc:'空腹+40（最高品質）'},
+  {name:'果実パイ',mats:{果実:2,砂:1},type:'food',need:'かまど',desc:'空腹+30、ほっこりする'},
+  {name:'浄水',mats:{'水(生)':3,砂:1},type:'food',desc:'水分+20（リスクなし）'},
+  // --- 建材・中間素材 ---
+  {name:'木の板',mats:{木材:2},type:'material',desc:'加工した木材、丈夫な建材'},
+  {name:'石レンガ',mats:{石:3,砂:1},type:'material',desc:'耐久性の高い建材'},
+  {name:'鉄板',mats:{鉄:2},type:'material',desc:'鉄を薄く延ばした板'},
+  {name:'木炭',mats:{木材:3},type:'material',need:'かまど',desc:'高火力の燃料'},
+  {name:'ガラス',mats:{砂:4},type:'material',need:'かまど',desc:'砂を溶かして作ったガラス'},
+  {name:'布',mats:{繊維:3},type:'material',desc:'まとまった布地'},
+  {name:'皮ひも',mats:{繊維:2,草:1},type:'material',desc:'丈夫な紐'},
+  {name:'セメント',mats:{砂:3,石:2},type:'material',desc:'建設に使う接着剤'},
+  {name:'鉄くぎ',mats:{鉄:1,石:1},type:'material',desc:'木材の接合に使う'},
+  // --- 施設・設備 ---
+  {name:'物見台',mats:{'木の板':3,'皮ひも':2},type:'facility',desc:'霧の解消範囲常時+2'},
+  {name:'作業台',mats:{'木の板':4,'鉄くぎ':2},type:'facility',desc:'3素材同時クラフト解放（スロット+1）'},
+  {name:'医務室',mats:{布:3,'木の板':2},type:'facility',desc:'毎ターンHP+3（ベッドと累積）'},
+  {name:'食料庫',mats:{'木の板':4,草:2},type:'facility',desc:'食料のターン劣化なし'},
+  {name:'鍛冶場',mats:{'石レンガ':4,'鉄板':2},type:'facility',desc:'鉄鉱石1個→鉄1個（効率2倍）'},
+  {name:'農場',mats:{'木の板':2,草:4},type:'facility',desc:'毎ターン果実+1'},
+  {name:'採水場',mats:{'石レンガ':3,木材:2},type:'facility',desc:'毎ターン水(生)+3'},
+  {name:'灯台',mats:{'鉄板':3,'ガラス':2},type:'facility',desc:'脱出ルートが光る（海上の目印）'},
+  {name:'防波堤',mats:{'石レンガ':5,'セメント':2},type:'facility',desc:'風雨と夜の寒さを遮断（夜のHP損失なし）'},
+  {name:'自動農場',mats:{'鉄板':3,'木の板':2},type:'auto',need:'農場',desc:'毎ターン果実+2'},
+  // --- 脱出・エンディング ---
+  {name:'地図',mats:{布:2,'木炭':1},type:'escape',desc:'島全体の霧を解消'},
+  {name:'信号弾',mats:{'鉄板':1,草:3},type:'escape',desc:'（飾り）助けを呼ぶ信号'},
+  {name:'救命胴衣',mats:{布:3,木材:2},type:'escape',desc:'脱出時のHP消費なし'},
+  {name:'いかだ',mats:{'木の板':8,'皮ひも':4},type:'escape',desc:'緊急脱出（船より弱いが早い）'},
+  // 山岳素材を使ったレシピ
+  {name:'水晶の剣',mats:{'水晶':3,'木材':2},type:'tool',desc:'採集量全体+2、最強の道具'},
+  {name:'希少合金',mats:{'希少鉱石':2,'鉄':2},type:'material',desc:'最上位の金属素材'},
+  {name:'登山装備',mats:{'繊維':4,'鉄':2,'皮ひも':2},type:'tool',desc:'山岳に入れる（縄梯子上位）'},
+  {name:'水晶の羅針盤',mats:{'水晶':2,'鉄':1},type:'tool',desc:'最強コンパス、全マップ把握'},
+  {name:'希少合金の船',mats:{'希少合金':3,'木の板':10,'繊維':10},type:'escape',desc:'最速・最高スコアで脱出！'},
+  {name:'水晶のランタン',mats:{'水晶':1,'鉄':1},type:'tool',desc:'強烈な明かりと熱で夜の脅威を完全に無力化'},
+  {name:'リュック',mats:{繊維:6,'皮ひも':2},type:'tool',desc:'個人インベントリ+8'},
+];
+
+function initGame(){
+  G={
+    turn:7,pr:8,pc:4,hp:80,hunger:60,thirst:80,
+    inv:{'果実':2,'水(生)':2,'石':3,'草':2},invSlots:20,facilities:[],
+    depleted:{},// "r,c"->turnsLeft
+    gameOver:false,
+    homeR:8,homeC:4,
+    mountainExplored:false,
+    mapRevealed:false,
+    craftCount:0,// クラフト回数
+    prevHp:80,prevHunger:60,prevThirst:80, // for flash animation
+    encyclopedia:new Set(),
+    equip:{ slot0: null, slot1: null, slot2: null, slot3: null, slot4: null, slot5: null },
+    craftedTools: new Set(),
+    homeStorage: {},
+    homeStorageMax: 0,
+  };
+  ['果実','水(生)','石','草'].forEach(n=>G.encyclopedia.add(n));
+}
+
+// 20ターン1サイクル。7フェーズ: 早朝→朝→午前→昼→午後→夜→深夜
+// [r, g, b, alpha]。null = 無色
+const TIME_STEPS=[
+  // pos 0-1  早朝: やや青みがかった薄暗さ
+  {overlay:[15,15,55,0.28],badge:'🌅 早朝',cls:'badge-dawn'},
+  {overlay:[15,15,55,0.20],badge:'🌅 早朝',cls:'badge-dawn'},
+  // pos 2-3  朝: ごく薄い明るみ
+  {overlay:[200,190,150,0.07],badge:'🌤️ 朝',cls:'badge-morning'},
+  {overlay:[200,190,150,0.04],badge:'🌤️ 朝',cls:'badge-morning'},
+  // pos 4-6  午前: 昼に近い、ほぼ無色
+  {overlay:null,badge:'🌤️ 午前',cls:'badge-morning'},
+  {overlay:null,badge:'🌤️ 午前',cls:'badge-morning'},
+  {overlay:null,badge:'🌤️ 午前',cls:'badge-morning'},
+  // pos 7-9  昼: 午後と同じ薄い色合い
+  {overlay:[200,190,120,0.05],badge:'☀️ 昼',cls:'badge-day'},
+  {overlay:[200,190,120,0.05],badge:'☀️ 昼',cls:'badge-day'},
+  {overlay:[200,190,120,0.05],badge:'☀️ 昼',cls:'badge-day'},
+  // pos10-11  午後: 少しだけ色温度が下がる
+  {overlay:[150,145,120,0.08],badge:'🌤️ 午後',cls:'badge-morning'},
+  {overlay:[150,145,120,0.10],badge:'🌤️ 午後',cls:'badge-morning'},
+  // pos12-15  夜: 青みが増して暗くなる
+  {overlay:[10,12,45,0.25],badge:'🌙 夜',cls:'badge-night'},
+  {overlay:[8,10,42,0.33],badge:'🌙 夜',cls:'badge-night'},
+  {overlay:[5,8,38,0.38],badge:'🌙 夜',cls:'badge-night'},
+  {overlay:[4,6,35,0.42],badge:'🌙 夜',cls:'badge-night'},
+  // pos16-19  深夜: より暗い青
+  {overlay:[3,5,30,0.46],badge:'🌙 深夜',cls:'badge-night'},
+  {overlay:[3,5,30,0.46],badge:'🌙 深夜',cls:'badge-night'},
+  {overlay:[3,5,30,0.46],badge:'🌙 深夜',cls:'badge-night'},
+  {overlay:[8,8,45,0.38],badge:'🌙 深夜',cls:'badge-night'},
+];
+
+function getTimePhase(){
+  const pos=(G.turn-1)%20;
+  return TIME_STEPS[pos];
+}
+// isNight: 夜・深夜フェーズ（pos 12以降）
+function isNight(){
+  return (G.turn-1)%20>=12;
+}
+
+// TIME_PHASE_INFO は getTimePhase() から直接取るので不要だが参照箇所のため alias
+const TIME_PHASE_INFO=null; // 使用箇所を下記に移行
+
+const ITEM_CATEGORIES={};
+// tools
+['石斧','石のつるはし','釣り竿','鉄斧','鍬','石のナイフ','松明','木の弓','投石器','竹ざお','石のノコギリ','鉄のナイフ','鉄のつるはし','盾','木製バケツ','鉄バケツ','ランタン','コンパス','縄梯子','鉄の鎧','水晶の剣','登山装備','水晶の羅針盤','水晶のランタン'].forEach(n=>ITEM_CATEGORIES[n]='tool');
+// food
+['焼き魚','果実サラダ','煮沸水','保存食','果実','水(生)','魚','干し魚','貝のスープ','果実ジュース','スモーク魚','魚の塩漬け','木の実の酒','ハーブティー','野草サラダ','塩焼き魚','果実パイ','浄水'].forEach(n=>ITEM_CATEGORIES[n]='food');
+// escape
+['船の骨格','完成した船','地図','信号弾','救命胴衣','いかだ','希少合金の船'].forEach(n=>ITEM_CATEGORIES[n]='escape');
+// rest = mat
+
+const EQUIP_TOOLS = new Set(['石斧','鉄斧','石のつるはし','鉄のつるはし','釣り竿','竹ざお','石のナイフ','鉄のナイフ','縄梯子','登山装備','木の弓','投石器','石のノコギリ','鍬','松明','ランタン','防寒着','コンパス','水晶の剣','水晶の羅針盤','水晶のランタン','鉄の鎧','木製バケツ','鉄バケツ']);
+
+// 上位装備 → 下位装備（クラフト時に下位を装備から外して上位を装備）
+const TOOL_UPGRADES = {
+  '鉄斧': '石斧',
+  '鉄のつるはし': '石のつるはし',
+  '鉄のナイフ': '石のナイフ',
+  '登山装備': '縄梯子',
+  '釣り竿': '竹ざお',  // 釣り竿は竹ざおの上位
+  '鉄バケツ': '木製バケツ',
+};
+// 上位を作ったとき下位も「作成済み」とみなすための逆引き
+const TOOL_LOWER = {};
+for(const [upper, lower] of Object.entries(TOOL_UPGRADES)) TOOL_LOWER[upper] = lower;
+
+const GATHER_FLAVOR={
+  3:['ザクッ…大きな木を切り倒した！','バキバキッと枝を折って木材を得た','鬱蒼とした森から木材を切り出した'],
+  5:['ガツン！硬い岩を砕いた','カンカンと石を叩き割った','岩肌から良い石を見つけた'],
+  2:['サッサッと草を刈り取った','足元の草をむしり集めた','青々とした草を収穫した'],
+  1:['サラサラの砂を集めた','波打ち際で砂を掬った','砂浜を掘り返した'],
+  4:['川の水を汲み上げた','清らかな水を手に入れた','流れる水を容器に溜めた'],
+  7:['山肌を削って鉱物を掘り出した','険しい岩壁からキラリと光る石を見つけた','高山の鉱脈を掘り当てた']
+};
+
+function ic(n){return G.inv[n]||0}
+function totalInv(){let t=0;for(let k in G.inv)t+=G.inv[k];return t}
+function addItem(n,q){
+  let space=G.invSlots-totalInv();
+  let a=Math.min(q,space);
+  if(a<=0)return 0;
+  G.inv[n]=(G.inv[n]||0)+a;
+  return a;
+}
+function rmItem(n,q){
+  if((G.inv[n]||0)<q)return false;
+  G.inv[n]-=q;
+  if(G.inv[n]<=0)delete G.inv[n];
+  return true;
+}
+function hasTool(n){
+  if(G.inv[n]>0) return true;
+  return Object.values(G.equip).some(s=>s&&s.name===n);
+}
+function hasFac(n){return G.facilities.includes(n)}
+
+function toScreen(c,r){
+  const ox=480/2,oy=55;
+  return{x:ox+(c-r)*(TILE_W/2),y:oy+(c+r)*(TILE_H/2)};
+}
+function fromScreen(sx,sy){
+  const ox=480/2,oy=55;
+  const dx=sx-ox,dy=sy-oy;
+  const fc=(dx/(TILE_W/2)+dy/(TILE_H/2))/2;
+  const fr=(dy/(TILE_H/2)-dx/(TILE_W/2))/2;
+  return{c:Math.round(fc),r:Math.round(fr)};
+}
+
+function drawBlock(c,r,opts){
+  const p=toScreen(c,r);
+  const tw=TILE_W/2,th=TILE_H/2;
+  const sh=opts.sideH||BLOCK_SIDE_H;
+  const oy=opts.offsetY||0;
+
+  // Top face (diamond)
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y-th-oy);
+  ctx.lineTo(p.x+tw,p.y-oy);
+  ctx.lineTo(p.x,p.y+th-oy);
+  ctx.lineTo(p.x-tw,p.y-oy);
+  ctx.closePath();
+  ctx.fillStyle=opts.topColor;
+  ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.3)';
+  ctx.lineWidth=0.5;
+  ctx.stroke();
+
+  // Left face
+  ctx.beginPath();
+  ctx.moveTo(p.x-tw,p.y-oy);
+  ctx.lineTo(p.x,p.y+th-oy);
+  ctx.lineTo(p.x,p.y+th-oy+sh);
+  ctx.lineTo(p.x-tw,p.y-oy+sh);
+  ctx.closePath();
+  ctx.fillStyle=opts.leftColor;
+  ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.3)';
+  ctx.lineWidth=0.5;
+  ctx.stroke();
+
+  // Right face
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y+th-oy);
+  ctx.lineTo(p.x+tw,p.y-oy);
+  ctx.lineTo(p.x+tw,p.y-oy+sh);
+  ctx.lineTo(p.x,p.y+th-oy+sh);
+  ctx.closePath();
+  ctx.fillStyle=opts.rightColor;
+  ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.3)';
+  ctx.lineWidth=0.5;
+  ctx.stroke();
+}
+
+function drawTileObject(c,r,type,isDepleted){
+  const p=toScreen(c,r);
+  const oy=BLOCK_STYLES[type]?.offsetY||0;
+  const topY=p.y-oy-2;
+
+  ctx.font='16px serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='bottom';
+
+  if(type===3){
+    if(isDepleted){
+      ctx.font='14px serif';
+      ctx.fillText('🪵',p.x,topY);
+    } else {
+      ctx.fillStyle='#8B4513';
+      ctx.fillRect(p.x-2,topY-14,4,10);
+      ctx.font='18px serif';
+      ctx.fillText('🌲',p.x,topY-4);
+    }
+  } else if(type===4){
+    ctx.font='12px serif';
+    ctx.globalAlpha=0.7;
+    ctx.fillText('〜',p.x,topY+4);
+    ctx.globalAlpha=1.0;
+  } else if(type===5){
+    ctx.font='14px serif';
+    ctx.fillText('🪨',p.x,topY);
+  } else if(type===2){
+    ctx.font='11px serif';
+    ctx.globalAlpha=0.8;
+    ctx.fillText('🌿',p.x,topY+2);
+    ctx.globalAlpha=1.0;
+  } else if(type===7){
+    // 雪の頂上
+    ctx.font='14px serif';
+    ctx.fillText('🏔️',p.x,topY-8);
+  }
+}
+
+function drawHomeIcons(c,r){
+  const p=toScreen(c,r);
+  const oy=BLOCK_STYLES[6]?.offsetY||0;
+  const topY=p.y-oy;
+
+  ctx.font='12px serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='bottom';
+  ctx.fillText('🏕️',p.x,topY-4);
+
+  if(G.facilities.length>0){
+    let icons=G.facilities.map(f=>ITEMS_EMOJI[f]||'📦').join('');
+    ctx.font='7px serif';
+    ctx.fillText(icons,p.x,topY+8);
+  }
+}
+
+function drawPlayer(){
+  const p=toScreen(G.pc,G.pr);
+  const t=tileAt(G.pr,G.pc);
+  const oy=BLOCK_STYLES[t]?.offsetY||0;
+  const topY=p.y-oy;
+
+  // タイルの左寄りに立つ（等角投影での「左前」= x-10, y+4）
+  const px=p.x-10, py=topY-2;
+
+  // 足元の影
+  ctx.beginPath();
+  ctx.ellipse(px,py+2,7,3,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.45)';
+  ctx.fill();
+
+  // キャラ本体（木のオブジェクトと同等のサイズ感）
+  ctx.font='24px serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='bottom';
+  // 白い縁取りで視認性UP
+  ctx.shadowColor='rgba(255,255,255,0.8)';
+  ctx.shadowBlur=6;
+  ctx.fillText('🧍',px,py);
+  ctx.shadowBlur=0;
+}
+
+function render(){
+  ctx.clearRect(0,0,480,540);
+  ctx.fillStyle='#0a1a2a';
+  ctx.fillRect(0,0,480,540);
+
+  const phase=getTimePhase();
+
+  // 隣接タイルのボブ量（元の位置から少しだけ浮き上がって戻る、0〜3px）
+  const bob=(1-Math.cos(Date.now()/400))/2*3;
+
+  for(let r=0;r<10;r++){
+    for(let c=0;c<10;c++){
+      const t=tileAt(r,c);
+      const style=BLOCK_STYLES[t]||BLOCK_STYLES[0];
+      const isAdj=(Math.abs(r-G.pr)+Math.abs(c-G.pc)===1)&&t!==0;
+      const isCurrent=(r===G.pr&&c===G.pc);
+
+      const key=r+','+c;
+      const isDepleted=!!(G.depleted&&G.depleted[key]&&G.depleted[key]>0);
+      let drawStyle=style;
+      if(t===3&&isDepleted){
+        drawStyle={topColor:'#6a5030',leftColor:'#5a4020',rightColor:'#4a3010',sideH:style.sideH,offsetY:style.offsetY};
+      }
+
+      if(isAdj){
+        // タイル全体をボブ分だけ上にずらして描画
+        ctx.save();
+        ctx.translate(0,-bob);
+        drawBlock(c,r,drawStyle);
+        // 緑ハイライト（移動可能マーカー）
+        const p=toScreen(c,r);
+        const tw=TILE_W/2,th=TILE_H/2,oy=style.offsetY||0;
+        ctx.beginPath();
+        ctx.moveTo(p.x,p.y-th-oy);ctx.lineTo(p.x+tw,p.y-oy);
+        ctx.lineTo(p.x,p.y+th-oy);ctx.lineTo(p.x-tw,p.y-oy);
+        ctx.closePath();
+        ctx.fillStyle='rgba(100,255,120,0.30)';
+        ctx.fill();
+        drawTileObject(c,r,t,isDepleted);
+        if(t===6&&G.facilities) drawHomeIcons(c,r);
+        ctx.restore();
+      } else {
+        drawBlock(c,r,drawStyle);
+
+        if(isCurrent){
+          const p=toScreen(c,r);
+          const tw=TILE_W/2,th=TILE_H/2,oy=style.offsetY||0;
+          ctx.beginPath();
+          ctx.moveTo(p.x,p.y-th-oy);ctx.lineTo(p.x+tw,p.y-oy);
+          ctx.lineTo(p.x,p.y+th-oy);ctx.lineTo(p.x-tw,p.y-oy);
+          ctx.closePath();
+          ctx.strokeStyle='rgba(255,255,255,0.85)';
+          ctx.lineWidth=2;
+          ctx.stroke();
+        }
+
+        drawTileObject(c,r,t,isDepleted);
+        if(t===6&&G.facilities) drawHomeIcons(c,r);
+      }
+    }
+  }
+
+  // 時間帯カラーオーバーレイ
+  const phaseOverlay=phase?.overlay;
+  if(phaseOverlay){
+    ctx.fillStyle=`rgba(${phaseOverlay[0]},${phaseOverlay[1]},${phaseOverlay[2]},${phaseOverlay[3]})`;
+    ctx.fillRect(0,0,480,420);
+  }
+
+  drawPlayer();
+}
+
+function log(msg,cls){
+  const lp=document.getElementById('logPanelBottom');
+  const p=document.createElement('p');
+  p.textContent=msg;
+  if(cls)p.className=cls;
+  lp.appendChild(p);
+  lp.scrollTop=lp.scrollHeight;
+  // keep last 50
+  while(lp.children.length>50)lp.removeChild(lp.firstChild);
+}
+
+function flashStat(id){
+  const el=document.getElementById(id).closest('.stat');
+  el.classList.remove('stat-flash');
+  void el.offsetWidth;
+  el.classList.add('stat-flash');
+}
+
+function updateUI(){
+  // 時間帯バッジ
+  const dnBadge=document.getElementById('dayNightBadge');
+  const phInfo=getTimePhase();
+  dnBadge.className=phInfo.cls;
+  dnBadge.textContent=phInfo.badge;
+  document.getElementById('turnInfo').innerHTML='T'+G.turn+' '+dnBadge.outerHTML;
+
+  // status flash on decrease
+  if(G.hp<G.prevHp) flashStat('hpBar');
+  if(G.hunger<G.prevHunger) flashStat('hunBar');
+  if(G.thirst<G.prevThirst) flashStat('thiBar');
+  G.prevHp=G.hp;G.prevHunger=G.hunger;G.prevThirst=G.thirst;
+
+  document.getElementById('hpVal').textContent=G.hp;
+  document.getElementById('hpBar').style.width=G.hp+'%';
+  document.getElementById('hunVal').textContent=G.hunger;
+  document.getElementById('hunBar').style.width=G.hunger+'%';
+  document.getElementById('thiVal').textContent=G.thirst;
+  document.getElementById('thiBar').style.width=G.thirst+'%';
+
+  // danger blink
+  document.getElementById('hpBar').closest('.stat').classList.toggle('stat-danger',G.hp<=20);
+  document.getElementById('hunBar').closest('.stat').classList.toggle('stat-danger',G.hunger<=20);
+  document.getElementById('thiBar').closest('.stat').classList.toggle('stat-danger',G.thirst<=20);
+
+  const t=tileAt(G.pr,G.pc);
+  document.getElementById('currentTile').textContent='現在地: '+TILE_NAMES[t]+' '+TILE_EMOJI[t];
+
+  // facility info
+  const fi=document.getElementById('facilityInfo');
+  if(G.facilities.length>0){
+    fi.textContent='設備: '+G.facilities.join(', ');
+  } else {
+    fi.textContent='';
+  }
+
+  // inventory with full warning + category colors
+  const full=totalInv()>=G.invSlots;
+  const titleEl=document.getElementById('invTitle');
+  titleEl.textContent='インベントリ ('+totalInv()+'/'+G.invSlots+')'+(full?' ⚠️満杯！':'');
+  titleEl.style.color=full?'#f88':'#aaa';
+
+  const il=document.getElementById('invList');
+  il.innerHTML='';
+  for(let k in G.inv){
+    if(G.inv[k]<=0)continue;
+    const d=document.createElement('div');
+    const cat=ITEM_CATEGORIES[k]||'material';
+    d.className='inv-item cat-'+cat;
+    d.innerHTML=
+      '<div class="inv-emoji">'+(ITEMS_EMOJI[k]||'📦')+'</div>'+
+      '<div class="inv-name">'+k+'</div>'+
+      '<div class="inv-count">×'+G.inv[k]+'</div>';
+    // ダブルクリック処理
+    (function(itemKey){
+      d.ondblclick = () => {
+        const cat2 = ITEM_CATEGORIES[itemKey] || 'material';
+        if (EQUIP_TOOLS.has(itemKey)) {
+          const emptySlot = Object.keys(G.equip).find(s => G.equip[s] === null);
+          if (emptySlot) {
+            rmItem(itemKey, 1);
+            G.equip[emptySlot] = { name: itemKey };
+            log('⚔️ ' + itemKey + 'を装備した！', 'good');
+            updateUI();
+          } else {
+            log('⚠️ 装備スロットが満杯です（最大4つ）', 'warn');
+          }
+        } else if (cat2 === 'food') {
+          executeUseItem(itemKey);
+        } else {
+          showDropConfirm(itemKey);
+        }
+      };
+    })(k);
+    il.appendChild(d);
+  }
+
+  // ホーム倉庫ビュー
+  const atHome = tileAt(G.pr,G.pc)===6;
+  const hsView = document.getElementById('homeStorageView');
+  if(atHome && G.homeStorageMax>0){
+    hsView.style.display='block';
+    document.getElementById('homeStorageViewTitle').textContent=
+      '📦 ホーム倉庫 ('+totalHomeStorage()+'/'+G.homeStorageMax+') — クラフトにも使えます';
+    const hsItems=document.getElementById('homeStorageViewItems');
+    hsItems.innerHTML='';
+    const storageKeys=Object.keys(G.homeStorage).filter(k=>G.homeStorage[k]>0);
+    if(storageKeys.length===0){
+      hsItems.innerHTML='<div style="font-size:10px;color:#444;padding:4px">空っぽ</div>';
+    } else {
+      storageKeys.forEach(name=>{
+        const d=document.createElement('div');
+        const cat=ITEM_CATEGORIES[name]||'material';
+        d.className='inv-item cat-'+cat;
+        d.style.cssText='width:64px;height:46px;cursor:pointer;';
+        d.title='ダブルクリック: 使用 / 捨てる';
+        d.innerHTML='<div class="inv-emoji">'+(ITEMS_EMOJI[name]||'📦')+'</div>'+
+          '<div class="inv-name">'+name+'</div>'+
+          '<div class="inv-count">×'+G.homeStorage[name]+'</div>';
+        // ダブルクリックで倉庫から使用/捨て
+        d.ondblclick=(n=>{
+          return ()=>{
+            const cat2=ITEM_CATEGORIES[n]||'material';
+            if(cat2==='food'){
+              // 倉庫から取り出して即使用
+              const u=USABLE_DEFS.find(u=>u.name===n);
+              if(u&&(G.homeStorage[n]||0)>0){
+                G.homeStorage[n]--;
+                if(G.homeStorage[n]<=0)delete G.homeStorage[n];
+                u.fn();
+                closeAllModals();
+                updateUI();
+              }
+            } else {
+              // 倉庫から直接捨て確認（インベントリ経由しない）
+              if((G.homeStorage[n]||0)>0){
+                showDropConfirmFromStorage(n);
+              }
+            }
+          };
+        })(name);
+        hsItems.appendChild(d);
+      });
+    }
+  } else {
+    hsView.style.display='none';
+  }
+
+  updateActions();
+  render();
+  renderEquip();
+}
+
+function updateActions(){
+  const ab=document.getElementById('actionBtns');
+  ab.innerHTML='';
+  if(G.gameOver)return;
+  const t=tileAt(G.pr,G.pc);
+  const baseTile=MAP[G.pr][G.pc];
+  const atHome=t===6;
+
+  // ── 上段: 採集・クラフト・図鑑（常に表示）──
+  const row1=document.createElement('div');
+  row1.style.cssText='display:flex;gap:6px;width:100%;margin-bottom:4px;';
+
+  const canGather=(baseTile>=1&&baseTile<=5)||baseTile===7;
+  const gatherLabels={1:'採集(砂・貝殻)',2:'採集(草・繊維)',3:'採集(木材・果実)',4:'採集(水)',5:'採集(石・鉄鉱石)',7:'採集(水晶・希少鉱石)'};
+  const gatherB=btn(canGather?(gatherLabels[baseTile]||'採集'):'採集',()=>doGather());
+  if(!canGather)gatherB.disabled=true;
+  gatherB.style.flex='1';
+  row1.appendChild(gatherB);
+
+  const craftB=btn('🔨 クラフト',()=>openCraft());
+  craftB.id='actionCraftBtn'; craftB.style.flex='1';
+  row1.appendChild(craftB);
+
+  const encycB=btn('📖 図鑑',()=>openEncyc());
+  encycB.id='actionEncycBtn'; encycB.style.flex='1';
+  row1.appendChild(encycB);
+
+  ab.appendChild(row1);
+
+  // ── 下段: 開放済みの設備・脱出（解放時のみ表示）──
+  const row2=document.createElement('div');
+  row2.style.cssText='display:flex;gap:6px;width:100%;flex-wrap:wrap;';
+
+  if(atHome&&hasFac('ベッド')&&isNight()){
+    const sleepB=btn('🛏️ 睡眠する（朝まで）',()=>doSleep());
+    sleepB.style.cssText='flex:1;background:#1a2a4a;color:#88aaff;';
+    row2.appendChild(sleepB);
+  }
+  if(atHome&&G.homeStorageMax>0){
+    const storageB=btn('📦 倉庫を開く',()=>openHomeStorage());
+    storageB.style.flex='1';
+    row2.appendChild(storageB);
+  }
+  if(atHome&&hasFac('井戸')){
+    const wellB=btn('🪣 井戸で水汲み',()=>doWell());
+    wellB.style.flex='1';
+    row2.appendChild(wellB);
+  }
+  if(baseTile===1&&ic('希少合金の船')>0){
+    const eb=btn('⛵ 最高の船で脱出！',()=>doEscapeBest());
+    eb.className='btn-escape'; eb.style.flex='1'; row2.appendChild(eb);
+  } else if(baseTile===1&&ic('完成した船')>0){
+    const eb=btn('⛵ 脱出！',()=>doEscape());
+    eb.className='btn-escape'; eb.style.flex='1'; row2.appendChild(eb);
+  } else if(baseTile===1&&ic('いかだ')>0){
+    const eb=btn('🛶 いかだで脱出',()=>doEscapeRaft());
+    eb.className='btn-escape'; eb.style.flex='1'; row2.appendChild(eb);
+  }
+
+  if(row2.children.length>0) ab.appendChild(row2);
+}
+
+function btn(text,fn){
+  const b=document.createElement('button');
+  b.textContent=text;b.onclick=fn;return b;
+}
+
+function showGatherToast(gains){
+  // gains: [{emoji,name,qty}]
+  const toast=document.getElementById('gatherToast');
+  toast.innerHTML='';
+  gains.forEach((g,i)=>{
+    const el=document.createElement('div');
+    el.className='gather-item';
+    el.style.animationDelay=(i*0.15)+'s';
+    el.textContent=g.emoji+' +'+g.name+'×'+g.qty;
+    toast.appendChild(el);
+  });
+  // 自動クリア
+  clearTimeout(showGatherToast._timer);
+  showGatherToast._timer=setTimeout(()=>{toast.innerHTML='';},2800);
+}
+
+function updateActionBtns(){
+  const craftOpen=document.getElementById('craftModal')?.style.display==='flex';
+  const encycOpen=document.getElementById('encycModal')?.style.display==='flex';
+  const cb=document.getElementById('actionCraftBtn');
+  const eb=document.getElementById('actionEncycBtn');
+  if(cb) cb.classList.toggle('active-modal',craftOpen);
+  if(eb) eb.classList.toggle('active-modal',encycOpen);
+}
+
+function doGather(){
+  closeAllModals();
+  const t=MAP[G.pr][G.pc];
+  const key=G.pr+','+G.pc;
+  const flav=GATHER_FLAVOR[t];
+  const flavor=flav?flav[Math.floor(Math.random()*flav.length)]:'';
+  const gains=[];
+  function gain(emoji,name,qty){
+    const a=addItem(name,qty);
+    if(a>0){G.encyclopedia.add(name);gains.push({emoji,name,qty:a});}
+    return a;
+  }
+
+  if(t===3){// forest
+    if(G.depleted[key]&&G.depleted[key]>0){
+      log('⚠️ この森は枯渇中… あと'+G.depleted[key]+'ターン','warn');
+      return;
+    }
+    let qty=2+Math.floor(Math.random()*2);
+    if(hasTool('鉄斧'))qty+=2;
+    else if(hasTool('石斧'))qty+=1;
+    if(!gain('🌲','木材',qty)){log('⚠️ インベントリが一杯！','warn');return;}
+    const fruitRoll=Math.random(); if(fruitRoll<0.88) gain('🍎','果実',fruitRoll<0.3?2:1);
+    G.depleted[key]=10;
+  } else if(t===4){// river
+    if(!gain('💧','水(生)',2)){log('⚠️ インベントリが一杯！','warn');return;}
+    if(hasTool('釣り竿')) gain('🐟','魚',1);
+    else if(hasTool('竹ざお')&&Math.random()<0.4) gain('🐟','魚',1); // 竹ざおは40%
+  } else if(t===5){// rock
+    let qty=2+Math.floor(Math.random()*2);
+    if(!gain('🪨','石',qty)){log('⚠️ インベントリが一杯！','warn');return;}
+    if(hasTool('石のつるはし')||hasTool('鉄のつるはし')) gain('⛏️','鉄鉱石',1);
+  } else if(t===1){// beach
+    if(!gain('🏖️','砂',2)){log('⚠️ インベントリが一杯！','warn');return;}
+    if(Math.random()<0.3) gain('🐚','貝殻',1);
+  } else if(t===2){// grass
+    let qty=2+Math.floor(Math.random()*2);
+    if(!gain('🌿','草',qty)){log('⚠️ インベントリが一杯！','warn');return;}
+    const fiberRoll=Math.random(); if(fiberRoll<0.65) gain('🧵','繊維',fiberRoll<0.2?2:1);
+  } else if(t===7){// mountain
+    if(Math.random()<0.4) gain('💎','水晶',1);
+    if(Math.random()<0.25) gain('✨','希少鉱石',1);
+    gain('🪨','石',1+Math.floor(Math.random()*2));
+  }
+
+  if(gains.length>0){
+    const summary=gains.map(g=>g.emoji+g.name+'×'+g.qty).join('、');
+    log('🎒 '+flavor+' '+summary,'good');
+    showGatherToast(gains);
+  }
+  endTurn();
+}
+
+function doSleep(){
+  if(!isNight()){log('💤 まだ夜ではない。夜になってから眠ろう。','warn');return;}
+  if(!hasFac('ベッド')){log('🛏️ ベッドがないと眠れない。','warn');return;}
+  closeAllModals();
+  const pos=(G.turn-1)%20;
+  const turnsLeft=20-pos; // 朝（次のサイクル先頭）まで残り
+  let hungerLost=0,thirstLost=0;
+  for(let i=0;i<turnsLeft;i++){
+    G.turn++;
+    // 眠っている間は消費を半減
+    G.hunger=Math.max(0,G.hunger-1);
+    G.thirst=Math.max(0,G.thirst-1);
+    hungerLost++;thirstLost++;
+    // 自動設備は通常通り稼働
+    if(hasFac('自動伐採機')){addItem('木材',1);}
+    if(hasFac('自動採石機')){addItem('石',1);}
+    if(hasFac('貯水タンク')){addItem('水(生)',2);}
+    if(hasFac('農場')){addItem('果実',1);}
+    if(hasFac('自動農場')){addItem('果実',2);}
+    if(hasFac('採水場')){addItem('水(生)',3);}
+    if(hasFac('医務室')){G.hp=Math.min(100,G.hp+3);}
+    // 森再生
+    for(let k in G.depleted){G.depleted[k]--;if(G.depleted[k]<=0)delete G.depleted[k];}
+  }
+  log(`🛏️ ベッドで眠った。朝まで${turnsLeft}ターン経過。（空腹-${hungerLost} 水分-${thirstLost}）`,'good');
+  log('🌅 夜が明けた。','good');
+  log(`── ターン${G.turn} [空腹:${G.hunger} 水分:${G.thirst} HP:${G.hp}] ──`,'turn-sep');
+  saveGame();
+  updateUI();
+}
+
+function doWell(){
+  let a=addItem('水(生)',2);
+  if(a>0){log('🪣 井戸から水(生)×'+a+'を汲んだ','good');endTurn();}
+  else log('⚠️⚠️ インベントリが一杯！','warn');
+}
+
+
+function canCraft(r){
+  const atHome=tileAt(G.pr,G.pc)===6;
+  for(let m in r.mats){
+    const have=(G.inv[m]||0)+(atHome?(G.homeStorage[m]||0):0);
+    if(have<r.mats[m])return false;
+  }
+  // 装備品は既に作成済みなら作れない
+  if(EQUIP_TOOLS.has(r.name) && G.craftedTools && G.craftedTools.has(r.name)) return false;
+  // リュックは既に拡張済みなら作れない
+  if(r.name==='リュック' && G.invSlots>20) return false;
+  if(r.need){
+    if(r.need==='かまど'&&!hasFac('かまど'))return false;
+    if(r.need==='鉄斧'&&!hasTool('鉄斧'))return false;
+    if(r.need==='農場'&&!hasFac('農場'))return false;
+    // 設備（かまど等）を必要とするレシピはホームでのみ作れる
+    if((r.need==='かまど'||r.need==='農場') && tileAt(G.pr,G.pc)!==6) return false;
+  }
+  if((r.type==='facility'||r.type==='auto'||r.type==='escape')&&G.homeR===null)return false;
+  if(r.type==='facility'&&hasFac(r.name))return false;
+  if(r.type==='auto'&&hasFac(r.name))return false;
+  if(r.type==='escape'&&ic(r.name)>0)return false;
+  return true;
+}
+
+function maxCraftSlots(){ return tileAt(G.pr,G.pc)===6 ? 3 : 2; }
+let craftSlots = [null, null];
+
+function closeAllModals(){
+  document.getElementById('craftModal').style.display='none';
+  document.getElementById('useModal').style.display='none';
+  document.getElementById('encycModal').style.display='none';
+  document.getElementById('dropConfirmModal').style.display='none';
+  document.getElementById('homeStorageModal').style.display='none';
+  craftSlots=new Array(maxCraftSlots()).fill(null);
+  updateActionBtns();
+}
+
+function totalHomeStorage(){
+  return Object.values(G.homeStorage).reduce((s,v)=>s+v,0);
+}
+
+function openHomeStorage(){
+  const already=document.getElementById('homeStorageModal').style.display==='flex';
+  closeAllModals();
+  if(already)return;
+  renderHomeStorageModal();
+  document.getElementById('homeStorageModal').style.display='flex';
+}
+
+function closeHomeStorage(){
+  document.getElementById('homeStorageModal').style.display='none';
+}
+
+// 倉庫に1個預ける
+function depositOne(n){
+  if((G.inv[n]||0)<=0)return;
+  if(totalHomeStorage()>=G.homeStorageMax){log('⚠️ 倉庫が満杯です！','warn');return;}
+  G.homeStorage[n]=(G.homeStorage[n]||0)+1;
+  rmItem(n,1);
+}
+// 倉庫からアイテムを1個取り出す
+function withdrawOne(n){
+  if((G.homeStorage[n]||0)<=0)return;
+  if(totalInv()>=G.invSlots){log('⚠️ インベントリが満杯です！','warn');return;}
+  addItem(n,1);
+  G.homeStorage[n]--;
+  if(G.homeStorage[n]<=0)delete G.homeStorage[n];
+}
+// 指定アイテムを全量倉庫に預ける
+function depositAll(n){
+  const qty=G.inv[n]||0;
+  for(let i=0;i<qty;i++){
+    if(totalHomeStorage()>=G.homeStorageMax)break;
+    G.homeStorage[n]=(G.homeStorage[n]||0)+1;
+    rmItem(n,1);
+  }
+}
+// 指定アイテムを全量取り出す
+function withdrawAll(n){
+  const qty=G.homeStorage[n]||0;
+  for(let i=0;i<qty;i++){
+    if(totalInv()>=G.invSlots)break;
+    addItem(n,1);
+    G.homeStorage[n]--;
+  }
+  if((G.homeStorage[n]||0)<=0)delete G.homeStorage[n];
+}
+// 所持品を全部倉庫へ（容量が足りなければ後ろのアイテムが手元に残る）
+function depositAllInv(){
+  const keys=Object.keys(G.inv).filter(k=>G.inv[k]>0);
+  for(const n of keys){
+    const qty=G.inv[n]||0;
+    for(let i=0;i<qty;i++){
+      if(totalHomeStorage()>=G.homeStorageMax)break;
+      G.homeStorage[n]=(G.homeStorage[n]||0)+1;
+      rmItem(n,1);
+    }
+  }
+  log('📦 所持品を倉庫に預けました','good');
+}
+
+function renderHomeStorageModal(){
+  const modal=document.getElementById('homeStorageModal');
+  modal.innerHTML='';
+
+  // ── タイトルバー ──
+  const title=document.createElement('div');
+  title.style.cssText='display:flex;align-items:center;padding:6px 10px;border-bottom:1px solid #30363d;flex-shrink:0;gap:6px;';
+  title.innerHTML='<span style="color:#f0c040;font-size:13px;font-weight:bold;flex:1">📦 ホーム倉庫 ('+totalHomeStorage()+'/'+G.homeStorageMax+')</span>';
+  // 一括預けボタン
+  const depAllBtn=document.createElement('button');
+  depAllBtn.textContent='所持品をすべて預ける';
+  depAllBtn.style.cssText='background:#1f3a5a;border:none;color:#58a6ff;border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;';
+  depAllBtn.onclick=()=>{depositAllInv();renderHomeStorageModal();updateUI();};
+  title.appendChild(depAllBtn);
+  const closeBtn=document.createElement('button');
+  closeBtn.style.cssText='background:none;border:none;color:#8b949e;font-size:18px;cursor:pointer;margin-left:4px;';
+  closeBtn.textContent='×';
+  closeBtn.onclick=closeHomeStorage;
+  title.appendChild(closeBtn);
+  modal.appendChild(title);
+
+  // ── ボディ（左右分割）──
+  const body=document.createElement('div');
+  body.style.cssText='display:flex;flex:1;overflow:hidden;';
+
+  // 左: 所持品 → 倉庫
+  const left=document.createElement('div');
+  left.style.cssText='flex:1;display:flex;flex-direction:column;border-right:1px solid #30363d;overflow:hidden;';
+  left.innerHTML='<div style="font-size:10px;color:#8b949e;padding:4px 8px;flex-shrink:0;">所持品 → 倉庫へ預ける</div>';
+  const leftList=document.createElement('div');
+  leftList.style.cssText='flex:1;overflow-y:auto;padding:4px;display:flex;flex-direction:column;gap:2px;';
+
+  const invKeys=Object.keys(G.inv).filter(k=>G.inv[k]>0);
+  if(invKeys.length===0){
+    leftList.innerHTML='<div style="color:#555;font-size:11px;text-align:center;padding:12px;">所持品なし</div>';
+  } else {
+    invKeys.forEach(name=>{
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;justify-content:space-between;align-items:center;background:#21262d;border-radius:4px;padding:3px 6px;gap:4px;';
+      const label=document.createElement('span');
+      label.style.cssText='font-size:11px;color:#ccc;flex:1;';
+      label.textContent=(ITEMS_EMOJI[name]||'')+name+' ×'+G.inv[name];
+      row.appendChild(label);
+      // ×1 預ける
+      const b1=document.createElement('button');
+      b1.textContent='+1';
+      b1.style.cssText='background:#1f3a5a;border:none;color:#58a6ff;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;';
+      b1.onclick=(n=>()=>{depositOne(n);renderHomeStorageModal();updateUI();})(name);
+      // 全部預ける
+      const bAll=document.createElement('button');
+      bAll.textContent='全部';
+      bAll.style.cssText='background:#1a3050;border:none;color:#58a6ff;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;';
+      bAll.onclick=(n=>()=>{depositAll(n);renderHomeStorageModal();updateUI();})(name);
+      row.appendChild(b1);
+      row.appendChild(bAll);
+      leftList.appendChild(row);
+    });
+  }
+  left.appendChild(leftList);
+
+  // 右: 倉庫 → 所持品
+  const right=document.createElement('div');
+  right.style.cssText='flex:1;display:flex;flex-direction:column;overflow:hidden;';
+  right.innerHTML='<div style="font-size:10px;color:#8b949e;padding:4px 8px;flex-shrink:0;">倉庫 → 取り出す</div>';
+  const rightList=document.createElement('div');
+  rightList.style.cssText='flex:1;overflow-y:auto;padding:4px;display:flex;flex-direction:column;gap:2px;';
+
+  const storageKeys=Object.keys(G.homeStorage).filter(k=>G.homeStorage[k]>0);
+  if(storageKeys.length===0){
+    rightList.innerHTML='<div style="color:#555;font-size:11px;text-align:center;padding:12px;">倉庫は空</div>';
+  } else {
+    storageKeys.forEach(name=>{
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;justify-content:space-between;align-items:center;background:#21262d;border-radius:4px;padding:3px 6px;gap:4px;';
+      const label=document.createElement('span');
+      label.style.cssText='font-size:11px;color:#ccc;flex:1;';
+      label.textContent=(ITEMS_EMOJI[name]||'')+name+' ×'+G.homeStorage[name];
+      row.appendChild(label);
+      // ×1 取り出し
+      const b1=document.createElement('button');
+      b1.textContent='+1';
+      b1.style.cssText='background:#1a3520;border:none;color:#3fb950;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;';
+      b1.onclick=(n=>()=>{withdrawOne(n);renderHomeStorageModal();updateUI();})(name);
+      // 全部取り出し
+      const bAll=document.createElement('button');
+      bAll.textContent='全部';
+      bAll.style.cssText='background:#162c1a;border:none;color:#3fb950;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;';
+      bAll.onclick=(n=>()=>{withdrawAll(n);renderHomeStorageModal();updateUI();})(name);
+      row.appendChild(b1);
+      row.appendChild(bAll);
+      rightList.appendChild(row);
+    });
+  }
+  right.appendChild(rightList);
+
+  body.appendChild(left);
+  body.appendChild(right);
+  modal.appendChild(body);
+}
+
+function openCraft() {
+  const already=document.getElementById('craftModal').style.display==='flex';
+  closeAllModals();
+  if(already)return;
+  craftSlots = new Array(maxCraftSlots()).fill(null);
+  renderCraftModal();
+  document.getElementById('craftModal').style.display = 'flex';
+  updateActionBtns();
+}
+
+function closeCraft() {
+  document.getElementById('craftModal').style.display = 'none';
+  craftSlots = new Array(maxCraftSlots()).fill(null);
+  updateActionBtns();
+}
+
+function renderCraftModal() {
+  renderCraftableList();
+}
+
+function renderCraftInv() {
+  const el = document.getElementById('craftInvSlots');
+  el.innerHTML = '';
+  const usedCounts = {};
+  craftSlots.forEach(s => { if(s) usedCounts[s.name] = (usedCounts[s.name]||0) + s.count; });
+
+  // インベントリのアイテム
+  for(let name in G.inv) {
+    if(G.inv[name] <= 0) continue;
+    const available = (G.inv[name]||0) - (usedCounts[name]||0);
+    const btn = document.createElement('button');
+    btn.className = 'craft-inv-btn' + (available <= 0 ? ' used' : '');
+    btn.textContent = (ITEMS_EMOJI[name]||'') + name + ' x' + G.inv[name];
+    if(available > 0) btn.onclick = () => addToSlot(name);
+    el.appendChild(btn);
+  }
+
+  // 装備中のアイテム（スロットからも選択可能に）
+  Object.values(G.equip).forEach(s => {
+    if(!s) return;
+    const name = s.name;
+    const already = el.querySelector(`[data-equip="${name}"]`);
+    if(already) return; // 重複防止
+    const btn = document.createElement('button');
+    btn.className = 'craft-inv-btn';
+    btn.setAttribute('data-equip', name);
+    btn.textContent = '⚔️' + (ITEMS_EMOJI[name]||'') + name + ' (装備中)';
+    btn.onclick = () => addToSlot(name);
+    el.appendChild(btn);
+  });
+}
+
+function addToSlot(name) {
+  // 装備中なら使用可能数に1追加
+  const equipCount = Object.values(G.equip).filter(s=>s&&s.name===name).length;
+  const invCount = (G.inv[name]||0);
+  const totalAvailable = invCount + equipCount;
+  // 既存スロットに追加
+  const usedCounts = {};
+  craftSlots.forEach(s => { if(s) usedCounts[s.name] = (usedCounts[s.name]||0) + s.count; });
+  if(craftSlots.some(s=>s&&s.name===name)) {
+    for(let i=0;i<craftSlots.length;i++) {
+      if(craftSlots[i]&&craftSlots[i].name===name) {
+        if((usedCounts[name]||0) < totalAvailable) {
+          craftSlots[i].count++;
+          renderCraftModal();
+        }
+        return;
+      }
+    }
+  }
+  // 空スロットへ
+  for(let i=0;i<craftSlots.length;i++) {
+    if(!craftSlots[i]) {
+      craftSlots[i] = {name, count:1};
+      renderCraftModal();
+      return;
+    }
+  }
+}
+
+function clearSlot(i) {
+  craftSlots[i] = null;
+  renderCraftModal();
+}
+
+function renderCraftSlots() {
+  const container = document.getElementById('craftSlotsContainer');
+  container.innerHTML = '';
+  craftSlots.forEach((s, i) => {
+    if(i > 0) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'font-size:12px;color:#555;';
+      sep.textContent = '＋';
+      container.appendChild(sep);
+    }
+    const el = document.createElement('div');
+    el.className = s ? 'craft-slot filled' : 'craft-slot';
+    el.onclick = () => clearSlot(i);
+    if(s) {
+      el.innerHTML = '<span>' + (ITEMS_EMOJI[s.name]||'') + '</span><span class="slot-count">x'+s.count+'</span>';
+    } else {
+      el.innerHTML = '<span style="color:#444;font-size:13px">空</span>';
+    }
+    container.appendChild(el);
+  });
+  // スロット数の説明（既存ノートを再利用）
+  let note = document.getElementById('craftSlotNote');
+  if(!note) {
+    note = document.createElement('div');
+    note.id = 'craftSlotNote';
+    note.style.cssText = 'font-size:9px;color:#555;text-align:center;padding:2px 0;';
+    container.parentElement.insertBefore(note, container);
+  }
+  note.textContent = tileAt(G.pr,G.pc)===6 ? '🏕️ ホーム: 3スロット' : '🌿 フィールド: 2スロット';
+}
+
+function evalCraftResult() {
+  const btn = document.getElementById('craftExecBtn');
+
+  const slotMats = {};
+  craftSlots.forEach(s => { if(s) slotMats[s.name] = (slotMats[s.name]||0) + s.count; });
+  const slotKeys = Object.keys(slotMats);
+
+  if(slotKeys.length === 0) {
+    btn.disabled = true;
+    btn.textContent = 'クラフト';
+    btn.style.background = '#333';
+    btn.dataset.recipe = '';
+    return;
+  }
+
+  let matched = null;
+  for(const r of RECIPES) {
+    const rKeys = Object.keys(r.mats);
+    if(rKeys.length !== slotKeys.length) continue;
+    let match = true;
+    for(const [name, need] of Object.entries(r.mats)) {
+      if((slotMats[name]||0) !== need) { match=false; break; }
+    }
+    if(match) { matched = r; break; }
+  }
+
+  if(matched && canCraft(matched)) {
+    btn.disabled = false;
+    btn.textContent = '🔨 ' + (ITEMS_EMOJI[matched.name]||'') + matched.name + ' を作る！';
+    btn.style.background = '#238636';
+    btn.dataset.recipe = matched.name;
+  } else {
+    btn.disabled = true;
+    btn.textContent = matched ? '⚠️ 条件不足' : '組み合わせ不一致';
+    btn.style.background = '#333';
+    btn.dataset.recipe = '';
+  }
+}
+
+function renderCraftableList() {
+  const list = document.getElementById('craftableList');
+  const title = document.getElementById('craftableTitle');
+  if(!list) return;
+  list.innerHTML = '';
+
+  const query = (document.getElementById('craftSearch')?.value || '').trim();
+
+  // 全所持アイテム（インベントリ＋装備＋ホーム倉庫）
+  const allHave = {...G.inv};
+  Object.values(G.equip).forEach(s=>{ if(s) allHave[s.name]=(allHave[s.name]||0)+1; });
+  if(tileAt(G.pr,G.pc)===6){
+    for(const [n,q] of Object.entries(G.homeStorage||{})) allHave[n]=(allHave[n]||0)+q;
+  }
+  const seen = G.encyclopedia; // 一度でも入手したことがある素材
+
+  const TYPE_ORDER = ['tool','food','material','facility','auto','escape'];
+  const TYPE_LABEL = {
+    tool:'🔧 道具・装備', food:'🍎 食料・飲料', material:'🧱 素材・加工',
+    facility:'🏕️ 設備（ホーム）', auto:'⚙️ 自動化（ホーム）', escape:'⛵ 脱出アイテム'
+  };
+
+  const craftable = {}; // type -> []
+  const needMore  = {}; // type -> []
+  TYPE_ORDER.forEach(t => { craftable[t]=[]; needMore[t]=[]; });
+
+  for(const r of RECIPES) {
+    // 非表示条件
+    if(EQUIP_TOOLS.has(r.name) && G.craftedTools && G.craftedTools.has(r.name)) continue;
+    if((r.type==='facility'||r.type==='auto') && hasFac(r.name)) continue;
+    if(r.type==='escape' && ic(r.name)>0) continue;
+
+    // 検索フィルタ（検索中は全素材入手済みのもの限定）
+    const ingreds = Object.keys(r.mats);
+    const hasAllIngredientsSeen = ingreds.every(n => seen.has(n));
+    if(query) {
+      if(!r.name.includes(query)) continue;
+      if(!hasAllIngredientsSeen) continue;
+    }
+
+    // 不足素材
+    const missing = {};
+    for(const [name, need] of Object.entries(r.mats)) {
+      if((allHave[name]||0) < need) missing[name] = need - (allHave[name]||0);
+    }
+    const missingCount = Object.keys(missing).length;
+    const needHome = (r.type==='facility'||r.type==='auto'||r.type==='escape') && G.homeR===null;
+    const needFacHome = r.need && (r.need==='かまど'||r.need==='農場') && tileAt(G.pr,G.pc)!==6;
+    const type = TYPE_ORDER.includes(r.type) ? r.type : 'material';
+
+    if(missingCount === 0 && !needHome && !needFacHome) {
+      craftable[type].push(r);
+    } else {
+      // 「素材不足」条件: 全素材を1度でも入手済み かつ 脱出アイテムは除外
+      if(r.type !== 'escape' && hasAllIngredientsSeen) {
+        needMore[type].push({r, missing, needHome: needHome||needFacHome});
+      }
+    }
+  }
+
+  const totalCraftable = TYPE_ORDER.reduce((s,t)=>s+craftable[t].length, 0);
+  const totalNeedMore  = TYPE_ORDER.reduce((s,t)=>s+needMore[t].length, 0);
+  title.textContent = `✅ ${totalCraftable}件作れる　❌ ${totalNeedMore}件素材不足　ダブルクリックでクラフト`;
+
+  function makeRow(r, canMake) {
+    const row = document.createElement('div');
+    const mats = Object.entries(r.mats).map(([n,q])=>(ITEMS_EMOJI[n]||'')+n+'×'+q).join(' ＋ ');
+    const condTxt = r.need ? ` <span style="color:#58a6ff;font-size:10px;">（${r.need}必要）</span>` : '';
+    if(canMake === true) {
+      // ✅ 今すぐ作れる → 緑
+      row.style.cssText = 'background:#0d2e14;border:1px solid #238636;border-radius:5px;padding:6px 8px;cursor:pointer;user-select:none;';
+      row.innerHTML =
+        `<div style="font-size:12px;color:#3fb950;font-weight:bold;">${ITEMS_EMOJI[r.name]||'📦'}${r.name}${condTxt}</div>`+
+        `<div style="font-size:10px;color:#4a6a4a;margin-top:1px;">${mats}</div>`+
+        `<div style="font-size:10px;color:#aaa;">${r.desc||''}</div>`;
+      row.ondblclick = () => execCraft(r.name);
+      row.onclick = () => {
+        list.querySelectorAll('[data-sel]').forEach(el=>{el.removeAttribute('data-sel');el.style.borderColor='#238636';});
+        row.dataset.sel='1'; row.style.borderColor='#58a6ff';
+      };
+    } else {
+      // ❌ 素材不足 → 赤
+      const needHome = canMake && canMake.needHome;
+      // 素材ごとに「持ってる数/必要数」を色付きで表示
+      const matParts = Object.entries(r.mats).map(([n,need])=>{
+        const have = (allHave[n]||0);
+        const short = need - have;
+        const color = short > 0 ? '#e05050' : '#3fb950';
+        return `<span style="color:${color}">${ITEMS_EMOJI[n]||''}${n}×${need}${short>0?' ('+short+'不足)':''}</span>`;
+      }).join('<span style="color:#444"> ＋ </span>');
+      const missTxt = needHome ? (tileAt(G.pr,G.pc)!==6 ? '🏕️ ホームで作れる' : '🏕️ ホームが必要') : '';
+      row.style.cssText = 'background:#1f0a0a;border:1px solid #5a2020;border-radius:5px;padding:5px 8px;';
+      row.innerHTML =
+        `<div style="font-size:11px;color:#c06060;font-weight:bold;">${ITEMS_EMOJI[r.name]||'📦'}${r.name}${condTxt}</div>`+
+        `<div style="font-size:10px;margin-top:2px;">${matParts}${missTxt?'　<span style="color:#58a6ff">'+missTxt+'</span>':''}</div>`+
+        `<div style="font-size:10px;color:#888;margin-top:2px;">${r.desc||''}</div>`;
+    }
+    return row;
+  }
+
+  let any = false;
+  // 作れるもの（カテゴリ別）
+  let craftHdrShown = false;
+  TYPE_ORDER.forEach(type => {
+    if(craftable[type].length === 0) return;
+    if(!craftHdrShown) {
+      const hdr = document.createElement('div');
+      hdr.style.cssText='font-size:10px;color:#3fb950;padding:4px 2px 2px;font-weight:bold;';
+      hdr.textContent='✅ 今すぐ作れる — ダブルクリックでクラフト';
+      list.appendChild(hdr); craftHdrShown=true; any=true;
+    }
+    const catHdr = document.createElement('div');
+    catHdr.style.cssText='font-size:10px;color:#58a6ff;padding:4px 2px 1px;';
+    catHdr.textContent = TYPE_LABEL[type]||type;
+    list.appendChild(catHdr);
+    craftable[type].forEach(r => list.appendChild(makeRow(r, true)));
+  });
+
+  // もう少しで作れる（カテゴリ別）
+  let needHdrShown = false;
+  TYPE_ORDER.forEach(type => {
+    if(needMore[type].length === 0) return;
+    if(!needHdrShown) {
+      const hdr = document.createElement('div');
+      hdr.style.cssText='font-size:10px;color:#e05050;padding:6px 2px 2px;font-weight:bold;';
+      hdr.textContent='❌ 素材不足';
+      list.appendChild(hdr); needHdrShown=true; any=true;
+    }
+    const catHdr = document.createElement('div');
+    catHdr.style.cssText='font-size:10px;color:#58a6ff;padding:4px 2px 1px;';
+    catHdr.textContent = TYPE_LABEL[type]||type;
+    list.appendChild(catHdr);
+    needMore[type].forEach(item => list.appendChild(makeRow(item.r, item)));
+  });
+
+  if(!any) {
+    list.innerHTML = query
+      ? '<div style="color:#444;font-size:11px;padding:20px;text-align:center;">該当なし</div>'
+      : '<div style="color:#444;font-size:11px;padding:20px;text-align:center;">素材を集めてクラフトしよう</div>';
+  }
+}
+
+function execCraft(recipeName) {
+  const recipe = RECIPES.find(r => r.name === recipeName);
+  if(!recipe || !canCraft(recipe)) return;
+  doCraft(recipe);
+  renderCraftModal();
+}
+
+function doCraft(recipe){
+  G.craftCount=(G.craftCount||0)+1;
+  G.encyclopedia.add(recipe.name);
+  // ホームにいるときは倉庫の素材を優先消費
+  const atHomeDraft=tileAt(G.pr,G.pc)===6;
+  for(let m in recipe.mats){
+    let need=recipe.mats[m];
+    if(atHomeDraft && G.homeStorage[m]){
+      const fromStorage=Math.min(G.homeStorage[m],need);
+      G.homeStorage[m]-=fromStorage;
+      if(G.homeStorage[m]<=0)delete G.homeStorage[m];
+      need-=fromStorage;
+    }
+    if(need>0)rmItem(m,need);
+  }
+  if(recipe.type==='facility'||recipe.type==='auto'){
+    G.facilities.push(recipe.name);
+    log('🏕️ '+recipe.name+'を設置した！','good');
+    if(recipe.name==='木の倉庫'){
+      G.homeStorageMax=(G.homeStorageMax||0)+30;
+      log('📦 ホーム倉庫が30枠拡張された！','good');
+    }
+  } else if(EQUIP_TOOLS.has(recipe.name)){
+    // 装備品: 即装備処理
+    G.craftedTools.add(recipe.name);
+    // 上位装備なら下位も作成済みに
+    if(TOOL_LOWER[recipe.name]) G.craftedTools.add(TOOL_LOWER[recipe.name]);
+    // 下位装備を装備スロットから外す
+    const lower = TOOL_UPGRADES[recipe.name];
+    if(lower){
+      for(const key of Object.keys(G.equip)){
+        if(G.equip[key] && G.equip[key].name===lower){
+          G.equip[key]=null;
+          log('🔄 '+lower+'から'+recipe.name+'に装備を更新！','good');
+        }
+      }
+    }
+    // 空きスロットに装備（インベントリには入れない）
+    const emptySlot=Object.keys(G.equip).find(k=>G.equip[k]===null);
+    if(emptySlot){
+      G.equip[emptySlot]={name:recipe.name};
+      log('⚔️ '+recipe.name+'を作って即装備した！','good');
+    } else {
+      addItem(recipe.name,1);
+      log('🔨 '+recipe.name+'を作った（装備スロット満杯）！','good');
+    }
+  } else {
+    addItem(recipe.name,1);
+    log('🔨 '+recipe.name+'を作った！','good');
+    if(recipe.name==='地図'){
+      log('🗺️ 地図を広げた… 島の全体像と山岳の様子が見えた！','good');
+      log('⛰️ 山岳には珍しい素材が眠っているようだ。縄梯子で登れる！','good');
+      G.mapRevealed=true;
+    }
+    if(recipe.name==='リュック'){
+      G.invSlots+=8;
+      log('🎒 リュックを作って背負った！インベントリ+8','good');
+    }
+  }
+  updateUI();
+}
+
+function openUse(){
+  const already=document.getElementById('useModal').style.display==='flex';
+  closeAllModals();
+  if(already)return;
+  const ul=document.getElementById('useList');
+  ul.innerHTML='';
+  const usable=USABLE_DEFS;
+  let count=0;
+  usable.forEach(u=>{
+    if(ic(u.name)<=0)return;
+    count++;
+    const row=document.createElement('div');row.className='modal-row';
+    const info=document.createElement('div');
+    info.className='info';
+    info.textContent=(ITEMS_EMOJI[u.name]||'')+' '+u.name+' ×'+ic(u.name);
+    row.appendChild(info);
+    const b=document.createElement('button');
+    b.textContent='使う';b.className='use-btn';
+    b.onclick=()=>{
+      if(G.gameOver)return;
+      rmItem(u.name,1);u.fn();updateUI();
+      // Check if any usable items remain
+      let remaining=0;
+      usable.forEach(u2=>{if(ic(u2.name)>0)remaining++;});
+      if(remaining===0){closeUse();}
+      else{openUse();}
+    };
+    row.appendChild(b);
+    ul.appendChild(row);
+  });
+  if(count===0){
+    const p=document.createElement('div');
+    p.style.cssText='color:#999;text-align:center;padding:20px;font-size:13px';
+    p.textContent='使えるアイテムがありません';
+    ul.appendChild(p);
+  }
+  document.getElementById('useModal').style.display='flex';
+  updateActionBtns();
+}
+function closeUse(){document.getElementById('useModal').style.display='none';updateActionBtns();}
+
+const USABLE_DEFS=[
+  {name:'焼き魚',fn:()=>{G.hunger=Math.min(100,G.hunger+30);log('🍽️ 焼き魚を食べた (空腹+30)','good');}},
+  {name:'果実サラダ',fn:()=>{G.hunger=Math.min(100,G.hunger+20);G.thirst=Math.min(100,G.thirst+10);log('🥗 果実サラダを食べた (空腹+20, 水分+10)','good');}},
+  {name:'煮沸水',fn:()=>{G.thirst=Math.min(100,G.thirst+30);log('🥤 煮沸水を飲んだ (水分+30)','good');}},
+  {name:'保存食',fn:()=>{G.hunger=Math.min(100,G.hunger+20);log('🥫 保存食を食べた (空腹+20)','good');}},
+  {name:'果実',fn:()=>{G.hunger=Math.min(100,G.hunger+10);log('🍎 果実を食べた (空腹+10)','good');}},
+  {name:'水(生)',fn:()=>{G.thirst=Math.min(100,G.thirst+10);G.hp=Math.max(0,G.hp-5);log('💧 生水を飲んだ (水分+10, HP-5)','warn');}},
+  {name:'魚',fn:()=>{G.hunger=Math.min(100,G.hunger+10);G.hp=Math.max(0,G.hp-3);log('🐟 生魚を食べた… 空腹+10 HP-3','warn');}},
+  {name:'干し魚',fn:()=>{G.hunger=Math.min(100,G.hunger+25);log('🐟 干し魚を食べた (空腹+25)','good');}},
+  {name:'貝のスープ',fn:()=>{G.hunger=Math.min(100,G.hunger+20);G.thirst=Math.min(100,G.thirst+20);log('🍲 貝のスープを飲んだ (空腹+20, 水分+20)','good');}},
+  {name:'果実ジュース',fn:()=>{G.thirst=Math.min(100,G.thirst+40);log('🥤 果実ジュースを飲んだ (水分+40)','good');}},
+  {name:'スモーク魚',fn:()=>{G.hunger=Math.min(100,G.hunger+35);log('🍣 スモーク魚を食べた (空腹+35)','good');}},
+  {name:'魚の塩漬け',fn:()=>{G.hunger=Math.min(100,G.hunger+15);log('🐟 魚の塩漬けを食べた (空腹+15)','good');}},
+  {name:'木の実の酒',fn:()=>{G.thirst=Math.min(100,G.thirst+25);G.hp=Math.min(100,G.hp+5);G.hunger=Math.min(100,G.hunger+5);log('🍶 木の実の酒を飲んだ (水分+25, HP+5, 空腹+5)','good');}},
+  {name:'ハーブティー',fn:()=>{G.thirst=Math.min(100,G.thirst+25);G.hp=Math.min(100,G.hp+10);log('🍵 ハーブティーを飲んだ (水分+25, HP+10)','good');}},
+  {name:'野草サラダ',fn:()=>{G.hunger=Math.min(100,G.hunger+15);G.thirst=Math.min(100,G.thirst+5);log('🥗 野草サラダを食べた (空腹+15, 水分+5)','good');}},
+  {name:'塩焼き魚',fn:()=>{G.hunger=Math.min(100,G.hunger+40);log('🍽️ 塩焼き魚を食べた (空腹+40)','good');}},
+  {name:'果実パイ',fn:()=>{G.hunger=Math.min(100,G.hunger+30);log('🥧 果実パイを食べた (空腹+30)','good');}},
+  {name:'浄水',fn:()=>{G.thirst=Math.min(100,G.thirst+20);log('💧 浄水を飲んだ (水分+20)','good');}}
+];
+
+function executeUseItem(name){
+  if(G.gameOver)return;
+  const u=USABLE_DEFS.find(d=>d.name===name);
+  if(!u||ic(name)<=0)return;
+  rmItem(name,1);
+  u.fn();
+  closeAllModals();
+  updateUI();
+}
+
+function renderEquip(){
+  const area=document.getElementById('equipGridArea');
+  if(!area)return;
+  area.innerHTML='';
+  ['slot0','slot1','slot2','slot3','slot4','slot5'].forEach(slotKey=>{
+    const s=G.equip[slotKey];
+    const slotEl=document.createElement('div');
+    slotEl.className='equip-slot-h'+(s?' filled':'');
+    if(s){
+      slotEl.textContent=(ITEMS_EMOJI[s.name]||'🔲')+' '+s.name;
+      slotEl.title='クリックで外す';
+      slotEl.onclick=()=>{
+        const space=G.invSlots-totalInv();
+        if(space<=0){log('⚠️ インベントリが満杯','warn');return;}
+        addItem(s.name,1);
+        G.equip[slotKey]=null;
+        log('🔓 '+s.name+'を外した','good');
+        updateUI();
+      };
+    } else {
+      slotEl.textContent='🔲 空';
+    }
+    area.appendChild(slotEl);
+  });
+}
+
+function showDropConfirmFromStorage(name){
+  closeAllModals();
+  const modal=document.getElementById('dropConfirmModal');
+  document.getElementById('dropConfirmTitle').textContent=(ITEMS_EMOJI[name]||'📦')+' '+name+' を捨てる？';
+  document.getElementById('dropOne').onclick=()=>{
+    if((G.homeStorage[name]||0)<=0){closeDropConfirm();return;}
+    G.homeStorage[name]--;
+    if(G.homeStorage[name]<=0)delete G.homeStorage[name];
+    log('🗑️ '+name+'を1つ捨てた（倉庫から）','warn');
+    closeDropConfirm();
+    updateUI();
+  };
+  document.getElementById('dropAll').onclick=()=>{
+    const qty=G.homeStorage[name]||0;
+    if(qty<=0){closeDropConfirm();return;}
+    delete G.homeStorage[name];
+    log('🗑️ '+name+'をすべて捨てた (×'+qty+')（倉庫から）','warn');
+    closeDropConfirm();
+    updateUI();
+  };
+  modal.style.display='flex';
+}
+
+function showDropConfirm(name){
+  closeAllModals();
+  const modal=document.getElementById('dropConfirmModal');
+  document.getElementById('dropConfirmTitle').textContent=(ITEMS_EMOJI[name]||'📦')+' '+name+' を捨てる？';
+  document.getElementById('dropOne').onclick=()=>{
+    if(ic(name)<=0){closeDropConfirm();return;}
+    rmItem(name,1);
+    log('🗑️ '+name+'を1つ捨てた','warn');
+    closeDropConfirm();
+    updateUI();
+  };
+  document.getElementById('dropAll').onclick=()=>{
+    const qty=ic(name);
+    if(qty<=0){closeDropConfirm();return;}
+    rmItem(name,qty);
+    log('🗑️ '+name+'をすべて捨てた (×'+qty+')','warn');
+    closeDropConfirm();
+    updateUI();
+  };
+  modal.style.display='flex';
+}
+
+function closeDropConfirm(){
+  document.getElementById('dropConfirmModal').style.display='none';
+}
+
+const ITEM_DESC={
+  '木材':'島の木から切り出した材木。あらゆる道具の基本素材。',
+  '石':'岩場から採れる硬い石。道具や建材として使える。',
+  '草':'草地に生える繊維質の草。ロープや布の原料。',
+  '繊維':'草から取れる丈夫な繊維。布や紐の素材。',
+  '砂':'砂浜の砂。ガラスやセメントの原料になる。',
+  '貝殻':'砂浜で見つかる貝の殻。装飾や道具に使える。',
+  '鉄鉱石':'岩場の深部から採れる赤茶色の石。精錬すると鉄になる。',
+  '鉄':'鉄鉱石を精錬した金属。丈夫な道具や建材になる。',
+  '果実':'森の木に実る果物。そのまま食べられる。',
+  '魚':'川や海で釣れる魚。加工すると食べやすくなる。',
+  '水(生)':'川から汲んだ生水。そのまま飲めるが体に良くない。',
+  '水晶':'山岳で採れる透明な結晶。希少で強力な素材。',
+  '希少鉱石':'山岳の深部に眠る謎の鉱石。最上位の素材。',
+};
+
+function getItemDesc(name){
+  if(ITEM_DESC[name])return ITEM_DESC[name];
+  const r=RECIPES.find(r=>r.name===name);
+  return r?r.desc:'???';
+}
+
+let encycSelected=null;
+
+function openEncyc(){
+  const already=document.getElementById('encycModal').style.display==='flex';
+  closeAllModals();
+  if(already)return;
+  document.getElementById('encycModal').style.display='flex';
+  renderEncycLeft();
+  if(encycSelected) renderEncycRight(encycSelected);
+  updateActionBtns();
+}
+
+function closeEncyc(){
+  document.getElementById('encycModal').style.display='none';
+  updateActionBtns();
+}
+
+function renderEncycLeft(){
+  const left=document.getElementById('encycLeft');
+  left.innerHTML='';
+  const discovered=[...G.encyclopedia].sort();
+  document.getElementById('encycCount').textContent='発見済みアイテム: '+discovered.length+'種';
+  discovered.forEach(name=>{
+    const card=document.createElement('div');
+    card.className='craft-card'+(encycSelected===name?' selected':'');
+    card.innerHTML=(ITEMS_EMOJI[name]||'📦')+' '+name;
+    card.style.fontSize='10px';
+    card.style.cssText='background:#21262d;border:1px solid #30363d;border-radius:6px;padding:4px 8px;font-size:10px;color:#ccc;cursor:pointer;'+(encycSelected===name?'border-color:#58a6ff;background:#1f3a5a;':'');
+    card.onclick=()=>{encycSelected=name;renderEncycLeft();renderEncycRight(name);};
+    left.appendChild(card);
+  });
+  if(discovered.length===0){
+    left.innerHTML='<div style="color:#555;font-size:11px;text-align:center;padding:20px;">まだ何も発見していない</div>';
+  }
+}
+
+function renderEncycRight(name){
+  const right=document.getElementById('encycRight');
+  const emoji=ITEMS_EMOJI[name]||'📦';
+  const desc=getItemDesc(name);
+  const cat=ITEM_CATEGORIES[name]||'material';
+  const catLabels={tool:'道具',food:'食料',material:'素材',escape:'脱出用'};
+  const recipe=RECIPES.find(r=>r.name===name);
+  let recipeHtml='';
+  if(recipe){
+    recipeHtml='<div style="margin-top:12px;"><div style="font-size:10px;color:#8b949e;margin-bottom:6px;">クラフト方法</div>'+
+      Object.entries(recipe.mats).map(([k,v])=>
+        '<div style="background:#21262d;border-radius:6px;padding:4px 8px;margin-bottom:3px;font-size:11px;color:#ccc;">'+
+        (ITEMS_EMOJI[k]||'')+' '+k+' ×'+v+'</div>'
+      ).join('')+'</div>';
+  }
+  const have=ic(name);
+  right.innerHTML=
+    '<div style="font-size:32px;margin-bottom:4px;">'+emoji+'</div>'+
+    '<div style="font-size:18px;font-weight:bold;color:#fff;margin-bottom:4px;">'+name+'</div>'+
+    '<div style="display:inline-block;background:#30363d;border-radius:4px;padding:2px 8px;font-size:10px;color:#8b949e;margin-bottom:10px;">'+
+      (catLabels[cat]||cat)+'</div>'+
+    '<div style="font-size:12px;color:#ccc;line-height:1.6;margin-bottom:8px;">'+desc+'</div>'+
+    '<div style="font-size:11px;color:#8b949e;">現在の所持数: <span style="color:#fff;font-weight:bold;">'+have+'</span></div>'+
+    recipeHtml;
+}
+
+function doEscape(){
+  G.gameOver=true;
+  document.getElementById('ovTitle').textContent='🎉 脱出成功！';
+  document.getElementById('ovMsg').textContent='ターン'+G.turn+'で漂流島からの脱出に成功した！\nおめでとう！';
+  document.getElementById('endStats').innerHTML=
+    '📊 クリア統計<br>'+
+    '⏱️ '+G.turn+'ターン | 🔨 クラフト'+G.craftCount+'回 | 🏗️ 設備'+G.facilities.length+'個<br>'+
+    '❤️HP:'+G.hp+' 🍖空腹:'+G.hunger+' 💧水分:'+G.thirst;
+  document.getElementById('overlay').style.display='flex';
+}
+
+function doEscapeRaft(){
+  G.gameOver=true;
+  const hasLifeJacket=ic('救命胴衣')>0;
+  if(!hasLifeJacket){G.hp=Math.max(0,G.hp-20);}
+  document.getElementById('ovTitle').textContent='🛶 いかだで脱出！';
+  document.getElementById('ovMsg').textContent='ターン'+G.turn+'でいかだに乗って漂流島を脱出した！\n'+(hasLifeJacket?'救命胴衣のおかげで安全に脱出できた！':'波に揉まれながらもなんとか…（HP-20）')+'\n（船での脱出よりスコアは低め）';
+  document.getElementById('endStats').innerHTML=
+    '📊 クリア統計<br>'+
+    '⏱️ '+G.turn+'ターン | 🔨 クラフト'+G.craftCount+'回 | 🏗️ 設備'+G.facilities.length+'個<br>'+
+    '❤️HP:'+G.hp+' 🍖空腹:'+G.hunger+' 💧水分:'+G.thirst+'<br>'+
+    '🛶 いかだ脱出（船より低スコア）';
+  document.getElementById('overlay').style.display='flex';
+}
+
+function doEscapeBest(){
+  G.gameOver=true;
+  document.getElementById('ovTitle').textContent='🎉 最高の脱出！';
+  document.getElementById('ovMsg').textContent='ターン'+G.turn+'で希少合金の船に乗り、漂流島を堂々と脱出した！\n最高級の船で快適な航海だ！';
+  document.getElementById('endStats').innerHTML=
+    '📊 クリア統計<br>'+
+    '⏱️ '+G.turn+'ターン | 🔨 クラフト'+G.craftCount+'回 | 🏗️ 設備'+G.facilities.length+'個<br>'+
+    '❤️HP:'+G.hp+' 🍖空腹:'+G.hunger+' 💧水分:'+G.thirst+'<br>'+
+    '⛵ 希少合金の船（最高スコア！）';
+  document.getElementById('overlay').style.display='flex';
+}
+
+function endTurn(){
+  if(G.gameOver)return;
+  G.turn++;
+
+  // automation
+  if(hasFac('自動伐採機')){let a=addItem('木材',1);if(a>0)log('⚙️ 自動伐採機: 木材+1','good');}
+  if(hasFac('自動採石機')){let a=addItem('石',1);if(a>0)log('⚙️ 自動採石機: 石+1','good');}
+  if(hasFac('貯水タンク')){let a=addItem('水(生)',2);if(a>0)log('🛢️ 貯水タンク: 水(生)+2','good');}
+  if(hasFac('農場')){let a=addItem('果実',1);if(a>0)log('🌾 農場: 果実+1','good');}
+  if(hasFac('自動農場')){let a=addItem('果実',2);if(a>0)log('🤖 自動農場: 果実+2','good');}
+  if(hasFac('採水場')){let a=addItem('水(生)',3);if(a>0)log('💦 採水場: 水(生)+3','good');}
+
+  // 医務室によるHP回復
+  if(hasFac('医務室')){G.hp=Math.min(100,G.hp+3);}
+
+  // お腹・水分が両方8割以上なら自然回復
+  if(G.hunger>=80&&G.thirst>=80&&G.hp<100){
+    G.hp=Math.min(100,G.hp+2);
+    log('💚 状態が良好。体力が少し戻った (+2)','good');
+  }
+
+  // 昼夜の切り替わり通知
+  const pos=(G.turn-1)%20;
+  if(pos===12) log('🌙 夜になった。気温が下がり、寒さが身に染みる…','warn');
+  else if(pos===0 && G.turn>1) log('🌅 夜が明けた。','good');
+
+  // 空腹: 昼夜関係なく一定ペースで進む
+  G.hunger=Math.max(0,G.hunger-2);
+
+  // 水分: 昼は暑くて多く失う、夜は涼しいので少ない
+  const thirstLoss=isNight()?1:3;
+  G.thirst=Math.max(0,G.thirst-thirstLoss);
+
+  // 夜の寒さによるHP損失
+  if(isNight()){
+    const fullyWarm=hasTool('水晶のランタン')||hasTool('ランタン')||hasFac('防波堤');
+    const partlyWarm=hasTool('松明')||hasTool('防寒着')||hasTool('鉄の鎧');
+    if(!fullyWarm){
+      const coldDmg=partlyWarm?1:2;
+      G.hp=Math.max(0,G.hp-coldDmg);
+      if(partlyWarm) log('🧥 防寒具のおかげで何とか凌いでいる… (-1)','warn');
+      else log('🌙 夜の寒さと野生動物の気配…体力が削られている (-2)','warn');
+    }
+  }
+
+  // 空腹・脱水によるHP損失
+  if(G.hunger<=0){G.hp=Math.max(0,G.hp-5);log('⚠️ 空腹でどんどん弱っていく…！ (-5)','warn');}
+  if(G.thirst<=0){G.hp=Math.max(0,G.hp-5);log('⚠️ 喉がカラカラだ…意識が朦朧とする (-5)','warn');}
+  if(G.hunger>0&&G.hunger<=20)log('⚠️ お腹が空いてきた…何か食べないと','warn');
+  if(G.thirst>0&&G.thirst<=20)log('⚠️ 喉が渇いてきた…','warn');
+
+  // forest regen
+  for(let k in G.depleted){
+    G.depleted[k]--;
+    if(G.depleted[k]<=0)delete G.depleted[k];
+  }
+
+  log(`── ターン${G.turn} [空腹:${G.hunger} 水分:${G.thirst} HP:${G.hp}] ──`,'turn-sep');
+
+  // tutorial hints
+  if(G.turn===2) log('💡 ヒント: 緑のマスをタップして森へ移動し、木材を集めよう');
+  if(G.turn===3) log('💡 ヒント: 砂浜のホームに戻ってクラフトすると設備も作れる！');
+  if(G.turn===5&&G.craftCount===0) log('💡 ヒント: クラフトボタンで素材を組み合わせて道具を作ろう');
+
+  // game over
+  if(G.hp<=0){
+    G.gameOver=true;
+    log('💀 力尽きた…','warn');
+    document.getElementById('ovTitle').textContent='💀 ゲームオーバー';
+    document.getElementById('ovMsg').textContent='ターン'+G.turn+'で力尽きた…\n次はもっとうまくやれるはず。';
+    document.getElementById('endStats').innerHTML=
+      '📊 統計<br>⏱️ '+G.turn+'ターン | 🔨 クラフト'+(G.craftCount||0)+'回 | 🏗️ 設備'+G.facilities.length+'個';
+    document.getElementById('overlay').style.display='flex';
+  }
+
+  updateUI();
+  saveGame();
+}
+
+function movePlayer(nr,nc){
+  if(G.gameOver)return;
+  if(nr<0||nr>=10||nc<0||nc>=10)return;
+  if(MAP[nr][nc]===0)return;
+  const dr=Math.abs(nr-G.pr),dc=Math.abs(nc-G.pc);
+  if(dr+dc!==1)return;
+  // 山岳は縄梯子か登山装備がないと入れない
+  if(MAP[nr][nc]===7){
+    if(!hasTool('縄梯子') && !hasTool('登山装備')){
+      log('⛰️ 険しすぎて登れない… 縄梯子か登山装備が必要だ','warn');
+      return;
+    }
+    // 初めて山岳に入るとき
+    if(!G.mountainExplored){
+      G.mountainExplored=true;
+      log('⛰️ ついに山岳地帯に踏み込んだ！','good');
+      log('✨ 見渡す限り広がる景色… ここには珍しい鉱物がありそうだ','good');
+      log('💎 山岳では「水晶」「希少鉱石」が採掘できる！','good');
+    }
+  }
+  G.pr=nr;G.pc=nc;
+  const t=tileAt(nr,nc);
+  log('👣 '+TILE_NAMES[t]+' '+TILE_EMOJI[t]+'へ移動した');
+  endTurn();
+}
+
+function hitTestTile(sx,sy,c,r){
+  // クリック点がタイルの上面ひし形に含まれるか（offsetY考慮）
+  const t=tileAt(r,c);
+  const style=BLOCK_STYLES[t]||BLOCK_STYLES[0];
+  const oy=style.offsetY||0;
+  const p=toScreen(c,r);
+  const tw=TILE_W/2,th=TILE_H/2;
+  // ひし形の中心は (p.x, p.y - oy)
+  const dx=Math.abs(sx-p.x)/tw;
+  const dy=Math.abs(sy-(p.y-oy))/th;
+  return dx+dy<=1.0;
+}
+
+function handleClick(sx,sy){
+  if(G.gameOver)return;
+  // 前面（高いr+c）から順にヒットテスト
+  let hit=null;
+  for(let sum=18;sum>=0;sum--){
+    for(let r=Math.min(sum,9);r>=Math.max(0,sum-9);r--){
+      const c=sum-r;
+      if(c<0||c>=10)continue;
+      if(tileAt(r,c)===0)continue;
+      if(hitTestTile(sx,sy,c,r)){hit={r,c};break;}
+    }
+    if(hit)break;
+  }
+  if(!hit)return;
+  const dr=Math.abs(hit.r-G.pr),dc=Math.abs(hit.c-G.pc);
+  if(dr+dc===1){
+    movePlayer(hit.r,hit.c);
+  }
+}
+
+const SAVE_KEY = 'drift_island_save';
+
+function saveGame() {
+  const saveData = {
+    G: {
+      ...G,
+      encyclopedia: [...G.encyclopedia], // SetはJSON化できないのでArray変換
+      craftedTools: [...(G.craftedTools||[])]
+    }
+  };
+  localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+}
+
+function loadGame() {
+  const raw = localStorage.getItem(SAVE_KEY);
+  if(!raw) return false;
+  try {
+    const data = JSON.parse(raw);
+    G = data.G;
+    G.encyclopedia = new Set(G.encyclopedia); // Array→Setに戻す
+    if(!G.equip) G.equip = {slot0:null,slot1:null,slot2:null,slot3:null,slot4:null,slot5:null};
+    if(!G.equip.slot4) G.equip.slot4 = null;
+    if(!G.equip.slot5) G.equip.slot5 = null;
+    if(!G.craftedTools) G.craftedTools = new Set(); else G.craftedTools = new Set(G.craftedTools);
+    if(!G.homeStorage) G.homeStorage = {};
+    if(G.homeStorageMax === undefined) G.homeStorageMax = 0;
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+function hasSaveData() {
+  return !!localStorage.getItem(SAVE_KEY);
+}
+
+function deleteSave() {
+  localStorage.removeItem(SAVE_KEY);
+}
+
+function showTitleScreen() {
+  document.getElementById('titleScreen').style.display = 'flex';
+  const btns = document.getElementById('titleBtns');
+  btns.innerHTML = '';
+
+  if(hasSaveData()) {
+    const cont = document.createElement('button');
+    cont.textContent = '▶ つづきから';
+    cont.style.cssText = 'background:#1f3a5a;color:#58a6ff;border:1px solid #58a6ff;border-radius:8px;padding:14px;font-size:15px;cursor:pointer;font-weight:bold;';
+    cont.onclick = () => {
+      if(loadGame()) {
+        hideTitleScreen();
+        document.getElementById('logPanelBottom').innerHTML = '';
+        log('📂 セーブデータを読み込みました（ターン'+G.turn+'）','good');
+        updateUI();
+      }
+    };
+    btns.appendChild(cont);
+  }
+
+  const newGame = document.createElement('button');
+  newGame.textContent = hasSaveData() ? '🔄 最初からやり直す' : '🏝️ はじめから';
+  newGame.style.cssText = 'background:#21262d;color:#fff;border:1px solid #30363d;border-radius:8px;padding:14px;font-size:15px;cursor:pointer;white-space:nowrap;';
+  newGame.onclick = () => {
+    if(hasSaveData() && !confirm('セーブデータを削除してはじめからやり直しますか？')) return;
+    deleteSave();
+    hideTitleScreen();
+    restartGame();
+  };
+  btns.appendChild(newGame);
+}
+
+function hideTitleScreen() {
+  document.getElementById('titleScreen').style.display = 'none';
+}
+
+function restartGame(){
+  initGame();
+  document.getElementById('overlay').style.display='none';
+  document.getElementById('endStats').innerHTML='';
+  document.getElementById('logPanel').innerHTML='';
+  log('🌊 見知らぬ砂浜に打ち上げられた…','good');
+  log('🎒 手荷物を確認した: 果実×2、水(生)×2、石×3、草×2','good');
+  log('📌 操作: マップをタップして移動、採集ボタンで素材収集');
+  log('🏕️ 砂浜のホームを拠点に、島を探索して脱出を目指せ！');
+  log('🎯 目標: 船を作って砂浜🏖️から脱出せよ！');
+  log('⚠️ 空腹と水分に注意！ゼロになるとHPが削れる','warn');
+  log(`── ターン1 [空腹:${G.hunger} 水分:${G.thirst} HP:${G.hp}] ──`,'turn-sep');
+  updateUI();
+}
+
+function initScale(){
+  const wrap=document.getElementById('wrap');
+  const s=Math.min(window.innerWidth/BASE_W,window.innerHeight/BASE_H);
+  wrap.style.transform='scale('+s+')';
+  wrap.style.transformOrigin='top center';
+  wrap.style.marginTop=Math.max(0,(window.innerHeight-BASE_H*s)/2)+'px';
+}
+
+window.addEventListener('load',()=>{
+  canvas=document.getElementById('gameCanvas');
+  ctx=canvas.getContext('2d');
+  // HiDPI対応：devicePixelRatioでCanvas実解像度を引き上げ、CSSサイズはそのまま
+  const dpr=window.devicePixelRatio||1;
+  const cssW=480,cssH=420;
+  canvas.width=cssW*dpr;
+  canvas.height=cssH*dpr;
+  canvas.style.width=cssW+'px';
+  canvas.style.height=cssH+'px';
+  ctx.scale(dpr,dpr);
+
+  function getPos(e){
+    const rect=canvas.getBoundingClientRect();
+    const sx=canvas.width/rect.width,sy=canvas.height/rect.height;
+    return e.touches
+      ?{x:(e.touches[0].clientX-rect.left)*sx,y:(e.touches[0].clientY-rect.top)*sy}
+      :{x:(e.clientX-rect.left)*sx,y:(e.clientY-rect.top)*sy};
+  }
+
+  canvas.addEventListener('click',e=>{const p=getPos(e);handleClick(p.x,p.y);});
+  canvas.addEventListener('touchstart',e=>{
+    e.preventDefault();const p=getPos(e);handleClick(p.x,p.y);
+  },{passive:false});
+
+  // Esc to close modals
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      if(document.getElementById('craftModal').style.display==='flex') closeCraft();
+      else if(document.getElementById('useModal').style.display==='flex') closeUse();
+      else if(document.getElementById('encycModal').style.display==='flex') closeEncyc();
+    }
+  });
+
+  initScale();
+  window.addEventListener('resize',initScale);
+
+  initGame();
+  updateUI();
+  showTitleScreen();
+
+  // 隣接タイルのボブアニメーション用レンダーループ（~30fps）
+  let _lastAnimT=0;
+  function animLoop(ts){
+    requestAnimationFrame(animLoop);
+    if(!G.gameOver&&ts-_lastAnimT>33){
+      _lastAnimT=ts;
+      render();
+    }
+  }
+  requestAnimationFrame(animLoop);
+});
+</script>
+</body>
+</html>
