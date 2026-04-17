@@ -40,15 +40,17 @@ const BOX_WALL  = 14;
 const BOX_H     = 48;
 
 // ===== Physics constants =====
-const RESTITUTION      = 0.0;   // bounciness (食べ物 = 完全非弾性)
-const REST_VEL_THRESH  = 80;    // これ以下の衝突速度は反発なし（静止接触）
-const FRICTION         = 0.55;  // tangential friction
-const DAMPING_LIN      = 0.3;   // per-second linear damping (強め)
-const DAMPING_ANG      = 0.15;  // per-second angular damping (強め)
-const SLEEP_LIN        = 20;    // px/s
-const SLEEP_ANG        = 0.15;  // rad/s
-const SUBSTEPS         = 4;
-const SETTLE_TIME      = 0.4;   // 静止判定に必要な連続時間(s)
+const RESTITUTION      = 0.0;   // 食べ物 = 完全非弾性
+const REST_VEL_THRESH  = 60;    // 静止接触とみなす相対速度閾値
+const FRICTION         = 0.6;   // 摩擦係数
+const DAMPING_FALL_LIN = 0.98;  // 落下中の線速度減衰 (per second) — 空気抵抗軽め
+const DAMPING_FALL_ANG = 0.85;  // 落下中の角速度減衰
+const DAMPING_REST_LIN = 0.30;  // スタック体の線速度減衰 (per second) — 素早く止める
+const DAMPING_REST_ANG = 0.15;  // スタック体の角速度減衰
+const VEL_CUTOFF       = 3;     // これ以下の速度は即ゼロ (px/s)
+const ANG_CUTOFF       = 0.02;  // これ以下の角速度は即ゼロ (rad/s)
+const SUBSTEPS         = 5;
+const SETTLE_TIME      = 0.5;   // 静止判定に必要な連続時間(s)
 
 // ===== Food shape definitions =====
 // vertices: polygon local space (centroid at 0,0 unless comOffsetY shifts it)
@@ -136,8 +138,6 @@ function makeBody(type, x, worldY, isStatic) {
     inertia, invInertia: isStatic ? 0 : 1/inertia,
     vertices: verts,   // local space
     isStatic,
-    sleeping: false,
-    sleepTimer: 0,
   };
 }
 
@@ -304,7 +304,7 @@ function makeWallRect(x, y, w, h) {
     mass: Infinity, invMass: 0,
     inertia: Infinity, invInertia: 0,
     vertices: [{x:-w/2,y:-h/2},{x:w/2,y:-h/2},{x:w/2,y:h/2},{x:-w/2,y:h/2}],
-    isStatic: true, sleeping: true, sleepTimer: 999,
+    isStatic: true,
   };
 }
 
@@ -340,10 +340,8 @@ const SCROLL_TH = H * 0.46;
 // カメラ追跡用: 安定済みボディのみ追う（跳ねている最中は無視）
 let cameraTargetTopY = GROUND_Y;
 function updateCamera(dt) {
-  // sleeping（安定）したスタック体の最高点だけを追う
   let topY = GROUND_Y;
   for (const b of stackBodies) {
-    if (!b.sleeping) continue;  // 跳ねている最中は無視
     const aabb = getAABB(b);
     if (aabb.minY < topY) topY = aabb.minY;
   }
@@ -537,74 +535,40 @@ function drawSakuraTree(cx,baseY,dir) {
 }
 
 // ===== Physics Step =====
+// sleeping廃止 - 全ボディ常時物理計算。積んだものも衝撃で動く。
 function physicsStep(dt) {
-  const allDynamic = [...stackBodies, ...(fallingBody ? [fallingBody] : [])];
+  const fb = (fallingBody && fallingBody.isDropped) ? fallingBody : null;
+  const allDynamic = [...stackBodies, ...(fb ? [fb] : [])];
 
-  // Integrate forces
+  // 1) 重力・減衰・積分（落下体とスタック体で減衰を分ける）
   for (const b of allDynamic) {
-    if (b.isStatic || b.sleeping) continue;
     b.vy += GRAVITY * dt;
-    // damping (per second)
-    const ld = Math.pow(DAMPING_LIN, dt);
-    const ad = Math.pow(DAMPING_ANG, dt);
+    const isStack = b !== fb;
+    const ld = Math.pow(isStack ? DAMPING_REST_LIN : DAMPING_FALL_LIN, dt);
+    const ad = Math.pow(isStack ? DAMPING_REST_ANG : DAMPING_FALL_ANG, dt);
     b.vx *= ld; b.vy *= ld;
     b.omega *= ad;
-    // マイクロ振動カットオフ：超低速は即ゼロ
-    const spd2 = b.vx*b.vx + b.vy*b.vy;
-    if (spd2 < 4) { b.vx = 0; b.vy = 0; }
-    if (Math.abs(b.omega) < 0.01) b.omega = 0;
-    // integrate position
+    // 微小速度カットオフ（ナノ振動防止）
+    if (b.vx*b.vx + b.vy*b.vy < VEL_CUTOFF*VEL_CUTOFF) { b.vx = 0; b.vy = 0; }
+    if (Math.abs(b.omega) < ANG_CUTOFF) b.omega = 0;
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     b.angle += b.omega * dt;
   }
 
-  // Detect & resolve collisions
-  // 1) fallingBody vs 静的ボディ（壁・床）
-  if (fallingBody && fallingBody.isDropped) {
-    for (const bS of staticBodies) {
-      const m = satCollide(fallingBody, bS);
-      if (m) resolveCollision(fallingBody, bS, m);
-    }
-    // 2) fallingBody vs スタック体（sleeping含む全て）
-    for (const bStack of stackBodies) {
-      const m = satCollide(fallingBody, bStack);
-      if (m) {
-        // sleeping体は無限質量の静的壁として扱う
-        if (bStack.sleeping) {
-          const fake = {x:bStack.x, y:bStack.y, vx:0, vy:0, omega:0,
-                        invMass:0, invInertia:0, isStatic:true,
-                        vertices:bStack.vertices, angle:bStack.angle};
-          resolveCollision(fallingBody, fake, m);
-        } else {
-          resolveCollision(fallingBody, bStack, m);
-        }
-      }
+  // 2) 衝突検出・解決（全ペア）
+  // dynamic vs dynamic（スタック同士・落下体とスタック）
+  for (let i = 0; i < allDynamic.length; i++) {
+    for (let j = i+1; j < allDynamic.length; j++) {
+      const m = satCollide(allDynamic[i], allDynamic[j]);
+      if (m) resolveCollision(allDynamic[i], allDynamic[j], m);
     }
   }
-  // 3) 非sleeping スタック体 vs 静的ボディ（地面安定化）
-  for (const bA of stackBodies) {
-    if (bA.sleeping) continue;
+  // dynamic vs 静的ボディ（壁・床）
+  for (const bD of allDynamic) {
     for (const bS of staticBodies) {
-      const m = satCollide(bA, bS);
-      if (m) resolveCollision(bA, bS, m);
-    }
-  }
-
-  // Sleep check for stack bodies
-  for (const b of stackBodies) {
-    if (b.isStatic) continue;
-    const spd = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
-    const ang = Math.abs(b.omega);
-    if (spd < SLEEP_LIN && ang < SLEEP_ANG) {
-      b.sleepTimer += dt;
-      if (b.sleepTimer > 0.8) {
-        b.sleeping = true;
-        b.vx = 0; b.vy = 0; b.omega = 0;
-      }
-    } else {
-      b.sleepTimer = 0;
-      b.sleeping = false;
+      const m = satCollide(bD, bS);
+      if (m) resolveCollision(bD, bS, m);
     }
   }
 }
@@ -717,7 +681,7 @@ function update(dt) {
   const spd = Math.sqrt(fb.vx*fb.vx + fb.vy*fb.vy);
   fb.dropTime = (fb.dropTime || 0) + dt;
   // 速度が閾値以下の状態が一定時間続いたら着地判定
-  if (spd < SLEEP_LIN && Math.abs(fb.omega) < SLEEP_ANG) {
+  if (spd < 20 && Math.abs(fb.omega) < 0.15) {
     fb.settleTimer = (fb.settleTimer || 0) + dt;
     // 閾値を超えたら強制ゼロ速度（振動防止）
     if (fb.settleTimer >= SETTLE_TIME * 0.5) {
@@ -746,15 +710,6 @@ function update(dt) {
     texts.forEach((t,i) => bonusTexts.push({text:t, x:fb.x, y:sy-30-i*22, life:1.2, maxLife:1.2}));
     playSound('land');
 
-    // Wake nearby sleeping bodies so they react
-    for (const b of stackBodies) {
-      if (b.sleeping) {
-        const dx = b.x - fb.x, dy = b.y - fb.y;
-        if (Math.sqrt(dx*dx+dy*dy) < 120) {
-          b.sleeping = false; b.sleepTimer = 0;
-        }
-      }
-    }
 
     spawnFalling();
   }
