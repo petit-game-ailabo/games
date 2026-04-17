@@ -1,19 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 HANAMI STACK - 完全自動動画生成スクリプト
-Playwright でブラウザを操作しながらcanvasをキャプチャ -> moviepy + VOICEVOX で動画合成
 """
 import json
 import time
 import base64
-import subprocess
-import sys
 import requests
 from pathlib import Path
 from io import BytesIO
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from moviepy import AudioFileClip, ImageClip, VideoClip, concatenate_videoclips
+from moviepy import AudioFileClip, VideoClip, concatenate_videoclips
 
 try:
     from playwright.sync_api import sync_playwright
@@ -31,9 +28,9 @@ GAME_URL = "http://localhost:5173"
 FFMPEG_PATH = r"C:\Users\talashi\AppData\Local\Programs\Python\Python312\Lib\site-packages\imageio_ffmpeg\binaries\ffmpeg-win-x86_64-v7.1.exe"
 
 NARRATIONS = [
-    "HANAMI STACK！春のお花見弁当箱に、おにぎりや唐揚げを積み重ねるゲームだよ！",
-    "本物の物理シミュレーションで、積んだアイテムが次のアイテムに押されてリアルに動くのがポイント！",
-    "どこまで高く積めるかな？概要欄から無料で遊べるよ！",
+    "HANAMI STACK！春のお花見弁当箱に、おにぎりや唐揚げやだし巻き玉子を積み重ねていくゲームだよ！タップして落として、うまく重ねよう！",
+    "本物の物理シミュレーションを使ってるから、積んだアイテムが次のアイテムに押されてリアルに動くのがポイント！うまく積むとぴたっボーナスやタワーボーナスが入って、どんどんスコアが上がるよ！",
+    "毎日新作ミニゲームを投稿してるよ！概要欄のリンクから今すぐ無料で遊んでみてね！",
 ]
 
 def load_font(size):
@@ -104,14 +101,13 @@ def add_subtitle(frame_img, text):
 
 RECORDER_JS = """
 window._recorder = {
-    frames: [], recording: false, intervalId: null, _prev: null,
+    frames: [], recording: false, intervalId: null,
     start(fps) {
-        this.frames = []; this.recording = true; this._prev = null;
+        this.frames = []; this.recording = true;
         const c = document.getElementById('c');
         this.intervalId = setInterval(() => {
             if (!this.recording) return;
-            const d = c.toDataURL('image/jpeg', 0.88);
-            if (d !== this._prev) { this.frames.push(d); this._prev = d; }
+            this.frames.push(c.toDataURL('image/jpeg', 0.88));
         }, 1000 / (fps || 40));
     },
     stop() {
@@ -119,9 +115,10 @@ window._recorder = {
         if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
         return this.frames.length;
     },
-    flush() { const f = this.frames; this.frames = []; this._prev = null; return f; }
+    flush() { const f = this.frames; this.frames = []; return f; },
+    snapshot() { return document.getElementById('c').toDataURL('image/jpeg', 0.92); }
 };
-'recorder_ready'
+'ok'
 """
 
 def decode_frames(raw_list, target_w, target_h):
@@ -132,19 +129,10 @@ def decode_frames(raw_list, target_w, target_h):
         result.append(img)
     return result
 
-def fire_click(page, cx, cy, canvas_w=360, canvas_h=640, vp_w=390, vp_h=844):
-    """canvas座標でマウスイベントを発火"""
-    sx = cx * vp_w / canvas_w
-    sy = cy * vp_h / canvas_h
-    page.mouse.move(sx, sy)
-    page.mouse.down()
-    time.sleep(0.12)
-    page.mouse.up()
-
 def capture_frames():
     scenes = {}
     FPS = 40
-    DROP_XS = [180, 165, 195, 175, 185, 160, 200]  # 7回分のドロップX座標
+    DROP_XS = [180, 165, 195, 175, 185, 160, 200, 180, 170, 190]
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(
@@ -154,47 +142,49 @@ def capture_frames():
                 '--disable-renderer-backgrounding',
                 '--disable-backgrounding-occluded-windows',
                 '--disable-background-media-suspend',
-                '--force-device-scale-factor=1',
             ]
         )
         page = browser.new_page(viewport={"width": 390, "height": 844})
         page.goto(GAME_URL + '?record=1')
-        time.sleep(2.0)
+        time.sleep(2.5)
         page.evaluate(RECORDER_JS)
 
-        # ---- Scene 1: タイトル画面 (3秒) ----
-        print(f"  Scene 1: title (3s @ {FPS}fps)...")
-        page.evaluate(f"window._recorder.start({FPS})")
-        time.sleep(3.0)
-        page.evaluate("window._recorder.stop()")
-        raw1 = page.evaluate("window._recorder.flush()")
-        print(f"    {len(raw1)} frames")
-        scenes[0] = decode_frames(raw1, VW, VH)
+        # ---- Scene 1: タイトル画面 - 静止画を伸ばす ----
+        print(f"  Scene 1: title (static snapshot x3s @ {FPS}fps)...")
+        raw_title = page.evaluate("window._recorder.snapshot()")
+        frame_title = decode_frames([raw_title], VW, VH)[0]
+        n1 = FPS * 3
+        scenes[0] = [frame_title] * n1
+        print(f"    {n1} frames (static stretch)")
 
-        # ---- ゲーム開始 ----
-        fire_click(page, 180, 430)
+        # ---- ゲーム開始（JS直接呼び出し） ----
+        rc = page.evaluate("typeof window._recordCtrl")
+        print(f"  _recordCtrl type: {rc}")
+        page.evaluate("window._recordCtrl.startGame()")
         time.sleep(0.5)
 
-        # ---- Scene 2: ゲームプレイ (15秒: 7個積む) ----
-        print(f"  Scene 2: gameplay (15s @ {FPS}fps)...")
+        # ---- Scene 2: ゲームプレイ録画 ----
+        print(f"  Scene 2: gameplay (@ {FPS}fps)...")
         page.evaluate(f"window._recorder.start({FPS})")
 
         for i, x in enumerate(DROP_XS):
-            fire_click(page, x, 300)
-            time.sleep(4.5)  # 着地・安定待ち
+            print(f"    drop {i+1}: x={x}")
+            page.evaluate(f"window._recordCtrl.dropNow({x})")
+            time.sleep(4.8)
+            stk = page.evaluate("window._recordCtrl.getStk()")
+            print(f"    stk={stk}")
 
-        # 余った録画時間を埋める（スタックの揺れを見せる）
-        time.sleep(1.5)
+        time.sleep(1.0)
         page.evaluate("window._recorder.stop()")
         raw2 = page.evaluate("window._recorder.flush()")
         print(f"    {len(raw2)} frames")
         scenes[1] = decode_frames(raw2, VW, VH)
 
-        # ---- Scene 3: ハイスコア静止画 (4秒) ----
-        print(f"  Scene 3: result snapshot (4s)...")
-        raw3_single = page.evaluate("document.getElementById('c').toDataURL('image/jpeg', 0.88)")
-        frame3 = decode_frames([raw3_single], VW, VH)[0]
-        n3 = int(FPS * 4)
+        # ---- Scene 3: 積み上がったスタックのスナップショット ----
+        print(f"  Scene 3: final stack snapshot (4s)...")
+        raw3 = page.evaluate("window._recorder.snapshot()")
+        frame3 = decode_frames([raw3], VW, VH)[0]
+        n3 = FPS * 4
         scenes[2] = [frame3] * n3
         print(f"    {n3} frames (static)")
 
@@ -220,48 +210,47 @@ def build_video():
         print("[ERROR] VOICEVOX not running.")
         return
 
-    print("\n[1/3] Generating narration...")
+    print("\n[1/3] Narration...")
     audio_paths = []
     for i, text in enumerate(NARRATIONS):
         p = TMP / f"narr_{i:02d}.wav"
         tts(text, p)
         audio_paths.append(p)
 
-    print("\n[2/3] Capturing game footage...")
+    print("\n[2/3] Capturing...")
     if DRIVER != 'playwright':
         print("[ERROR] Playwright not installed.")
         return
     scenes = capture_frames()
 
-    print("\n[3/3] Compositing video...")
-    clips = []
+    print("\n[3/3] Compositing...")
     fps = 40
+    clips = []
     for i, (scene_frames, narr_path, narr_text) in enumerate(zip(
         [scenes[0], scenes[1], scenes[2]], audio_paths, NARRATIONS
     )):
         audio = AudioFileClip(str(narr_path))
         dur = audio.duration
-
         sub_frames = [add_subtitle(f, narr_text) for f in scene_frames]
         needed = int(dur * fps) + 1
         if len(sub_frames) < needed:
             sub_frames = sub_frames + [sub_frames[-1]] * (needed - len(sub_frames))
         else:
             sub_frames = sub_frames[:needed]
-
         clip = frames_to_clip(sub_frames, fps).with_audio(audio.with_duration(dur))
         clips.append(clip)
         print(f"  Scene {i+1}: {dur:.1f}s")
 
     total = sum(c.duration for c in clips)
-    print(f"\n  Total: {total:.1f}s")
+    print(f"  Total: {total:.1f}s")
+    if total > 60:
+        print("  WARNING: over 60s!")
 
     final = concatenate_videoclips(clips, method="compose")
     out = BASE / "hanami_stack_day27.mp4"
 
     import os
     os.environ['IMAGEIO_FFMPEG_EXE'] = FFMPEG_PATH
-
     final.write_videofile(
         str(out), fps=fps,
         codec="libx264", audio_codec="aac",
@@ -269,8 +258,7 @@ def build_video():
         logger="bar"
     )
     print(f"\nDone! -> {out}")
-    for c in clips:
-        c.close()
+    for c in clips: c.close()
     final.close()
 
 if __name__ == "__main__":
