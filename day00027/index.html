@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>HANAMI STACK – おにぎりタワー</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+    #wrapper { position: relative; width: 360px; height: 640px; }
+    canvas { display: block; width: 360px; height: 640px; cursor: crosshair; touch-action: none; user-select: none; }
+    @media (max-height: 660px) { #wrapper { transform: scale(0.9); transform-origin: top center; } }
+    @media (max-width: 380px)  { #wrapper { transform: scale(0.95); transform-origin: top center; } }
+  </style>
+</head>
+<body>
+<div id="wrapper"><canvas id="c" width="360" height="640"></canvas></div>
+<script>
+(function () {
+'use strict';
+
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const W = 360, H = 640;
+
+// ===== Debug =====
+let DEBUG = false;
+
+// ===== Constants =====
+const GROUND_Y    = 560;   // world Y of ground/box floor
+const GRAVITY     = 980;   // px/s^2
+const MAX_MISS    = 3;
+const FLOAT_SCR_Y = 80;    // screen Y of held item
+
+// ===== Bento Box =====
+const BOX_W    = 170;
+const BOX_LEFT  = W / 2 - BOX_W / 2;   // 95
+const BOX_RIGHT = W / 2 + BOX_W / 2;   // 265
+const BOX_WALL  = 14;
+const BOX_H     = 48;
+
+// ===== Physics constants =====
+const RESTITUTION  = 0.25;   // bounciness
+const FRICTION     = 0.55;   // tangential friction coefficient
+const DAMPING_LIN  = 0.992;  // per second linear damping
+const DAMPING_ANG  = 0.985;  // per second angular damping
+const SLEEP_LIN    = 8;      // px/s below which body may sleep
+const SLEEP_ANG    = 0.05;   // rad/s
+const SUBSTEPS     = 3;      // physics substeps per frame
+
+// ===== Food shape definitions =====
+// vertices: polygon local space (centroid at 0,0 unless comOffsetY shifts it)
+// comOffsetY: how far center of mass is below geometric center (positive = below = more stable)
+const FOOD_DEF = {
+  onigiri: {
+    emoji: '🍙', w: 62, h: 56,
+    vertices: [{x:-29,y:23},{x:29,y:23},{x:15,y:-23},{x:-15,y:-23}],
+    mass: 80, comOffsetY: 5,
+  },
+  karaage: {
+    emoji: '🍗', w: 56, h: 56,
+    vertices: [
+      {x:-18,y:-24},{x:4,y:-28},{x:20,y:-18},{x:22,y:-4},
+      {x:14,y:8},{x:8,y:22},{x:2,y:27},{x:-5,y:22},{x:-8,y:8},{x:-22,y:-8},
+    ],
+    mass: 65, comOffsetY: -8,
+  },
+  tamagoyaki: {
+    emoji: '🥚', w: 48, h: 60,
+    vertices: [
+      {x:0,y:-26},{x:10,y:-18},{x:16,y:-6},{x:15,y:8},
+      {x:8,y:20},{x:0,y:24},{x:-8,y:20},{x:-15,y:8},{x:-16,y:-6},{x:-10,y:-18},
+    ],
+    mass: 70, comOffsetY: 4,
+  },
+};
+const FOOD_ORDER = ['onigiri','onigiri','karaage','onigiri','tamagoyaki','karaage'];
+
+// ===== Background phases =====
+const BG = [
+  { h:    0, sky0:'#fce4ec', sky1:'#fff0f8' },
+  { h:  400, sky0:'#d0e8ff', sky1:'#87ceeb' },
+  { h:  900, sky0:'#6a8fd8', sky1:'#2c3e8c' },
+  { h: 1500, sky0:'#1a1a60', sky1:'#050518' },
+  { h: 2200, sky0:'#020210', sky1:'#000000' },
+  { h: 3500, sky0:'#000000', sky1:'#000000' },
+];
+
+// ===== Helpers =====
+function rand(a, b) { return Math.random() * (b - a) + a; }
+function randI(a, b) { return Math.floor(rand(a, b + 1)); }
+function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+function toScreenY(wy) { return wy - cameraTopY; }
+
+// ===== 2D Vector math =====
+const V = {
+  add: (a,b) => ({x:a.x+b.x, y:a.y+b.y}),
+  sub: (a,b) => ({x:a.x-b.x, y:a.y-b.y}),
+  scale: (a,s) => ({x:a.x*s, y:a.y*s}),
+  dot: (a,b) => a.x*b.x + a.y*b.y,
+  cross: (a,b) => a.x*b.y - a.y*b.x,  // scalar (z component)
+  crossSV: (s,v) => ({x:-s*v.y, y:s*v.x}),  // scalar × vector
+  len: a => Math.sqrt(a.x*a.x + a.y*a.y),
+  norm: a => { const l=Math.sqrt(a.x*a.x+a.y*a.y)||1; return {x:a.x/l, y:a.y/l}; },
+  rot: (v,a) => { const c=Math.cos(a),s=Math.sin(a); return {x:v.x*c-v.y*s, y:v.x*s+v.y*c}; },
+  perp: v => ({x:-v.y, y:v.x}),
+};
+
+// ===== Rigid Body =====
+function computePolygonInertia(mass, verts) {
+  // Polygon moment of inertia around centroid
+  let num = 0, den = 0;
+  const n = verts.length;
+  for (let i = 0; i < n; i++) {
+    const a = verts[i], b = verts[(i+1)%n];
+    const cr = Math.abs(V.cross(a, b));
+    num += cr * (V.dot(a,a) + V.dot(a,b) + V.dot(b,b));
+    den += cr;
+  }
+  return (mass / 6) * (num / den);
+}
+
+function makeBody(type, x, worldY, isStatic) {
+  const def = FOOD_DEF[type];
+  // Shift vertices so centroid accounts for comOffsetY
+  const verts = def.vertices.map(v => ({x:v.x, y:v.y - (def.comOffsetY||0)}));
+  const mass  = isStatic ? Infinity : def.mass;
+  const inertia = isStatic ? Infinity : computePolygonInertia(mass, verts);
+  return {
+    type, x, y: worldY,
+    angle: 0,
+    vx: 0, vy: 0, omega: 0,
+    mass, invMass: isStatic ? 0 : 1/mass,
+    inertia, invInertia: isStatic ? 0 : 1/inertia,
+    vertices: verts,   // local space
+    isStatic,
+    sleeping: false,
+    sleepTimer: 0,
+  };
+}
+
+// Get world-space vertices of a body
+function getWorldVerts(body) {
+  return body.vertices.map(v => {
+    const r = V.rot(v, body.angle);
+    return {x: body.x + r.x, y: body.y + r.y};
+  });
+}
+
+function getAABB(body) {
+  const wv = getWorldVerts(body);
+  return {
+    minX: Math.min(...wv.map(v=>v.x)),
+    maxX: Math.max(...wv.map(v=>v.x)),
+    minY: Math.min(...wv.map(v=>v.y)),
+    maxY: Math.max(...wv.map(v=>v.y)),
+  };
+}
+
+// ===== SAT Collision Detection =====
+function projectPoly(verts, axis) {
+  let mn = Infinity, mx = -Infinity;
+  for (const v of verts) {
+    const d = V.dot(v, axis);
+    if (d < mn) mn = d;
+    if (d > mx) mx = d;
+  }
+  return {mn, mx};
+}
+
+function getAxes(verts) {
+  const axes = [];
+  for (let i = 0; i < verts.length; i++) {
+    const a = verts[i], b = verts[(i+1)%verts.length];
+    const edge = V.sub(b, a);
+    axes.push(V.norm({x:-edge.y, y:edge.x}));
+  }
+  return axes;
+}
+
+// Returns null if no collision, else {normal, depth, contacts[]}
+function satCollide(bodyA, bodyB) {
+  const vertsA = getWorldVerts(bodyA);
+  const vertsB = getWorldVerts(bodyB);
+
+  let minDepth = Infinity;
+  let minNormal = null;
+
+  const axes = [...getAxes(vertsA), ...getAxes(vertsB)];
+  for (const axis of axes) {
+    const pA = projectPoly(vertsA, axis);
+    const pB = projectPoly(vertsB, axis);
+    const overlap = Math.min(pA.mx, pB.mx) - Math.max(pA.mn, pB.mn);
+    if (overlap <= 0) return null;  // separating axis found
+    if (overlap < minDepth) {
+      minDepth = overlap;
+      minNormal = axis;
+    }
+  }
+
+  // Ensure normal points from A to B
+  const d = V.sub({x:bodyB.x,y:bodyB.y}, {x:bodyA.x,y:bodyA.y});
+  if (V.dot(d, minNormal) < 0) minNormal = V.scale(minNormal, -1);
+
+  // Find contact points (clipping)
+  const contacts = findContactPoints(vertsA, vertsB, minNormal);
+
+  return {normal: minNormal, depth: minDepth, contacts};
+}
+
+function findContactPoints(vertsA, vertsB, normal) {
+  // Find deepest penetrating vertices of B into A, and vice versa
+  const contacts = [];
+  for (const v of vertsB) {
+    // Project v onto normal relative to A support
+    const pA = projectPoly(vertsA, normal);
+    const dv = V.dot(v, normal);
+    if (dv <= pA.mx + 0.5) contacts.push(v);
+  }
+  if (contacts.length === 0) {
+    // Use midpoint of overlap
+    const pB = projectPoly(vertsB, normal);
+    const pA = projectPoly(vertsA, normal);
+    const overlapMid = (Math.max(pA.mn,pB.mn) + Math.min(pA.mx,pB.mx)) * 0.5;
+    contacts.push({x: normal.x * overlapMid, y: normal.y * overlapMid});
+  }
+  return contacts.slice(0, 2);
+}
+
+function resolveCollision(bodyA, bodyB, manifold) {
+  const {normal, depth, contacts} = manifold;
+
+  // Positional correction (Baumgarte)
+  const slop = 0.5;
+  const percent = 0.4;
+  const correction = Math.max(depth - slop, 0) / (bodyA.invMass + bodyB.invMass) * percent;
+  const corr = V.scale(normal, correction);
+  if (!bodyA.isStatic) { bodyA.x -= corr.x * bodyA.invMass; bodyA.y -= corr.y * bodyA.invMass; }
+  if (!bodyB.isStatic) { bodyB.x += corr.x * bodyB.invMass; bodyB.y += corr.y * bodyB.invMass; }
+
+  // Impulse per contact point
+  const contactCount = contacts.length;
+  for (const contact of contacts) {
+    const rA = V.sub(contact, {x:bodyA.x, y:bodyA.y});
+    const rB = V.sub(contact, {x:bodyB.x, y:bodyB.y});
+
+    // Relative velocity at contact point
+    const vA = V.add({x:bodyA.vx,y:bodyA.vy}, V.crossSV(bodyA.omega, rA));
+    const vB = V.add({x:bodyB.vx,y:bodyB.vy}, V.crossSV(bodyB.omega, rB));
+    const relV = V.sub(vB, vA);
+    const relVn = V.dot(relV, normal);
+
+    if (relVn > 0) continue;  // separating
+
+    const rACrossN = V.cross(rA, normal);
+    const rBCrossN = V.cross(rB, normal);
+    const denom = bodyA.invMass + bodyB.invMass
+                + rACrossN * rACrossN * bodyA.invInertia
+                + rBCrossN * rBCrossN * bodyB.invInertia;
+
+    const j = -(1 + RESTITUTION) * relVn / denom / contactCount;
+    const impulse = V.scale(normal, j);
+
+    if (!bodyA.isStatic) {
+      bodyA.vx -= impulse.x * bodyA.invMass;
+      bodyA.vy -= impulse.y * bodyA.invMass;
+      bodyA.omega -= V.cross(rA, impulse) * bodyA.invInertia;
+    }
+    if (!bodyB.isStatic) {
+      bodyB.vx += impulse.x * bodyB.invMass;
+      bodyB.vy += impulse.y * bodyB.invMass;
+      bodyB.omega += V.cross(rB, impulse) * bodyB.invInertia;
+    }
+
+    // Friction impulse
+    const tangent = V.norm(V.sub(relV, V.scale(normal, V.dot(relV, normal))));
+    const relVt = V.dot(relV, tangent);
+    const jt = -relVt / denom / contactCount;
+    const frictionImpulse = V.scale(tangent, clamp(jt, -j * FRICTION, j * FRICTION));
+
+    if (!bodyA.isStatic) {
+      bodyA.vx -= frictionImpulse.x * bodyA.invMass;
+      bodyA.vy -= frictionImpulse.y * bodyA.invMass;
+      bodyA.omega -= V.cross(rA, frictionImpulse) * bodyA.invInertia;
+    }
+    if (!bodyB.isStatic) {
+      bodyB.vx += frictionImpulse.x * bodyB.invMass;
+      bodyB.vy += frictionImpulse.y * bodyB.invMass;
+      bodyB.omega += V.cross(rB, frictionImpulse) * bodyB.invInertia;
+    }
+  }
+}
+
+// ===== Static wall bodies =====
+function makeWallRect(x, y, w, h) {
+  // rectangle as polygon, centered at x,y
+  return {
+    x, y, angle: 0,
+    vx:0, vy:0, omega:0,
+    mass: Infinity, invMass: 0,
+    inertia: Infinity, invInertia: 0,
+    vertices: [{x:-w/2,y:-h/2},{x:w/2,y:-h/2},{x:w/2,y:h/2},{x:-w/2,y:h/2}],
+    isStatic: true, sleeping: true, sleepTimer: 999,
+  };
+}
+
+// ===== State =====
+let state = 'title';
+let score = 0, miss = 0, noMiss = true, elapsed = 0, lastTime = 0;
+let cameraTopY = 0;
+let stackBodies = [];      // settled rigid bodies
+let fallingBody = null;    // the currently falling body
+let staticBodies = [];     // walls/floor
+let nextQueue = [];
+let petals = [], stars = [], bonusTexts = [];
+let landCount = 0;
+let windDir = 0, windTarget = 0, windTimer = 0;
+let isDragging = false, playerX = W / 2;
+let highScore  = +(localStorage.getItem('hanamistack_hs') || 0);
+let highHeight = +(localStorage.getItem('hanamistack_hh') || 0);
+
+function buildStaticBodies() {
+  const WALL_H = 600;  // tall enough
+  staticBodies = [
+    // floor
+    makeWallRect(W/2, GROUND_Y + 25, BOX_W, 50),
+    // left wall
+    makeWallRect(BOX_LEFT - BOX_WALL/2, GROUND_Y - BOX_H/2, BOX_WALL, BOX_H + 50),
+    // right wall
+    makeWallRect(BOX_RIGHT + BOX_WALL/2, GROUND_Y - BOX_H/2, BOX_WALL, BOX_H + 50),
+  ];
+}
+
+// ===== Camera =====
+const SCROLL_TH = H * 0.46;
+// カメラ追跡用: 安定済みボディのみ追う（跳ねている最中は無視）
+let cameraTargetTopY = GROUND_Y;
+function updateCamera(dt) {
+  // sleeping（安定）したスタック体の最高点だけを追う
+  let topY = GROUND_Y;
+  for (const b of stackBodies) {
+    if (!b.sleeping) continue;  // 跳ねている最中は無視
+    const aabb = getAABB(b);
+    if (aabb.minY < topY) topY = aabb.minY;
+  }
+  // 目標値は一方向のみ更新（下がることはない）
+  if (topY < cameraTargetTopY) cameraTargetTopY = topY;
+
+  const topSY = cameraTargetTopY - cameraTopY;
+  if (topSY < SCROLL_TH) {
+    cameraTopY -= (SCROLL_TH - topSY) * Math.min(1, dt * 4);
+  }
+}
+
+function stackHeight() {
+  let topY = GROUND_Y;
+  for (const b of stackBodies) {
+    const aabb = getAABB(b);
+    if (aabb.minY < topY) topY = aabb.minY;
+  }
+  return Math.max(0, GROUND_Y - topY);
+}
+
+// ===== Wind =====
+function updateWind(dt) {
+  windTimer -= dt;
+  if (windTimer <= 0) {
+    windTarget = rand(-1, 1);
+    windTimer  = rand(3, 8);
+  }
+  windDir += (windTarget - windDir) * dt * 1.2;
+}
+
+// ===== Stars =====
+function initStars() {
+  stars = [];
+  for (let i = 0; i < 200; i++) {
+    stars.push({ x: rand(0,W), wy: rand(-12000, GROUND_Y), size: rand(0.5,2.5), bri: rand(0.4,1), tw: rand(0,Math.PI*2) });
+  }
+}
+function drawStars(alpha) {
+  ctx.save();
+  for (const s of stars) {
+    const sy = s.wy - cameraTopY * 0.22;
+    if (sy < -4 || sy > H+4) continue;
+    const tw = 0.7 + 0.3 * Math.sin(s.tw + elapsed * 2.1);
+    ctx.globalAlpha = alpha * s.bri * tw;
+    ctx.fillStyle = 'white';
+    ctx.beginPath(); ctx.arc(s.x, sy, s.size, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.restore();
+}
+
+// ===== Petals =====
+function makePetal(fromTop) {
+  return {
+    x: rand(0,W), y: fromTop ? rand(-20,-5) : rand(0,H),
+    vx: windDir*1.4 + rand(-0.4,0.4), vy: rand(0.7,1.8),
+    size: rand(7,15), rot: rand(0,Math.PI*2), rotV: rand(-0.05,0.05), a: rand(0.5,1.0),
+  };
+}
+function initPetals() { petals=[]; for(let i=0;i<28;i++) petals.push(makePetal(false)); }
+function updatePetals(dt) {
+  while (petals.length < 28) petals.push(makePetal(true));
+  for (const p of petals) {
+    p.vx += (windDir*1.4 - p.vx) * dt * 1.8;
+    p.x += p.vx*dt*60; p.y += p.vy*dt*60; p.rot += p.rotV*dt*60;
+    if (p.y > H+20 || p.x < -40 || p.x > W+40) Object.assign(p, makePetal(true));
+  }
+}
+function drawPetals() {
+  for (const p of petals) {
+    ctx.save(); ctx.globalAlpha=p.a; ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+    ctx.font=`${p.size}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🌸',0,0); ctx.restore();
+  }
+}
+
+// ===== Background =====
+function lerpColor(c1, c2, t) {
+  const p = s => parseInt(s, 16);
+  const r = (a,b) => Math.round(a+(b-a)*t);
+  const [r1,g1,b1]=[c1.slice(1,3),c1.slice(3,5),c1.slice(5,7)].map(p);
+  const [r2,g2,b2]=[c2.slice(1,3),c2.slice(3,5),c2.slice(5,7)].map(p);
+  return `rgb(${r(r1,r2)},${r(g1,g2)},${r(b1,b2)})`;
+}
+function getBgColors(sh) {
+  for (let i=BG.length-1;i>=0;i--) {
+    if (sh>=BG[i].h) {
+      const nx=BG[i+1]; if(!nx) return {sky0:BG[i].sky0,sky1:BG[i].sky1};
+      const t=(sh-BG[i].h)/(nx.h-BG[i].h);
+      return {sky0:lerpColor(BG[i].sky0,nx.sky0,t),sky1:lerpColor(BG[i].sky1,nx.sky1,t)};
+    }
+  }
+  return {sky0:BG[0].sky0,sky1:BG[0].sky1};
+}
+function drawBackground() {
+  const sh = stackHeight();
+  const {sky0,sky1} = getBgColors(sh);
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,sky0); grad.addColorStop(1,sky1);
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+
+  const starA = clamp((sh-300)/800,0,1);
+  if (starA>0) drawStars(starA);
+  if (sh>600&&sh<3500) { const a=clamp(Math.min((sh-600)/600,(3500-sh)/600),0,1); drawSun(a); }
+  if (sh>2800) { const a=clamp((sh-2800)/1200,0,1); drawGalaxy(a); }
+
+  const gsy = toScreenY(GROUND_Y);
+  if (gsy < H + 10) {
+    ctx.fillStyle = '#5d9e4f';
+    ctx.fillRect(0, gsy, W, H - gsy + 10);
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+    for (let x=0;x<=W;x+=30){ctx.beginPath();ctx.moveTo(x,gsy);ctx.lineTo(x,H);ctx.stroke();}
+    for (let y=gsy;y<=H;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    ctx.fillStyle = '#8d6e4a'; ctx.fillRect(0, gsy - 4, W, 4);
+    drawBentoBox(gsy);
+  }
+  if (sh < 800) {
+    const ta = clamp(1-sh/800,0,1);
+    ctx.save(); ctx.globalAlpha = ta;
+    drawSakuraTree(38, gsy, 1); drawSakuraTree(W-38, gsy, -1);
+    ctx.restore();
+  }
+}
+function drawSun(alpha) {
+  ctx.save(); ctx.globalAlpha=alpha;
+  const sx=W*0.76,sy=H*0.22;
+  const g=ctx.createRadialGradient(sx,sy,10,sx,sy,65);
+  g.addColorStop(0,'rgba(255,255,180,0.9)'); g.addColorStop(1,'rgba(255,190,40,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,65,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fffde4'; ctx.beginPath(); ctx.arc(sx,sy,22,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawGalaxy(alpha) {
+  ctx.save(); ctx.globalAlpha=alpha;
+  const cx=W*0.38,cy=H*0.32;
+  const g=ctx.createRadialGradient(cx,cy,0,cx,cy,130);
+  g.addColorStop(0,'rgba(220,170,255,0.5)'); g.addColorStop(0.4,'rgba(100,80,210,0.3)'); g.addColorStop(1,'rgba(20,10,60,0)');
+  ctx.fillStyle=g;
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(0.4); ctx.scale(1,0.38);
+  ctx.beginPath(); ctx.arc(0,0,130,0,Math.PI*2); ctx.fill(); ctx.restore();
+  ctx.globalAlpha=alpha*0.6; ctx.fillStyle='rgba(180,140,255,0.6)';
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(0.4); ctx.scale(1,0.38);
+  ctx.beginPath(); ctx.arc(0,0,40,0,Math.PI*2); ctx.fill(); ctx.restore();
+  ctx.restore();
+}
+function drawBentoBox(groundScreenY) {
+  const bx  = BOX_LEFT - BOX_WALL;
+  const bTop = groundScreenY - BOX_H;
+  const fullW = BOX_W + BOX_WALL * 2;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(bx + 4, bTop + 4, fullW, BOX_H + 4);
+
+  const lacquerGrad = ctx.createLinearGradient(bx, bTop, bx + fullW, bTop);
+  lacquerGrad.addColorStop(0,   '#8b1a1a');
+  lacquerGrad.addColorStop(0.3, '#c0392b');
+  lacquerGrad.addColorStop(0.7, '#c0392b');
+  lacquerGrad.addColorStop(1,   '#6b1010');
+  ctx.fillStyle = lacquerGrad;
+  ctx.fillRect(bx, bTop, fullW, BOX_H + 4);
+
+  ctx.fillStyle = '#d4a017'; ctx.fillRect(bx, bTop, fullW, 4);
+  ctx.fillStyle = '#d4a017'; ctx.fillRect(bx, groundScreenY, fullW, 5);
+  ctx.fillStyle = '#7a1010'; ctx.fillRect(bx, bTop + 4, BOX_WALL, BOX_H);
+  ctx.fillRect(BOX_RIGHT, bTop + 4, BOX_WALL, BOX_H);
+  ctx.fillStyle = '#3d0a0a'; ctx.fillRect(BOX_LEFT, groundScreenY - 6, BOX_W, 6);
+
+  ctx.strokeStyle = '#d4a017'; ctx.lineWidth = 1.5;
+  [bTop + BOX_H * 0.33, bTop + BOX_H * 0.66].forEach(y => {
+    ctx.beginPath(); ctx.moveTo(bx, y); ctx.lineTo(bx + BOX_WALL, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(BOX_RIGHT, y); ctx.lineTo(BOX_RIGHT + BOX_WALL, y); ctx.stroke();
+  });
+  ctx.fillStyle = '#f0c030';
+  [[bx+2,bTop+2],[bx+fullW-2,bTop+2],[bx+2,groundScreenY+2],[bx+fullW-2,groundScreenY+2]].forEach(([x,y])=>{
+    ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+  });
+  ctx.save(); ctx.globalAlpha=0.08; ctx.fillStyle='#ffff00';
+  ctx.fillRect(BOX_LEFT, bTop+4, BOX_W, BOX_H-4); ctx.restore();
+}
+function drawSakuraTree(cx,baseY,dir) {
+  ctx.save(); ctx.fillStyle='#7a5535'; ctx.fillRect(cx-6,baseY-85,12,85);
+  ctx.strokeStyle='#7a5535'; ctx.lineWidth=7; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx,baseY-62); ctx.quadraticCurveTo(cx+dir*24,baseY-108,cx+dir*52,baseY-128); ctx.stroke();
+  ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(cx,baseY-80); ctx.quadraticCurveTo(cx+dir*14,baseY-136,cx+dir*28,baseY-165); ctx.stroke();
+  ctx.fillStyle='rgba(255,175,195,0.72)';
+  [[dir*46,baseY-135,34],[dir*20,baseY-174,28],[dir*4,baseY-144,24]].forEach(([dx,dy,r])=>{
+    ctx.beginPath(); ctx.arc(cx+dx,dy,r,0,Math.PI*2); ctx.fill();
+  });
+  ctx.restore();
+}
+
+// ===== Physics Step =====
+function physicsStep(dt) {
+  const allDynamic = [...stackBodies, ...(fallingBody ? [fallingBody] : [])];
+
+  // Integrate forces
+  for (const b of allDynamic) {
+    if (b.isStatic || b.sleeping) continue;
+    b.vy += GRAVITY * dt;
+    // linear damping
+    const ld = Math.pow(DAMPING_LIN, dt);
+    const ad = Math.pow(DAMPING_ANG, dt);
+    b.vx *= ld; b.vy *= ld;
+    b.omega *= ad;
+    // integrate position
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.angle += b.omega * dt;
+  }
+
+  // Detect & resolve collisions
+  const allBodies = [...allDynamic, ...staticBodies];
+  for (let i = 0; i < allDynamic.length; i++) {
+    const bA = allDynamic[i];
+    if (bA.sleeping) continue;
+    // vs other dynamic bodies (sleeping bodies still participate in collision)
+    for (let j = i+1; j < allDynamic.length; j++) {
+      const bB = allDynamic[j];
+      const manifold = satCollide(bA, bB);
+      if (manifold) {
+        if (bB.sleeping) { bB.sleeping = false; bB.sleepTimer = 0; }
+        resolveCollision(bA, bB, manifold);
+      }
+    }
+    // vs static bodies
+    for (const bS of staticBodies) {
+      const manifold = satCollide(bA, bS);
+      if (manifold) resolveCollision(bA, bS, manifold);
+    }
+  }
+
+  // Sleep check for stack bodies
+  for (const b of stackBodies) {
+    if (b.isStatic) continue;
+    const spd = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+    const ang = Math.abs(b.omega);
+    if (spd < SLEEP_LIN && ang < SLEEP_ANG) {
+      b.sleepTimer += dt;
+      if (b.sleepTimer > 0.8) {
+        b.sleeping = true;
+        b.vx = 0; b.vy = 0; b.omega = 0;
+      }
+    } else {
+      b.sleepTimer = 0;
+      b.sleeping = false;
+    }
+  }
+}
+
+// ===== Food Drawing =====
+function drawBody(body) {
+  const def = FOOD_DEF[body.type];
+  const sx  = body.x;
+  const sy  = toScreenY(body.y);
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(body.angle);
+
+  // emoji
+  const fs = Math.max(def.w, def.h) * 0.86;
+  ctx.font=`${fs}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(def.emoji, 0, 0);
+
+  if (DEBUG) {
+    // hitbox polygon
+    ctx.strokeStyle='rgba(255,50,50,0.9)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(body.vertices[0].x, body.vertices[0].y);
+    for (let i=1;i<body.vertices.length;i++) ctx.lineTo(body.vertices[i].x, body.vertices[i].y);
+    ctx.closePath(); ctx.stroke();
+    // center of mass (body center = 0,0 in local space)
+    ctx.fillStyle='rgba(0,255,80,0.95)';
+    ctx.beginPath(); ctx.arc(0,0,3.5,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ===== Food Queue =====
+function pickNext() {
+  if (!nextQueue.length) {
+    const arr=[...FOOD_ORDER];
+    for(let i=arr.length-1;i>0;i--){const j=randI(0,i);[arr[i],arr[j]]=[arr[j],arr[i]];}
+    nextQueue.push(...arr);
+  }
+  return nextQueue.shift();
+}
+
+function spawnFalling() {
+  const type = pickNext();
+  const spawnY = cameraTopY + FLOAT_SCR_Y;
+  fallingBody = makeBody(type, playerX, spawnY, false);
+  fallingBody.isDropped = false;
+}
+
+// ===== Land / Miss =====
+let missScheduled = false;
+function addMiss(reason) {
+  if (missScheduled || state !== 'playing') return;
+  missScheduled = true;
+  const msg = reason==='edge' ? 'はみ出た！💦' : '落としちゃった！💦';
+  bonusTexts.push({text:msg,x:W/2,y:H*0.45,life:1.3,maxLife:1.3,big:true,color:'#ff9900'});
+  miss++; noMiss=false; playSound('miss');
+  fallingBody = null;
+  if (miss >= MAX_MISS) { endGame(); return; }
+  setTimeout(() => { missScheduled = false; spawnFalling(); }, 400);
+}
+
+// ===== Update =====
+function update(dt) {
+  if (state !== 'playing') return;
+  elapsed += dt;
+  updateWind(dt);
+  updatePetals(dt);
+  updateCamera(dt);
+
+  for(let i=bonusTexts.length-1;i>=0;i--){
+    bonusTexts[i].life-=dt; bonusTexts[i].y-=dt*26;
+    if(bonusTexts[i].life<=0) bonusTexts.splice(i,1);
+  }
+
+  // Floating item follows player
+  if (fallingBody && !fallingBody.isDropped) {
+    fallingBody.x = playerX;
+    fallingBody.y = cameraTopY + FLOAT_SCR_Y;
+    fallingBody.vx = 0; fallingBody.vy = 0; fallingBody.omega = 0; fallingBody.angle = 0;
+    return;
+  }
+
+  // Physics substeps
+  const subDt = dt / SUBSTEPS;
+  for (let s = 0; s < SUBSTEPS; s++) physicsStep(subDt);
+
+  if (!fallingBody) return;
+
+  // Check if falling body has landed (is now colliding with something stable)
+  const fb = fallingBody;
+  const fbAABB = getAABB(fb);
+
+  // Off screen below → miss
+  if (toScreenY(fbAABB.minY) > H + 150) {
+    addMiss('fall'); return;
+  }
+
+  // Check if body is outside box walls (x bounds) after landing
+  if (fb.y > GROUND_Y - 80) {
+    if (fb.x < BOX_LEFT - 5 || fb.x > BOX_RIGHT + 5) {
+      addMiss('edge'); return;
+    }
+  }
+
+  // Check if body has come to near-rest (landed on something)
+  const spd = Math.sqrt(fb.vx*fb.vx + fb.vy*fb.vy);
+  const settled = spd < 30 && Math.abs(fb.omega) < 0.3 && fb.y < GROUND_Y + 10;
+  if (settled) {
+    // Transfer to stack
+    fb.sleeping = false;
+    fb.sleepTimer = 0;
+    stackBodies.push(fb);
+    fallingBody = null;
+    landCount++;
+
+    let gained = 100; const texts = ['+100'];
+    if (Math.abs(fb.x - W/2) <= 25) { gained+=50; texts.push('ぴたっ！+50'); }
+    if (landCount % 5 === 0) { gained+=200; texts.push('タワーボーナス！+200'); }
+    score += gained;
+    const sy = toScreenY(fb.y);
+    texts.forEach((t,i) => bonusTexts.push({text:t, x:fb.x, y:sy-30-i*22, life:1.2, maxLife:1.2}));
+    playSound('land');
+
+    // Wake nearby sleeping bodies so they react
+    for (const b of stackBodies) {
+      if (b.sleeping) {
+        const dx = b.x - fb.x, dy = b.y - fb.y;
+        if (Math.sqrt(dx*dx+dy*dy) < 120) {
+          b.sleeping = false; b.sleepTimer = 0;
+        }
+      }
+    }
+
+    spawnFalling();
+  }
+}
+
+// ===== Draw =====
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  drawBackground();
+  drawPetals();
+
+  if (state === 'title')  { drawTitle();  return; }
+  if (state === 'result') { drawResult(); return; }
+
+  // stack
+  for (const b of stackBodies) drawBody(b);
+
+  // falling item
+  if (fallingBody) {
+    drawBody(fallingBody);
+    if (!fallingBody.isDropped) {
+      const def = FOOD_DEF[fallingBody.type];
+      const fsy = toScreenY(fallingBody.y);
+      let topSY = toScreenY(GROUND_Y);
+      for (const b of stackBodies) {
+        const aabb = getAABB(b);
+        const bsy = toScreenY(aabb.minY);
+        if (bsy < topSY) topSY = bsy;
+      }
+      // drop guide line
+      ctx.save(); ctx.setLineDash([4,6]);
+      ctx.strokeStyle='rgba(200,140,140,0.4)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(fallingBody.x, fsy+20);
+      ctx.lineTo(fallingBody.x, topSY); ctx.stroke();
+      // box inner range indicator
+      ctx.setLineDash([2,4]);
+      ctx.strokeStyle='rgba(255,220,50,0.35)'; ctx.lineWidth=1;
+      ctx.strokeRect(BOX_LEFT, fsy+30, BOX_W, topSY - fsy - 30);
+      ctx.restore();
+    }
+  }
+
+  drawHUD();
+  drawBonusTexts();
+
+  if (DEBUG) {
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,H-24,W,24);
+    ctx.fillStyle='#0f0'; ctx.font='9px monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(`cam:${cameraTopY.toFixed(0)} wind:${windDir.toFixed(2)} sh:${stackHeight().toFixed(0)} stk:${stackBodies.length}`, 4, H-12);
+  }
+}
+
+// ===== HUD =====
+function drawHUD() {
+  ctx.fillStyle='rgba(0,0,0,0.58)'; ctx.fillRect(0,0,W,56);
+  ctx.save();
+  ctx.fillStyle='#ffcce8'; ctx.font='bold 10px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText('SCORE',7,5);
+  ctx.font='bold 20px sans-serif'; ctx.fillStyle='#ff6699';
+  ctx.fillText(score,7,17);
+  ctx.restore();
+
+  const sh=stackHeight();
+  ctx.save();
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillStyle='#aaddff'; ctx.font='bold 10px sans-serif'; ctx.fillText('HEIGHT',W/2,5);
+  ctx.font='bold 20px sans-serif'; ctx.fillStyle='#66ccff';
+  ctx.fillText(sh.toFixed(0)+'m',W/2,17);
+  ctx.restore();
+
+  ctx.save();
+  ctx.textAlign='right'; ctx.textBaseline='top';
+  ctx.fillStyle='#ffcce8'; ctx.font='bold 10px sans-serif'; ctx.fillText('MISS',W-7,5);
+  ctx.font='17px serif'; ctx.textBaseline='middle';
+  for(let i=0;i<MAX_MISS;i++){
+    const hx=W-10-(MAX_MISS-1-i)*22;
+    ctx.fillText(i<MAX_MISS-miss?'❤️':'🖤',hx,36);
+  }
+  ctx.restore();
+
+  const bw=52,bh=5,bx=W/2-bw/2,by=47;
+  ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.fillRect(bx,by,bw,bh);
+  const mid=bx+bw/2, wEnd=mid+windDir*bw*0.48;
+  ctx.fillStyle=windDir>0.05?'#87d8ff':windDir<-0.05?'#ffb3d8':'#ccc';
+  ctx.fillRect(Math.min(mid,wEnd),by,Math.abs(wEnd-mid),bh);
+  ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.fillRect(mid-1,by-1,2,bh+2);
+  if (Math.abs(windDir)>0.15) {
+    ctx.font='9px sans-serif'; ctx.textBaseline='middle'; ctx.fillStyle='rgba(255,255,255,0.55)';
+    if (windDir>0){ctx.textAlign='left';ctx.fillText('→',bx+bw+3,by+bh/2);}
+    else{ctx.textAlign='right';ctx.fillText('←',bx-3,by+bh/2);}
+  }
+}
+
+function drawBonusTexts() {
+  for (const bt of bonusTexts) {
+    const r=bt.life/bt.maxLife;
+    ctx.save(); ctx.globalAlpha=Math.min(1,r*2.2);
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font=bt.big?'bold 18px sans-serif':'bold 14px sans-serif';
+    ctx.strokeStyle='rgba(0,0,0,0.75)'; ctx.lineWidth=3;
+    ctx.strokeText(bt.text,bt.x,bt.y);
+    ctx.fillStyle=bt.color||(bt.big?'#aaddff':'#ffaacc');
+    ctx.fillText(bt.text,bt.x,bt.y);
+    ctx.restore();
+  }
+}
+
+// ===== Screens =====
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+function drawBtn(cx,cy,label,color){
+  const bw=220,bh=44;
+  ctx.save(); ctx.fillStyle=color;
+  roundRect(ctx,cx-bw/2,cy-bh/2,bw,bh,22); ctx.fill();
+  ctx.fillStyle='white'; ctx.font='bold 15px sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label,cx,cy); ctx.restore();
+}
+function drawTitle() {
+  ctx.fillStyle='rgba(0,0,0,0.58)';
+  roundRect(ctx,28,100,W-56,420,18); ctx.fill();
+  ctx.strokeStyle='rgba(255,160,200,0.5)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ff99cc'; ctx.font='bold 28px sans-serif'; ctx.fillText('HANAMI STACK',W/2,152);
+  ctx.fillStyle='#aaddff'; ctx.font='14px sans-serif'; ctx.fillText('おにぎりタワー 〜無限お花見〜',W/2,178);
+  ctx.font='40px serif'; ctx.fillText('🍙🍗🥚',W/2,224);
+  ctx.fillStyle='#ddd'; ctx.font='13px sans-serif';
+  ['押しながら左右に動かす','離したら食べ物が落ちる！','ミス3回でゲームオーバー','時間制限なし・どこまでも積める'].forEach((t,i)=>{
+    ctx.fillText(t,W/2,272+i*23);
+  });
+  if (highScore||highHeight) {
+    ctx.fillStyle='#ffd700'; ctx.font='bold 13px sans-serif';
+    ctx.fillText(`ベスト ${highScore}pt / ${highHeight}m`,W/2,372);
+  }
+  drawBtn(W/2,430,'タップしてスタート！','#e91e8c');
+}
+function drawResult() {
+  const sh=Math.floor(stackHeight());
+  ctx.fillStyle='rgba(0,0,0,0.68)';
+  roundRect(ctx,18,85,W-36,460,18); ctx.fill();
+  ctx.strokeStyle='rgba(255,160,200,0.5)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#ff99cc'; ctx.font='bold 24px sans-serif'; ctx.fillText('ゲームオーバー',W/2,130);
+  ctx.font='36px serif'; ctx.fillText('🌸',W/2,172);
+  ctx.fillStyle='#ccc'; ctx.font='bold 14px sans-serif'; ctx.fillText('スコア',W/2,210);
+  ctx.fillStyle='#ff99cc'; ctx.font='bold 34px sans-serif'; ctx.fillText(score+' pt',W/2,242);
+  ctx.fillStyle='#66ccff'; ctx.font='bold 18px sans-serif'; ctx.fillText('到達高度 '+sh+' m',W/2,274);
+  const newS=score>highScore, newH=sh>highHeight;
+  ctx.font='13px sans-serif';
+  ctx.fillStyle=newS?'#ffd700':'#666';
+  ctx.fillText(newS?'🎉 スコア NEW RECORD！':'ベスト: '+highScore+'pt',W/2,304);
+  ctx.fillStyle=newH?'#7fffaa':'#666';
+  ctx.fillText(newH?'🚀 高度 NEW RECORD！':'ベスト高度: '+highHeight+'m',W/2,326);
+  if (noMiss) {
+    ctx.fillStyle='#7fffaa'; ctx.font='bold 13px sans-serif';
+    ctx.fillText('✨ ノーミスボーナス +500pt',W/2,350);
+  }
+  drawBtn(W/2,420,'もう一度！','#27ae60');
+  drawBtn(W/2,472,'タイトルへ','#444');
+  ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.font='10px sans-serif';
+  ctx.fillText('D キーで当たり判定表示切替',W/2,520);
+}
+
+// ===== Game Flow =====
+function startGame() {
+  state='playing'; score=0; miss=0; noMiss=true; elapsed=0;
+  cameraTopY=0; cameraTargetTopY=GROUND_Y; stackBodies=[]; bonusTexts=[]; landCount=0;
+  nextQueue=[]; windDir=0; windTarget=0; windTimer=rand(3,7);
+  playerX=W/2; isDragging=false; fallingBody=null; missScheduled=false;
+  buildStaticBodies();
+  initPetals(); initStars();
+  spawnFalling();
+}
+function endGame() {
+  if (noMiss) score+=500;
+  const sh=Math.floor(stackHeight());
+  if (score>highScore){highScore=score;localStorage.setItem('hanamistack_hs',highScore);}
+  if (sh>highHeight){highHeight=sh;localStorage.setItem('hanamistack_hh',highHeight);}
+  state='result'; playSound('end');
+}
+
+// ===== Input =====
+function getPos(e) {
+  const rect=canvas.getBoundingClientRect();
+  const sx=W/rect.width, sy=H/rect.height;
+  const src=e.touches?e.touches[0]:(e.changedTouches?e.changedTouches[0]:e);
+  return {x:(src.clientX-rect.left)*sx, y:(src.clientY-rect.top)*sy};
+}
+function onDown(ex,ey) {
+  if (state==='title'){if(ey>408&&ey<452)startGame();return;}
+  if (state==='result'){
+    if(ey>398&&ey<442)startGame();
+    if(ey>450&&ey<494)state='title';
+    return;
+  }
+  isDragging=true; playerX=clamp(ex,22,W-22);
+}
+function onMove(ex) {
+  if (state==='playing'&&isDragging) playerX=clamp(ex,22,W-22);
+}
+function onUp() {
+  if (state==='playing'&&isDragging) {
+    isDragging=false;
+    if (fallingBody && !fallingBody.isDropped) {
+      fallingBody.isDropped = true;
+      fallingBody.vy = 50;  // small initial downward nudge
+    }
+  }
+}
+canvas.addEventListener('mousedown', e=>{const p=getPos(e);onDown(p.x,p.y);});
+canvas.addEventListener('mousemove', e=>{const p=getPos(e);onMove(p.x);});
+canvas.addEventListener('mouseup',   ()=>onUp());
+canvas.addEventListener('touchstart',e=>{e.preventDefault();const p=getPos(e);onDown(p.x,p.y);},{passive:false});
+canvas.addEventListener('touchmove', e=>{e.preventDefault();const p=getPos(e);onMove(p.x);},{passive:false});
+canvas.addEventListener('touchend',  e=>{e.preventDefault();onUp();},{passive:false});
+document.addEventListener('keydown', e=>{if(e.key==='d'||e.key==='D') DEBUG=!DEBUG;});
+
+// ===== Sound =====
+let audioCtx=null;
+function ac(){return audioCtx||(audioCtx=new(window.AudioContext||window.webkitAudioContext)());}
+function playSound(type){
+  try{
+    const a=ac(),o=a.createOscillator(),g=a.createGain();
+    o.connect(g);g.connect(a.destination);
+    const t=a.currentTime;
+    if(type==='land'){o.type='sine';o.frequency.setValueAtTime(440,t);o.frequency.exponentialRampToValueAtTime(220,t+0.12);g.gain.setValueAtTime(0.13,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.15);o.start(t);o.stop(t+0.15);}
+    else if(type==='miss'){o.type='sawtooth';o.frequency.setValueAtTime(220,t);o.frequency.exponentialRampToValueAtTime(80,t+0.3);g.gain.setValueAtTime(0.1,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.3);o.start(t);o.stop(t+0.3);}
+    else if(type==='end'){o.type='sine';o.frequency.setValueAtTime(523,t);o.frequency.setValueAtTime(659,t+0.15);o.frequency.setValueAtTime(784,t+0.3);g.gain.setValueAtTime(0.1,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.5);o.start(t);o.stop(t+0.5);}
+  }catch(e){}
+}
+
+// ===== Main Loop =====
+function loop(ts) {
+  if (!lastTime) lastTime=ts;
+  const dt=Math.min((ts-lastTime)/1000, 0.05);
+  lastTime=ts;
+  update(dt); draw();
+  requestAnimationFrame(loop);
+}
+
+initPetals(); initStars();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
