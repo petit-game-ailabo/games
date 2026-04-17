@@ -24,11 +24,11 @@ const ctx    = canvas.getContext('2d');
 const W = 360, H = 640;
 
 // ===== Debug =====
-let DEBUG = false;
+let DEBUG = true;
 
 // ===== Constants =====
 const GROUND_Y    = 560;   // world Y of ground/box floor
-const GRAVITY     = 980;   // px/s^2
+const GRAVITY     = 300;   // px/s^2
 const MAX_MISS    = 3;
 const FLOAT_SCR_Y = 80;    // screen Y of held item
 
@@ -40,13 +40,15 @@ const BOX_WALL  = 14;
 const BOX_H     = 48;
 
 // ===== Physics constants =====
-const RESTITUTION  = 0.25;   // bounciness
-const FRICTION     = 0.55;   // tangential friction coefficient
-const DAMPING_LIN  = 0.992;  // per second linear damping
-const DAMPING_ANG  = 0.985;  // per second angular damping
-const SLEEP_LIN    = 8;      // px/s below which body may sleep
-const SLEEP_ANG    = 0.05;   // rad/s
-const SUBSTEPS     = 3;      // physics substeps per frame
+const RESTITUTION      = 0.0;   // bounciness (食べ物 = 完全非弾性)
+const REST_VEL_THRESH  = 80;    // これ以下の衝突速度は反発なし（静止接触）
+const FRICTION         = 0.55;  // tangential friction
+const DAMPING_LIN      = 0.3;   // per-second linear damping (強め)
+const DAMPING_ANG      = 0.15;  // per-second angular damping (強め)
+const SLEEP_LIN        = 20;    // px/s
+const SLEEP_ANG        = 0.15;  // rad/s
+const SUBSTEPS         = 4;
+const SETTLE_TIME      = 0.4;   // 静止判定に必要な連続時間(s)
 
 // ===== Food shape definitions =====
 // vertices: polygon local space (centroid at 0,0 unless comOffsetY shifts it)
@@ -231,8 +233,8 @@ function resolveCollision(bodyA, bodyB, manifold) {
   const {normal, depth, contacts} = manifold;
 
   // Positional correction (Baumgarte)
-  const slop = 0.5;
-  const percent = 0.4;
+  const slop = 1.5;   // 微小な重なりは無視
+  const percent = 0.3;
   const correction = Math.max(depth - slop, 0) / (bodyA.invMass + bodyB.invMass) * percent;
   const corr = V.scale(normal, correction);
   if (!bodyA.isStatic) { bodyA.x -= corr.x * bodyA.invMass; bodyA.y -= corr.y * bodyA.invMass; }
@@ -258,7 +260,9 @@ function resolveCollision(bodyA, bodyB, manifold) {
                 + rACrossN * rACrossN * bodyA.invInertia
                 + rBCrossN * rBCrossN * bodyB.invInertia;
 
-    const j = -(1 + RESTITUTION) * relVn / denom / contactCount;
+    // 衝突速度が小さい（静止接触）は反発ゼロ
+    const e = Math.abs(relVn) > REST_VEL_THRESH ? RESTITUTION : 0;
+    const j = -(1 + e) * relVn / denom / contactCount;
     const impulse = V.scale(normal, j);
 
     if (!bodyA.isStatic) {
@@ -540,11 +544,15 @@ function physicsStep(dt) {
   for (const b of allDynamic) {
     if (b.isStatic || b.sleeping) continue;
     b.vy += GRAVITY * dt;
-    // linear damping
+    // damping (per second)
     const ld = Math.pow(DAMPING_LIN, dt);
     const ad = Math.pow(DAMPING_ANG, dt);
     b.vx *= ld; b.vy *= ld;
     b.omega *= ad;
+    // マイクロ振動カットオフ：超低速は即ゼロ
+    const spd2 = b.vx*b.vx + b.vy*b.vy;
+    if (spd2 < 4) { b.vx = 0; b.vy = 0; }
+    if (Math.abs(b.omega) < 0.01) b.omega = 0;
     // integrate position
     b.x += b.vx * dt;
     b.y += b.vy * dt;
@@ -552,23 +560,34 @@ function physicsStep(dt) {
   }
 
   // Detect & resolve collisions
-  const allBodies = [...allDynamic, ...staticBodies];
-  for (let i = 0; i < allDynamic.length; i++) {
-    const bA = allDynamic[i];
-    if (bA.sleeping) continue;
-    // vs other dynamic bodies (sleeping bodies still participate in collision)
-    for (let j = i+1; j < allDynamic.length; j++) {
-      const bB = allDynamic[j];
-      const manifold = satCollide(bA, bB);
-      if (manifold) {
-        if (bB.sleeping) { bB.sleeping = false; bB.sleepTimer = 0; }
-        resolveCollision(bA, bB, manifold);
+  // 1) fallingBody vs 静的ボディ（壁・床）
+  if (fallingBody && fallingBody.isDropped) {
+    for (const bS of staticBodies) {
+      const m = satCollide(fallingBody, bS);
+      if (m) resolveCollision(fallingBody, bS, m);
+    }
+    // 2) fallingBody vs スタック体（sleeping含む全て）
+    for (const bStack of stackBodies) {
+      const m = satCollide(fallingBody, bStack);
+      if (m) {
+        // sleeping体は無限質量の静的壁として扱う
+        if (bStack.sleeping) {
+          const fake = {x:bStack.x, y:bStack.y, vx:0, vy:0, omega:0,
+                        invMass:0, invInertia:0, isStatic:true,
+                        vertices:bStack.vertices, angle:bStack.angle};
+          resolveCollision(fallingBody, fake, m);
+        } else {
+          resolveCollision(fallingBody, bStack, m);
+        }
       }
     }
-    // vs static bodies
+  }
+  // 3) 非sleeping スタック体 vs 静的ボディ（地面安定化）
+  for (const bA of stackBodies) {
+    if (bA.sleeping) continue;
     for (const bS of staticBodies) {
-      const manifold = satCollide(bA, bS);
-      if (manifold) resolveCollision(bA, bS, manifold);
+      const m = satCollide(bA, bS);
+      if (m) resolveCollision(bA, bS, m);
     }
   }
 
@@ -634,6 +653,8 @@ function spawnFalling() {
   const spawnY = cameraTopY + FLOAT_SCR_Y;
   fallingBody = makeBody(type, playerX, spawnY, false);
   fallingBody.isDropped = false;
+  fallingBody.settleTimer = 0;
+  fallingBody.dropTime = 0;
 }
 
 // ===== Land / Miss =====
@@ -694,7 +715,21 @@ function update(dt) {
 
   // Check if body has come to near-rest (landed on something)
   const spd = Math.sqrt(fb.vx*fb.vx + fb.vy*fb.vy);
-  const settled = spd < 30 && Math.abs(fb.omega) < 0.3 && fb.y < GROUND_Y + 10;
+  fb.dropTime = (fb.dropTime || 0) + dt;
+  // 速度が閾値以下の状態が一定時間続いたら着地判定
+  if (spd < SLEEP_LIN && Math.abs(fb.omega) < SLEEP_ANG) {
+    fb.settleTimer = (fb.settleTimer || 0) + dt;
+    // 閾値を超えたら強制ゼロ速度（振動防止）
+    if (fb.settleTimer >= SETTLE_TIME * 0.5) {
+      fb.vx = 0; fb.vy = 0; fb.omega = 0;
+    }
+  } else {
+    fb.settleTimer = 0;
+  }
+  // 最大4秒経過したら強制着地（どんな状況でも詰まらせない）
+  const forceSettle = fb.dropTime > 4.0;
+  if (forceSettle) { fb.vx = 0; fb.vy = 0; fb.omega = 0; }
+  const settled = (fb.settleTimer || 0) >= SETTLE_TIME || forceSettle;
   if (settled) {
     // Transfer to stack
     fb.sleeping = false;
