@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>とびきりケーキ屋さん</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f8e8f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    overflow: hidden;
+  }
+  #gameCanvas {
+    display: block;
+    touch-action: none;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<script>
+(function() {
+'use strict';
+
+// ===== CONSTANTS =====
+const W = 390, H = 844;
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ===== COLORS =====
+const C = {
+  bg:       '#fff5fa',
+  bgTop:    '#ffe0f0',
+  plate:    '#fff0f5',
+  sponge:   '#f5d7a0',
+  choco:    '#7b4c2e',
+  matcha:   '#8fbc6e',
+  gauge1:   '#ff8aad',
+  gauge2:   '#a8d8ea',
+  gaugeBg:  '#e8e8e8',
+  star:     '#ffcc00',
+  text:     '#5a3550',
+  white:    '#ffffff',
+  shadow:   'rgba(180,120,160,0.18)',
+};
+
+// ===== PARTS =====
+const PARTS = [
+  { emoji: '🍓', name: 'いちご',       sweet: 15, lively: 5  },
+  { emoji: '🍫', name: 'チョコ',       sweet: 20, lively: 5  },
+  { emoji: '🍒', name: 'さくらんぼ',   sweet: 10, lively: 10 },
+  { emoji: '🌸', name: '桜',           sweet: 0,  lively: 15 },
+  { emoji: '🍋', name: 'レモン',       sweet: -10,lively: 5  },
+  { emoji: '🍬', name: 'キャンディ',   sweet: 25, lively: 20 },
+  { emoji: '🌿', name: 'ミント',       sweet: -5, lively: -10},
+  { emoji: '⭐', name: '星型チョコ',   sweet: 15, lively: 15 },
+  { emoji: '🌈', name: 'カラースプレー',sweet:5,  lively: 30 },
+  { emoji: '🍰', name: 'ケーキフラッグ',sweet:0,  lively: 20 },
+];
+
+// ===== CUSTOMER TYPES =====
+const CUSTOMERS = [
+  { name: '甘党の女の子',         emoji: '👧', sweetMin: 60, sweetMax: 100, livelyMin: 30, livelyMax: 70,  preferBase: 'sponge' },
+  { name: 'さっぱり好きのOL',     emoji: '👩‍💼', sweetMin: 0,  sweetMax: 40,  livelyMin: 20, livelyMax: 60,  preferBase: 'matcha' },
+  { name: '華やか大好きパーティ好き', emoji: '🎉', sweetMin: 40, sweetMax: 80,  livelyMin: 60, livelyMax: 100, preferBase: 'choco'  },
+  { name: 'シンプル派のお母さん', emoji: '👩',  sweetMin: 30, sweetMax: 60,  livelyMin: 0,  livelyMax: 40,  preferBase: 'sponge' },
+  { name: 'バランス重視の先生',   emoji: '👩‍🏫', sweetMin: 30, sweetMax: 70,  livelyMin: 30, livelyMax: 70,  preferBase: 'matcha' },
+];
+
+const BASE_TYPES = ['sponge', 'choco', 'matcha'];
+const BASE_NAMES = { sponge: 'スポンジ', choco: 'チョコ', matcha: '抹茶' };
+
+// ===== STATE =====
+const PHASE = {
+  TITLE: 'title',
+  CUSTOMER: 'customer',
+  BASE_SELECT: 'base_select',
+  DECO: 'deco',
+  COMPLETE: 'complete',
+  SCORE: 'score',
+};
+
+let state = {
+  phase: PHASE.TITLE,
+  customer: null,
+  base: null,
+  parts: [],
+  sweet: 0,
+  lively: 0,
+  timeLeft: 75,
+  fallingPart: null,
+  fallY: -60,
+  fallX: W / 2,
+  fallSpeed: 3.5,
+  score: 0,
+  stars: 0,
+  highScore: parseInt(localStorage.getItem('cake_hs') || '0'),
+  particles: [],
+  sparkles: [],
+  holdTimer: 0,
+  isHolding: false,
+  lastTime: 0,
+  totalScore: 0,
+  roundsLeft: 3,
+  roundNum: 1,
+};
+
+// ===== UTILS =====
+function rand(a, b) { return a + Math.random() * (b - a); }
+function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function drawRoundRect(x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+}
+
+function drawEmoji(emoji, x, y, size) {
+  ctx.save();
+  ctx.font = size + 'px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, x, y);
+  ctx.restore();
+}
+
+// ===== CAKE DRAWING =====
+const CAKE_CX = W / 2;
+const CAKE_Y_BASE = 650;
+const CAKE_W = 200;
+const CAKE_H = 80;
+
+function drawCake() {
+  const base = state.base;
+  if (!base) return;
+
+  // Shadow
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(CAKE_CX, CAKE_Y_BASE + CAKE_H + 8, CAKE_W / 2 + 10, 14, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(180,120,160,0.15)';
+  ctx.fill();
+  ctx.restore();
+
+  // Bottom layer
+  const baseColor = base === 'sponge' ? C.sponge : base === 'choco' ? C.choco : C.matcha;
+  const creamColor = '#fff5f8';
+  const y1 = CAKE_Y_BASE;
+
+  // Cake body
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(CAKE_CX, y1 + CAKE_H, CAKE_W / 2, 16, 0, 0, Math.PI * 2);
+  ctx.fillStyle = creamColor;
+  ctx.fill();
+  ctx.restore();
+
+  drawRoundRect(CAKE_CX - CAKE_W / 2, y1, CAKE_W, CAKE_H, 14, baseColor);
+
+  // Cream layer top
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(CAKE_CX, y1, CAKE_W / 2, 16, 0, 0, Math.PI * 2);
+  ctx.fillStyle = creamColor;
+  ctx.fill();
+  ctx.restore();
+
+  // Cream top highlight
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(CAKE_CX, y1, CAKE_W / 2 - 10, 10, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.restore();
+
+  // Drizzle decoration
+  if (base === 'choco') {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(60,30,10,0.35)';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 4; i++) {
+      const px = CAKE_CX - 70 + i * 45;
+      ctx.beginPath();
+      ctx.moveTo(px, y1 - 4);
+      ctx.bezierCurveTo(px + 5, y1 + 15, px - 5, y1 + 30, px + 3, y1 + 50);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (base === 'matcha') {
+    ctx.save();
+    ctx.fillStyle = 'rgba(100,160,80,0.2)';
+    for (let i = 0; i < 6; i++) {
+      ctx.beginPath();
+      ctx.arc(CAKE_CX - 80 + i * 30, y1 + 20 + (i % 2) * 20, 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Placed parts on cake
+  const maxParts = state.parts.length;
+  if (maxParts > 0) {
+    const topY = y1 - 10;
+    const cols = Math.min(maxParts, 6);
+    const spacingX = Math.min(CAKE_W / (cols + 1), 45);
+    const startX = CAKE_CX - spacingX * (cols - 1) / 2;
+    for (let i = 0; i < maxParts; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const px = startX + col * spacingX;
+      const py = topY - row * 32;
+      drawEmoji(state.parts[i].emoji, px, py, 26);
+    }
+  }
+}
+
+// ===== GAUGE DRAWING =====
+function drawGauges() {
+  const gaugeH = 220;
+  const gaugeW = 22;
+  const x1 = 22, x2 = W - 22 - gaugeW;
+  const gy = H / 2 - gaugeH / 2 + 20;
+
+  // Sweet gauge (left)
+  drawGaugeSingle(x1, gy, gaugeW, gaugeH, state.sweet, state.customer?.sweetMin, state.customer?.sweetMax, C.gauge1, '甘さ', '🍯');
+  // Lively gauge (right)
+  drawGaugeSingle(x2, gy, gaugeW, gaugeH, state.lively, state.customer?.livelyMin, state.customer?.livelyMax, C.gauge2, '賑やか', '🎊');
+}
+
+function drawGaugeSingle(x, y, w, h, val, zMin, zMax, color, label, icon) {
+  // Background
+  drawRoundRect(x, y, w, h, w / 2, C.gaugeBg);
+
+  // Zone highlight
+  if (zMin !== undefined) {
+    const zY = y + h - (zMax / 100) * h;
+    const zH = ((zMax - zMin) / 100) * h;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(x, zY, w, zH, w / 2) : null;
+    ctx.fillStyle = color + '55';
+    ctx.fillRect(x + 2, zY, w - 4, zH);
+    ctx.restore();
+  }
+
+  // Fill
+  const fillH = (clamp(val, 0, 100) / 100) * h;
+  const fillY = y + h - fillH;
+  ctx.save();
+  ctx.beginPath();
+  ctx.fillStyle = color;
+  ctx.fillRect(x + 3, fillY, w - 6, fillH);
+  // Round bottom of fill
+  ctx.restore();
+
+  // Border
+  drawRoundRect(x, y, w, h, w / 2, null, color + 'aa');
+
+  // Label
+  ctx.save();
+  ctx.fillStyle = C.text;
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, x + w / 2, y - 14);
+  ctx.fillText(icon, x + w / 2, y - 2);
+  ctx.restore();
+
+  // Value text
+  ctx.save();
+  ctx.fillStyle = C.text;
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(Math.round(val), x + w / 2, y + h + 14);
+  ctx.restore();
+}
+
+// ===== PARTICLES =====
+function spawnParticles(x, y) {
+  const colors = ['#ff88bb', '#ffcc66', '#aaeeff', '#ccff88', '#ffaaee', '#ff6688'];
+  for (let i = 0; i < 18; i++) {
+    const angle = rand(0, Math.PI * 2);
+    const speed = rand(2, 7);
+    state.particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 3,
+      life: 1,
+      decay: rand(0.02, 0.04),
+      size: rand(5, 12),
+      color: colors[randInt(0, colors.length - 1)],
+      emoji: Math.random() < 0.3 ? ['✨','💫','⭐','🌟'][randInt(0,3)] : null,
+    });
+  }
+}
+
+function spawnSparkles() {
+  for (let i = 0; i < 25; i++) {
+    state.sparkles.push({
+      x: rand(60, W - 60),
+      y: rand(100, H - 200),
+      life: 1,
+      decay: rand(0.008, 0.02),
+      size: rand(8, 22),
+      delay: rand(0, 60),
+      emoji: ['✨','💫','⭐','🌟','💖','🎀'][randInt(0, 5)],
+    });
+  }
+}
+
+function updateParticles() {
+  state.particles = state.particles.filter(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.2;
+    p.life -= p.decay;
+    return p.life > 0;
+  });
+  state.sparkles = state.sparkles.filter(s => {
+    s.delay -= 1;
+    if (s.delay <= 0) s.life -= s.decay;
+    return s.life > 0 && s.delay > -100;
+  });
+}
+
+function drawParticles() {
+  state.particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    if (p.emoji) {
+      drawEmoji(p.emoji, p.x, p.y, p.size);
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  });
+  state.sparkles.forEach(s => {
+    if (s.delay > 0) return;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, s.life) * (0.5 + 0.5 * Math.sin(Date.now() / 200 + s.x));
+    drawEmoji(s.emoji, s.x, s.y, s.size);
+    ctx.restore();
+  });
+}
+
+// ===== BACKGROUND =====
+function drawBG() {
+  // Gradient background
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#ffe0f5');
+  grad.addColorStop(1, '#fff5fa');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Decorative dots
+  ctx.save();
+  ctx.globalAlpha = 0.12;
+  const t = Date.now() / 3000;
+  for (let i = 0; i < 12; i++) {
+    const x = (W * 0.08) + (W * 0.84) * ((i * 0.618 + t * 0.03) % 1);
+    const y = 80 + (H - 200) * ((i * 0.382) % 1);
+    const r = 18 + 10 * Math.sin(t + i);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = ['#ffaad5','#aaeeff','#ffe0aa','#ccffaa'][i % 4];
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ===== TITLE PHASE =====
+function drawTitle() {
+  drawBG();
+  // Title card
+  drawRoundRect(W/2 - 160, 120, 320, 200, 24, 'rgba(255,255,255,0.8)', '#ffb3d9');
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e0569a';
+  ctx.font = 'bold 32px sans-serif';
+  ctx.fillText('とびきり', W/2, 185);
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillText('ケーキ屋さん 🎂', W/2, 228);
+  ctx.font = '16px sans-serif';
+  ctx.fillStyle = C.text;
+  ctx.fillText('落ちてくるパーツをタップして', W/2, 270);
+  ctx.fillText('ケーキを飾ろう！', W/2, 292);
+  ctx.restore();
+
+  // High score
+  if (state.highScore > 0) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e0569a';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('🏆 ハイスコア: ' + state.highScore + '点', W/2, 360);
+    ctx.restore();
+  }
+
+  // How to play
+  drawRoundRect(W/2 - 150, 390, 300, 160, 16, 'rgba(255,255,255,0.7)');
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = C.text;
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('遊び方', W/2, 414);
+  ctx.font = '13px sans-serif';
+  ctx.fillText('👆 タップ → パーツをキャッチ！', W/2, 440);
+  ctx.fillText('⏱ 長押し0.5秒 → スキップ', W/2, 462);
+  ctx.fillText('📊 甘さ・にぎやかさゲージを', W/2, 484);
+  ctx.fillText('お客様の好みに合わせよう', W/2, 504);
+  ctx.fillText('3ラウンドで合計スコアを競おう！', W/2, 526);
+  ctx.restore();
+
+  // Start button
+  drawRoundRect(W/2 - 110, 600, 220, 60, 30, '#ff82b8', '#e0569a');
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText('🎂 スタート！', W/2, 638);
+  ctx.restore();
+}
+
+// ===== CUSTOMER PHASE =====
+function drawCustomer() {
+  drawBG();
+  const c = state.customer;
+  drawRoundRect(W/2 - 165, 100, 330, 280, 20, 'rgba(255,255,255,0.88)', '#ffb3d9');
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e0569a';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillText('ラウンド ' + state.roundNum + ' / 3', W/2, 132);
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillStyle = C.text;
+  ctx.fillText('お客様がご来店！', W/2, 158);
+  ctx.restore();
+  drawEmoji(c.emoji, W/2, 210, 56);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#c0407a';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(c.name, W/2, 260);
+  ctx.font = '13px sans-serif';
+  ctx.fillStyle = C.text;
+  ctx.fillText('甘さ: ' + c.sweetMin + '〜' + c.sweetMax + '%', W/2, 290);
+  ctx.fillText('にぎやかさ: ' + c.livelyMin + '〜' + c.livelyMax + '%', W/2, 312);
+  ctx.fillText('好みベース: ' + BASE_NAMES[c.preferBase], W/2, 334);
+  ctx.restore();
+
+  drawRoundRect(W/2 - 110, 600, 220, 60, 30, '#ff82b8', '#e0569a');
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('ベースを選ぶ →', W/2, 638);
+  ctx.restore();
+}
+
+// ===== BASE SELECT PHASE =====
+function drawBaseSelect() {
+  drawBG();
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e0569a';
+  ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('ケーキのベースを選ぼう！', W/2, 100);
+  ctx.restore();
+
+  const bases = [
+    { id: 'sponge', color: C.sponge, name: 'スポンジ', desc: '甘くてふわふわ' },
+    { id: 'choco', color: C.choco, name: 'チョコ',   desc: '濃厚リッチ'     },
+    { id: 'matcha', color: C.matcha, name: '抹茶',  desc: 'さっぱり和風'   },
+  ];
+
+  bases.forEach((b, i) => {
+    const bx = W / 2 - 100;
+    const by = 160 + i * 170;
+    drawRoundRect(bx, by, 200, 140, 18,
+      state.base === b.id ? b.color + 'cc' : 'rgba(255,255,255,0.85)',
+      state.base === b.id ? '#e0569a' : b.color);
+    // Mini cake icon
+    ctx.save();
+    ctx.fillStyle = b.color;
+    ctx.beginPath();
+    ctx.ellipse(W/2, by + 48, 44, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(W/2 - 44, by + 30, 88, 40);
+    ctx.beginPath();
+    ctx.ellipse(W/2, by + 30, 44, 10, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff5f8';
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = state.base === b.id ? '#fff' : '#5a3550';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText(b.name, W/2, by + 96);
+    ctx.font = '14px sans-serif';
+    ctx.fillText(b.desc, W/2, by + 120);
+    ctx.restore();
+  });
+}
+
+// ===== DECO PHASE =====
+let _decoTimer = 0;
+
+function drawDeco(dt) {
+  drawBG();
+  _decoTimer += dt;
+
+  // Falling part
+  const fp = state.fallingPart;
+  if (fp) {
+    state.fallY += state.fallSpeed;
+    if (state.fallY > H - 160) {
+      // Missed — skip
+      nextPart();
+    } else {
+      // Hold progress ring
+      if (state.isHolding) {
+        const prog = state.holdTimer / 500;
+        ctx.save();
+        ctx.strokeStyle = '#ff82b8';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(state.fallX, state.fallY, 36, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      drawEmoji(fp.emoji, state.fallX, state.fallY, 44);
+      // Part name
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#c0407a';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(fp.name, state.fallX, state.fallY + 32);
+      ctx.fillStyle = '#888';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('甘+' + fp.sweet + ' 賑+' + fp.lively, state.fallX, state.fallY + 46);
+      ctx.restore();
+    }
+  }
+
+  // Cake
+  drawCake();
+
+  // Gauges
+  drawGauges();
+
+  // Timer bar
+  const timerW = W - 100;
+  const timerX = 50;
+  const timerY = 36;
+  drawRoundRect(timerX, timerY, timerW, 16, 8, C.gaugeBg);
+  const ratio = state.timeLeft / 75;
+  const barColor = ratio > 0.5 ? '#ff82b8' : ratio > 0.25 ? '#ffaa44' : '#ff4444';
+  drawRoundRect(timerX, timerY, timerW * ratio, 16, 8, barColor);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = C.text;
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText('⏱ ' + Math.ceil(state.timeLeft) + '秒', W/2, timerY - 4);
+  ctx.restore();
+
+  // Parts count
+  const cntOk = state.parts.length >= 3 && state.parts.length <= 8;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = cntOk ? '#22aa55' : '#e05555';
+  ctx.font = '13px sans-serif';
+  ctx.fillText('乗せた数: ' + state.parts.length + '個　✨3〜8個が理想', W/2, 68);
+  ctx.restore();
+
+  // Customer hint
+  const c = state.customer;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#c0407a';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText(c.emoji + ' ' + c.name, W/2, H - 30);
+  ctx.restore();
+
+  // Particles
+  drawParticles();
+}
+
+// ===== COMPLETE PHASE =====
+let _completeTimer = 0;
+
+function drawComplete(dt) {
+  drawBG();
+  _completeTimer += dt;
+
+  // Zoom-in cake (~500ms to reach 1.4x)
+  const zoom = Math.min(1.4, 1 + _completeTimer * 0.0003);
+  ctx.save();
+  ctx.translate(W/2, CAKE_Y_BASE + CAKE_H / 2 - 80);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-W/2, -(CAKE_Y_BASE + CAKE_H / 2 - 80));
+
+  // Cake
+  drawCake();
+  ctx.restore();
+
+  // Sparkles
+  drawParticles();
+
+  // Title overlay
+  if (_completeTimer > 500) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, (_completeTimer - 500) / 500);
+    drawRoundRect(W/2 - 140, 140, 280, 80, 20, 'rgba(255,255,255,0.9)', '#ffb3d9');
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e0569a';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText('🎉 完成！', W/2, 190);
+    ctx.restore();
+  }
+
+  if (_completeTimer > 1300) {
+    drawRoundRect(W/2 - 120, 600, 240, 58, 28, '#ff82b8', '#e0569a');
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('採点する！', W/2, 637);
+    ctx.restore();
+  }
+}
+
+// ===== SCORE PHASE =====
+function drawScore() {
+  drawBG();
+  drawParticles();
+
+  drawRoundRect(W/2 - 165, 80, 330, 430, 24, 'rgba(255,255,255,0.92)', '#ffb3d9');
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e0569a';
+  ctx.font = 'bold 24px sans-serif';
+  ctx.fillText('採点結果', W/2, 122);
+  ctx.restore();
+
+  // Stars
+  const stars = state.stars;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = '38px sans-serif';
+  let starsStr = '';
+  for (let i = 0; i < 5; i++) starsStr += i < stars ? '★' : '☆';
+  ctx.fillStyle = C.star;
+  ctx.fillText(starsStr, W/2, 178);
+  ctx.restore();
+
+  // Score breakdown
+  const lines = state.scoreBreakdown || [];
+  ctx.save();
+  ctx.textAlign = 'left';
+  ctx.font = '14px sans-serif';
+  ctx.fillStyle = C.text;
+  lines.forEach((line, i) => {
+    ctx.fillText(line, W/2 - 130, 210 + i * 26);
+  });
+  ctx.restore();
+
+  // Total this round
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#c0407a';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('このラウンド: ' + state.score + '点', W/2, 370);
+
+  // Cumulative
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillStyle = C.text;
+  ctx.fillText('合計スコア: ' + state.totalScore + '点', W/2, 400);
+
+  // Round status
+  if (state.roundsLeft > 0) {
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText('残り ' + state.roundsLeft + ' ラウンド', W/2, 424);
+  } else {
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#e0569a';
+    if (state.totalScore >= state.highScore) {
+      ctx.fillText('🏆 ハイスコア更新！', W/2, 424);
+    }
+  }
+  ctx.restore();
+
+  // Button
+  const btnLabel = state.roundsLeft > 0 ? '次のお客様へ →' : 'もう一度遊ぶ！';
+  drawRoundRect(W/2 - 120, 590, 240, 58, 28, '#ff82b8', '#e0569a');
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(btnLabel, W/2, 627);
+  ctx.restore();
+}
+
+// ===== GAME LOGIC =====
+function startGame() {
+  state.totalScore = 0;
+  state.roundsLeft = 3;
+  state.roundNum = 1;
+  state.highScore = parseInt(localStorage.getItem('cake_hs') || '0');
+  startRound();
+}
+
+function startRound() {
+  state.customer = CUSTOMERS[randInt(0, CUSTOMERS.length - 1)];
+  state.base = null;
+  state.parts = [];
+  state.sweet = 50;
+  state.lively = 50;
+  state.timeLeft = 75;
+  state.fallingPart = null;
+  state.fallY = -60;
+  state.particles = [];
+  state.sparkles = [];
+  _completeTimer = 0;
+  state.phase = PHASE.CUSTOMER;
+}
+
+function spawnPart() {
+  const p = PARTS[randInt(0, PARTS.length - 1)];
+  state.fallingPart = p;
+  state.fallY = -40;
+  state.fallX = rand(80, W - 80);
+  state.fallSpeed = rand(2.8, 4.2);
+  state.isHolding = false;
+  state.holdTimer = 0;
+}
+
+let spawnTimer = null;
+function nextPart() {
+  state.fallingPart = null;
+  spawnTimer = setTimeout(spawnPart, 600);
+}
+
+function catchPart() {
+  const p = state.fallingPart;
+  if (!p) return;
+  state.parts.push(p);
+  state.sweet = clamp(state.sweet + p.sweet, 0, 100);
+  state.lively = clamp(state.lively + p.lively, 0, 100);
+  spawnParticles(state.fallX, state.fallY);
+  state.fallingPart = null;
+  spawnTimer = setTimeout(spawnPart, 400);
+}
+
+function skipPart() {
+  state.fallingPart = null;
+  spawnTimer = setTimeout(spawnPart, 500);
+}
+
+function endDeco() {
+  clearTimeout(spawnTimer);
+  state.fallingPart = null;
+  _completeTimer = 0;
+  spawnSparkles();
+  state.phase = PHASE.COMPLETE;
+}
+
+function calcScore() {
+  const c = state.customer;
+  let stars = 0;
+  const breakdown = [];
+
+  // Both gauges in zone
+  const sweetOk = state.sweet >= c.sweetMin && state.sweet <= c.sweetMax;
+  const livelyOk = state.lively >= c.livelyMin && state.lively <= c.livelyMax;
+  if (sweetOk && livelyOk) {
+    stars += 3;
+    breakdown.push('✅ ゲージ両方ゾーン内: +3★');
+  } else if (sweetOk || livelyOk) {
+    stars += 1;
+    breakdown.push('⚡ ゲージ片方ゾーン内: +1★');
+  } else {
+    breakdown.push('❌ ゲージがゾーン外');
+  }
+
+  // Base match
+  if (state.base === c.preferBase) {
+    stars += 1;
+    breakdown.push('✅ ベースが好みに合致: +1★');
+  } else {
+    breakdown.push('❌ ベースが好みと違う');
+  }
+
+  // Part count
+  const cnt = state.parts.length;
+  if (cnt >= 3 && cnt <= 8) {
+    stars += 1;
+    breakdown.push('✅ パーツ数ちょうどよい(' + cnt + '個): +1★');
+  } else {
+    breakdown.push('❌ パーツ数が多すぎ/少なすぎ(' + cnt + '個)');
+  }
+
+  stars = clamp(stars, 0, 5);
+  const score = stars * 100 + clamp(state.parts.length * 3, 0, 15);
+  return { stars, score, breakdown };
+}
+
+// ===== INPUT =====
+let pointerDown = false;
+let pointerDownTime = 0;
+
+function getCanvasXY(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+}
+
+function onPointerDown(e) {
+  e.preventDefault();
+  pointerDown = true;
+  pointerDownTime = Date.now();
+  state.isHolding = false;
+  state.holdTimer = 0;
+
+  const { x, y } = getCanvasXY(e);
+  handleTap(x, y);
+}
+
+function onPointerMove(e) {
+  e.preventDefault();
+}
+
+function onPointerUp(e) {
+  e.preventDefault();
+  pointerDown = false;
+  state.isHolding = false;
+  state.holdTimer = 0;
+}
+
+function handleTap(x, y) {
+  switch (state.phase) {
+    case PHASE.TITLE:
+      // Start button area
+      if (y > 590 && y < 670) startGame();
+      break;
+    case PHASE.CUSTOMER:
+      if (y > 590 && y < 670) state.phase = PHASE.BASE_SELECT;
+      break;
+    case PHASE.BASE_SELECT:
+      ['sponge', 'choco', 'matcha'].forEach((id, i) => {
+        const by = 160 + i * 170;
+        const bx = W/2 - 100;
+        if (x >= bx && x <= bx + 200 && y >= by && y <= by + 140) {
+          state.base = id;
+          // Short delay then start deco
+          setTimeout(() => {
+            state.phase = PHASE.DECO;
+            spawnPart();
+          }, 300);
+        }
+      });
+      break;
+    case PHASE.DECO:
+      if (state.fallingPart) {
+        // Check hit on falling part (generous radius)
+        const dx = x - state.fallX;
+        const dy = y - state.fallY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 75) {
+          catchPart();
+        } else {
+          // Tap anywhere else starts hold timer
+          state.isHolding = true;
+        }
+      }
+      break;
+    case PHASE.COMPLETE:
+      if (_completeTimer > 1300) goToScore();
+      break;
+    case PHASE.SCORE:
+      if (y > 580 && y < 650) {
+        if (state.roundsLeft > 0) {
+          state.roundNum++;
+          state.roundsLeft--;
+          startRound();
+        } else {
+          state.phase = PHASE.TITLE;
+        }
+      }
+      break;
+  }
+}
+
+function goToScore() {
+  const result = calcScore();
+  state.stars = result.stars;
+  state.score = result.score;
+  state.scoreBreakdown = result.breakdown;
+  state.totalScore += result.score;
+  if (state.totalScore > state.highScore) {
+    state.highScore = state.totalScore;
+    localStorage.setItem('cake_hs', state.highScore);
+  }
+  spawnParticles(W/2, H/2);
+  spawnSparkles();
+  state.phase = PHASE.SCORE;
+}
+
+canvas.addEventListener('mousedown', onPointerDown);
+canvas.addEventListener('mousemove', onPointerMove);
+canvas.addEventListener('mouseup', onPointerUp);
+canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+canvas.addEventListener('touchend', onPointerUp, { passive: false });
+
+
+// ===== MAIN LOOP =====
+let lastTimestamp = 0;
+
+function loop(timestamp) {
+  const dt = Math.min(timestamp - lastTimestamp, 50);
+  lastTimestamp = timestamp;
+
+  ctx.clearRect(0, 0, W, H);
+
+  switch (state.phase) {
+    case PHASE.TITLE:
+      drawTitle();
+      break;
+    case PHASE.CUSTOMER:
+      drawCustomer();
+      break;
+    case PHASE.BASE_SELECT:
+      drawBaseSelect();
+      break;
+    case PHASE.DECO:
+      // Timer countdown
+      state.timeLeft -= dt / 1000;
+      if (state.timeLeft <= 0) {
+        state.timeLeft = 0;
+        endDeco();
+      }
+      // Hold timer for skip
+      if (state.isHolding && state.fallingPart) {
+        state.holdTimer += dt;
+        if (state.holdTimer >= 500) {
+          skipPart();
+          state.isHolding = false;
+          state.holdTimer = 0;
+        }
+      }
+      updateParticles();
+      drawDeco(dt);
+      break;
+    case PHASE.COMPLETE:
+      updateParticles();
+      drawComplete(dt);
+      break;
+    case PHASE.SCORE:
+      updateParticles();
+      drawScore();
+      break;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+
+// ===== RECORD SUPPORT =====
+const urlParams = new URLSearchParams(location.search);
+if (urlParams.get('record') === '1') {
+  window._recordCtrl = {
+    start: function() {
+      startGame();
+    },
+    stop: function() {
+      // no-op, recording ends externally
+    }
+  };
+}
+
+})();
+</script>
+</body>
+</html>
