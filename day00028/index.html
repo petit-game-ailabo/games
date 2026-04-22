@@ -573,7 +573,6 @@ function drawCustomer() {
   ctx.fillStyle = C.text;
   ctx.fillText('甘さ: ' + c.sweetMin + '〜' + c.sweetMax + '%', W/2, 290);
   ctx.fillText('にぎやかさ: ' + c.livelyMin + '〜' + c.livelyMax + '%', W/2, 312);
-  ctx.fillText('好みベース: ' + BASE_NAMES[c.preferBase], W/2, 334);
   ctx.restore();
 
   drawRoundRect(W/2 - 110, 600, 220, 60, 30, '#ff82b8', '#e0569a');
@@ -581,53 +580,8 @@ function drawCustomer() {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 20px sans-serif';
-  ctx.fillText('ベースを選ぶ →', W/2, 638);
+  ctx.fillText('ケーキを作る！ 🎂', W/2, 638);
   ctx.restore();
-}
-
-// ===== BASE SELECT PHASE =====
-function drawBaseSelect() {
-  drawBG();
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#e0569a';
-  ctx.font = 'bold 24px sans-serif';
-  ctx.fillText('ケーキのベースを選ぼう！', W/2, 100);
-  ctx.restore();
-
-  const bases = [
-    { id: 'sponge', color: C.sponge, name: 'スポンジ', desc: '甘くてふわふわ' },
-    { id: 'choco', color: C.choco, name: 'チョコ',   desc: '濃厚リッチ'     },
-    { id: 'matcha', color: C.matcha, name: '抹茶',  desc: 'さっぱり和風'   },
-  ];
-
-  bases.forEach((b, i) => {
-    const bx = W / 2 - 100;
-    const by = 160 + i * 170;
-    drawRoundRect(bx, by, 200, 140, 18,
-      state.base === b.id ? b.color + 'cc' : 'rgba(255,255,255,0.85)',
-      state.base === b.id ? '#e0569a' : b.color);
-    // Mini cake icon
-    ctx.save();
-    ctx.fillStyle = b.color;
-    ctx.beginPath();
-    ctx.ellipse(W/2, by + 48, 44, 10, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(W/2 - 44, by + 30, 88, 40);
-    ctx.beginPath();
-    ctx.ellipse(W/2, by + 30, 44, 10, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff5f8';
-    ctx.fill();
-    ctx.restore();
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = state.base === b.id ? '#fff' : '#5a3550';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText(b.name, W/2, by + 96);
-    ctx.font = '14px sans-serif';
-    ctx.fillText(b.desc, W/2, by + 120);
-    ctx.restore();
-  });
 }
 
 // ===== DECO PHASE =====
@@ -739,70 +693,100 @@ function drawComplete(dt) {
   }
 }
 
-// ===== SCORE PHASE =====
+// お客様の反応コメント
+const CUSTOMER_COMMENTS = {
+  5: ['わあ〜！こんなケーキ初めて！最高です♡', 'もう感動しちゃった…！また絶対来ます！', '完璧すぎてうちの子に自慢しちゃいそう♪'],
+  4: ['すごく美味しそう！大満足です♪', 'センスいいですね〜！また来ますね！', 'これ、友達にも教えたいな♡'],
+  3: ['うん、なかなか良かったですよ〜！', 'まあまあ好みでした！次も期待してます', 'ちょっと惜しいけど、美味しかったです'],
+  2: ['うーん、ちょっと好みと違ったかも…', 'もう少し甘さ控えめだと嬉しかったな', '次はもっと期待してますね…！'],
+  1: ['正直、私には合わなかったかな…', 'ちょっとびっくりしました（笑）次頑張って！', 'まあ…チャレンジは好きですよ'],
+  0: ['これは…ちょっとご縁がなかったですね', 'お互い頑張りましょう（笑）', 'きっと次はうまくいきますよ！'],
+};
+
 function drawScore() {
   drawBG();
   drawParticles();
 
-  drawRoundRect(W/2 - 165, 80, 330, 430, 24, 'rgba(255,255,255,0.92)', '#ffb3d9');
+  drawRoundRect(W/2 - 165, 70, 330, 470, 24, 'rgba(255,255,255,0.92)', '#ffb3d9');
 
+  const c = state.customer;
+  const stars = state.stars;
+
+  // お客様アイコン＋名前
+  drawEmoji(c.emoji, W/2, 118, 44);
   ctx.save();
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#e0569a';
-  ctx.font = 'bold 24px sans-serif';
-  ctx.fillText('採点結果', W/2, 122);
+  ctx.fillStyle = '#c0407a';
+  ctx.font = 'bold 15px sans-serif';
+  ctx.fillText(c.name, W/2, 150);
   ctx.restore();
 
   // Stars
-  const stars = state.stars;
   ctx.save();
   ctx.textAlign = 'center';
-  ctx.font = '38px sans-serif';
+  ctx.font = '36px sans-serif';
   let starsStr = '';
   for (let i = 0; i < 5; i++) starsStr += i < stars ? '★' : '☆';
   ctx.fillStyle = C.star;
-  ctx.fillText(starsStr, W/2, 178);
+  ctx.fillText(starsStr, W/2, 196);
   ctx.restore();
 
-  // Score breakdown
-  const lines = state.scoreBreakdown || [];
+  // お客様のひとこと（吹き出し風）
+  const commentList = CUSTOMER_COMMENTS[stars];
+  const comment = state.scoreComment || commentList[0];
+  drawRoundRect(W/2 - 145, 212, 290, 100, 16, '#fff0f8', '#ffb3d9');
+  // 吹き出し三角
   ctx.save();
-  ctx.textAlign = 'left';
-  ctx.font = '14px sans-serif';
-  ctx.fillStyle = C.text;
-  lines.forEach((line, i) => {
-    ctx.fillText(line, W/2 - 130, 210 + i * 26);
-  });
+  ctx.fillStyle = '#fff0f8';
+  ctx.beginPath();
+  ctx.moveTo(W/2 - 14, 212);
+  ctx.lineTo(W/2 + 14, 212);
+  ctx.lineTo(W/2, 196);
+  ctx.fill();
   ctx.restore();
 
-  // Total this round
+  // コメントテキスト（折り返し）
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#7a3560';
+  ctx.font = '15px sans-serif';
+  const maxW = 250;
+  // 手動折り返し
+  const words = comment.split('');
+  let line = '', lineY = 248;
+  for (let ch of words) {
+    const test = line + ch;
+    if (ctx.measureText(test).width > maxW) {
+      ctx.fillText(line, W/2, lineY);
+      line = ch; lineY += 24;
+    } else { line = test; }
+  }
+  ctx.fillText(line, W/2, lineY);
+  ctx.restore();
+
+  // スコア
   ctx.save();
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c0407a';
   ctx.font = 'bold 20px sans-serif';
-  ctx.fillText('このラウンド: ' + state.score + '点', W/2, 370);
-
-  // Cumulative
+  ctx.fillText('このラウンド: ' + state.score + '点', W/2, 342);
   ctx.font = 'bold 16px sans-serif';
   ctx.fillStyle = C.text;
-  ctx.fillText('合計スコア: ' + state.totalScore + '点', W/2, 400);
+  ctx.fillText('合計スコア: ' + state.totalScore + '点', W/2, 372);
 
-  // Round status
   if (state.roundsLeft > 0) {
-    ctx.font = '14px sans-serif';
-    ctx.fillStyle = '#888';
-    ctx.fillText('残り ' + state.roundsLeft + ' ラウンド', W/2, 424);
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('あと ' + state.roundsLeft + ' 人お客様が来ます', W/2, 398);
   } else {
-    ctx.font = '14px sans-serif';
+    ctx.font = 'bold 14px sans-serif';
     ctx.fillStyle = '#e0569a';
-    if (state.totalScore >= state.highScore) {
-      ctx.fillText('🏆 ハイスコア更新！', W/2, 424);
-    }
+    ctx.fillText(state.totalScore >= state.highScore ? '🏆 ハイスコア更新！' : 'お疲れさまでした！', W/2, 398);
   }
   ctx.restore();
 
   // Button
-  const btnLabel = state.roundsLeft > 0 ? '次のお客様へ →' : 'もう一度遊ぶ！';
+  const btnLabel = state.roundsLeft > 0 ? '次のお客様へ →' : 'もう一度！';
   drawRoundRect(W/2 - 120, 590, 240, 58, 28, '#ff82b8', '#e0569a');
   ctx.save();
   ctx.textAlign = 'center';
@@ -823,7 +807,7 @@ function startGame() {
 
 function startRound() {
   state.customer = CUSTOMERS[randInt(0, CUSTOMERS.length - 1)];
-  state.base = null;
+  state.base = state.customer.preferBase; // 自動でお客様の好みのベースを選択
   state.parts = [];
   state.sweet = 50;
   state.lively = 50;
@@ -852,8 +836,9 @@ function spawnPartOnBeat() {
 }
 
 function catchPartAt(x, y) {
-  let best = null, bestDist = 80;
+  let best = null, bestDist = 55;
   state.fallingParts.forEach(fp => {
+    if (fp.y < 110) return; // 画面上部に入ってきたばかりは当たらない
     const dx = x - fp.x, dy = y - fp.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist < bestDist) { bestDist = dist; best = fp; }
@@ -944,21 +929,13 @@ function handleTap(x, y) {
       if (y > 590 && y < 670) startGame();
       break;
     case PHASE.CUSTOMER:
-      if (y > 590 && y < 670) state.phase = PHASE.BASE_SELECT;
-      break;
-    case PHASE.BASE_SELECT:
-      ['sponge', 'choco', 'matcha'].forEach((id, i) => {
-        const by = 160 + i * 170;
-        const bx = W/2 - 100;
-        if (x >= bx && x <= bx + 200 && y >= by && y <= by + 140) {
-          state.base = id;
-          setTimeout(() => {
-            state.phase = PHASE.DECO;
-            startBGM();
-            spawnPartOnBeat();
-          }, 300);
-        }
-      });
+      if (y > 590 && y < 670) {
+        setTimeout(() => {
+          state.phase = PHASE.DECO;
+          startBGM();
+          spawnPartOnBeat();
+        }, 200);
+      }
       break;
     case PHASE.DECO:
       catchPartAt(x, y);
@@ -984,7 +961,8 @@ function goToScore() {
   const result = calcScore();
   state.stars = result.stars;
   state.score = result.score;
-  state.scoreBreakdown = result.breakdown;
+  const comments = CUSTOMER_COMMENTS[result.stars];
+  state.scoreComment = comments[randInt(0, comments.length - 1)];
   state.totalScore += result.score;
   if (state.totalScore > state.highScore) {
     state.highScore = state.totalScore;
@@ -1018,9 +996,6 @@ function loop(timestamp) {
       break;
     case PHASE.CUSTOMER:
       drawCustomer();
-      break;
-    case PHASE.BASE_SELECT:
-      drawBaseSelect();
       break;
     case PHASE.DECO:
       state.timeLeft -= dt / 1000;
