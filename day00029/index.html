@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>にぎにぎリズム！</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #ff8c42;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+#app {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: linear-gradient(160deg, #fff3e0 0%, #ffe0b2 40%, #ffcc80 100%);
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+}
+
+/* ===== SCREENS ===== */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s;
+}
+.screen.hidden { display: none; }
+
+/* ===== TITLE SCREEN ===== */
+#titleScreen {
+  background: linear-gradient(160deg, #fff8e1 0%, #ffe082 60%, #ffb300 100%);
+  gap: 24px;
+  padding: 40px;
+}
+#titleScreen .title-emoji {
+  font-size: 100px;
+  line-height: 1;
+  animation: bounce 1.2s ease-in-out infinite;
+}
+@keyframes bounce {
+  0%,100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-16px) scale(1.05); }
+}
+#titleScreen h1 {
+  font-size: 40px;
+  font-weight: 900;
+  color: #bf360c;
+  text-shadow: 0 2px 0 #ffcc80, 0 4px 8px rgba(0,0,0,0.2);
+  letter-spacing: 2px;
+  text-align: center;
+}
+#titleScreen .subtitle {
+  font-size: 16px;
+  color: #6d4c41;
+  text-align: center;
+  line-height: 1.6;
+}
+#startBtn {
+  margin-top: 16px;
+  padding: 20px 60px;
+  font-size: 22px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ff7043, #ff5722);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  box-shadow: 0 6px 0 #bf360c, 0 8px 20px rgba(0,0,0,0.25);
+  cursor: pointer;
+  letter-spacing: 2px;
+  transform: translateY(0);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+#startBtn:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 #bf360c, 0 4px 10px rgba(0,0,0,0.2);
+}
+.how-to {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+.how-to-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #5d4037;
+  font-weight: 700;
+}
+.how-to-item .icon { font-size: 28px; }
+
+/* ===== GAME SCREEN ===== */
+#gameScreen {
+  background: transparent;
+  justify-content: flex-start;
+  padding: 0;
+}
+#gameScreen .top-bar {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px 8px;
+  z-index: 10;
+}
+.score-display {
+  font-size: 28px;
+  font-weight: 900;
+  color: #bf360c;
+  text-shadow: 0 1px 0 #fff;
+}
+.combo-display {
+  font-size: 20px;
+  font-weight: 800;
+  color: #e65100;
+  transition: transform 0.1s;
+}
+.combo-display.pop { transform: scale(1.4); }
+
+/* progress bar */
+#progressBar {
+  width: 100%;
+  height: 8px;
+  background: rgba(0,0,0,0.1);
+  z-index: 10;
+}
+#progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff7043, #ffb300);
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+/* beat indicator */
+#beatIndicator {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(255,112,67,0.15);
+  border: 3px solid rgba(255,112,67,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 12px auto;
+  transition: transform 0.05s, background 0.05s;
+}
+#beatIndicator.pulse {
+  transform: scale(1.25);
+  background: rgba(255,112,67,0.4);
+}
+#beatIndicator .beat-onigiri { font-size: 40px; }
+
+/* action zone */
+#actionZone {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+/* falling action icon */
+#actionIcon {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 52px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: none;
+}
+#actionIcon .action-label {
+  font-size: 18px;
+  font-weight: 900;
+  color: #5d4037;
+  background: rgba(255,255,255,0.85);
+  border-radius: 20px;
+  padding: 4px 14px;
+  white-space: nowrap;
+}
+
+/* target zone ring */
+#targetZone {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 4px solid rgba(255,112,67,0.5);
+  background: rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+#targetZone.active-zone {
+  border-color: #ff7043;
+  background: rgba(255,112,67,0.2);
+  box-shadow: 0 0 20px rgba(255,112,67,0.4);
+}
+
+/* judgement popup */
+#judgement {
+  position: absolute;
+  left: 50%;
+  top: 35%;
+  transform: translate(-50%, -50%) scale(0);
+  font-size: 48px;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 20;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transition: transform 0.1s ease-out, opacity 0.3s;
+  opacity: 0;
+  white-space: nowrap;
+}
+#judgement.show {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+}
+#judgement.fade {
+  transform: translate(-50%, -60%) scale(0.8);
+  opacity: 0;
+}
+
+/* hold progress ring */
+#holdRing {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 140px;
+  height: 140px;
+  pointer-events: none;
+  z-index: 6;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+#holdRing.visible { opacity: 1; }
+#holdRingCanvas { display: block; }
+
+/* flick arrow */
+#flickArrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  transition: opacity 0.2s;
+  animation: arrowPulse 0.4s ease-in-out infinite alternate;
+}
+#flickArrow.visible { opacity: 1; }
+@keyframes arrowPulse {
+  from { transform: translate(-50%, -50%) translateY(0); }
+  to { transform: translate(-50%, -50%) translateY(-12px); }
+}
+
+/* onigiri character */
+#onigiriChar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 72px;
+  z-index: 3;
+  transition: transform 0.1s;
+  pointer-events: none;
+}
+#onigiriChar.squeeze {
+  transform: translateX(-50%) scale(0.85, 1.15);
+}
+#onigiriChar.knead {
+  animation: kneadAnim 0.2s ease-in-out infinite alternate;
+}
+@keyframes kneadAnim {
+  from { transform: translateX(-50%) rotate(-10deg) scale(0.9); }
+  to { transform: translateX(-50%) rotate(10deg) scale(1.1); }
+}
+#onigiriChar.toss {
+  animation: tossAnim 0.5s ease-in forwards;
+}
+@keyframes tossAnim {
+  0% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) translateY(-120px) scale(1.3) rotate(20deg); }
+  100% { transform: translateX(-50%) translateY(-300px) scale(0) rotate(40deg); opacity: 0; }
+}
+
+/* miss flash */
+#missFlash {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,0,0,0.25);
+  pointer-events: none;
+  z-index: 30;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+#missFlash.show { opacity: 1; }
+
+/* ===== RESULT SCREEN ===== */
+#resultScreen {
+  background: linear-gradient(160deg, #fff8e1 0%, #ffe082 60%, #ffb300 100%);
+  gap: 20px;
+  padding: 40px 32px;
+}
+#resultOnigiri {
+  font-size: 100px;
+  line-height: 1;
+  animation: resultBounce 0.8s ease-out;
+}
+@keyframes resultBounce {
+  0% { transform: scale(0) rotate(-20deg); }
+  60% { transform: scale(1.2) rotate(5deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+#resultRank {
+  font-size: 28px;
+  font-weight: 900;
+  color: #bf360c;
+  text-align: center;
+  text-shadow: 0 2px 0 #ffcc80;
+}
+#resultSerial {
+  background: rgba(255,255,255,0.7);
+  border-radius: 16px;
+  padding: 16px 24px;
+  text-align: center;
+  font-size: 16px;
+  color: #5d4037;
+  line-height: 1.8;
+  font-weight: 700;
+}
+#resultScore {
+  font-size: 20px;
+  color: #e65100;
+  font-weight: 900;
+}
+#shareBtn {
+  padding: 14px 40px;
+  font-size: 17px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #29b6f6, #0288d1);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  box-shadow: 0 4px 0 #01579b;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+#retryBtn {
+  padding: 18px 52px;
+  font-size: 20px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ff7043, #ff5722);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  box-shadow: 0 6px 0 #bf360c;
+  cursor: pointer;
+  letter-spacing: 2px;
+}
+
+/* particles */
+.particle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 24px;
+  animation: particleFly 0.8s ease-out forwards;
+}
+@keyframes particleFly {
+  0% { opacity: 1; transform: translate(0,0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TITLE SCREEN -->
+  <div id="titleScreen" class="screen">
+    <div class="title-emoji">🍙</div>
+    <h1>にぎにぎ<br>リズム！</h1>
+    <p class="subtitle">BGMのビートに合わせて<br>おにぎりを握り上げよう！</p>
+    <div class="how-to">
+      <div class="how-to-item"><span class="icon">✊</span>タップ<br>にぎる</div>
+      <div class="how-to-item"><span class="icon">🌀</span>長押し<br>こねる</div>
+      <div class="how-to-item"><span class="icon">👆</span>フリック<br>ポイ！</div>
+    </div>
+    <button id="startBtn">はじめる！</button>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="gameScreen" class="screen hidden">
+    <div class="top-bar">
+      <div class="score-display" id="scoreDisplay">0</div>
+      <div class="combo-display" id="comboDisplay"></div>
+    </div>
+    <div id="progressBar"><div id="progressFill"></div></div>
+    <div id="beatIndicator">
+      <div class="beat-onigiri">🍙</div>
+    </div>
+    <div id="actionZone">
+      <div id="targetZone"></div>
+      <div id="actionIcon">
+        <span id="actionEmoji"></span>
+        <span class="action-label" id="actionLabel"></span>
+      </div>
+      <div id="holdRing">
+        <canvas id="holdRingCanvas" width="140" height="140"></canvas>
+      </div>
+      <div id="flickArrow">⬆️</div>
+      <div id="judgement"></div>
+      <div id="onigiriChar">🍙</div>
+    </div>
+    <div id="missFlash"></div>
+  </div>
+
+  <!-- RESULT SCREEN -->
+  <div id="resultScreen" class="screen hidden">
+    <div id="resultOnigiri">🍙</div>
+    <div id="resultRank"></div>
+    <div id="resultSerial"></div>
+    <div id="resultScore"></div>
+    <button id="retryBtn">もう一回！</button>
+    <button id="shareBtn">シェアする📣</button>
+  </div>
+
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// ===== RECORD MODE =====
+const isRecord = location.search.includes('record=1');
+
+// ===== ELEMENTS =====
+const app          = document.getElementById('app');
+const titleScreen  = document.getElementById('titleScreen');
+const gameScreen   = document.getElementById('gameScreen');
+const resultScreen = document.getElementById('resultScreen');
+const startBtn     = document.getElementById('startBtn');
+const retryBtn     = document.getElementById('retryBtn');
+
+const scoreDisplay = document.getElementById('scoreDisplay');
+const comboDisplay = document.getElementById('comboDisplay');
+const progressFill = document.getElementById('progressFill');
+const beatIndicator = document.getElementById('beatIndicator');
+const actionIcon   = document.getElementById('actionIcon');
+const actionEmoji  = document.getElementById('actionEmoji');
+const actionLabel  = document.getElementById('actionLabel');
+const targetZone   = document.getElementById('targetZone');
+const holdRing     = document.getElementById('holdRing');
+const holdRingCanvas = document.getElementById('holdRingCanvas');
+const holdCtx      = holdRingCanvas.getContext('2d');
+const flickArrow   = document.getElementById('flickArrow');
+const judgementEl  = document.getElementById('judgement');
+const onigiriChar  = document.getElementById('onigiriChar');
+const missFlash    = document.getElementById('missFlash');
+
+const resultOnigiri = document.getElementById('resultOnigiri');
+const resultRank    = document.getElementById('resultRank');
+const resultSerial  = document.getElementById('resultSerial');
+const resultScore   = document.getElementById('resultScore');
+
+// ===== AUDIO =====
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function resumeAudio() {
+  const ac = getAudioCtx();
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+
+// kick drum
+function playKick(ac, t) {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.frequency.setValueAtTime(150, t);
+  osc.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+  gain.gain.setValueAtTime(1.0, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  osc.start(t); osc.stop(t + 0.25);
+}
+
+// hi-hat
+function playHat(ac, t) {
+  const buf = ac.createBuffer(1, ac.sampleRate * 0.06, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const filt = ac.createBiquadFilter();
+  filt.type = 'highpass'; filt.frequency.value = 6000;
+  const gain = ac.createGain();
+  gain.gain.setValueAtTime(0.4, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  src.connect(filt); filt.connect(gain); gain.connect(ac.destination);
+  src.start(t); src.stop(t + 0.06);
+}
+
+// snare (2・4拍)
+function playSnare(ac, t) {
+  const buf = ac.createBuffer(1, ac.sampleRate * 0.15, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2);
+  const src = ac.createBufferSource();
+  src.buffer = buf;
+  const gain = ac.createGain();
+  gain.gain.setValueAtTime(0.5, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  src.connect(gain); gain.connect(ac.destination);
+  src.start(t); src.stop(t + 0.15);
+}
+
+// melody note
+function playNote(ac, freq, t, dur) {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = 'triangle';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.8);
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.start(t); osc.stop(t + dur);
+}
+
+// short "にぎる" sound effect
+function playSfxGrip(ac, t) {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(400, t);
+  osc.frequency.exponentialRampToValueAtTime(200, t + 0.08);
+  gain.gain.setValueAtTime(0.2, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.start(t); osc.stop(t + 0.1);
+}
+
+// "ポイ" sound effect
+function playSfxToss(ac, t) {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(600, t);
+  osc.frequency.exponentialRampToValueAtTime(1200, t + 0.2);
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.start(t); osc.stop(t + 0.3);
+}
+
+// miss sound effect
+function playSfxMiss(ac, t) {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(150, t);
+  gain.gain.setValueAtTime(0.15, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.start(t); osc.stop(t + 0.12);
+}
+
+// BGM scheduler
+let bgmScheduled = false;
+let bgmNodes = [];
+let bgmStartTime = 0;
+let bgmStopFlag = false;
+
+const BPM = 120;
+const BEAT = 60 / BPM; // 0.5s
+
+// melody pattern (scale: C major simple)
+const MELODY_NOTES = [
+  { beat: 0,  freq: 523.25 },
+  { beat: 1,  freq: 587.33 },
+  { beat: 2,  freq: 659.25 },
+  { beat: 3,  freq: 523.25 },
+  { beat: 4,  freq: 659.25 },
+  { beat: 5,  freq: 783.99 },
+  { beat: 6,  freq: 880.00 },
+  { beat: 7,  freq: 783.99 },
+];
+const MELODY_BARS = 2; // repeat every 8 beats
+
+function startBGM(ac) {
+  bgmStopFlag = false;
+  bgmStartTime = ac.currentTime + 0.1;
+  scheduleBGM(ac, bgmStartTime, 80); // schedule 80 beats ahead
+}
+
+function scheduleBGM(ac, startT, numBeats) {
+  for (let i = 0; i < numBeats; i++) {
+    if (bgmStopFlag) break;
+    const t = startT + i * BEAT;
+    const beatInBar = i % 4;
+    // kick on beat 0,2
+    if (beatInBar === 0 || beatInBar === 2) playKick(ac, t);
+    // snare on beat 1,3
+    if (beatInBar === 1 || beatInBar === 3) playSnare(ac, t);
+    // hihat every beat
+    playHat(ac, t);
+    // melody
+    const beatInPattern = i % (MELODY_BARS * 4);
+    const noteData = MELODY_NOTES.find(n => n.beat === beatInPattern);
+    if (noteData) playNote(ac, noteData.freq, t, BEAT * 0.7);
+  }
+}
+
+function stopBGM() {
+  bgmStopFlag = true;
+}
+
+// ===== GAME STATE =====
+const ACTIONS = ['grip', 'knead']; // types (last one in sequence = toss)
+const WINDOW_MS = 200; // ±200ms
+const HOLD_DURATION = 400; // ms
+
+// Build action sequence: 8*3 + 1 toss
+function buildSequence() {
+  const seq = [];
+  let beat = 4; // start at beat 4 (2 beat intro)
+  for (let set = 0; set < 3; set++) {
+    for (let i = 0; i < 8; i++) {
+      const type = (Math.random() < 0.5) ? 'grip' : 'knead';
+      seq.push({ type, beat });
+      beat += 1;
+    }
+    beat += 2; // 2 beat rest between sets
+  }
+  // toss at end
+  seq.push({ type: 'toss', beat });
+  return seq;
+}
+
+// Game variables
+let state = 'title'; // title | playing | result
+let score = 0;
+let combo = 0;
+let perfectCount = 0;
+let totalActions = 0;
+let sequence = [];
+let currentActionIdx = 0;
+let gameStartTime = 0; // performance.now() when game started
+let animRaf = null;
+
+// input state
+let touchStartY = 0;
+let touchStartX = 0;
+let touchStartTime = 0;
+let isTouching = false;
+let holdTimer = null;
+let holdProgress = 0;
+let holdActive = false;
+let holdAnimRaf = null;
+
+// current action timing
+let currentActionShownAt = 0; // performance.now()
+
+// judgement state
+let judgementTimer = null;
+
+function showScreen(name) {
+  titleScreen.classList.add('hidden');
+  gameScreen.classList.add('hidden');
+  resultScreen.classList.add('hidden');
+  document.getElementById(name + 'Screen').classList.remove('hidden');
+  state = name;
+}
+
+// ===== SEQUENCE / TIMING =====
+// Convert beat index to ms from game start
+function beatToMs(beat) {
+  return beat * BEAT * 1000;
+}
+
+// Get expected ms for action at index
+function actionTimeMs(idx) {
+  return beatToMs(sequence[idx].beat);
+}
+
+// Current game elapsed ms
+function elapsedMs() {
+  return performance.now() - gameStartTime;
+}
+
+// ===== BEAT VISUAL =====
+let lastBeatFlashed = -1;
+
+function updateBeat(elapsed) {
+  const beatIdx = Math.floor(elapsed / (BEAT * 1000));
+  if (beatIdx !== lastBeatFlashed) {
+    lastBeatFlashed = beatIdx;
+    beatIndicator.classList.add('pulse');
+    setTimeout(() => beatIndicator.classList.remove('pulse'), 80);
+  }
+}
+
+// ===== ACTION DISPLAY =====
+const ACTION_META = {
+  grip:  { emoji: '✊', label: 'にぎる！', color: '#ff7043' },
+  knead: { emoji: '🌀', label: 'こねる！', color: '#7e57c2' },
+  toss:  { emoji: '👆', label: 'ポイ！',   color: '#43a047' },
+};
+
+// Falling animation: icon starts at top of actionZone and falls to target
+let actionAnimStart = 0;
+const ACTION_FALL_DURATION = BEAT * 1000; // one beat to fall
+let currentAction = null;
+let actionConsumed = false;
+
+function showAction(action) {
+  currentAction = action;
+  actionConsumed = false;
+  actionAnimStart = performance.now();
+  currentActionShownAt = actionAnimStart;
+
+  const meta = ACTION_META[action.type];
+  actionEmoji.textContent = meta.emoji;
+  actionLabel.textContent = meta.label;
+  actionLabel.style.background = `${meta.color}33`;
+  actionLabel.style.color = meta.color;
+
+  actionIcon.style.opacity = '1';
+
+  // show flick arrow hint for toss
+  if (action.type === 'toss') {
+    flickArrow.classList.add('visible');
+  } else {
+    flickArrow.classList.remove('visible');
+  }
+}
+
+function hideAction() {
+  actionIcon.style.opacity = '0';
+  currentAction = null;
+  flickArrow.classList.remove('visible');
+  targetZone.classList.remove('active-zone');
+}
+
+// ===== JUDGEMENT =====
+function showJudgement(type) {
+  let text, color;
+  if (type === 'PERFECT') { text = 'PERFECT!'; color = '#ffd600'; }
+  else if (type === 'OK')  { text = 'OK!';      color = '#66bb6a'; }
+  else                      { text = 'MISS...';  color = '#ef5350'; }
+
+  judgementEl.textContent = text;
+  judgementEl.style.color = color;
+  judgementEl.style.webkitTextStroke = '2px rgba(0,0,0,0.2)';
+  judgementEl.classList.remove('fade');
+  judgementEl.classList.add('show');
+
+  if (judgementTimer) clearTimeout(judgementTimer);
+  judgementTimer = setTimeout(() => {
+    judgementEl.classList.remove('show');
+    judgementEl.classList.add('fade');
+    setTimeout(() => judgementEl.classList.remove('fade'), 300);
+  }, 500);
+}
+
+// ===== SCORING =====
+function comboMultiplier(c) {
+  if (c >= 20) return 2.0;
+  if (c >= 15) return 1.5;
+  if (c >= 10) return 1.2;
+  return 1.0;
+}
+
+function addJudgement(type) {
+  totalActions++;
+  const ac = getAudioCtx();
+  if (type === 'PERFECT') {
+    combo++;
+    const mult = comboMultiplier(combo);
+    score += Math.round(100 * mult);
+    perfectCount++;
+    playSfxGrip(ac, ac.currentTime);
+    spawnParticles('✨');
+  } else if (type === 'OK') {
+    combo++;
+    score += 50;
+    playSfxGrip(ac, ac.currentTime);
+  } else {
+    combo = 0;
+    playSfxMiss(ac, ac.currentTime);
+    missFlash.classList.add('show');
+    setTimeout(() => missFlash.classList.remove('show'), 150);
+  }
+  scoreDisplay.textContent = score;
+  updateComboDisplay();
+  showJudgement(type);
+}
+
+function updateComboDisplay() {
+  if (combo >= 2) {
+    comboDisplay.textContent = `${combo} COMBO!`;
+    comboDisplay.classList.add('pop');
+    setTimeout(() => comboDisplay.classList.remove('pop'), 100);
+  } else {
+    comboDisplay.textContent = '';
+  }
+}
+
+// ===== PARTICLES =====
+function spawnParticles(emoji) {
+  for (let i = 0; i < 6; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.textContent = emoji;
+    const angle = (Math.random() * 360) * Math.PI / 180;
+    const dist = 60 + Math.random() * 80;
+    p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    p.style.setProperty('--dy', Math.sin(angle) * dist - 40 + 'px');
+    p.style.left = '180px';
+    p.style.top = '380px';
+    app.appendChild(p);
+    setTimeout(() => p.remove(), 800);
+  }
+}
+
+// ===== INPUT HANDLING =====
+function getEventY(e) {
+  if (e.changedTouches) return e.changedTouches[0].clientY;
+  return e.clientY;
+}
+function getEventX(e) {
+  if (e.changedTouches) return e.changedTouches[0].clientX;
+  return e.clientX;
+}
+
+function onInputStart(e) {
+  if (state !== 'playing') return;
+  e.preventDefault();
+  isTouching = true;
+  touchStartY = getEventY(e);
+  touchStartX = getEventX(e);
+  touchStartTime = performance.now();
+  holdProgress = 0;
+
+  // Start hold timer for knead
+  if (currentAction && !actionConsumed && currentAction.type === 'knead') {
+    holdActive = true;
+    holdRing.classList.add('visible');
+    startHoldAnimation();
+  }
+}
+
+function onInputEnd(e) {
+  if (state !== 'playing') return;
+  e.preventDefault();
+
+  const dy = getEventY(e) - touchStartY;
+  const holdDuration = performance.now() - touchStartTime;
+
+  isTouching = false;
+  holdActive = false;
+  holdRing.classList.remove('visible');
+  cancelAnimationFrame(holdAnimRaf);
+  holdProgress = 0;
+
+  if (!currentAction || actionConsumed) return;
+
+  // Check flick (toss)
+  if (currentAction.type === 'toss') {
+    if (dy < -50) {
+      judgeAction('toss');
+    }
+    return;
+  }
+
+  // Check grip (tap = quick release)
+  if (currentAction.type === 'grip') {
+    if (holdDuration < HOLD_DURATION) {
+      judgeAction('grip');
+    }
+    return;
+  }
+
+  // Check knead (hold)
+  if (currentAction.type === 'knead') {
+    if (holdDuration >= HOLD_DURATION) {
+      judgeAction('knead');
+    }
+    return;
+  }
+}
+
+function judgeAction(inputType) {
+  if (!currentAction || actionConsumed) return;
+  if (inputType !== currentAction.type) return;
+
+  const elapsed = elapsedMs();
+  const expectedMs = actionTimeMs(currentActionIdx);
+  const diff = Math.abs(elapsed - expectedMs);
+
+  actionConsumed = true;
+  hideAction();
+
+  if (inputType === 'toss') {
+    const ac = getAudioCtx();
+    playSfxToss(ac, ac.currentTime);
+    onigiriChar.classList.add('toss');
+    addJudgement(diff <= WINDOW_MS ? 'PERFECT' : 'OK');
+    // advance
+    currentActionIdx++;
+    // game ends after toss
+    setTimeout(() => endGame(), 1200);
+    return;
+  }
+
+  // animate onigiri
+  if (inputType === 'grip') {
+    onigiriChar.classList.add('squeeze');
+    setTimeout(() => onigiriChar.classList.remove('squeeze'), 150);
+  }
+
+  let judgementType;
+  if (diff <= WINDOW_MS * 0.4) judgementType = 'PERFECT';
+  else if (diff <= WINDOW_MS) judgementType = 'OK';
+  else judgementType = 'MISS';
+
+  addJudgement(judgementType);
+  currentActionIdx++;
+}
+
+// Hold animation
+function startHoldAnimation() {
+  const start = performance.now();
+  function tick() {
+    if (!holdActive) return;
+    const elapsed = performance.now() - start;
+    holdProgress = Math.min(elapsed / HOLD_DURATION, 1);
+    drawHoldRing(holdProgress);
+    if (holdProgress < 1) {
+      holdAnimRaf = requestAnimationFrame(tick);
+    } else {
+      // auto-complete knead if holding long enough
+      onigiriChar.classList.add('knead');
+      setTimeout(() => onigiriChar.classList.remove('knead'), 300);
+    }
+  }
+  holdAnimRaf = requestAnimationFrame(tick);
+}
+
+function drawHoldRing(progress) {
+  holdCtx.clearRect(0, 0, 140, 140);
+  const cx = 70, cy = 70, r = 58;
+  // background ring
+  holdCtx.beginPath();
+  holdCtx.arc(cx, cy, r, 0, Math.PI * 2);
+  holdCtx.strokeStyle = 'rgba(126,87,194,0.2)';
+  holdCtx.lineWidth = 8;
+  holdCtx.stroke();
+  // progress arc
+  holdCtx.beginPath();
+  holdCtx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+  holdCtx.strokeStyle = '#7e57c2';
+  holdCtx.lineWidth = 8;
+  holdCtx.lineCap = 'round';
+  holdCtx.stroke();
+}
+
+// ===== GAME LOOP =====
+function gameLoop() {
+  if (state !== 'playing') return;
+  const elapsed = elapsedMs();
+
+  // progress bar
+  const totalMs = beatToMs(sequence[sequence.length - 1].beat) + BEAT * 1000 * 3;
+  progressFill.style.width = Math.min(elapsed / totalMs * 100, 100) + '%';
+
+  // beat visual
+  updateBeat(elapsed);
+
+  // action zone target highlight: active 600ms before action
+  if (currentAction && !actionConsumed) {
+    const expectedMs = actionTimeMs(currentActionIdx);
+    const diff = expectedMs - elapsed;
+    if (diff < 200) {
+      targetZone.classList.add('active-zone');
+    } else {
+      targetZone.classList.remove('active-zone');
+    }
+
+    // falling icon position
+    const fallElapsed = performance.now() - actionAnimStart;
+    const fallProgress = Math.min(fallElapsed / (ACTION_FALL_DURATION), 1);
+    // actionZone height ~ 450px, target center at 50% = ~225px
+    // icon starts at top 20px, ends at 200px
+    const topStart = 10, topEnd = 200;
+    const topPos = topStart + (topEnd - topStart) * fallProgress;
+    actionIcon.style.top = topPos + 'px';
+
+    // Miss: if action has passed window and not consumed
+    if (elapsed > expectedMs + WINDOW_MS + 100 && !actionConsumed) {
+      actionConsumed = true;
+      hideAction();
+      addJudgement('MISS');
+      currentActionIdx++;
+    }
+  }
+
+  // Schedule next action to show: show it ACTION_FALL_DURATION ms before its beat
+  if (!currentAction && currentActionIdx < sequence.length) {
+    const expectedMs = actionTimeMs(currentActionIdx);
+    if (elapsed >= expectedMs - ACTION_FALL_DURATION) {
+      showAction(sequence[currentActionIdx]);
+    }
+  }
+
+  // End condition: all actions done + 2 beats passed
+  if (currentActionIdx >= sequence.length && !currentAction) {
+    const lastBeatMs = beatToMs(sequence[sequence.length - 1].beat);
+    if (elapsed > lastBeatMs + BEAT * 1000 * 2) {
+      endGame();
+      return;
+    }
+  }
+
+  animRaf = requestAnimationFrame(gameLoop);
+}
+
+// ===== START / END =====
+function startGame() {
+  // Reset state
+  score = 0;
+  combo = 0;
+  perfectCount = 0;
+  totalActions = 0;
+  currentActionIdx = 0;
+  currentAction = null;
+  actionConsumed = false;
+  lastBeatFlashed = -1;
+  holdActive = false;
+  holdProgress = 0;
+
+  sequence = buildSequence();
+
+  scoreDisplay.textContent = '0';
+  comboDisplay.textContent = '';
+  progressFill.style.width = '0%';
+  onigiriChar.className = '';
+  judgementEl.className = '';
+  judgementEl.textContent = '';
+  holdRing.classList.remove('visible');
+  flickArrow.classList.remove('visible');
+  actionIcon.style.opacity = '0';
+  targetZone.classList.remove('active-zone');
+  missFlash.classList.remove('show');
+
+  showScreen('game');
+
+  const ac = resumeAudio();
+  stopBGM();
+  startBGM(ac);
+
+  gameStartTime = performance.now() + 100; // small offset to align with BGM start
+  cancelAnimationFrame(animRaf);
+  animRaf = requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+  if (state === 'result') return;
+  state = 'result';
+  cancelAnimationFrame(animRaf);
+  stopBGM();
+
+  const perfectRate = totalActions > 0 ? perfectCount / totalActions : 0;
+  let rank, face, serif;
+
+  if (perfectRate >= 0.8) {
+    rank = '神おにぎり ★★★';
+    face = '🍙✨';
+    serif = 'さいっっっきょうだよ！！シェアして自慢して！✨';
+  } else if (perfectRate >= 0.5) {
+    rank = 'うまいおにぎり ★★';
+    face = '🍙';
+    serif = 'うまい！センスあるじゃん！もう一回どう？';
+  } else if (perfectRate >= 0.3) {
+    rank = 'ふつうおにぎり ★';
+    face = '🍙';
+    serif = 'まあまあかな〜。練習あるのみ！';
+  } else {
+    rank = 'ぐちゃおにぎり';
+    face = '😢';
+    serif = '…ぐちゃぐちゃやん。でも食べるよ？😂';
+  }
+
+  resultOnigiri.textContent = face;
+  resultRank.textContent = rank;
+  resultSerial.innerHTML = `「${serif}」`;
+  resultScore.innerHTML = `スコア: <strong>${score}</strong>pt　PERFECT率: ${Math.round(perfectRate * 100)}%`;
+
+  showScreen('result');
+}
+
+// ===== TOUCH EVENTS =====
+app.addEventListener('touchstart', onInputStart, { passive: false });
+app.addEventListener('touchend', onInputEnd, { passive: false });
+app.addEventListener('mousedown', onInputStart);
+app.addEventListener('mouseup', onInputEnd);
+
+// ===== BUTTON EVENTS =====
+startBtn.addEventListener('click', () => { resumeAudio(); startGame(); });
+retryBtn.addEventListener('click', () => startGame());
+document.getElementById('shareBtn').addEventListener('click', () => {
+  const perfectRate = totalActions > 0 ? Math.round(perfectCount / totalActions * 100) : 0;
+  const rankText = resultRank.textContent;
+  const text = `🍙にぎにぎリズム！\n${rankText}\nスコア: ${score}pt　PERFECT率: ${perfectRate}%\n#にぎにぎリズム`;
+  if (navigator.share) {
+    navigator.share({ text });
+  } else {
+    navigator.clipboard.writeText(text).then(() => alert('スコアをコピーしました！'));
+  }
+});
+
+// ===== RECORD MODE =====
+if (isRecord) {
+  window._recordCtrl = {
+    start: () => { resumeAudio(); startGame(); },
+    stop: () => ({
+      score,
+      combo,
+      perfectCount,
+      totalActions,
+      state,
+    }),
+  };
+}
+
+// ===== INIT =====
+showScreen('title');
+
+// Resize app for viewport
+function resizeApp() {
+  const scaleX = window.innerWidth / 390;
+  const scaleY = window.innerHeight / 844;
+  const scale = Math.min(scaleX, scaleY);
+  app.style.transform = `scale(${scale})`;
+  app.style.transformOrigin = 'top left';
+  app.style.position = 'absolute';
+  app.style.left = ((window.innerWidth - 390 * scale) / 2) + 'px';
+  app.style.top = ((window.innerHeight - 844 * scale) / 2) + 'px';
+}
+resizeApp();
+window.addEventListener('resize', resizeApp);
+
+})();
+</script>
+</body>
+</html>
