@@ -174,21 +174,12 @@ function pickRandomSimpleRule() {
 
 function generateRules() {
   let chosen = null, correctIdx = -1, attempts = 0;
-  const forceConflict = round >= 6 && Math.random() < 0.25;
   while (attempts < 50) {
     attempts++;
     const r = pickRandomSimpleRule();
     const idx = applyRule(r, wires);
-    if (forceConflict && idx >= 0) {
-      chosen = {
-        type: 'color_exclude_constraint',
-        baseRule: r,
-        forbidColorId: wires[idx].color.id,
-        text: r.text + `、ただし${wires[idx].color.name}は切るな`,
-      };
-      correctIdx = -1;
-      break;
-    } else if (!forceConflict && (idx >= 0 || r.type === 'middle')) {
+    // "切らないが正解"は自然発生のみ: middle(偶数本) or color(存在しない色)
+    if (idx >= 0 || r.type === 'middle' || r.type === 'color') {
       chosen = r; correctIdx = idx; break;
     }
   }
