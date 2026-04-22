@@ -103,19 +103,13 @@ let state = {
   parts: [],
   sweet: 0,
   lively: 0,
-  timeLeft: 75,
-  fallingPart: null,
-  fallY: -60,
-  fallX: W / 2,
-  fallSpeed: 3.5,
+  timeLeft: 45,
+  fallingParts: [],
   score: 0,
   stars: 0,
   highScore: parseInt(localStorage.getItem('cake_hs') || '0'),
   particles: [],
   sparkles: [],
-  holdTimer: 0,
-  isHolding: false,
-  lastTime: 0,
   totalScore: 0,
   roundsLeft: 3,
   roundNum: 1,
@@ -126,6 +120,109 @@ function rand(a, b) { return a + Math.random() * (b - a); }
 function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function lerp(a, b, t) { return a + (b - a) * t; }
+
+// ===== AUDIO =====
+let audioCtx = null;
+let beatInterval = null;
+let beatCount = 0;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playNote(freq, type, duration, vol, delay) {
+  const ac = getAudioCtx();
+  const t = ac.currentTime + (delay || 0);
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(vol || 0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  osc.start(t); osc.stop(t + duration);
+}
+
+function playNoise(duration, vol, delay) {
+  const ac = getAudioCtx();
+  const t = ac.currentTime + (delay || 0);
+  const buf = ac.createBuffer(1, ac.sampleRate * duration, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+  const src = ac.createBufferSource();
+  const gain = ac.createGain();
+  const filter = ac.createBiquadFilter();
+  filter.type = 'highpass'; filter.frequency.value = 3000;
+  src.buffer = buf;
+  src.connect(filter); filter.connect(gain); gain.connect(ac.destination);
+  gain.gain.setValueAtTime(vol || 0.1, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  src.start(t); src.stop(t + duration);
+}
+
+function playCatch() {
+  // 明るいポップ音
+  playNote(880, 'sine', 0.12, 0.25);
+  playNote(1320, 'sine', 0.08, 0.15, 0.05);
+}
+
+function playMiss() {
+  playNote(220, 'sine', 0.15, 0.08);
+}
+
+// BGM: 120BPMのポップビート
+const BPM = 128;
+const BEAT_MS = 60000 / BPM; // ~469ms
+
+// ベースライン (C major)
+const BASS_SEQ = [130, 130, 164, 130, 174, 164, 130, 196];
+// メロディ
+const MELO_SEQ = [
+  523,0,659,0,784,659,0,523,
+  698,0,880,0,784,0,659,0,
+];
+
+function playBeat(beat) {
+  const b = beat % 8;
+  // キック (1, 5拍目)
+  if (b === 0 || b === 4) {
+    playNote(80, 'sine', 0.25, 0.35);
+    playNote(60, 'sine', 0.15, 0.2, 0.04);
+  }
+  // スネア (3, 7拍目)
+  if (b === 2 || b === 6) {
+    playNoise(0.12, 0.18);
+    playNote(200, 'triangle', 0.1, 0.12);
+  }
+  // ハイハット 毎拍
+  playNoise(0.05, 0.06);
+  // ベース
+  const bassFreq = BASS_SEQ[b];
+  playNote(bassFreq, 'sawtooth', 0.18, 0.12);
+  // メロディ
+  const meloFreq = MELO_SEQ[beat % 16];
+  if (meloFreq) {
+    playNote(meloFreq, 'sine', 0.15, 0.18);
+    playNote(meloFreq * 1.5, 'sine', 0.06, 0.08, 0.02);
+  }
+}
+
+function startBGM() {
+  if (beatInterval) return;
+  beatCount = 0;
+  playBeat(beatCount++);
+  beatInterval = setInterval(() => {
+    playBeat(beatCount++);
+    // ビートに合わせてアイテムをスポーン
+    if (state.phase === PHASE.DECO) spawnPartOnBeat();
+  }, BEAT_MS);
+}
+
+function stopBGM() {
+  clearInterval(beatInterval);
+  beatInterval = null;
+}
 
 function drawRoundRect(x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
@@ -534,44 +631,28 @@ function drawBaseSelect() {
 }
 
 // ===== DECO PHASE =====
-let _decoTimer = 0;
-
 function drawDeco(dt) {
   drawBG();
-  _decoTimer += dt;
 
-  // Falling part
-  const fp = state.fallingPart;
-  if (fp) {
-    state.fallY += state.fallSpeed;
-    if (state.fallY > H - 160) {
-      // Missed — skip
-      nextPart();
-    } else {
-      // Hold progress ring
-      if (state.isHolding) {
-        const prog = state.holdTimer / 500;
-        ctx.save();
-        ctx.strokeStyle = '#ff82b8';
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.arc(state.fallX, state.fallY, 36, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-      drawEmoji(fp.emoji, state.fallX, state.fallY, 44);
-      // Part name
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#c0407a';
-      ctx.font = 'bold 13px sans-serif';
-      ctx.fillText(fp.name, state.fallX, state.fallY + 32);
-      ctx.fillStyle = '#888';
-      ctx.font = '11px sans-serif';
-      ctx.fillText('甘+' + fp.sweet + ' 賑+' + fp.lively, state.fallX, state.fallY + 46);
-      ctx.restore();
+  // Update & draw falling parts
+  state.fallingParts = state.fallingParts.filter(fp => {
+    fp.y += fp.speed;
+    if (fp.y > H - 150) {
+      playMiss();
+      return false; // missed, disappear silently
     }
-  }
+    // bounce/wobble
+    fp.wobble = (fp.wobble || 0) + 0.15;
+    const wx = Math.sin(fp.wobble) * 8;
+    drawEmoji(fp.emoji, fp.x + wx, fp.y, 46);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#c0407a';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(fp.name, fp.x + wx, fp.y + 34);
+    ctx.restore();
+    return true;
+  });
 
   // Cake
   drawCake();
@@ -580,11 +661,9 @@ function drawDeco(dt) {
   drawGauges();
 
   // Timer bar
-  const timerW = W - 100;
-  const timerX = 50;
-  const timerY = 36;
+  const timerW = W - 100, timerX = 50, timerY = 36;
   drawRoundRect(timerX, timerY, timerW, 16, 8, C.gaugeBg);
-  const ratio = state.timeLeft / 75;
+  const ratio = state.timeLeft / 45;
   const barColor = ratio > 0.5 ? '#ff82b8' : ratio > 0.25 ? '#ffaa44' : '#ff4444';
   drawRoundRect(timerX, timerY, timerW * ratio, 16, 8, barColor);
   ctx.save();
@@ -748,50 +827,49 @@ function startRound() {
   state.parts = [];
   state.sweet = 50;
   state.lively = 50;
-  state.timeLeft = 75;
-  state.fallingPart = null;
-  state.fallY = -60;
+  state.timeLeft = 45;
+  state.fallingParts = [];
   state.particles = [];
   state.sparkles = [];
   _completeTimer = 0;
   state.phase = PHASE.CUSTOMER;
 }
 
-function spawnPart() {
-  const p = PARTS[randInt(0, PARTS.length - 1)];
-  state.fallingPart = p;
-  state.fallY = -40;
-  state.fallX = rand(80, W - 80);
-  state.fallSpeed = rand(2.8, 4.2);
-  state.isHolding = false;
-  state.holdTimer = 0;
+function spawnPartOnBeat() {
+  if (state.fallingParts.length >= 4) return;
+  // 2拍に1回は2個スポーン
+  const count = (beatCount % 4 === 0) ? 2 : 1;
+  for (let i = 0; i < count; i++) {
+    const p = PARTS[randInt(0, PARTS.length - 1)];
+    state.fallingParts.push({
+      ...p,
+      y: -40 - i * 120,
+      x: rand(75, W - 75),
+      speed: rand(3.5, 5.5),
+      wobble: rand(0, Math.PI * 2),
+    });
+  }
 }
 
-let spawnTimer = null;
-function nextPart() {
-  state.fallingPart = null;
-  spawnTimer = setTimeout(spawnPart, 600);
-}
-
-function catchPart() {
-  const p = state.fallingPart;
-  if (!p) return;
-  state.parts.push(p);
-  state.sweet = clamp(state.sweet + p.sweet, 0, 100);
-  state.lively = clamp(state.lively + p.lively, 0, 100);
-  spawnParticles(state.fallX, state.fallY);
-  state.fallingPart = null;
-  spawnTimer = setTimeout(spawnPart, 400);
-}
-
-function skipPart() {
-  state.fallingPart = null;
-  spawnTimer = setTimeout(spawnPart, 500);
+function catchPartAt(x, y) {
+  let best = null, bestDist = 80;
+  state.fallingParts.forEach(fp => {
+    const dx = x - fp.x, dy = y - fp.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < bestDist) { bestDist = dist; best = fp; }
+  });
+  if (!best) return;
+  state.fallingParts = state.fallingParts.filter(fp => fp !== best);
+  state.parts.push(best);
+  state.sweet = clamp(state.sweet + best.sweet, 0, 100);
+  state.lively = clamp(state.lively + best.lively, 0, 100);
+  spawnParticles(best.x, best.y);
+  playCatch();
 }
 
 function endDeco() {
-  clearTimeout(spawnTimer);
-  state.fallingPart = null;
+  stopBGM();
+  state.fallingParts = [];
   _completeTimer = 0;
   spawnSparkles();
   state.phase = PHASE.COMPLETE;
@@ -852,25 +930,12 @@ function getCanvasXY(e) {
 
 function onPointerDown(e) {
   e.preventDefault();
-  pointerDown = true;
-  pointerDownTime = Date.now();
-  state.isHolding = false;
-  state.holdTimer = 0;
-
   const { x, y } = getCanvasXY(e);
   handleTap(x, y);
 }
 
-function onPointerMove(e) {
-  e.preventDefault();
-}
-
-function onPointerUp(e) {
-  e.preventDefault();
-  pointerDown = false;
-  state.isHolding = false;
-  state.holdTimer = 0;
-}
+function onPointerMove(e) { e.preventDefault(); }
+function onPointerUp(e) { e.preventDefault(); }
 
 function handleTap(x, y) {
   switch (state.phase) {
@@ -887,27 +952,16 @@ function handleTap(x, y) {
         const bx = W/2 - 100;
         if (x >= bx && x <= bx + 200 && y >= by && y <= by + 140) {
           state.base = id;
-          // Short delay then start deco
           setTimeout(() => {
             state.phase = PHASE.DECO;
-            spawnPart();
+            startBGM();
+            spawnPartOnBeat();
           }, 300);
         }
       });
       break;
     case PHASE.DECO:
-      if (state.fallingPart) {
-        // Check hit on falling part (generous radius)
-        const dx = x - state.fallX;
-        const dy = y - state.fallY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 75) {
-          catchPart();
-        } else {
-          // Tap anywhere else starts hold timer
-          state.isHolding = true;
-        }
-      }
+      catchPartAt(x, y);
       break;
     case PHASE.COMPLETE:
       if (_completeTimer > 1300) goToScore();
@@ -969,21 +1023,8 @@ function loop(timestamp) {
       drawBaseSelect();
       break;
     case PHASE.DECO:
-      // Timer countdown
       state.timeLeft -= dt / 1000;
-      if (state.timeLeft <= 0) {
-        state.timeLeft = 0;
-        endDeco();
-      }
-      // Hold timer for skip
-      if (state.isHolding && state.fallingPart) {
-        state.holdTimer += dt;
-        if (state.holdTimer >= 500) {
-          skipPart();
-          state.isHolding = false;
-          state.holdTimer = 0;
-        }
-      }
+      if (state.timeLeft <= 0) { state.timeLeft = 0; endDeco(); }
       updateParticles();
       drawDeco(dt);
       break;
