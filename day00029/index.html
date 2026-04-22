@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>LAST WIRE</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a1a2e;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+}
+canvas { display: block; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  const W = Math.min(window.innerWidth, 480);
+  const H = Math.min(window.innerHeight, 854);
+  canvas.width = W;
+  canvas.height = H;
+  if (state === 'playing') startRound();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Web Audio
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+function playTone(freq, type, dur, vol = 0.3) {
+  try {
+    const osc = AC.createOscillator();
+    const gain = AC.createGain();
+    osc.connect(gain); gain.connect(AC.destination);
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, AC.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+    osc.start(); osc.stop(AC.currentTime + dur);
+  } catch(e) {}
+}
+function soundCut() { playTone(800, 'square', 0.08, 0.2); }
+function soundDefused() {
+  playTone(600, 'sine', 0.1, 0.3);
+  setTimeout(() => playTone(900, 'sine', 0.15, 0.3), 80);
+  setTimeout(() => playTone(1200, 'sine', 0.2, 0.25), 160);
+}
+function soundBoom() {
+  const buf = AC.createBuffer(1, AC.sampleRate * 0.5, AC.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  const src = AC.createBufferSource();
+  const gain = AC.createGain();
+  src.buffer = buf; src.connect(gain); gain.connect(AC.destination);
+  gain.gain.value = 0.4;
+  src.start();
+}
+function soundBeep(freq) { playTone(freq, 'square', 0.05, 0.1); }
+
+const COLORS = [
+  { name: '赤', hex: '#e74c3c', id: 'red' },
+  { name: '青', hex: '#3498db', id: 'blue' },
+  { name: '黄', hex: '#f1c40f', id: 'yellow' },
+  { name: '緑', hex: '#2ecc71', id: 'green' },
+  { name: '白', hex: '#ecf0f1', id: 'white' },
+  { name: '紫', hex: '#9b59b6', id: 'purple' },
+];
+
+let state = 'title';
+let round = 0;
+let score = 0;
+let streak = 0;
+let highScore = parseInt(localStorage.getItem('lastwire_hs') || '0');
+let wires = [];
+let rules = [];
+let persistentRules = [];
+let timerMax = 5;
+let timerLeft = 5;
+let lastTime = 0;
+let correctWireIndex = -1;
+let cutResult = null;
+let resultTimer = 0;
+let particles = [];
+let floatTexts = [];
+let bombShake = 0;
+let streakMultiplier = 1.0;
+let lastBeepSecond = -1;
+
+function getWireCount() {
+  if (round <= 3) return 3;
+  if (round <= 7) return 4;
+  if (round <= 11) return 5;
+  return 6;
+}
+function getTimerDuration() {
+  if (round <= 3) return 5;
+  if (round <= 7) return 4;
+  if (round <= 10) return 3;
+  return 2.5;
+}
+function getStreakMultiplier(s) {
+  if (s >= 15) return 3.0;
+  if (s >= 10) return 2.0;
+  if (s >= 5) return 1.5;
+  return 1.0;
+}
+
+function generateWires(count) {
+  const W = canvas.width, H = canvas.height;
+  const bombCY = H * 0.42;
+  const bombR = Math.min(W, H) * 0.12;
+  const spread = W * 0.7;
+  const startX = (W - spread) / 2;
+  let colorPool = [...COLORS].sort(() => Math.random() - 0.5);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const color = colorPool[i % colorPool.length];
+    const x = count > 1 ? startX + (spread / (count - 1)) * i : W / 2;
+    const minLen = H * 0.18, maxLen = H * 0.35;
+    const len = minLen + Math.random() * (maxLen - minLen);
+    out.push({
+      id: i, color,
+      startX: x, startY: bombCY + bombR,
+      endX: x + (Math.random() - 0.5) * 40,
+      endY: bombCY + bombR + len,
+      cx: x + (Math.random() - 0.5) * 60,
+      cy: bombCY + bombR + len * 0.4,
+      length: len, cut: false, hover: false,
+    });
+  }
+  return out;
+}
+
+function applyRule(rule, wires) {
+  switch (rule.type) {
+    case 'longest': { let m = -1, idx = -1; wires.forEach((w,i) => { if (w.length > m) { m = w.length; idx = i; } }); return idx; }
+    case 'shortest': { let m = Infinity, idx = -1; wires.forEach((w,i) => { if (w.length < m) { m = w.length; idx = i; } }); return idx; }
+    case 'color': return wires.findIndex(w => w.color.id === rule.colorId);
+    case 'leftmost': return 0;
+    case 'rightmost': return wires.length - 1;
+    case 'middle': return wires.length % 2 === 0 ? -1 : Math.floor(wires.length / 2);
+    case 'not_color_longest': { let m = -1, idx = -1; wires.forEach((w,i) => { if (w.color.id !== rule.colorId && w.length > m) { m = w.length; idx = i; } }); return idx; }
+    case 'color_exclude_constraint': {
+      const base = applyRule(rule.baseRule, wires);
+      if (base === -1) return -1;
+      return wires[base].color.id === rule.forbidColorId ? -1 : base;
+    }
+  }
+  return -1;
+}
+
+function pickRandomSimpleRule() {
+  const c = COLORS[Math.floor(Math.random() * COLORS.length)];
+  const types = [
+    { type: 'longest', text: '一番長いワイヤーを切れ' },
+    { type: 'shortest', text: '一番短いワイヤーを切れ' },
+    { type: 'leftmost', text: '一番左のワイヤーを切れ' },
+    { type: 'rightmost', text: '一番右のワイヤーを切れ' },
+    { type: 'middle', text: '真ん中のワイヤーを切れ' },
+    { type: 'color', colorId: c.id, text: `${c.name}のワイヤーを切れ` },
+    { type: 'not_color_longest', colorId: c.id, text: `${c.name}以外で一番長いワイヤーを切れ` },
+  ];
+  return types[Math.floor(Math.random() * types.length)];
+}
+
+function generateRules() {
+  let chosen = null, correctIdx = -1, attempts = 0;
+  const forceConflict = round >= 6 && Math.random() < 0.25;
+  while (attempts < 50) {
+    attempts++;
+    const r = pickRandomSimpleRule();
+    const idx = applyRule(r, wires);
+    if (forceConflict && idx >= 0) {
+      chosen = {
+        type: 'color_exclude_constraint',
+        baseRule: r,
+        forbidColorId: wires[idx].color.id,
+        text: r.text + `、ただし${wires[idx].color.name}は切るな`,
+      };
+      correctIdx = -1;
+      break;
+    } else if (!forceConflict && (idx >= 0 || r.type === 'middle')) {
+      chosen = r; correctIdx = idx; break;
+    }
+  }
+  if (!chosen) { chosen = { type: 'longest', text: '一番長いワイヤーを切れ' }; correctIdx = applyRule(chosen, wires); }
+  return { rule: chosen, correctIdx };
+}
+
+function resolveCorrectWire() {
+  let idx = correctWireIndex;
+  for (const pr of persistentRules) {
+    if (pr.type === 'not_color' && idx >= 0 && wires[idx].color.id === pr.colorId) idx = -1;
+  }
+  return idx;
+}
+
+function startRound() {
+  round++;
+  wires = generateWires(getWireCount());
+  timerMax = getTimerDuration();
+  timerLeft = timerMax;
+  cutResult = null;
+  lastBeepSecond = -1;
+  const { rule, correctIdx } = generateRules();
+  rules = [rule];
+  correctWireIndex = correctIdx;
+  if (round >= 11 && persistentRules.length > 0) correctWireIndex = resolveCorrectWire();
+  if (round >= 11 && Math.random() < 0.3 && persistentRules.length === 0) {
+    if (rule.type === 'color' || rule.type === 'not_color_longest') {
+      persistentRules = [{ type: 'not_color', colorId: rule.colorId, text: `${rule.text}（継続）` }];
+    }
+  }
+}
+
+function startGame() {
+  round = 0; score = 0; streak = 0; streakMultiplier = 1.0;
+  persistentRules = []; particles = []; floatTexts = [];
+  state = 'playing';
+  startRound();
+}
+
+function spawnExplosion(x, y, count, colors) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2, speed = 2 + Math.random() * 8;
+    particles.push({
+      x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+      life: 1, decay: 0.02 + Math.random()*0.03,
+      r: 3 + Math.random()*6, color: colors[Math.floor(Math.random()*colors.length)],
+    });
+  }
+}
+function spawnSuccess(x, y) { spawnExplosion(x, y, 30, ['#2ecc71','#f1c40f','#ecf0f1','#3498db']); }
+function spawnFail(x, y) { spawnExplosion(x, y, 60, ['#e74c3c','#e67e22','#f39c12','#c0392b']); }
+
+function spawnFloat(x, y, text, color) {
+  floatTexts.push({ x, y, text, color, life: 1.5, vy: -1.5 });
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length-1; i >= 0; i--) {
+    const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = floatTexts.length-1; i >= 0; i--) {
+    const f = floatTexts[i]; f.y += f.vy; f.life -= dt;
+    if (f.life <= 0) floatTexts.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save(); ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r*p.life, 0, Math.PI*2); ctx.fill(); ctx.restore();
+  }
+  const W = canvas.width;
+  for (const f of floatTexts) {
+    ctx.save(); ctx.globalAlpha = Math.min(1, f.life); ctx.fillStyle = f.color;
+    ctx.font = `bold ${Math.floor(W*0.045)}px Courier New`;
+    ctx.textAlign = 'center'; ctx.shadowColor = f.color; ctx.shadowBlur = 10;
+    ctx.fillText(f.text, f.x, f.y); ctx.restore();
+  }
+}
+
+function getWirePoints(w) { return { x0: w.startX, y0: w.startY, cx: w.cx, cy: w.cy, x1: w.endX, y1: w.endY }; }
+
+function drawWire(w) {
+  const { x0, y0, cx, cy, x1, y1 } = getWirePoints(w);
+  ctx.save();
+  ctx.strokeStyle = w.cut ? '#444' : w.color.hex;
+  ctx.lineWidth = w.hover ? 7 : 5; ctx.lineCap = 'round';
+  ctx.shadowColor = w.color.hex; ctx.shadowBlur = w.hover ? 15 : 5;
+  if (w.cut) {
+    const mx = 0.25*x0 + 0.5*cx + 0.25*x1, my = 0.25*y0 + 0.5*cy + 0.25*y1;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(cx, cy*0.7+y0*0.3, mx, my-8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx, my+8); ctx.quadraticCurveTo(cx, cy*0.9, x1, y1+20); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(mx, my, 3, 0, Math.PI*2); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(cx, cy, x1, y1); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.fillStyle = w.color.hex;
+    ctx.font = `bold ${Math.floor(canvas.width*0.032)}px Courier New`;
+    ctx.textAlign = 'center'; ctx.fillText(w.color.name, x1, y1+18);
+  }
+  ctx.restore();
+}
+
+function drawBomb(shakeX, shakeY) {
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2+shakeX, cy = H*0.42+shakeY;
+  const r = Math.min(W,H)*0.12;
+  ctx.save();
+  // Danger tint based on round
+  const danger = Math.min(1, round / 15);
+  const grad = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, r*0.1, cx, cy, r);
+  grad.addColorStop(0, `rgb(${Math.floor(85+danger*100)},${Math.floor(85-danger*85)},${Math.floor(85-danger*85)})`);
+  grad.addColorStop(1, '#1a1a1a');
+  ctx.fillStyle = grad; ctx.shadowColor = '#000'; ctx.shadowBlur = 20;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = danger > 0.5 ? '#e74c3c' : '#888'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.strokeStyle = '#c0a060'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx+r*0.2, cy-r*0.8); ctx.quadraticCurveTo(cx+r*0.6, cy-r*1.2, cx+r*0.4, cy-r*1.5); ctx.stroke();
+  const sparkT = (Date.now()%500)/500;
+  if (timerLeft > 0.5) {
+    ctx.fillStyle = `rgba(255,${150+sparkT*100},0,${0.7+sparkT*0.3})`;
+    ctx.shadowColor = '#ff8c00'; ctx.shadowBlur = 15;
+    ctx.beginPath(); ctx.arc(cx+r*0.4, cy-r*1.5, 4+sparkT*3, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  // Draw bomb as circle with X pattern instead of emoji (avoid canvas emoji bug)
+  ctx.strokeStyle = '#666'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx-r*0.3, cy-r*0.3); ctx.lineTo(cx+r*0.3, cy+r*0.3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+r*0.3, cy-r*0.3); ctx.lineTo(cx-r*0.3, cy+r*0.3); ctx.stroke();
+  ctx.restore();
+  return { cx, cy, r };
+}
+
+function drawTimer(cx, cy, r) {
+  const W = canvas.width;
+  const ratio = timerLeft / timerMax;
+  const ringR = r + 18;
+  ctx.save();
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.arc(cx, cy, ringR, 0, Math.PI*2); ctx.stroke();
+  const color = ratio > 0.5 ? '#2ecc71' : ratio > 0.25 ? '#f1c40f' : '#e74c3c';
+  ctx.strokeStyle = color; ctx.lineWidth = 8; ctx.shadowColor = color; ctx.shadowBlur = 10; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(cx, cy, ringR, -Math.PI/2, -Math.PI/2 + Math.PI*2*ratio); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.fillStyle = color;
+  ctx.font = `bold ${Math.floor(W*0.06)}px Courier New`;
+  ctx.textAlign = 'center';
+  ctx.fillText(Math.ceil(timerLeft), cx, cy - r - 28);
+  ctx.restore();
+}
+
+function drawRules() {
+  const W = canvas.width, H = canvas.height;
+  const boxX = W*0.05, boxW = W*0.9, boxY = H*0.04;
+  ctx.save();
+  const allRuleTexts = rules.map(r => r.text||'');
+  persistentRules.forEach(r => allRuleTexts.push('【継続】'+(r.text||'')));
+  const lineH = Math.floor(W*0.042);
+  const padding = 10;
+  const boxH = lineH*allRuleTexts.length + padding*2 + 8;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 2;
+  ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 10;
+  roundRect(ctx, boxX, boxY, boxW, boxH, 8); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.textAlign = 'center';
+  allRuleTexts.forEach((text, i) => {
+    ctx.fillStyle = i < rules.length ? '#f1c40f' : '#aaffaa';
+    ctx.font = `bold ${lineH}px Courier New`;
+    ctx.fillText(text, W/2, boxY+padding+lineH*(i+0.8));
+  });
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+
+function drawHUD() {
+  const W = canvas.width, H = canvas.height;
+  ctx.save();
+  ctx.fillStyle = '#ecf0f1'; ctx.font = `bold ${Math.floor(W*0.035)}px Courier New`;
+  const hudY = H * 0.14;
+  ctx.textAlign = 'left';
+  ctx.fillText(`Round ${round}`, W*0.03, hudY);
+  ctx.fillText(`Score: ${score}`, W*0.03, hudY + Math.floor(W*0.05));
+  const mx = getStreakMultiplier(streak);
+  if (mx > 1) {
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillText(`×${mx.toFixed(1)} STREAK ${streak}`, W*0.03, hudY + Math.floor(W*0.1));
+  }
+  ctx.textAlign = 'right'; ctx.fillStyle = '#aaa';
+  ctx.fillText(`HI: ${highScore}`, W*0.97, hudY);
+  ctx.restore();
+}
+
+function drawTitle() {
+  const W = canvas.width, H = canvas.height;
+  ctx.save();
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#1a1a2e'); g.addColorStop(1,'#16213e');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  ['#e74c3c','#3498db','#f1c40f','#2ecc71','#ecf0f1','#9b59b6'].forEach((c,i) => {
+    ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.globalAlpha = 0.3;
+    ctx.shadowColor = c; ctx.shadowBlur = 8;
+    ctx.beginPath(); const x = W*(0.1+i*0.15);
+    ctx.moveTo(x,H*0.1); ctx.quadraticCurveTo(x+20,H*0.3,x-10,H*0.6); ctx.stroke();
+  });
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  ctx.fillStyle = '#e74c3c'; ctx.shadowColor = '#e74c3c'; ctx.shadowBlur = 30;
+  ctx.font = `bold ${Math.floor(W*0.13)}px Courier New`; ctx.textAlign = 'center';
+  ctx.fillText('LAST', W/2, H*0.3);
+  ctx.fillStyle = '#ecf0f1'; ctx.shadowColor = '#ecf0f1';
+  ctx.fillText('WIRE', W/2, H*0.3+Math.floor(W*0.14));
+  ctx.shadowBlur = 0; ctx.fillStyle = '#f1c40f';
+  ctx.font = `${Math.floor(W*0.04)}px Courier New`;
+  ctx.fillText('爆弾を解除せよ', W/2, H*0.3+Math.floor(W*0.22));
+  ctx.fillStyle = '#aaa'; ctx.font = `${Math.floor(W*0.035)}px Courier New`;
+  ctx.fillText(`BEST: ${highScore}`, W/2, H*0.58);
+  ctx.fillStyle = '#ecf0f1'; ctx.font = `${Math.floor(W*0.033)}px Courier New`;
+  ['ルールを読み、正しいワイヤーを切れ','間違えると即爆発！','切れるワイヤーが無い時は','タイムアウトを待て'].forEach((l,i) => {
+    ctx.fillText(l, W/2, H*0.66+i*Math.floor(W*0.05));
+  });
+  const pulse = 0.7+0.3*Math.sin(Date.now()/400);
+  ctx.globalAlpha = pulse; ctx.fillStyle = '#f1c40f';
+  ctx.font = `bold ${Math.floor(W*0.05)}px Courier New`;
+  ctx.fillText('タップしてスタート', W/2, H*0.88);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+let gameoverCorrectName = '';
+
+function drawGameOver() {
+  const W = canvas.width, H = canvas.height;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0,0,W,H);
+  const label = cutResult === 'timeout' ? 'TIME UP!' : '爆発！';
+  ctx.fillStyle = '#e74c3c'; ctx.shadowColor = '#e74c3c'; ctx.shadowBlur = 40;
+  ctx.font = `bold ${Math.floor(W*0.12)}px Courier New`; ctx.textAlign = 'center';
+  ctx.fillText(label, W/2, H*0.28);
+  ctx.shadowBlur = 0; ctx.fillStyle = '#ecf0f1';
+  ctx.font = `bold ${Math.floor(W*0.07)}px Courier New`;
+  ctx.fillText(`SCORE: ${score}`, W/2, H*0.42);
+  ctx.font = `${Math.floor(W*0.045)}px Courier New`;
+  ctx.fillText(`Round ${round}`, W/2, H*0.50);
+  if (gameoverCorrectName) {
+    ctx.fillStyle = '#aaffaa'; ctx.font = `${Math.floor(W*0.036)}px Courier New`;
+    ctx.fillText(`正解: ${gameoverCorrectName}`, W/2, H*0.57);
+  }
+  if (score > 0 && score >= highScore) {
+    ctx.fillStyle = '#f1c40f'; ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 20;
+    ctx.font = `bold ${Math.floor(W*0.05)}px Courier New`;
+    ctx.fillText('NEW RECORD!', W/2, H*0.65);
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.fillStyle = '#aaa'; ctx.font = `${Math.floor(W*0.04)}px Courier New`;
+    ctx.fillText(`BEST: ${highScore}`, W/2, H*0.65);
+  }
+  const pulse = 0.7+0.3*Math.sin(Date.now()/400);
+  ctx.globalAlpha = pulse; ctx.fillStyle = '#f1c40f';
+  ctx.font = `bold ${Math.floor(W*0.05)}px Courier New`;
+  ctx.fillText('タップでリトライ', W/2, H*0.80);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function bezierPoint(t, x0, y0, cx, cy, x1, y1) {
+  const u = 1-t;
+  return { x: u*u*x0+2*u*t*cx+t*t*x1, y: u*u*y0+2*u*t*cy+t*t*y1 };
+}
+function distToBezier(px, py, w) {
+  const { x0, y0, cx, cy, x1, y1 } = getWirePoints(w);
+  let minDist = Infinity;
+  for (let t=0; t<=1; t+=0.025) {
+    const p = bezierPoint(t, x0, y0, cx, cy, x1, y1);
+    const d = Math.hypot(px-p.x, py-p.y);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
+let isTouchDevice = false;
+function getHitRadius() { return isTouchDevice ? 38 : 20; }
+
+function handleTap(px, py, isTouch) {
+  if (isTouch) isTouchDevice = true;
+  if (AC.state === 'suspended') AC.resume();
+  if (state === 'title') { startGame(); return; }
+  if (state === 'gameover') { state = 'title'; return; }
+  if (state !== 'playing' || cutResult !== null) return;
+
+  let tappedIdx = -1, minDist = Infinity;
+  wires.forEach((w, i) => {
+    if (w.cut) return;
+    const d = distToBezier(px, py, w);
+    if (d < getHitRadius() && d < minDist) { minDist = d; tappedIdx = i; }
+  });
+  if (tappedIdx === -1) return;
+
+  soundCut();
+  const final = resolveCorrectWire();
+  if (tappedIdx === final) {
+    wires[tappedIdx].cut = true;
+    cutResult = 'correct';
+    const timeBonus = Math.floor(timerLeft * 20);
+    streakMultiplier = getStreakMultiplier(streak);
+    const gained = Math.floor((100 + timeBonus) * streakMultiplier);
+    score += gained;
+    streak++;
+    streakMultiplier = getStreakMultiplier(streak);
+    spawnSuccess(wires[tappedIdx].endX, wires[tappedIdx].endY);
+    spawnFloat(canvas.width/2, canvas.height*0.75, `+${gained}`, '#2ecc71');
+    if (streakMultiplier > getStreakMultiplier(streak-1)) {
+      spawnFloat(canvas.width/2, canvas.height*0.70, `×${streakMultiplier.toFixed(1)} STREAK!`, '#f1c40f');
+    }
+    soundDefused();
+    resultTimer = 1.3;
+  } else {
+    wires[tappedIdx].cut = true;
+    cutResult = 'wrong';
+    streak = 0; streakMultiplier = 1.0;
+    bombShake = 20;
+    const final2 = resolveCorrectWire();
+    gameoverCorrectName = final2 >= 0 ? wires[final2].color.name + 'のワイヤー' : '（切らない）';
+    spawnFail(canvas.width/2, canvas.height*0.42);
+    soundBoom();
+    resultTimer = 1.8;
+  }
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const py = (e.clientY - rect.top) * (canvas.height / rect.height);
+  handleTap(px, py, e.pointerType === 'touch');
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (state !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const py = (e.clientY - rect.top) * (canvas.height / rect.height);
+  wires.forEach(w => { if (!w.cut) w.hover = distToBezier(px, py, w) < getHitRadius(); });
+});
+
+function drawGameBackground() {
+  const W = canvas.width, H = canvas.height;
+  const danger = Math.min(1, round / 15);
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, `rgb(${Math.floor(13+danger*30)},${Math.floor(13)},${Math.floor(26-danger*10)})`);
+  g.addColorStop(1, '#1a1a2e');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+  for (let x=0; x<W; x+=30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y=0; y<H; y+=30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.restore();
+}
+
+function loop(ts) {
+  requestAnimationFrame(loop);
+  if (lastTime === 0) { lastTime = ts; return; }
+  const dt = Math.min((ts - lastTime) / 1000, 0.1);
+  lastTime = ts;
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0,0,W,H);
+
+  if (state === 'title') { drawTitle(); return; }
+  if (state === 'gameover') { drawGameBackground(); drawParticles(); drawGameOver(); updateParticles(dt); return; }
+
+  if (cutResult === null) {
+    timerLeft -= dt;
+    const secLeft = Math.ceil(timerLeft);
+    if (secLeft !== lastBeepSecond && secLeft <= 3 && timerLeft > 0) {
+      soundBeep(secLeft <= 1 ? 880 : 660);
+      lastBeepSecond = secLeft;
+    }
+    if (timerLeft <= 0) {
+      timerLeft = 0;
+      const final = resolveCorrectWire();
+      if (final === -1) {
+        cutResult = 'correct';
+        streakMultiplier = getStreakMultiplier(streak);
+        const gained = Math.floor(100 * streakMultiplier);
+        score += gained; streak++;
+        streakMultiplier = getStreakMultiplier(streak);
+        spawnSuccess(W/2, H*0.42);
+        spawnFloat(W/2, H*0.75, `+${gained} 切らない！`, '#2ecc71');
+        soundDefused();
+        resultTimer = 1.5;
+      } else {
+        cutResult = 'timeout';
+        streak = 0; streakMultiplier = 1.0; bombShake = 20;
+        gameoverCorrectName = wires[final].color.name + 'のワイヤー';
+        spawnFail(W/2, H*0.42);
+        soundBoom();
+        resultTimer = 1.8;
+      }
+    }
+  }
+
+  if (cutResult !== null) {
+    resultTimer -= dt;
+    if (resultTimer <= 0) {
+      if (cutResult === 'correct') {
+        startRound();
+      } else {
+        if (score > highScore) { highScore = score; localStorage.setItem('lastwire_hs', highScore); }
+        state = 'gameover';
+      }
+      return;
+    }
+  }
+
+  if (bombShake > 0) bombShake *= 0.85;
+  const shakeX = bombShake > 0.5 ? (Math.random()-0.5)*bombShake : 0;
+  const shakeY = bombShake > 0.5 ? (Math.random()-0.5)*bombShake : 0;
+
+  drawGameBackground();
+  wires.forEach(w => drawWire(w));
+  const { cx, cy, r } = drawBomb(shakeX, shakeY);
+  drawTimer(cx, cy, r);
+  drawHUD();
+  drawRules();
+
+  if (cutResult === 'correct') {
+    ctx.save(); ctx.fillStyle = `rgba(46,204,113,${Math.min(1,resultTimer)})`;
+    ctx.font = `bold ${Math.floor(W*0.09)}px Courier New`; ctx.textAlign = 'center';
+    ctx.shadowColor = '#2ecc71'; ctx.shadowBlur = 30;
+    ctx.fillText('DEFUSED!', W/2, H*0.82); ctx.restore();
+  } else if (cutResult === 'wrong' || cutResult === 'timeout') {
+    ctx.save(); ctx.fillStyle = `rgba(231,76,60,${Math.min(1,resultTimer)})`;
+    ctx.font = `bold ${Math.floor(W*0.09)}px Courier New`; ctx.textAlign = 'center';
+    ctx.shadowColor = '#e74c3c'; ctx.shadowBlur = 30;
+    ctx.fillText('BOOM!', W/2, H*0.82); ctx.restore();
+  }
+
+  updateParticles(dt);
+  drawParticles();
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
