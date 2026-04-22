@@ -24,12 +24,42 @@ canvas { display: block; touch-action: none; }
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
+// Game state — declared BEFORE resize() to avoid TDZ error
+let state = 'title';
+let round = 0;
+let score = 0;
+let streak = 0;
+let highScore = parseInt(localStorage.getItem('lastwire_hs') || '0');
+let wires = [];
+let rules = [];
+let persistentRules = [];
+let timerMax = 5;
+let timerLeft = 5;
+let lastTime = 0;
+let correctWireIndex = -1;
+let cutResult = null;
+let resultTimer = 0;
+let particles = [];
+let floatTexts = [];
+let bombShake = 0;
+let streakMultiplier = 1.0;
+let lastBeepSecond = -1;
+
+const COLORS = [
+  { name: '赤', hex: '#e74c3c', id: 'red' },
+  { name: '青', hex: '#3498db', id: 'blue' },
+  { name: '黄', hex: '#f1c40f', id: 'yellow' },
+  { name: '緑', hex: '#2ecc71', id: 'green' },
+  { name: '白', hex: '#ecf0f1', id: 'white' },
+  { name: '紫', hex: '#9b59b6', id: 'purple' },
+];
+
 function resize() {
   const W = Math.min(window.innerWidth, 480);
   const H = Math.min(window.innerHeight, 854);
   canvas.width = W;
   canvas.height = H;
-  if (typeof state !== 'undefined' && state === 'playing') startRound();
+  if (state === 'playing') startRound();
 }
 resize();
 window.addEventListener('resize', resize);
@@ -64,35 +94,6 @@ function soundBoom() {
   src.start();
 }
 function soundBeep(freq) { playTone(freq, 'square', 0.05, 0.1); }
-
-const COLORS = [
-  { name: '赤', hex: '#e74c3c', id: 'red' },
-  { name: '青', hex: '#3498db', id: 'blue' },
-  { name: '黄', hex: '#f1c40f', id: 'yellow' },
-  { name: '緑', hex: '#2ecc71', id: 'green' },
-  { name: '白', hex: '#ecf0f1', id: 'white' },
-  { name: '紫', hex: '#9b59b6', id: 'purple' },
-];
-
-let state = 'title';
-let round = 0;
-let score = 0;
-let streak = 0;
-let highScore = parseInt(localStorage.getItem('lastwire_hs') || '0');
-let wires = [];
-let rules = [];
-let persistentRules = [];
-let timerMax = 5;
-let timerLeft = 5;
-let lastTime = 0;
-let correctWireIndex = -1;
-let cutResult = null;
-let resultTimer = 0;
-let particles = [];
-let floatTexts = [];
-let bombShake = 0;
-let streakMultiplier = 1.0;
-let lastBeepSecond = -1;
 
 function getWireCount() {
   if (round <= 3) return 3;
