@@ -298,7 +298,7 @@
   </div>
   <div class="center" id="startPanel">
     <h1>弾幕で戦場を塗り替えろ</h1>
-    <p>移動で向きを決め、星弾の陣を置く。敵群を引き込み、弾幕ごと崩して異変の核を倒す。</p>
+    <p>箒で叩いて星くず印を付け、スペルカードで起爆する。敵群を整えてから弾幕ごと崩せ。</p>
     <button id="start">スタート</button>
   </div>
   <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
@@ -336,6 +336,8 @@
       ko: 0,
       time: 0,
       combo: 0,
+      broomStep: 0,
+      broomTimer: 0,
       bossHp: 260,
       bossMaxHp: 260,
       techniqueTimer: 0,
@@ -345,6 +347,7 @@
 
     const enemies = [];
     const bullets = [];
+    const slashes = [];
     const fields = [];
     const sparks = [];
     const enemyShots = [];
@@ -396,6 +399,7 @@
     function resetGame() {
       enemies.length = 0;
       bullets.length = 0;
+      slashes.length = 0;
       fields.length = 0;
       sparks.length = 0;
       enemyShots.length = 0;
@@ -407,6 +411,8 @@
         ko: 0,
         time: 0,
         combo: 0,
+        broomStep: 0,
+        broomTimer: 0,
         bossHp: 260,
         techniqueTimer: 0,
         cooldown: { square: 0, triangle: 0, circle: 0 },
@@ -427,7 +433,7 @@
       }
       startPanel.classList.remove("hidden");
       startPanel.querySelector("h1").textContent = "弾幕で戦場を塗り替えろ";
-      startPanel.querySelector("p").textContent = "移動で向きを決め、星弾の陣を置く。敵群を引き込み、弾幕ごと崩して異変の核を倒す。";
+      startPanel.querySelector("p").textContent = "箒で叩いて星くず印を付け、スペルカードで起爆する。敵群を整えてから弾幕ごと崩せ。";
     }
 
     function endGame(won) {
@@ -469,6 +475,19 @@
       bullets.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, damage, life, max: life, color, size });
     }
 
+    function angleDelta(from, to) {
+      return Math.atan2(Math.sin(to - from), Math.cos(to - from));
+    }
+
+    function markEnemy(enemy, power = 1) {
+      enemy.mark = Math.min(3, (enemy.mark || 0) + power);
+      enemy.markTime = 5.5;
+    }
+
+    function markedEnemies() {
+      return enemies.filter((enemy) => enemy.mark > 0 && enemy.markTime > 0);
+    }
+
     function killEnemy(enemy, color = "#ffe27a") {
       const i = enemies.indexOf(enemy);
       if (i < 0) return;
@@ -496,14 +515,39 @@
     function squareAttack() {
       startGame();
       if (!state.running || state.cooldown.square > 0) return;
-      state.cooldown.square = 0.1;
+      state.cooldown.square = 0.16;
+      state.broomStep = state.broomTimer > 0 ? (state.broomStep % 3) + 1 : 1;
+      state.broomTimer = 0.78;
       const base = player.angle;
-      for (let i = -2; i <= 2; i += 1) {
-        spawnBullet(player.x, player.y, base + i * 0.13, 720, 8, 0.58, i ? "#ffe27a" : "#ffffff", i ? 5 : 7);
+      const range = 78 + state.broomStep * 14;
+      const width = 0.78 + state.broomStep * 0.12;
+      slashes.push({ x: player.x, y: player.y, angle: base, range, width, life: 0.16, max: 0.16, step: state.broomStep });
+      let hits = 0;
+      for (const enemy of [...enemies]) {
+        const dx = enemy.x - player.x;
+        const dy = enemy.y - player.y;
+        const dist = Math.hypot(dx, dy);
+        const facing = Math.atan2(dy, dx);
+        if (dist < range + enemy.r && Math.abs(angleDelta(base, facing)) < width) {
+          hits += 1;
+          enemy.hp -= 3 + state.broomStep * 2;
+          markEnemy(enemy, 1);
+          const push = 34 + state.broomStep * 10;
+          enemy.x += Math.cos(base) * push;
+          enemy.y += Math.sin(base) * push;
+          spawnSpark(enemy.x, enemy.y, "#ffe27a", 4, 90);
+          if (enemy.hp <= 0) killEnemy(enemy, "#ffe27a");
+        }
       }
-      state.star = Math.min(state.maxStar, state.star + 0.6);
-      showTechnique("□ 星弾ショット");
-      playTone(430, 0.035, "square", 0.018);
+      if (state.bossHp > 0) {
+        const dx = boss.x - player.x;
+        const dy = boss.y - player.y;
+        if (Math.hypot(dx, dy) < range + boss.r && Math.abs(angleDelta(base, Math.atan2(dy, dx))) < width) damageBoss(2 + state.broomStep, "#ffe27a");
+      }
+      state.star = Math.min(state.maxStar, state.star + 1.2 + hits * 0.7);
+      camera.shake = Math.max(camera.shake, hits ? 5 : 2);
+      showTechnique(`□ 箒連撃 ${state.broomStep}`);
+      playTone(300 + state.broomStep * 80, 0.04, "square", 0.02);
     }
 
     function triangleAttack() {
@@ -516,6 +560,36 @@
       }
       state.star -= 20;
       state.cooldown.triangle = 0.58;
+      const marked = markedEnemies();
+      if (marked.length) {
+        showTechnique(`△ 星くず起爆 x${marked.length}`);
+        camera.shake = Math.max(camera.shake, 10);
+        for (const enemy of [...marked]) {
+          const mark = enemy.mark || 1;
+          enemy.mark = 0;
+          enemy.markTime = 0;
+          spawnSpark(enemy.x, enemy.y, "#ffe27a", 10 + mark * 5, 170 + mark * 35);
+          fields.push({
+            x: enemy.x,
+            y: enemy.y,
+            r: 28,
+            maxR: 74 + mark * 22,
+            angle: player.angle + mark,
+            spin: mark % 2 ? 1 : -1,
+            pulse: 0,
+            life: 1.05 + mark * 0.18,
+            max: 1.05 + mark * 0.18,
+            damageTick: 0,
+            colorA: "#ffe27a",
+            colorB: "#ff8fc7",
+            burst: mark >= 3
+          });
+          enemy.hp -= 12 + mark * 8;
+          if (enemy.hp <= 0) killEnemy(enemy, "#ffe27a");
+        }
+        playTone(520, 0.12, "sawtooth", 0.04);
+        return;
+      }
       const distance = 180;
       const x = player.x + Math.cos(player.angle) * distance;
       const y = player.y + Math.sin(player.angle) * distance;
@@ -616,6 +690,8 @@
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const dist = Math.max(0.001, Math.hypot(dx, dy));
+        enemy.markTime = Math.max(0, (enemy.markTime || 0) - dt);
+        if (enemy.markTime <= 0) enemy.mark = 0;
         const avoid = fields.reduce((push, f) => {
           const fx = enemy.x - f.x;
           const fy = enemy.y - f.y;
@@ -745,12 +821,22 @@
       }
     }
 
+    function updateSlashes(dt) {
+      for (let i = slashes.length - 1; i >= 0; i -= 1) {
+        const slash = slashes[i];
+        slash.life -= dt;
+        if (slash.life <= 0) slashes.splice(i, 1);
+      }
+    }
+
     function update(dt) {
       if (state.running) {
         state.time += dt;
         state.cooldown.square = Math.max(0, state.cooldown.square - dt);
         state.cooldown.triangle = Math.max(0, state.cooldown.triangle - dt);
         state.cooldown.circle = Math.max(0, state.cooldown.circle - dt);
+        state.broomTimer = Math.max(0, state.broomTimer - dt);
+        if (state.broomTimer <= 0) state.broomStep = 0;
         state.techniqueTimer = Math.max(0, state.techniqueTimer - dt);
         state.grazePulse = Math.max(0, state.grazePulse - dt);
         techniqueEl.classList.toggle("hidden", state.techniqueTimer <= 0);
@@ -761,6 +847,7 @@
       }
       updateBullets(dt);
       updateFields(dt);
+      updateSlashes(dt);
       updateEnemyShots(dt);
       updateSparks(dt);
       camera.shake = Math.max(0, camera.shake - dt * 32);
@@ -872,6 +959,30 @@
       }
     }
 
+    function drawSlashes() {
+      for (const slash of slashes) {
+        const p = worldToScreen(slash.x, slash.y);
+        const alpha = Math.max(0, slash.life / slash.max);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(slash.angle);
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = slash.step === 3 ? "#ff8fc7" : "#ffe27a";
+        ctx.lineWidth = 11 + slash.step * 2;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.arc(0, 0, slash.range, -slash.width, slash.width);
+        ctx.stroke();
+        ctx.globalAlpha = alpha * 0.5;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, slash.range + 10, -slash.width * 0.8, slash.width * 0.8);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     function drawActors() {
       if (state.bossHp > 0) {
         const b = worldToScreen(boss.x, boss.y);
@@ -897,6 +1008,19 @@
         ctx.beginPath();
         ctx.arc(p.x + enemy.r * 0.24, p.y - enemy.r * 0.2, enemy.r * 0.35, 0, Math.PI * 2);
         ctx.fill();
+        if (enemy.mark > 0 && enemy.markTime > 0) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, 0.42 + enemy.mark * 0.18);
+          ctx.strokeStyle = "#ffe27a";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, enemy.r + 8 + enemy.mark * 3 + Math.sin(state.time * 9) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+          for (let i = 0; i < enemy.mark; i += 1) {
+            drawStar(p.x - 10 + i * 10, p.y - enemy.r - 11, 5, "#ffe27a", state.time * 5 + i);
+          }
+          ctx.restore();
+        }
       }
 
       const p = worldToScreen(player.x, player.y);
@@ -951,6 +1075,7 @@
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       drawWorld();
       drawFields();
+      drawSlashes();
       drawProjectiles();
       drawActors();
       drawSparks();
