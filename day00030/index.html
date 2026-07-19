@@ -497,6 +497,9 @@
       spawnedEnemies: 0,
       time: 0,
       attackCooldown: 0,
+      attackLock: 0,
+      attackBaseYaw: 0,
+      attackSteerLimit: 0.18,
       comboStep: 0,
       comboTimer: 0,
       techniqueTimer: 0,
@@ -666,6 +669,24 @@
       return new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
     }
 
+    function angleDelta(from, to) {
+      return Math.atan2(Math.sin(to - from), Math.cos(to - from));
+    }
+
+    function clampAimToAttack(input, limit = 0.18) {
+      if (input.lengthSq() < 0.05) return;
+      const target = Math.atan2(input.x, input.z);
+      player.rotation.y += THREE.MathUtils.clamp(angleDelta(player.rotation.y, target), -limit, limit);
+    }
+
+    function beginAttack(lockTime, steerLimit = 0.18) {
+      clampAimToAttack(readInput(), 0.12);
+      state.attackLock = Math.max(state.attackLock, lockTime);
+      state.attackBaseYaw = player.rotation.y;
+      state.attackSteerLimit = steerLimit;
+      state.velocity.multiplyScalar(0.35);
+    }
+
     function spawnTalisman(angle, speed, life, color = 0xfff0a6) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.5), materials.talisman.clone());
       mesh.material.color.setHex(color);
@@ -678,6 +699,22 @@
       talismans.push(mesh);
     }
 
+    function spawnBeam(length, width, life, color = 0xb9f3ff) {
+      const fwd = forwardVector();
+      const beam = new THREE.Mesh(
+        new THREE.BoxGeometry(width, 0.08, length),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.72 })
+      );
+      beam.position.copy(player.position).addScaledVector(fwd, length * 0.5);
+      beam.position.y = 0.72;
+      beam.rotation.y = player.rotation.y;
+      beam.userData.life = life;
+      beam.userData.maxLife = life;
+      beam.userData.grow = 0.15;
+      scene.add(beam);
+      slashes.push(beam);
+    }
+
     function showTechnique(name) {
       techniqueEl.textContent = name;
       techniqueEl.classList.remove("hidden");
@@ -685,6 +722,7 @@
     }
 
     function slashAttack(style = 1) {
+      beginAttack(0.24 + style * 0.035, 0.16);
       const fwd = forwardVector();
       const origin = player.position.clone();
       const slash = new THREE.Mesh(new THREE.TorusGeometry(1.45 + style * 0.18, 0.035, 6, 40, Math.PI * (1.05 + style * 0.12)), materials.slash.clone());
@@ -715,45 +753,83 @@
     }
 
     function stardustBreak() {
-      showTechnique("△ 星屑ブレイク");
+      beginAttack(0.52, 0.14);
+      showTechnique("△ 流星ランス");
       const fwd = forwardVector();
-      for (let i = -4; i <= 4; i += 1) spawnTalisman(player.rotation.y + i * 0.07, 14, 0.58, 0xfff0a6);
+      spawnBeam(10.8, 1.05, 0.24, 0xfff0a6);
+      for (let i = -2; i <= 2; i += 1) spawnTalisman(player.rotation.y + i * 0.035, 18, 0.58, 0xfff0a6);
       for (const enemy of [...enemies]) {
         const toEnemy = enemy.position.clone().sub(player.position);
-        if (toEnemy.length() < 7.4 && toEnemy.normalize().dot(fwd) > 0.58) killEnemy(enemy, 0xfff0a6);
+        if (toEnemy.length() < 9.8 && toEnemy.normalize().dot(fwd) > 0.76) killEnemy(enemy, 0xfff0a6);
       }
       if (boss) {
         const toBoss = boss.position.clone().sub(player.position);
-        if (toBoss.length() < 8.2 && toBoss.normalize().dot(fwd) > 0.5) damageBoss(18, 0xfff0a6);
+        if (toBoss.length() < 10.6 && toBoss.normalize().dot(fwd) > 0.72) damageBoss(32, 0xfff0a6);
       }
+      state.screenShake = Math.max(state.screenShake, 0.24);
+      playTone(520, 0.08, "sawtooth", 0.036);
     }
 
     function cometSweep() {
+      beginAttack(0.48, 0.2);
       showTechnique("△ 彗星スイープ");
-      for (let i = -8; i <= 8; i += 1) spawnTalisman(player.rotation.y + i * 0.16, 11.2, 0.54, i % 2 ? 0xff9ec4 : 0xb9f3ff);
+      const leftArc = new THREE.Mesh(new THREE.TorusGeometry(2.7, 0.055, 6, 48, Math.PI * 1.45), materials.slash.clone());
+      leftArc.position.copy(player.position);
+      leftArc.position.y = 0.66;
+      leftArc.rotation.set(Math.PI / 2, 0, -player.rotation.y - 0.72);
+      leftArc.material.color.setHex(0xff9ec4);
+      leftArc.userData.life = 0.28;
+      leftArc.userData.maxLife = 0.28;
+      leftArc.userData.grow = 2.2;
+      scene.add(leftArc);
+      slashes.push(leftArc);
+      for (let i = -11; i <= 11; i += 1) spawnTalisman(player.rotation.y + i * 0.15, 11.5, 0.5, i % 2 ? 0xff9ec4 : 0xb9f3ff);
       for (const enemy of [...enemies]) {
-        if (enemy.position.distanceTo(player.position) < 4.8) killEnemy(enemy, 0xff9ec4);
+        if (enemy.position.distanceTo(player.position) < 5.8) killEnemy(enemy, 0xff9ec4);
       }
-      if (boss && boss.position.distanceTo(player.position) < 5.3) damageBoss(16, 0xff9ec4);
+      if (boss && boss.position.distanceTo(player.position) < 5.8) damageBoss(18, 0xff9ec4);
+      state.screenShake = Math.max(state.screenShake, 0.2);
+      playTone(320, 0.09, "sawtooth", 0.032);
     }
 
     function milkyOrbit() {
-      showTechnique("△ 天河オービット");
-      for (let i = 0; i < 24; i += 1) spawnTalisman(player.rotation.y + (i / 24) * Math.PI * 2, 9.6, 0.78, i % 2 ? 0xfff0a6 : 0xb9f3ff);
-      for (const enemy of [...enemies]) {
-        if (enemy.position.distanceTo(player.position) < 6.6) killEnemy(enemy, 0xb9f3ff);
+      beginAttack(0.55, 0.12);
+      showTechnique("△ 星雲バリア");
+      for (let r = 1.7; r <= 3.1; r += 1.4) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 6, 56), materials.slash.clone());
+        ring.position.copy(player.position);
+        ring.position.y = 0.7;
+        ring.rotation.x = Math.PI / 2;
+        ring.material.color.setHex(r > 2 ? 0xb9f3ff : 0xfff0a6);
+        ring.userData.life = 0.34;
+        ring.userData.maxLife = 0.34;
+        ring.userData.grow = 1.4;
+        scene.add(ring);
+        slashes.push(ring);
       }
-      if (boss && boss.position.distanceTo(player.position) < 7.2) damageBoss(22, 0xb9f3ff);
+      for (let i = 0; i < 30; i += 1) spawnTalisman(player.rotation.y + (i / 30) * Math.PI * 2, 8.4, 0.62, i % 2 ? 0xfff0a6 : 0xb9f3ff);
+      for (const enemy of [...enemies]) {
+        if (enemy.position.distanceTo(player.position) < 4.9) killEnemy(enemy, 0xb9f3ff);
+      }
+      if (boss && boss.position.distanceTo(player.position) < 4.8) damageBoss(12, 0xb9f3ff);
+      state.morale = Math.min(100, state.morale + 6);
+      state.screenShake = Math.max(state.screenShake, 0.14);
+      playTone(240, 0.12, "triangle", 0.03);
     }
 
     function circleBurst() {
+      beginAttack(0.82, 0.08);
       state.spellFlash = 0.55;
       showTechnique("○ 星光砲");
       const fwd = forwardVector();
+      spawnBeam(21.5, 2.35, 0.38, 0xb9f3ff);
       for (let row = -3; row <= 3; row += 1) {
         for (let i = 0; i < 7; i += 1) {
           spawnTalisman(player.rotation.y + row * 0.035, 17 + i * 0.3, 0.76, row % 2 ? 0xfff0a6 : 0xb9f3ff);
         }
+      }
+      for (let i = 1; i <= 8; i += 1) {
+        spawnSpark(player.position.clone().addScaledVector(fwd, i * 2.25), i % 2 ? 0xfff0a6 : 0xb9f3ff, 10, 5.5);
       }
       for (const enemy of [...enemies]) {
         const toEnemy = enemy.position.clone().sub(player.position);
@@ -765,7 +841,7 @@
       }
       spawnSpark(player.position, 0xfff0a6);
       state.hitStop = Math.max(state.hitStop, 0.08);
-      state.screenShake = Math.max(state.screenShake, 0.42);
+      state.screenShake = Math.max(state.screenShake, 0.52);
       playTone(95, 0.18, "sawtooth", 0.05);
       if (navigator.vibrate) navigator.vibrate([25, 25, 60]);
     }
@@ -842,6 +918,9 @@
       state.spawnedEnemies = 0;
       state.time = 0;
       state.attackCooldown = 0;
+      state.attackLock = 0;
+      state.attackBaseYaw = 0;
+      state.attackSteerLimit = 0.18;
       state.comboStep = 0;
       state.comboTimer = 0;
       state.techniqueTimer = 0;
@@ -913,14 +992,21 @@
 
     function updatePlayer(dt) {
       const input = readInput();
-      const targetSpeed = 8.8;
+      const attacking = state.attackLock > 0;
+      if (attacking && input.lengthSq() > 0.04) {
+        const target = Math.atan2(input.x, input.z);
+        const baseDiff = THREE.MathUtils.clamp(angleDelta(state.attackBaseYaw, target), -state.attackSteerLimit, state.attackSteerLimit);
+        const lockedTarget = state.attackBaseYaw + baseDiff;
+        player.rotation.y += THREE.MathUtils.clamp(angleDelta(player.rotation.y, lockedTarget), -dt * 1.55, dt * 1.55);
+      }
+      const targetSpeed = attacking ? 2.4 : 8.8;
       state.velocity.lerp(input.multiplyScalar(targetSpeed), 1 - Math.pow(0.0008, dt));
       player.position.addScaledVector(state.velocity, dt);
 
       player.position.x = THREE.MathUtils.clamp(player.position.x, WORLD.minX + 1.2, WORLD.maxX - 1.2);
       player.position.z = THREE.MathUtils.clamp(player.position.z, WORLD.minZ + 1.2, WORLD.maxZ - 1.2);
 
-      if (state.velocity.lengthSq() > 0.05) {
+      if (!attacking && state.velocity.lengthSq() > 0.05) {
         player.rotation.y = Math.atan2(state.velocity.x, state.velocity.z);
       }
 
@@ -1015,8 +1101,9 @@
       for (let i = slashes.length - 1; i >= 0; i -= 1) {
         const slash = slashes[i];
         slash.userData.life -= dt;
-        slash.scale.multiplyScalar(1 + dt * 3.6);
-        slash.material.opacity = Math.max(0, slash.userData.life / 0.18) * 0.56;
+        slash.scale.multiplyScalar(1 + dt * (slash.userData.grow ?? 3.6));
+        const maxLife = slash.userData.maxLife ?? 0.18;
+        slash.material.opacity = Math.max(0, slash.userData.life / maxLife) * 0.72;
         if (slash.userData.life <= 0) {
           scene.remove(slash);
           slashes.splice(i, 1);
@@ -1061,6 +1148,7 @@
       if (state.running) {
         state.time += simDt;
         state.attackCooldown = Math.max(0, state.attackCooldown - simDt);
+        state.attackLock = Math.max(0, state.attackLock - simDt);
         state.comboTimer = Math.max(0, state.comboTimer - simDt);
         if (state.comboTimer <= 0) state.comboStep = 0;
         state.techniqueTimer = Math.max(0, state.techniqueTimer - simDt);
