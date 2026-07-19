@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>クリスタルダッシュ3D</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #11151c;
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      touch-action: none;
+      user-select: none;
+    }
+
+    #game {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .hud {
+      position: fixed;
+      inset: max(14px, env(safe-area-inset-top)) 14px auto 14px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .brand,
+    .meter,
+    .time {
+      min-height: 42px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(9, 12, 18, 0.62);
+      backdrop-filter: blur(14px);
+      border-radius: 8px;
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.25);
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 7px 10px;
+      min-width: 0;
+    }
+
+    .brand b {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 15px;
+      line-height: 1.15;
+    }
+
+    .brand span {
+      color: #cbd5e1;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .meter,
+    .time {
+      display: grid;
+      place-items: center;
+      min-width: 70px;
+      padding: 0 10px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meter {
+      color: #ffdf74;
+    }
+
+    .time {
+      color: #b9f3ff;
+    }
+
+    .center-panel {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: min(88vw, 430px);
+      transform: translate(-50%, -50%);
+      z-index: 6;
+      padding: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(10, 14, 20, 0.78);
+      backdrop-filter: blur(18px);
+      border-radius: 8px;
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.38);
+    }
+
+    .center-panel h1 {
+      margin: 0 0 10px;
+      font-size: clamp(26px, 8vw, 42px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .center-panel p {
+      margin: 0 0 18px;
+      color: #dbe6f3;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      min-height: 48px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 18px;
+      color: #11151c;
+      background: #ffdf74;
+      font-weight: 800;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .stick {
+      position: fixed;
+      left: 22px;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      width: 116px;
+      height: 116px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(9, 12, 18, 0.42);
+      z-index: 4;
+      touch-action: none;
+    }
+
+    .knob {
+      position: absolute;
+      left: 38px;
+      top: 38px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #e7f8ff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .credits {
+      position: fixed;
+      right: 16px;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      z-index: 4;
+      max-width: 180px;
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.45;
+      text-align: right;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.75);
+      pointer-events: none;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 430px) {
+      .hud {
+        grid-template-columns: 1fr auto;
+      }
+
+      .time {
+        grid-column: 2;
+      }
+
+      .meter {
+        grid-column: 2;
+        grid-row: 2;
+      }
+
+      .brand {
+        grid-row: 1 / span 2;
+      }
+
+      .credits {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div class="hud">
+    <div class="brand">
+      <b>クリスタルダッシュ3D</b>
+      <span>low poly action</span>
+    </div>
+    <div class="meter" id="score">0 / 12</div>
+    <div class="time" id="time">45.0</div>
+  </div>
+  <div class="center-panel" id="panel">
+    <h1>クリスタルを集めろ</h1>
+    <p>光る結晶を12個集めて脱出。岩に当たるとタイムが削られる。</p>
+    <div class="actions">
+      <button id="start">スタート</button>
+      <button class="secondary" id="reset">リセット</button>
+    </div>
+  </div>
+  <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
+  <div class="credits">Powered by Three.js</div>
+
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+
+    const canvas = document.getElementById("game");
+    const scoreEl = document.getElementById("score");
+    const timeEl = document.getElementById("time");
+    const panel = document.getElementById("panel");
+    const startBtn = document.getElementById("start");
+    const resetBtn = document.getElementById("reset");
+    const stick = document.getElementById("stick");
+    const knob = document.getElementById("knob");
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x11151c);
+    scene.fog = new THREE.Fog(0x11151c, 20, 64);
+
+    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 120);
+    camera.position.set(0, 10.5, 13);
+    camera.lookAt(0, 0, 0);
+
+    const hemi = new THREE.HemisphereLight(0xb9f3ff, 0x2b1937, 2.2);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xffe0a1, 2.7);
+    sun.position.set(-7, 13, 8);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    scene.add(sun);
+
+    const arena = new THREE.Group();
+    scene.add(arena);
+
+    const materials = {
+      grass: new THREE.MeshStandardMaterial({ color: 0x2f9c68, roughness: 0.82 }),
+      path: new THREE.MeshStandardMaterial({ color: 0x415466, roughness: 0.95 }),
+      player: new THREE.MeshStandardMaterial({ color: 0xffdf74, roughness: 0.45, metalness: 0.12 }),
+      playerAccent: new THREE.MeshStandardMaterial({ color: 0x3be5ff, roughness: 0.35, emissive: 0x064a55 }),
+      rock: new THREE.MeshStandardMaterial({ color: 0x758293, roughness: 0.9 }),
+      crystal: new THREE.MeshStandardMaterial({ color: 0xff5f9e, roughness: 0.28, emissive: 0x5b1234 }),
+      trunk: new THREE.MeshStandardMaterial({ color: 0x7c5438, roughness: 0.86 }),
+      leaf: new THREE.MeshStandardMaterial({ color: 0x2db378, roughness: 0.78 })
+    };
+
+    const floor = new THREE.Mesh(new THREE.CylinderGeometry(17, 18.5, 1, 9), materials.grass);
+    floor.position.y = -0.55;
+    floor.receiveShadow = true;
+    arena.add(floor);
+
+    const path = new THREE.Mesh(new THREE.TorusGeometry(8.8, 1.05, 8, 64), materials.path);
+    path.rotation.x = Math.PI / 2;
+    path.position.y = 0.02;
+    path.receiveShadow = true;
+    arena.add(path);
+
+    function makeTree(x, z, s) {
+      const tree = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.22 * s, 1.3 * s, 6), materials.trunk);
+      trunk.position.y = 0.55 * s;
+      trunk.castShadow = true;
+      const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.78 * s, 0), materials.leaf);
+      leaf.position.y = 1.45 * s;
+      leaf.castShadow = true;
+      tree.add(trunk, leaf);
+      tree.position.set(x, 0, z);
+      arena.add(tree);
+    }
+
+    for (let i = 0; i < 26; i += 1) {
+      const a = (i / 26) * Math.PI * 2;
+      const r = 14.2 + Math.sin(i * 4.1) * 1.1;
+      makeTree(Math.cos(a) * r, Math.sin(a) * r, 0.8 + (i % 4) * 0.12);
+    }
+
+    const player = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.ConeGeometry(0.58, 1.35, 5), materials.player);
+    body.position.y = 0.85;
+    body.castShadow = true;
+    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 0), materials.playerAccent);
+    head.position.y = 1.65;
+    head.castShadow = true;
+    const shadowDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.03, 24), new THREE.MeshBasicMaterial({ color: 0x10151c, transparent: true, opacity: 0.28 }));
+    shadowDisc.position.y = 0.03;
+    player.add(body, head, shadowDisc);
+    scene.add(player);
+
+    const crystals = [];
+    const rocks = [];
+    const particles = [];
+    const keys = new Set();
+    const state = {
+      running: false,
+      won: false,
+      score: 0,
+      time: 45,
+      velocity: new THREE.Vector3(),
+      input: new THREE.Vector2(),
+      lastHit: 0
+    };
+
+    function rand(seed) {
+      return Math.abs(Math.sin(seed * 9283.193) * 43758.5453) % 1;
+    }
+
+    function placeOnRing(item, index, count, radius, jitter) {
+      const a = (index / count) * Math.PI * 2 + rand(index + 3) * 0.4;
+      const r = radius + (rand(index + 7) - 0.5) * jitter;
+      item.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+    }
+
+    function resetWorld() {
+      crystals.forEach((c) => scene.remove(c));
+      rocks.forEach((r) => scene.remove(r));
+      particles.forEach((p) => scene.remove(p));
+      crystals.length = 0;
+      rocks.length = 0;
+      particles.length = 0;
+
+      player.position.set(0, 0, 0);
+      player.rotation.set(0, 0, 0);
+      state.running = false;
+      state.won = false;
+      state.score = 0;
+      state.time = 45;
+      state.velocity.set(0, 0, 0);
+      state.input.set(0, 0);
+      panel.classList.remove("hidden");
+      panel.querySelector("h1").textContent = "クリスタルを集めろ";
+      panel.querySelector("p").textContent = "光る結晶を12個集めて脱出。岩に当たるとタイムが削られる。";
+
+      for (let i = 0; i < 12; i += 1) {
+        const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.48, 0), materials.crystal);
+        crystal.castShadow = true;
+        crystal.userData.baseY = 0.75;
+        placeOnRing(crystal, i, 12, 5.5 + (i % 3) * 1.9, 1.7);
+        crystal.position.y = crystal.userData.baseY;
+        scene.add(crystal);
+        crystals.push(crystal);
+      }
+
+      for (let i = 0; i < 7; i += 1) {
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.65 + (i % 3) * 0.18, 0), materials.rock);
+        rock.castShadow = true;
+        rock.userData.speed = 0.55 + i * 0.12;
+        rock.userData.phase = i * 0.9;
+        placeOnRing(rock, i, 7, 8.8, 1.2);
+        rock.position.y = 0.62;
+        scene.add(rock);
+        rocks.push(rock);
+      }
+
+      updateHud();
+    }
+
+    function updateHud() {
+      scoreEl.textContent = `${state.score} / 12`;
+      timeEl.textContent = Math.max(0, state.time).toFixed(1);
+    }
+
+    function startGame() {
+      if (state.time <= 0 || state.won) resetWorld();
+      state.running = true;
+      panel.classList.add("hidden");
+    }
+
+    function endGame(won) {
+      state.running = false;
+      state.won = won;
+      panel.classList.remove("hidden");
+      panel.querySelector("h1").textContent = won ? "クリア！" : "時間切れ";
+      panel.querySelector("p").textContent = won
+        ? "全部回収。次のステージへ進める。"
+        : "岩を避けるライン取りが大事。もう一回走って、12個回収を狙って。";
+    }
+
+    function spawnSpark(position, color) {
+      const geo = new THREE.IcosahedronGeometry(0.08, 0);
+      for (let i = 0; i < 12; i += 1) {
+        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
+        const dot = new THREE.Mesh(geo, mat);
+        dot.position.copy(position);
+        dot.userData.life = 0.55;
+        dot.userData.vel = new THREE.Vector3((rand(i + position.x) - 0.5) * 5, rand(i + 9) * 3.4, (rand(i + position.z) - 0.5) * 5);
+        scene.add(dot);
+        particles.push(dot);
+      }
+    }
+
+    function readInput() {
+      let x = state.input.x;
+      let y = state.input.y;
+      if (keys.has("arrowleft") || keys.has("a")) x -= 1;
+      if (keys.has("arrowright") || keys.has("d")) x += 1;
+      if (keys.has("arrowup") || keys.has("w")) y -= 1;
+      if (keys.has("arrowdown") || keys.has("s")) y += 1;
+      const v = new THREE.Vector3(x, 0, y);
+      if (v.lengthSq() > 1) v.normalize();
+      return v;
+    }
+
+    function updatePlayer(dt) {
+      const input = readInput();
+      const targetSpeed = 8.8;
+      state.velocity.lerp(input.multiplyScalar(targetSpeed), 1 - Math.pow(0.0008, dt));
+      player.position.addScaledVector(state.velocity, dt);
+
+      const dist = Math.hypot(player.position.x, player.position.z);
+      if (dist > 13.2) {
+        player.position.multiplyScalar(13.2 / dist);
+      }
+
+      if (state.velocity.lengthSq() > 0.05) {
+        player.rotation.y = Math.atan2(state.velocity.x, state.velocity.z);
+      }
+
+      body.rotation.z = Math.sin(performance.now() / 95) * 0.08 * Math.min(1, state.velocity.length() / targetSpeed);
+    }
+
+    function updateCollectibles(time) {
+      for (let i = crystals.length - 1; i >= 0; i -= 1) {
+        const c = crystals[i];
+        c.rotation.y += 0.035;
+        c.position.y = c.userData.baseY + Math.sin(time * 2.4 + i) * 0.22;
+        if (c.position.distanceTo(player.position) < 1.05) {
+          spawnSpark(c.position, 0xffdf74);
+          scene.remove(c);
+          crystals.splice(i, 1);
+          state.score += 1;
+          if (navigator.vibrate) navigator.vibrate(25);
+          if (state.score >= 12) endGame(true);
+        }
+      }
+    }
+
+    function updateRocks(dt, time) {
+      for (const rock of rocks) {
+        const center = rock.userData.phase;
+        const radius = 8.5 + Math.sin(center) * 1.7;
+        const a = time * rock.userData.speed + center;
+        rock.position.x = Math.cos(a) * radius;
+        rock.position.z = Math.sin(a) * radius;
+        rock.rotation.x += dt * 2.5;
+        rock.rotation.z += dt * 1.6;
+
+        if (state.running && performance.now() - state.lastHit > 850 && rock.position.distanceTo(player.position) < 1.25) {
+          state.lastHit = performance.now();
+          state.time -= 3.5;
+          state.velocity.multiplyScalar(-0.65);
+          spawnSpark(player.position, 0x3be5ff);
+          if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
+        }
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i -= 1) {
+        const p = particles[i];
+        p.userData.life -= dt;
+        p.position.addScaledVector(p.userData.vel, dt);
+        p.userData.vel.y -= 7 * dt;
+        p.material.opacity = Math.max(0, p.userData.life / 0.55);
+        if (p.userData.life <= 0) {
+          scene.remove(p);
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    function resize() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(0.033, (now - last) / 1000);
+      last = now;
+      const t = now / 1000;
+
+      if (state.running) {
+        state.time -= dt;
+        updatePlayer(dt);
+        updateCollectibles(t);
+        if (state.time <= 0 && !state.won) endGame(false);
+      }
+
+      updateRocks(dt, t);
+      updateParticles(dt);
+      arena.rotation.y = Math.sin(t * 0.16) * 0.035;
+      camera.position.x = player.position.x * 0.35;
+      camera.position.z = 13 + player.position.z * 0.35;
+      camera.lookAt(player.position.x * 0.4, 0.5, player.position.z * 0.4);
+      updateHud();
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+    }
+
+    function setStick(clientX, clientY) {
+      const rect = stick.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      const len = Math.hypot(dx, dy);
+      const max = 38;
+      const scale = len > max ? max / len : 1;
+      const x = dx * scale;
+      const y = dy * scale;
+      knob.style.transform = `translate(${x}px, ${y}px)`;
+      state.input.set(x / max, y / max);
+    }
+
+    function releaseStick() {
+      knob.style.transform = "translate(0, 0)";
+      state.input.set(0, 0);
+    }
+
+    startBtn.addEventListener("click", startGame);
+    resetBtn.addEventListener("click", resetWorld);
+    window.addEventListener("resize", resize);
+    window.addEventListener("keydown", (event) => {
+      keys.add(event.key.toLowerCase());
+      if (event.key === "Enter" || event.key === " ") startGame();
+    });
+    window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
+    stick.addEventListener("pointerdown", (event) => {
+      stick.setPointerCapture(event.pointerId);
+      setStick(event.clientX, event.clientY);
+      startGame();
+    });
+    stick.addEventListener("pointermove", (event) => {
+      if (event.buttons) setStick(event.clientX, event.clientY);
+    });
+    stick.addEventListener("pointerup", releaseStick);
+    stick.addEventListener("pointercancel", releaseStick);
+
+    resize();
+    resetWorld();
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
