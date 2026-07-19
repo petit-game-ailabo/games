@@ -304,13 +304,13 @@
       <b>幻想クリスタル無双3D</b>
       <span>danmaku crowd action</span>
     </div>
-    <div class="meter" id="score">晶 0 / 8</div>
+    <div class="meter" id="score">星 45 / 80</div>
     <div class="ko" id="ko">KO 0</div>
-    <div class="time" id="time">60.0</div>
+    <div class="time" id="time">士気 50</div>
   </div>
   <div class="center-panel" id="panel">
     <h1>星の魔女で駆けろ</h1>
-    <p>結晶を集め、迫る影兵をコンボと派生スペルで薙ぎ払う。丸は前方大技の切り札。</p>
+    <p>参道を突破し、奥の敵武将を倒す。星力を使ってスペルを切り替えろ。</p>
     <div class="actions">
       <button id="start">スタート</button>
       <button class="secondary" id="reset">リセット</button>
@@ -380,6 +380,12 @@
       crystal: new THREE.MeshStandardMaterial({ color: 0xff5f9e, roughness: 0.28, emissive: 0x5b1234 }),
       enemy: new THREE.MeshStandardMaterial({ color: 0x282c36, roughness: 0.86 }),
       enemyMark: new THREE.MeshStandardMaterial({ color: 0xff9ec4, roughness: 0.55, emissive: 0x2c0716 }),
+      shield: new THREE.MeshStandardMaterial({ color: 0x54606c, roughness: 0.86 }),
+      ranged: new THREE.MeshStandardMaterial({ color: 0x2c4664, roughness: 0.78 }),
+      caster: new THREE.MeshStandardMaterial({ color: 0x53376e, roughness: 0.78, emissive: 0x12071c }),
+      boss: new THREE.MeshStandardMaterial({ color: 0x731f2e, roughness: 0.7, emissive: 0x22040a }),
+      baseRed: new THREE.MeshStandardMaterial({ color: 0xb92b3a, roughness: 0.72 }),
+      baseBlue: new THREE.MeshStandardMaterial({ color: 0x4fc3ff, roughness: 0.52, emissive: 0x062632 }),
       talisman: new THREE.MeshBasicMaterial({ color: 0xfff0a6 }),
       slash: new THREE.MeshBasicMaterial({ color: 0xfff0a6, transparent: true, opacity: 0.56, side: THREE.DoubleSide }),
       trunk: new THREE.MeshStandardMaterial({ color: 0x7c5438, roughness: 0.86 }),
@@ -443,12 +449,6 @@
     makeTorii(0, -7, 0.78);
     makeShrine();
 
-    const pathRing = new THREE.Mesh(new THREE.TorusGeometry(8.8, 1.05, 8, 64), materials.path);
-    pathRing.rotation.x = Math.PI / 2;
-    pathRing.position.set(0, 0.03, 4);
-    pathRing.receiveShadow = true;
-    arena.add(pathRing);
-
     function makeTree(x, z, s) {
       const tree = new THREE.Group();
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.22 * s, 1.3 * s, 6), materials.trunk);
@@ -480,22 +480,24 @@
     player.add(body, head, shadowDisc);
     scene.add(player);
 
-    const crystals = [];
-    const rocks = [];
     const enemies = [];
+    const bases = [];
     const talismans = [];
     const slashes = [];
     const particles = [];
+    let boss = null;
     const keys = new Set();
     const state = {
       running: false,
       won: false,
-      score: 0,
+      star: 45,
+      maxStar: 80,
+      morale: 50,
       kills: 0,
       combo: 0,
       spell: 0,
       spawnedEnemies: 0,
-      time: 60,
+      time: 0,
       attackCooldown: 0,
       comboStep: 0,
       comboTimer: 0,
@@ -537,9 +539,10 @@
       item.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
     }
 
-    function makeEnemy() {
+    function makeEnemy(type = "melee") {
       const enemy = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.82, 5), materials.enemy);
+      const bodyMat = type === "shield" ? materials.shield : type === "ranged" ? materials.ranged : type === "caster" ? materials.caster : materials.enemy;
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.82, 5), bodyMat);
       body.position.y = 0.48;
       body.castShadow = true;
       const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.23, 0), materials.enemyMark);
@@ -549,13 +552,27 @@
       blade.position.set(0.32, 0.66, 0.1);
       blade.rotation.z = 0.5;
       enemy.add(body, head, blade);
+      if (type === "shield") {
+        const shield = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.55, 0.12), materials.shield);
+        shield.position.set(0, 0.62, 0.34);
+        shield.castShadow = true;
+        enemy.add(shield);
+      }
+      if (type === "ranged") {
+        const bow = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.9), materials.ranged);
+        bow.position.set(-0.34, 0.66, 0.04);
+        bow.rotation.z = -0.4;
+        enemy.add(bow);
+      }
       enemy.userData.speed = 1.1 + rand(state.spawnedEnemies + 11) * 0.9;
       enemy.userData.phase = rand(state.spawnedEnemies + 23) * Math.PI * 2;
+      enemy.userData.type = type;
       return enemy;
     }
 
     function spawnEnemy(index = state.spawnedEnemies) {
-      const enemy = makeEnemy();
+      const types = ["melee", "melee", "shield", "ranged", "caster"];
+      const enemy = makeEnemy(types[index % types.length]);
       const side = rand(index + 37) > 0.5 ? 1 : -1;
       const lane = index < 18 ? 3.8 + rand(index + 41) * 4.4 : 8.5 + rand(index + 43) * 5.2;
       const z = index < 18 ? 10 - rand(index + 47) * 14 : 10 - rand(index + 53) * 38;
@@ -566,8 +583,44 @@
       state.spawnedEnemies += 1;
     }
 
+    function makeBoss() {
+      const unit = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.82, 1.9, 6), materials.boss);
+      body.position.y = 1;
+      body.castShadow = true;
+      const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.44, 0), materials.enemyMark);
+      head.position.y = 2.22;
+      head.castShadow = true;
+      const weapon = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 2.2), materials.shrineRed);
+      weapon.position.set(0.75, 1.2, 0.12);
+      weapon.rotation.z = 0.55;
+      unit.add(body, head, weapon);
+      unit.position.set(0, 0, -25);
+      unit.userData.hp = 160;
+      unit.userData.maxHp = 160;
+      unit.userData.lastAttack = 0;
+      unit.traverse((item) => { if (item.isMesh) item.castShadow = true; });
+      scene.add(unit);
+      boss = unit;
+    }
+
+    function makeBase(x, z) {
+      const base = new THREE.Group();
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.14, 18), materials.baseRed);
+      pad.position.y = 0.08;
+      const banner = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.8, 0.16), materials.wood);
+      banner.position.set(0, 0.95, 0);
+      const flag = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.52, 0.06), materials.baseRed);
+      flag.position.set(0.52, 1.52, 0);
+      base.add(pad, banner, flag);
+      base.position.set(x, 0, z);
+      base.userData.captured = false;
+      arena.add(base);
+      bases.push(base);
+    }
+
     function removeObjectList(list) {
-      list.forEach((item) => scene.remove(item));
+      list.forEach((item) => item.parent?.remove(item));
       list.length = 0;
     }
 
@@ -581,7 +634,8 @@
       enemies.splice(index, 1);
       state.kills += 1;
       state.combo += 1;
-      state.spell = Math.min(100, state.spell + 5);
+      state.star = Math.min(state.maxStar, state.star + 6);
+      state.morale = Math.min(100, state.morale + 1);
       state.hitStop = Math.max(state.hitStop, 0.035);
       state.screenShake = Math.max(state.screenShake, 0.18);
       playTone(220 + Math.min(18, state.combo) * 18, 0.045, "square", 0.032);
@@ -590,8 +644,24 @@
       checkWin();
     }
 
+    function damageBoss(amount, burst = 0xfff0a6) {
+      if (!boss || boss.userData.hp <= 0) return;
+      boss.userData.hp = Math.max(0, boss.userData.hp - amount);
+      spawnSpark(boss.position.clone().add(new THREE.Vector3(0, 1.2, 0)), burst, 16, 7);
+      state.hitStop = Math.max(state.hitStop, 0.05);
+      state.screenShake = Math.max(state.screenShake, 0.2);
+      state.star = Math.min(state.maxStar, state.star + 4);
+      if (boss.userData.hp <= 0) {
+        state.morale = 100;
+        spawnSpark(boss.position.clone().add(new THREE.Vector3(0, 1, 0)), 0xfff0a6, 40, 11);
+        boss.parent?.remove(boss);
+        boss = null;
+        endGame(true);
+      }
+    }
+
     function checkWin() {
-      if (state.score >= 8 && state.kills >= 45) endGame(true);
+      if (!boss) endGame(true);
     }
 
     function forwardVector() {
@@ -640,6 +710,10 @@
           killEnemy(enemy, 0xfff0a6);
         }
       }
+      if (boss) {
+        const toBoss = boss.position.clone().sub(origin);
+        if (toBoss.length() < 2.7 + style * 0.42 && toBoss.normalize().dot(fwd) > -0.05) damageBoss(5 + style * 3, 0xfff0a6);
+      }
     }
 
     function stardustBreak() {
@@ -650,7 +724,10 @@
         const toEnemy = enemy.position.clone().sub(player.position);
         if (toEnemy.length() < 7.4 && toEnemy.normalize().dot(fwd) > 0.58) killEnemy(enemy, 0xfff0a6);
       }
-      state.spell = Math.min(100, state.spell + 8);
+      if (boss) {
+        const toBoss = boss.position.clone().sub(player.position);
+        if (toBoss.length() < 8.2 && toBoss.normalize().dot(fwd) > 0.5) damageBoss(18, 0xfff0a6);
+      }
     }
 
     function cometSweep() {
@@ -659,7 +736,7 @@
       for (const enemy of [...enemies]) {
         if (enemy.position.distanceTo(player.position) < 4.8) killEnemy(enemy, 0xff9ec4);
       }
-      state.spell = Math.min(100, state.spell + 12);
+      if (boss && boss.position.distanceTo(player.position) < 5.3) damageBoss(16, 0xff9ec4);
     }
 
     function milkyOrbit() {
@@ -668,11 +745,10 @@
       for (const enemy of [...enemies]) {
         if (enemy.position.distanceTo(player.position) < 6.6) killEnemy(enemy, 0xb9f3ff);
       }
-      state.spell = Math.min(100, state.spell + 16);
+      if (boss && boss.position.distanceTo(player.position) < 7.2) damageBoss(22, 0xb9f3ff);
     }
 
     function circleBurst() {
-      state.spell = 0;
       state.spellFlash = 0.55;
       showTechnique("○ 星光砲");
       const fwd = forwardVector();
@@ -684,6 +760,10 @@
       for (const enemy of [...enemies]) {
         const toEnemy = enemy.position.clone().sub(player.position);
         if (toEnemy.length() < 14 && toEnemy.normalize().dot(fwd) > 0.42) killEnemy(enemy, 0xb9f3ff);
+      }
+      if (boss) {
+        const toBoss = boss.position.clone().sub(player.position);
+        if (toBoss.length() < 17 && toBoss.normalize().dot(fwd) > 0.35) damageBoss(46, 0xb9f3ff);
       }
       spawnSpark(player.position, 0xfff0a6);
       state.hitStop = Math.max(state.hitStop, 0.08);
@@ -698,6 +778,7 @@
       state.comboStep = state.comboTimer > 0 ? (state.comboStep % 4) + 1 : 1;
       state.comboTimer = 0.82;
       state.attackCooldown = 0.2;
+      state.star = Math.min(state.maxStar, state.star + 3);
       showTechnique(`□ ${state.comboStep}段`);
       slashAttack(state.comboStep);
       if (state.comboStep === 4) {
@@ -709,48 +790,59 @@
     function triangleAttack() {
       startGame();
       if (!state.running || state.attackCooldown > 0) return;
-      const step = state.comboTimer > 0 ? state.comboStep : 0;
+      const direction = readInput();
+      const cost = 14;
+      if (state.star < cost) {
+        showTechnique("△ 星力不足");
+        playTone(120, 0.08, "square", 0.02);
+        return;
+      }
+      state.star -= cost;
       state.attackCooldown = 0.46;
       state.comboTimer = 0;
       state.comboStep = 0;
-      if (step <= 1) stardustBreak();
-      else if (step === 2) cometSweep();
-      else milkyOrbit();
+      if (direction.z < -0.45) stardustBreak();
+      else if (Math.abs(direction.x) > 0.45) cometSweep();
+      else if (direction.z > 0.45) milkyOrbit();
+      else cometSweep();
       updateHud();
     }
 
     function circleAttack() {
       startGame();
       if (!state.running || state.attackCooldown > 0) return;
-      if (state.spell >= 100) {
+      if (state.star >= 70) {
         state.attackCooldown = 0.72;
+        state.star -= 70;
         circleBurst();
       } else {
         state.attackCooldown = 0.26;
-        showTechnique("○ まだ溜まってない");
-        state.spell = Math.min(100, state.spell + 3);
+        showTechnique("○ 星力が足りない");
+        playTone(90, 0.08, "square", 0.02);
       }
       updateHud();
     }
 
     function resetWorld() {
-      removeObjectList(crystals);
-      removeObjectList(rocks);
       removeObjectList(enemies);
+      removeObjectList(bases);
       removeObjectList(talismans);
       removeObjectList(slashes);
       removeObjectList(particles);
+      boss?.parent?.remove(boss);
+      boss = null;
 
       player.position.set(0, 0, 14);
       player.rotation.set(0, 0, 0);
       state.running = false;
       state.won = false;
-      state.score = 0;
+      state.star = 45;
+      state.maxStar = 80;
+      state.morale = 50;
       state.kills = 0;
       state.combo = 0;
-      state.spell = 0;
       state.spawnedEnemies = 0;
-      state.time = 60;
+      state.time = 0;
       state.attackCooldown = 0;
       state.comboStep = 0;
       state.comboTimer = 0;
@@ -762,51 +854,26 @@
       state.input.set(0, 0);
       panel.classList.remove("hidden");
       panel.querySelector("h1").textContent = "星の魔女で駆けろ";
-      panel.querySelector("p").textContent = "結晶を集め、迫る影兵をコンボと派生スペルで薙ぎ払う。丸は前方大技の切り札。";
+      panel.querySelector("p").textContent = "参道を突破し、奥の敵武将を倒す。星力を使ってスペルを切り替えろ。";
 
-      const crystalPositions = [
-        [-3.2, 10.5], [3.4, 7.3], [-4.8, 3.4], [4.5, -1.8],
-        [-3.7, -7.2], [4.1, -13.6], [-4.2, -20.8], [0, -28.2]
-      ];
-
-      for (let i = 0; i < crystalPositions.length; i += 1) {
-        const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.48, 0), materials.crystal);
-        crystal.castShadow = true;
-        crystal.userData.baseY = 0.75;
-        crystal.position.set(crystalPositions[i][0], 0, crystalPositions[i][1]);
-        crystal.position.y = crystal.userData.baseY;
-        scene.add(crystal);
-        crystals.push(crystal);
-      }
-
-      for (let i = 0; i < 7; i += 1) {
-        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.65 + (i % 3) * 0.18, 0), materials.rock);
-        rock.castShadow = true;
-        rock.userData.speed = 0.55 + i * 0.12;
-        rock.userData.phase = i * 0.9;
-        rock.userData.baseX = (rand(i + 70) - 0.5) * 18;
-        rock.userData.baseZ = 9 - i * 5.2;
-        rock.position.set(rock.userData.baseX, 0.62, rock.userData.baseZ);
-        rock.position.y = 0.62;
-        scene.add(rock);
-        rocks.push(rock);
-      }
-
+      makeBase(-5.8, 2);
+      makeBase(5.6, -12);
+      makeBoss();
       for (let i = 0; i < 30; i += 1) spawnEnemy(i);
 
       updateHud();
     }
 
     function updateHud() {
-      scoreEl.textContent = `晶 ${state.score} / 8`;
+      scoreEl.textContent = `星 ${Math.floor(state.star)} / ${state.maxStar}`;
       koEl.textContent = `KO ${state.kills}`;
-      timeEl.textContent = Math.max(0, state.time).toFixed(1);
-      circleBtn.classList.toggle("spell-ready", state.spell >= 100);
-      circleBtn.style.opacity = state.spell >= 100 ? "1" : "0.72";
+      timeEl.textContent = `士気 ${Math.floor(state.morale)}`;
+      circleBtn.classList.toggle("spell-ready", state.star >= 70);
+      circleBtn.style.opacity = state.star >= 70 ? "1" : "0.72";
     }
 
     function startGame() {
-      if (state.time <= 0 || state.won) resetWorld();
+      if (state.won) resetWorld();
       state.running = true;
       panel.classList.add("hidden");
     }
@@ -815,10 +882,10 @@
       state.running = false;
       state.won = won;
       panel.classList.remove("hidden");
-      panel.querySelector("h1").textContent = won ? "クリア！" : "時間切れ";
+      panel.querySelector("h1").textContent = won ? "敵武将撃破！" : "士気崩壊";
       panel.querySelector("p").textContent = won
-        ? "コンボ派生で群れを割って結晶を確保。かなり芯が出てきた。"
-        : "弾幕の撃ちどころと回収ルートを変えれば、まだ押し返せる。";
+        ? "参道を突破して敵将を討ち取った。次は武将戦の駆け引きを濃くする。"
+        : "拠点を取り返し、星力を切らさず押し返せばまだ戦える。";
     }
 
     function spawnSpark(position, color, count = 12, force = 5) {
@@ -889,7 +956,7 @@
 
         if (state.running && performance.now() - state.lastHit > 850 && rock.position.distanceTo(player.position) < 1.25) {
           state.lastHit = performance.now();
-          state.time -= 3.5;
+          state.morale = Math.max(0, state.morale - 4);
           state.velocity.multiplyScalar(-0.65);
           spawnSpark(player.position, 0x3be5ff);
           if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
@@ -903,17 +970,54 @@
         const dist = Math.max(0.001, toPlayer.length());
         const dir = toPlayer.multiplyScalar(1 / dist);
         const orbit = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(Math.sin(time * 1.7 + enemy.userData.phase) * 0.48);
-        const speed = enemy.userData.speed * (dist > 2.2 ? 1 : -0.55);
+        const preferred = enemy.userData.type === "ranged" ? 6.2 : enemy.userData.type === "caster" ? 5.2 : 2.2;
+        const speed = enemy.userData.speed * (dist > preferred ? 1 : -0.55);
         enemy.position.addScaledVector(dir.add(orbit).normalize(), dt * speed);
         enemy.rotation.y = Math.atan2(dir.x, dir.z);
         enemy.children[0].rotation.z = Math.sin(time * 7 + enemy.userData.phase) * 0.12;
 
         if (state.running && performance.now() - state.lastHit > 650 && dist < 0.95) {
           state.lastHit = performance.now();
-          state.time -= 1.6;
+          state.morale = Math.max(0, state.morale - 2);
           state.combo = 0;
           state.velocity.addScaledVector(dir, 2.5);
           spawnSpark(player.position, 0xff9ec4);
+        }
+      }
+    }
+
+    function updateBoss(dt, time) {
+      if (!boss || !state.running) return;
+      const toPlayer = player.position.clone().sub(boss.position);
+      const dist = Math.max(0.001, toPlayer.length());
+      const dir = toPlayer.multiplyScalar(1 / dist);
+      if (dist < 15 && dist > 3.2) {
+        boss.position.addScaledVector(dir, dt * 1.8);
+      }
+      boss.rotation.y = Math.atan2(dir.x, dir.z);
+      boss.children[2].rotation.z = 0.55 + Math.sin(time * 5) * 0.24;
+      if (dist < 3.2 && time - boss.userData.lastAttack > 1.25) {
+        boss.userData.lastAttack = time;
+        state.morale = Math.max(0, state.morale - 7);
+        state.velocity.addScaledVector(dir, 5);
+        state.screenShake = Math.max(state.screenShake, 0.22);
+        spawnSpark(player.position, 0xc6283b, 18, 7);
+        showTechnique(`敵武将 ${Math.ceil((boss.userData.hp / boss.userData.maxHp) * 100)}%`);
+      }
+    }
+
+    function updateBases() {
+      for (const base of bases) {
+        if (base.userData.captured) continue;
+        const nearEnemies = enemies.some((enemy) => enemy.position.distanceTo(base.position) < 4.2);
+        if (!nearEnemies && player.position.distanceTo(base.position) < 2.4) {
+          base.userData.captured = true;
+          base.children[0].material = materials.baseBlue;
+          base.children[2].material = materials.baseBlue;
+          state.morale = Math.min(100, state.morale + 18);
+          state.star = Math.min(state.maxStar, state.star + 18);
+          spawnSpark(base.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x4fc3ff, 24, 8);
+          showTechnique("拠点制圧");
         }
       }
     }
@@ -931,6 +1035,10 @@
             talisman.userData.life = 0;
             break;
           }
+        }
+        if (boss && boss.position.distanceTo(talisman.position) < 1.45) {
+          damageBoss(4, talisman.material.color.getHex());
+          talisman.userData.life = 0;
         }
 
         if (talisman.userData.life <= 0) {
@@ -988,7 +1096,7 @@
       }
 
       if (state.running) {
-        state.time -= simDt;
+        state.time += simDt;
         state.attackCooldown = Math.max(0, state.attackCooldown - simDt);
         state.comboTimer = Math.max(0, state.comboTimer - simDt);
         if (state.comboTimer <= 0) state.comboStep = 0;
@@ -997,13 +1105,12 @@
         state.spellFlash = Math.max(0, state.spellFlash - simDt);
         state.screenShake = Math.max(0, state.screenShake - dt);
         updatePlayer(simDt);
-        updateCollectibles(t);
-        if (state.score >= 8) state.spell = Math.min(100, state.spell + simDt * 7);
-        if (state.time <= 0 && !state.won) endGame(false);
+        updateBases();
+        if (state.morale <= 0 && !state.won) endGame(false);
       }
 
-      updateRocks(simDt, t);
       updateEnemies(simDt, t);
+      updateBoss(simDt, t);
       updateTalismans(simDt);
       updateSlashes(dt);
       updateParticles(dt);
