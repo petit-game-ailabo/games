@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>クリスタルダッシュ3D</title>
+  <title>幻想クリスタル無双3D</title>
   <style>
     * {
       box-sizing: border-box;
@@ -34,7 +34,7 @@
       position: fixed;
       inset: max(14px, env(safe-area-inset-top)) 14px auto 14px;
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1fr auto auto auto;
       gap: 8px;
       align-items: center;
       pointer-events: none;
@@ -43,6 +43,7 @@
 
     .brand,
     .meter,
+    .ko,
     .time {
       min-height: 42px;
       border: 1px solid rgba(255, 255, 255, 0.18);
@@ -91,6 +92,10 @@
 
     .time {
       color: #b9f3ff;
+    }
+
+    .ko {
+      color: #ff9ec4;
     }
 
     .center-panel {
@@ -159,6 +164,35 @@
       touch-action: none;
     }
 
+    .attack {
+      position: fixed;
+      right: 24px;
+      bottom: max(28px, env(safe-area-inset-bottom));
+      z-index: 4;
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      background: radial-gradient(circle at 35% 28%, #fff3b8 0, #ffdf74 34%, #ff528c 100%);
+      color: #11151c;
+      font-size: 28px;
+      font-weight: 900;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
+      touch-action: none;
+      cursor: pointer;
+    }
+
+    .spell-ready {
+      animation: pulse 900ms ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
     .knob {
       position: absolute;
       left: 38px;
@@ -202,6 +236,11 @@
         grid-row: 2;
       }
 
+      .ko {
+        grid-column: 2;
+        grid-row: 3;
+      }
+
       .brand {
         grid-row: 1 / span 2;
       }
@@ -216,21 +255,23 @@
   <canvas id="game"></canvas>
   <div class="hud">
     <div class="brand">
-      <b>クリスタルダッシュ3D</b>
-      <span>low poly action</span>
+      <b>幻想クリスタル無双3D</b>
+      <span>danmaku crowd action</span>
     </div>
-    <div class="meter" id="score">0 / 12</div>
-    <div class="time" id="time">45.0</div>
+    <div class="meter" id="score">晶 0 / 8</div>
+    <div class="ko" id="ko">KO 0</div>
+    <div class="time" id="time">60.0</div>
   </div>
   <div class="center-panel" id="panel">
-    <h1>クリスタルを集めろ</h1>
-    <p>光る結晶を12個集めて脱出。岩に当たるとタイムが削られる。</p>
+    <h1>弾幕で群れを割れ</h1>
+    <p>結晶を集め、迫る影兵をまとめて薙ぎ払う。スペルゲージが満ちたら一気に制圧。</p>
     <div class="actions">
       <button id="start">スタート</button>
       <button class="secondary" id="reset">リセット</button>
     </div>
   </div>
   <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
+  <button class="attack" id="attack" aria-label="attack">斬</button>
   <div class="credits">Powered by Three.js</div>
 
   <script type="module">
@@ -238,12 +279,14 @@
 
     const canvas = document.getElementById("game");
     const scoreEl = document.getElementById("score");
+    const koEl = document.getElementById("ko");
     const timeEl = document.getElementById("time");
     const panel = document.getElementById("panel");
     const startBtn = document.getElementById("start");
     const resetBtn = document.getElementById("reset");
     const stick = document.getElementById("stick");
     const knob = document.getElementById("knob");
+    const attackBtn = document.getElementById("attack");
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -277,6 +320,10 @@
       playerAccent: new THREE.MeshStandardMaterial({ color: 0x3be5ff, roughness: 0.35, emissive: 0x064a55 }),
       rock: new THREE.MeshStandardMaterial({ color: 0x758293, roughness: 0.9 }),
       crystal: new THREE.MeshStandardMaterial({ color: 0xff5f9e, roughness: 0.28, emissive: 0x5b1234 }),
+      enemy: new THREE.MeshStandardMaterial({ color: 0x282c36, roughness: 0.86 }),
+      enemyMark: new THREE.MeshStandardMaterial({ color: 0xff9ec4, roughness: 0.55, emissive: 0x2c0716 }),
+      talisman: new THREE.MeshBasicMaterial({ color: 0xfff0a6 }),
+      slash: new THREE.MeshBasicMaterial({ color: 0xfff0a6, transparent: true, opacity: 0.56, side: THREE.DoubleSide }),
       trunk: new THREE.MeshStandardMaterial({ color: 0x7c5438, roughness: 0.86 }),
       leaf: new THREE.MeshStandardMaterial({ color: 0x2db378, roughness: 0.78 })
     };
@@ -325,13 +372,22 @@
 
     const crystals = [];
     const rocks = [];
+    const enemies = [];
+    const talismans = [];
+    const slashes = [];
     const particles = [];
     const keys = new Set();
     const state = {
       running: false,
       won: false,
       score: 0,
-      time: 45,
+      kills: 0,
+      combo: 0,
+      spell: 0,
+      spawnedEnemies: 0,
+      time: 60,
+      attackCooldown: 0,
+      spellFlash: 0,
       velocity: new THREE.Vector3(),
       input: new THREE.Vector2(),
       lastHit: 0
@@ -347,31 +403,154 @@
       item.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
     }
 
+    function makeEnemy() {
+      const enemy = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.82, 5), materials.enemy);
+      body.position.y = 0.48;
+      body.castShadow = true;
+      const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.23, 0), materials.enemyMark);
+      head.position.y = 1.03;
+      head.castShadow = true;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.72), materials.enemyMark);
+      blade.position.set(0.32, 0.66, 0.1);
+      blade.rotation.z = 0.5;
+      enemy.add(body, head, blade);
+      enemy.userData.speed = 1.1 + rand(state.spawnedEnemies + 11) * 0.9;
+      enemy.userData.phase = rand(state.spawnedEnemies + 23) * Math.PI * 2;
+      return enemy;
+    }
+
+    function spawnEnemy(index = state.spawnedEnemies) {
+      const enemy = makeEnemy();
+      const a = rand(index + 37) * Math.PI * 2;
+      const r = 12.3 + rand(index + 41) * 1.8;
+      enemy.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+      enemy.rotation.y = a + Math.PI;
+      scene.add(enemy);
+      enemies.push(enemy);
+      state.spawnedEnemies += 1;
+    }
+
+    function removeObjectList(list) {
+      list.forEach((item) => scene.remove(item));
+      list.length = 0;
+    }
+
+    function killEnemy(enemy, burst = 0xff9ec4) {
+      const index = enemies.indexOf(enemy);
+      if (index === -1) return;
+      spawnSpark(enemy.position, burst);
+      scene.remove(enemy);
+      enemies.splice(index, 1);
+      state.kills += 1;
+      state.combo += 1;
+      state.spell = Math.min(100, state.spell + 5);
+      if (state.spawnedEnemies < 82) spawnEnemy(state.spawnedEnemies + state.kills);
+      if (navigator.vibrate && state.combo % 8 === 0) navigator.vibrate(18);
+      checkWin();
+    }
+
+    function checkWin() {
+      if (state.score >= 8 && state.kills >= 45) endGame(true);
+    }
+
+    function forwardVector() {
+      return new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+    }
+
+    function spawnTalisman(angle, speed, life, color = 0xfff0a6) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.5), materials.talisman.clone());
+      mesh.material.color.setHex(color);
+      mesh.position.copy(player.position);
+      mesh.position.y = 0.75;
+      mesh.rotation.y = angle;
+      mesh.userData.life = life;
+      mesh.userData.vel = new THREE.Vector3(Math.sin(angle) * speed, 0, Math.cos(angle) * speed);
+      scene.add(mesh);
+      talismans.push(mesh);
+    }
+
+    function slashAttack() {
+      const fwd = forwardVector();
+      const origin = player.position.clone();
+      const slash = new THREE.Mesh(new THREE.TorusGeometry(1.65, 0.035, 6, 40, Math.PI * 1.35), materials.slash.clone());
+      slash.position.copy(origin).addScaledVector(fwd, 1.15);
+      slash.position.y = 0.65;
+      slash.rotation.set(Math.PI / 2, 0, -player.rotation.y + 0.85);
+      slash.userData.life = 0.18;
+      scene.add(slash);
+      slashes.push(slash);
+
+      for (let i = -2; i <= 2; i += 1) {
+        spawnTalisman(player.rotation.y + i * 0.22, 10.5, 0.42, i % 2 ? 0xb9f3ff : 0xfff0a6);
+      }
+
+      for (const enemy of [...enemies]) {
+        const toEnemy = enemy.position.clone().sub(origin);
+        const dist = toEnemy.length();
+        if (dist < 2.9 && toEnemy.normalize().dot(fwd) > -0.1) {
+          killEnemy(enemy, 0xfff0a6);
+        }
+      }
+    }
+
+    function spellAttack() {
+      state.spell = 0;
+      state.spellFlash = 0.55;
+      for (let i = 0; i < 36; i += 1) {
+        spawnTalisman((i / 36) * Math.PI * 2, 12.8, 0.9, i % 2 ? 0xff9ec4 : 0xb9f3ff);
+      }
+      for (const enemy of [...enemies]) {
+        if (enemy.position.distanceTo(player.position) < 10.5) killEnemy(enemy, 0xb9f3ff);
+      }
+      spawnSpark(player.position, 0xfff0a6);
+      if (navigator.vibrate) navigator.vibrate([25, 25, 60]);
+    }
+
+    function attack() {
+      startGame();
+      if (!state.running || state.attackCooldown > 0) return;
+      if (state.spell >= 100) {
+        state.attackCooldown = 0.65;
+        spellAttack();
+      } else {
+        state.attackCooldown = 0.32;
+        slashAttack();
+      }
+      updateHud();
+    }
+
     function resetWorld() {
-      crystals.forEach((c) => scene.remove(c));
-      rocks.forEach((r) => scene.remove(r));
-      particles.forEach((p) => scene.remove(p));
-      crystals.length = 0;
-      rocks.length = 0;
-      particles.length = 0;
+      removeObjectList(crystals);
+      removeObjectList(rocks);
+      removeObjectList(enemies);
+      removeObjectList(talismans);
+      removeObjectList(slashes);
+      removeObjectList(particles);
 
       player.position.set(0, 0, 0);
       player.rotation.set(0, 0, 0);
       state.running = false;
       state.won = false;
       state.score = 0;
-      state.time = 45;
+      state.kills = 0;
+      state.combo = 0;
+      state.spell = 0;
+      state.spawnedEnemies = 0;
+      state.time = 60;
+      state.attackCooldown = 0;
+      state.spellFlash = 0;
       state.velocity.set(0, 0, 0);
       state.input.set(0, 0);
       panel.classList.remove("hidden");
-      panel.querySelector("h1").textContent = "クリスタルを集めろ";
-      panel.querySelector("p").textContent = "光る結晶を12個集めて脱出。岩に当たるとタイムが削られる。";
+      panel.querySelector("h1").textContent = "弾幕で群れを割れ";
+      panel.querySelector("p").textContent = "結晶を集め、迫る影兵をまとめて薙ぎ払う。スペルゲージが満ちたら一気に制圧。";
 
-      for (let i = 0; i < 12; i += 1) {
+      for (let i = 0; i < 8; i += 1) {
         const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.48, 0), materials.crystal);
         crystal.castShadow = true;
         crystal.userData.baseY = 0.75;
-        placeOnRing(crystal, i, 12, 5.5 + (i % 3) * 1.9, 1.7);
+        placeOnRing(crystal, i, 8, 5.5 + (i % 3) * 1.9, 1.7);
         crystal.position.y = crystal.userData.baseY;
         scene.add(crystal);
         crystals.push(crystal);
@@ -388,12 +567,17 @@
         rocks.push(rock);
       }
 
+      for (let i = 0; i < 30; i += 1) spawnEnemy(i);
+
       updateHud();
     }
 
     function updateHud() {
-      scoreEl.textContent = `${state.score} / 12`;
+      scoreEl.textContent = `晶 ${state.score} / 8`;
+      koEl.textContent = `KO ${state.kills}`;
       timeEl.textContent = Math.max(0, state.time).toFixed(1);
+      attackBtn.textContent = state.spell >= 100 ? "符" : "斬";
+      attackBtn.classList.toggle("spell-ready", state.spell >= 100);
     }
 
     function startGame() {
@@ -408,8 +592,8 @@
       panel.classList.remove("hidden");
       panel.querySelector("h1").textContent = won ? "クリア！" : "時間切れ";
       panel.querySelector("p").textContent = won
-        ? "全部回収。次のステージへ進める。"
-        : "岩を避けるライン取りが大事。もう一回走って、12個回収を狙って。";
+        ? "群れを割って結晶を確保。これは少し、ゲームの芯が見えたかも。"
+        : "弾幕の撃ちどころと回収ルートを変えれば、まだ押し返せる。";
     }
 
     function spawnSpark(position, color) {
@@ -465,8 +649,9 @@
           scene.remove(c);
           crystals.splice(i, 1);
           state.score += 1;
+          state.spell = Math.min(100, state.spell + 12);
           if (navigator.vibrate) navigator.vibrate(25);
-          if (state.score >= 12) endGame(true);
+          checkWin();
         }
       }
     }
@@ -487,6 +672,62 @@
           state.velocity.multiplyScalar(-0.65);
           spawnSpark(player.position, 0x3be5ff);
           if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
+        }
+      }
+    }
+
+    function updateEnemies(dt, time) {
+      for (const enemy of [...enemies]) {
+        const toPlayer = player.position.clone().sub(enemy.position);
+        const dist = Math.max(0.001, toPlayer.length());
+        const dir = toPlayer.multiplyScalar(1 / dist);
+        const orbit = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(Math.sin(time * 1.7 + enemy.userData.phase) * 0.48);
+        const speed = enemy.userData.speed * (dist > 2.2 ? 1 : -0.55);
+        enemy.position.addScaledVector(dir.add(orbit).normalize(), dt * speed);
+        enemy.rotation.y = Math.atan2(dir.x, dir.z);
+        enemy.children[0].rotation.z = Math.sin(time * 7 + enemy.userData.phase) * 0.12;
+
+        if (state.running && performance.now() - state.lastHit > 650 && dist < 0.95) {
+          state.lastHit = performance.now();
+          state.time -= 1.6;
+          state.combo = 0;
+          state.velocity.addScaledVector(dir, 2.5);
+          spawnSpark(player.position, 0xff9ec4);
+        }
+      }
+    }
+
+    function updateTalismans(dt) {
+      for (let i = talismans.length - 1; i >= 0; i -= 1) {
+        const talisman = talismans[i];
+        talisman.userData.life -= dt;
+        talisman.position.addScaledVector(talisman.userData.vel, dt);
+        talisman.rotation.y += dt * 8;
+
+        for (const enemy of [...enemies]) {
+          if (enemy.position.distanceTo(talisman.position) < 0.8) {
+            killEnemy(enemy, talisman.material.color.getHex());
+            talisman.userData.life = 0;
+            break;
+          }
+        }
+
+        if (talisman.userData.life <= 0) {
+          scene.remove(talisman);
+          talismans.splice(i, 1);
+        }
+      }
+    }
+
+    function updateSlashes(dt) {
+      for (let i = slashes.length - 1; i >= 0; i -= 1) {
+        const slash = slashes[i];
+        slash.userData.life -= dt;
+        slash.scale.multiplyScalar(1 + dt * 3.6);
+        slash.material.opacity = Math.max(0, slash.userData.life / 0.18) * 0.56;
+        if (slash.userData.life <= 0) {
+          scene.remove(slash);
+          slashes.splice(i, 1);
         }
       }
     }
@@ -521,14 +762,21 @@
 
       if (state.running) {
         state.time -= dt;
+        state.attackCooldown = Math.max(0, state.attackCooldown - dt);
+        state.spellFlash = Math.max(0, state.spellFlash - dt);
         updatePlayer(dt);
         updateCollectibles(t);
+        if (state.score >= 8) state.spell = Math.min(100, state.spell + dt * 7);
         if (state.time <= 0 && !state.won) endGame(false);
       }
 
       updateRocks(dt, t);
+      updateEnemies(dt, t);
+      updateTalismans(dt);
+      updateSlashes(dt);
       updateParticles(dt);
       arena.rotation.y = Math.sin(t * 0.16) * 0.035;
+      scene.fog.color.setHex(state.spellFlash > 0 ? 0x2b1436 : 0x11151c);
       camera.position.x = player.position.x * 0.35;
       camera.position.z = 13 + player.position.z * 0.35;
       camera.lookAt(player.position.x * 0.4, 0.5, player.position.z * 0.4);
@@ -559,10 +807,18 @@
 
     startBtn.addEventListener("click", startGame);
     resetBtn.addEventListener("click", resetWorld);
+    attackBtn.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      attack();
+    });
     window.addEventListener("resize", resize);
     window.addEventListener("keydown", (event) => {
       keys.add(event.key.toLowerCase());
-      if (event.key === "Enter" || event.key === " ") startGame();
+      if (event.key === "Enter") startGame();
+      if (event.key === " " || event.key.toLowerCase() === "j" || event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        attack();
+      }
     });
     window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
     stick.addEventListener("pointerdown", (event) => {
