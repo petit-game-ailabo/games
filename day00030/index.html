@@ -164,24 +164,70 @@
       touch-action: none;
     }
 
-    .attack {
+    .command-pad {
       position: fixed;
       right: 24px;
       bottom: max(28px, env(safe-area-inset-bottom));
       z-index: 4;
-      width: 92px;
-      height: 92px;
+      display: grid;
+      grid-template-columns: 72px 72px;
+      grid-template-rows: 72px 72px;
+      gap: 8px;
+      touch-action: none;
+    }
+
+    .command {
+      width: 72px;
+      height: 72px;
       border-radius: 50%;
       display: grid;
       place-items: center;
       border: 1px solid rgba(255, 255, 255, 0.24);
-      background: radial-gradient(circle at 35% 28%, #fff3b8 0, #ffdf74 34%, #ff528c 100%);
       color: #11151c;
-      font-size: 28px;
+      font-size: 27px;
       font-weight: 900;
       box-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
       touch-action: none;
       cursor: pointer;
+      padding: 0;
+    }
+
+    .square {
+      grid-column: 1;
+      grid-row: 2;
+      background: radial-gradient(circle at 35% 28%, #fff3b8 0, #ffdf74 42%, #ff8c5b 100%);
+    }
+
+    .triangle {
+      grid-column: 1 / span 2;
+      grid-row: 1;
+      margin: 0 auto;
+      background: radial-gradient(circle at 35% 28%, #dffcff 0, #85eaff 42%, #5b8cff 100%);
+    }
+
+    .circle {
+      grid-column: 2;
+      grid-row: 2;
+      background: radial-gradient(circle at 35% 28%, #ffe9fa 0, #ff9ec4 42%, #b980ff 100%);
+    }
+
+    .technique {
+      position: fixed;
+      left: 50%;
+      top: 88px;
+      z-index: 4;
+      min-width: min(74vw, 520px);
+      transform: translateX(-50%);
+      padding: 10px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(9, 12, 18, 0.68);
+      color: #fff3b8;
+      font-size: 18px;
+      font-weight: 900;
+      text-align: center;
+      text-shadow: 0 2px 14px rgba(0, 0, 0, 0.75);
+      pointer-events: none;
     }
 
     .spell-ready {
@@ -263,15 +309,20 @@
     <div class="time" id="time">60.0</div>
   </div>
   <div class="center-panel" id="panel">
-    <h1>弾幕で群れを割れ</h1>
-    <p>結晶を集め、迫る影兵をまとめて薙ぎ払う。スペルゲージが満ちたら一気に制圧。</p>
+    <h1>星の魔女で駆けろ</h1>
+    <p>結晶を集め、迫る影兵をコンボと派生スペルで薙ぎ払う。丸は前方大技の切り札。</p>
     <div class="actions">
       <button id="start">スタート</button>
       <button class="secondary" id="reset">リセット</button>
     </div>
   </div>
   <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
-  <button class="attack" id="attack" aria-label="attack">斬</button>
+  <div class="command-pad">
+    <button class="command triangle" id="triangle" aria-label="triangle">△</button>
+    <button class="command square" id="square" aria-label="square">□</button>
+    <button class="command circle" id="circle" aria-label="circle">○</button>
+  </div>
+  <div class="technique hidden" id="technique"></div>
   <div class="credits">Powered by Three.js</div>
 
   <script type="module">
@@ -286,7 +337,10 @@
     const resetBtn = document.getElementById("reset");
     const stick = document.getElementById("stick");
     const knob = document.getElementById("knob");
-    const attackBtn = document.getElementById("attack");
+    const squareBtn = document.getElementById("square");
+    const triangleBtn = document.getElementById("triangle");
+    const circleBtn = document.getElementById("circle");
+    const techniqueEl = document.getElementById("technique");
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -387,6 +441,9 @@
       spawnedEnemies: 0,
       time: 60,
       attackCooldown: 0,
+      comboStep: 0,
+      comboTimer: 0,
+      techniqueTimer: 0,
       spellFlash: 0,
       velocity: new THREE.Vector3(),
       input: new THREE.Vector2(),
@@ -423,7 +480,7 @@
     function spawnEnemy(index = state.spawnedEnemies) {
       const enemy = makeEnemy();
       const a = rand(index + 37) * Math.PI * 2;
-      const r = 12.3 + rand(index + 41) * 1.8;
+      const r = index < 18 ? 3.8 + rand(index + 41) * 4.4 : 12.3 + rand(index + 41) * 1.8;
       enemy.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
       enemy.rotation.y = a + Math.PI;
       scene.add(enemy);
@@ -470,52 +527,120 @@
       talismans.push(mesh);
     }
 
-    function slashAttack() {
+    function showTechnique(name) {
+      techniqueEl.textContent = name;
+      techniqueEl.classList.remove("hidden");
+      state.techniqueTimer = 0.72;
+    }
+
+    function slashAttack(style = 1) {
       const fwd = forwardVector();
       const origin = player.position.clone();
-      const slash = new THREE.Mesh(new THREE.TorusGeometry(1.65, 0.035, 6, 40, Math.PI * 1.35), materials.slash.clone());
-      slash.position.copy(origin).addScaledVector(fwd, 1.15);
+      const slash = new THREE.Mesh(new THREE.TorusGeometry(1.45 + style * 0.18, 0.035, 6, 40, Math.PI * (1.05 + style * 0.12)), materials.slash.clone());
+      slash.position.copy(origin).addScaledVector(fwd, 0.9 + style * 0.12);
       slash.position.y = 0.65;
-      slash.rotation.set(Math.PI / 2, 0, -player.rotation.y + 0.85);
+      slash.rotation.set(Math.PI / 2, 0, -player.rotation.y + 0.62 + style * 0.12);
       slash.userData.life = 0.18;
       scene.add(slash);
       slashes.push(slash);
 
-      for (let i = -2; i <= 2; i += 1) {
-        spawnTalisman(player.rotation.y + i * 0.22, 10.5, 0.42, i % 2 ? 0xb9f3ff : 0xfff0a6);
+      for (let i = -style; i <= style; i += 1) {
+        spawnTalisman(player.rotation.y + i * 0.18, 9.5 + style, 0.32 + style * 0.06, i % 2 ? 0xb9f3ff : 0xfff0a6);
       }
 
       for (const enemy of [...enemies]) {
         const toEnemy = enemy.position.clone().sub(origin);
         const dist = toEnemy.length();
-        if (dist < 2.9 && toEnemy.normalize().dot(fwd) > -0.1) {
+        if (dist < 2.35 + style * 0.38 && toEnemy.normalize().dot(fwd) > -0.18) {
           killEnemy(enemy, 0xfff0a6);
         }
       }
     }
 
-    function spellAttack() {
+    function stardustBreak() {
+      showTechnique("△ 星屑ブレイク");
+      const fwd = forwardVector();
+      for (let i = -4; i <= 4; i += 1) spawnTalisman(player.rotation.y + i * 0.07, 14, 0.58, 0xfff0a6);
+      for (const enemy of [...enemies]) {
+        const toEnemy = enemy.position.clone().sub(player.position);
+        if (toEnemy.length() < 7.4 && toEnemy.normalize().dot(fwd) > 0.58) killEnemy(enemy, 0xfff0a6);
+      }
+      state.spell = Math.min(100, state.spell + 8);
+    }
+
+    function cometSweep() {
+      showTechnique("△ 彗星スイープ");
+      for (let i = -8; i <= 8; i += 1) spawnTalisman(player.rotation.y + i * 0.16, 11.2, 0.54, i % 2 ? 0xff9ec4 : 0xb9f3ff);
+      for (const enemy of [...enemies]) {
+        if (enemy.position.distanceTo(player.position) < 4.8) killEnemy(enemy, 0xff9ec4);
+      }
+      state.spell = Math.min(100, state.spell + 12);
+    }
+
+    function milkyOrbit() {
+      showTechnique("△ 天河オービット");
+      for (let i = 0; i < 24; i += 1) spawnTalisman(player.rotation.y + (i / 24) * Math.PI * 2, 9.6, 0.78, i % 2 ? 0xfff0a6 : 0xb9f3ff);
+      for (const enemy of [...enemies]) {
+        if (enemy.position.distanceTo(player.position) < 6.6) killEnemy(enemy, 0xb9f3ff);
+      }
+      state.spell = Math.min(100, state.spell + 16);
+    }
+
+    function circleBurst() {
       state.spell = 0;
       state.spellFlash = 0.55;
-      for (let i = 0; i < 36; i += 1) {
-        spawnTalisman((i / 36) * Math.PI * 2, 12.8, 0.9, i % 2 ? 0xff9ec4 : 0xb9f3ff);
+      showTechnique("○ 星光砲");
+      const fwd = forwardVector();
+      for (let row = -3; row <= 3; row += 1) {
+        for (let i = 0; i < 7; i += 1) {
+          spawnTalisman(player.rotation.y + row * 0.035, 17 + i * 0.3, 0.76, row % 2 ? 0xfff0a6 : 0xb9f3ff);
+        }
       }
       for (const enemy of [...enemies]) {
-        if (enemy.position.distanceTo(player.position) < 10.5) killEnemy(enemy, 0xb9f3ff);
+        const toEnemy = enemy.position.clone().sub(player.position);
+        if (toEnemy.length() < 14 && toEnemy.normalize().dot(fwd) > 0.42) killEnemy(enemy, 0xb9f3ff);
       }
       spawnSpark(player.position, 0xfff0a6);
       if (navigator.vibrate) navigator.vibrate([25, 25, 60]);
     }
 
-    function attack() {
+    function squareAttack() {
+      startGame();
+      if (!state.running || state.attackCooldown > 0) return;
+      state.comboStep = state.comboTimer > 0 ? (state.comboStep % 4) + 1 : 1;
+      state.comboTimer = 0.82;
+      state.attackCooldown = 0.2;
+      showTechnique(`□ ${state.comboStep}段`);
+      slashAttack(state.comboStep);
+      if (state.comboStep === 4) {
+        for (let i = -5; i <= 5; i += 1) spawnTalisman(player.rotation.y + i * 0.12, 12.6, 0.52, 0xff9ec4);
+      }
+      updateHud();
+    }
+
+    function triangleAttack() {
+      startGame();
+      if (!state.running || state.attackCooldown > 0) return;
+      const step = state.comboTimer > 0 ? state.comboStep : 0;
+      state.attackCooldown = 0.46;
+      state.comboTimer = 0;
+      state.comboStep = 0;
+      if (step <= 1) stardustBreak();
+      else if (step === 2) cometSweep();
+      else milkyOrbit();
+      updateHud();
+    }
+
+    function circleAttack() {
       startGame();
       if (!state.running || state.attackCooldown > 0) return;
       if (state.spell >= 100) {
-        state.attackCooldown = 0.65;
-        spellAttack();
+        state.attackCooldown = 0.72;
+        circleBurst();
       } else {
-        state.attackCooldown = 0.32;
-        slashAttack();
+        state.attackCooldown = 0.26;
+        showTechnique("○ まだ溜まってない");
+        state.spell = Math.min(100, state.spell + 3);
       }
       updateHud();
     }
@@ -539,12 +664,15 @@
       state.spawnedEnemies = 0;
       state.time = 60;
       state.attackCooldown = 0;
+      state.comboStep = 0;
+      state.comboTimer = 0;
+      state.techniqueTimer = 0;
       state.spellFlash = 0;
       state.velocity.set(0, 0, 0);
       state.input.set(0, 0);
       panel.classList.remove("hidden");
-      panel.querySelector("h1").textContent = "弾幕で群れを割れ";
-      panel.querySelector("p").textContent = "結晶を集め、迫る影兵をまとめて薙ぎ払う。スペルゲージが満ちたら一気に制圧。";
+      panel.querySelector("h1").textContent = "星の魔女で駆けろ";
+      panel.querySelector("p").textContent = "結晶を集め、迫る影兵をコンボと派生スペルで薙ぎ払う。丸は前方大技の切り札。";
 
       for (let i = 0; i < 8; i += 1) {
         const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.48, 0), materials.crystal);
@@ -576,8 +704,8 @@
       scoreEl.textContent = `晶 ${state.score} / 8`;
       koEl.textContent = `KO ${state.kills}`;
       timeEl.textContent = Math.max(0, state.time).toFixed(1);
-      attackBtn.textContent = state.spell >= 100 ? "符" : "斬";
-      attackBtn.classList.toggle("spell-ready", state.spell >= 100);
+      circleBtn.classList.toggle("spell-ready", state.spell >= 100);
+      circleBtn.style.opacity = state.spell >= 100 ? "1" : "0.72";
     }
 
     function startGame() {
@@ -592,7 +720,7 @@
       panel.classList.remove("hidden");
       panel.querySelector("h1").textContent = won ? "クリア！" : "時間切れ";
       panel.querySelector("p").textContent = won
-        ? "群れを割って結晶を確保。これは少し、ゲームの芯が見えたかも。"
+        ? "コンボ派生で群れを割って結晶を確保。かなり芯が出てきた。"
         : "弾幕の撃ちどころと回収ルートを変えれば、まだ押し返せる。";
     }
 
@@ -763,6 +891,10 @@
       if (state.running) {
         state.time -= dt;
         state.attackCooldown = Math.max(0, state.attackCooldown - dt);
+        state.comboTimer = Math.max(0, state.comboTimer - dt);
+        if (state.comboTimer <= 0) state.comboStep = 0;
+        state.techniqueTimer = Math.max(0, state.techniqueTimer - dt);
+        techniqueEl.classList.toggle("hidden", state.techniqueTimer <= 0);
         state.spellFlash = Math.max(0, state.spellFlash - dt);
         updatePlayer(dt);
         updateCollectibles(t);
@@ -807,17 +939,33 @@
 
     startBtn.addEventListener("click", startGame);
     resetBtn.addEventListener("click", resetWorld);
-    attackBtn.addEventListener("pointerdown", (event) => {
+    squareBtn.addEventListener("pointerdown", (event) => {
       event.preventDefault();
-      attack();
+      squareAttack();
+    });
+    triangleBtn.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      triangleAttack();
+    });
+    circleBtn.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      circleAttack();
     });
     window.addEventListener("resize", resize);
     window.addEventListener("keydown", (event) => {
       keys.add(event.key.toLowerCase());
       if (event.key === "Enter") startGame();
-      if (event.key === " " || event.key.toLowerCase() === "j" || event.key.toLowerCase() === "k") {
+      if (event.key === " " || event.key.toLowerCase() === "j") {
         event.preventDefault();
-        attack();
+        squareAttack();
+      }
+      if (event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        triangleAttack();
+      }
+      if (event.key.toLowerCase() === "l") {
+        event.preventDefault();
+        circleAttack();
       }
     });
     window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
