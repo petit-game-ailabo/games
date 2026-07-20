@@ -43,7 +43,7 @@
       position: fixed;
       inset: 18px 18px auto 18px;
       display: grid;
-      grid-template-columns: 1fr auto auto auto;
+      grid-template-columns: 1fr auto auto;
       gap: 10px;
       align-items: start;
       pointer-events: none;
@@ -100,6 +100,74 @@
 
     .boss {
       color: var(--cyan);
+    }
+
+    .status {
+      position: fixed;
+      left: 50%;
+      bottom: max(20px, env(safe-area-inset-bottom));
+      z-index: 5;
+      width: min(360px, calc(100vw - 220px));
+      min-width: 210px;
+      transform: translateX(-50%);
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      background: rgba(12, 15, 22, 0.78);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(12px);
+      pointer-events: none;
+    }
+
+    .portrait {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 226, 122, 0.75);
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 35% 28%, #fff6bf 0, #ffe27a 42%, #2f2335 43%, #151d29 100%);
+      box-shadow: 0 0 24px rgba(255, 226, 122, 0.25);
+      font-size: 28px;
+    }
+
+    .starStatus {
+      min-width: 0;
+    }
+
+    .starLabel {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+      color: var(--gold);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .starValue {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .starBar {
+      height: 13px;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 226, 122, 0.38);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .starFill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #ffe27a, #8df4ff);
+      box-shadow: 0 0 18px rgba(141, 244, 255, 0.36);
+      transform-origin: left center;
     }
 
     .center {
@@ -268,6 +336,11 @@
         grid-column: 2;
       }
 
+      .status {
+        bottom: max(190px, env(safe-area-inset-bottom));
+        width: min(300px, calc(100vw - 28px));
+      }
+
       .pad {
         grid-template-columns: 70px 70px;
         grid-template-rows: 70px 70px;
@@ -290,21 +363,27 @@
   <div class="hud">
     <div class="panel">
       <b>幻想星力無双2D</b>
-      <span>danmaku field control</span>
+      <span>broom and spell action</span>
     </div>
-    <div class="meter" id="star">星力 60</div>
     <div class="ko" id="ko">KO 0</div>
     <div class="boss" id="boss">異変 100%</div>
   </div>
   <div class="center" id="startPanel">
-    <h1>弾幕で戦場を塗り替えろ</h1>
-    <p>箒で叩いて星くず印を付け、スペルカードで起爆する。敵群を整えてから弾幕ごと崩せ。</p>
+    <h1>箒とスペルで押し切れ</h1>
+    <p>通常攻撃で星力を戻し、短い回復待ちを挟みながらスペルカードを回す。敵は近づいて武器を振ってくる。</p>
     <button id="start">スタート</button>
   </div>
   <div class="stick" id="stick"><div class="knob" id="knob"></div></div>
+  <div class="status" id="status">
+    <div class="portrait">☆</div>
+    <div class="starStatus">
+      <div class="starLabel"><span>星力</span><span class="starValue" id="starValue">8/8</span></div>
+      <div class="starBar"><div class="starFill" id="starFill"></div></div>
+    </div>
+  </div>
   <div class="pad">
-    <button class="cmd" id="triangle" aria-label="danmaku field">△</button>
-    <button class="cmd" id="square" aria-label="star shot">□</button>
+    <button class="cmd" id="triangle" aria-label="spell card">△</button>
+    <button class="cmd" id="square" aria-label="broom attack">□</button>
     <button class="cmd" id="circle" aria-label="star cannon">○</button>
   </div>
   <div class="technique hidden" id="technique"></div>
@@ -313,7 +392,8 @@
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
-    const starEl = document.getElementById("star");
+    const starValueEl = document.getElementById("starValue");
+    const starFillEl = document.getElementById("starFill");
     const koEl = document.getElementById("ko");
     const bossEl = document.getElementById("boss");
     const startPanel = document.getElementById("startPanel");
@@ -331,10 +411,11 @@
     const state = {
       running: false,
       won: false,
-      star: 60,
-      maxStar: 100,
+      star: 8,
+      maxStar: 8,
       ko: 0,
       time: 0,
+      lastAttackTime: -99,
       combo: 0,
       broomStep: 0,
       broomTimer: 0,
@@ -350,8 +431,7 @@
     const slashes = [];
     const fields = [];
     const sparks = [];
-    const enemyShots = [];
-    const boss = { x: W / 2, y: 138, r: 38, phase: 0, shot: 0 };
+    const boss = { x: W / 2, y: 138, r: 38, phase: 0, attackCd: 1.1, windup: 0, swingLife: 0, hitDone: false, angle: Math.PI / 2 };
     let audioContext = null;
     let last = performance.now();
 
@@ -402,14 +482,14 @@
       slashes.length = 0;
       fields.length = 0;
       sparks.length = 0;
-      enemyShots.length = 0;
       Object.assign(player, { x: W / 2, y: H - 170, vx: 0, vy: 0, angle: -Math.PI / 2, inv: 0 });
       Object.assign(state, {
         running: false,
         won: false,
-        star: 60,
+        star: 8,
         ko: 0,
         time: 0,
+        lastAttackTime: -99,
         combo: 0,
         broomStep: 0,
         broomTimer: 0,
@@ -418,6 +498,7 @@
         cooldown: { square: 0, triangle: 0, circle: 0 },
         grazePulse: 0
       });
+      Object.assign(boss, { x: W / 2, y: 138, phase: 0, attackCd: 1.1, windup: 0, swingLife: 0, hitDone: false, angle: Math.PI / 2 });
       for (let i = 0; i < 38; i += 1) spawnEnemy(i);
       for (let i = 0; i < 34; i += 1) {
         enemies.push({
@@ -426,40 +507,48 @@
           r: i % 7 === 0 ? 18 : 13,
           hp: i % 7 === 0 ? 30 : 12,
           speed: i % 7 === 0 ? 50 : 70,
-          type: i % 7 === 0 ? "elite" : i % 5 === 0 ? "shot" : "mob",
+          type: i % 7 === 0 ? "elite" : "mob",
           phase: rand(i + 260) * Math.PI * 2,
-          shot: rand(i + 280) * 1.6
+          attackCd: 0.7 + rand(i + 280) * 1.4,
+          windup: 0,
+          swingLife: 0,
+          hitDone: false,
+          angle: -Math.PI / 2
         });
       }
       startPanel.classList.remove("hidden");
-      startPanel.querySelector("h1").textContent = "弾幕で戦場を塗り替えろ";
-      startPanel.querySelector("p").textContent = "箒で叩いて星くず印を付け、スペルカードで起爆する。敵群を整えてから弾幕ごと崩せ。";
+      startPanel.querySelector("h1").textContent = "箒とスペルで押し切れ";
+      startPanel.querySelector("p").textContent = "通常攻撃で星力を戻し、短い回復待ちを挟みながらスペルカードを回す。敵は近づいて武器を振ってくる。";
     }
 
     function endGame(won) {
       state.running = false;
       state.won = won;
       startPanel.classList.remove("hidden");
-      startPanel.querySelector("h1").textContent = won ? "異変の核を撃破" : "弾幕に飲まれた";
+      startPanel.querySelector("h1").textContent = won ? "異変の核を撃破" : "押し切られた";
       startPanel.querySelector("p").textContent = won
-        ? "敵群を陣に引き込み、星弾で戦場を制圧した。次は敵側の弾幕パターンを増やす。"
-        : "グレイズで星力を戻し、陣を切らさず戦場を塗り返せば押し切れる。";
+        ? "箒で距離を作り、星力を切らさずスペルで敵群を崩した。"
+        : "敵の振りを見て一歩外し、星力を戻してからスペルで切り返せば押し切れる。";
     }
 
     function spawnEnemy(i = state.ko + enemies.length) {
       const side = rand(i + state.time * 0.1) > 0.5 ? -1 : 1;
       const lane = rand(i + 4) * H * 0.72 + 120;
       const typeRoll = rand(i + 19);
-      const type = typeRoll > 0.82 ? "elite" : typeRoll > 0.62 ? "shot" : "mob";
+      const type = typeRoll > 0.82 ? "elite" : "mob";
       enemies.push({
         x: side < 0 ? -60 : W + 60,
         y: lane,
         r: type === "elite" ? 18 : 13,
         hp: type === "elite" ? 38 : 16,
-        speed: type === "elite" ? 54 : type === "shot" ? 68 : 82,
+        speed: type === "elite" ? 56 : 82,
         type,
         phase: rand(i + 31) * Math.PI * 2,
-        shot: rand(i + 44) * 1.6
+        attackCd: 0.8 + rand(i + 44) * 1.5,
+        windup: 0,
+        swingLife: 0,
+        hitDone: false,
+        angle: 0
       });
     }
 
@@ -479,22 +568,12 @@
       return Math.atan2(Math.sin(to - from), Math.cos(to - from));
     }
 
-    function markEnemy(enemy, power = 1) {
-      enemy.mark = Math.min(3, (enemy.mark || 0) + power);
-      enemy.markTime = 5.5;
-    }
-
-    function markedEnemies() {
-      return enemies.filter((enemy) => enemy.mark > 0 && enemy.markTime > 0);
-    }
-
     function killEnemy(enemy, color = "#ffe27a") {
       const i = enemies.indexOf(enemy);
       if (i < 0) return;
       enemies.splice(i, 1);
       state.ko += 1;
       state.combo += 1;
-      state.star = Math.min(state.maxStar, state.star + 1.6);
       camera.shake = Math.max(camera.shake, 5);
       spawnSpark(enemy.x, enemy.y, color, enemy.type === "elite" ? 22 : 12, enemy.type === "elite" ? 240 : 165);
       if (enemies.length < 70) spawnEnemy(state.ko + enemies.length + 80);
@@ -515,6 +594,7 @@
     function squareAttack() {
       startGame();
       if (!state.running || state.cooldown.square > 0) return;
+      state.lastAttackTime = state.time;
       state.cooldown.square = 0.16;
       state.broomStep = state.broomTimer > 0 ? (state.broomStep % 3) + 1 : 1;
       state.broomTimer = 0.78;
@@ -531,7 +611,11 @@
         if (dist < range + enemy.r && Math.abs(angleDelta(base, facing)) < width) {
           hits += 1;
           enemy.hp -= 3 + state.broomStep * 2;
-          markEnemy(enemy, 1);
+          if (Math.random() < 0.15) {
+            state.star = Math.min(state.maxStar, state.star + 1);
+            state.grazePulse = 0.18;
+            spawnSpark(enemy.x, enemy.y, "#8df4ff", 5, 120);
+          }
           const push = 34 + state.broomStep * 10;
           enemy.x += Math.cos(base) * push;
           enemy.y += Math.sin(base) * push;
@@ -544,7 +628,6 @@
         const dy = boss.y - player.y;
         if (Math.hypot(dx, dy) < range + boss.r && Math.abs(angleDelta(base, Math.atan2(dy, dx))) < width) damageBoss(2 + state.broomStep, "#ffe27a");
       }
-      state.star = Math.min(state.maxStar, state.star + 1.2 + hits * 0.7);
       camera.shake = Math.max(camera.shake, hits ? 5 : 2);
       showTechnique(`□ 箒連撃 ${state.broomStep}`);
       playTone(300 + state.broomStep * 80, 0.04, "square", 0.02);
@@ -553,43 +636,14 @@
     function triangleAttack() {
       startGame();
       if (!state.running || state.cooldown.triangle > 0) return;
-      if (state.star < 20) {
+      if (state.star < 2) {
         showTechnique("△ 星力不足");
         playTone(120, 0.08, "square", 0.02);
         return;
       }
-      state.star -= 20;
+      state.lastAttackTime = state.time;
+      state.star -= 2;
       state.cooldown.triangle = 0.58;
-      const marked = markedEnemies();
-      if (marked.length) {
-        showTechnique(`△ 星くず起爆 x${marked.length}`);
-        camera.shake = Math.max(camera.shake, 10);
-        for (const enemy of [...marked]) {
-          const mark = enemy.mark || 1;
-          enemy.mark = 0;
-          enemy.markTime = 0;
-          spawnSpark(enemy.x, enemy.y, "#ffe27a", 10 + mark * 5, 170 + mark * 35);
-          fields.push({
-            x: enemy.x,
-            y: enemy.y,
-            r: 28,
-            maxR: 74 + mark * 22,
-            angle: player.angle + mark,
-            spin: mark % 2 ? 1 : -1,
-            pulse: 0,
-            life: 1.05 + mark * 0.18,
-            max: 1.05 + mark * 0.18,
-            damageTick: 0,
-            colorA: "#ffe27a",
-            colorB: "#ff8fc7",
-            burst: mark >= 3
-          });
-          enemy.hp -= 12 + mark * 8;
-          if (enemy.hp <= 0) killEnemy(enemy, "#ffe27a");
-        }
-        playTone(520, 0.12, "sawtooth", 0.04);
-        return;
-      }
       const distance = 180;
       const x = player.x + Math.cos(player.angle) * distance;
       const y = player.y + Math.sin(player.angle) * distance;
@@ -615,12 +669,13 @@
     function circleAttack() {
       startGame();
       if (!state.running || state.cooldown.circle > 0) return;
-      if (state.star < 56) {
+      if (state.star < 6) {
         showTechnique("○ 星力不足");
         playTone(90, 0.09, "square", 0.02);
         return;
       }
-      state.star -= 56;
+      state.lastAttackTime = state.time;
+      state.star -= 6;
       state.cooldown.circle = 1.0;
       showTechnique("○ 星河決壊");
       const base = player.angle;
@@ -658,10 +713,6 @@
       if (navigator.vibrate) navigator.vibrate([20, 30, 70]);
     }
 
-    function fireEnemyShot(x, y, angle, speed = 170) {
-      enemyShots.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r: 5, life: 4, grazed: false });
-    }
-
     function readInput() {
       let x = input.x;
       let y = input.y;
@@ -690,8 +741,6 @@
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const dist = Math.max(0.001, Math.hypot(dx, dy));
-        enemy.markTime = Math.max(0, (enemy.markTime || 0) - dt);
-        if (enemy.markTime <= 0) enemy.mark = 0;
         const avoid = fields.reduce((push, f) => {
           const fx = enemy.x - f.x;
           const fy = enemy.y - f.y;
@@ -702,18 +751,64 @@
           }
           return push;
         }, { x: 0, y: 0 });
-        enemy.x += ((dx / dist) * enemy.speed + avoid.x + Math.sin(state.time * 2 + enemy.phase) * 24) * dt;
-        enemy.y += ((dy / dist) * enemy.speed + avoid.y + Math.cos(state.time * 2.2 + enemy.phase) * 24) * dt;
-
-        enemy.shot -= dt;
-        if ((enemy.type === "shot" || enemy.type === "elite") && enemy.shot <= 0) {
-          enemy.shot = enemy.type === "elite" ? 1.3 : 1.75;
-          fireEnemyShot(enemy.x, enemy.y, Math.atan2(player.y - enemy.y, player.x - enemy.x), enemy.type === "elite" ? 210 : 170);
+        for (const other of enemies) {
+          if (other === enemy) continue;
+          const ox = enemy.x - other.x;
+          const oy = enemy.y - other.y;
+          const od = Math.hypot(ox, oy);
+          const min = enemy.r + other.r + 7;
+          if (od > 0.001 && od < min) {
+            avoid.x += (ox / od) * (min - od) * 9;
+            avoid.y += (oy / od) * (min - od) * 9;
+          }
         }
 
-        if (dist < enemy.r + player.r && player.inv <= 0) {
+        enemy.angle = Math.atan2(dy, dx);
+        enemy.attackCd = Math.max(0, enemy.attackCd - dt);
+        enemy.windup = Math.max(0, enemy.windup - dt);
+        enemy.swingLife = Math.max(0, enemy.swingLife - dt);
+        const attackRange = enemy.type === "elite" ? 82 : 64;
+        if (enemy.windup <= 0 && enemy.swingLife <= 0) {
+          if (dist > attackRange * 0.78) {
+            enemy.x += ((dx / dist) * enemy.speed + avoid.x + Math.sin(state.time * 2 + enemy.phase) * 18) * dt;
+            enemy.y += ((dy / dist) * enemy.speed + avoid.y + Math.cos(state.time * 2.2 + enemy.phase) * 18) * dt;
+          } else if (enemy.attackCd <= 0) {
+            enemy.windup = enemy.type === "elite" ? 0.42 : 0.32;
+            enemy.attackCd = enemy.type === "elite" ? 1.45 : 1.1;
+            enemy.hitDone = false;
+          }
+        }
+
+        if (enemy.windup > 0 && enemy.windup <= dt) {
+          enemy.swingLife = 0.22;
+          enemy.angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+          spawnSpark(enemy.x + Math.cos(enemy.angle) * enemy.r, enemy.y + Math.sin(enemy.angle) * enemy.r, "#ff8fc7", 3, 80);
+        }
+
+        if (enemy.swingLife > 0 && !enemy.hitDone) {
+          const px = player.x - enemy.x;
+          const py = player.y - enemy.y;
+          const pd = Math.hypot(px, py);
+          const facing = Math.atan2(py, px);
+          if (pd < attackRange + player.r && Math.abs(angleDelta(enemy.angle, facing)) < 0.78 && player.inv <= 0) {
+            enemy.hitDone = true;
+            player.inv = 0.82;
+            state.star = Math.max(0, state.star - 1);
+            state.combo = 0;
+            camera.shake = Math.max(camera.shake, 12);
+            spawnSpark(player.x, player.y, "#ff5d69", 18, 260);
+            if (state.star <= 0) endGame(false);
+          }
+        }
+
+        if (dist < enemy.r + player.r - 4) {
+          enemy.x -= (dx / dist) * 70 * dt;
+          enemy.y -= (dy / dist) * 70 * dt;
+        }
+
+        if (dist < enemy.r + player.r - 2 && player.inv <= 0 && enemy.swingLife > 0) {
           player.inv = 0.8;
-          state.star = Math.max(0, state.star - 9);
+          state.star = Math.max(0, state.star - 1);
           state.combo = 0;
           camera.shake = Math.max(camera.shake, 12);
           spawnSpark(player.x, player.y, "#ff5d69", 18, 260);
@@ -725,12 +820,34 @@
     function updateBoss(dt) {
       if (state.bossHp <= 0 || !state.running) return;
       boss.phase += dt;
-      boss.shot -= dt;
-      boss.x = W / 2 + Math.sin(boss.phase * 0.8) * 170;
-      if (boss.shot <= 0) {
-        boss.shot = 1.15;
-        const base = Math.atan2(player.y - boss.y, player.x - boss.x);
-        for (let i = -3; i <= 3; i += 1) fireEnemyShot(boss.x, boss.y, base + i * 0.18, 190);
+      const dx = player.x - boss.x;
+      const dy = player.y - boss.y;
+      const dist = Math.max(0.001, Math.hypot(dx, dy));
+      boss.angle = Math.atan2(dy, dx);
+      boss.attackCd = Math.max(0, boss.attackCd - dt);
+      boss.windup = Math.max(0, boss.windup - dt);
+      boss.swingLife = Math.max(0, boss.swingLife - dt);
+      if (boss.windup <= 0 && boss.swingLife <= 0) {
+        if (dist > 148) {
+          boss.x += (dx / dist) * 54 * dt;
+          boss.y += (dy / dist) * 54 * dt;
+        } else if (boss.attackCd <= 0) {
+          boss.windup = 0.5;
+          boss.attackCd = 1.65;
+          boss.hitDone = false;
+        }
+      }
+      if (boss.windup > 0 && boss.windup <= dt) {
+        boss.swingLife = 0.28;
+        boss.angle = Math.atan2(player.y - boss.y, player.x - boss.x);
+      }
+      if (boss.swingLife > 0 && !boss.hitDone && dist < 132 + player.r && Math.abs(angleDelta(boss.angle, Math.atan2(dy, dx))) < 0.9 && player.inv <= 0) {
+        boss.hitDone = true;
+        player.inv = 1.0;
+        state.star = Math.max(0, state.star - 2);
+        camera.shake = Math.max(camera.shake, 16);
+        spawnSpark(player.x, player.y, "#ff5d69", 28, 320);
+        if (state.star <= 0) endGame(false);
       }
     }
 
@@ -783,32 +900,6 @@
       }
     }
 
-    function updateEnemyShots(dt) {
-      for (let i = enemyShots.length - 1; i >= 0; i -= 1) {
-        const s = enemyShots[i];
-        s.x += s.vx * dt;
-        s.y += s.vy * dt;
-        s.life -= dt;
-        const d = Math.hypot(player.x - s.x, player.y - s.y);
-        if (!s.grazed && d < 44 && d > player.r + s.r) {
-          s.grazed = true;
-          state.star = Math.min(state.maxStar, state.star + 4.2);
-          state.grazePulse = 0.28;
-          showTechnique("Graze +星力");
-          playTone(680, 0.035, "triangle", 0.018);
-        }
-        if (d < player.r + s.r && player.inv <= 0) {
-          player.inv = 0.9;
-          state.star = Math.max(0, state.star - 12);
-          camera.shake = Math.max(camera.shake, 12);
-          spawnSpark(player.x, player.y, "#ff5d69", 18, 260);
-          s.life = 0;
-          if (state.star <= 0) endGame(false);
-        }
-        if (s.life <= 0 || s.x < -140 || s.x > W + 140 || s.y < -140 || s.y > H + 140) enemyShots.splice(i, 1);
-      }
-    }
-
     function updateSparks(dt) {
       for (let i = sparks.length - 1; i >= 0; i -= 1) {
         const p = sparks[i];
@@ -839,6 +930,10 @@
         if (state.broomTimer <= 0) state.broomStep = 0;
         state.techniqueTimer = Math.max(0, state.techniqueTimer - dt);
         state.grazePulse = Math.max(0, state.grazePulse - dt);
+        if (state.time - state.lastAttackTime > 2.4 && state.star < state.maxStar) {
+          state.star = Math.min(state.maxStar, state.star + (state.maxStar / 3) * dt);
+          state.grazePulse = Math.max(state.grazePulse, 0.06);
+        }
         techniqueEl.classList.toggle("hidden", state.techniqueTimer <= 0);
         updatePlayer(dt);
         updateEnemies(dt);
@@ -848,12 +943,13 @@
       updateBullets(dt);
       updateFields(dt);
       updateSlashes(dt);
-      updateEnemyShots(dt);
       updateSparks(dt);
       camera.shake = Math.max(0, camera.shake - dt * 32);
       camera.x += (player.x - camera.x) * (1 - Math.pow(0.002, dt));
       camera.y += (player.y - camera.y) * (1 - Math.pow(0.002, dt));
-      starEl.textContent = `星力 ${Math.floor(state.star)}`;
+      const shownStar = Math.max(0, Math.min(state.maxStar, state.star));
+      starValueEl.textContent = `${Math.floor(shownStar)}/${state.maxStar}`;
+      starFillEl.style.transform = `scaleX(${shownStar / state.maxStar})`;
       koEl.textContent = `KO ${state.ko}`;
       bossEl.textContent = `異変 ${Math.ceil((state.bossHp / state.bossMaxHp) * 100)}%`;
     }
@@ -996,31 +1092,55 @@
         ctx.stroke();
         drawStar(b.x, b.y - 4, 16, "#ffe27a", state.time);
         ctx.restore();
+        if (boss.windup > 0 || boss.swingLife > 0) {
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(boss.angle);
+          ctx.globalAlpha = boss.swingLife > 0 ? 0.85 : 0.28;
+          ctx.strokeStyle = boss.swingLife > 0 ? "#ff5d69" : "#ffe27a";
+          ctx.lineWidth = boss.swingLife > 0 ? 16 : 8;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.arc(0, 0, 128, -0.85, 0.85);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
 
       for (const enemy of enemies) {
         const p = worldToScreen(enemy.x, enemy.y);
-        ctx.fillStyle = enemy.type === "elite" ? "#673149" : enemy.type === "shot" ? "#2e4c65" : "#202833";
+        ctx.save();
+        ctx.fillStyle = enemy.type === "elite" ? "#673149" : "#202833";
         ctx.beginPath();
         ctx.arc(p.x, p.y, enemy.r, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = enemy.type === "elite" ? "#ff8fc7" : "rgba(141, 244, 255, 0.55)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
         ctx.fillStyle = "#ff8fc7";
         ctx.beginPath();
         ctx.arc(p.x + enemy.r * 0.24, p.y - enemy.r * 0.2, enemy.r * 0.35, 0, Math.PI * 2);
         ctx.fill();
-        if (enemy.mark > 0 && enemy.markTime > 0) {
-          ctx.save();
-          ctx.globalAlpha = Math.min(1, 0.42 + enemy.mark * 0.18);
-          ctx.strokeStyle = "#ffe27a";
-          ctx.lineWidth = 2;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(enemy.angle);
+        if (enemy.windup > 0 || enemy.swingLife > 0) {
+          ctx.globalAlpha = enemy.swingLife > 0 ? 0.78 : 0.24;
+          ctx.strokeStyle = enemy.swingLife > 0 ? "#ff5d69" : "#ffe27a";
+          ctx.lineWidth = enemy.type === "elite" ? 10 : 7;
+          ctx.lineCap = "round";
           ctx.beginPath();
-          ctx.arc(p.x, p.y, enemy.r + 8 + enemy.mark * 3 + Math.sin(state.time * 9) * 2, 0, Math.PI * 2);
+          ctx.arc(0, 0, enemy.type === "elite" ? 78 : 61, -0.72, 0.72);
           ctx.stroke();
-          for (let i = 0; i < enemy.mark; i += 1) {
-            drawStar(p.x - 10 + i * 10, p.y - enemy.r - 11, 5, "#ffe27a", state.time * 5 + i);
-          }
-          ctx.restore();
+        } else {
+          ctx.globalAlpha = 0.82;
+          ctx.strokeStyle = "#dfe8ff";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(enemy.r * 0.35, -enemy.r * 0.55);
+          ctx.lineTo(enemy.r + 13, -enemy.r * 0.25);
+          ctx.stroke();
         }
+        ctx.restore();
       }
 
       const p = worldToScreen(player.x, player.y);
@@ -1050,13 +1170,6 @@
         drawStar(p.x, p.y, b.size, b.color, state.time * 10);
       }
       ctx.globalAlpha = 1;
-      for (const s of enemyShots) {
-        const p = worldToScreen(s.x, s.y);
-        ctx.fillStyle = s.grazed ? "#ffcfeb" : "#ff5d69";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, s.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
     }
 
     function drawSparks() {
