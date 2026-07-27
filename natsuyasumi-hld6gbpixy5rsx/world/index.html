@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>幻想郷のなつやすみ — 世界のかたち</title>
 <style>
@@ -11,8 +11,13 @@
   body {
     background:#0b120d; display:flex; justify-content:center; align-items:center;
     font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; overflow:hidden;
+    overscroll-behavior:none; -webkit-user-select:none; user-select:none;
+    -webkit-tap-highlight-color:transparent;
   }
-  #gameCanvas { display:block; image-rendering:pixelated; box-shadow:0 0 40px rgba(0,0,0,0.6); }
+  #gameCanvas {
+    display:block; image-rendering:pixelated; box-shadow:0 0 40px rgba(0,0,0,0.6);
+    touch-action:none;
+  }
 </style>
 </head>
 <body>
@@ -38,8 +43,12 @@ const W = 960, H = 540;
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = W; canvas.height = H;
+let isPortrait = false;
 function resize() {
-  const raw = Math.min(window.innerWidth/W, window.innerHeight/H);
+  const vw = window.innerWidth, vh = window.innerHeight;
+  isPortrait = vh > vw;
+  const raw = Math.min(vw/W, vh/H);
+  // 縮小するときは目一杯、拡大は整数倍だけ（ドットをにじませない）
   const s = raw >= 2 ? 2 : (raw >= 1 ? 1 : raw);
   canvas.style.width = (W*s)+'px'; canvas.style.height = (H*s)+'px';
 }
@@ -650,13 +659,58 @@ window.addEventListener('keydown',e=>{
   if(e.code==='KeyB'&&state==='play'){ basketReturn='play'; state='basket'; }
 });
 window.addEventListener('keyup',e=>{keys[e.code]=false;});
-window.addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
+window.addEventListener('blur',()=>{for(const k in keys)keys[k]=false;stick.on=false;});
+
+// ===== タッチ（スマホ）=====
+// ドラッグ＝あるく（大きく倒すと はしる）／タップ＝あみ／右上のかごボタン
+let usingTouch=false;
+const stick={on:false,id:null,ox:0,oy:0,x:0,y:0,moved:false,t0:0};
+const KAGO={x:W-46,y:46,r:30};
+function toCanvas(t){
+  const r=canvas.getBoundingClientRect();
+  return { x:(t.clientX-r.left)/r.width*W, y:(t.clientY-r.top)/r.height*H };
+}
+function tapAction(p){
+  if(state==='title'){ startDay(); return; }
+  if(state==='caught'){ state='play'; caughtView=null; return; }
+  if(state==='basket'){ state=basketReturn; return; }
+  if(state==='play'&&!trans){
+    if(p && dist(p.x,p.y,KAGO.x,KAGO.y)<KAGO.r+8){ basketReturn='play'; state='basket'; return; }
+    if(talkBox){ talkBox=null; } else swing();
+  }
+}
+canvas.addEventListener('touchstart',e=>{
+  e.preventDefault(); usingTouch=true; initAudio();
+  const t=e.changedTouches[0], p=toCanvas(t);
+  if(!stick.on){
+    stick.on=true; stick.id=t.identifier;
+    stick.ox=p.x; stick.oy=p.y; stick.x=p.x; stick.y=p.y;
+    stick.moved=false; stick.t0=performance.now();
+  }
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier!==stick.id) continue;
+    const p=toCanvas(t); stick.x=p.x; stick.y=p.y;
+    if(dist(p.x,p.y,stick.ox,stick.oy)>14) stick.moved=true;
+  }
+},{passive:false});
+function endTouch(e){
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier!==stick.id) continue;
+    const held=performance.now()-stick.t0;
+    if(!stick.moved && held<400) tapAction({x:stick.ox,y:stick.oy});
+    stick.on=false; stick.id=null;
+  }
+}
+canvas.addEventListener('touchend',endTouch,{passive:false});
+canvas.addEventListener('touchcancel',endTouch,{passive:false});
 canvas.addEventListener('mousedown',e=>{
+  if(usingTouch) return;
   e.preventDefault(); initAudio();
-  if(state==='title') startDay();
-  else if(state==='caught'){state='play';caughtView=null;}
-  else if(state==='basket') state=basketReturn;
-  else if(state==='play'&&!trans){ if(talkBox) talkBox=null; else swing(); }
+  tapAction(toCanvas(e));
 });
 
 // ===== 更新 =====
@@ -671,10 +725,15 @@ function update(dt){
 
   if(net.t>=0){ net.t+=dt; if(net.t>0.48) net.t=-1; }
 
-  let ax=0,ay=0;
+  let ax=0,ay=0,tilt=0;
   for(const c in MOVE) if(keys[c]){ax+=MOVE[c][0];ay+=MOVE[c][1];}
-  if(ax||ay){const m=Math.hypot(ax,ay);ax/=m;ay/=m;}
-  player.running=!!(keys.ShiftLeft||keys.ShiftRight);
+  if(ax||ay){const m=Math.hypot(ax,ay);ax/=m;ay/=m;tilt=1;}
+  if(stick.on){
+    const dx=stick.x-stick.ox, dy=stick.y-stick.oy, dd=Math.hypot(dx,dy);
+    if(dd>12){ tilt=Math.min(1,(dd-12)/62); ax=dx/dd; ay=dy/dd; }
+  }
+  // スティックを大きく倒す＝はしる
+  player.running=!!(keys.ShiftLeft||keys.ShiftRight)||(stick.on&&tilt>0.72);
   player.moving=!!(ax||ay);
   const SPD=player.running?216:118;
   const sc=SC[cur], a=sc.area;
@@ -903,6 +962,25 @@ function drawHud(){
     text(placeLabel.txt, 22, 62, 22, '#ffffff');
     ctx.restore();
   }
+  // スマホ：かごボタンとスティック
+  if(usingTouch){
+    ctx.save(); ctx.globalAlpha=0.5;
+    ctx.fillStyle='#1c2418'; ctx.beginPath(); ctx.arc(KAGO.x,KAGO.y,KAGO.r,0,7); ctx.fill();
+    ctx.strokeStyle='rgba(255,238,190,0.7)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(KAGO.x,KAGO.y,KAGO.r,0,7); ctx.stroke();
+    ctx.restore();
+    text('かご',KAGO.x,KAGO.y+5,14,'#ffffff','center');
+    if(stick.on){
+      ctx.save(); ctx.globalAlpha=0.3;
+      ctx.strokeStyle='#fff'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(stick.ox,stick.oy,62,0,7); ctx.stroke();
+      let dx=stick.x-stick.ox,dy=stick.y-stick.oy; const dd=Math.hypot(dx,dy)||1;
+      const m=Math.min(62,dd);
+      ctx.globalAlpha=0.5; ctx.fillStyle='#fff';
+      ctx.beginPath(); ctx.arc(stick.ox+dx/dd*m,stick.oy+dy/dd*m,22,0,7); ctx.fill();
+      ctx.restore();
+    }
+  }
   if(talkBox){
     const bx=180, by=H-118, bw=600, bh=76;
     ctx.fillStyle='rgba(20,26,18,0.9)'; rr(bx,by,bw,bh,10); ctx.fill();
@@ -1026,6 +1104,10 @@ function drawTitle(){
   line('Z で 網。B で 虫かご。');
   line('家の 中から 出て、庭・道・川・林・神社へ。');
   line('点数も ゲージも ない。歩いて 見るだけ。','#1f6a52');
+  if(usingTouch||isPortrait){
+    y+=2; line('スマホ：ドラッグで あるく（大きく倒すと はしる）','#8a4a20');
+    line('　　　　タップで あみ。右上の かご ボタン。','#8a4a20');
+  }
   const bp=Math.sin(elapsed*3)*3;
   ctx.fillStyle='#e8604f'; rr(66,392+bp,268,56,28); ctx.fill();
   ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=3; rr(66,392+bp,268,56,28); ctx.stroke();
@@ -1049,6 +1131,11 @@ function loop(now){
   }
   else if(state==='caught') drawCaught(dt);
   else if(state==='basket') drawBasket();
+  if(isPortrait && window.innerWidth < 900){
+    ctx.fillStyle='rgba(8,12,9,0.86)'; ctx.fillRect(0,0,W,H);
+    text('よこ向きに してね',W/2,H/2-16,30,'#ffffff','center');
+    text('横画面のほうが 広く 見えます',W/2,H/2+18,16,'#cfe8b8','center');
+  }
   requestAnimationFrame(loop);
 }
 load(); requestAnimationFrame(loop);
