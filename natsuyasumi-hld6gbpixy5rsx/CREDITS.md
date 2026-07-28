@@ -17,6 +17,19 @@
 - 無料サンプル版から必要なタイルだけを切り出し、独自アトラスに再構成して使用
 - 素材そのものの再配布は不可のため、ゲームの一部としてのみ同梱
 
+## 背景写真（`photo/` 版）
+
+実写の背景は Wikimedia Commons から、**CC0 / パブリックドメイン / CC BY** のものだけを選んでいます。
+**CC BY-SA は継承義務があるため採用していません。**
+いずれも 960x540 にトリミングし、色調整・ブルーム・ぼかしを加えています。
+
+| ファイル | 元画像 | ライセンス | 撮影者 |
+|---|---|---|---|
+| `photo/bg/azemichi.jpg` | [Path(あぜ道) - panoramio.jpg](https://commons.wikimedia.org/wiki/File:Path(%E3%81%82%E3%81%9C%E9%81%93)_-_panoramio.jpg) | **CC BY 3.0**（表示必須） | **Fumihiko Ueno** |
+| `photo/bg/michi.jpg` | [Tōzaki Shrine 20210411 01.jpg](https://commons.wikimedia.org/wiki/File:T%C5%8Dzaki_Shrine_20210411_01.jpg) | **CC0** | 先従隗始 |
+
+CC BY のものは**撮影者名の表示が必須**なので、写真を差し替えたときはこの表を必ず更新すること。
+
 ## 原作
 
 **東方Project** (C) 上海アリス幻樂団 / ZUN
