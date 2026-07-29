@@ -340,6 +340,38 @@ function morningScript(d) {
   return [...head, ...wake, ...niwa, ...before, ...taiso,
           ...gohan, ...table, ...dekake, { k:'free' }];
 }
+// 日がくれると けーねが むかえに来る。いま居る場所に 歩いて入ってきて、
+// いっしょに ざしきへ かえる。どこに居ても なりたつように その場で組み立てる
+function mukaeScript() {
+  const sc = SC[cur], home = (cur === 'zashiki');
+  const from = nearestFree(clamp(player.x - 175, 30, W-30),
+                           Math.min(sc.yBot - 6, player.y + 42));
+  const to   = nearestFree(clamp(player.x - 80, 30, W-30), player.y + 6);
+  const q = [
+    { k:'cast', list:[['keine', from.x, from.y]] },
+    { k:'move', list:[['keine', to.x, to.y]], s:3.4 },
+    { k:'say', who:'keine', text: home ? 'ここに いたのか' : 'こんなところに いたのか' },
+    { k:'say', who:'keine', text:'もう くらいよ。かえろう' },
+    { k:'say', who:'cirno', text:'……もう ちょっとだけ' },
+    { k:'say', who:'keine', text:'あしたも あるだろう' },
+    { k:'say', who:'cirno', text:'……はぁい' },
+  ];
+  if (!home) {
+    q.push({ k:'move', list:[['keine', from.x, from.y, 1]], s:3.4 });
+    q.push({ k:'walk', x:from.x, y:from.y });
+  }
+  q.push({ k:'to', sc:'zashiki', at:'mae' });
+  q.push({ k:'cast', list:[['keine', 420, 496]] });
+  q.push({ k:'put', x:290, y:492 });
+  q.push({ k:'wait', s:0.7 });
+  q.push({ k:'say', who:'keine', text:'ふとん、しいてあるよ' });
+  q.push({ k:'say', who:'cirno', text:'……うん' });
+  q.push({ k:'say', who:'keine', text:'おやすみ' });
+  q.push({ k:'move', list:[['keine', 566, 538, 1]], s:3.2 });
+  q.push({ k:'wait', s:0.6 });
+  q.push({ k:'free' });
+  return q;
+}
 const NIGHT = [
   { k:'say', who:'cirno', text:'……ねむい。ねよ' },
   { k:'card', text:'よる', s:2.0 },
@@ -545,7 +577,7 @@ let veil = 0;              // 場面の切りかわりの 黒い幕
 let talkLock = false;      // 場面が おわった直後に かってに 会話が はじまらないように
 let nedokoT = 0, nedokoArmed = false;
 // 時計は出さない。画面を移るたびに 時間がすすみ、空気の色と 虫の声で わかるようにする
-let steps = 0;
+let steps = 0, mukaeDone = false;
 const DAY_STEPS = 24;
 const dayT = () => clamp(steps / DAY_STEPS, 0, 1);
 
@@ -588,7 +620,7 @@ function resetDay() {
   for (const k in SC) for (const n of (SC[k].npc || [])) {
     n.idx = 0; n.done = !linesOf(n);
   }
-  talkNpc = null; nedokoT = 0; nedokoArmed = false; steps = 0;
+  talkNpc = null; nedokoT = 0; nedokoArmed = false; steps = 0; mukaeDone = false;
 }
 function runScene(q) {
   scene = { q, i:0, t:0, entered:-1, flags:{} };
@@ -877,6 +909,13 @@ function loop(now) {
     fade = Math.max(0, fade - dt*1.4);
   }
 
+  // --- 日がくれたら けーねが むかえに来る。はなしの とちゅうでは 割りこまない
+  if (!inScene && !fadeTo && !mukaeDone && !talkNpc && steps >= DAY_STEPS) {
+    mukaeDone = true;
+    runScene(mukaeScript());
+    state = 'scene';
+  }
+
   // --- ふとんで じっとしていたら 1にちが おわる
   if (!inScene && !fadeTo && sc.nedoko) {
     const inBed = dist(player.x, player.y, sc.nedoko.x, sc.nedoko.y) < sc.nedoko.r;
@@ -1114,9 +1153,11 @@ if (qs.has('record') || EDIT) {
     npcState: () => (SC[cur].npc||[]).map(n => ({ idx:n.idx||0, done:!!n.done,
                                                   n:(linesOf(n)||[]).length })),
     R: TALK_R,
-    steps: () => ({ steps, dayT:+dayT().toFixed(2) }),
+    steps: () => ({ steps, dayT:+dayT().toFixed(2), mukae:mukaeDone }),
     setSteps: n => { steps = n; },
-    dbg: () => ({ state, cur, day, steps, x:Math.round(player.x), y:Math.round(player.y),
+    setMukae: v => { mukaeDone = !!v; },
+    dbg: () => ({ state, cur, day, steps, mukae:mukaeDone,
+                  x:Math.round(player.x), y:Math.round(player.y),
                   h:Math.round(heightAt(player.y)), on:walkable(player.x, player.y),
                   lock:exitLock, talking:!!talkNpc, scene:!!scene }),
   };
