@@ -52,14 +52,15 @@ const SC = {
     name: 'あぜみち',
     src: 'bg/azemichi.jpg',
     walk: [
-      [[452,192],[494,192],[558,250],[640,322],[706,402],[756,472],[800,545],
-       [236,545],[274,472],[316,402],[360,322],[408,250]]
+      [[452,192],[494,192],[558,250],[640,322],[706,402],[756,472],[800,541],
+       [236,541],[274,472],[316,402],[360,322],[408,250]]
     ],
     yTop:192, yBot:540, hFar:34, hNear:132,
     haze: '#eaf1e2',
     start: { far:[473,214], near:[500,505] },
     exits: [
-      { x0:436, x1:512, y0:186, y1:222, to:'michi', at:'near' },   // 奥へ
+      // 道のいちばん奥。はしまで歩いたら次の場所へ（幅は道の奥はばより広くとる）
+      { x0:400, x1:560, y0:180, y1:228, to:'michi', at:'near' },
     ],
     amb: 'ki',    // 木のざわめき・セミ多め
   },
@@ -67,16 +68,16 @@ const SC = {
     name: 'むらのみち',
     src: 'bg/michi.jpg',
     walk: [
-      [[496,206],[528,206],[572,246],[604,302],[644,362],[672,422],[690,482],[700,545],
-       [100,545],[160,482],[215,422],[276,362],[346,302],[430,246]],
+      [[496,206],[528,206],[572,246],[604,302],[644,362],[672,422],[690,482],[700,541],
+       [100,541],[160,482],[215,422],[276,362],[346,302],[430,246]],
       // 祠の前の白い砂利。とくに用のない場所
-      [[620,352],[940,336],[956,470],[956,545],[702,545],[664,440]]
+      [[620,352],[940,336],[956,470],[956,541],[702,541],[664,440]]
     ],
     yTop:206, yBot:540, hFar:30, hNear:136,
     haze: '#dfe9f2',
     start: { far:[512,228], near:[400,500] },
     exits: [
-      { x0:480, x1:548, y0:200, y1:236, to:'aze', at:'near' },
+      { x0:440, x1:590, y0:194, y1:242, to:'aze', at:'near' },
     ],
     amb: 'mura',  // 開けた場所。風と とおくのセミ
   },
@@ -310,16 +311,36 @@ function loop(now) {
   player.running = !!(keys.ShiftLeft || keys.ShiftRight) || (stick.on && tilt > 0.72);
   player.moving = (ax !== 0 || ay !== 0);
 
+  // 万一 道の外に出ていたら 引き戻す（外に出たまま自由に動けると 写真の外まで歩けてしまう）
+  if (!fadeTo && !walkable(player.x, player.y)) {
+    const f = nearestFree(player.x, player.y);
+    player.x = f.x; player.y = f.y;
+  }
+
   if (player.moving) {
     // 奥にいるほど 画面のうえでは ゆっくり動く（遠近に合わせる）
-    const depth = Math.max(0.34, heightAt(player.y) / sc.hNear);
+    const depth = Math.max(0.45, heightAt(player.y) / sc.hNear);
     const spd = (player.running ? 300 : 172) * depth * (stick.on ? Math.max(0.35, tilt) : 1);
-    const nx = player.x + ax*spd*dt, ny = player.y + ay*spd*dt;
-    const stuck = !walkable(player.x, player.y);
-    if (stuck || walkable(nx, player.y)) player.x = nx;
-    if (stuck || walkable(player.x, ny)) player.y = ny;
-    player.x = clamp(player.x, 4, W-4);
-    player.y = clamp(player.y, sc.yTop-6, H-2);
+    const step = spd*dt;
+    const nx = player.x + ax*step, ny = player.y + ay*step;
+    let movedX = false, movedY = false;
+    if (ax !== 0 && walkable(nx, player.y)) { player.x = nx; movedX = true; }
+    if (ay !== 0 && walkable(player.x, ny)) { player.y = ny; movedY = true; }
+    // 壁ぞいにすべる。道は奥ですぼまるので、これがないと まっすぐ奥へ押すだけで引っかかる。
+    // ずらせる量は道のふちの傾きより大きくないと ふちに沿えずに止まってしまう
+    const slide = Math.max(4, step * 2.6);
+    if (ay !== 0 && !movedY) {
+      for (let k = 1; k <= slide; k += 0.5) {
+        if (walkable(player.x - k, ny)) { player.x -= k; player.y = ny; break; }
+        if (walkable(player.x + k, ny)) { player.x += k; player.y = ny; break; }
+      }
+    }
+    if (ax !== 0 && !movedX) {
+      for (let k = 1; k <= slide; k += 0.5) {
+        if (walkable(nx, player.y - k)) { player.y -= k; player.x = nx; break; }
+        if (walkable(nx, player.y + k)) { player.y += k; player.x = nx; break; }
+      }
+    }
     if (ax > 0.2) player.face = 1; else if (ax < -0.2) player.face = -1;
     player.bob += dt * (player.running ? 15 : 9);
   } else {
