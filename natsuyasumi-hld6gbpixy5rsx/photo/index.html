@@ -46,35 +46,54 @@ const CI = { cirno:2, dai:3, rumia:4, wriggle:5, mystia:6, keine:7, reimu:0, mar
 const NAME = { cirno:'チルノ', dai:'だいようせい', rumia:'ルーミア', wriggle:'リグル',
                mystia:'ミスティア', keine:'けーね', reimu:'れいむ', marisa:'まりさ' };
 const imgChars = new Image();
+const KANSUJI = ['','一','二','三','四','五','六','七','八','九','十'];
+function hiduke(n) {
+  if (n <= 10) return KANSUJI[n];
+  if (n < 20) return '十' + KANSUJI[n-10];
+  if (n === 20) return '二十';
+  if (n < 30) return '二十' + KANSUJI[n-20];
+  return n === 30 ? '三十' : '三十一';
+}
 
 // ===== 画面 =====
 // walk  … 歩ける範囲。写真の中の道や床をなぞった多角形（複数可）
 // solid … その中でも入れないところ（いろり・あんどん など）。楕円 [x,y,rx,ry]
 // yTop/yBot と hFar/hNear … 奥行き。足元のy座標で背の高さを決める
-// npc   … その場に居るキャラと、そこで交わされる会話
+// npc   … その場に居るキャラと、日ごとの会話
 const SC = {
   zashiki: {
     name:'ざしき', src:'bg/zashiki.jpg', amb:'in', haze:'#efe6d2',
     walk: [[[0,372],[130,352],[300,338],[470,330],[620,318],[780,326],[900,344],[960,360],[960,541],[0,541]]],
     yTop:318, yBot:540, hFar:54, hNear:132,
-    start: { mae:[430,500], doma:[870,420] },
+    start: { mae:[430,500], doma:[870,420], nedoko:[300,466] },
     exits: [
       { x0:0, x1:960, y0:530, y1:545, to:'rouka', at:'temae' },
       { x0:930, x1:960, y0:380, y1:541, to:'doma', at:'zashiki' },
     ],
+    // ふとんの あるところ。ここで じっとしていると 1日が おわる
+    nedoko: { x:186, y:452, r:58 },
     npc: [{
       who: [['dai', 300, 470]],
-      lines: [
-        ['dai',  'ここ、たたみが つめたくて きもちいいの'],
-        ['cirno','あたいのほうが つめたいけどね'],
-        ['dai',  'でも チルノちゃんの となりは あついよ'],
-        ['cirno','そんなこと ないもん'],
-        ['dai',  'ねえ。この いえの ひと、どこに いっちゃったのかな'],
-        ['cirno','しらない。ずっと いないよ'],
-        ['dai',  'でも おちゃわん、ふせて あったよ'],
-        ['cirno','……かえって くるのかな'],
-        ['dai',  'かえって くるよ。きっと'],
-      ],
+      days: {
+        1: [
+          ['dai',  'ここ、たたみが つめたくて きもちいいの'],
+          ['cirno','あたいのほうが つめたいけどね'],
+          ['dai',  'でも チルノちゃんの となりは あついよ'],
+          ['cirno','そんなこと ないもん'],
+          ['dai',  'ねえ。この いえの ひと、どこに いっちゃったのかな'],
+          ['cirno','しらない。ずっと いないよ'],
+          ['dai',  'でも おちゃわん、ふせて あったよ'],
+          ['cirno','……かえって くるのかな'],
+          ['dai',  'かえって くるよ。きっと'],
+        ],
+        2: [
+          ['dai',  'きのう、ここで ねちゃったの'],
+          ['cirno','かぜ ひくよ'],
+          ['dai',  'ようせいは かぜ ひかないの'],
+          ['cirno','……あたいも？'],
+          ['dai',  'チルノちゃんは ひきそう'],
+        ],
+      },
     }],
   },
   doma: {
@@ -82,26 +101,35 @@ const SC = {
     walk: [[[100,392],[560,368],[960,382],[960,541],[100,541]]],
     solid: [[735,468,148,48], [335,418,54,20]],   // いろり／あんどん
     yTop:366, yBot:540, hFar:60, hNear:130,
-    start: { zashiki:[170,470] },
+    start: { zashiki:[170,470], asa:[450,505] },
     exits: [ { x0:0, x1:135, y0:380, y1:541, to:'zashiki', at:'doma' } ],
     npc: [{
-      who: [['keine', 470, 480]],
-      lines: [
-        ['keine','この いろりはね、まいにち ひを たさないと きえてしまうんだ'],
-        ['cirno','だれが たしてたの？'],
-        ['keine','さあ。でも すみが まだ あたたかい'],
-        ['cirno','だれか いるって こと？'],
-        ['keine','いるか、さっきまで いたか。どちらでも おなじことだよ'],
-        ['cirno','ぜんぜん おなじじゃないよ！'],
-        ['keine','……そうだね。おなじじゃ ないな'],
-      ],
+      // いろりの手前がわ。奥に置くと まわりが いろり（solid）で、近づける場所が なくなる
+      who: [['keine', 560, 496]],
+      days: {
+        1: [
+          ['keine','この いろりはね、まいにち ひを たさないと きえてしまうんだ'],
+          ['cirno','だれが たしてたの？'],
+          ['keine','さあ。でも すみが まだ あたたかい'],
+          ['cirno','だれか いるって こと？'],
+          ['keine','いるか、さっきまで いたか。どちらでも おなじことだよ'],
+          ['cirno','ぜんぜん おなじじゃないよ！'],
+          ['keine','……そうだね。おなじじゃ ないな'],
+        ],
+        2: [
+          ['keine','すみを たしておいたよ'],
+          ['cirno','だれのために？'],
+          ['keine','つぎに ここに すわる だれかのために'],
+          ['cirno','あたいかも'],
+          ['keine','そうかもね'],
+        ],
+      },
     }],
   },
   rouka: {
     name:'ろうか', src:'bg/rouka.jpg', amb:'in', haze:'#e6dfcd',
     walk: [[[838,180],[870,180],[900,240],[928,300],[948,380],[958,460],[958,541],[452,541],[566,460],[664,380],[742,300],[800,240]]],
     yTop:180, yBot:540, hFar:30, hNear:140,
-    // oku は 出入り口の四角の外に置く。中に立ったまま だと 鍵が外れず 戻れなくなる
     start: { oku:[850,232], temae:[720,520] },
     exits: [
       { x0:820, x1:900, y0:174, y1:214, to:'iemae', at:'ie' },
@@ -109,17 +137,25 @@ const SC = {
     ],
     npc: [{
       who: [['rumia', 790, 330]],
-      lines: [
-        ['rumia','そーなのかー'],
-        ['cirno','まだ なんにも いってないよ'],
-        ['rumia','いいの。そーなのかー って いいたかっただけ'],
-        ['cirno','へんなの'],
-        ['rumia','ここ、ひかりが まっすぐ はいって こないから すきなの'],
-        ['cirno','くらいのが すき？'],
-        ['rumia','くらいっていうか、ゆうがたが ずっと つづいてる かんじ'],
-        ['cirno','……わかるかも'],
-        ['rumia','そーなのかー'],
-      ],
+      days: {
+        1: [
+          ['rumia','そーなのかー'],
+          ['cirno','まだ なんにも いってないよ'],
+          ['rumia','いいの。そーなのかー って いいたかっただけ'],
+          ['cirno','へんなの'],
+          ['rumia','ここ、ひかりが まっすぐ はいって こないから すきなの'],
+          ['cirno','くらいのが すき？'],
+          ['rumia','くらいっていうか、ゆうがたが ずっと つづいてる かんじ'],
+          ['cirno','……わかるかも'],
+          ['rumia','そーなのかー'],
+        ],
+        2: [
+          ['rumia','きのうの ゆうがた、ここ とおった？'],
+          ['cirno','とおってないよ'],
+          ['rumia','そーなのかー'],
+          ['rumia','じゃあ だれ だったのかな'],
+        ],
+      },
     }],
   },
   iemae: {
@@ -133,17 +169,26 @@ const SC = {
     ],
     npc: [{
       who: [['marisa', 250, 480]],
-      lines: [
-        ['marisa','でけえ やねだよなあ。あれ ぜんぶ くさだぜ'],
-        ['cirno', 'くさ？ かやって いうんだよ'],
-        ['marisa','へえ、しってるのか'],
-        ['cirno', '……きのう だいちゃんに おしえてもらった'],
-        ['marisa','なんだよ それ'],
-        ['marisa','なあ。ここって どこなんだろうな'],
-        ['cirno', 'げんそうきょうじゃ ないの？'],
-        ['marisa','にてるけど、ちがう きがする'],
-        ['marisa','まあ どっちでも いいか。なつやすみだしな'],
-      ],
+      days: {
+        1: [
+          ['marisa','でけえ やねだよなあ。あれ ぜんぶ くさだぜ'],
+          ['cirno', 'くさ？ かやって いうんだよ'],
+          ['marisa','へえ、しってるのか'],
+          ['cirno', '……きのう だいちゃんに おしえてもらった'],
+          ['marisa','なんだよ それ'],
+          ['marisa','なあ。ここって どこなんだろうな'],
+          ['cirno', 'げんそうきょうじゃ ないの？'],
+          ['marisa','にてるけど、ちがう きがする'],
+          ['marisa','まあ どっちでも いいか。なつやすみだしな'],
+        ],
+        2: [
+          ['marisa','やねの くさ、ちょっと はえてるんだ'],
+          ['cirno', 'くさの うえに くさ？'],
+          ['marisa','そうだよ。だれも かってないからな'],
+          ['cirno', '……かる ひとが いないんだ'],
+          ['marisa','まあ、そういうことだ'],
+        ],
+      },
     }],
   },
   aze: {
@@ -158,17 +203,26 @@ const SC = {
     ],
     npc: [{
       who: [['wriggle', 396, 424]],
-      lines: [
-        ['wriggle','しっ。うごかないで'],
-        ['cirno',  'なに？'],
-        ['wriggle','いま、あしもとを とおった'],
-        ['cirno',  '……なにも いなかったよ'],
-        ['wriggle','いたよ。ちいさいのが すごく たくさん'],
-        ['cirno',  'ぜんぜん みえない'],
-        ['wriggle','みえなくても いるんだ。それで じゅうぶんだろ'],
-        ['cirno',  'よく わかんない'],
-        ['wriggle','いつか わかるさ'],
-      ],
+      days: {
+        1: [
+          ['wriggle','しっ。うごかないで'],
+          ['cirno',  'なに？'],
+          ['wriggle','いま、あしもとを とおった'],
+          ['cirno',  '……なにも いなかったよ'],
+          ['wriggle','いたよ。ちいさいのが すごく たくさん'],
+          ['cirno',  'ぜんぜん みえない'],
+          ['wriggle','みえなくても いるんだ。それで じゅうぶんだろ'],
+          ['cirno',  'よく わかんない'],
+          ['wriggle','いつか わかるさ'],
+        ],
+        2: [
+          ['wriggle','よるに ここ きたこと ある？'],
+          ['cirno',  'ないよ'],
+          ['wriggle','ほたるが でる'],
+          ['cirno',  'ほんと？'],
+          ['wriggle','うそは いわない'],
+        ],
+      },
     }],
   },
   mori: {
@@ -180,23 +234,100 @@ const SC = {
     exits: [ { x0:0, x1:960, y0:530, y1:545, to:'aze', at:'oku' } ],
     npc: [{
       who: [['reimu', 372, 402], ['mystia', 486, 386]],
-      lines: [
-        ['reimu', 'ここ、まだ だれか まつってるわね'],
-        ['mystia','だれを？'],
-        ['reimu', 'さあ。なまえは もう かいてない'],
-        ['mystia','なまえが ないのに まだ まつってるの？'],
-        ['reimu', 'まつられてるって そういうものよ'],
-        ['mystia','ふうん'],
-        ['mystia','ねえ、ここで うたっても いい？'],
-        ['reimu', 'だめ。ひとが たおれるでしょ'],
-        ['mystia','たおれるほど じょうずって ことね'],
-        ['reimu', 'ちがう'],
-      ],
+      days: {
+        1: [
+          ['reimu', 'ここ、まだ だれか まつってるわね'],
+          ['mystia','だれを？'],
+          ['reimu', 'さあ。なまえは もう かいてない'],
+          ['mystia','なまえが ないのに まだ まつってるの？'],
+          ['reimu', 'まつられてるって そういうものよ'],
+          ['mystia','ふうん'],
+          ['mystia','ねえ、ここで うたっても いい？'],
+          ['reimu', 'だめ。ひとが たおれるでしょ'],
+          ['mystia','たおれるほど じょうずって ことね'],
+          ['reimu', 'ちがう'],
+        ],
+        2: [
+          ['reimu', 'さいせんばこ、からっぽ'],
+          ['mystia','だれも こないもんね'],
+          ['reimu', 'わたしは きてる'],
+          ['mystia','いれない くせに'],
+          ['reimu', 'もってないもの'],
+        ],
+      },
     }],
   },
 };
 
-// ===== 音（環境音だけ。曲は鳴らさない）=====
+// ===== 朝のながれ =====
+// k:'card' 黒い画面に日づけ／'to' 画面をかえる／'put' 立ち位置／'cast' その場面のキャラ
+// 'say' セリフ（じどうで すすむ）／'walk' じどうで あるく／'taiso' ラジオたいそう／'free' 自由行動へ
+function morningScript(d) {
+  const head = [
+    { k:'card', text:'八月　' + hiduke(d) + '日', s:2.4 },
+    { k:'to', sc:'zashiki', at:'nedoko' },
+    { k:'cast', list:[['dai', 220, 430]] },
+    { k:'wait', s:1.0 },
+  ];
+  const wake = d === 1 ? [
+    { k:'say', who:'dai',   text:'チルノちゃん。あさだよ' },
+    { k:'say', who:'cirno', text:'……あと ごふん' },
+    { k:'say', who:'dai',   text:'ラジオたいそう はじまっちゃう' },
+    { k:'say', who:'cirno', text:'……いく' },
+  ] : d === 2 ? [
+    { k:'say', who:'dai',   text:'きょうは じぶんで おきたね' },
+    { k:'say', who:'cirno', text:'あたいは やれば できるの' },
+  ] : [
+    { k:'say', who:'dai',   text:'おはよう' },
+    { k:'say', who:'cirno', text:'おはよ' },
+  ];
+  const niwa = [
+    { k:'walk', x:470, y:522 },
+    { k:'to', sc:'iemae', at:'ie' },
+    { k:'cast', list:[['dai', 330, 480], ['marisa', 620, 468], ['wriggle', 770, 486]] },
+    { k:'put', x:470, y:500 },
+    { k:'wait', s:0.8 },
+  ];
+  const before = d === 1
+    ? [{ k:'say', who:'marisa', text:'おそいぜ' }]
+    : [{ k:'say', who:'wriggle', text:'きょうは かぜが ぬるいな' }];
+  const taiso = [
+    { k:'taiso' },
+    ...(d === 1 ? [
+      { k:'say', who:'cirno', text:'……ねむい' },
+      { k:'say', who:'dai',   text:'でも きもち よかったね' },
+    ] : []),
+  ];
+  const gohan = [
+    { k:'to', sc:'doma', at:'asa' },
+    { k:'cast', list:[['keine', 600, 428], ['dai', 890, 470], ['marisa', 700, 532]] },
+    { k:'put', x:450, y:500 },
+    { k:'wait', s:0.9 },
+  ];
+  const table = d === 1 ? [
+    { k:'say', who:'keine', text:'おはよう。ごはんが できているよ' },
+    { k:'say', who:'cirno', text:'いただきます' },
+    { k:'say', who:'keine', text:'きょうは どこへ いくんだい' },
+    { k:'say', who:'marisa',text:'きめてねえ' },
+    { k:'say', who:'keine', text:'きめないで あるくのが いちばん いいよ' },
+    { k:'say', who:'dai',   text:'せんせいが いうと せっとくりょくが あるね' },
+    { k:'say', who:'keine', text:'せんせいじゃ ない'},
+  ] : d === 2 ? [
+    { k:'say', who:'keine', text:'きのう、もりの ほうへ いっただろう' },
+    { k:'say', who:'cirno', text:'なんで わかるの' },
+    { k:'say', who:'keine', text:'くつに すぎの はが ついてる' },
+    { k:'say', who:'marisa',text:'めざといんだよ この ひとは' },
+  ] : [
+    { k:'say', who:'keine', text:'いってらっしゃい' },
+  ];
+  return [...head, ...wake, ...niwa, ...before, ...taiso, ...gohan, ...table, { k:'free' }];
+}
+const NIGHT = [
+  { k:'say', who:'cirno', text:'……ねむい。ねよ' },
+  { k:'card', text:'よる', s:2.0 },
+];
+
+// ===== 音（環境音だけ。曲は 朝の たいそう のときだけ）=====
 let AC = null, ambGain = null, ambTimer = 0;
 function initAudio() {
   if (AC) return;
@@ -230,6 +361,40 @@ function cicada(vol, freq, dur) {
   g.gain.linearRampToValueAtTime(0, t+dur);
   s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t+dur+0.05);
 }
+// ラジオたいそうの曲。原曲は著作権があるので 雰囲気だけ似せた じさくの メロディ。
+// バンドパスと ハイパスを とおして「ラジオから鳴っている」音にする
+const TAISO_BPM = 132;
+const TAISO_MEL = [
+  [0,1],[4,1],[7,1],[4,1],  [5,1],[4,1],[2,2],
+  [0,1],[4,1],[7,1],[12,1], [7,4],
+  [5,1],[7,1],[9,1],[7,1],  [4,1],[2,1],[0,2],
+  [2,1],[4,1],[5,1],[7,1],  [0,4],
+];
+function beep(freq, t0, dur, vol, type, out) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(vol, t0+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  o.connect(g); g.connect(out); o.start(t0); o.stop(t0+dur+0.06);
+}
+function playTaiso() {
+  const e = 60/TAISO_BPM/2;                       // 八分音符の長さ
+  let n = 0; for (const m of TAISO_MEL) n += m[1];
+  if (!AC) return n*e + 0.8;
+  const bp = AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1500; bp.Q.value=0.8;
+  const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=430;
+  const g  = AC.createGain(); g.gain.value = 0.55;
+  bp.connect(hp); hp.connect(g); g.connect(AC.destination);
+  const t0 = AC.currentTime + 0.2;
+  let at = 0;
+  for (const [semi, dur] of TAISO_MEL) {
+    beep(523.25*Math.pow(2, semi/12), t0+at*e, dur*e*0.92, 0.15, 'square', bp);
+    at += dur;
+  }
+  for (let i=0; i<n; i+=2) beep(165, t0+i*e, 0.07, 0.09, 'sine', bp);
+  return n*e + 0.8;
+}
 
 // ===== 入力 =====
 const keys = {};
@@ -239,6 +404,7 @@ window.addEventListener('keydown', e => {
   if (e.code in MOVE || e.code === 'Space' || e.code.startsWith('Shift')) e.preventDefault();
   keys[e.code] = true; initAudio();
   if (state === 'title' && (e.code === 'Space' || e.code === 'Enter')) start();
+  else if (!e.repeat && (e.code === 'Space' || e.code === 'Enter')) advance = true;
   if (EDIT && e.code === 'Backspace') { editPts.pop(); e.preventDefault(); }
   if (EDIT && e.code === 'KeyC') console.log(JSON.stringify(editPts));
 });
@@ -246,7 +412,8 @@ window.addEventListener('keyup', e => { keys[e.code] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; stick.on = false; });
 
 let usingTouch = false;
-const stick = { on:false, id:null, ox:0, oy:0, x:0, y:0 };
+let advance = false;   // セリフを つぎへ送る（スペース／タップ）。おしっぱなしでは 進まない
+const stick = { on:false, id:null, ox:0, oy:0, x:0, y:0, moved:false, t0:0 };
 function toCanvas(t) {
   const r = canvas.getBoundingClientRect();
   return { x:(t.clientX-r.left)/r.width*W, y:(t.clientY-r.top)/r.height*H };
@@ -255,18 +422,24 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault(); usingTouch = true; initAudio();
   const t = e.changedTouches[0], p = toCanvas(t);
   if (state === 'title') { start(); return; }
-  if (!stick.on) { stick.on=true; stick.id=t.identifier; stick.ox=p.x; stick.oy=p.y; stick.x=p.x; stick.y=p.y; }
+  if (!stick.on) { stick.on=true; stick.id=t.identifier; stick.ox=p.x; stick.oy=p.y;
+                   stick.x=p.x; stick.y=p.y; stick.moved=false; stick.t0=performance.now(); }
 }, { passive:false });
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
   for (const t of e.changedTouches) {
     if (t.identifier !== stick.id) continue;
     const p = toCanvas(t); stick.x = p.x; stick.y = p.y;
+    if (Math.hypot(p.x-stick.ox, p.y-stick.oy) > 14) stick.moved = true;
   }
 }, { passive:false });
 function endTouch(e) {
   e.preventDefault();
-  for (const t of e.changedTouches) if (t.identifier === stick.id) { stick.on=false; stick.id=null; }
+  for (const t of e.changedTouches) if (t.identifier === stick.id) {
+    // 指を ちょっと つけただけ＝タップ なら セリフを つぎへ
+    if (!stick.moved && performance.now()-stick.t0 < 400) advance = true;
+    stick.on=false; stick.id=null;
+  }
 }
 canvas.addEventListener('touchend', endTouch, { passive:false });
 canvas.addEventListener('touchcancel', endTouch, { passive:false });
@@ -279,6 +452,7 @@ canvas.addEventListener('mousedown', e => {
   initAudio();
   if (state === 'title') { start(); return; }
   if (EDIT) { const p = toCanvas(e); editPts.push([Math.round(p.x), Math.round(p.y)]); }
+  else advance = true;
 });
 
 // ===== 歩ける範囲 =====
@@ -318,7 +492,6 @@ function heightAt(y) {
   const sc = SC[cur];
   return lerp(sc.hFar, sc.hNear, clamp((y - sc.yTop) / (sc.yBot - sc.yTop), 0, 1));
 }
-
 // 画面のうえの距離ではなく、地面のうえの距離ではかる。
 // 遠近があるので、奥へ10px 動くのと 横へ10px 動くのでは 実際に離れる量がぜんぜんちがう。
 // 見かけの背の高さ h はカメラからの距離に反比例するので
@@ -338,9 +511,42 @@ function groundDist(x1, y1, x2, y2) {
 // ===== 状態 =====
 let state = 'load';
 let cur = 'zashiki';
+let day = 1;
 const player = { x:430, y:500, face:1, bob:0, moving:false, running:false };
 let fade = 0, fadeTo = null, nameT = 0, elapsed = 0, exitLock = false;
 let talkNpc = null, lineT = 0;
+let scene = null;          // {q, i, t, entered}
+let cast = [];             // その場面だけのキャラ
+let sceneSay = null;       // 場面のセリフ [who, text]
+let walkTo = null;         // じどうで あるく先
+let taisoT0 = -99;         // ラジオたいそうを はじめた時こく
+let nedokoT = 0, nedokoArmed = false;
+
+function moveMove(x, y, spd, dt) {   // 目的地へ 一歩ぶん すすむ（壁ぞいにすべる）
+  const dx = x - player.x, dy = y - player.y, d = Math.hypot(dx, dy);
+  if (d < 6) return true;
+  const step = Math.min(spd*dt, d);
+  const nx = player.x + dx/d*step, ny = player.y + dy/d*step;
+  let mx = false, my = false;
+  if (walkable(nx, player.y)) { player.x = nx; mx = true; }
+  if (walkable(player.x, ny)) { player.y = ny; my = true; }
+  const slide = Math.max(4, step*2.6);
+  if (!my && Math.abs(dy) > 0.5) {
+    for (let k=1; k<=slide; k+=0.5) {
+      if (walkable(player.x-k, ny)) { player.x -= k; player.y = ny; break; }
+      if (walkable(player.x+k, ny)) { player.x += k; player.y = ny; break; }
+    }
+  }
+  if (!mx && Math.abs(dx) > 0.5) {
+    for (let k=1; k<=slide; k+=0.5) {
+      if (walkable(nx, player.y-k)) { player.y -= k; player.x = nx; break; }
+      if (walkable(nx, player.y+k)) { player.y += k; player.x = nx; break; }
+    }
+  }
+  if (dx > 1) player.face = 1; else if (dx < -1) player.face = -1;
+  player.bob += dt*9;
+  return false;
+}
 
 function enter(id, at) {
   cur = id;
@@ -350,11 +556,16 @@ function enter(id, at) {
   player.x = f.x; player.y = f.y;
   nameT = 3.2; exitLock = true; talkNpc = null; lineT = 0;
 }
-function start() {
-  state = 'play';
-  enter('zashiki', 'mae');
-  fade = 1;
+function linesOf(n) { return (n.days && n.days[day]) || null; }
+function resetDay() {
+  for (const k in SC) for (const n of (SC[k].npc || [])) {
+    n.idx = 0; n.done = !linesOf(n);
+  }
+  talkNpc = null; nedokoT = 0; nedokoArmed = false;
 }
+function runScene(q) { scene = { q, i:0, t:0, entered:-1 }; sceneSay = null; walkTo = null; }
+function startMorning() { resetDay(); runScene(morningScript(day)); state = 'scene'; }
+function start() { day = 1; startMorning(); fade = 1; }
 
 // ===== 描画 =====
 const tmp = document.createElement('canvas'); tmp.width = 16; tmp.height = 16;
@@ -409,6 +620,51 @@ function hazeOf(y) {
   const far = 1 - clamp((y - sc.yTop) / (sc.yBot - sc.yTop), 0, 1);
   return far*far*0.30;
 }
+function sayBox(who, txt) {
+  const lines = wrap(txt, 19, 660);
+  const bh = 46 + lines.length*27, by = H - bh - 18;
+  ctx.save(); ctx.fillStyle = 'rgba(10,16,12,0.72)'; ctx.fillRect(28, by, W-56, bh); ctx.restore();
+  drawChar(CI[who], 74, by + bh - 12, 56, false, 0);
+  text(NAME[who] || '', 112, by + 26, 14, '#a9c79c');
+  lines.forEach((s, i) => text(s, 112, by + 52 + i*27, 19, '#ffffff'));
+}
+const sayDur = t => 1.9 + t.length * 0.085;
+
+// ===== 朝のながれを すすめる =====
+function stepScene(dt) {
+  const st = scene.q[scene.i];
+  if (!st) { scene = null; state = 'play'; cast = []; return; }
+  if (scene.entered !== scene.i) {
+    scene.entered = scene.i; scene.t = 0;
+    switch (st.k) {
+      case 'to':    enter(st.sc, st.at); fade = 1; break;
+      case 'put':   { const f = nearestFree(st.x, st.y); player.x=f.x; player.y=f.y; break; }
+      case 'cast':  cast = st.list.map(c => ({ k:c[0], x:c[1], y:c[2], ph:(c[1]*0.013+c[2]*0.007) })); break;
+      case 'say':   sceneSay = [st.who, st.text]; break;
+      case 'walk':  walkTo = { x:st.x, y:st.y }; break;
+      case 'taiso': st.s = playTaiso(); taisoT0 = elapsed; break;
+      case 'free':  scene = null; state = 'play'; cast = []; nedokoArmed = false; return;
+    }
+  }
+  scene.t += dt;
+  let done = false;
+  switch (st.k) {
+    case 'card':  done = scene.t >= st.s; break;
+    case 'wait':  done = scene.t >= st.s; break;
+    case 'to':    done = scene.t >= 0.9; break;
+    case 'put':   done = true; break;
+    case 'cast':  done = true; break;
+    case 'say':   done = scene.t >= sayDur(st.text) || (advance && scene.t > 0.3);
+                  if (done) sceneSay = null; break;
+    case 'taiso': done = scene.t >= st.s; break;
+    case 'walk':
+      done = moveMove(walkTo.x, walkTo.y, 150, dt) || scene.t > 6;
+      if (done) walkTo = null;
+      break;
+    default: done = true;
+  }
+  if (done) scene.i++;
+}
 
 // ===== ループ =====
 let last = performance.now();
@@ -424,18 +680,22 @@ function loop(now) {
   if (state === 'title') {
     ctx.drawImage(SC.aze.img, 0, 0, W, H);
     ctx.fillStyle = 'rgba(6,14,8,0.45)'; ctx.fillRect(0,0,W,H);
-    text('なつやすみ', W/2, 206, 46, '#ffffff', 'center');
-    text('しゃしんの なかを あるく', W/2, 246, 18, '#dbead2', 'center');
-    text('やじるし / WASD で あるく　　Shift で はしる', W/2, 348, 16, '#c9dcc0', 'center');
-    text('だれかの そばに いると はなしを してくれる', W/2, 376, 16, '#c9dcc0', 'center');
-    text(usingTouch ? 'がめんを ドラッグ' : 'スペースキー ではじまる', W/2, 410, 16, '#c9dcc0', 'center');
-    text('背景写真: Guilhem Vellut / 663highland / Fumihiko Ueno / 先従隗始',
-         W/2, 500, 12, 'rgba(226,238,220,0.72)', 'center', 'normal');
-    text('（CC BY・CC0 / Wikimedia Commons）　キャラ: Majstek — 非商用',
-         W/2, 518, 12, 'rgba(226,238,220,0.72)', 'center', 'normal');
+    text('なつやすみ', W/2, 200, 46, '#ffffff', 'center');
+    text('しゃしんの なかを あるく', W/2, 240, 18, '#dbead2', 'center');
+    text('やじるし / WASD で あるく　　Shift で はしる', W/2, 340, 16, '#c9dcc0', 'center');
+    text('だれかの そばに いると はなしを してくれる', W/2, 368, 16, '#c9dcc0', 'center');
+    text('スペース / タップ で セリフを つぎへ', W/2, 396, 16, '#c9dcc0', 'center');
+    text('ざしきの ふとんで じっとしていると 1にちが おわる', W/2, 424, 16, '#c9dcc0', 'center');
+    text(usingTouch ? 'がめんを ドラッグ ではじまる' : 'スペースキー ではじまる', W/2, 456, 16, '#c9dcc0', 'center');
+    text('背景写真: Guilhem Vellut / 663highland / Fumihiko Ueno（CC BY・Wikimedia Commons）',
+         W/2, 502, 12, 'rgba(226,238,220,0.72)', 'center', 'normal');
+    text('キャラ: Majstek — 非商用　／　ラジオたいそうの曲は じさく（原曲は使っていません）',
+         W/2, 520, 12, 'rgba(226,238,220,0.72)', 'center', 'normal');
     requestAnimationFrame(loop); return;
   }
 
+  const inScene = (state === 'scene');
+  if (inScene) stepScene(dt);
   const sc = SC[cur];
 
   if (!fadeTo && !walkable(player.x, player.y)) {
@@ -443,9 +703,9 @@ function loop(now) {
     player.x = f.x; player.y = f.y;
   }
 
-  // --- うごく
+  // --- うごく（自由行動のときだけ）
   let ax=0, ay=0, tilt=0;
-  if (!fadeTo) {
+  if (!fadeTo && !inScene) {
     for (const c in MOVE) if (keys[c]) { ax += MOVE[c][0]; ay += MOVE[c][1]; }
     if (ax || ay) { const m = Math.hypot(ax,ay); ax/=m; ay/=m; tilt = 1; }
     if (stick.on) {
@@ -453,10 +713,10 @@ function loop(now) {
       if (dd > 12) { tilt = Math.min(1, (dd-12)/62); ax = dx/dd; ay = dy/dd; }
     }
   }
-  player.running = !!(keys.ShiftLeft || keys.ShiftRight) || (stick.on && tilt > 0.72);
-  player.moving = (ax !== 0 || ay !== 0);
+  player.running = !inScene && (!!(keys.ShiftLeft || keys.ShiftRight) || (stick.on && tilt > 0.72));
+  player.moving = (ax !== 0 || ay !== 0) || !!walkTo;
 
-  if (player.moving) {
+  if (ax !== 0 || ay !== 0) {
     const depth = Math.max(0.45, heightAt(player.y) / sc.hNear);
     const spd = (player.running ? 300 : 172) * depth * (stick.on ? Math.max(0.35, tilt) : 1);
     const step = spd*dt;
@@ -464,7 +724,6 @@ function loop(now) {
     let movedX = false, movedY = false;
     if (ax !== 0 && walkable(nx, player.y)) { player.x = nx; movedX = true; }
     if (ay !== 0 && walkable(player.x, ny)) { player.y = ny; movedY = true; }
-    // 壁ぞいにすべる。道は奥ですぼまるので、これがないと まっすぐ奥へ押すだけで引っかかる
     const slide = Math.max(4, step * 2.6);
     if (ay !== 0 && !movedY) {
       for (let k = 1; k <= slide; k += 0.5) {
@@ -480,14 +739,14 @@ function loop(now) {
     }
     if (ax > 0.2) player.face = 1; else if (ax < -0.2) player.face = -1;
     player.bob += dt * (player.running ? 15 : 9);
-  } else {
+  } else if (!walkTo) {
     player.bob += dt * 1.6;
   }
 
-  // --- 画面のはしへ。入ってすぐ出口の上に立っていても すぐには通さない
+  // --- 画面のはしへ（自由行動のときだけ）
   const onExit = e => player.x > e.x0 && player.x < e.x1 && player.y > e.y0 && player.y < e.y1;
   if (exitLock && !sc.exits.some(onExit)) exitLock = false;
-  if (!fadeTo && !exitLock) {
+  if (!fadeTo && !inScene && !exitLock) {
     for (const e of sc.exits) if (onExit(e)) { fadeTo = e; break; }
   }
   if (fadeTo) {
@@ -498,14 +757,26 @@ function loop(now) {
     fade = Math.max(0, fade - dt*1.4);
   }
 
-  // --- はなし。そばに居るあいだだけ すすむ。ぜんぶ おわったら もう ひらかない
+  // --- ふとんで じっとしていたら 1にちが おわる
+  if (!inScene && !fadeTo && sc.nedoko) {
+    const inBed = dist(player.x, player.y, sc.nedoko.x, sc.nedoko.y) < sc.nedoko.r;
+    if (!inBed) nedokoArmed = true;
+    if (inBed && nedokoArmed && !player.moving) {
+      nedokoT += dt;
+      if (nedokoT > 1.2) {
+        day++;
+        runScene([...NIGHT, ...morningScript(day)]);
+        state = 'scene'; resetDay();
+      }
+    } else nedokoT = 0;
+  }
+
+  // --- はなし。そばに居るあいだ だけ すすむ。ぜんぶ おわったら もう ひらかない
   let near = null;
-  if (!fadeTo) {
+  if (!fadeTo && !inScene) {
     for (const n of (sc.npc || [])) {
       if (n.done) continue;
       for (const w of n.who) {
-        // 「背の高さ 1.6 人ぶん」まで近づいたら はなしができる。
-        // 横に離れても 奥に離れても おなじだけ 会話は終わる
         if (groundDist(player.x, player.y, w[1], w[2]) < TALK_R) { near = n; break; }
       }
       if (near) break;
@@ -513,12 +784,13 @@ function loop(now) {
   }
   if (near !== talkNpc) { talkNpc = near; lineT = 0; }
   if (talkNpc) {
-    const li = talkNpc.lines[talkNpc.idx || 0];
+    const L = linesOf(talkNpc);
+    const li = L[talkNpc.idx || 0];
     lineT += dt;
-    if (lineT >= 1.9 + li[1].length * 0.085) {
+    if (lineT >= sayDur(li[1]) || (advance && lineT > 0.3)) {
       talkNpc.idx = (talkNpc.idx || 0) + 1;
       lineT = 0;
-      if (talkNpc.idx >= talkNpc.lines.length) { talkNpc.done = true; talkNpc = null; }
+      if (talkNpc.idx >= L.length) { talkNpc.done = true; talkNpc = null; }
     }
   }
 
@@ -527,9 +799,9 @@ function loop(now) {
     ambTimer -= dt;
     if (ambTimer <= 0) {
       ambTimer = (sc.amb === 'in' ? 1.6 : 0.7) + Math.random()*1.8;
-      const near2 = sc.amb === 'ki';
-      cicada(near2 ? 0.13 : (sc.amb === 'in' ? 0.035 : 0.06),
-             near2 ? 2300 + Math.random()*900 : 3000 + Math.random()*700,
+      const k = sc.amb === 'ki';
+      cicada(k ? 0.13 : (sc.amb === 'in' ? 0.035 : 0.06),
+             k ? 2300 + Math.random()*900 : 3000 + Math.random()*700,
              0.8 + Math.random()*1.4);
     }
   }
@@ -537,22 +809,30 @@ function loop(now) {
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
 
-  // 手前のものが後に来るように 足元のyで並べる
+  const tb = (elapsed - taisoT0) * (TAISO_BPM/60);     // ラジオたいそうの ひょうし
+  const taisoOn = tb >= 0 && tb < 40;
+  const hop = taisoOn ? Math.abs(Math.sin(tb*Math.PI)) : 0;
+  const nobi = taisoOn && (Math.floor(tb) % 8) >= 4 ? 1 : 0;
+
   const actors = [];
-  for (const n of (sc.npc || [])) for (const w of n.who)
+  if (inScene) for (const c of cast) actors.push({ k:c.k, x:c.x, y:c.y, npc:true, ph:c.ph });
+  else for (const n of (sc.npc || [])) for (const w of n.who)
     actors.push({ k:w[0], x:w[1], y:w[2], npc:true, ph:(w[1]*0.013 + w[2]*0.007) });
   actors.push({ k:'cirno', x:player.x, y:player.y, npc:false });
   actors.sort((a,b) => a.y - b.y);
   for (const a of actors) {
-    const h = heightAt(a.y);
+    let h = heightAt(a.y);
+    if (taisoOn) h *= 1 + 0.10*nobi*hop;
     if (a.npc) {
-      // ふよふよ。妖精なので すこし浮いている
-      const fu = Math.sin(elapsed*1.7 + a.ph*7) * h*0.055 + h*0.06;
+      // ふよふよ。妖精なので すこし浮いている。たいそう中は みんなで はずむ
+      const fu = taisoOn ? h*0.14*hop
+                         : Math.sin(elapsed*1.7 + a.ph*7) * h*0.055 + h*0.06;
       shadow(a.x, a.y, h, 0.65);
       drawChar(CI[a.k], a.x, a.y - fu, h, false, hazeOf(a.y));
     } else {
       shadow(a.x, a.y, h);
-      const bob = player.moving ? Math.abs(Math.sin(player.bob)) * h*0.035
+      const bob = taisoOn ? h*0.14*hop
+                : player.moving ? Math.abs(Math.sin(player.bob)) * h*0.035
                                 : Math.sin(player.bob) * h*0.008;
       drawChar(CI.cirno, a.x, a.y - bob, h, player.face < 0, hazeOf(a.y));
     }
@@ -569,23 +849,27 @@ function loop(now) {
   }
 
   // はなしの まど
-  if (talkNpc) {
-    const li = talkNpc.lines[talkNpc.idx || 0];
-    const lines = wrap(li[1], 19, 660);
-    const bh = 46 + lines.length*27;
-    const by = H - bh - 18;
-    ctx.save();
-    ctx.fillStyle = 'rgba(10,16,12,0.72)';
-    ctx.fillRect(28, by, W-56, bh);
-    ctx.restore();
-    drawChar(CI[li[0]], 74, by + bh - 12, 56, false, 0);
-    text(NAME[li[0]] || '', 112, by + 26, 14, '#a9c79c');
-    lines.forEach((s, i) => text(s, 112, by + 52 + i*27, 19, '#ffffff'));
+  if (inScene && sceneSay) sayBox(sceneSay[0], sceneSay[1]);
+  else if (talkNpc) {
+    const li = linesOf(talkNpc)[talkNpc.idx || 0];
+    sayBox(li[0], li[1]);
   }
 
   if (fade > 0) {
     ctx.fillStyle = 'rgba(250,252,246,' + clamp(fade,0,1) + ')';
     ctx.fillRect(0,0,W,H);
+  }
+
+  // 日づけ／よる の 黒い画面
+  if (inScene) {
+    const st = scene && scene.q[scene.i];
+    if (st && st.k === 'card') {
+      const a = clamp(Math.min(scene.t/0.5, (st.s-scene.t)/0.6), 0, 1);
+      ctx.fillStyle = 'rgba(8,10,9,' + (0.94*Math.min(1, a*1.6)) + ')'; ctx.fillRect(0,0,W,H);
+      ctx.save(); ctx.globalAlpha = a;
+      text(st.text, W/2, H/2 + 10, 40, '#f2f6ee', 'center');
+      ctx.restore();
+    }
   }
 
   // --- ?edit=1 の下書き
@@ -603,7 +887,10 @@ function loop(now) {
     }
     ctx.strokeStyle = 'rgba(90,220,255,0.8)';
     for (const e of sc.exits) ctx.strokeRect(e.x0, e.y0, e.x1-e.x0, e.y1-e.y0);
-    // はなしができる範囲。遠近があるので 円ではなく 奥がすぼまった形になる
+    if (sc.nedoko) {
+      ctx.strokeStyle = 'rgba(255,140,220,0.9)';
+      ctx.beginPath(); ctx.arc(sc.nedoko.x, sc.nedoko.y, sc.nedoko.r, 0, Math.PI*2); ctx.stroke();
+    }
     ctx.strokeStyle = 'rgba(120,255,150,0.85)';
     for (const n of (sc.npc || [])) for (const w of n.who) {
       ctx.beginPath();
@@ -620,29 +907,22 @@ function loop(now) {
       }
       ctx.stroke();
     }
-    if (editPts.length) {
-      ctx.strokeStyle = 'rgba(60,200,255,0.95)';
-      ctx.beginPath(); ctx.moveTo(editPts[0][0], editPts[0][1]);
-      for (let i=1;i<editPts.length;i++) ctx.lineTo(editPts[i][0], editPts[i][1]);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(60,200,255,0.95)';
-      for (const p of editPts) ctx.fillRect(p[0]-3, p[1]-3, 6, 6);
-    }
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, H-58, W, 58);
-    text(cur + '  [' + Math.round(mouse.x) + ', ' + Math.round(mouse.y) + ']  せ:'
-       + Math.round(heightAt(player.y)) + '  ' + (walkable(player.x,player.y)?'ゆか':'そと'),
+    text(cur + '  八月' + day + '日  [' + Math.round(mouse.x) + ', ' + Math.round(mouse.y)
+       + ']  せ:' + Math.round(heightAt(player.y)) + '  ' + (walkable(player.x,player.y)?'ゆか':'そと'),
        12, H-34, 15, '#ffe08a');
     text('クリックで点を置く／Backspaceで戻す／Cでコンソールに出力：' + JSON.stringify(editPts).slice(0,84),
        12, H-12, 13, '#bcd6ff');
     ctx.restore();
   }
 
+  advance = false;   // 1フレームで つかいきる
   requestAnimationFrame(loop);
 }
 
 // ===== よみこみ =====
 let pending = 0;
-function done() { if (--pending === 0) state = 'title'; }
+function done() { if (--pending === 0) { resetDay(); state = 'title'; } }
 function load() {
   pending = 1;
   imgChars.onload = done;
@@ -664,15 +944,22 @@ if (qs.has('record') || EDIT) {
     start: () => { if (state === 'title') start(); },
     goto: (id, at) => { if (SC[id]) enter(id, at); },
     put: (x,y) => { player.x = x; player.y = y; },
-    talk: () => talkNpc ? { idx:talkNpc.idx||0, n:talkNpc.lines.length,
-                            line:talkNpc.lines[talkNpc.idx||0] } : null,
+    free: () => { scene = null; cast = []; state = 'play'; sceneSay = null;
+                  walkTo = null; taisoT0 = -99; nedokoArmed = false; },
+    sleep: () => { day++; runScene([...NIGHT, ...morningScript(day)]);
+                   state = 'scene'; resetDay(); },
+    scene: () => scene ? { i:scene.i, n:scene.q.length,
+                           k:(scene.q[scene.i]||{}).k, say:sceneSay } : null,
+    talk: () => talkNpc ? { idx:talkNpc.idx||0, n:linesOf(talkNpc).length,
+                            line:linesOf(talkNpc)[talkNpc.idx||0] } : null,
     gdist: () => (SC[cur].npc||[]).map(n => n.who.map(
       w => +groundDist(player.x, player.y, w[1], w[2]).toFixed(2))),
+    npcState: () => (SC[cur].npc||[]).map(n => ({ idx:n.idx||0, done:!!n.done,
+                                                  n:(linesOf(n)||[]).length })),
     R: TALK_R,
-    npcState: () => (SC[cur].npc||[]).map(n => ({ idx:n.idx||0, n:n.lines.length, done:!!n.done })),
-    dbg: () => ({ state, cur, x:Math.round(player.x), y:Math.round(player.y),
+    dbg: () => ({ state, cur, day, x:Math.round(player.x), y:Math.round(player.y),
                   h:Math.round(heightAt(player.y)), on:walkable(player.x, player.y),
-                  lock:exitLock, talking:!!talkNpc }),
+                  lock:exitLock, talking:!!talkNpc, scene:!!scene }),
   };
 }
 </script>
