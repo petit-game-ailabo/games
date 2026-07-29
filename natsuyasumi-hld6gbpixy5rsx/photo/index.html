@@ -282,7 +282,9 @@ function morningScript(d) {
     { k:'say', who:'cirno', text:'おはよ' },
   ];
   const niwa = [
-    { k:'walk', x:470, y:522 },
+    // 大妖精が さきに 部屋を出て、チルノが ついていく
+    { k:'move', list:[['dai', 470, 536, 1]], s:2.6 },
+    { k:'walk', x:470, y:524 },
     { k:'to', sc:'iemae', at:'ie' },
     { k:'cast', list:[['dai', 330, 480], ['marisa', 620, 468], ['wriggle', 770, 486]] },
     { k:'put', x:470, y:500 },
@@ -299,6 +301,11 @@ function morningScript(d) {
     ] : []),
   ];
   const gohan = [
+    // たいそうが おわって、みんなが 家のほうへ もどっていく
+    { k:'say', who:'keine', text:'ごはんに するよ' },
+    { k:'move', list:[['dai', 452, 448, 1], ['marisa', 506, 446, 1], ['wriggle', 560, 446, 1]], s:3.2 },
+    { k:'walk', x:498, y:450 },
+    { k:'wait', s:0.5 },
     { k:'to', sc:'doma', at:'asa' },
     { k:'cast', list:[['keine', 600, 428], ['dai', 890, 470], ['marisa', 700, 532]] },
     { k:'put', x:450, y:500 },
@@ -320,7 +327,16 @@ function morningScript(d) {
   ] : [
     { k:'say', who:'keine', text:'いってらっしゃい' },
   ];
-  return [...head, ...wake, ...niwa, ...before, ...taiso, ...gohan, ...table, { k:'free' }];
+  // ごはんが おわって、みんなが 出ていく。けーねだけ いろりの手前に のこる。
+  // ぜんぶ 動きおわってから やっと チルノが うごけるようにする
+  const dekake = [
+    { k:'say', who:'cirno', text:'ごちそうさま' },
+    { k:'move', list:[['marisa', 190, 512, 1], ['dai', 176, 470, 1], ['keine', 560, 496]], s:3.4 },
+    { k:'walk', x:392, y:526 },
+    { k:'wait', s:0.9 },
+  ];
+  return [...head, ...wake, ...niwa, ...before, ...taiso,
+          ...gohan, ...table, ...dekake, { k:'free' }];
 }
 const NIGHT = [
   { k:'say', who:'cirno', text:'……ねむい。ねよ' },
@@ -515,11 +531,16 @@ let day = 1;
 const player = { x:430, y:500, face:1, bob:0, moving:false, running:false };
 let fade = 0, fadeTo = null, nameT = 0, elapsed = 0, exitLock = false;
 let talkNpc = null, lineT = 0;
-let scene = null;          // {q, i, t, entered}
-let cast = [];             // その場面だけのキャラ
+let scene = null;          // {q, i, t, entered, flags}
+// その場面だけのキャラ。ひとりずつ じぶんの じょうたい を持つ
+//   pose … 'idle'（ふよふよ）／'walk'（歩いている）／'taiso'（たいそう中）／'gone'（もう居ない）
+let cast = [];
+let playerPose = 'idle';
 let sceneSay = null;       // 場面のセリフ [who, text]
 let walkTo = null;         // じどうで あるく先
-let taisoT0 = -99;         // ラジオたいそうを はじめた時こく
+let taisoT0 = -99, taisoBeats = 0;
+let veil = 0;              // 場面の切りかわりの 黒い幕
+let talkLock = false;      // 場面が おわった直後に かってに 会話が はじまらないように
 let nedokoT = 0, nedokoArmed = false;
 
 function moveMove(x, y, spd, dt) {   // 目的地へ 一歩ぶん すすむ（壁ぞいにすべる）
@@ -563,7 +584,10 @@ function resetDay() {
   }
   talkNpc = null; nedokoT = 0; nedokoArmed = false;
 }
-function runScene(q) { scene = { q, i:0, t:0, entered:-1 }; sceneSay = null; walkTo = null; }
+function runScene(q) {
+  scene = { q, i:0, t:0, entered:-1, flags:{} };
+  sceneSay = null; walkTo = null; cast = []; playerPose = 'idle'; taisoT0 = -99; veil = 0;
+}
 function startMorning() { resetDay(); runScene(morningScript(day)); state = 'scene'; }
 function start() { day = 1; startMorning(); fade = 1; }
 
@@ -631,19 +655,38 @@ function sayBox(who, txt) {
 const sayDur = t => 1.9 + t.length * 0.085;
 
 // ===== 朝のながれを すすめる =====
+function endScene() {
+  scene = null; state = 'play'; cast = []; sceneSay = null; walkTo = null;
+  playerPose = 'idle'; taisoT0 = -99; veil = 0;
+  nedokoArmed = false; talkLock = true;   // 場面あけに かってに 会話が はじまらないように
+}
+const TO_OUT = 0.55, TO_IN = 0.75;        // 場面の切りかわり：くらくなる／あかるくなる
 function stepScene(dt) {
   const st = scene.q[scene.i];
-  if (!st) { scene = null; state = 'play'; cast = []; return; }
+  if (!st) { endScene(); return; }
   if (scene.entered !== scene.i) {
     scene.entered = scene.i; scene.t = 0;
     switch (st.k) {
-      case 'to':    enter(st.sc, st.at); fade = 1; break;
       case 'put':   { const f = nearestFree(st.x, st.y); player.x=f.x; player.y=f.y; break; }
-      case 'cast':  cast = st.list.map(c => ({ k:c[0], x:c[1], y:c[2], ph:(c[1]*0.013+c[2]*0.007) })); break;
+      case 'cast':  cast = st.list.map(c => ({
+                      k:c[0], x:c[1], y:c[2], ph:(c[1]*0.013+c[2]*0.007),
+                      pose:'idle', face:1, wbob:0, tx:0, ty:0, gone:false }));
+                    break;
       case 'say':   sceneSay = [st.who, st.text]; break;
       case 'walk':  walkTo = { x:st.x, y:st.y }; break;
-      case 'taiso': st.s = playTaiso(); taisoT0 = elapsed; break;
-      case 'free':  scene = null; state = 'play'; cast = []; nedokoArmed = false; return;
+      case 'move':
+        for (const [who, x, y, gone] of st.list) {
+          const c = cast.find(c => c.k === who);
+          if (c) { c.tx = x; c.ty = y; c.gone = !!gone; c.pose = 'walk'; }
+        }
+        break;
+      case 'taiso':
+        st.s = playTaiso(); taisoT0 = elapsed;
+        taisoBeats = st.s * (TAISO_BPM/60);
+        for (const c of cast) if (c.pose !== 'gone') c.pose = 'taiso';
+        playerPose = 'taiso';
+        break;
+      case 'free':  endScene(); return;
     }
   }
   scene.t += dt;
@@ -651,12 +694,43 @@ function stepScene(dt) {
   switch (st.k) {
     case 'card':  done = scene.t >= st.s; break;
     case 'wait':  done = scene.t >= st.s; break;
-    case 'to':    done = scene.t >= 0.9; break;
     case 'put':   done = true; break;
     case 'cast':  done = true; break;
     case 'say':   done = scene.t >= sayDur(st.text) || (advance && scene.t > 0.3);
                   if (done) sceneSay = null; break;
-    case 'taiso': done = scene.t >= st.s; break;
+    case 'to':
+      // まっくらにしてから 画面を入れかえ、また あかるくする
+      if (scene.t < TO_OUT) veil = scene.t / TO_OUT;
+      else {
+        if (!scene.flags[scene.i]) { scene.flags[scene.i] = 1; enter(st.sc, st.at); }
+        veil = clamp(1 - (scene.t - TO_OUT) / TO_IN, 0, 1);
+      }
+      done = scene.t >= TO_OUT + TO_IN;
+      if (done) veil = 0;
+      break;
+    case 'taiso':
+      done = scene.t >= st.s;
+      if (done) {   // たいそうが おわったら ちゃんと ふだんの すがたに もどす
+        for (const c of cast) if (c.pose === 'taiso') c.pose = 'idle';
+        playerPose = 'idle'; taisoT0 = -99;
+      }
+      break;
+    case 'move': {
+      let all = true;
+      for (const c of cast) {
+        if (c.pose !== 'walk') continue;
+        const dx = c.tx-c.x, dy = c.ty-c.y, dd = Math.hypot(dx, dy);
+        if (dd < 5) { c.pose = c.gone ? 'gone' : 'idle'; continue; }
+        all = false;
+        const depth = Math.max(0.45, heightAt(c.y) / SC[cur].hNear);
+        const sp = Math.min(130*depth*dt, dd);
+        c.x += dx/dd*sp; c.y += dy/dd*sp;
+        c.face = dx > 0 ? 1 : -1; c.wbob += dt*9;
+      }
+      done = all || scene.t > (st.s || 4);
+      if (done) for (const c of cast) if (c.pose === 'walk') c.pose = c.gone ? 'gone' : 'idle';
+      break;
+    }
     case 'walk':
       done = moveMove(walkTo.x, walkTo.y, 150, dt) || scene.t > 6;
       if (done) walkTo = null;
@@ -772,16 +846,19 @@ function loop(now) {
   }
 
   // --- はなし。そばに居るあいだ だけ すすむ。ぜんぶ おわったら もう ひらかない
-  let near = null;
-  if (!fadeTo && !inScene) {
-    for (const n of (sc.npc || [])) {
-      if (n.done) continue;
-      for (const w of n.who) {
-        if (groundDist(player.x, player.y, w[1], w[2]) < TALK_R) { near = n; break; }
+  let near = null, anyNear = false;
+  for (const n of (sc.npc || [])) {
+    for (const w of n.who) {
+      if (groundDist(player.x, player.y, w[1], w[2]) < TALK_R) {
+        anyNear = true;
+        if (!n.done && !near) near = n;
       }
-      if (near) break;
     }
   }
+  // 場面が おわった直後に となりに 居あわせただけで はじまらないように、
+  // いちど はなれてから でないと 会話しない
+  if (!anyNear) talkLock = false;
+  if (fadeTo || inScene || talkLock) near = null;
   if (near !== talkNpc) { talkNpc = near; lineT = 0; }
   if (talkNpc) {
     const L = linesOf(talkNpc);
@@ -809,33 +886,41 @@ function loop(now) {
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
 
-  const tb = (elapsed - taisoT0) * (TAISO_BPM/60);     // ラジオたいそうの ひょうし
-  const taisoOn = tb >= 0 && tb < 40;
-  const hop = taisoOn ? Math.abs(Math.sin(tb*Math.PI)) : 0;
-  const nobi = taisoOn && (Math.floor(tb) % 8) >= 4 ? 1 : 0;
+  // ラジオたいそうの ひょうし。曲が おわったら もう はずまない
+  const tb = (elapsed - taisoT0) * (TAISO_BPM/60);
+  const beat = (taisoT0 > -90 && tb >= 0 && tb < taisoBeats) ? tb : -1;
+  const hop  = beat >= 0 ? Math.abs(Math.sin(beat*Math.PI)) : 0;
+  const nobi = beat >= 0 && (Math.floor(beat) % 8) >= 4 ? 1 : 0;
 
+  // だれが どの すがたで居るかは、そのキャラ じしんが 持っている
   const actors = [];
-  if (inScene) for (const c of cast) actors.push({ k:c.k, x:c.x, y:c.y, npc:true, ph:c.ph });
-  else for (const n of (sc.npc || [])) for (const w of n.who)
-    actors.push({ k:w[0], x:w[1], y:w[2], npc:true, ph:(w[1]*0.013 + w[2]*0.007) });
-  actors.push({ k:'cirno', x:player.x, y:player.y, npc:false });
+  if (inScene) {
+    for (const c of cast) if (c.pose !== 'gone')
+      actors.push({ k:c.k, x:c.x, y:c.y, ph:c.ph, pose:c.pose, face:c.face, wbob:c.wbob });
+  } else {
+    for (const n of (sc.npc || [])) for (const w of n.who)
+      actors.push({ k:w[0], x:w[1], y:w[2], ph:(w[1]*0.013 + w[2]*0.007), pose:'idle', face:1 });
+  }
+  actors.push({ k:'cirno', x:player.x, y:player.y, me:true,
+                pose:inScene ? playerPose : 'idle', face:player.face });
   actors.sort((a,b) => a.y - b.y);
   for (const a of actors) {
     let h = heightAt(a.y);
-    if (taisoOn) h *= 1 + 0.10*nobi*hop;
-    if (a.npc) {
-      // ふよふよ。妖精なので すこし浮いている。たいそう中は みんなで はずむ
-      const fu = taisoOn ? h*0.14*hop
-                         : Math.sin(elapsed*1.7 + a.ph*7) * h*0.055 + h*0.06;
-      shadow(a.x, a.y, h, 0.65);
-      drawChar(CI[a.k], a.x, a.y - fu, h, false, hazeOf(a.y));
+    let off;
+    if (a.pose === 'taiso') {
+      h *= 1 + 0.10*nobi*hop;
+      off = h*0.14*hop;
+    } else if (a.me) {
+      off = player.moving ? Math.abs(Math.sin(player.bob)) * h*0.035
+                          : Math.sin(player.bob) * h*0.008;
+    } else if (a.pose === 'walk') {
+      off = Math.abs(Math.sin(a.wbob)) * h*0.05 + h*0.05;
     } else {
-      shadow(a.x, a.y, h);
-      const bob = taisoOn ? h*0.14*hop
-                : player.moving ? Math.abs(Math.sin(player.bob)) * h*0.035
-                                : Math.sin(player.bob) * h*0.008;
-      drawChar(CI.cirno, a.x, a.y - bob, h, player.face < 0, hazeOf(a.y));
+      // ふよふよ。妖精なので すこし浮いている
+      off = Math.sin(elapsed*1.7 + a.ph*7) * h*0.055 + h*0.06;
     }
+    shadow(a.x, a.y, h, a.me ? 1 : 0.65);
+    drawChar(CI[a.k], a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
 
   // 場所の名まえ
@@ -857,6 +942,11 @@ function loop(now) {
 
   if (fade > 0) {
     ctx.fillStyle = 'rgba(250,252,246,' + clamp(fade,0,1) + ')';
+    ctx.fillRect(0,0,W,H);
+  }
+  // 場面の切りかわり。いちど まっくらに してから つぎの場所へ
+  if (veil > 0) {
+    ctx.fillStyle = 'rgba(6,9,7,' + clamp(veil,0,1) + ')';
     ctx.fillRect(0,0,W,H);
   }
 
@@ -944,12 +1034,14 @@ if (qs.has('record') || EDIT) {
     start: () => { if (state === 'title') start(); },
     goto: (id, at) => { if (SC[id]) enter(id, at); },
     put: (x,y) => { player.x = x; player.y = y; },
-    free: () => { scene = null; cast = []; state = 'play'; sceneSay = null;
-                  walkTo = null; taisoT0 = -99; nedokoArmed = false; },
+    free: () => { endScene(); talkLock = false; },
     sleep: () => { day++; runScene([...NIGHT, ...morningScript(day)]);
                    state = 'scene'; resetDay(); },
     scene: () => scene ? { i:scene.i, n:scene.q.length,
-                           k:(scene.q[scene.i]||{}).k, say:sceneSay } : null,
+                           k:(scene.q[scene.i]||{}).k, say:sceneSay, veil:+veil.toFixed(2) } : null,
+    poses: () => ({ me:playerPose,
+                    cast:cast.map(c => ({ k:c.k, pose:c.pose, x:Math.round(c.x), y:Math.round(c.y) })),
+                    taisoT0: +(elapsed - taisoT0).toFixed(1), lock:talkLock }),
     talk: () => talkNpc ? { idx:talkNpc.idx||0, n:linesOf(talkNpc).length,
                             line:linesOf(talkNpc)[talkNpc.idx||0] } : null,
     gdist: () => (SC[cur].npc||[]).map(n => n.who.map(
