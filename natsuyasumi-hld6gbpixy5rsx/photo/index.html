@@ -70,8 +70,10 @@ const SC = {
       { x0:0, x1:960, y0:530, y1:545, to:'rouka', at:'temae' },
       { x0:930, x1:960, y0:380, y1:541, to:'doma', at:'zashiki' },
     ],
-    // ふとんの あるところ。ここで じっとしていると 1日が おわる
-    nedoko: { x:186, y:452, r:58 },
+    // ふとんの あるところ。ここで じっとしていると 1日が おわる。
+    // 写真のうえに ふとんを かいて、どこで ねられるか 見てわかるようにする
+    nedoko: { x:180, y:456, r:66,
+              quad:[[124,418],[244,413],[276,504],[82,510]] },
     npc: [{
       who: [['dai', 300, 470]],
       days: {
@@ -542,6 +544,10 @@ let taisoT0 = -99, taisoBeats = 0;
 let veil = 0;              // 場面の切りかわりの 黒い幕
 let talkLock = false;      // 場面が おわった直後に かってに 会話が はじまらないように
 let nedokoT = 0, nedokoArmed = false;
+// 時計は出さない。画面を移るたびに 時間がすすみ、空気の色と 虫の声で わかるようにする
+let steps = 0;
+const DAY_STEPS = 24;
+const dayT = () => clamp(steps / DAY_STEPS, 0, 1);
 
 function moveMove(x, y, spd, dt) {   // 目的地へ 一歩ぶん すすむ（壁ぞいにすべる）
   const dx = x - player.x, dy = y - player.y, d = Math.hypot(dx, dy);
@@ -582,7 +588,7 @@ function resetDay() {
   for (const k in SC) for (const n of (SC[k].npc || [])) {
     n.idx = 0; n.done = !linesOf(n);
   }
-  talkNpc = null; nedokoT = 0; nedokoArmed = false;
+  talkNpc = null; nedokoT = 0; nedokoArmed = false; steps = 0;
 }
 function runScene(q) {
   scene = { q, i:0, t:0, entered:-1, flags:{} };
@@ -638,6 +644,36 @@ function wrap(t, size, maxW) {
   }
   if (line) out.push(line);
   return out;
+}
+// 写真のうえに ふとんを かく。輪郭線は出さず、面だけ。
+// すこし ぼかして 写真の解像感に あわせないと 貼りものに見える
+function drawFuton(n) {
+  const q = n.quad;                                   // [おく左, おく右, 手前右, 手前左]
+  const P = (a,b,t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+  const L = t => P(q[0], q[3], t), R = t => P(q[1], q[2], t);
+  const band = (t0, t1, inset) => {
+    const a = L(t0), b = R(t0), c = R(t1), d = L(t1);
+    if (!inset) return [a,b,c,d];
+    return [P(a,b,inset), P(b,a,inset), P(c,d,inset), P(d,c,inset)];
+  };
+  const path = pts => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+                        for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+                        ctx.closePath(); ctx.fill(); };
+  ctx.save();
+  ctx.filter = 'blur(2.2px)';
+  ctx.globalAlpha = 0.42; ctx.fillStyle = '#241d10';           // たたみに おちる かげ
+  path([[q[0][0]-8,q[0][1]+10],[q[1][0]+12,q[1][1]+10],[q[2][0]+14,q[2][1]+8],[q[3][0]-12,q[3][1]+8]]);
+  ctx.filter = 'blur(1.1px)';
+  ctx.globalAlpha = 1;    ctx.fillStyle = '#eee7d6'; path(band(0, 1));          // 敷きぶとん
+  ctx.globalAlpha = 0.45; ctx.fillStyle = '#a99c80'; path(band(0.93, 1));       // 手前の陰
+  // 夏の掛けぶとん。たたみの色と はっきり分けないと ただの白い板に見える
+  ctx.globalAlpha = 1;    ctx.fillStyle = '#8ea6b8'; path(band(0.38, 0.96));
+  ctx.globalAlpha = 0.55; ctx.fillStyle = '#6f8798'; path(band(0.62, 0.66));    // しわ
+  ctx.globalAlpha = 1;    ctx.fillStyle = '#fbf8ef'; path(band(0.31, 0.40));    // めくり返した裏地
+  ctx.globalAlpha = 0.40; ctx.fillStyle = '#7d8f9c'; path(band(0.40, 0.435));   // その影
+  ctx.globalAlpha = 1;    ctx.fillStyle = '#fdfbf5'; path(band(0.06, 0.22, 0.19)); // まくら
+  ctx.globalAlpha = 0.35; ctx.fillStyle = '#a2957b'; path(band(0.22, 0.255, 0.19));
+  ctx.restore();
 }
 function hazeOf(y) {
   const sc = SC[cur];
@@ -824,9 +860,19 @@ function loop(now) {
     for (const e of sc.exits) if (onExit(e)) { fadeTo = e; break; }
   }
   if (fadeTo) {
-    fade += dt * 2.2;
-    if (fade >= 1 && fadeTo.to) { enter(fadeTo.to, fadeTo.at); fadeTo = { done:true }; }
-    if (fadeTo && fadeTo.done) { fade -= dt*3.6; if (fade <= 0) { fade = 0; fadeTo = null; } }
+    // くらくする → 入れかえる → あかるくする。ふたつを 同じフレームで やると
+    // 増える量と 減る量が 打ち消しあって 抜けられなくなるので、はっきり分ける
+    if (!fadeTo.done) {
+      fade += dt * 3.4;
+      if (fade >= 1) {
+        fade = 1;
+        if (fadeTo.to) { enter(fadeTo.to, fadeTo.at); steps++; }  // 画面を移ると 時間がすすむ
+        fadeTo = { done:true };
+      }
+    } else {
+      fade -= dt * 2.6;
+      if (fade <= 0) { fade = 0; fadeTo = null; }
+    }
   } else if (fade > 0) {
     fade = Math.max(0, fade - dt*1.4);
   }
@@ -837,7 +883,7 @@ function loop(now) {
     if (!inBed) nedokoArmed = true;
     if (inBed && nedokoArmed && !player.moving) {
       nedokoT += dt;
-      if (nedokoT > 1.2) {
+      if (nedokoT > 1.0) {
         day++;
         runScene([...NIGHT, ...morningScript(day)]);
         state = 'scene'; resetDay();
@@ -877,14 +923,17 @@ function loop(now) {
     if (ambTimer <= 0) {
       ambTimer = (sc.amb === 'in' ? 1.6 : 0.7) + Math.random()*1.8;
       const k = sc.amb === 'ki';
-      cicada(k ? 0.13 : (sc.amb === 'in' ? 0.035 : 0.06),
-             k ? 2300 + Math.random()*900 : 3000 + Math.random()*700,
-             0.8 + Math.random()*1.4);
+      const vol = k ? 0.13 : (sc.amb === 'in' ? 0.035 : 0.06);
+      // ゆうがたは ひぐらし。ひくくて ながい声にする
+      if (dayT() > 0.62) cicada(vol*0.9, 1500 + Math.random()*400, 1.6 + Math.random()*1.4);
+      else cicada(vol, k ? 2300 + Math.random()*900 : 3000 + Math.random()*700,
+                  0.8 + Math.random()*1.4);
     }
   }
 
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
+  if (sc.nedoko && sc.nedoko.quad) drawFuton(sc.nedoko);
 
   // ラジオたいそうの ひょうし。曲が おわったら もう はずまない
   const tb = (elapsed - taisoT0) * (TAISO_BPM/60);
@@ -923,6 +972,21 @@ function loop(now) {
     drawChar(CI[a.k], a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
 
+  // ゆうがた。時計は出さず、光の色だけで 時間の ながれを 見せる
+  const ev = clamp((dayT() - 0.34) / 0.66, 0, 1);
+  if (ev > 0.01) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 0.92*ev;
+    ctx.fillStyle = 'rgb(255,' + Math.round(176 - 44*ev) + ',' + Math.round(122 - 52*ev) + ')';
+    ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(28,22,52,' + (0.30*ev*ev).toFixed(3) + ')';   // 日がおちて くらくなる
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+
   // 場所の名まえ
   if (nameT > 0) {
     nameT -= dt;
@@ -941,7 +1005,8 @@ function loop(now) {
   }
 
   if (fade > 0) {
-    ctx.fillStyle = 'rgba(250,252,246,' + clamp(fade,0,1) + ')';
+    // 白い光だと 目に いたい。くらくして 切りかえる
+    ctx.fillStyle = 'rgba(7,10,8,' + clamp(fade,0,1)*0.94 + ')';
     ctx.fillRect(0,0,W,H);
   }
   // 場面の切りかわり。いちど まっくらに してから つぎの場所へ
@@ -1049,7 +1114,9 @@ if (qs.has('record') || EDIT) {
     npcState: () => (SC[cur].npc||[]).map(n => ({ idx:n.idx||0, done:!!n.done,
                                                   n:(linesOf(n)||[]).length })),
     R: TALK_R,
-    dbg: () => ({ state, cur, day, x:Math.round(player.x), y:Math.round(player.y),
+    steps: () => ({ steps, dayT:+dayT().toFixed(2) }),
+    setSteps: n => { steps = n; },
+    dbg: () => ({ state, cur, day, steps, x:Math.round(player.x), y:Math.round(player.y),
                   h:Math.round(heightAt(player.y)), on:walkable(player.x, player.y),
                   lock:exitLock, talking:!!talkNpc, scene:!!scene }),
   };
