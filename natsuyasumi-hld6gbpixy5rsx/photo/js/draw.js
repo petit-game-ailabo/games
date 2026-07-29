@@ -48,8 +48,19 @@ function wrap(t, size, maxW) {
   return out;
 }
 // 写真のうえに ふとんを かく。輪郭線は出さず、面だけ。
-// すこし ぼかして 写真の解像感に あわせないと 貼りものに見える
+// すこし ぼかして 写真の解像感に あわせないと 貼りものに見える。
+// ただし ctx.filter の ぼかしは とても おそい（毎フレームやると 61fps が 17fps に落ちた）。
+// ふとんは 動かないので、はじめの1回だけ 別のカンバスに かいて、あとは それを のせる。
+const futonCache = new Map();
 function drawFuton(n) {
+  let cv = futonCache.get(n);
+  if (!cv) { cv = bakeFuton(n); futonCache.set(n, cv); }
+  ctx.drawImage(cv, 0, 0);
+}
+function bakeFuton(n) {
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');                    // ここだけ 別のカンバスに かく
   const q = n.quad;                                   // [おく左, おく右, 手前右, 手前左]
   const P = (a,b,t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
   const L = t => P(q[0], q[3], t), R = t => P(q[1], q[2], t);
@@ -76,6 +87,7 @@ function drawFuton(n) {
   ctx.globalAlpha = 1;    ctx.fillStyle = '#fdfbf5'; path(band(0.06, 0.22, 0.19)); // まくら
   ctx.globalAlpha = 0.35; ctx.fillStyle = '#a2957b'; path(band(0.22, 0.255, 0.19));
   ctx.restore();
+  return cv;
 }
 function hazeOf(y) {
   const sc = SC[cur];
