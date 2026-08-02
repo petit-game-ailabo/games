@@ -63,7 +63,22 @@ function enter(id, at) {
   player.x = f.x; player.y = f.y;
   nameT = 3.2; exitLock = true; talkNpc = null; lineT = 0;
 }
-function linesOf(n) { const t = talksOf(n); return (t && t[WORLD.day]) || null; }
+function linesOf(n) {
+  const t = talksOf(n);
+  if (!t) return null;
+  const v = t[WORLD.day];
+  if (!v) return null;
+  // ふつうは [話し手, ことば] の ならび（v[0] は 配列）。
+  // でも v[0] が オブジェクトなら、それは {when, lines} の かたまりの ならび。
+  // 竿を もったら／お手伝いを したら セリフが 変わる、を データだけで 書くための もの。
+  // じょうけんに あう さいしょの かたまりを えらぶ（when を 書かなければ いつでも）。
+  if (v.length && v[0] && !Array.isArray(v[0]) && typeof v[0] === 'object') {
+    const ctx = { day: WORLD.day, place: cur, home: cur === 'zashiki' };
+    const blk = v.find(b => matchWhen(b.when, ctx));
+    return (blk && blk.lines) || null;
+  }
+  return v;
+}
 function resetDay() {
   applyNpcChanges();   // あとから ふえた／消えた NPC を つけ直す
   for (const k in SC) for (const n of (SC[k].npc || [])) {
