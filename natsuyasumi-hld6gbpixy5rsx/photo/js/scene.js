@@ -31,6 +31,9 @@ function stepScene(dt) {
                     break;
       case 'say':   sceneSay = [st.who, st.text]; break;
       case 'sel':   sceneSel = { st, i:0, n:st.opts.length }; break;
+      // べつの あそびに 入る。おわると けっかが WORLD.num[out] に 入る。
+      // 知らない 名まえなら 素通り（場面を 止めない）
+      case 'mini':  if (startMini(st.name, st.cfg, st.out)) return; break;
       // 書いてある ところへ とぶ。**組み立てるときでは なく、いま 見て 決める**
       case 'goto':  if (sceneJump(st.id)) return; break;
       case 'if':    if (matchWhen(st.when, { day:WORLD.day }) && sceneJump(st.go)) return;
@@ -71,6 +74,7 @@ function stepScene(dt) {
     case 'cast':  done = true; break;
     case 'meal':  done = true; break;
     case 'label': done = true; break;
+    case 'mini':  done = (state !== 'mini'); break;   // あそびが おわったら つぎへ
     case 'goto':  done = true; break;     // とび先が 見つからなかった ときだけ ここ
     case 'if':    done = true; break;
     // えらぶ。**ここは 時間では 進まない。**えらぶまで 待つ

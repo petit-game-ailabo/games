@@ -47,6 +47,15 @@ function loop(now) {
     requestAnimationFrame(loop); return;
   }
 
+  // べつの あそびの あいだは、画面ぜんぶを あそびに わたす
+  if (state === 'mini') {
+    miniStep(dt);
+    if (state === 'mini') {
+      miniDraw(); advance = false; requestAnimationFrame(loop); return;
+    }
+    // この フレームで おわった ときは、そのまま 下の 場面の つづきへ
+  }
+
   const inScene = (state === 'scene');
   if (inScene) stepScene(dt);
   const sc = SC[cur];
@@ -443,6 +452,8 @@ if (qs.has('record') || EDIT) {
     put: (x,y) => { player.x = x; player.y = y; },
     free: () => { endScene(); talkLock = false; },
     sleep: () => sleepNow(),
+    mini: () => mini ? { name:mini.name, t:+mini.t.toFixed(1), out:mini.out } : null,
+    miniEnd: n => { if (mini) { mini.result = n; mini.done = true; } },
     sel: () => sceneSel ? { i:sceneSel.i, n:sceneSel.n,
                             opts:sceneSel.st.opts.map(o => o.t), text:sceneSel.st.text } : null,
     pick: n => { if (sceneSel) { sceneSel.i = n; advance = true; } },
