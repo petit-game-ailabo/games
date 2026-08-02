@@ -100,33 +100,52 @@ function footTick() {
   ashioto(sc.ashi || 'tsuchi', 0.085 * depth * (player.running ? 1.25 : 1));
 }
 
-// --- 風鈴。ガラスが 鳴る 音。
-// **きれいな2音を つづけて 鳴らすと コインを 取った 音に なる。**
-// ほんものの ガラスは 倍音が 整数倍に ならず、高い倍音ほど 早く 消える。
-// それと、舌が あたる かすかな 音。この2つで 「日常の音」に なる
+// --- 風鈴（江戸風鈴＝うすい ガラスの おわん）。
+// ワイングラスと おなじ なかま。しらべ直して 分かったのは この4つ：
+//  1. たたくと **いちばん低い モード（ふちに はらが 4つ）だけが のこる。** ほぼ ひとつの音
+//  2. その上の モード（比 2.83／5.42）も 出るが **0.1秒ほどで 消える**。
+//     ここを のばすと 持続する にごりに なる ← 前の 実装の まちがいは 比ではなく **のばしすぎ**
+//  3. ガラスは 完全な まるでは ないので、その モードが **2つに わずかに 割れる**。
+//     数Hz の ずれが ゆっくりした ゆらぎ（うなり）に なる。鐘の warble と 同じ機構。
+//     **これが 風鈴らしさの 正体。** 前の 実装には これが なかった
+//  4. 舌が あたる 瞬間だけ 雑音が のる
 function fuurin(vol) {
   if (!AC) return;
   const t0 = AC.currentTime;
-  const base = 1720 + Math.random()*280;
-  for (const [m, v] of [[1, 1], [2.74, 0.30], [5.12, 0.10]]) {
+  const f    = 1950 + Math.random()*420;
+  const beat = 1.4 + Math.random()*2.4;      // うなり。1〜4Hz が ここちよい
+  const ring = 1.6 + Math.random()*1.2;
+
+  // いちばん低い モード。**わずかに ずれた 2つ**で ゆらぎを 作る
+  for (const df of [0, beat]) {
     const o = AC.createOscillator(); o.type = 'sine';
-    o.frequency.value = base * m * (0.997 + Math.random()*0.006);
-    const dur = (1.3 + Math.random()*0.6) / Math.sqrt(m);   // 高い倍音ほど 早く 消える
+    o.frequency.value = f + df;
     const g = AC.createGain();
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(vol*v, t0 + 0.004);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    g.gain.linearRampToValueAtTime(vol*0.5, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + ring);
     o.connect(g); g.connect(ambGain);
-    o.start(t0); o.stop(t0 + dur + 0.1);
+    o.start(t0); o.stop(t0 + ring + 0.1);
   }
-  if (shortNoise) {                                          // 舌が あたる 音
-    const s = AC.createBufferSource(); s.buffer = shortNoise;
-    const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 2600;
+  // 上の モード。**すぐ 消える**。たたいた しゅんかんの 明るさ だけを 出す
+  for (const [m, v, d] of [[2.83, 0.15, 0.10], [5.42, 0.05, 0.05]]) {
+    const o = AC.createOscillator(); o.type = 'sine';
+    o.frequency.value = f * m * (0.995 + Math.random()*0.01);
     const g = AC.createGain();
-    g.gain.setValueAtTime(vol*0.45, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol*v, t0 + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    o.connect(g); g.connect(ambGain);
+    o.start(t0); o.stop(t0 + d + 0.05);
+  }
+  if (shortNoise) {                          // 舌が あたる 音
+    const s = AC.createBufferSource(); s.buffer = shortNoise;
+    const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 2800;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(vol*0.35, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.035);
     s.connect(hp); hp.connect(g); g.connect(ambGain);
-    s.start(t0); s.stop(t0 + 0.08);
+    s.start(t0); s.stop(t0 + 0.06);
   }
 }
 
