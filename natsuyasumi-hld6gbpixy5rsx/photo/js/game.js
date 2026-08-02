@@ -205,19 +205,8 @@ function loop(now) {
     }
   }
 
-  // --- セミ
-  if (AC) {
-    ambTimer -= dt;
-    if (ambTimer <= 0) {
-      ambTimer = (sc.amb === 'in' ? 1.6 : 0.7) + Math.random()*1.8;
-      const k = sc.amb === 'ki';
-      const vol = k ? 0.13 : (sc.amb === 'in' ? 0.035 : 0.06);
-      // ゆうがたは ひぐらし。ひくくて ながい声にする
-      if (dayT() > 0.62) cicada(vol*0.9, 1500 + Math.random()*400, 1.6 + Math.random()*1.4);
-      else cicada(vol, k ? 2300 + Math.random()*900 : 3000 + Math.random()*700,
-                  0.8 + Math.random()*1.4);
-    }
-  }
+  // --- 虫や 鳥。時間帯で 鳴くものが 変わる（audio.js の ambientTick）
+  ambientTick(dt);
 
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
@@ -424,6 +413,7 @@ if (qs.has('record') || EDIT) {
     setMukae: v => { WORLD.mukaeDone = !!v; },
     setYoru: v => { WORLD.yoruDone = !!v; },
     setDay: n => { newDay(n); },
+    amb: () => ({ kind:ambKind(), last:lastAmb, dayT:+dayT().toFixed(2), on:!!AC }),
     lastDay: LAST_DAY,
     world: () => JSON.parse(JSON.stringify(WORLD)),
     queue: () => JSON.parse(JSON.stringify(WORLD.queue)),

@@ -21,6 +21,7 @@ TESTS = [
     ("test_mukae.py",      "日ぐれに けーねが むかえに来る"),
     ("test_yoru.py",       "日ぐれに かえったら 晩ごはん→縁側→ねられる"),
     ("test_yoyaku.py",     "きょう行った ところが ごはんの 話に なる（よやく）"),
+    ("test_oto.py",        "時間帯で 鳴くものが 変わる（耳でも 時間が わかる）"),
 ]
 
 want = sys.argv[1] if len(sys.argv) > 1 else ""
