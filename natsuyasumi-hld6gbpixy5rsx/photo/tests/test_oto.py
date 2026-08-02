@@ -88,9 +88,19 @@ with sync_playwright() as pw:
         if gap <= 3.6: fails.append(f"{s}: 葉ずれに 切れ目が ない（{gap:.1f}秒おき）")
     if not (seen["zashiki"]["sawa"] < seen["iemae"]["sawa"] < seen["mori"]["sawa"]):
         fails.append("家のなか < いえのまえ < そとの みち の じゅんに 葉ずれが 多く なっていない")
-    if not (seen["aze"]["water"] > 0.005): fails.append("あぜみちで 水の音が しない")
-    if seen["aze"]["water"] > 0.05: fails.append("水の音が 大きすぎる（鳴りっぱなしの 音は 小さく）")
     if seen["mori"]["water"] > 0.005: fails.append("水の ない画面で 水の音が する")
+
+    # 水の音は **音源からの 距離**で 変わるか（画面ごとの 定数では ない）
+    pg.evaluate("window._ctrl.setSteps(0); window._ctrl.goto('aze')"); pg.wait_for_timeout(400)
+    pg.evaluate("window._ctrl.free()")
+    got = []
+    for tag, x, y in [("水べの そば", 300, 430), ("道の おく", 470, 300)]:
+        pg.evaluate(f"window._ctrl.put({x},{y})"); pg.wait_for_timeout(1400)
+        v = pg.evaluate("window._ctrl.spot()")["mizu"]
+        got.append(v); print(f"  あぜみち {tag}: 水={v:.4f}")
+    if not (got[0] > 0.004): fails.append("水べの そばでも 水の音が しない")
+    if not (got[0] > got[1]*2.5):
+        fails.append(f"水の音が 距離で 変わっていない（そば {got[0]} / おく {got[1]}）")
 
     # 家のなかでは 風鈴、そとの みちでは 葉ずれ
     for s, want in [("zashiki", "fuurin"), ("mori", "sawa")]:

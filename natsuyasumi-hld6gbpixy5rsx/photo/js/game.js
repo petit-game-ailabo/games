@@ -151,6 +151,23 @@ function loop(now) {
     state = 'scene';
   }
 
+  // --- 画面の中の 点。そばに 行くと 名まえが 出て、はじめてなら 場面が うごく。
+  // 会話でも 拾い物でも ない 相手（こよみ・水べ・賽銭箱…）は ここが 受け口
+  nearSpot = null;
+  if (!inScene && !fadeTo && !talkNpc && state !== 'scene') {
+    for (const sp of (SC[cur].spot || [])) {
+      if (!sp.name && !sp.scene) continue;                 // 音だけの 点は 相手に しない
+      if (groundDist(player.x, player.y, sp.x, sp.y) > (sp.r || 1.2)) continue;
+      nearSpot = sp;
+      if (sp.scene && !hasFlag('spot:' + sp.id)) {
+        setFlag('spot:' + sp.id);
+        const q = buildScene(sp.scene, { day:WORLD.day });
+        if (q.length) { runScene(q); state = 'scene'; }
+      }
+      break;
+    }
+  }
+
   // --- 置かれた物を ひろう。ボタンは いらない（会話と おなじ考え方）
   if (!inScene && !fadeTo && !talkNpc && state !== 'scene') {
     for (const o of itemsAt(cur)) {
@@ -214,6 +231,7 @@ function loop(now) {
   ambientTick(dt);
   footTick();                    // 足音。画面ごとに ふみごこちが ちがう
   utaTick(dt);                   // 遠くの うた。地図の かわりに 耳で さがす
+  mizuTick();                    // 水の音。**音源に 近いほど 大きい**
 
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
@@ -290,6 +308,14 @@ function loop(now) {
   else if (talkNpc) {
     const li = linesOf(talkNpc)[talkNpc.idx || 0];
     sayBox(li[0], li[1]);
+  }
+  // そばに ある 点の 名まえ。**写真に 光を のせない。**
+  // 実写の うえに 目じるしを かくと 貼りものに 見えるので、もじだけ そっと 出す
+  else if (nearSpot && nearSpot.name) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,12,9,0.42)'; ctx.fillRect(0, H-46, W, 46);
+    text(nearSpot.name, W/2, H-18, 17, 'rgba(246,250,242,0.92)', 'center');
+    ctx.restore();
   }
 
   if (fade > 0) {
@@ -434,6 +460,10 @@ if (qs.has('record') || EDIT) {
     world: () => JSON.parse(JSON.stringify(WORLD)),
     queue: () => JSON.parse(JSON.stringify(WORLD.queue)),
     items: () => ({ mochi:Object.keys(WORLD.items), oki:JSON.parse(JSON.stringify(WORLD.placed)) }),
+    spot: () => ({ near: nearSpot ? nearSpot.id : null,
+                   all: (SC[cur].spot || []).map(s => [s.id,
+                        +groundDist(player.x, player.y, s.x, s.y).toFixed(2)]),
+                   mizu: mizuGain ? +mizuGain.gain.value.toFixed(4) : null }),
     num: () => ({ zutto:JSON.parse(JSON.stringify(WORLD.num)),
                   kyou:JSON.parse(JSON.stringify(WORLD.today)) }),
     wipe: () => wipeSave(),

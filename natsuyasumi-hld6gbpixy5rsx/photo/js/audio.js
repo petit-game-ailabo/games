@@ -223,9 +223,20 @@ function setPlaceSound() {
     dekake();
   }
   prevAmb = sc.amb;
-  mizuGain.gain.cancelScheduledValues(t);
-  mizuGain.gain.setValueAtTime(mizuGain.gain.value, t);
-  mizuGain.gain.linearRampToValueAtTime((sc.mizu || 0) * 0.028, t + 0.8);
+}
+
+// --- 水の音は **音源からの 距離**で 決まる（DESIGN.md §1）。
+// 画面ごとの 定数だと、あぜみちの どこに 立っても 同じ 大きさに なる。
+// 音源は screens.json の spot に `oto:"mizu"` で 置く
+function mizuTick() {
+  if (!AC || !mizuGain) return;
+  let v = 0;
+  for (const sp of (SC[cur].spot || [])) {
+    if (sp.oto !== 'mizu') continue;
+    const d = groundDist(player.x, player.y, sp.x, sp.y);
+    v = Math.max(v, (sp.v || 1) / (1 + d*d*0.6));
+  }
+  mizuGain.gain.setTargetAtTime(v * 0.05, AC.currentTime, 0.3);
 }
 function cicada(vol, freq, dur) {
   if (!AC) return;

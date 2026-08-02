@@ -69,6 +69,33 @@ with sync_playwright() as pw:
         print(f"  {r['sc']:8s} {r['who']:8s} いちばん近づける距離={r['best']} {r['at']} {'OK' if ok else 'NG'}")
         if not ok: fails.append(f"{r['sc']}/{r['who']}: 近づける床がない（最短 {r['best']}）")
 
+    # 0-b) 画面の中の 点（spot）にも 近づける床が あるか。
+    # **けーねを いろりの奥に 置いて 会話できなくなった**のと 同じ こわれかた。
+    # 音だけの 点（oto）は 近づく 必要が ないので のぞく
+    print("\n-- 点に 近づけるか --")
+    sp = pg.evaluate("""() => {
+      const out = [];
+      for (const k in SC) for (const s of (SC[k].spot || [])) {
+        if (!s.name && !s.scene) continue;
+        let best = 1e9, bx=0, by=0;
+        const save = cur; cur = k;
+        for (let y=SC[k].yTop; y<=540; y+=4) for (let x=0; x<960; x+=6) {
+          if (!walkable(x,y)) continue;
+          const d = groundDist(x,y,s.x,s.y);
+          if (d < best) { best=d; bx=x; by=y; }
+        }
+        cur = save;
+        out.push({sc:k, id:s.id, r:s.r || 1.2, best:+best.toFixed(2), at:[bx,by]});
+      }
+      return out;
+    }""")
+    if not sp: print("  （名まえや 場面を もつ 点は まだ ない）")
+    for r in sp:
+        ok = r["best"] <= r["r"]
+        print(f"  {r['sc']:8s} {r['id']:10s} とどく={r['r']} いちばん近づける={r['best']} "
+              f"{r['at']} {'OK' if ok else 'NG'}")
+        if not ok: fails.append(f"{r['sc']}/{r['id']}: 点に 近づける床がない（最短 {r['best']}）")
+
     # 1) 各画面：出発点が床の上か／スクリーンショット
     print("\n-- 各画面 --")
     for s in SCREENS:

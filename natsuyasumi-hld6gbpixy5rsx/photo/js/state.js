@@ -19,6 +19,7 @@ let veil = 0;              // 場面の切りかわりの 黒い幕
 let talkLock = false;      // 場面が おわった直後に かってに 会話が はじまらないように
 let nedokoT = 0, nedokoArmed = false;
 let firedScreen = null;    // 'enter' の ひきがねを もう ひいた画面。じぶんで移ると 空にもどす
+let nearSpot = null;       // いま そばに ある 点（画面の中の 調べられる ところ）
 
 function moveMove(x, y, spd, dt) {   // 目的地へ 一歩ぶん すすむ（壁ぞいにすべる）
   const dx = x - player.x, dy = y - player.y, d = Math.hypot(dx, dy);
