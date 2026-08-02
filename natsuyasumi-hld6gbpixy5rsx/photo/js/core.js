@@ -31,6 +31,15 @@ function loadData(url, use, then) {
     .then(then);
 }
 
+// 画面の表（data/screens.json）。歩ける範囲・出入口・だれが居るか・奥ゆき
+let SC = {};
+function setScreens(o) {
+  SC = o;
+  // npc.talks は かぎの文字れつ。ここで じっさいの セリフに つなぎかえる
+  for (const k in SC) for (const n of (SC[k].npc || []))
+    if (typeof n.talks === 'string') n.days = TALKS[n.talks] || {};
+}
+
 // キャラの表（data/cast.json）。名まえ・絵のこま番号・浮くか・影のこさ
 let CAST = {};
 const castOf = k => CAST[k] || {};

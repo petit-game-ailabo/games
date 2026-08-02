@@ -324,6 +324,12 @@ function load() {
   imgChars.src = 'data:image/png;base64,' + CHARS_B64;
   pending++;
   loadData('data/cast.json', j => { CAST = j.cast; }, done);
+  // 画面が よめてから でないと、どの写真を よむかが わからない。
+  // 写真の ぶんを 足すのは この中。screens ぶんの done() は そのあとに 来る
+  pending++;
+  loadData('data/screens.json', j => { setScreens(j.screens); loadPhotos(); }, done);
+}
+function loadPhotos() {
   for (const k in SC) {
     pending++;
     const im = new Image();
