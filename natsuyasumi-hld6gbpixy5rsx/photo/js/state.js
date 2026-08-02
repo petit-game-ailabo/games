@@ -117,14 +117,18 @@ function sleepNow() {
   // ねる ひきがねは 場面を はじめない（すぐ下で よるの場面に なるので こわしてしまう）。
   // ねぎわの 出しものは B3 の よやくで あつかう
   fireTriggers('sleep', {}, false);
+  // **きょうの** よるの場面を、日が 変わる まえに 組んでおく。
+  // newDay の あとで 組むと day が もう 進んでいて、絵日記など 日別の 出しものが
+  // 翌日づけに なってしまう（いまの night は 日別分岐が ないので 見た目は 同じだが、D5 の 前提）
+  const night = nightScript();
   // 八月三十一日の よるで なつやすみは おわる。つぎの朝は 来ない
   if (WORLD.day >= LAST_DAY) {
-    runScene([...nightScript(), ...buildScene('owari', { day:WORLD.day })]);
+    runScene([...night, ...buildScene('owari', { day:WORLD.day })]);
     state = 'scene';
     return;
   }
   newDay(WORLD.day + 1);
   saveWorld();
-  runScene([...nightScript(), ...morningScript(WORLD.day)]);
+  runScene([...night, ...morningScript(WORLD.day)]);
   state = 'scene'; resetDay();
 }

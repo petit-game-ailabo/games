@@ -325,10 +325,12 @@ spot が ないと 音源を 置けないので、単独では 作れない。
         talkループが key の 変化を 見て、変わったら `idx=0` で 話しなおす＋`Math.min` で 頭打ち。
         `linesOf` は `linesPick().L` に した（ふつうの ならびは 従来と 同じ）。
         検査：会話中に 竿を もつと 9行→5行に 縮んでも 落ちず、竿の セリフに 話しなおすのを 確認。talk とおった。
-- [ ] **G3. `sleepNow` が `newDay` の あとで 夜の場面を 組む**（指・D5 の 前提）
+- [x] **G3. `sleepNow` が `newDay` の あとで 夜の場面を 組む**（指・D5 の 前提）
       `nightScript` が **すでに 翌日の day** を 見る。いまの `night` に 日別分岐が ないので
       無害だが、D5 の 絵日記を `night` に 入れると **今日でなく 明日の 日記を 綴じる**。
       → ねる ときの カード／日記は `newDay` の **前**に 組む。
+      - できた。`const night = nightScript()` を `newDay` の 前に 出し、それを 使う。
+        いまの night は 日別分岐が ないので 見た目は 不変（予防修正）。検査 day とおった。
 - [ ] **G4. `matchWhen` の `place` が グローバル `cur` を 見て `ctx.place` を 無視**（指・K8′ を place併用で 書く前に）
       `resetDay` は 全画面の npc を いまの `cur` で `linesOf` するので、他画面の ブロックに
       `place` 条件を 書くと `done` が 誤確定する。いまの talks に `place` ブロックが ないので
