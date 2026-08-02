@@ -20,6 +20,7 @@ let taisoT0 = -99, taisoBeats = 0;
 let veil = 0;              // 場面の切りかわりの 黒い幕
 let talkLock = false;      // 場面が おわった直後に かってに 会話が はじまらないように
 let nedokoT = 0, nedokoArmed = false;
+let nightT = 0;            // よるの ぐあい 0〜1。晩ごはんが すむと ゆっくり 1 へ
 let firedScreen = null;    // 'enter' の ひきがねを もう ひいた画面。じぶんで移ると 空にもどす
 let nearSpot = null;       // いま そばに ある 点（画面の中の 調べられる ところ）
 
@@ -69,6 +70,7 @@ function resetDay() {
   }
   talkNpc = null; nedokoT = 0; nedokoArmed = false;
   WORLD.steps = 0; WORLD.mukaeDone = false; WORLD.yoruDone = false;
+  nightT = 0;              // 朝は かならず 明るいところから。だんだん 明るくは しない
 }
 function runScene(q) {
   scene = { q, i:0, t:0, entered:-1, flags:{} };

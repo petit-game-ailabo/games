@@ -306,8 +306,14 @@ function loop(now) {
     drawChar(ciOf(a.k), a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
 
+  // よるの ぐあい。晩ごはんが すむと ゆっくり よるに なる。
+  // **ゆうがた（あたたかい）と よる（つめたい）は 別のもの。**
+  // ゆうがたを こくして いっても よるには ならない
+  const wantNight = WORLD.yoruDone ? 1 : 0;
+  nightT += clamp(wantNight - nightT, -dt*0.5, dt*0.5);
+
   // ゆうがた。時計は出さず、光の色だけで 時間の ながれを 見せる
-  const ev = clamp((dayT() - 0.34) / 0.66, 0, 1);
+  const ev = clamp((dayT() - 0.34) / 0.66, 0, 1) * (1 - nightT);
   if (ev > 0.01) {
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
@@ -317,6 +323,22 @@ function loop(now) {
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.fillStyle = 'rgba(28,22,52,' + (0.30*ev*ev).toFixed(3) + ')';   // 日がおちて くらくなる
+    ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+  // よる。青に 寄せて 沈める。ふちを おとすと 目が 慣れていない 感じが 出る
+  if (nightT > 0.01) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 0.94*nightT;
+    ctx.fillStyle = 'rgb(92,112,166)';
+    ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(8,12,32,' + (0.34*nightT).toFixed(3) + ')';
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = 0.55*nightT;
+    ctx.fillStyle = yoruVig();
     ctx.fillRect(0,0,W,H);
     ctx.restore();
   }
@@ -478,7 +500,12 @@ if (qs.has('record') || EDIT) {
     npcState: () => (SC[cur].npc||[]).map(n => ({ idx:n.idx||0, done:!!n.done,
                                                   n:(linesOf(n)||[]).length })),
     R: TALK_R,
-    steps: () => ({ steps:WORLD.steps, dayT:+dayT().toFixed(2), mukae:WORLD.mukaeDone }),
+    steps: () => ({ steps:WORLD.steps, dayT:+dayT().toFixed(2), mukae:WORLD.mukaeDone,
+                    night:+nightT.toFixed(2) }),
+    rgb: () => { const d = ctx.getImageData(300, 200, 60, 60).data;
+                 let r=0,g=0,b=0; for (let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2];}
+                 const n = d.length/4;
+                 return { r:Math.round(r/n), g:Math.round(g/n), b:Math.round(b/n) }; },
     setSteps: n => { WORLD.steps = n; },
     setMukae: v => { WORLD.mukaeDone = !!v; },
     setYoru: v => { WORLD.yoruDone = !!v; },

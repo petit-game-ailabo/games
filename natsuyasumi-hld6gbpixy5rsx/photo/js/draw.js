@@ -115,6 +115,16 @@ function drawItem(o) {
   }
   ctx.restore();
 }
+// よるの ふち。**毎フレーム 作ると もったいないので 1回だけ**（ふとんと 同じ考え方）
+let yoruVigG = null;
+function yoruVig() {
+  if (!yoruVigG) {
+    yoruVigG = ctx.createRadialGradient(W/2, H*0.52, H*0.30, W/2, H*0.52, H*0.92);
+    yoruVigG.addColorStop(0, 'rgba(4,6,18,0)');
+    yoruVigG.addColorStop(1, 'rgba(4,6,18,1)');
+  }
+  return yoruVigG;
+}
 function hazeOf(y) {
   const sc = SC[cur];
   const far = 1 - clamp((y - sc.yTop) / (sc.yBot - sc.yTop), 0, 1);
