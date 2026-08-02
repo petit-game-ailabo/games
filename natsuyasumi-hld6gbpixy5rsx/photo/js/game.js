@@ -243,23 +243,29 @@ function loop(now) {
   if (!anyNear) talkLock = false;
   if (fadeTo || inScene || talkLock) near = null;
   if (near !== talkNpc) { talkNpc = near; lineT = 0; }
-  if (talkNpc && !linesOf(talkNpc)) {
-    // その日の セリフが ない のに 会話に 入ってしまった（日づけだけ 変わった ときなど）。
-    // ここで 落ちると ループ ごと 止まるので、だまって 閉じる
-    talkNpc.done = true; talkNpc = null;
-  }
   if (talkNpc) {
-    const L = linesOf(talkNpc);
-    const li = L[talkNpc.idx || 0];
-    lineT += dt;
-    if (lineT >= sayDur(li[1]) || (advance && lineT > 0.3)) {
-      talkNpc.idx = (talkNpc.idx || 0) + 1;
-      lineT = 0;
-      if (talkNpc.idx >= L.length) {
-        // はなしが 尽きた。だれとの はなしだったかを ひきがねに わたす
-        const who = talkNpc.who[0][0];
-        talkNpc.done = true; talkNpc = null;
-        fireTriggers('talk', { who });
+    const pick = linesPick(talkNpc);
+    const L = pick.L;
+    if (!L) {
+      // その日の セリフが ない のに 会話に 入ってしまった（日づけだけ 変わった ときなど）。
+      // ここで 落ちると ループ ごと 止まるので、だまって 閉じる
+      talkNpc.done = true; talkNpc = null;
+    } else {
+      // 会話の とちゅうで 竿を もった等で セリフの かたまりが 差しかわったら、
+      // はじめから 話しなおす。古い idx の まま だと 短い かたまりで はみ出して 落ちる
+      if (talkNpc._blk !== pick.key) { talkNpc._blk = pick.key; talkNpc.idx = 0; lineT = 0; }
+      const idx = Math.min(talkNpc.idx || 0, L.length - 1);   // 念のための 頭打ち
+      const li = L[idx];
+      lineT += dt;
+      if (lineT >= sayDur(li[1]) || (advance && lineT > 0.3)) {
+        talkNpc.idx = idx + 1;
+        lineT = 0;
+        if (talkNpc.idx >= L.length) {
+          // はなしが 尽きた。だれとの はなしだったかを ひきがねに わたす
+          const who = talkNpc.who[0][0];
+          talkNpc.done = true; talkNpc = null;
+          fireTriggers('talk', { who });
+        }
       }
     }
   }
