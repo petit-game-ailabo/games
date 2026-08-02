@@ -98,8 +98,8 @@ function sayBox(who, txt) {
   const lines = wrap(txt, 19, 660);
   const bh = 46 + lines.length*27, by = H - bh - 18;
   ctx.save(); ctx.fillStyle = 'rgba(10,16,12,0.72)'; ctx.fillRect(28, by, W-56, bh); ctx.restore();
-  drawChar(CI[who], 74, by + bh - 12, 56, false, 0);
-  text(NAME[who] || '', 112, by + 26, 14, '#a9c79c');
+  drawChar(ciOf(who), 74, by + bh - 12, 56, false, 0);
+  text(nameOf(who), 112, by + 26, 14, '#a9c79c');
   lines.forEach((s, i) => text(s, 112, by + 52 + i*27, 19, '#ffffff'));
 }
 const sayDur = t => 1.9 + t.length * 0.085;

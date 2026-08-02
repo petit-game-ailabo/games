@@ -20,9 +20,23 @@ const clamp = (v,a,b) => v<a?a:(v>b?b:v);
 const lerp  = (a,b,t) => a + (b-a)*t;
 const dist  = (x1,y1,x2,y2) => Math.hypot(x1-x2, y1-y2);
 
-const CI = { cirno:2, dai:3, rumia:4, wriggle:5, mystia:6, keine:7, reimu:0, marisa:1 };
-const NAME = { cirno:'チルノ', dai:'だいようせい', rumia:'ルーミア', wriggle:'リグル',
-               mystia:'ミスティア', keine:'けーね', reimu:'れいむ', marisa:'まりさ' };
+// ===== データ =====
+// 中身は data/*.json にある。ツクールが 書きかえるのは そっち。
+// fetch で よむので、**ファイルを 直接ひらく（file://）と うごかない。**
+// かならず サーバごしに ひらくこと：  python -m http.server 8000
+let dataErr = '';
+function loadData(url, use, then) {
+  fetch(url).then(r => r.json()).then(use)
+    .catch(() => { dataErr = url + ' が よめない。サーバごしに ひらくこと'; })
+    .then(then);
+}
+
+// キャラの表（data/cast.json）。名まえ・絵のこま番号・浮くか・影のこさ
+let CAST = {};
+const castOf = k => CAST[k] || {};
+const ciOf   = k => CAST[k] ? CAST[k].ci : 0;
+const nameOf = k => CAST[k] ? CAST[k].name : '';
+
 const imgChars = new Image();
 const KANSUJI = ['','一','二','三','四','五','六','七','八','九','十'];
 function hiduke(n) {

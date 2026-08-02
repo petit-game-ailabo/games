@@ -10,6 +10,14 @@ function loop(now) {
     text('よみこみちゅう…', W/2, H/2, 20, '#7fa87a', 'center');
     requestAnimationFrame(loop); return;
   }
+  // データが よめなかったとき。だまって うごかすと 原因が わからなくなる
+  if (state === 'error') {
+    ctx.fillStyle = '#1b0e0c'; ctx.fillRect(0,0,W,H);
+    text(dataErr, W/2, H/2 - 12, 19, '#ffb3a2', 'center');
+    text('れい:  python -m http.server 8000  →  http://127.0.0.1:8000/photo/',
+         W/2, H/2 + 22, 15, '#d8bcb4', 'center', 'normal');
+    requestAnimationFrame(loop); return;
+  }
   if (state === 'title') {
     ctx.drawImage(SC.aze.img, 0, 0, W, H);
     ctx.fillStyle = 'rgba(6,14,8,0.45)'; ctx.fillRect(0,0,W,H);
@@ -194,12 +202,15 @@ function loop(now) {
                           : Math.sin(player.bob) * h*0.008;
     } else if (a.pose === 'walk') {
       off = Math.abs(Math.sin(a.wbob)) * h*0.05 + h*0.05;
-    } else {
-      // ふよふよ。妖精なので すこし浮いている
+    } else if (castOf(a.k).float) {
+      // ふよふよ。妖精や妖怪なので すこし浮いている
       off = Math.sin(elapsed*1.7 + a.ph*7) * h*0.055 + h*0.06;
+    } else {
+      off = 0;                       // 人は 浮かない。地面に立つ
     }
-    shadow(a.x, a.y, h, a.me ? 1 : 0.65);
-    drawChar(CI[a.k], a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
+    const sh = castOf(a.k).shadow;
+    shadow(a.x, a.y, h, a.me ? 1 : (sh === undefined ? 0.65 : sh));
+    drawChar(ciOf(a.k), a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
 
   // ゆうがた。時計は出さず、光の色だけで 時間の ながれを 見せる
@@ -306,11 +317,13 @@ function loop(now) {
 }
 // ===== よみこみ =====
 let pending = 0;
-function done() { if (--pending === 0) { resetDay(); state = 'title'; } }
+function done() { if (--pending === 0) { resetDay(); state = dataErr ? 'error' : 'title'; } }
 function load() {
   pending = 1;
   imgChars.onload = done;
   imgChars.src = 'data:image/png;base64,' + CHARS_B64;
+  pending++;
+  loadData('data/cast.json', j => { CAST = j.cast; }, done);
   for (const k in SC) {
     pending++;
     const im = new Image();

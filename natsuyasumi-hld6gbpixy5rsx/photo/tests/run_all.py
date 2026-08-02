@@ -6,6 +6,11 @@
 # 1本ずつ ブラウザを 立ちあげるので、ぜんぶで 5〜8分 かかる。
 import os, subprocess, sys, time
 
+# Windows の コンソールは 既定が cp932 で、日本語の記号（—）を 出すと 落ちる。
+# 環境に たよらず utf-8 で 出す。
+try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception: pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 TESTS = [
     ("test_screens.py",    "6画面：出発点・歩ける範囲・つながり・会話・近づけるか"),
