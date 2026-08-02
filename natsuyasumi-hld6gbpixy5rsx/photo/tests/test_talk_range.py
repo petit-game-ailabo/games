@@ -37,6 +37,13 @@ with sync_playwright() as pw:
         print(f"  {s}")
         for tag, dx, dy in OFF:
             pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(260)
+            # 画面に入った ときの ひきがねで 場面が 出ることが ある（もりの いしだたみ など）。
+            # おわるまで 待って、**場面あけの talkLock を はずす**。
+            # ここで 見たいのは 近さの はかりかた だけ
+            for _ in range(60):
+                if not pg.evaluate("window._ctrl.scene()"): break
+                pg.wait_for_timeout(200)
+            pg.evaluate("window._ctrl.free()")
             pg.evaluate(f"window._ctrl.put({nx+dx},{ny+dy})"); pg.wait_for_timeout(300)
             d = pg.evaluate("window._ctrl.dbg()")
             if d["cur"] != s:
