@@ -75,17 +75,17 @@ with sync_playwright() as pw:
         pg.wait_for_timeout(1300)
         p = pg.evaluate("window._ctrl.place()")
         seen[s] = p
-        print(f"  {s:8s} amb={p['amb']:4s} 風={p['wind']:.3f} こもり={p['windF']:4d}Hz 水={p['water']:.3f}")
+        print(f"  {s:8s} amb={p['amb']:4s} 葉ずれ={p['sawa']:.2f} 水={p['water']:.3f}")
         if p["amb"] != amb: fails.append(f"{s}: amb が {p['amb']}（{amb} のはず）")
-    if not (seen["zashiki"]["wind"] < seen["iemae"]["wind"] < seen["mori"]["wind"]):
-        fails.append("家のなか < いえのまえ < そとの みち の じゅんに 風が 強く なっていない")
-    if not (seen["zashiki"]["windF"] < seen["mori"]["windF"]):
-        fails.append("家のなかの 風が こもっていない")
-    if not (seen["aze"]["water"] > 0.01): fails.append("あぜみちで 水の音が しない")
-    if seen["mori"]["water"] > 0.01: fails.append("水の ない画面で 水の音が する")
+    # **鳴りっぱなしの 音は 置かない。**耳の 負担に なるし、ひくい うなりは こわい
+    if not (seen["zashiki"]["sawa"] < seen["iemae"]["sawa"] < seen["mori"]["sawa"]):
+        fails.append("家のなか < いえのまえ < そとの みち の じゅんに 葉ずれが 多く なっていない")
+    if not (seen["aze"]["water"] > 0.005): fails.append("あぜみちで 水の音が しない")
+    if seen["aze"]["water"] > 0.05: fails.append("水の音が 大きすぎる（鳴りっぱなしの 音は 小さく）")
+    if seen["mori"]["water"] > 0.005: fails.append("水の ない画面で 水の音が する")
 
-    # 家のなかでは 風鈴、そとの みちでは 木の葉ずれ
-    for s, want in [("zashiki", "fuurin"), ("mori", "kaze")]:
+    # 家のなかでは 風鈴、そとの みちでは 葉ずれ
+    for s, want in [("zashiki", "fuurin"), ("mori", "sawa")]:
         pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(400)
         got = set()
         for _ in range(160):
@@ -158,6 +158,37 @@ with sync_playwright() as pw:
         print(f"  {s:8s} うたが きこえる={bool(got)} {got if got else ''}")
         if should and not got: fails.append(f"{s}: 近いのに うたが きこえない")
         if not should and got: fails.append(f"{s}: 遠すぎるのに うたが きこえる")
+
+    # --- 家を 出た しゅんかん だけ 短く 鳴る。1日1回
+    print()
+    # ここまでの 行き来で もう 家を 出てしまっている（1日1回なので）。日を 変えて やり直す
+    pg.evaluate("window._ctrl.setDay(4); window._ctrl.setYoru(true);")
+    pg.evaluate("window._ctrl.goto('rouka')"); pg.wait_for_timeout(700)   # 家のなか
+    n0 = pg.evaluate("window._ctrl.dekake()")["n"]
+    pg.evaluate("window._ctrl.goto('iemae')"); pg.wait_for_timeout(900)   # 外へ
+    n1 = pg.evaluate("window._ctrl.dekake()")["n"]
+    print(f"  はじめて 外へ 出た: {n1-n0}回 鳴った")
+    if n1 - n0 != 1: fails.append(f"家を 出ても 曲が 鳴らない（{n1-n0}回）")
+    # 2回目は 鳴らない
+    pg.evaluate("window._ctrl.goto('rouka')"); pg.wait_for_timeout(700)
+    pg.evaluate("window._ctrl.goto('iemae')"); pg.wait_for_timeout(900)
+    n2 = pg.evaluate("window._ctrl.dekake()")["n"]
+    print(f"  おなじ日に もう一度: {n2-n1}回")
+    if n2 != n1: fails.append(f"おなじ日に なんども 鳴る（{n2-n1}回）")
+    # つぎの日は また 鳴る
+    pg.evaluate("window._ctrl.setDay(5)")
+    pg.evaluate("window._ctrl.goto('rouka')"); pg.wait_for_timeout(700)
+    pg.evaluate("window._ctrl.goto('iemae')"); pg.wait_for_timeout(900)
+    n3 = pg.evaluate("window._ctrl.dekake()")["n"]
+    print(f"  つぎの日: {n3-n2}回")
+    if n3 - n2 != 1: fails.append(f"日が 変わっても 鳴らない（{n3-n2}回）")
+    # 外どうしの 行き来では 鳴らない
+    pg.evaluate("window._ctrl.setDay(6)")
+    pg.evaluate("window._ctrl.goto('aze')"); pg.wait_for_timeout(700)
+    pg.evaluate("window._ctrl.goto('iemae')"); pg.wait_for_timeout(900)
+    n4 = pg.evaluate("window._ctrl.dekake()")["n"]
+    print(f"  外から 外へ: {n4-n3}回")
+    if n4 != n3: fails.append("家を 出ていないのに 鳴る")
 
     # 音を 足しても こまが 落ちていないか
     fps = pg.evaluate("""() => new Promise(r => { let n=0; const t0=performance.now();

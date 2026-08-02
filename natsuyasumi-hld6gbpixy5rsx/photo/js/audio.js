@@ -1,15 +1,16 @@
 // 自動でわけたファイル。もとは photo/index.html 1枚だった
 // ===== 音（環境音だけ。曲は 朝の たいそう のときだけ）=====
 let AC = null, ambGain = null, ambTimer = 0;
-let windLP = null, windGain = null, mizuGain = null;
-// 足音は 1秒に 3回ほど 鳴る。そのたび 音の もとを 作ると ごみが たまるので 使いまわす
-let shortNoise = null;
+let mizuGain = null;
+// 音の もとは 使いまわす。そのたび 作ると ごみが たまる
+let shortNoise = null, longNoise = null;
 
-// 場所ごとの 風の きこえかた。
-//   in  家のなか … こもって 小さい
-//   out いえのまえ … ふつう
-//   ki  そとの みち … 木の葉ずれで つよめ
-const WIND = { in:{ f:300, g:0.05 }, out:{ f:480, g:0.15 }, ki:{ f:640, g:0.22 } };
+// **ずっと 鳴りつづける 音は 作らない。**
+// ひとつの 音を 鳴らしっぱなしに すると 耳が つかれるし、
+// ひくい うなりは こわい 風に きこえる。
+// ほんものの 夏の 外は、セミと、ときどき 来る 葉ずれと、鳥。**小さい音の あつまり**。
+//   p … 葉ずれが 来る ぐあい   v … その 大きさ
+const SAWA = { in:{ p:0.06, v:0.008 }, out:{ p:0.34, v:0.018 }, ki:{ p:0.55, v:0.028 } };
 
 function noiseBuf(sec) {
   const len = AC.sampleRate * sec;
@@ -23,21 +24,37 @@ function initAudio() {
   try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
   ambGain = AC.createGain(); ambGain.gain.value = 0.0; ambGain.connect(AC.destination);
   shortNoise = noiseBuf(0.3);
+  longNoise  = noiseBuf(3);
 
-  // 風。ずっと 鳴っている。場所で こもりぐあいと 大きさを 変える
-  const src = AC.createBufferSource(); src.buffer = noiseBuf(3); src.loop = true;
-  windLP = AC.createBiquadFilter(); windLP.type='lowpass'; windLP.frequency.value=420;
-  windGain = AC.createGain(); windGain.gain.value = 0.16;
-  src.connect(windLP); windLP.connect(windGain); windGain.connect(ambGain); src.start();
-
-  // 水の音。**水のそばの 画面でだけ** 大きくなる（screens.json の mizu）
-  const w = AC.createBufferSource(); w.buffer = noiseBuf(3); w.loop = true;
-  const wbp = AC.createBiquadFilter(); wbp.type='bandpass'; wbp.frequency.value=900; wbp.Q.value=0.6;
-  const whp = AC.createBiquadFilter(); whp.type='highpass'; whp.frequency.value=320;
+  // 水の音。**水のそばの 画面でだけ**。ここだけは ほんとうに 鳴りつづける ものなので
+  // のこすが、うんと 小さく、しゃーっと した 高い成分は けずる
+  const w = AC.createBufferSource(); w.buffer = longNoise; w.loop = true;
+  const wbp = AC.createBiquadFilter(); wbp.type='bandpass'; wbp.frequency.value=760; wbp.Q.value=0.5;
+  const wlp = AC.createBiquadFilter(); wlp.type='lowpass';  wlp.frequency.value=1800;
   mizuGain = AC.createGain(); mizuGain.gain.value = 0;
-  w.connect(wbp); wbp.connect(whp); whp.connect(mizuGain); mizuGain.connect(ambGain); w.start();
+  w.connect(wbp); wbp.connect(wlp); wlp.connect(mizuGain); mizuGain.connect(ambGain); w.start();
 
   ambGain.gain.linearRampToValueAtTime(0.9, AC.currentTime + 1.6);
+}
+
+// --- 葉ずれ。**さわさわと 来て、さわさわと 去る。**
+// ひくい音は 入れない。ひくい うなりが こわい 風の しょうたい
+function sawasawa(vol) {
+  if (!AC || !longNoise) return;
+  const t = AC.currentTime, dur = 1.6 + Math.random()*2.8;
+  const s = AC.createBufferSource(); s.buffer = longNoise; s.loop = true;
+  s.playbackRate.value = 0.8 + Math.random()*0.5;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = 1600 + Math.random()*1700;     // 葉ずれは 高い
+  bp.Q.value = 0.7;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 950;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + dur*0.4);           // ゆっくり 来て
+  g.gain.linearRampToValueAtTime(vol*0.65, t + dur*0.65);
+  g.gain.linearRampToValueAtTime(0.0001, t + dur);            // ゆっくり 去る
+  s.connect(bp); bp.connect(hp); hp.connect(g); g.connect(ambGain);
+  s.start(t); s.stop(t + dur + 0.05);
 }
 
 // --- 足音。画面ごとに ふみごこちを 変える（screens.json の ashi）。
@@ -165,31 +182,44 @@ function fuurin(vol) {
   }
 }
 
-// --- 木の葉ずれ。風が ひとしきり 強く なる
-function kaze(vol, dur) {
-  if (!AC || !windGain) return;
-  const t = AC.currentTime, base = windGain.gain.value;
-  windGain.gain.cancelScheduledValues(t);
-  windGain.gain.setValueAtTime(base, t);
-  windGain.gain.linearRampToValueAtTime(base + vol, t + dur*0.35);
-  windGain.gain.linearRampToValueAtTime(base, t + dur);
+// --- 家を 出た しゅんかん だけ 短く 鳴る（DESIGN.md §1）。**その日 はじめて 外に 出たとき だけ。**
+// 出入りの たび 鳴らすと わずらわしく、「きょうの ぼうけんが はじまる」感じが 消える
+const DEKAKE_MEL = [
+  [0,1],[4,1],[7,1],[12,2],
+  [9,1],[7,1],[9,1],[12,3],
+];
+let dekakeCount = 0;
+function dekake() {
+  if (!AC) return;
+  dekakeCount++;
+  const e = 0.19;
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3600;
+  const g  = AC.createGain(); g.gain.value = 0.5;
+  lp.connect(g); g.connect(AC.destination);
+  const t0 = AC.currentTime + 0.05;
+  let at = 0;
+  for (const [semi, d] of DEKAKE_MEL) {
+    beep(1046.5 * Math.pow(2, semi/12), t0 + at*e, d*e*0.9, 0.12, 'triangle', lp);
+    at += d;
+  }
+  for (let i = 0; i < at; i += 2) beep(261.6, t0 + i*e, 0.10, 0.06, 'sine', lp);
 }
 
-// --- 画面が 変わったら 風と 水を つけ変える。**ゆっくり 変える**（ぶつ切りだと 不自然）
-let lastPlace = '';
+// --- 画面が 変わったとき。水だけ ゆっくり つけ変える（ぶつ切りだと 不自然）
+let lastPlace = '', prevAmb = '';
 function setPlaceSound() {
   if (!AC || cur === lastPlace) return;
   lastPlace = cur; lastPlace2 = '';    // 前の画面の のこりが 検査で 嘘に 見えないように
-  const sc = SC[cur] || {}, w = WIND[sc.amb] || WIND.out, t = AC.currentTime;
-  windLP.frequency.cancelScheduledValues(t);
-  windLP.frequency.setValueAtTime(windLP.frequency.value, t);
-  windLP.frequency.linearRampToValueAtTime(w.f, t + 0.8);
-  windGain.gain.cancelScheduledValues(t);
-  windGain.gain.setValueAtTime(windGain.gain.value, t);
-  windGain.gain.linearRampToValueAtTime(w.g, t + 0.8);
+  const sc = SC[cur] || {}, t = AC.currentTime;
+  // 家のなか から 外へ 出た
+  if (state === 'play' && prevAmb === 'in' && sc.amb !== 'in' && !WORLD.dekakeDone) {
+    WORLD.dekakeDone = true;
+    dekake();
+  }
+  prevAmb = sc.amb;
   mizuGain.gain.cancelScheduledValues(t);
   mizuGain.gain.setValueAtTime(mizuGain.gain.value, t);
-  mizuGain.gain.linearRampToValueAtTime((sc.mizu || 0) * 0.09, t + 0.8);
+  mizuGain.gain.linearRampToValueAtTime((sc.mizu || 0) * 0.028, t + 0.8);
 }
 function cicada(vol, freq, dur) {
   if (!AC) return;
@@ -363,16 +393,16 @@ function ambKind() {
 let lastAmb = '', lastPlace2 = '';
 function ambientTick(dt) {
   if (!AC) return;
-  setPlaceSound();              // 画面が 変わっていたら 風と 水を つけ変える
+  setPlaceSound();              // 画面が 変わっていたら 水を つけ変える
   ambTimer -= dt;
   if (ambTimer > 0) return;
   const sc = SC[cur], inside = (sc.amb === 'in'), ki = (sc.amb === 'ki');
   const vol = ki ? 0.13 : (inside ? 0.035 : 0.06);
   ambTimer = (inside ? 1.6 : 0.7) + Math.random()*1.8;
-  // 場所の音。虫や鳥とは べつに、その場所らしい 音を まぜる
-  // **ずっと 不ぞろいに ながれている** ものなので、まばらには しない
+  // 場所の音。**どれも 来ては 去る。鳴りっぱなしの ものは ひとつも 置かない**
   if (inside && Math.random() < 0.42) { fuurin(0.026); lastPlace2 = 'fuurin'; }
-  else if (ki && Math.random() < 0.28) { kaze(0.10, 2.2 + Math.random()*1.6); lastPlace2 = 'kaze'; }
+  const sw = SAWA[sc.amb] || SAWA.out;
+  if (Math.random() < sw.p) { sawasawa(sw.v); lastPlace2 = 'sawa'; }
 
   const kind = ambKind();
   lastAmb = kind;

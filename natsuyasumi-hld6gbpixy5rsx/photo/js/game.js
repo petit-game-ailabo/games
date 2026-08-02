@@ -189,6 +189,11 @@ function loop(now) {
   if (!anyNear) talkLock = false;
   if (fadeTo || inScene || talkLock) near = null;
   if (near !== talkNpc) { talkNpc = near; lineT = 0; }
+  if (talkNpc && !linesOf(talkNpc)) {
+    // その日の セリフが ない のに 会話に 入ってしまった（日づけだけ 変わった ときなど）。
+    // ここで 落ちると ループ ごと 止まるので、だまって 閉じる
+    talkNpc.done = true; talkNpc = null;
+  }
   if (talkNpc) {
     const L = linesOf(talkNpc);
     const li = L[talkNpc.idx || 0];
@@ -414,14 +419,15 @@ if (qs.has('record') || EDIT) {
     setSteps: n => { WORLD.steps = n; },
     setMukae: v => { WORLD.mukaeDone = !!v; },
     setYoru: v => { WORLD.yoruDone = !!v; },
-    setDay: n => { newDay(n); },
+    // 日づけを 変えたら 会話の すすみ具合も 入れ直す（ねたときと おなじ）
+    setDay: n => { newDay(n); resetDay(); },
     amb: () => ({ kind:ambKind(), last:lastAmb, dayT:+dayT().toFixed(2), on:!!AC }),
     foot: () => ({ want:SC[cur].ashi || 'tsuchi', last:lastFootKind, n:footCount }),
     uta: () => ({ now:utaNow, dist:(EVENTS.tooi || []).map(t => [t.id, screenDist(cur, t.place)]) }),
     utaNow: () => { utaTimer = 0; },
+    dekake: () => ({ n:dekakeCount, done:WORLD.dekakeDone }),
     place: () => ({ cur, amb:SC[cur].amb, mizu:SC[cur].mizu || 0, lastPlace2,
-                    wind: windGain ? +windGain.gain.value.toFixed(3) : null,
-                    windF: windLP ? Math.round(windLP.frequency.value) : null,
+                    sawa: (SAWA[SC[cur].amb] || SAWA.out).p,
                     water: mizuGain ? +mizuGain.gain.value.toFixed(3) : null }),
     lastDay: LAST_DAY,
     world: () => JSON.parse(JSON.stringify(WORLD)),

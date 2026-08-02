@@ -10,6 +10,7 @@ const WORLD = {
   mukaeDone: false,  // きょう もう むかえが 来たか
   yoruDone: false,   // きょう もう 晩ごはんと 縁側が すんだか
   duskFired: false,  // きょう もう 日ぐれの ひきがねを ひいたか
+  dekakeDone: false, // きょう もう 家を 出たか（出かけの 曲は 1日1回）
   fired: {},         // ひいた ひきがね  { ひきがねのID: ひいた日 }
   flags: {},         // 立てた しるし     { なまえ: 立った日 }
   items: {},         // もちもの         { なまえ: true }
@@ -57,6 +58,7 @@ const everVisited = place => (WORLD.visited[place] || []).length > 0;
 function newDay(d) {
   WORLD.day = d; WORLD.steps = 0;
   WORLD.mukaeDone = false; WORLD.yoruDone = false; WORLD.duskFired = false;
+  WORLD.dekakeDone = false;
 }
 
 // --- はじめから。しるしも もちものも すてる
