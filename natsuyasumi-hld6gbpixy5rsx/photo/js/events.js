@@ -136,17 +136,28 @@ function serveQueue(at, ctx) {
 // --- あとから NPC が ふえたり 居なくなったり する。
 // SC は 毎回 data から よみ直すので、変えたぶんは WORLD に のこして ここで つけ直す
 function applyNpcChanges() {
-  for (const n of WORLD.npcAdd) {
-    const sc = SC[n.place]; if (!sc) continue;
-    sc.npc = sc.npc || [];
-    if (sc.npc.some(e => e.added === n.who)) continue;
-    sc.npc.push({ who:[[n.who, n.x, n.y]], talks:n.talks, added:n.who });
-  }
-  for (const key of WORLD.npcGone) {
-    const [place, who] = key.split(':');
-    const sc = SC[place]; if (!sc || !sc.npc) continue;
-    for (const e of sc.npc) e.who = e.who.filter(w => w[0] !== who);
-    sc.npc = sc.npc.filter(e => e.who.length);
+  for (const k in SC) {
+    const sc = SC[k];
+    // はじめの すがたを とっておく。ここに もどしてから つけ直すので、
+    // 「はじめから」で 前の周回の NPC が のこらない
+    if (!sc.npc0) sc.npc0 = JSON.stringify(sc.npc || []);
+    // きょうの 会話の すすみ具合は 消さない
+    const keep = {};
+    for (const e of (sc.npc || [])) keep[e.who.map(w => w[0]).join(',')] = [e.idx, e.done];
+    sc.npc = JSON.parse(sc.npc0);
+
+    for (const n of WORLD.npcAdd) if (n.place === k)
+      sc.npc.push({ who:[[n.who, n.x, n.y]], talks:n.talks });
+    for (const key of WORLD.npcGone) {
+      const [place, who] = key.split(':');
+      if (place !== k) continue;
+      for (const e of sc.npc) e.who = e.who.filter(w => w[0] !== who);
+      sc.npc = sc.npc.filter(e => e.who.length);
+    }
+    for (const e of sc.npc) {
+      const v = keep[e.who.map(w => w[0]).join(',')];
+      if (v) { e.idx = v[0]; e.done = v[1]; }
+    }
   }
 }
 

@@ -60,7 +60,14 @@ function stepScene(dt) {
       // まっくらにしてから 画面を入れかえ、また あかるくする
       if (scene.t < TO_OUT) veil = scene.t / TO_OUT;
       else {
-        if (!scene.flags[scene.i]) { scene.flags[scene.i] = 1; enter(st.sc, st.at); }
+        if (!scene.flags[scene.i]) {
+          scene.flags[scene.i] = 1;
+          enter(st.sc, st.at);
+          // **場面の 自動移動は「じぶんで 来た」に しない。**
+          // ここを 空のままに すると、場面が おわった つぎのフレームに
+          // 'enter' の ひきがねが かってに ひかれる（毎朝 どまで 起きてしまう）
+          firedScreen = st.sc;
+        }
         veil = clamp(1 - (scene.t - TO_OUT) / TO_IN, 0, 1);
       }
       done = scene.t >= TO_OUT + TO_IN;

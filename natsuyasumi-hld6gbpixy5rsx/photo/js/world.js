@@ -64,6 +64,8 @@ function resetWorld() {
   newDay(1);
   WORLD.flags = {}; WORLD.items = {}; WORLD.placed = {}; WORLD.visited = {};
   WORLD.queue = []; WORLD.fired = {};
+  WORLD.npcAdd = []; WORLD.npcGone = [];
+  applyNpcChanges();     // SC に つけた ぶんも もとに もどす
 }
 
 // --- セーブ。ねたときに 書く。立ち位置は のこさない（つぎの日の 朝から はじまる）
