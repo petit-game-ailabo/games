@@ -159,6 +159,31 @@ with sync_playwright() as pw:
     print(f"  セーブの中: {n3}")
     if (n3 or {}).get("stamp") != 2: fails.append("数が セーブに のっていない")
 
+    # --- 時間帯の じょうけん（K5a）。**耳で きこえる 音と 同じ 区切り**で ないと
+    # 手がかりに ならない（時計を 出さない ゲームなので）
+    print()
+    r = pg.evaluate("""() => {
+      resetWorld(); state = 'play';
+      const out = [];
+      for (const s of [0, 6, 16]) { WORLD.steps = s;
+        out.push([s, ambKind(), matchWhen({toki:ambKind()}, {}),
+                  matchWhen({toki:'asa'}, {})]); }
+      WORLD.steps = 24; WORLD.yoruDone = true;
+      out.push([24, ambKind(), matchWhen({toki:'yoru'}, {}), matchWhen({toki:'asa'}, {})]);
+      WORLD.yoruDone = false; WORLD.steps = 12;
+      return { rows: out,
+               list: [matchWhen({toki:['hiru','yoru']}, {}), matchWhen({toki:['asa']}, {})],
+               fine: [matchWhen({tokiFrom:0.4}, {}), matchWhen({tokiFrom:0.6}, {})],
+               plain: [matchWhen({}, {}), matchWhen(null, {})] };
+    }""")
+    for steps, kind, same, isAsa in r["rows"]:
+        ok = same and (isAsa == (kind == "asa"))
+        print(f"  steps={steps:2d} きこえる={kind:7s} じょうけんと 一致={same} {'OK' if ok else 'NG'}")
+        if not ok: fails.append(f"steps={steps}: 時間帯の じょうけんが 耳と 合わない（{kind}）")
+    if r["list"] != [True, False]: fails.append("toki を ならびで 書けない")
+    if r["fine"] != [True, False]: fails.append("tokiFrom が きいていない")
+    if r["plain"] != [True, True]: fails.append("じょうけんを 書かないと 通らなくなった")
+
     print("\nerrors:", errs[:5])
     if errs: fails.append("エラー " + str(errs[:3]))
     b.close()

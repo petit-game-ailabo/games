@@ -30,6 +30,16 @@ function matchWhen(w, ctx) {
     if (w.flagAge.from !== undefined && age < w.flagAge.from) return false;
     if (w.flagAge.to   !== undefined && age > w.flagAge.to)   return false;
   }
+  // 時間帯。**耳で きこえている ものと 同じ 区切り**を つかう（audio.js の ambKind）。
+  // 時計は 出さないので、条件と 音が ずれると 手がかりに ならない。
+  //   { toki:'yugata' } / { toki:['yugata','yoru'] }
+  if (w.toki !== undefined) {
+    const k = ambKind();
+    if (Array.isArray(w.toki) ? w.toki.indexOf(k) < 0 : w.toki !== k) return false;
+  }
+  // もっと こまかく。0＝あさ 1＝日ぐれ
+  if (w.tokiFrom !== undefined && dayT() < w.tokiFrom) return false;
+  if (w.tokiTo   !== undefined && dayT() > w.tokiTo)   return false;
   // 数で 出しわける。{ num: { key:'stamp', min:10 } }
   if (w.num !== undefined) {
     const v = numOf(w.num.key);
