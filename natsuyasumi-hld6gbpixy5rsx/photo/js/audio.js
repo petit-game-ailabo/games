@@ -109,43 +109,59 @@ function footTick() {
 //     数Hz の ずれが ゆっくりした ゆらぎ（うなり）に なる。鐘の warble と 同じ機構。
 //     **これが 風鈴らしさの 正体。** 前の 実装には これが なかった
 //  4. 舌が あたる 瞬間だけ 雑音が のる
+// **この家の 風鈴は ずっと 同じ もの。だから 音程は 変わらない。**
+// たたくたび 音程を ふると、毎回 べつの物を たたいている ことに なり、鐘に きこえる
+const FUURIN_F    = 2640;   // その ガラスの 音程
+const FUURIN_BEAT = 2.3;    // ゆがみで 割れた ぶんの ずれ（Hz）。うなりに なる
+
+// 一回ぶん。**「ちりーん」の ーん は 長い。**
+// はじめに すっと おちて、そのあと 3〜4秒 かけて 消えていく
+function fuurinHit(t, vol) {
+  const ring = 3.4 + vol*22;               // つよく たたくほど 長く のこる
+  for (const df of [0, FUURIN_BEAT]) {
+    const o = AC.createOscillator(); o.type = 'sine';
+    o.frequency.value = FUURIN_F + df;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol*0.5, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(vol*0.15, t + 0.25);   // はじめの おち
+    g.gain.exponentialRampToValueAtTime(0.0001, t + ring);      // 長い しっぽ
+    o.connect(g); g.connect(ambGain);
+    o.start(t); o.stop(t + ring + 0.1);
+  }
+  // 上の モード。**ごく かすかに、すぐ 消える。**ここが 出すぎると 鐘に なる
+  for (const [m, v, d] of [[2.83, 0.06, 0.06], [5.42, 0.02, 0.03]]) {
+    const o = AC.createOscillator(); o.type = 'sine';
+    o.frequency.value = FUURIN_F * m;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol*v, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(ambGain);
+    o.start(t); o.stop(t + d + 0.05);
+  }
+  if (shortNoise) {                          // 舌が あたる 音。ごく かすかに
+    const s = AC.createBufferSource(); s.buffer = shortNoise;
+    const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 3200;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(vol*0.22, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+    s.connect(hp); hp.connect(g); g.connect(ambGain);
+    s.start(t); s.stop(t + 0.05);
+  }
+}
+
+// **風に ゆられるので 不ぞろいに なる。** ひと吹きで 2〜5回、
+// 間隔も つよさも ばらばら。おなじ 音程なので かさなっても にごらない
 function fuurin(vol) {
   if (!AC) return;
   const t0 = AC.currentTime;
-  const f    = 1950 + Math.random()*420;
-  const beat = 1.4 + Math.random()*2.4;      // うなり。1〜4Hz が ここちよい
-  const ring = 1.6 + Math.random()*1.2;
-
-  // いちばん低い モード。**わずかに ずれた 2つ**で ゆらぎを 作る
-  for (const df of [0, beat]) {
-    const o = AC.createOscillator(); o.type = 'sine';
-    o.frequency.value = f + df;
-    const g = AC.createGain();
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(vol*0.5, t0 + 0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + ring);
-    o.connect(g); g.connect(ambGain);
-    o.start(t0); o.stop(t0 + ring + 0.1);
-  }
-  // 上の モード。**すぐ 消える**。たたいた しゅんかんの 明るさ だけを 出す
-  for (const [m, v, d] of [[2.83, 0.15, 0.10], [5.42, 0.05, 0.05]]) {
-    const o = AC.createOscillator(); o.type = 'sine';
-    o.frequency.value = f * m * (0.995 + Math.random()*0.01);
-    const g = AC.createGain();
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.linearRampToValueAtTime(vol*v, t0 + 0.003);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
-    o.connect(g); g.connect(ambGain);
-    o.start(t0); o.stop(t0 + d + 0.05);
-  }
-  if (shortNoise) {                          // 舌が あたる 音
-    const s = AC.createBufferSource(); s.buffer = shortNoise;
-    const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 2800;
-    const g = AC.createGain();
-    g.gain.setValueAtTime(vol*0.35, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.035);
-    s.connect(hp); hp.connect(g); g.connect(ambGain);
-    s.start(t0); s.stop(t0 + 0.06);
+  const n = 1 + Math.floor(Math.random()*4);   // ひと吹きで 1〜4回。これも 不ぞろい
+  let at = 0;
+  for (let i = 0; i < n; i++) {
+    fuurinHit(t0 + at, vol * (0.4 + Math.random()*0.8));
+    // かけ算で 短い間隔が 多くなる。ときどき 長く あく＝不ぞろい
+    at += 0.08 + Math.random()*Math.random()*0.95;
   }
 }
 
@@ -283,7 +299,8 @@ function ambientTick(dt) {
   const vol = ki ? 0.13 : (inside ? 0.035 : 0.06);
   ambTimer = (inside ? 1.6 : 0.7) + Math.random()*1.8;
   // 場所の音。虫や鳥とは べつに、その場所らしい 音を まぜる
-  if (inside && Math.random() < 0.18) { fuurin(0.035); lastPlace2 = 'fuurin'; }
+  // **ずっと 不ぞろいに ながれている** ものなので、まばらには しない
+  if (inside && Math.random() < 0.42) { fuurin(0.026); lastPlace2 = 'fuurin'; }
   else if (ki && Math.random() < 0.28) { kaze(0.10, 2.2 + Math.random()*1.6); lastPlace2 = 'kaze'; }
 
   const kind = ambKind();
