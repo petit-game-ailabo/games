@@ -1,0 +1,72 @@
+// ===== 世界の じょうたい =====
+// **日を またいで のこるもの だけ** ここに 入れる。
+// いま どこに 立っているか・場面の とちゅう などは のこさない（そっちは state.js）。
+// ここが そのまま セーブの中身。ふえるときは この形に 足すこと。
+const SAVE_KEY = 'natsuyasumi.photo.v1';
+
+const WORLD = {
+  day: 1,
+  steps: 0,          // きょう 画面を 移った回数。時計の かわり
+  mukaeDone: false,  // きょう もう むかえが 来たか
+  flags: {},         // 立てた しるし     { なまえ: 立った日 }
+  items: {},         // もちもの         { なまえ: true }
+  placed: {},        // 場所に 置かれた物  { 場所: [なまえ, ...] }
+  visited: {},       // どこに いつ 行ったか { 場所: [日, ...] }
+  queue: [],         // あとで 効く よやく（B2 で つかう）
+};
+
+const DAY_STEPS = 24;                                  // これだけ 画面を移ると 日ぐれ
+const dayT = () => clamp(WORLD.steps / DAY_STEPS, 0, 1);   // 0=あさ 1=日ぐれ
+
+// --- しるし
+const hasFlag = k => WORLD.flags[k] !== undefined;
+const flagDay = k => WORLD.flags[k];                       // いつ 立ったか（何日目か）
+function setFlag(k) { if (!hasFlag(k)) WORLD.flags[k] = WORLD.day; }
+
+// --- もちもの と 置かれた物
+const hasItem = k => !!WORLD.items[k];
+function giveItem(k) { WORLD.items[k] = true; }
+function putItem(place, k) {
+  const a = WORLD.placed[place] = WORLD.placed[place] || [];
+  if (a.indexOf(k) < 0) a.push(k);
+}
+const itemsAt = place => WORLD.placed[place] || [];
+
+// --- どこに いつ 行ったか。おなじ日に 何度 来ても 1回だけ かぞえる
+function noteVisit(place) {
+  const v = WORLD.visited[place] = WORLD.visited[place] || [];
+  if (v[v.length-1] !== WORLD.day) v.push(WORLD.day);
+}
+const visitedOn = (place, d) => (WORLD.visited[place] || []).indexOf(d) >= 0;
+const everVisited = place => (WORLD.visited[place] || []).length > 0;
+
+// --- 1日ぶんを まっさらに（日が変わるとき）
+function newDay(d) { WORLD.day = d; WORLD.steps = 0; WORLD.mukaeDone = false; }
+
+// --- はじめから。しるしも もちものも すてる
+function resetWorld() {
+  newDay(1);
+  WORLD.flags = {}; WORLD.items = {}; WORLD.placed = {}; WORLD.visited = {}; WORLD.queue = [];
+}
+
+// --- セーブ。ねたときに 書く。立ち位置は のこさない（つぎの日の 朝から はじまる）
+function saveWorld() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(WORLD)); } catch (e) {}
+}
+function loadWorld() {
+  try {
+    const s = localStorage.getItem(SAVE_KEY);
+    if (!s) return false;
+    const o = JSON.parse(s);
+    if (!o || typeof o.day !== 'number') return false;
+    Object.assign(WORLD, o);
+    return true;
+  } catch (e) { return false; }
+}
+function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+function savedDay() {
+  try {
+    const o = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    return (o && typeof o.day === 'number' && o.day > 1) ? o.day : 0;
+  } catch (e) { return 0; }
+}

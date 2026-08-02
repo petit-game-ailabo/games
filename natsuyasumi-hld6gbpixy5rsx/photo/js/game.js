@@ -27,7 +27,18 @@ function loop(now) {
     text('だれかの そばに いると はなしを してくれる', W/2, 368, 16, '#c9dcc0', 'center');
     text('スペース / タップ で セリフを つぎへ', W/2, 396, 16, '#c9dcc0', 'center');
     text('ざしきの ふとんで じっとしていると 1にちが おわる', W/2, 424, 16, '#c9dcc0', 'center');
-    text(usingTouch ? 'がめんを ドラッグ ではじまる' : 'スペースキー ではじまる', W/2, 456, 16, '#c9dcc0', 'center');
+    // ねた ところから つづけられる。だまって つづきに するのは わかりにくいので、
+    // ある ときだけ 出して、はじめから やりなおす道も のこす
+    const sd = savedDay();
+    if (sd) {
+      text(usingTouch ? 'タップで つづきから（八月' + hiduke(sd) + '日）'
+                      : 'スペースキーで つづきから（八月' + hiduke(sd) + '日）',
+           W/2, 452, 16, '#ffe6a8', 'center');
+      text(usingTouch ? 'ここを タップで はじめから' : 'R キーで はじめから',
+           W/2, 476, 15, '#a9bfa2', 'center');   // この もじの ところが RESTART_BOX
+    } else {
+      text(usingTouch ? 'がめんを ドラッグ ではじまる' : 'スペースキー ではじまる', W/2, 456, 16, '#c9dcc0', 'center');
+    }
     text('背景写真: Guilhem Vellut / 663highland / Fumihiko Ueno（CC BY・Wikimedia Commons）',
          W/2, 502, 12, 'rgba(226,238,220,0.72)', 'center', 'normal');
     text('キャラ: Majstek — 非商用　／　ラジオたいそうの曲は じさく（原曲は使っていません）',
@@ -97,7 +108,7 @@ function loop(now) {
       fade += dt * 3.4;
       if (fade >= 1) {
         fade = 1;
-        if (fadeTo.to) { enter(fadeTo.to, fadeTo.at); steps++; }  // 画面を移ると 時間がすすむ
+        if (fadeTo.to) { enter(fadeTo.to, fadeTo.at); WORLD.steps++; }  // 画面を移ると 時間がすすむ
         fadeTo = { done:true };
       }
     } else {
@@ -109,8 +120,8 @@ function loop(now) {
   }
 
   // --- 日がくれたら けーねが むかえに来る。はなしの とちゅうでは 割りこまない
-  if (!inScene && !fadeTo && !mukaeDone && !talkNpc && steps >= DAY_STEPS) {
-    mukaeDone = true;
+  if (!inScene && !fadeTo && !WORLD.mukaeDone && !talkNpc && WORLD.steps >= DAY_STEPS) {
+    WORLD.mukaeDone = true;
     runScene(mukaeScript());
     state = 'scene';
   }
@@ -121,11 +132,7 @@ function loop(now) {
     if (!inBed) nedokoArmed = true;
     if (inBed && nedokoArmed && !player.moving) {
       nedokoT += dt;
-      if (nedokoT > 1.0) {
-        day++;
-        runScene([...NIGHT, ...morningScript(day)]);
-        state = 'scene'; resetDay();
-      }
+      if (nedokoT > 1.0) sleepNow();
     } else nedokoT = 0;
   }
 
@@ -304,7 +311,7 @@ function loop(now) {
       ctx.stroke();
     }
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, H-58, W, 58);
-    text(cur + '  八月' + day + '日  [' + Math.round(mouse.x) + ', ' + Math.round(mouse.y)
+    text(cur + '  八月' + WORLD.day + '日  [' + Math.round(mouse.x) + ', ' + Math.round(mouse.y)
        + ']  せ:' + Math.round(heightAt(player.y)) + '  ' + (walkable(player.x,player.y)?'ゆか':'そと'),
        12, H-34, 15, '#ffe08a');
     text('クリックで点を置く／Backspaceで戻す／Cでコンソールに出力：' + JSON.stringify(editPts).slice(0,84),
@@ -350,8 +357,7 @@ if (qs.has('record') || EDIT) {
     goto: (id, at) => { if (SC[id]) enter(id, at); },
     put: (x,y) => { player.x = x; player.y = y; },
     free: () => { endScene(); talkLock = false; },
-    sleep: () => { day++; runScene([...NIGHT, ...morningScript(day)]);
-                   state = 'scene'; resetDay(); },
+    sleep: () => sleepNow(),
     scene: () => scene ? { i:scene.i, n:scene.q.length,
                            k:(scene.q[scene.i]||{}).k, say:sceneSay, veil:+veil.toFixed(2) } : null,
     poses: () => ({ me:playerPose,
@@ -364,10 +370,13 @@ if (qs.has('record') || EDIT) {
     npcState: () => (SC[cur].npc||[]).map(n => ({ idx:n.idx||0, done:!!n.done,
                                                   n:(linesOf(n)||[]).length })),
     R: TALK_R,
-    steps: () => ({ steps, dayT:+dayT().toFixed(2), mukae:mukaeDone }),
-    setSteps: n => { steps = n; },
-    setMukae: v => { mukaeDone = !!v; },
-    dbg: () => ({ state, cur, day, steps, mukae:mukaeDone,
+    steps: () => ({ steps:WORLD.steps, dayT:+dayT().toFixed(2), mukae:WORLD.mukaeDone }),
+    setSteps: n => { WORLD.steps = n; },
+    setMukae: v => { WORLD.mukaeDone = !!v; },
+    world: () => JSON.parse(JSON.stringify(WORLD)),
+    wipe: () => wipeSave(),
+    resume: () => { if (state === 'title') resume(); },
+    dbg: () => ({ state, cur, day:WORLD.day, steps:WORLD.steps, mukae:WORLD.mukaeDone,
                   x:Math.round(player.x), y:Math.round(player.y),
                   h:Math.round(heightAt(player.y)), on:walkable(player.x, player.y),
                   lock:exitLock, talking:!!talkNpc, scene:!!scene }),
