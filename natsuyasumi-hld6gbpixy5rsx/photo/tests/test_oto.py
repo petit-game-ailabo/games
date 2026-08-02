@@ -65,6 +65,39 @@ with sync_playwright() as pw:
     print(f"  晩ごはんの あと: 鳴った={got}")
     if got != "yoru": fails.append("晩ごはんの あとに よるの音に ならない")
 
+    # --- 場所で 風と 水が 変わるか
+    print()
+    WANT_WIND = {"zashiki":"in", "doma":"in", "rouka":"in",
+                 "iemae":"out", "aze":"ki", "mori":"ki"}
+    seen = {}
+    for s, amb in WANT_WIND.items():
+        pg.evaluate(f"window._ctrl.setSteps(0); window._ctrl.setYoru(true); window._ctrl.goto('{s}')")
+        pg.wait_for_timeout(1300)
+        p = pg.evaluate("window._ctrl.place()")
+        seen[s] = p
+        print(f"  {s:8s} amb={p['amb']:4s} 風={p['wind']:.3f} こもり={p['windF']:4d}Hz 水={p['water']:.3f}")
+        if p["amb"] != amb: fails.append(f"{s}: amb が {p['amb']}（{amb} のはず）")
+    if not (seen["zashiki"]["wind"] < seen["iemae"]["wind"] < seen["mori"]["wind"]):
+        fails.append("家のなか < いえのまえ < そとの みち の じゅんに 風が 強く なっていない")
+    if not (seen["zashiki"]["windF"] < seen["mori"]["windF"]):
+        fails.append("家のなかの 風が こもっていない")
+    if not (seen["aze"]["water"] > 0.01): fails.append("あぜみちで 水の音が しない")
+    if seen["mori"]["water"] > 0.01: fails.append("水の ない画面で 水の音が する")
+
+    # 家のなかでは 風鈴、そとの みちでは 木の葉ずれ
+    for s, want in [("zashiki", "fuurin"), ("mori", "kaze")]:
+        pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(400)
+        got = set()
+        for _ in range(90):
+            pg.wait_for_timeout(200)
+            pg.evaluate("window._ctrl.setSteps(0); window._ctrl.setYoru(true);")
+            v = pg.evaluate("window._ctrl.place()")["lastPlace2"]
+            if v: got.add(v)
+            if want in got: break
+        print(f"  {s:8s} で 鳴った: {sorted(got)}")
+        if want not in got: fails.append(f"{s}: {want} が 鳴らない")
+        if s == "mori" and "fuurin" in got: fails.append("そとなのに 風鈴が 鳴る")
+
     # 音を 足しても こまが 落ちていないか
     fps = pg.evaluate("""() => new Promise(r => { let n=0; const t0=performance.now();
       const s=()=>{n++; if(performance.now()-t0<1000) requestAnimationFrame(s); else r(n);};

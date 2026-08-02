@@ -1,19 +1,82 @@
 // 自動でわけたファイル。もとは photo/index.html 1枚だった
 // ===== 音（環境音だけ。曲は 朝の たいそう のときだけ）=====
 let AC = null, ambGain = null, ambTimer = 0;
+let windLP = null, windGain = null, mizuGain = null;
+
+// 場所ごとの 風の きこえかた。
+//   in  家のなか … こもって 小さい
+//   out いえのまえ … ふつう
+//   ki  そとの みち … 木の葉ずれで つよめ
+const WIND = { in:{ f:300, g:0.05 }, out:{ f:480, g:0.15 }, ki:{ f:640, g:0.22 } };
+
+function noiseBuf(sec) {
+  const len = AC.sampleRate * sec;
+  const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i=0;i<len;i++) d[i] = Math.random()*2-1;
+  return buf;
+}
 function initAudio() {
   if (AC) return;
   try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
   ambGain = AC.createGain(); ambGain.gain.value = 0.0; ambGain.connect(AC.destination);
-  const len = AC.sampleRate * 3;
-  const buf = AC.createBuffer(1, len, AC.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i=0;i<len;i++) d[i] = Math.random()*2-1;
-  const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
-  const lp = AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=420;
-  const wg = AC.createGain(); wg.gain.value = 0.16;
-  src.connect(lp); lp.connect(wg); wg.connect(ambGain); src.start();
+
+  // 風。ずっと 鳴っている。場所で こもりぐあいと 大きさを 変える
+  const src = AC.createBufferSource(); src.buffer = noiseBuf(3); src.loop = true;
+  windLP = AC.createBiquadFilter(); windLP.type='lowpass'; windLP.frequency.value=420;
+  windGain = AC.createGain(); windGain.gain.value = 0.16;
+  src.connect(windLP); windLP.connect(windGain); windGain.connect(ambGain); src.start();
+
+  // 水の音。**水のそばの 画面でだけ** 大きくなる（screens.json の mizu）
+  const w = AC.createBufferSource(); w.buffer = noiseBuf(3); w.loop = true;
+  const wbp = AC.createBiquadFilter(); wbp.type='bandpass'; wbp.frequency.value=900; wbp.Q.value=0.6;
+  const whp = AC.createBiquadFilter(); whp.type='highpass'; whp.frequency.value=320;
+  mizuGain = AC.createGain(); mizuGain.gain.value = 0;
+  w.connect(wbp); wbp.connect(whp); whp.connect(mizuGain); mizuGain.connect(ambGain); w.start();
+
   ambGain.gain.linearRampToValueAtTime(0.9, AC.currentTime + 1.6);
+}
+
+// --- 風鈴。家のなかで ときどき。二つの音が すこし ずれて 鳴る
+function fuurin(vol) {
+  if (!AC) return;
+  const t0 = AC.currentTime;
+  for (const [f, dt, v] of [[2637, 0, 1], [3520, 0.035, 0.55]]) {
+    const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f * (0.99 + Math.random()*0.02);
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t0+dt);
+    g.gain.linearRampToValueAtTime(vol*v, t0+dt+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dt+1.5);
+    o.connect(g); g.connect(ambGain);
+    o.start(t0+dt); o.stop(t0+dt+1.6);
+  }
+}
+
+// --- 木の葉ずれ。風が ひとしきり 強く なる
+function kaze(vol, dur) {
+  if (!AC || !windGain) return;
+  const t = AC.currentTime, base = windGain.gain.value;
+  windGain.gain.cancelScheduledValues(t);
+  windGain.gain.setValueAtTime(base, t);
+  windGain.gain.linearRampToValueAtTime(base + vol, t + dur*0.35);
+  windGain.gain.linearRampToValueAtTime(base, t + dur);
+}
+
+// --- 画面が 変わったら 風と 水を つけ変える。**ゆっくり 変える**（ぶつ切りだと 不自然）
+let lastPlace = '';
+function setPlaceSound() {
+  if (!AC || cur === lastPlace) return;
+  lastPlace = cur; lastPlace2 = '';    // 前の画面の のこりが 検査で 嘘に 見えないように
+  const sc = SC[cur] || {}, w = WIND[sc.amb] || WIND.out, t = AC.currentTime;
+  windLP.frequency.cancelScheduledValues(t);
+  windLP.frequency.setValueAtTime(windLP.frequency.value, t);
+  windLP.frequency.linearRampToValueAtTime(w.f, t + 0.8);
+  windGain.gain.cancelScheduledValues(t);
+  windGain.gain.setValueAtTime(windGain.gain.value, t);
+  windGain.gain.linearRampToValueAtTime(w.g, t + 0.8);
+  mizuGain.gain.cancelScheduledValues(t);
+  mizuGain.gain.setValueAtTime(mizuGain.gain.value, t);
+  mizuGain.gain.linearRampToValueAtTime((sc.mizu || 0) * 0.09, t + 0.8);
 }
 function cicada(vol, freq, dur) {
   if (!AC) return;
@@ -105,14 +168,19 @@ function ambKind() {
   return 'hiru';
 }
 
-let lastAmb = '';
+let lastAmb = '', lastPlace2 = '';
 function ambientTick(dt) {
   if (!AC) return;
+  setPlaceSound();              // 画面が 変わっていたら 風と 水を つけ変える
   ambTimer -= dt;
   if (ambTimer > 0) return;
   const sc = SC[cur], inside = (sc.amb === 'in'), ki = (sc.amb === 'ki');
   const vol = ki ? 0.13 : (inside ? 0.035 : 0.06);
   ambTimer = (inside ? 1.6 : 0.7) + Math.random()*1.8;
+  // 場所の音。虫や鳥とは べつに、その場所らしい 音を まぜる
+  if (inside && Math.random() < 0.30) { fuurin(0.055); lastPlace2 = 'fuurin'; }
+  else if (ki && Math.random() < 0.28) { kaze(0.10, 2.2 + Math.random()*1.6); lastPlace2 = 'kaze'; }
+
   const kind = ambKind();
   lastAmb = kind;
   if (kind === 'yoru') {
