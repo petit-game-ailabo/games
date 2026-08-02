@@ -406,6 +406,7 @@ if (qs.has('record') || EDIT) {
     setMukae: v => { WORLD.mukaeDone = !!v; },
     setYoru: v => { WORLD.yoruDone = !!v; },
     world: () => JSON.parse(JSON.stringify(WORLD)),
+    queue: () => JSON.parse(JSON.stringify(WORLD.queue)),
     wipe: () => wipeSave(),
     resume: () => { if (state === 'title') resume(); },
     dbg: () => ({ state, cur, day:WORLD.day, steps:WORLD.steps,

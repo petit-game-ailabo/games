@@ -97,9 +97,43 @@ function canFire(t) {
   return false;
 }
 
+// --- よやく。**いま 起きたことを、あとの ごはんの ときに 効かせる。**
+//   later:{ at:'dinner'|'breakfast', after:N, scene:'…', flag:'…' }
+//   at:'dinner'    … その日の 晩ごはん（after を 書かなければ きょう）
+//   at:'breakfast' … つぎの日の 朝ごはん（after を 書かなければ あした）
+function reserve(later) {
+  const after = later.after !== undefined ? later.after
+              : (later.at === 'breakfast' ? 1 : 0);
+  WORLD.queue.push({ at:later.at, day:WORLD.day + after,
+                     scene:later.scene, flag:later.flag });
+}
+
+// その ごはんで 出す ぶんを 取りだす。**日が すぎた ぶんも 出す**
+// （その日 ごはんを とばしても、よやくが 消えてしまわないように）
+function dueQueue(at) {
+  const out = [];
+  WORLD.queue = WORLD.queue.filter(q => {
+    if (q.at !== at || q.day > WORLD.day) return true;
+    out.push(q); return false;
+  });
+  return out;
+}
+
+// よやくを セリフの ならびに ひらく。**場面の とちゅうに 差しこむ ためのもの**なので、
+// ここで つくる 場面には to や free を 入れないこと
+function serveQueue(at, ctx) {
+  const steps = [];
+  for (const q of dueQueue(at)) {
+    if (q.flag) setFlag(q.flag);
+    if (q.scene) steps.push(...buildScene(q.scene, ctx));
+  }
+  return steps;
+}
+
 function runActions(dos, ctx, sceneOk) {
   for (const a of [].concat(dos || [])) {
     if (a.flag) setFlag(a.flag);
+    if (a.later) reserve(a.later);
     // 場面を はじめる。**いまの場面を こわさないよう、場面の とちゅうでは 出さない。**
     // ごはん中や ねるときの 出しものは B3 の よやくで あつかう
     if (a.scene && sceneOk !== false && state !== 'scene') {
