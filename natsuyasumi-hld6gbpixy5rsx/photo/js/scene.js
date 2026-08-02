@@ -34,10 +34,9 @@ function stepScene(dt) {
       // ごはんの ふし目。ここに よやくが 落ちてくる（B3）。
       // 場面の とちゅうなので、ひきがねから 場面を はじめることは できない
       case 'meal': {
-        fireTriggers('meal', { at:st.at }, false);
-        // よやくを **いまの ならびの すぐ うしろに 差しこむ**。
+        // ひきがねの ぶんと よやくの ぶんを **いまの ならびの すぐ うしろに 差しこむ**。
         // 場面を あたらしく はじめると いまの場面を こわすので、そうしない
-        const add = serveQueue(st.at, { day:WORLD.day, at:st.at });
+        const add = mealSteps(st.at, { day:WORLD.day, at:st.at });
         if (add.length) scene.q.splice(scene.i + 1, 0, ...add);
         break;
       }

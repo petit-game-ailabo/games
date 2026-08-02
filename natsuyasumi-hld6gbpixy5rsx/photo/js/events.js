@@ -16,6 +16,8 @@ function matchWhen(w, ctx) {
   if (w.place   !== undefined && cur !== w.place)         return false;
   if (w.who     !== undefined && ctx.who !== w.who)       return false;
   if (w.at      !== undefined && ctx.at  !== w.at)        return false;
+  if (w.spot    !== undefined && ctx.spot !== w.spot)     return false;
+  if (w.took    !== undefined && ctx.item !== w.took)     return false;
   if (w.visited !== undefined && !everVisited(w.visited)) return false;
   if (w.today   !== undefined && !visitedOn(w.today, WORLD.day)) return false;
   if (w.flag    !== undefined && !hasFlag(w.flag))        return false;
@@ -158,6 +160,11 @@ function serveQueue(at, ctx) {
   return steps;
 }
 
+// ごはんの ふし目。よやくの ぶんと、ひきがねが 足した ぶんを つなげて 返す
+function mealSteps(at, ctx) {
+  return collectTriggers('meal', { at }).concat(serveQueue(at, ctx));
+}
+
 // --- あとから NPC が ふえたり 居なくなったり する。
 // SC は 毎回 data から よみ直すので、変えたぶんは WORLD に のこして ここで つけ直す
 function applyNpcChanges() {
@@ -206,13 +213,28 @@ function runActions(dos, ctx, sceneOk) {
       }
       applyNpcChanges();
     }
-    // 場面を はじめる。**いまの場面を こわさないよう、場面の とちゅうでは 出さない。**
-    // ごはん中や ねるときの 出しものは B3 の よやくで あつかう
-    if (a.scene && sceneOk !== false && state !== 'scene') {
-      const q = buildScene(a.scene, ctx);
-      if (q.length) { runScene(q); state = 'scene'; }
+    // 場面。**いまの場面を こわさないよう、場面の とちゅうでは あたらしく はじめない。**
+    // あつめる ばあい（ごはん・拾ったとき）は、いまの ならびに **つなげる** ぶんを 返す
+    if (a.scene) {
+      if (sceneCollect) sceneCollect.push(...buildScene(a.scene, ctx));
+      else if (sceneOk !== false && state !== 'scene') {
+        const q = buildScene(a.scene, ctx);
+        if (q.length) { runScene(q); state = 'scene'; }
+      }
     }
   }
+}
+
+// ひきがねが 足す ぶんを ためる 箱。null で ないときは 場面を はじめず ここへ つむ
+let sceneCollect = null;
+
+// ひきがねを ひいて、**足された セリフを 返す**。
+// いま 走っている 場面に つなげたい とき（ごはん・物を ひろったとき）に つかう
+function collectTriggers(on, ctx) {
+  const box = [];
+  sceneCollect = box;
+  try { fireTriggers(on, ctx, false); } finally { sceneCollect = null; }
+  return box;
 }
 
 function fireTriggers(on, ctx, sceneOk) {

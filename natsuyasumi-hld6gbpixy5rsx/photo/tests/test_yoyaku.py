@@ -116,8 +116,12 @@ with sync_playwright() as pw:
     hit2 = [s for s in morning if "あぜみちに いた" in s]
     print(f"  2日目の朝の セリフ{len(morning)}こ  あぜみちの話={'あり' if hit2 else 'なし'}")
     if not hit2: fails.append("きのう あぜみちへ 行ったのに 朝ごはんで 話に ならない")
-    if pg.evaluate("window._ctrl.queue()"):
-        fails.append("出したはずの よやくが のこっている")
+    # 出した ぶんだけ 消える。**ほかの よやくは のこる**
+    # （さおを ひろった ときの 晩ごはんの ぶんが ここに いる。D-025 で 取りこぼさない）
+    rest = pg.evaluate("window._ctrl.queue()")
+    print("  朝ごはんの あと のこる よやく:", [f"{x['at']}(八月{x['day']}日)" for x in rest])
+    if any(x["at"] == "breakfast" for x in rest):
+        fails.append("出したはずの 朝ごはんの よやくが のこっている")
     pg.screenshot(path=os.path.join(OUT, "q_breakfast.png"))
 
     # --- 行かなければ 話に ならない（2日目は どこへも 行かずに 晩ごはん）

@@ -74,6 +74,9 @@ function runScene(q) {
 }
 function startMorning(head) {
   resetDay();
+  // 朝の はじまり。ここで 場面を はじめると すぐ下の 朝のながれで 上書きされるので、
+  // しるしや よやくを つける ためだけの ひきがね
+  fireTriggers('wake', {}, false);
   runScene([...(head || []), ...morningScript(WORLD.day)]);
   state = 'scene';
 }

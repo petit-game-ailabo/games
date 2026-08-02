@@ -153,18 +153,26 @@ function loop(now) {
 
   // --- 画面の中の 点。そばに 行くと 名まえが 出て、はじめてなら 場面が うごく。
   // 会話でも 拾い物でも ない 相手（こよみ・水べ・賽銭箱…）は ここが 受け口
+  const wasSpot = nearSpot;
   nearSpot = null;
   if (!inScene && !fadeTo && !talkNpc && state !== 'scene') {
     for (const sp of (SC[cur].spot || [])) {
-      if (!sp.name && !sp.scene) continue;                 // 音だけの 点は 相手に しない
+      if (!sp.name && !sp.scene && !sp.use) continue;      // 音だけの 点は 相手に しない
       if (groundDist(player.x, player.y, sp.x, sp.y) > (sp.r || 1.2)) continue;
       nearSpot = sp;
-      if (sp.scene && !hasFlag('spot:' + sp.id)) {
-        setFlag('spot:' + sp.id);
-        const q = buildScene(sp.scene, { day:WORLD.day });
+      break;
+    }
+    // **近づいた しゅんかん だけ** ひく。そばに 居るあいだ 何度も ひかない
+    if (nearSpot && nearSpot !== wasSpot) {
+      fireTriggers('near', { spot:nearSpot.id });
+      // その点で つかう 道具を 持っていたら「つかった」も ひく
+      if (nearSpot.use && hasItem(nearSpot.use))
+        fireTriggers('use', { spot:nearSpot.id, item:nearSpot.use });
+      if (nearSpot.scene && !hasFlag('spot:' + nearSpot.id) && state !== 'scene') {
+        setFlag('spot:' + nearSpot.id);
+        const q = buildScene(nearSpot.scene, { day:WORLD.day });
         if (q.length) { runScene(q); state = 'scene'; }
       }
-      break;
     }
   }
 
@@ -174,7 +182,12 @@ function loop(now) {
       if (groundDist(player.x, player.y, o.x, o.y) < 1.1) {
         const it = ITEMS[o.item] || {};
         takeItem(cur, o.item);
-        runScene([{ k:'say', who:'cirno', text: it.found || ((it.name||o.item) + ' を みつけた') }]);
+        // ひろったことを 起点に できるように、**ひきがねを 通す**。
+        // ひきがねが 足した セリフは ひとことの うしろに つなげる
+        const q = [{ k:'say', who:'cirno',
+                     text: it.found || ((it.name||o.item) + ' を みつけた') }];
+        q.push(...collectTriggers('take', { item:o.item }));
+        runScene(q);
         state = 'scene';
         break;
       }
