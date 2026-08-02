@@ -88,7 +88,7 @@ with sync_playwright() as pw:
     for s, want in [("zashiki", "fuurin"), ("mori", "kaze")]:
         pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(400)
         got = set()
-        for _ in range(90):
+        for _ in range(160):
             pg.wait_for_timeout(200)
             pg.evaluate("window._ctrl.setSteps(0); window._ctrl.setYoru(true);")
             v = pg.evaluate("window._ctrl.place()")["lastPlace2"]
@@ -97,6 +97,41 @@ with sync_playwright() as pw:
         print(f"  {s:8s} で 鳴った: {sorted(got)}")
         if want not in got: fails.append(f"{s}: {want} が 鳴らない")
         if s == "mori" and "fuurin" in got: fails.append("そとなのに 風鈴が 鳴る")
+
+    # --- 足音が 画面ごとに 変わるか（キーで じっさいに 歩かせる）
+    print()
+    WANT_ASHI = {"zashiki":"tatami", "doma":"tsuchi", "rouka":"ita",
+                 "iemae":"jari", "aze":"kusa", "mori":"ishi"}
+    for s, want in WANT_ASHI.items():
+        pg.evaluate(f"window._ctrl.setSteps(0); window._ctrl.setYoru(true); window._ctrl.goto('{s}')")
+        pg.wait_for_timeout(400)
+        pg.evaluate("window._ctrl.free()")
+        d0 = pg.evaluate("window._ctrl.dbg()")
+        # **画面から 出ないように 引きもどしながら 歩かせる。**
+        # どまの 左は ざしきなので、ふつうに 歩かせると となりの 足音を 聞いてしまう
+        pg.keyboard.down("ArrowLeft")
+        for _ in range(6):
+            pg.wait_for_timeout(150)
+            pg.evaluate(f"window._ctrl.put({d0['x']},{d0['y']})")
+        pg.keyboard.up("ArrowLeft")
+        f = pg.evaluate("window._ctrl.foot()")
+        now = pg.evaluate("window._ctrl.dbg()")["cur"]
+        ok = (f["last"] == want and now == s)
+        print(f"  {s:8s} ほしい={want:7s} 鳴った={f['last']:7s} {'OK' if ok else 'NG'}"
+              f"{'' if now == s else '  （'+now+' へ 出てしまった）'}")
+        if not ok: fails.append(f"{s}: 足音が {want} で ない（{f['last']}）")
+
+    # 歩いた ぶんだけ 鳴る。とまっているときは 鳴らない
+    pg.evaluate("window._ctrl.setSteps(0); window._ctrl.goto('iemae')"); pg.wait_for_timeout(400)
+    pg.evaluate("window._ctrl.free()")
+    n0 = pg.evaluate("window._ctrl.foot()")["n"]
+    pg.keyboard.down("ArrowLeft"); pg.wait_for_timeout(1500); pg.keyboard.up("ArrowLeft")
+    n1 = pg.evaluate("window._ctrl.foot()")["n"]
+    pg.wait_for_timeout(2500)
+    n2 = pg.evaluate("window._ctrl.foot()")["n"]
+    print(f"  1.5秒 歩いて {n1-n0}歩 → そのあと 2.5秒 じっとして {n2-n1}歩")
+    if n1 - n0 < 2: fails.append(f"歩いても 足音が 鳴らない（{n1-n0}歩）")
+    if n2 != n1: fails.append(f"とまっているのに 足音が 鳴る（{n2-n1}歩）")
 
     # 音を 足しても こまが 落ちていないか
     fps = pg.evaluate("""() => new Promise(r => { let n=0; const t0=performance.now();

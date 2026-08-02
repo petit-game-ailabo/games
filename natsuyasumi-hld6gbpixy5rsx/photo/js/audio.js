@@ -2,6 +2,8 @@
 // ===== 音（環境音だけ。曲は 朝の たいそう のときだけ）=====
 let AC = null, ambGain = null, ambTimer = 0;
 let windLP = null, windGain = null, mizuGain = null;
+// 足音は 1秒に 3回ほど 鳴る。そのたび 音の もとを 作ると ごみが たまるので 使いまわす
+let shortNoise = null;
 
 // 場所ごとの 風の きこえかた。
 //   in  家のなか … こもって 小さい
@@ -20,6 +22,7 @@ function initAudio() {
   if (AC) return;
   try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
   ambGain = AC.createGain(); ambGain.gain.value = 0.0; ambGain.connect(AC.destination);
+  shortNoise = noiseBuf(0.3);
 
   // 風。ずっと 鳴っている。場所で こもりぐあいと 大きさを 変える
   const src = AC.createBufferSource(); src.buffer = noiseBuf(3); src.loop = true;
@@ -37,18 +40,93 @@ function initAudio() {
   ambGain.gain.linearRampToValueAtTime(0.9, AC.currentTime + 1.6);
 }
 
-// --- 風鈴。家のなかで ときどき。二つの音が すこし ずれて 鳴る
+// --- 足音。画面ごとに ふみごこちを 変える（screens.json の ashi）。
+//   f/q  … どのあたりの 音か。ひくいほど にぶい
+//   hp   … これより ひくい音を けずる。じゃりじゃりした ものは 高く
+//   sweep… 鳴っている あいだに 音が さがる（草を かき分ける ような 音）
+//   kishi… 板が きしむ。音程が すこし 上がって 下がる
+const ASHI = {
+  tatami: { f: 260,  q: 0.9, dur: 0.10 },                          // たたみ
+  ita:    { f: 420,  q: 1.2, dur: 0.13, kishi: 1 },                // 板の ろうか
+  tsuchi: { f: 340,  q: 0.8, dur: 0.09 },                          // どま
+  jari:   { f: 2600, q: 0.7, dur: 0.12, hp: 900 },                 // じゃり
+  ishi:   { f: 1800, q: 1.6, dur: 0.09, hp: 700 },                 // 石だたみ
+  kusa:   { f: 3400, q: 0.5, dur: 0.22, hp: 1100, sweep: 0.45 },   // 草を かき分ける
+};
+let lastFoot = 0, lastFootKind = '', footCount = 0;
+function ashioto(kind, vol) {
+  if (!AC || !shortNoise) return;
+  const a = ASHI[kind] || ASHI.tsuchi, t = AC.currentTime, dur = a.dur;
+  lastFootKind = kind; footCount++;
+  const s = AC.createBufferSource(); s.buffer = shortNoise;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = a.q;
+  const f0 = a.f * (0.9 + Math.random()*0.2);
+  bp.frequency.setValueAtTime(f0, t);
+  if (a.sweep) bp.frequency.linearRampToValueAtTime(f0*a.sweep, t + dur);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let tail = bp;
+  if (a.hp) {
+    const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = a.hp;
+    bp.connect(hp); tail = hp;
+  }
+  s.connect(bp); tail.connect(g); g.connect(ambGain);
+  s.start(t); s.stop(t + dur + 0.05);
+  if (a.kishi) {
+    const o = AC.createOscillator(); o.type = 'sine';
+    const k = 380 + Math.random()*160;
+    o.frequency.setValueAtTime(k, t);
+    o.frequency.linearRampToValueAtTime(k*1.25, t + 0.05);
+    o.frequency.linearRampToValueAtTime(k*0.9,  t + 0.16);
+    const og = AC.createGain();
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.linearRampToValueAtTime(vol*0.6, t + 0.02);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(og); og.connect(ambGain); o.start(t); o.stop(t + 0.2);
+  }
+}
+// 一歩ごとに 1回。歩幅（player.bob）が π を またぐたび 鳴らす。
+// **奥に いるほど 小さく**。走ると すこし 強い
+function footTick() {
+  if (!AC) return;
+  const ph = Math.floor(player.bob / Math.PI);
+  if (ph === lastFoot) return;
+  lastFoot = ph;
+  if (!player.moving) return;
+  const sc = SC[cur];
+  const depth = Math.max(0.45, heightAt(player.y) / sc.hNear);
+  ashioto(sc.ashi || 'tsuchi', 0.085 * depth * (player.running ? 1.25 : 1));
+}
+
+// --- 風鈴。ガラスが 鳴る 音。
+// **きれいな2音を つづけて 鳴らすと コインを 取った 音に なる。**
+// ほんものの ガラスは 倍音が 整数倍に ならず、高い倍音ほど 早く 消える。
+// それと、舌が あたる かすかな 音。この2つで 「日常の音」に なる
 function fuurin(vol) {
   if (!AC) return;
   const t0 = AC.currentTime;
-  for (const [f, dt, v] of [[2637, 0, 1], [3520, 0.035, 0.55]]) {
-    const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f * (0.99 + Math.random()*0.02);
+  const base = 1720 + Math.random()*280;
+  for (const [m, v] of [[1, 1], [2.74, 0.30], [5.12, 0.10]]) {
+    const o = AC.createOscillator(); o.type = 'sine';
+    o.frequency.value = base * m * (0.997 + Math.random()*0.006);
+    const dur = (1.3 + Math.random()*0.6) / Math.sqrt(m);   // 高い倍音ほど 早く 消える
     const g = AC.createGain();
-    g.gain.setValueAtTime(0.0001, t0+dt);
-    g.gain.linearRampToValueAtTime(vol*v, t0+dt+0.006);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0+dt+1.5);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol*v, t0 + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     o.connect(g); g.connect(ambGain);
-    o.start(t0+dt); o.stop(t0+dt+1.6);
+    o.start(t0); o.stop(t0 + dur + 0.1);
+  }
+  if (shortNoise) {                                          // 舌が あたる 音
+    const s = AC.createBufferSource(); s.buffer = shortNoise;
+    const hp = AC.createBiquadFilter(); hp.type='highpass'; hp.frequency.value = 2600;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(vol*0.45, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
+    s.connect(hp); hp.connect(g); g.connect(ambGain);
+    s.start(t0); s.stop(t0 + 0.08);
   }
 }
 
@@ -120,9 +198,17 @@ function kotori(vol) {
 function suzumushi(vol) {
   if (!AC) return;
   const t0 = AC.currentTime, dur = 0.5 + Math.random()*0.35;
-  const o = AC.createOscillator(); o.type = 'sine';
-  o.frequency.value = 4300 + Math.random()*500;
+  const f = 4300 + Math.random()*500;
+  const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f;
   const g = AC.createGain();
+  // すこし ざらつきを まぜる。**まったくの 純音は 電子音に きこえる**
+  if (shortNoise) {
+    const s = AC.createBufferSource(); s.buffer = shortNoise; s.loop = true;
+    const bp = AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value = f; bp.Q.value = 14;
+    const ng = AC.createGain(); ng.gain.value = 0.5;
+    s.connect(bp); bp.connect(ng); ng.connect(g);
+    s.start(t0); s.stop(t0 + dur + 0.05);
+  }
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.linearRampToValueAtTime(vol, t0 + 0.12);
   g.gain.setValueAtTime(vol, t0 + dur*0.7);
@@ -178,7 +264,7 @@ function ambientTick(dt) {
   const vol = ki ? 0.13 : (inside ? 0.035 : 0.06);
   ambTimer = (inside ? 1.6 : 0.7) + Math.random()*1.8;
   // 場所の音。虫や鳥とは べつに、その場所らしい 音を まぜる
-  if (inside && Math.random() < 0.30) { fuurin(0.055); lastPlace2 = 'fuurin'; }
+  if (inside && Math.random() < 0.18) { fuurin(0.035); lastPlace2 = 'fuurin'; }
   else if (ki && Math.random() < 0.28) { kaze(0.10, 2.2 + Math.random()*1.6); lastPlace2 = 'kaze'; }
 
   const kind = ambKind();
