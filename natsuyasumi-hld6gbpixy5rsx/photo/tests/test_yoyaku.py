@@ -84,6 +84,32 @@ with sync_playwright() as pw:
     if not any(x["at"] == "breakfast" for x in left):
         fails.append("あしたの 朝ごはんの よやくまで 消えている")
 
+    # --- 晩ごはんの けっか、どまに つりざおが 置かれたか。そばに 行けば ひろえるか
+    oki = pg.evaluate("window._ctrl.items()")
+    print(f"  晩ごはんの あと: もちもの={oki['mochi']} 置かれた={list(oki['oki'].keys())}")
+    if not oki["oki"].get("doma"):
+        fails.append("晩ごはんで つりざおが どまに 置かれない")
+    else:
+        pg.evaluate(NO_DUSK)
+        o = oki["oki"]["doma"][0]
+        # どまの 入り口は つりざおから 0.8人ぶんしか ないので、**着いた しゅんかんに
+        # ひろってしまう**。おなじ tick のうちに 遠くへ どけて、それから 近づく
+        pg.evaluate("window._ctrl.goto('doma'); window._ctrl.free();"
+                    " window._ctrl.put(760,500);")
+        pg.wait_for_timeout(600)
+        pg.screenshot(path=os.path.join(OUT, "q_item.png"))
+        if "sao" in pg.evaluate("window._ctrl.items()")["mochi"]:
+            fails.append("はなれているのに ひろってしまう")
+        pg.evaluate(f"window._ctrl.put({o['x']},{o['y']})"); pg.wait_for_timeout(700)
+        got = pg.evaluate("window._ctrl.items()")
+        sc = pg.evaluate("window._ctrl.scene()")
+        line = sc["say"][1] if sc and sc["say"] else ""
+        print(f"  そばへ行ったら: もちもの={got['mochi']}  「{line}」")
+        if "sao" not in got["mochi"]: fails.append("そばへ行っても つりざおを ひろえない")
+        if got["oki"].get("doma"): fails.append("ひろったのに まだ 置かれたまま")
+        if not line: fails.append("ひろっても なにも 言わない")
+        if pg.evaluate("window._ctrl.scene()"): wait_scene_end(pg)
+
     # --- ねて つぎの日の 朝ごはん。あぜみちの 話が 出るか
     pg.evaluate("window._ctrl.sleep()")
     morning = wait_scene_end(pg, 1200)

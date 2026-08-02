@@ -41,6 +41,9 @@ let TALKS = {};
 // よみこみの ときに つなぐと 取りこぼす
 function talksOf(n) { return n.days || TALKS[n.talks] || null; }
 
+// もちものの表（data/items.json）。よびかた・ひろったときの ことば・かたち
+let ITEMS = {};
+
 // キャラの表（data/cast.json）。名まえ・絵のこま番号・浮くか・影のこさ
 let CAST = {};
 const castOf = k => CAST[k] || {};

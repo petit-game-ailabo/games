@@ -105,7 +105,7 @@ function reserve(later) {
   const after = later.after !== undefined ? later.after
               : (later.at === 'breakfast' ? 1 : 0);
   WORLD.queue.push({ at:later.at, day:WORLD.day + after,
-                     scene:later.scene, flag:later.flag });
+                     scene:later.scene, flag:later.flag, do:later.do });
 }
 
 // その ごはんで 出す ぶんを 取りだす。**日が すぎた ぶんも 出す**
@@ -125,15 +125,49 @@ function serveQueue(at, ctx) {
   const steps = [];
   for (const q of dueQueue(at)) {
     if (q.flag) setFlag(q.flag);
+    // よやくの 出しものは、セリフの ほかに 物を 置いたり しるしを 立てたり できる。
+    // ただし **場面は はじめない**（いまの ごはんの ならびを こわすので）
+    if (q.do) runActions(q.do, ctx, false);
     if (q.scene) steps.push(...buildScene(q.scene, ctx));
   }
   return steps;
+}
+
+// --- あとから NPC が ふえたり 居なくなったり する。
+// SC は 毎回 data から よみ直すので、変えたぶんは WORLD に のこして ここで つけ直す
+function applyNpcChanges() {
+  for (const n of WORLD.npcAdd) {
+    const sc = SC[n.place]; if (!sc) continue;
+    sc.npc = sc.npc || [];
+    if (sc.npc.some(e => e.added === n.who)) continue;
+    sc.npc.push({ who:[[n.who, n.x, n.y]], talks:n.talks, added:n.who });
+  }
+  for (const key of WORLD.npcGone) {
+    const [place, who] = key.split(':');
+    const sc = SC[place]; if (!sc || !sc.npc) continue;
+    for (const e of sc.npc) e.who = e.who.filter(w => w[0] !== who);
+    sc.npc = sc.npc.filter(e => e.who.length);
+  }
 }
 
 function runActions(dos, ctx, sceneOk) {
   for (const a of [].concat(dos || [])) {
     if (a.flag) setFlag(a.flag);
     if (a.later) reserve(a.later);
+    if (a.item) giveItem(a.item);
+    // その場所に 物を 置く。写真のうえに 出て、そばに 行くと ひろえる
+    if (a.place) putItem(a.place.at, a.place.item, a.place.x, a.place.y);
+    // NPC を 出す／消す
+    if (a.npc) {
+      if (a.npc.gone) {
+        const key = a.npc.place + ':' + a.npc.who;
+        if (WORLD.npcGone.indexOf(key) < 0) WORLD.npcGone.push(key);
+      } else if (!WORLD.npcAdd.some(n => n.place === a.npc.place && n.who === a.npc.who)) {
+        WORLD.npcAdd.push({ place:a.npc.place, who:a.npc.who,
+                            x:a.npc.x, y:a.npc.y, talks:a.npc.talks });
+      }
+      applyNpcChanges();
+    }
     // 場面を はじめる。**いまの場面を こわさないよう、場面の とちゅうでは 出さない。**
     // ごはん中や ねるときの 出しものは B3 の よやくで あつかう
     if (a.scene && sceneOk !== false && state !== 'scene') {

@@ -89,6 +89,32 @@ function bakeFuton(n) {
   ctx.restore();
   return cv;
 }
+// 写真のうえに 置かれた物。**絵は 持っていないので 手で かく。**
+// じみだと 気づかれないので、ゆっくり ひかる。h は そこに立った ときの 背の高さ
+function drawItem(o) {
+  const it = (ITEMS[o.item] || {});
+  const h = heightAt(o.y), g = 0.5 + 0.5*Math.sin(elapsed*2.2);
+  ctx.save();
+  // ぼんやりした ひかり。ここに 何か あると 気づかせる ためだけのもの
+  ctx.globalAlpha = 0.18 + 0.14*g;
+  ctx.fillStyle = '#fff3c4';
+  ctx.beginPath(); ctx.ellipse(o.x, o.y - h*0.22, h*0.34, h*0.30, 0, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 1;
+  shadow(o.x, o.y, h*0.7, 0.7);
+  if (it.shape === 'rod') {
+    // ながい棒。かるく たてかけて ある
+    ctx.strokeStyle = '#6a5433'; ctx.lineWidth = Math.max(1.5, h*0.022);
+    ctx.beginPath(); ctx.moveTo(o.x - h*0.10, o.y);
+    ctx.lineTo(o.x + h*0.16, o.y - h*0.78); ctx.stroke();
+    ctx.strokeStyle = '#d9cba6'; ctx.lineWidth = Math.max(1, h*0.012);
+    ctx.beginPath(); ctx.moveTo(o.x - h*0.10, o.y);
+    ctx.lineTo(o.x - h*0.03, o.y - h*0.22); ctx.stroke();
+  } else {
+    ctx.fillStyle = '#8b7a55';
+    ctx.beginPath(); ctx.ellipse(o.x, o.y - h*0.10, h*0.13, h*0.10, 0, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
 function hazeOf(y) {
   const sc = SC[cur];
   const far = 1 - clamp((y - sc.yTop) / (sc.yBot - sc.yTop), 0, 1);

@@ -60,6 +60,7 @@ function enter(id, at) {
 }
 function linesOf(n) { const t = talksOf(n); return (t && t[WORLD.day]) || null; }
 function resetDay() {
+  applyNpcChanges();   // あとから ふえた／消えた NPC を つけ直す
   for (const k in SC) for (const n of (SC[k].npc || [])) {
     n.idx = 0; n.done = !linesOf(n);
   }

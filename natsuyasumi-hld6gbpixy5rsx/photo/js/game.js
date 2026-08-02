@@ -150,6 +150,19 @@ function loop(now) {
     state = 'scene';
   }
 
+  // --- 置かれた物を ひろう。ボタンは いらない（会話と おなじ考え方）
+  if (!inScene && !fadeTo && !talkNpc && state !== 'scene') {
+    for (const o of itemsAt(cur)) {
+      if (groundDist(player.x, player.y, o.x, o.y) < 1.1) {
+        const it = ITEMS[o.item] || {};
+        takeItem(cur, o.item);
+        runScene([{ k:'say', who:'cirno', text: it.found || ((it.name||o.item) + ' を みつけた') }]);
+        state = 'scene';
+        break;
+      }
+    }
+  }
+
   // --- ふとんで じっとしていたら 1にちが おわる
   if (!inScene && !fadeTo && sc.nedoko) {
     const inBed = dist(player.x, player.y, sc.nedoko.x, sc.nedoko.y) < sc.nedoko.r;
@@ -208,6 +221,7 @@ function loop(now) {
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
   if (sc.nedoko && sc.nedoko.quad) drawFuton(sc.nedoko);
+  for (const o of itemsAt(cur)) drawItem(o);   // 置かれた物は 地めんの上。キャラより さき
 
   // ラジオたいそうの ひょうし。曲が おわったら もう はずまない
   const tb = (elapsed - taisoT0) * (TAISO_BPM/60);
@@ -367,6 +381,8 @@ function load() {
   pending++;
   loadData('data/events.json', j => { EVENTS = j; }, done);
   pending++;
+  loadData('data/items.json', j => { ITEMS = j.items; }, done);
+  pending++;
   loadData('data/screens.json', j => { SC = j.screens; loadPhotos(); }, done);
 }
 function loadPhotos() {
@@ -407,6 +423,7 @@ if (qs.has('record') || EDIT) {
     setYoru: v => { WORLD.yoruDone = !!v; },
     world: () => JSON.parse(JSON.stringify(WORLD)),
     queue: () => JSON.parse(JSON.stringify(WORLD.queue)),
+    items: () => ({ mochi:Object.keys(WORLD.items), oki:JSON.parse(JSON.stringify(WORLD.placed)) }),
     wipe: () => wipeSave(),
     resume: () => { if (state === 'title') resume(); },
     dbg: () => ({ state, cur, day:WORLD.day, steps:WORLD.steps,

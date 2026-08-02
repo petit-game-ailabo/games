@@ -15,7 +15,9 @@ const WORLD = {
   items: {},         // もちもの         { なまえ: true }
   placed: {},        // 場所に 置かれた物  { 場所: [なまえ, ...] }
   visited: {},       // どこに いつ 行ったか { 場所: [日, ...] }
-  queue: [],         // あとで 効く よやく（B2 で つかう）
+  queue: [],         // あとで 効く よやく
+  npcAdd: [],        // あとから ふえた NPC  [{place, who, x, y, talks}]
+  npcGone: [],       // 居なくなった NPC     ['場所:だれ']
 };
 
 const DAY_STEPS = 24;                                  // これだけ 画面を移ると 日ぐれ
@@ -27,11 +29,18 @@ const flagDay = k => WORLD.flags[k];                       // いつ 立った�
 function setFlag(k) { if (!hasFlag(k)) WORLD.flags[k] = WORLD.day; }
 
 // --- もちもの と 置かれた物
+// placed は 場所ごとの ならび： { doma: [{item:'sao', x:250, y:470}] }
 const hasItem = k => !!WORLD.items[k];
 function giveItem(k) { WORLD.items[k] = true; }
-function putItem(place, k) {
+function putItem(place, k, x, y) {
   const a = WORLD.placed[place] = WORLD.placed[place] || [];
-  if (a.indexOf(k) < 0) a.push(k);
+  if (!a.some(o => o.item === k)) a.push({ item:k, x:x, y:y });
+}
+function takeItem(place, k) {
+  const a = WORLD.placed[place] || [];
+  const i = a.findIndex(o => o.item === k);
+  if (i >= 0) a.splice(i, 1);
+  giveItem(k);
 }
 const itemsAt = place => WORLD.placed[place] || [];
 
