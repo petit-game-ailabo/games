@@ -74,3 +74,4 @@ function buildScene(name, ctx) {
 const morningScript = d => buildScene('morning', { day:d });
 const mukaeScript   = () => buildScene('mukae',  { day:WORLD.day, home: cur === 'zashiki' });
 const nightScript   = () => buildScene('night',  { day:WORLD.day });
+const yoruScript    = () => buildScene('yoru',   { day:WORLD.day });

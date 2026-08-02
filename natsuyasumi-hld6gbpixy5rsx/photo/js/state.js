@@ -63,7 +63,7 @@ function resetDay() {
     n.idx = 0; n.done = !linesOf(n);
   }
   talkNpc = null; nedokoT = 0; nedokoArmed = false;
-  WORLD.steps = 0; WORLD.mukaeDone = false;
+  WORLD.steps = 0; WORLD.mukaeDone = false; WORLD.yoruDone = false;
 }
 function runScene(q) {
   scene = { q, i:0, t:0, entered:-1, flags:{} };

@@ -8,6 +8,7 @@ const WORLD = {
   day: 1,
   steps: 0,          // きょう 画面を 移った回数。時計の かわり
   mukaeDone: false,  // きょう もう むかえが 来たか
+  yoruDone: false,   // きょう もう 晩ごはんと 縁側が すんだか
   flags: {},         // 立てた しるし     { なまえ: 立った日 }
   items: {},         // もちもの         { なまえ: true }
   placed: {},        // 場所に 置かれた物  { 場所: [なまえ, ...] }
@@ -41,7 +42,9 @@ const visitedOn = (place, d) => (WORLD.visited[place] || []).indexOf(d) >= 0;
 const everVisited = place => (WORLD.visited[place] || []).length > 0;
 
 // --- 1日ぶんを まっさらに（日が変わるとき）
-function newDay(d) { WORLD.day = d; WORLD.steps = 0; WORLD.mukaeDone = false; }
+function newDay(d) {
+  WORLD.day = d; WORLD.steps = 0; WORLD.mukaeDone = false; WORLD.yoruDone = false;
+}
 
 // --- はじめから。しるしも もちものも すてる
 function resetWorld() {

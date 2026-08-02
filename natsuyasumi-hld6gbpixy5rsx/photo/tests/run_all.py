@@ -19,6 +19,7 @@ TESTS = [
     ("test_poses.py",      "キャラのすがた・転送しない・場面あけに 会話が はじまらない"),
     ("test_day.py",        "切りかわりの幕の色・夕方・ふとんで日が変わる"),
     ("test_mukae.py",      "日ぐれに けーねが むかえに来る"),
+    ("test_yoru.py",       "日ぐれに かえったら 晩ごはん→縁側→ねられる"),
 ]
 
 want = sys.argv[1] if len(sys.argv) > 1 else ""

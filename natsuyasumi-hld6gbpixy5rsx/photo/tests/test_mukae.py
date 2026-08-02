@@ -32,6 +32,8 @@ with sync_playwright() as pw:
 
     for si, s in enumerate(SCREENS):
         pg.evaluate("window._ctrl.setSteps(0)"); pg.evaluate("window._ctrl.setMukae(false)")
+        # 晩ごはんは とめておく。ここで 見たいのは むかえ だけ（晩ごはんは test_yoru.py）
+        pg.evaluate("window._ctrl.setYoru(true)")
         pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(500)
         # 会話が はじまっていたら 離しておく
         pg.evaluate("window._ctrl.setSteps(24)"); pg.wait_for_timeout(400)
@@ -59,6 +61,7 @@ with sync_playwright() as pw:
         if si == 0: print(f"     かえったあとの立ち位置: {d['x']},{d['y']}  ふとんまで {dd:.0f}px")
 
     # 1日に 1回だけ
+    pg.evaluate("window._ctrl.setYoru(true)")
     pg.evaluate("window._ctrl.setSteps(30)"); pg.wait_for_timeout(2500)
     d = pg.evaluate("window._ctrl.dbg()")
     print(f"\n  もう一度 日がくれても: scene={d['scene']} mukae={d['mukae']}")
@@ -70,8 +73,11 @@ with sync_playwright() as pw:
         pg.wait_for_timeout(200)
         if pg.evaluate("window._ctrl.scene()") is None: break
     st = pg.evaluate("window._ctrl.steps()")
-    print(f"  2日目のはじめ: steps={st['steps']} mukae={st['mukae']}")
+    d0 = pg.evaluate("window._ctrl.dbg()")
+    print(f"  2日目のはじめ: steps={st['steps']} mukae={st['mukae']} yoru={d0['yoru']}")
     if st["mukae"]: fails.append("日が変わっても むかえの しるしが 残っている")
+    if d0["yoru"]: fails.append("日が変わっても 晩ごはんの しるしが 残っている")
+    pg.evaluate("window._ctrl.setYoru(true)")
     pg.evaluate("window._ctrl.setSteps(24)"); pg.wait_for_timeout(3000)
     d2 = pg.evaluate("window._ctrl.dbg()")
     print(f"  2日目の日ぐれ: scene={d2['scene']}")

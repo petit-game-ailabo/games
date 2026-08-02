@@ -71,6 +71,12 @@ with sync_playwright() as pw:
     for _ in range(700):
         if pg.evaluate("window._ctrl.scene()") is None: break
         pg.wait_for_timeout(200)
+    # 晩ごはんと 縁側は とめておく（そっちは test_yoru.py）。
+    # ここで 見たいのは「歩いて ふとんに立てば 日が変わる」だけ
+    pg.evaluate("window._ctrl.setYoru(true)"); pg.wait_for_timeout(200)
+    for _ in range(700):
+        if pg.evaluate("window._ctrl.scene()") is None: break
+        pg.wait_for_timeout(200)
 
     # 3) キー操作だけで ふとんまで行って ねられるか
     pg.evaluate("window._ctrl.goto('zashiki','mae')"); pg.wait_for_timeout(500)

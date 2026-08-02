@@ -126,6 +126,15 @@ function loop(now) {
     state = 'scene';
   }
 
+  // --- 日がくれて うちに かえったら、晩ごはんと 縁側。1日1回だけ。
+  // むかえ（さきに 発火する）で かえってきても、じぶんで かえってきても なりたつ
+  if (!inScene && !fadeTo && !WORLD.yoruDone && !talkNpc
+      && WORLD.steps >= DAY_STEPS && cur === 'zashiki') {
+    WORLD.yoruDone = true;
+    runScene(yoruScript());
+    state = 'scene';
+  }
+
   // --- ふとんで じっとしていたら 1にちが おわる
   if (!inScene && !fadeTo && sc.nedoko) {
     const inBed = dist(player.x, player.y, sc.nedoko.x, sc.nedoko.y) < sc.nedoko.r;
@@ -375,10 +384,12 @@ if (qs.has('record') || EDIT) {
     steps: () => ({ steps:WORLD.steps, dayT:+dayT().toFixed(2), mukae:WORLD.mukaeDone }),
     setSteps: n => { WORLD.steps = n; },
     setMukae: v => { WORLD.mukaeDone = !!v; },
+    setYoru: v => { WORLD.yoruDone = !!v; },
     world: () => JSON.parse(JSON.stringify(WORLD)),
     wipe: () => wipeSave(),
     resume: () => { if (state === 'title') resume(); },
-    dbg: () => ({ state, cur, day:WORLD.day, steps:WORLD.steps, mukae:WORLD.mukaeDone,
+    dbg: () => ({ state, cur, day:WORLD.day, steps:WORLD.steps,
+                  mukae:WORLD.mukaeDone, yoru:WORLD.yoruDone,
                   x:Math.round(player.x), y:Math.round(player.y),
                   h:Math.round(heightAt(player.y)), on:walkable(player.x, player.y),
                   lock:exitLock, talking:!!talkNpc, scene:!!scene }),
