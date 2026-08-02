@@ -50,8 +50,10 @@
       - できた。`js/screens.js` は消した。`npc.talks`（かぎの文字れつ）を `setScreens()` が
         `n.days` に つなぎかえる。写真の よみこみは 画面が よめてからに した（`loadPhotos()`）。
         検査 screens・morning とおった。
-- [ ] **A3. セリフをデータに**
+- [x] **A3. セリフをデータに**
       `talks.js` → `data/talks.json`。話者は A1 のIDで。
+      - できた。`js/talks.js` は消した。screens と talks は **どちらが先に届くか わからない**ので、
+        よみこみ時ではなく **引くときに つなぐ**（`talksOf()`）。検査 screens・morning とおった。
 - [ ] **A4. 世界の状態を1か所に**
       `world.js`：日づけ・フラグ・持ち物・訪れた場所の記録・その日の出来事。
       localStorage にセーブ／ロード。いまバラバラの `day`/`steps`/`mukaeDone` を集約。

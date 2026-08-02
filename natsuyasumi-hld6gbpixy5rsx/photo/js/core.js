@@ -33,12 +33,13 @@ function loadData(url, use, then) {
 
 // 画面の表（data/screens.json）。歩ける範囲・出入口・だれが居るか・奥ゆき
 let SC = {};
-function setScreens(o) {
-  SC = o;
-  // npc.talks は かぎの文字れつ。ここで じっさいの セリフに つなぎかえる
-  for (const k in SC) for (const n of (SC[k].npc || []))
-    if (typeof n.talks === 'string') n.days = TALKS[n.talks] || {};
-}
+
+// セリフの表（data/talks.json）。場所 → 日づけ → [話し手, ことば] のならび
+let TALKS = {};
+// npc.talks は かぎの文字れつ。**引くときに つなぐ**。
+// screens と talks は どちらが 先に とどくか わからないので、
+// よみこみの ときに つなぐと 取りこぼす
+function talksOf(n) { return n.days || TALKS[n.talks] || null; }
 
 // キャラの表（data/cast.json）。名まえ・絵のこま番号・浮くか・影のこさ
 let CAST = {};

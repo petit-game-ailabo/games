@@ -56,7 +56,7 @@ function enter(id, at) {
   player.x = f.x; player.y = f.y;
   nameT = 3.2; exitLock = true; talkNpc = null; lineT = 0;
 }
-function linesOf(n) { return (n.days && n.days[day]) || null; }
+function linesOf(n) { const t = talksOf(n); return (t && t[day]) || null; }
 function resetDay() {
   for (const k in SC) for (const n of (SC[k].npc || [])) {
     n.idx = 0; n.done = !linesOf(n);
