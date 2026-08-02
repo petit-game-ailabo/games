@@ -168,6 +168,15 @@ function loop(now) {
 
   // --- 画面の中の 点。そばに 行くと 名まえが 出て、はじめてなら 場面が うごく。
   // 会話でも 拾い物でも ない 相手（こよみ・水べ・賽銭箱…）は ここが 受け口
+  // --- せき止めの まえに 立ったら わけを 言う。**理由は 子供っぽく**（DESIGN.md §1）
+  if (!inScene && !fadeTo && !talkNpc && state !== 'scene') {
+    const g = gateAt(player.x, player.y, 26);
+    if (g && g !== gateSaid) {
+      gateSaid = g;
+      if (g.why) { runScene([{ k:'say', who:'cirno', text:g.why }]); state = 'scene'; }
+    } else if (!g) gateSaid = null;
+  }
+
   const wasSpot = nearSpot;
   nearSpot = null;
   if (!inScene && !fadeTo && !talkNpc && state !== 'scene') {

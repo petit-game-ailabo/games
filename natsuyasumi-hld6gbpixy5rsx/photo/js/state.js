@@ -23,6 +23,7 @@ let nedokoT = 0, nedokoArmed = false;
 let nightT = 0;            // よるの ぐあい 0〜1。晩ごはんが すむと ゆっくり 1 へ
 let firedScreen = null;    // 'enter' の ひきがねを もう ひいた画面。じぶんで移ると 空にもどす
 let nearSpot = null;       // いま そばに ある 点（画面の中の 調べられる ところ）
+let gateSaid = null;       // わけを 言った せき止め。はなれるまで 言いなおさない
 
 function moveMove(x, y, spd, dt) {   // 目的地へ 一歩ぶん すすむ（壁ぞいにすべる）
   const dx = x - player.x, dy = y - player.y, d = Math.hypot(dx, dy);

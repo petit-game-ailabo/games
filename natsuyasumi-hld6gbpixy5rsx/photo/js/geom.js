@@ -17,7 +17,23 @@ function walkable(x, y) {
     const dx = (x-s[0])/s[2], dy = (y-s[1])/s[3];
     if (dx*dx + dy*dy < 1) return false;
   }
+  // せき止め。**しるしが 立つまでは 通れない。**立ったら 無くなる
+  // （ハチの巣・せの高い草・ふかい水 など。DESIGN.md §1）
+  for (const g of (sc.gate || [])) {
+    if (hasFlag(g.need)) continue;
+    const e = g.e, dx = (x-e[0])/e[2], dy = (y-e[1])/e[3];
+    if (dx*dx + dy*dy < 1) return false;
+  }
   return true;
+}
+// いま せき止めている ものを かえす（そばに 来たら わけを 言う ため）
+function gateAt(x, y, r) {
+  for (const g of (SC[cur].gate || [])) {
+    if (hasFlag(g.need)) continue;
+    const e = g.e, dx = (x-e[0])/(e[2]+(r||0)), dy = (y-e[1])/(e[3]+(r||0));
+    if (dx*dx + dy*dy < 1) return g;
+  }
+  return null;
 }
 function nearestFree(x, y) {
   if (walkable(x, y)) return { x, y };

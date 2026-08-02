@@ -196,6 +196,7 @@ function applyNpcChanges() {
 function runActions(dos, ctx, sceneOk) {
   for (const a of [].concat(dos || [])) {
     if (a.flag) setFlag(a.flag);
+    if (a.unflag) delete WORLD.flags[a.unflag];   // せき止めを もどす ときに つかう
     if (a.later) reserve(a.later);
     if (a.item) giveItem(a.item);
     if (a.add) addNum(a.add.key, a.add.n);      // 数を ふやす { add:{key:'stamp', n:1} }
