@@ -71,15 +71,26 @@ function runScene(q) {
   scene = { q, i:0, t:0, entered:-1, flags:{} };
   sceneSay = null; walkTo = null; cast = []; playerPose = 'idle'; taisoT0 = -99; veil = 0;
 }
-function startMorning() { resetDay(); runScene(morningScript(WORLD.day)); state = 'scene'; }
-function start()  { resetWorld(); startMorning(); fade = 1; }
-// つづきから。ねたときの ぶんを よみ、その日の 朝から はじめる
+function startMorning(head) {
+  resetDay();
+  runScene([...(head || []), ...morningScript(WORLD.day)]);
+  state = 'scene';
+}
+// はじめから。**額縁（いまの話）から はじまる**
+function start()  { resetWorld(); startMorning(buildScene('gakubuchi', { day:1 })); fade = 1; }
+// つづきから。ねたときの ぶんを よみ、その日の 朝から はじめる。額縁は 出さない
 function resume() { loadWorld(); startMorning(); fade = 1; }
 // ねる。日が変わって、そこで セーブする
 function sleepNow() {
   // ねる ひきがねは 場面を はじめない（すぐ下で よるの場面に なるので こわしてしまう）。
   // ねぎわの 出しものは B3 の よやくで あつかう
   fireTriggers('sleep', {}, false);
+  // 八月三十一日の よるで なつやすみは おわる。つぎの朝は 来ない
+  if (WORLD.day >= LAST_DAY) {
+    runScene([...nightScript(), ...buildScene('owari', { day:WORLD.day })]);
+    state = 'scene';
+    return;
+  }
   newDay(WORLD.day + 1);
   saveWorld();
   runScene([...nightScript(), ...morningScript(WORLD.day)]);

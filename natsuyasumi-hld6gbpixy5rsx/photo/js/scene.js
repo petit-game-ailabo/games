@@ -42,6 +42,8 @@ function stepScene(dt) {
         break;
       }
       case 'free':  endScene(); return;
+      // なつやすみが おわった。タイトルに もどる。**つづきからは 出さない**
+      case 'title': wipeSave(); endScene(); state = 'title'; fade = 0; return;
     }
   }
   scene.t += dt;

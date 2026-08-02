@@ -20,6 +20,7 @@ const WORLD = {
   npcGone: [],       // 居なくなった NPC     ['場所:だれ']
 };
 
+const LAST_DAY  = 31;                                  // 八月三十一日で なつやすみは おわる
 const DAY_STEPS = 24;                                  // これだけ 画面を移ると 日ぐれ
 const dayT = () => clamp(WORLD.steps / DAY_STEPS, 0, 1);   // 0=あさ 1=日ぐれ
 

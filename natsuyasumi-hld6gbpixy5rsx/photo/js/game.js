@@ -23,6 +23,7 @@ function loop(now) {
     ctx.fillStyle = 'rgba(6,14,8,0.45)'; ctx.fillRect(0,0,W,H);
     text('なつやすみ', W/2, 200, 46, '#ffffff', 'center');
     text('しゃしんの なかを あるく', W/2, 240, 18, '#dbead2', 'center');
+    text('八月一日から 三十一日まで', W/2, 272, 15, '#a8c0a1', 'center', 'normal');
     text('やじるし / WASD で あるく　　Shift で はしる', W/2, 340, 16, '#c9dcc0', 'center');
     text('だれかの そばに いると はなしを してくれる', W/2, 368, 16, '#c9dcc0', 'center');
     text('スペース / タップ で セリフを つぎへ', W/2, 396, 16, '#c9dcc0', 'center');
@@ -313,7 +314,8 @@ function loop(now) {
       const a = clamp(Math.min(scene.t/0.5, (st.s-scene.t)/0.6), 0, 1);
       ctx.fillStyle = 'rgba(8,10,9,' + (0.94*Math.min(1, a*1.6)) + ')'; ctx.fillRect(0,0,W,H);
       ctx.save(); ctx.globalAlpha = a;
-      text(st.text, W/2, H/2 + 10, 40, '#f2f6ee', 'center');
+      // 日づけは 大きく。額縁や おわりの かたりは 小さく（size で 変える）
+      text(st.text, W/2, H/2 + 10, st.size || 40, '#f2f6ee', 'center');
       ctx.restore();
     }
   }
@@ -421,6 +423,8 @@ if (qs.has('record') || EDIT) {
     setSteps: n => { WORLD.steps = n; },
     setMukae: v => { WORLD.mukaeDone = !!v; },
     setYoru: v => { WORLD.yoruDone = !!v; },
+    setDay: n => { newDay(n); },
+    lastDay: LAST_DAY,
     world: () => JSON.parse(JSON.stringify(WORLD)),
     queue: () => JSON.parse(JSON.stringify(WORLD.queue)),
     items: () => ({ mochi:Object.keys(WORLD.items), oki:JSON.parse(JSON.stringify(WORLD.placed)) }),
