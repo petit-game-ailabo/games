@@ -111,7 +111,7 @@ function footTick() {
 //  4. 舌が あたる 瞬間だけ 雑音が のる
 // **この家の 風鈴は ずっと 同じ もの。だから 音程は 変わらない。**
 // たたくたび 音程を ふると、毎回 べつの物を たたいている ことに なり、鐘に きこえる
-const FUURIN_F    = 2640;   // その ガラスの 音程
+const FUURIN_F    = 3520;   // その ガラスの 音程。**うすい ガラスは かなり 高い**
 const FUURIN_BEAT = 2.3;    // ゆがみで 割れた ぶんの ずれ（Hz）。うなりに なる
 
 // 一回ぶん。**「ちりーん」の ーん は 長い。**
@@ -273,6 +273,77 @@ function karasu(vol) {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(bp); bp.connect(g); g.connect(ambGain);
     o.start(t); o.stop(t + dur + 0.05);
+  }
+}
+
+// ===== 遠くから きこえる 音 =====
+// 地図は 出さない。かわりに **耳で さがす**。
+// 遠いほど 小さく、こもって きこえる。近づくほど はっきりする。
+// うたっているのは おなじ子なので、こえの たかさは 変わらない（D-037）
+const UTA_SCALE = [0, 2, 4, 7, 9, 12, 14];      // ペンタトニック。さまよう ふしに なる
+// 遠さ → [大きさ, どれくらい こもるか(Hz)]
+const UTA_FAR = [[0.085, 6000], [0.040, 1500], [0.016, 700]];
+
+function uta(base, vol, cut) {
+  if (!AC) return;
+  const t0 = AC.currentTime + 0.05;
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = cut;
+  const out = AC.createGain(); out.gain.value = 1; lp.connect(out); out.connect(ambGain);
+  const n = 3 + Math.floor(Math.random()*3);
+  let at = 0;
+  for (let i = 0; i < n; i++) {
+    const semi = UTA_SCALE[Math.floor(Math.random()*UTA_SCALE.length)];
+    const dur = 0.18 + Math.random()*0.30;
+    const f = base * Math.pow(2, semi/12);
+    const o = AC.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+    // ふるえ（ビブラート）。これが ないと 笛に きこえる
+    const vib = AC.createOscillator(); vib.type = 'sine'; vib.frequency.value = 5.4 + Math.random();
+    const vibg = AC.createGain(); vibg.gain.value = f * 0.012;
+    vib.connect(vibg); vibg.connect(o.frequency);
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t0 + at);
+    g.gain.linearRampToValueAtTime(vol, t0 + at + 0.05);
+    g.gain.setValueAtTime(vol, t0 + at + dur*0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + dur);
+    o.connect(g); g.connect(lp);
+    o.start(t0 + at); vib.start(t0 + at);
+    o.stop(t0 + at + dur + 0.05); vib.stop(t0 + at + dur + 0.05);
+    at += dur * (0.85 + Math.random()*0.4);
+  }
+}
+
+// 画面の つながりを たどって、いくつ 先か を かぞえる
+function screenDist(from, to) {
+  if (from === to) return 0;
+  const seen = { [from]: 0 };
+  let q = [from];
+  while (q.length) {
+    const next = [];
+    for (const k of q) for (const e of (SC[k].exits || [])) {
+      if (seen[e.to] !== undefined) continue;
+      seen[e.to] = seen[k] + 1;
+      if (e.to === to) return seen[e.to];
+      next.push(e.to);
+    }
+    q = next;
+  }
+  return 99;
+}
+
+let utaTimer = 0, utaNow = null;
+function utaTick(dt) {
+  if (!AC || state !== 'play') return;
+  utaTimer -= dt;
+  if (utaTimer > 0) return;
+  utaTimer = 4.5 + Math.random()*5.5;
+  utaNow = null;
+  for (const t of (EVENTS.tooi || [])) {
+    if (!matchWhen(t.when, { day: WORLD.day })) continue;
+    const d = screenDist(cur, t.place);
+    if (d >= UTA_FAR.length) continue;
+    utaNow = { id: t.id, dist: d };
+    uta(t.base || 880, UTA_FAR[d][0], UTA_FAR[d][1]);
+    break;
   }
 }
 

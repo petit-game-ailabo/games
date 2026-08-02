@@ -133,6 +133,32 @@ with sync_playwright() as pw:
     if n1 - n0 < 2: fails.append(f"歩いても 足音が 鳴らない（{n1-n0}歩）")
     if n2 != n1: fails.append(f"とまっているのに 足音が 鳴る（{n2-n1}歩）")
 
+    # --- 遠くの うた。近づくほど はっきり きこえるか（地図の かわり）
+    print()
+    # もり に ミスティアが 居る。あぜ→もり が 1こ先、いえのまえ→もり が 2こ先
+    # 遠さは 画面の つながりを たどった 数。3こ先より 遠いと きこえない
+    for s, want in [("mori", 0), ("aze", 1), ("iemae", 2), ("zashiki", 4)]:
+        pg.evaluate(f"window._ctrl.setSteps(0); window._ctrl.setYoru(true); window._ctrl.goto('{s}')")
+        pg.wait_for_timeout(400)
+        pg.evaluate("window._ctrl.free()")
+        d = dict(pg.evaluate("window._ctrl.uta()")["dist"])["mystia"]
+        ok = (d == want)
+        print(f"  {s:8s} もりまで {d}こ先  {'OK' if ok else 'NG（' + str(want) + ' のはず）'}")
+        if not ok: fails.append(f"{s}: もりまでの 遠さが {d}（{want} のはず）")
+    # 近くでは 鳴り、遠すぎると 鳴らない
+    for s, should in [("mori", True), ("aze", True), ("zashiki", False)]:
+        pg.evaluate(f"window._ctrl.setSteps(0); window._ctrl.goto('{s}')"); pg.wait_for_timeout(400)
+        pg.evaluate("window._ctrl.free()")
+        got = None
+        for _ in range(40):
+            pg.evaluate("window._ctrl.utaNow()")      # まちを とばす
+            pg.wait_for_timeout(150)
+            u = pg.evaluate("window._ctrl.uta()")["now"]
+            if u: got = u; break
+        print(f"  {s:8s} うたが きこえる={bool(got)} {got if got else ''}")
+        if should and not got: fails.append(f"{s}: 近いのに うたが きこえない")
+        if not should and got: fails.append(f"{s}: 遠すぎるのに うたが きこえる")
+
     # 音を 足しても こまが 落ちていないか
     fps = pg.evaluate("""() => new Promise(r => { let n=0; const t0=performance.now();
       const s=()=>{n++; if(performance.now()-t0<1000) requestAnimationFrame(s); else r(n);};

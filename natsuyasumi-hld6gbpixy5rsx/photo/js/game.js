@@ -208,6 +208,7 @@ function loop(now) {
   // --- 虫や 鳥。時間帯で 鳴くものが 変わる（audio.js の ambientTick）
   ambientTick(dt);
   footTick();                    // 足音。画面ごとに ふみごこちが ちがう
+  utaTick(dt);                   // 遠くの うた。地図の かわりに 耳で さがす
 
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
@@ -416,6 +417,8 @@ if (qs.has('record') || EDIT) {
     setDay: n => { newDay(n); },
     amb: () => ({ kind:ambKind(), last:lastAmb, dayT:+dayT().toFixed(2), on:!!AC }),
     foot: () => ({ want:SC[cur].ashi || 'tsuchi', last:lastFootKind, n:footCount }),
+    uta: () => ({ now:utaNow, dist:(EVENTS.tooi || []).map(t => [t.id, screenDist(cur, t.place)]) }),
+    utaNow: () => { utaTimer = 0; },
     place: () => ({ cur, amb:SC[cur].amb, mizu:SC[cur].mizu || 0, lastPlace2,
                     wind: windGain ? +windGain.gain.value.toFixed(3) : null,
                     windF: windLP ? Math.round(windLP.frequency.value) : null,
