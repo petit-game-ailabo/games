@@ -24,7 +24,9 @@ function matchWhen(w, ctx) {
   if (w.dayFrom !== undefined && !(ctx.day >= w.dayFrom)) return false;
   if (w.dayTo   !== undefined && !(ctx.day <= w.dayTo))   return false;
   if (w.home    !== undefined && !!ctx.home !== !!w.home) return false;
-  if (w.place   !== undefined && cur !== w.place)         return false;
+  // place は **ctx で わたされた 画面**を 見る（なければ いまの画面 cur）。
+  // resetDay は 全画面の NPC を まとめて 見るので、その NPC の 画面を わたす（G4）。
+  if (w.place   !== undefined && (ctx.place !== undefined ? ctx.place : cur) !== w.place) return false;
   if (w.who     !== undefined && ctx.who !== w.who)       return false;
   if (w.at      !== undefined && ctx.at  !== w.at)        return false;
   if (w.spot    !== undefined && ctx.spot !== w.spot)     return false;

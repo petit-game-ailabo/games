@@ -68,7 +68,9 @@ function enter(id, at) {
 //   key … 'flat'＝ふつうの ならび／数字＝えらんだ かたまりの 番号／-1＝どれにも あわず
 // key を 返すのは、会話の とちゅうで 竿を もった等で かたまりが 差しかわったのを
 // 気づくため（game.js の talk が 見て、idx を もどして 話しなおす）。
-function linesPick(n) {
+// place … その NPC の いる 画面。省くと いまの画面（cur）。resetDay は 全画面を
+// まとめて 見るので、when:{place} が その画面で 正しく 効くよう 画面を わたす（G4）。
+function linesPick(n, place) {
   const t = talksOf(n);
   if (!t) return { L:null, key:null };
   const v = t[WORLD.day];
@@ -78,18 +80,19 @@ function linesPick(n) {
   // 竿を もったら／お手伝いを したら セリフが 変わる、を データだけで 書くための もの。
   // じょうけんに あう さいしょの かたまりを えらぶ（when を 書かなければ いつでも）。
   if (v.length && v[0] && !Array.isArray(v[0]) && typeof v[0] === 'object') {
-    const ctx = { day: WORLD.day, place: cur, home: cur === 'zashiki' };
+    const p = place || cur;
+    const ctx = { day: WORLD.day, place: p, home: p === 'zashiki' };
     for (let i = 0; i < v.length; i++)
       if (matchWhen(v[i].when, ctx)) return { L: v[i].lines || null, key:i };
     return { L:null, key:-1 };
   }
   return { L:v, key:'flat' };
 }
-function linesOf(n) { return linesPick(n).L; }
+function linesOf(n, place) { return linesPick(n, place).L; }
 function resetDay() {
   applyNpcChanges();   // あとから ふえた／消えた NPC を つけ直す
   for (const k in SC) for (const n of (SC[k].npc || [])) {
-    n.idx = 0; n.done = !linesOf(n);
+    n.idx = 0; n.done = !linesOf(n, k);   // その NPC の 画面 k で 見る
   }
   talkNpc = null; nedokoT = 0; nedokoArmed = false;
   WORLD.steps = 0; WORLD.mukaeDone = false; WORLD.yoruDone = false;

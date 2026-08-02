@@ -331,10 +331,13 @@ spot が ないと 音源を 置けないので、単独では 作れない。
       → ねる ときの カード／日記は `newDay` の **前**に 組む。
       - できた。`const night = nightScript()` を `newDay` の 前に 出し、それを 使う。
         いまの night は 日別分岐が ないので 見た目は 不変（予防修正）。検査 day とおった。
-- [ ] **G4. `matchWhen` の `place` が グローバル `cur` を 見て `ctx.place` を 無視**（指・K8′ を place併用で 書く前に）
+- [x] **G4. `matchWhen` の `place` が グローバル `cur` を 見て `ctx.place` を 無視**（指・K8′ を place併用で 書く前に）
       `resetDay` は 全画面の npc を いまの `cur` で `linesOf` するので、他画面の ブロックに
       `place` 条件を 書くと `done` が 誤確定する。いまの talks に `place` ブロックが ないので
       無害だが、K8′ を place と 併せた 瞬間に 効く。→ `place` は `ctx.place` を 見る。
+      - できた。`matchWhen` の place は `ctx.place`（無ければ cur）を 見る。`linesPick(n, place)`／
+        `linesOf(n, place)` に 画面を わたせるように し、`resetDay` は その NPC の 画面 `k` で 見る。
+        検査：cur=zashiki でも `when:{place:'mori'}` が もりの NPC で 正しく 効くのを 確認。talk とおった。
 - [ ] **G5. 夜の 自由行動 state が ない**（指・D8後半 蛍 の 前提）
       `night` は 「ねむい→カード→翌朝」で 即とじる。あぜみち 2日目の talks が すでに
       「よるに ここ…ほたるが でる」と 前振りしているのに 受け皿が ない。
