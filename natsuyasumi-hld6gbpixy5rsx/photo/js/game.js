@@ -421,7 +421,8 @@ if (qs.has('record') || EDIT) {
     setYoru: v => { WORLD.yoruDone = !!v; },
     // 日づけを 変えたら 会話の すすみ具合も 入れ直す（ねたときと おなじ）
     setDay: n => { newDay(n); resetDay(); },
-    amb: () => ({ kind:ambKind(), last:lastAmb, dayT:+dayT().toFixed(2), on:!!AC }),
+    amb: () => ({ kind:ambKind(), last:lastAmb, n:ambCount,
+                  dayT:+dayT().toFixed(2), on:!!AC }),
     foot: () => ({ want:SC[cur].ashi || 'tsuchi', last:lastFootKind, n:footCount }),
     uta: () => ({ now:utaNow, dist:(EVENTS.tooi || []).map(t => [t.id, screenDist(cur, t.place)]) }),
     utaNow: () => { utaTimer = 0; },

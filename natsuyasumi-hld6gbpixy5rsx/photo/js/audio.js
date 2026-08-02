@@ -10,7 +10,13 @@ let shortNoise = null, longNoise = null;
 // ひくい うなりは こわい 風に きこえる。
 // ほんものの 夏の 外は、セミと、ときどき 来る 葉ずれと、鳥。**小さい音の あつまり**。
 //   p … 葉ずれが 来る ぐあい   v … その 大きさ
-const SAWA = { in:{ p:0.06, v:0.008 }, out:{ p:0.34, v:0.018 }, ki:{ p:0.55, v:0.028 } };
+//
+// **切れ目が あることを 数で たしかめること。**
+// 鳴る間隔は だいたい 1.6/p 秒、ひとつの 長さは 平均2.2秒。
+// 1.6/p が 2.2 より 小さいと かさなり つづけ、常時ノイズに 逆もどりする。
+//   ki  1.6/0.25 = 6.4秒 おきに 2.2秒 → 3分の1 くらいしか 鳴っていない
+//   out 1.6/0.14 = 11秒 おきに 2.2秒
+const SAWA = { in:{ p:0.04, v:0.008 }, out:{ p:0.14, v:0.018 }, ki:{ p:0.25, v:0.028 } };
 
 function noiseBuf(sec) {
   const len = AC.sampleRate * sec;
@@ -41,7 +47,7 @@ function initAudio() {
 // ひくい音は 入れない。ひくい うなりが こわい 風の しょうたい
 function sawasawa(vol) {
   if (!AC || !longNoise) return;
-  const t = AC.currentTime, dur = 1.6 + Math.random()*2.8;
+  const t = AC.currentTime, dur = 1.4 + Math.random()*1.6;
   const s = AC.createBufferSource(); s.buffer = longNoise; s.loop = true;
   s.playbackRate.value = 0.8 + Math.random()*0.5;
   const bp = AC.createBiquadFilter(); bp.type = 'bandpass';
@@ -390,10 +396,14 @@ function ambKind() {
   return 'hiru';
 }
 
-let lastAmb = '', lastPlace2 = '';
+let lastAmb = '', lastPlace2 = '', ambCount = 0;
 function ambientTick(dt) {
   if (!AC) return;
   setPlaceSound();              // 画面が 変わっていたら 水を つけ変える
+  // **黒画面（額縁・日づけ・よる）では 夏の音を 止める。**
+  // 「幻想郷の今」で セミが 鳴っていては 回想の 枠に ならない
+  const st = scene && scene.q[scene.i];
+  if (st && st.k === 'card') return;
   ambTimer -= dt;
   if (ambTimer > 0) return;
   const sc = SC[cur], inside = (sc.amb === 'in'), ki = (sc.amb === 'ki');
@@ -405,7 +415,7 @@ function ambientTick(dt) {
   if (Math.random() < sw.p) { sawasawa(sw.v); lastPlace2 = 'sawa'; }
 
   const kind = ambKind();
-  lastAmb = kind;
+  lastAmb = kind; ambCount++;
   if (kind === 'yoru') {
     if (Math.random() < 0.35) karasu(vol*1.1); else suzumushi(vol*0.9);
     ambTimer += 0.8;                       // よるは まばら

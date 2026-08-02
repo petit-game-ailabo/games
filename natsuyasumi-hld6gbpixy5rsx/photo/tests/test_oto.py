@@ -77,7 +77,15 @@ with sync_playwright() as pw:
         seen[s] = p
         print(f"  {s:8s} amb={p['amb']:4s} 葉ずれ={p['sawa']:.2f} 水={p['water']:.3f}")
         if p["amb"] != amb: fails.append(f"{s}: amb が {p['amb']}（{amb} のはず）")
-    # **鳴りっぱなしの 音は 置かない。**耳の 負担に なるし、ひくい うなりは こわい
+    # **鳴りっぱなしの 音は 置かない。**耳の 負担に なるし、ひくい うなりは こわい。
+    # 数で たしかめる：鳴る間隔（だいたい 1.6/p 秒）が いちばん長い 葉ずれ（3.0秒）より
+    # 長く ないと、かさなり つづけて 常時ノイズに 逆もどりする
+    for s in ("iemae", "aze", "mori"):
+        p = seen[s]["sawa"]
+        gap = 1.6 / p if p else 999
+        print(f"  {s:8s} 葉ずれは {gap:.1f}秒 おきに 最大3.0秒 "
+              f"{'OK' if gap > 3.6 else 'NG（切れ目が ない）'}")
+        if gap <= 3.6: fails.append(f"{s}: 葉ずれに 切れ目が ない（{gap:.1f}秒おき）")
     if not (seen["zashiki"]["sawa"] < seen["iemae"]["sawa"] < seen["mori"]["sawa"]):
         fails.append("家のなか < いえのまえ < そとの みち の じゅんに 葉ずれが 多く なっていない")
     if not (seen["aze"]["water"] > 0.005): fails.append("あぜみちで 水の音が しない")
@@ -189,6 +197,24 @@ with sync_playwright() as pw:
     n4 = pg.evaluate("window._ctrl.dekake()")["n"]
     print(f"  外から 外へ: {n4-n3}回")
     if n4 != n3: fails.append("家を 出ていないのに 鳴る")
+
+    # --- 黒画面（額縁・日づけ・よる）では 夏の音を 止める
+    print()
+    pg.evaluate("window._ctrl.wipe()")
+    pg.reload(); pg.wait_for_timeout(3500)
+    pg.keyboard.press("Space"); pg.wait_for_timeout(300)   # タイトル → 額縁が はじまる
+    pg.evaluate("window._ctrl.start()"); pg.wait_for_timeout(600)
+    sc = pg.evaluate("window._ctrl.scene()")
+    a0 = pg.evaluate("window._ctrl.amb()")["n"]
+    pg.wait_for_timeout(4000)                               # 額縁の あいだ ずっと
+    a1 = pg.evaluate("window._ctrl.amb()")["n"]
+    sc2 = pg.evaluate("window._ctrl.scene()")
+    still_card = bool(sc2 and sc2.get("k") == "card")
+    print(f"  額縁のあいだ（k={sc2.get('k') if sc2 else None}）: 夏の音 {a1-a0}回")
+    if still_card and a1 != a0:
+        fails.append(f"黒画面なのに 夏の音が 鳴る（{a1-a0}回）")
+    if not still_card:
+        print("  （4秒では 額縁が おわっていた。判定は とばす）")
 
     # 音を 足しても こまが 落ちていないか
     fps = pg.evaluate("""() => new Promise(r => { let n=0; const t0=performance.now();
