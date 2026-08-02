@@ -16,6 +16,8 @@ const WORLD = {
   items: {},         // もちもの         { なまえ: true }
   placed: {},        // 場所に 置かれた物  { 場所: [なまえ, ...] }
   visited: {},       // どこに いつ 行ったか { 場所: [日, ...] }
+  num: {},           // ずっと のこる 数   { 'zukan':3, 'stamp':12 }
+  today: {},         // **その日だけの 数。朝に からに なる** { 'mushi:aze':18 }
   queue: [],         // あとで 効く よやく
   npcAdd: [],        // あとから ふえた NPC  [{place, who, x, y, talks}]
   npcGone: [],       // 居なくなった NPC     ['場所:だれ']
@@ -46,6 +48,28 @@ function takeItem(place, k) {
 }
 const itemsAt = place => WORLD.placed[place] || [];
 
+// --- 数。**ずっと のこる もの**と **その日だけの もの**を 分ける。
+// ずっと のこる … 図鑑の 数・スタンプの 数・こわした 回数
+// その日だけ   … その日 その場所の 虫の のこり
+const numOf = k => WORLD.num[k] || 0;
+function addNum(k, n) {
+  WORLD.num[k] = (WORLD.num[k] || 0) + (n === undefined ? 1 : n);
+  return WORLD.num[k];
+}
+function setNum(k, n) { WORLD.num[k] = n; }
+
+// DESIGN.md §6 の 教訓：**「その日その場所の 虫は 有限」を かならず 守ること。**
+// のこりが 無限だと 逃がしても すぐ 補充され、乱獲が いちばん とくに なる。
+// はじめて 引いた ときに max を 入れ、そこから 減らしていく
+function leftToday(k, max) {
+  if (WORLD.today[k] === undefined) WORLD.today[k] = max;
+  return WORLD.today[k];
+}
+function useToday(k, max, n) {
+  WORLD.today[k] = Math.max(0, leftToday(k, max) - (n === undefined ? 1 : n));
+  return WORLD.today[k];
+}
+
 // --- どこに いつ 行ったか。おなじ日に 何度 来ても 1回だけ かぞえる
 function noteVisit(place) {
   const v = WORLD.visited[place] = WORLD.visited[place] || [];
@@ -59,13 +83,14 @@ function newDay(d) {
   WORLD.day = d; WORLD.steps = 0;
   WORLD.mukaeDone = false; WORLD.yoruDone = false; WORLD.duskFired = false;
   WORLD.dekakeDone = false;
+  WORLD.today = {};        // その日だけの 数は 朝に もどる
 }
 
 // --- はじめから。しるしも もちものも すてる
 function resetWorld() {
   newDay(1);
   WORLD.flags = {}; WORLD.items = {}; WORLD.placed = {}; WORLD.visited = {};
-  WORLD.queue = []; WORLD.fired = {};
+  WORLD.queue = []; WORLD.fired = {}; WORLD.num = {};
   WORLD.npcAdd = []; WORLD.npcGone = [];
   applyNpcChanges();     // SC に つけた ぶんも もとに もどす
 }

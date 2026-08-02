@@ -21,6 +21,21 @@ function matchWhen(w, ctx) {
   if (w.flag    !== undefined && !hasFlag(w.flag))        return false;
   if (w.item    !== undefined && !hasItem(w.item))        return false;
   if (w.not     !== undefined && matchWhen(w.not, ctx))   return false;
+  // しるしが 立ってから 何日 たったか。D8「罪悪感が 尾を引く」に つかう
+  //   { flagAge: { flag:'kowashita', from:1, to:3 } }
+  if (w.flagAge !== undefined) {
+    const d = flagDay(w.flagAge.flag);
+    if (d === undefined) return false;
+    const age = WORLD.day - d;
+    if (w.flagAge.from !== undefined && age < w.flagAge.from) return false;
+    if (w.flagAge.to   !== undefined && age > w.flagAge.to)   return false;
+  }
+  // 数で 出しわける。{ num: { key:'stamp', min:10 } }
+  if (w.num !== undefined) {
+    const v = numOf(w.num.key);
+    if (w.num.min !== undefined && v < w.num.min) return false;
+    if (w.num.max !== undefined && v > w.num.max) return false;
+  }
   return true;
 }
 
@@ -166,6 +181,8 @@ function runActions(dos, ctx, sceneOk) {
     if (a.flag) setFlag(a.flag);
     if (a.later) reserve(a.later);
     if (a.item) giveItem(a.item);
+    if (a.add) addNum(a.add.key, a.add.n);      // 数を ふやす { add:{key:'stamp', n:1} }
+    if (a.set) setNum(a.set.key, a.set.n);      // 数を 入れる { set:{key:'stamp', n:0} }
     // その場所に 物を 置く。写真のうえに 出て、そばに 行くと ひろえる
     if (a.place) putItem(a.place.at, a.place.item, a.place.x, a.place.y);
     // NPC を 出す／消す

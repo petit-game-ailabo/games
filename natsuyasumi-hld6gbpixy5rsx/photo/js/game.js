@@ -434,6 +434,8 @@ if (qs.has('record') || EDIT) {
     world: () => JSON.parse(JSON.stringify(WORLD)),
     queue: () => JSON.parse(JSON.stringify(WORLD.queue)),
     items: () => ({ mochi:Object.keys(WORLD.items), oki:JSON.parse(JSON.stringify(WORLD.placed)) }),
+    num: () => ({ zutto:JSON.parse(JSON.stringify(WORLD.num)),
+                  kyou:JSON.parse(JSON.stringify(WORLD.today)) }),
     wipe: () => wipeSave(),
     resume: () => { if (state === 'title') resume(); },
     dbg: () => ({ state, cur, day:WORLD.day, steps:WORLD.steps,

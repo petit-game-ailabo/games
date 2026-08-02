@@ -134,6 +134,31 @@ with sync_playwright() as pw:
     print(f"  行かなかった日の 晩ごはん: もりの話={'あり' if hit3 else 'なし'}")
     if hit3: fails.append("行っていないのに もりの 話に なる")
 
+    # --- 数（K2）。ずっと のこる ものと、その日だけの ものを 分けている
+    print()
+    pg.evaluate("""() => {
+      addNum('stamp'); addNum('stamp'); addNum('zukan', 5);
+      leftToday('mushi:aze', 18); useToday('mushi:aze', 18); useToday('mushi:aze', 18);
+    }""")
+    n = pg.evaluate("window._ctrl.num()")
+    print(f"  つけたところ: ずっと={n['zutto']} きょう={n['kyou']}")
+    if n["zutto"].get("stamp") != 2: fails.append("ずっと のこる 数が つかない")
+    if n["kyou"].get("mushi:aze") != 16: fails.append("その日だけの 数が 減らない")
+
+    # ねると **その日だけの 数は 朝に もどり、ずっと のこる ものは 残る**
+    pg.evaluate("window._ctrl.sleep()")
+    wait_scene_end(pg, 1200)
+    n2 = pg.evaluate("window._ctrl.num()")
+    print(f"  ねた あと: ずっと={n2['zutto']} きょう={n2['kyou']}")
+    if n2["zutto"].get("stamp") != 2: fails.append("ねたら ずっと のこる 数まで 消えた")
+    if n2["kyou"].get("mushi:aze") is not None:
+        fails.append("ねても その日だけの 数が もどらない（DESIGN §6：その日その場所の 虫は 有限）")
+
+    # セーブして 読みなおしても のこるか
+    n3 = pg.evaluate("() => { saveWorld(); return JSON.parse(localStorage.getItem(SAVE_KEY)).num; }")
+    print(f"  セーブの中: {n3}")
+    if (n3 or {}).get("stamp") != 2: fails.append("数が セーブに のっていない")
+
     print("\nerrors:", errs[:5])
     if errs: fails.append("エラー " + str(errs[:3]))
     b.close()
