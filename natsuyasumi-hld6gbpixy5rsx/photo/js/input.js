@@ -6,6 +6,12 @@ const MOVE = { ArrowUp:[0,-1], KeyW:[0,-1], ArrowDown:[0,1], KeyS:[0,1],
 window.addEventListener('keydown', e => {
   if (e.code in MOVE || e.code === 'Space' || e.code.startsWith('Shift')) e.preventDefault();
   keys[e.code] = true; initAudio();
+  // えらんでいる あいだは 上下で うつる。おしっぱなしでは 進まない（e.repeat）
+  if (sceneSel && !e.repeat) {
+    const up = (e.code === 'ArrowUp' || e.code === 'KeyW');
+    const dn = (e.code === 'ArrowDown' || e.code === 'KeyS');
+    if (up || dn) { sceneSel.i = (sceneSel.i + (up ? sceneSel.n - 1 : 1)) % sceneSel.n; }
+  }
   if (state === 'title' && e.code === 'KeyR') { wipeSave(); start(); }
   else if (state === 'title' && (e.code === 'Space' || e.code === 'Enter')) titlePress(null);
   else if (!e.repeat && (e.code === 'Space' || e.code === 'Enter')) advance = true;
@@ -36,6 +42,14 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault(); usingTouch = true; initAudio();
   const t = e.changedTouches[0], p = toCanvas(t);
   if (state === 'title') { titlePress(p); return; }
+  // えらんでいる あいだは、その行を タップ → もう一度 タップで きめる
+  if (sceneSel && selRect) {
+    const r = Math.floor((p.y - selRect.top + 22) / 34);
+    if (r >= 0 && r < sceneSel.n) {
+      if (sceneSel.i === r) advance = true; else sceneSel.i = r;
+    }
+    return;
+  }
   if (!stick.on) { stick.on=true; stick.id=t.identifier; stick.ox=p.x; stick.oy=p.y;
                    stick.x=p.x; stick.y=p.y; stick.moved=false; stick.t0=performance.now(); }
 }, { passive:false });

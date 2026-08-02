@@ -317,7 +317,8 @@ function loop(now) {
   }
 
   // はなしの まど
-  if (inScene && sceneSay) sayBox(sceneSay[0], sceneSay[1]);
+  if (inScene && sceneSel) selRect = selBox(sceneSel);
+  else if (inScene && sceneSay) sayBox(sceneSay[0], sceneSay[1]);
   else if (talkNpc) {
     const li = linesOf(talkNpc)[talkNpc.idx || 0];
     sayBox(li[0], li[1]);
@@ -442,6 +443,9 @@ if (qs.has('record') || EDIT) {
     put: (x,y) => { player.x = x; player.y = y; },
     free: () => { endScene(); talkLock = false; },
     sleep: () => sleepNow(),
+    sel: () => sceneSel ? { i:sceneSel.i, n:sceneSel.n,
+                            opts:sceneSel.st.opts.map(o => o.t), text:sceneSel.st.text } : null,
+    pick: n => { if (sceneSel) { sceneSel.i = n; advance = true; } },
     scene: () => scene ? { i:scene.i, n:scene.q.length,
                            k:(scene.q[scene.i]||{}).k, say:sceneSay, veil:+veil.toFixed(2) } : null,
     poses: () => ({ me:playerPose,

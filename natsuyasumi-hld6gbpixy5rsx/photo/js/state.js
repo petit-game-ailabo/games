@@ -13,6 +13,8 @@ let scene = null;          // {q, i, t, entered, flags}
 let cast = [];
 let playerPose = 'idle';
 let sceneSay = null;       // 場面のセリフ [who, text]
+let sceneSel = null;       // えらんでいる とちゅう { st, i, n }
+let selRect = null;        // えらぶ まどの 場所。タップの あたり判定に つかう
 let walkTo = null;         // じどうで あるく先
 let taisoT0 = -99, taisoBeats = 0;
 let veil = 0;              // 場面の切りかわりの 黒い幕
@@ -70,7 +72,8 @@ function resetDay() {
 }
 function runScene(q) {
   scene = { q, i:0, t:0, entered:-1, flags:{} };
-  sceneSay = null; walkTo = null; cast = []; playerPose = 'idle'; taisoT0 = -99; veil = 0;
+  sceneSay = null; sceneSel = null;
+  walkTo = null; cast = []; playerPose = 'idle'; taisoT0 = -99; veil = 0;
 }
 function startMorning(head) {
   resetDay();

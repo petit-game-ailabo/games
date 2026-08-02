@@ -1,7 +1,19 @@
 // 自動でわけたファイル。もとは photo/index.html 1枚だった
 // ===== 朝のながれを すすめる =====
+// --- 分かれ道。`{k:'label', id}` へ とぶ。
+// 見つからなければ とばずに つぎへ すすむ（書きまちがいで 場面が 止まらないように）
+function labelIdx(id) {
+  return scene.q.findIndex(s => s.k === 'label' && s.id === id);
+}
+function sceneJump(id) {
+  const i = labelIdx(id);
+  if (i < 0) return false;
+  scene.i = i; scene.entered = -1; scene.t = 0;
+  return true;
+}
+
 function endScene() {
-  scene = null; state = 'play'; cast = []; sceneSay = null; walkTo = null;
+  scene = null; state = 'play'; cast = []; sceneSay = null; sceneSel = null; walkTo = null;
   playerPose = 'idle'; taisoT0 = -99; veil = 0;
   nedokoArmed = false; talkLock = true;   // 場面あけに かってに 会話が はじまらないように
 }
@@ -18,6 +30,11 @@ function stepScene(dt) {
                       pose:'idle', face:1, wbob:0, tx:0, ty:0, gone:false }));
                     break;
       case 'say':   sceneSay = [st.who, st.text]; break;
+      case 'sel':   sceneSel = { st, i:0, n:st.opts.length }; break;
+      // 書いてある ところへ とぶ。**組み立てるときでは なく、いま 見て 決める**
+      case 'goto':  if (sceneJump(st.id)) return; break;
+      case 'if':    if (matchWhen(st.when, { day:WORLD.day }) && sceneJump(st.go)) return;
+                    break;
       case 'walk':  walkTo = { x:st.x, y:st.y }; break;
       case 'move':
         for (const [who, x, y, gone] of st.list) {
@@ -53,6 +70,20 @@ function stepScene(dt) {
     case 'put':   done = true; break;
     case 'cast':  done = true; break;
     case 'meal':  done = true; break;
+    case 'label': done = true; break;
+    case 'goto':  done = true; break;     // とび先が 見つからなかった ときだけ ここ
+    case 'if':    done = true; break;
+    // えらぶ。**ここは 時間では 進まない。**えらぶまで 待つ
+    case 'sel':
+      if (!advance || scene.t < 0.25) break;
+      {
+        const opt = st.opts[sceneSel.i];
+        sceneSel = null; advance = false;
+        if (opt.do) runActions(opt.do, { day:WORLD.day }, false);
+        if (opt.go && sceneJump(opt.go)) return;
+        done = true;
+      }
+      break;
     case 'say':   done = scene.t >= sayDur(st.text) || (advance && scene.t > 0.3);
                   if (done) sceneSay = null; break;
     case 'to':

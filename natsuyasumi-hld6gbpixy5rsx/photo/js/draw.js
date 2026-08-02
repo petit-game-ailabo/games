@@ -129,3 +129,28 @@ function sayBox(who, txt) {
   lines.forEach((s, i) => text(s, 112, by + 52 + i*27, 19, '#ffffff'));
 }
 const sayDur = t => 1.9 + t.length * 0.085;
+
+// えらぶ まど。セリフの まどと おなじ 見た目に そろえる。
+// **えらんでいる あいだは 時間で 進まない。**急かさない
+const SEL_ROW = 34;
+function selBox(sel) {
+  const st = sel.st, lines = st.text ? wrap(st.text, 19, 660) : [];
+  const bh = 30 + lines.length*27 + sel.n*SEL_ROW + 12;
+  const by = H - bh - 18;
+  ctx.save();
+  ctx.fillStyle = 'rgba(10,16,12,0.78)'; ctx.fillRect(28, by, W-56, bh);
+  ctx.restore();
+  let y = by + 34;
+  if (st.who) { drawChar(ciOf(st.who), 74, by + 44, 52, false, 0);
+                text(nameOf(st.who), 112, by + 22, 14, '#a9c79c'); y = by + 44; }
+  lines.forEach((s, i) => text(s, 112, y + i*27, 19, '#ffffff'));
+  const top = y + lines.length*27 + 6;
+  for (let i = 0; i < sel.n; i++) {
+    const oy = top + i*SEL_ROW, on = (i === sel.i);
+    if (on) { ctx.save(); ctx.fillStyle = 'rgba(255,240,190,0.16)';
+              ctx.fillRect(100, oy - 20, W-160, SEL_ROW - 4); ctx.restore(); }
+    text((on ? '▸ ' : '  ') + st.opts[i].t, 118, oy, 19,
+         on ? '#ffe9ac' : 'rgba(232,240,228,0.72)');
+  }
+  return { top, rows: sel.n };     // タップの あたり判定に つかう
+}
