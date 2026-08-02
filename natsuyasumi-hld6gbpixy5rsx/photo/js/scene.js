@@ -34,6 +34,8 @@ function stepScene(dt) {
       // べつの あそびに 入る。おわると けっかが WORLD.num[out] に 入る。
       // 知らない 名まえなら 素通り（場面を 止めない）
       case 'mini':  if (startMini(st.name, st.cfg, st.out)) return; break;
+      // ただ 見るだけの 画面（虫かご・図鑑・スタンプ・絵日記）。とじたら つづきへ
+      case 'view':  if (openView(st.name, st.cfg)) return; break;
       // 書いてある ところへ とぶ。**組み立てるときでは なく、いま 見て 決める**
       case 'goto':  if (sceneJump(st.id)) return; break;
       case 'if':    if (matchWhen(st.when, { day:WORLD.day }) && sceneJump(st.go)) return;
@@ -75,6 +77,7 @@ function stepScene(dt) {
     case 'meal':  done = true; break;
     case 'label': done = true; break;
     case 'mini':  done = (state !== 'mini'); break;   // あそびが おわったら つぎへ
+    case 'view':  done = (state !== 'view'); break;   // とじたら つぎへ
     case 'goto':  done = true; break;     // とび先が 見つからなかった ときだけ ここ
     case 'if':    done = true; break;
     // えらぶ。**ここは 時間では 進まない。**えらぶまで 待つ

@@ -47,6 +47,12 @@ function loop(now) {
     requestAnimationFrame(loop); return;
   }
 
+  // 見るだけの 画面の あいだ
+  if (state === 'view') {
+    viewStep(dt);
+    if (state === 'view') { viewDraw(); advance = false; requestAnimationFrame(loop); return; }
+  }
+
   // べつの あそびの あいだは、画面ぜんぶを あそびに わたす
   if (state === 'mini') {
     miniStep(dt);
@@ -453,6 +459,9 @@ if (qs.has('record') || EDIT) {
     free: () => { endScene(); talkLock = false; },
     sleep: () => sleepNow(),
     mini: () => mini ? { name:mini.name, t:+mini.t.toFixed(1), out:mini.out } : null,
+    view: () => view ? { name:view.name, t:+view.t.toFixed(1) } : null,
+    viewOpen: (n, c) => openView(n, c),
+    stamp: d => setFlag('stamp:' + d),
     miniEnd: n => { if (mini) { mini.result = n; mini.done = true; } },
     sel: () => sceneSel ? { i:sceneSel.i, n:sceneSel.n,
                             opts:sceneSel.st.opts.map(o => o.t), text:sceneSel.st.text } : null,

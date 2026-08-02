@@ -6,6 +6,8 @@ const MOVE = { ArrowUp:[0,-1], KeyW:[0,-1], ArrowDown:[0,1], KeyS:[0,1],
 window.addEventListener('keydown', e => {
   if (e.code in MOVE || e.code === 'Space' || e.code.startsWith('Shift')) e.preventDefault();
   keys[e.code] = true; initAudio();
+  // 見るだけの 画面は Esc でも とじられる
+  if (state === 'view' && e.code === 'Escape') { advance = true; return; }
   // えらんでいる あいだは 上下で うつる。おしっぱなしでは 進まない（e.repeat）
   if (sceneSel && !e.repeat) {
     const up = (e.code === 'ArrowUp' || e.code === 'KeyW');
