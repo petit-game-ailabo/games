@@ -4,6 +4,17 @@
 
 let EVENTS = {};
 
+// --- かぎの 中の {day} を、いまの日の **数** に する。
+// {hiduke}（漢数字の 日づけ）とは べつもの。こちらは stamp:12 のような
+// **番号つきの しるし** を イベントから 立てる／読む ための もの。
+//   do:{ flag:'stamp:{day}' } … その日の ラジオ体操の 判こ
+//   when:{ flag:'stamp:{day}' } … きょう もう 押したか
+function expandKey(k, ctx) {
+  if (typeof k !== 'string' || k.indexOf('{day}') < 0) return k;
+  const d = (ctx && ctx.day !== undefined) ? ctx.day : WORLD.day;
+  return k.split('{day}').join(d);
+}
+
 // --- じょうけん。when に 書けるものを ここで 見る。
 // あとで ふえるときは ここに 足す（イベントの ひきがねも これを つかう）
 function matchWhen(w, ctx) {
@@ -20,13 +31,13 @@ function matchWhen(w, ctx) {
   if (w.took    !== undefined && ctx.item !== w.took)     return false;
   if (w.visited !== undefined && !everVisited(w.visited)) return false;
   if (w.today   !== undefined && !visitedOn(w.today, WORLD.day)) return false;
-  if (w.flag    !== undefined && !hasFlag(w.flag))        return false;
+  if (w.flag    !== undefined && !hasFlag(expandKey(w.flag, ctx))) return false;
   if (w.item    !== undefined && !hasItem(w.item))        return false;
   if (w.not     !== undefined && matchWhen(w.not, ctx))   return false;
   // しるしが 立ってから 何日 たったか。D8「罪悪感が 尾を引く」に つかう
   //   { flagAge: { flag:'kowashita', from:1, to:3 } }
   if (w.flagAge !== undefined) {
-    const d = flagDay(w.flagAge.flag);
+    const d = flagDay(expandKey(w.flagAge.flag, ctx));
     if (d === undefined) return false;
     const age = WORLD.day - d;
     if (w.flagAge.from !== undefined && age < w.flagAge.from) return false;
@@ -44,7 +55,7 @@ function matchWhen(w, ctx) {
   if (w.tokiTo   !== undefined && dayT() > w.tokiTo)   return false;
   // 数で 出しわける。{ num: { key:'stamp', min:10 } }
   if (w.num !== undefined) {
-    const v = numOf(w.num.key);
+    const v = numOf(expandKey(w.num.key, ctx));
     if (w.num.min !== undefined && v < w.num.min) return false;
     if (w.num.max !== undefined && v > w.num.max) return false;
   }
@@ -151,7 +162,7 @@ function dueQueue(at) {
 function serveQueue(at, ctx) {
   const steps = [];
   for (const q of dueQueue(at)) {
-    if (q.flag) setFlag(q.flag);
+    if (q.flag) setFlag(expandKey(q.flag, ctx));
     // よやくの 出しものは、セリフの ほかに 物を 置いたり しるしを 立てたり できる。
     // ただし **場面は はじめない**（いまの ごはんの ならびを こわすので）
     if (q.do) runActions(q.do, ctx, false);
@@ -195,12 +206,12 @@ function applyNpcChanges() {
 
 function runActions(dos, ctx, sceneOk) {
   for (const a of [].concat(dos || [])) {
-    if (a.flag) setFlag(a.flag);
-    if (a.unflag) delete WORLD.flags[a.unflag];   // せき止めを もどす ときに つかう
+    if (a.flag) setFlag(expandKey(a.flag, ctx));
+    if (a.unflag) delete WORLD.flags[expandKey(a.unflag, ctx)];   // せき止めを もどす ときに つかう
     if (a.later) reserve(a.later);
     if (a.item) giveItem(a.item);
-    if (a.add) addNum(a.add.key, a.add.n);      // 数を ふやす { add:{key:'stamp', n:1} }
-    if (a.set) setNum(a.set.key, a.set.n);      // 数を 入れる { set:{key:'stamp', n:0} }
+    if (a.add) addNum(expandKey(a.add.key, ctx), a.add.n);      // 数を ふやす { add:{key:'stamp', n:1} }
+    if (a.set) setNum(expandKey(a.set.key, ctx), a.set.n);      // 数を 入れる { set:{key:'stamp', n:0} }
     // その場所に 物を 置く。写真のうえに 出て、そばに 行くと ひろえる
     if (a.place) putItem(a.place.at, a.place.item, a.place.x, a.place.y);
     // NPC を 出す／消す

@@ -305,12 +305,16 @@ spot が ないと 音源を 置けないので、単独では 作れない。
 データで 書き始めると すぐ 詰まる／落ちる」穴**が 出た。中身より 先に これを 潰す。
 **どれも 数行だが、乗せる Dが 決まっているので 番号で 結ぶ。**
 
-- [ ] **G1. 日ごとキーの 展開**（重・D4／D5 の 前提）
+- [x] **G1. 日ごとキーの 展開**（重・D4／D5 の 前提）
       `buildStep` が 展開するのは `text` の `{hiduke}` だけ。`flag:"stamp:{day}"` や
       `add.key`/`set.key`/`num.key` の `{day}`（**漢数字でなく 数値**）が 展開されない。
       D-055 で スタンプは 日ごとの しるし `stamp:1…31` と 決め、`VIEW.stamp` も
       `hasFlag('stamp:'+d)` で 描くのに、イベントから その日の 枡を 押す 手だてが ない。
       → `buildStep`/`runActions` の キー文字列に `{day}` を 通す。
+      - できた。`expandKey(k, ctx)` を 足し、**書き側**（runActions の flag/unflag/add/set、
+        serveQueue の 予約フラグ）と **読み側**（matchWhen の flag/num.key/flagAge.flag）の
+        両方に 通した。`{day}` は いまの日の 数（1〜31）に なる。`{day}` の ない かぎは そのまま。
+        検査 yoyaku とおった。書き `do:{flag:'stamp:{day}'}`／読み `when:{flag:'stamp:{day}'}` を確認。
 - [ ] **G2. 条件つき talks の `idx` が ズレて ループごと 止まりうる**（重・K8′ を使う 全D の 前提）
       `linesOf` は 毎フレーム `{when,lines}` を 見て 返す 配列が 変わるのに、`n.done`/`n.idx` は
       `resetDay` で 1日1回しか 決まらない。**会話の 途中で フラグが 反転して 短い ブロックに
