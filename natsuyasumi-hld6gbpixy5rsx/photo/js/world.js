@@ -9,6 +9,8 @@ const WORLD = {
   steps: 0,          // きょう 画面を 移った回数。時計の かわり
   mukaeDone: false,  // きょう もう むかえが 来たか
   yoruDone: false,   // きょう もう 晩ごはんと 縁側が すんだか
+  duskFired: false,  // きょう もう 日ぐれの ひきがねを ひいたか
+  fired: {},         // ひいた ひきがね  { ひきがねのID: ひいた日 }
   flags: {},         // 立てた しるし     { なまえ: 立った日 }
   items: {},         // もちもの         { なまえ: true }
   placed: {},        // 場所に 置かれた物  { 場所: [なまえ, ...] }
@@ -43,13 +45,15 @@ const everVisited = place => (WORLD.visited[place] || []).length > 0;
 
 // --- 1日ぶんを まっさらに（日が変わるとき）
 function newDay(d) {
-  WORLD.day = d; WORLD.steps = 0; WORLD.mukaeDone = false; WORLD.yoruDone = false;
+  WORLD.day = d; WORLD.steps = 0;
+  WORLD.mukaeDone = false; WORLD.yoruDone = false; WORLD.duskFired = false;
 }
 
 // --- はじめから。しるしも もちものも すてる
 function resetWorld() {
   newDay(1);
-  WORLD.flags = {}; WORLD.items = {}; WORLD.placed = {}; WORLD.visited = {}; WORLD.queue = [];
+  WORLD.flags = {}; WORLD.items = {}; WORLD.placed = {}; WORLD.visited = {};
+  WORLD.queue = []; WORLD.fired = {};
 }
 
 // --- セーブ。ねたときに 書く。立ち位置は のこさない（つぎの日の 朝から はじまる）

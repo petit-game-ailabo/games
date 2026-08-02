@@ -14,6 +14,10 @@ function matchWhen(w, ctx) {
   if (w.dayTo   !== undefined && !(ctx.day <= w.dayTo))   return false;
   if (w.home    !== undefined && !!ctx.home !== !!w.home) return false;
   if (w.place   !== undefined && cur !== w.place)         return false;
+  if (w.who     !== undefined && ctx.who !== w.who)       return false;
+  if (w.at      !== undefined && ctx.at  !== w.at)        return false;
+  if (w.visited !== undefined && !everVisited(w.visited)) return false;
+  if (w.today   !== undefined && !visitedOn(w.today, WORLD.day)) return false;
   if (w.flag    !== undefined && !hasFlag(w.flag))        return false;
   if (w.item    !== undefined && !hasItem(w.item))        return false;
   if (w.not     !== undefined && matchWhen(w.not, ctx))   return false;
@@ -75,3 +79,43 @@ const morningScript = d => buildScene('morning', { day:d });
 const mukaeScript   = () => buildScene('mukae',  { day:WORLD.day, home: cur === 'zashiki' });
 const nightScript   = () => buildScene('night',  { day:WORLD.day });
 const yoruScript    = () => buildScene('yoru',   { day:WORLD.day });
+
+// ===== ひきがね =====
+// data/events.json の triggers を 見て、その時が来たら do を はしらせる。
+//   on     … 'enter'（画面に 入った）／'talk'（はなしが 尽きた）／'meal'（ごはん）
+//            ／'dusk'（日ぐれ）／'sleep'（ねた）
+//   when   … matchWhen と おなじ。書かなければ いつでも
+//   repeat … 書かなければ **一度きり**。'day' なら 1日1回。'always' なら まいかい
+//   do     … いまは flag（しるしを立てる）と scene（場面をはじめる）だけ。B4 でふえる
+function firedKey(t) { return t.id || (t.on + JSON.stringify(t.when || {})); }
+
+function canFire(t) {
+  const f = WORLD.fired[firedKey(t)];
+  if (f === undefined) return true;
+  if (t.repeat === 'always') return true;
+  if (t.repeat === 'day')    return f !== WORLD.day;
+  return false;
+}
+
+function runActions(dos, ctx, sceneOk) {
+  for (const a of [].concat(dos || [])) {
+    if (a.flag) setFlag(a.flag);
+    // 場面を はじめる。**いまの場面を こわさないよう、場面の とちゅうでは 出さない。**
+    // ごはん中や ねるときの 出しものは B3 の よやくで あつかう
+    if (a.scene && sceneOk !== false && state !== 'scene') {
+      const q = buildScene(a.scene, ctx);
+      if (q.length) { runScene(q); state = 'scene'; }
+    }
+  }
+}
+
+function fireTriggers(on, ctx, sceneOk) {
+  ctx = Object.assign({ day: WORLD.day, place: cur }, ctx || {});
+  for (const t of (EVENTS.triggers || [])) {
+    if (t.on !== on) continue;
+    if (!canFire(t)) continue;
+    if (!matchWhen(t.when, ctx)) continue;
+    WORLD.fired[firedKey(t)] = WORLD.day;
+    runActions(t.do, ctx, sceneOk);
+  }
+}

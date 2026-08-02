@@ -24,6 +24,14 @@ NPC_AT = {  # 画面ごとの NPC のいる場所（近づく先）
 }
 fails = []
 
+# この検査は 走りまわるので、ほうっておくと steps が DAY_STEPS を こえて
+# 日ぐれ → むかえ → 晩ごはん → 縁側 の 長い場面が はじまり、
+# そのあとの 移動も 会話も ぜんぶ できなくなる。
+# ここで 見たいのは 画面と 会話なので、日ぐれの ぶんは とめておく
+# （日ぐれは test_mukae.py / test_yoru.py が 見ている）
+NO_DUSK = ("window._ctrl.setSteps(0);"
+           "window._ctrl.setMukae(true); window._ctrl.setYoru(true);")
+
 with sync_playwright() as pw:
     b = pw.chromium.launch()
     pg = b.new_page(viewport={"width": 960, "height": 540})
@@ -34,6 +42,7 @@ with sync_playwright() as pw:
     pg.wait_for_timeout(3500)
     print("loaded state:", pg.evaluate("state"))
     pg.evaluate("window._ctrl.start()"); pg.wait_for_timeout(400); pg.evaluate("window._ctrl.free()"); pg.wait_for_timeout(1200)
+    pg.evaluate(NO_DUSK)
 
 
     # 0) どの NPC にも「じゅうぶん近づける床」があるか
@@ -74,6 +83,7 @@ with sync_playwright() as pw:
     random.seed(11)
     K = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]
     for s in SCREENS:
+        pg.evaluate(NO_DUSK)
         pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(300)
         off = 0; visited = set()
         for _ in range(26):
@@ -93,6 +103,7 @@ with sync_playwright() as pw:
     for s in SCREENS:
         got = set()
         for key in ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]:
+            pg.evaluate(NO_DUSK)
             pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(300)
             pg.keyboard.down("ShiftLeft"); pg.keyboard.down(key)
             for _ in range(22):
@@ -107,7 +118,9 @@ with sync_playwright() as pw:
     # 4) 会話：近づく → 進む → 尽きる → 二度と開かない
     print("\n-- はなし --")
     for s in SCREENS:
+        pg.evaluate(NO_DUSK)
         pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(300)
+        pg.evaluate("window._ctrl.free()")   # 場面あけの talkLock を はずす
         x, y = NPC_AT[s]
         pg.evaluate(f"window._ctrl.put({x+30},{y+18})"); pg.wait_for_timeout(500)
         t0 = pg.evaluate("window._ctrl.talk()")

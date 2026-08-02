@@ -108,7 +108,8 @@ function loop(now) {
       fade += dt * 3.4;
       if (fade >= 1) {
         fade = 1;
-        if (fadeTo.to) { enter(fadeTo.to, fadeTo.at); WORLD.steps++; }  // 画面を移ると 時間がすすむ
+        // 画面を移ると 時間がすすむ。**じぶんで 移ったときだけ** 'enter' を ひきなおす
+        if (fadeTo.to) { enter(fadeTo.to, fadeTo.at); WORLD.steps++; firedScreen = null; }
         fadeTo = { done:true };
       }
     } else {
@@ -119,8 +120,22 @@ function loop(now) {
     fade = Math.max(0, fade - dt*1.4);
   }
 
+  // --- ひきがね：画面に 入ったとき。1つの画面に つき 1回
+  if (!inScene && !fadeTo && !talkNpc && state !== 'scene' && firedScreen !== cur) {
+    firedScreen = cur;
+    fireTriggers('enter');
+  }
+
+  // --- ひきがね：日ぐれ。むかえより さきに ひく
+  if (!inScene && !fadeTo && !talkNpc && state !== 'scene'
+      && !WORLD.duskFired && WORLD.steps >= DAY_STEPS) {
+    WORLD.duskFired = true;
+    fireTriggers('dusk');
+  }
+
   // --- 日がくれたら けーねが むかえに来る。はなしの とちゅうでは 割りこまない
-  if (!inScene && !fadeTo && !WORLD.mukaeDone && !talkNpc && WORLD.steps >= DAY_STEPS) {
+  if (!inScene && !fadeTo && !WORLD.mukaeDone && !talkNpc && state !== 'scene'
+      && WORLD.steps >= DAY_STEPS) {
     WORLD.mukaeDone = true;
     runScene(mukaeScript());
     state = 'scene';
@@ -128,7 +143,7 @@ function loop(now) {
 
   // --- 日がくれて うちに かえったら、晩ごはんと 縁側。1日1回だけ。
   // むかえ（さきに 発火する）で かえってきても、じぶんで かえってきても なりたつ
-  if (!inScene && !fadeTo && !WORLD.yoruDone && !talkNpc
+  if (!inScene && !fadeTo && !WORLD.yoruDone && !talkNpc && state !== 'scene'
       && WORLD.steps >= DAY_STEPS && cur === 'zashiki') {
     WORLD.yoruDone = true;
     runScene(yoruScript());
@@ -167,7 +182,12 @@ function loop(now) {
     if (lineT >= sayDur(li[1]) || (advance && lineT > 0.3)) {
       talkNpc.idx = (talkNpc.idx || 0) + 1;
       lineT = 0;
-      if (talkNpc.idx >= L.length) { talkNpc.done = true; talkNpc = null; }
+      if (talkNpc.idx >= L.length) {
+        // はなしが 尽きた。だれとの はなしだったかを ひきがねに わたす
+        const who = talkNpc.who[0][0];
+        talkNpc.done = true; talkNpc = null;
+        fireTriggers('talk', { who });
+      }
     }
   }
 

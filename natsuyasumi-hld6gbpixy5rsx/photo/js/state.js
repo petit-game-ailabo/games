@@ -18,6 +18,7 @@ let taisoT0 = -99, taisoBeats = 0;
 let veil = 0;              // 場面の切りかわりの 黒い幕
 let talkLock = false;      // 場面が おわった直後に かってに 会話が はじまらないように
 let nedokoT = 0, nedokoArmed = false;
+let firedScreen = null;    // 'enter' の ひきがねを もう ひいた画面。じぶんで移ると 空にもどす
 
 function moveMove(x, y, spd, dt) {   // 目的地へ 一歩ぶん すすむ（壁ぞいにすべる）
   const dx = x - player.x, dy = y - player.y, d = Math.hypot(dx, dy);
@@ -75,6 +76,9 @@ function start()  { resetWorld(); startMorning(); fade = 1; }
 function resume() { loadWorld(); startMorning(); fade = 1; }
 // ねる。日が変わって、そこで セーブする
 function sleepNow() {
+  // ねる ひきがねは 場面を はじめない（すぐ下で よるの場面に なるので こわしてしまう）。
+  // ねぎわの 出しものは B3 の よやくで あつかう
+  fireTriggers('sleep', {}, false);
   newDay(WORLD.day + 1);
   saveWorld();
   runScene([...nightScript(), ...morningScript(WORLD.day)]);

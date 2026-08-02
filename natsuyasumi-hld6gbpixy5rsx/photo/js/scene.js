@@ -31,6 +31,9 @@ function stepScene(dt) {
         for (const c of cast) if (c.pose !== 'gone') c.pose = 'taiso';
         playerPose = 'taiso';
         break;
+      // ごはんの ふし目。ここに よやくが 落ちてくる（B3）。
+      // 場面の とちゅうなので、ひきがねから 場面を はじめることは できない
+      case 'meal':  fireTriggers('meal', { at:st.at }, false); break;
       case 'free':  endScene(); return;
     }
   }
@@ -41,6 +44,7 @@ function stepScene(dt) {
     case 'wait':  done = scene.t >= st.s; break;
     case 'put':   done = true; break;
     case 'cast':  done = true; break;
+    case 'meal':  done = true; break;
     case 'say':   done = scene.t >= sayDur(st.text) || (advance && scene.t > 0.3);
                   if (done) sceneSay = null; break;
     case 'to':
