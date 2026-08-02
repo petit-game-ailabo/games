@@ -19,8 +19,10 @@ function walkable(x, y) {
   }
   // せき止め。**しるしが 立つまでは 通れない。**立ったら 無くなる
   // （ハチの巣・せの高い草・ふかい水 など。DESIGN.md §1）
+  // toki を 書くと **その時間帯だけ** 効く 戸締り（夜だけ 家の とが しまる、など）。
   for (const g of (sc.gate || [])) {
-    if (hasFlag(g.need)) continue;
+    if (g.toki && !tokiIs(g.toki)) continue;   // その時間帯 以外は しまらない
+    if (g.need && hasFlag(g.need)) continue;    // しるしが 立てば あく
     const e = g.e, dx = (x-e[0])/e[2], dy = (y-e[1])/e[3];
     if (dx*dx + dy*dy < 1) return false;
   }
@@ -29,7 +31,8 @@ function walkable(x, y) {
 // いま せき止めている ものを かえす（そばに 来たら わけを 言う ため）
 function gateAt(x, y, r) {
   for (const g of (SC[cur].gate || [])) {
-    if (hasFlag(g.need)) continue;
+    if (g.toki && !tokiIs(g.toki)) continue;
+    if (g.need && hasFlag(g.need)) continue;
     const e = g.e, dx = (x-e[0])/(e[2]+(r||0)), dy = (y-e[1])/(e[3]+(r||0));
     if (dx*dx + dy*dy < 1) return g;
   }

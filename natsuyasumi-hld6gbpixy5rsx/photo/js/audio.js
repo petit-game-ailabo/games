@@ -406,6 +406,12 @@ function ambKind() {
   if (t < 0.12) return 'asa';
   return 'hiru';
 }
+// いまの 時間帯が toki に あうか。文字れつ でも ならび でも よい。
+// じょうけん（when）でも、夜だけの 戸締り（gate）でも つかう
+function tokiIs(toki) {
+  const k = ambKind();
+  return Array.isArray(toki) ? toki.indexOf(k) >= 0 : toki === k;
+}
 
 let lastAmb = '', lastPlace2 = '', ambCount = 0;
 function ambientTick(dt) {
