@@ -77,6 +77,6 @@ function resume() { loadWorld(); startMorning(); fade = 1; }
 function sleepNow() {
   newDay(WORLD.day + 1);
   saveWorld();
-  runScene([...NIGHT, ...morningScript(WORLD.day)]);
+  runScene([...nightScript(), ...morningScript(WORLD.day)]);
   state = 'scene'; resetDay();
 }

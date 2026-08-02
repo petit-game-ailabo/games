@@ -336,6 +336,8 @@ function load() {
   pending++;
   loadData('data/talks.json', j => { TALKS = j.talks; }, done);
   pending++;
+  loadData('data/events.json', j => { EVENTS = j; }, done);
+  pending++;
   loadData('data/screens.json', j => { SC = j.screens; loadPhotos(); }, done);
 }
 function loadPhotos() {
