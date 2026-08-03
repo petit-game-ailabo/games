@@ -43,6 +43,37 @@ function initAudio() {
   ambGain.gain.linearRampToValueAtTime(0.9, AC.currentTime + 1.6);
 }
 
+// --- 場面から 鳴らす 音（SFX）。場面に { k:'sound', name:'ware' } と 書くと 鳴る。
+// いまは ものが われる 音だけ。ふえたら SFX に 足す。
+function wareru() {
+  if (!AC || !shortNoise) return;
+  const t = AC.currentTime;
+  // ① われる しゅんかん：ざらっとした ノイズの 破裂
+  const s = AC.createBufferSource(); s.buffer = shortNoise;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 0.5;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.5, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+  s.connect(bp); bp.connect(g); g.connect(AC.destination);
+  s.start(t); s.stop(t + 0.4);
+  // ② 尾を ひく 不安：ひくい 2音（半音ずれ）が ゆっくり さがる
+  [138, 146].forEach(f => {
+    const o = AC.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f, t + 0.02);
+    o.frequency.exponentialRampToValueAtTime(f * 0.6, t + 1.5);
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+    const og = AC.createGain();
+    og.gain.setValueAtTime(0.0001, t + 0.02);
+    og.gain.exponentialRampToValueAtTime(0.13, t + 0.12);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+    o.connect(lp); lp.connect(og); og.connect(AC.destination);
+    o.start(t + 0.02); o.stop(t + 1.7);
+  });
+}
+const SFX = { ware: wareru };
+function playSfx(name) { initAudio(); const f = SFX[name]; if (f) f(); }
+
 // --- 葉ずれ。**さわさわと 来て、さわさわと 去る。**
 // ひくい音は 入れない。ひくい うなりが こわい 風の しょうたい
 function sawasawa(vol) {

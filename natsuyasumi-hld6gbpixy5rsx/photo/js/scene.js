@@ -37,6 +37,7 @@ function stepScene(dt) {
       // ただ 見るだけの 画面（虫かご・図鑑・スタンプ・絵日記）。とじたら つづきへ
       case 'view':  if (openView(st.name, st.cfg)) return; break;
       // 書いてある ところへ とぶ。**組み立てるときでは なく、いま 見て 決める**
+      case 'sound': playSfx(st.name); break;   // 場面の 音（ものが われる など）
       case 'goto':  if (sceneJump(st.id)) return; break;
       case 'if':    if (matchWhen(st.when, { day:WORLD.day }) && sceneJump(st.go)) return;
                     break;
@@ -79,6 +80,7 @@ function stepScene(dt) {
     case 'mini':  done = (state !== 'mini'); break;   // あそびが おわったら つぎへ
     case 'view':  done = (state !== 'view'); break;   // とじたら つぎへ
     case 'goto':  done = true; break;     // とび先が 見つからなかった ときだけ ここ
+    case 'sound': done = true; break;
     case 'if':    done = true; break;
     // えらぶ。**ここは 時間では 進まない。**えらぶまで 待つ
     case 'sel':
