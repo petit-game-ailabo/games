@@ -26,6 +26,14 @@ function walkable(x, y) {
     const e = g.e, dx = (x-e[0])/e[2], dy = (y-e[1])/e[3];
     if (dx*dx + dy*dy < 1) return false;
   }
+  // キャラは すり抜けない（P2）。立っている ところの まわりは 通れない。
+  // 半径は 会話できる 近さ(1.6)より 小さくして、**隣に 立って 話せる 余地**を のこす。
+  // 場面の あいだは キャラを 台本どおり 動かすので 効かせない（じゆう行動のときだけ）
+  if (state === 'play') {
+    for (const n of (sc.npc || [])) for (const w of n.who) {
+      if (groundDist(x, y, w[1], w[2]) < NPC_SOLID) return false;
+    }
+  }
   return true;
 }
 // いま せき止めている ものを かえす（そばに 来たら わけを 言う ため）
@@ -62,6 +70,7 @@ function heightAt(y) {
 // とすると、両方おなじ単位になる。単位は「そこに立ったときの背の高さ」ぶん。
 const FOCAL = 900;   // 写真のおよその画角。奥ゆきと横の はかり方のつりあいを決める
 const TALK_R = 1.6;  // はなしができる距離。単位は「背の高さ」ぶん
+const NPC_SOLID = 0.6;  // キャラの まわり、この 近さ より 内は 通れない（P2）。会話の 1.6 より 内
 function ground(x, y) {
   const h = heightAt(y);
   return { x:(x - W/2)/h, z:(SC[cur].focal || FOCAL)/h };

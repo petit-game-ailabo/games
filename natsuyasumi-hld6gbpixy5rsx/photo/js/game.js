@@ -88,7 +88,9 @@ function loop(now) {
     const depth = Math.max(0.45, heightAt(player.y) / sc.hNear);
     const spd = (player.running ? 300 : 172) * depth * (stick.on ? Math.max(0.35, tilt) : 1);
     const step = spd*dt;
-    const nx = player.x + ax*step, ny = player.y + ay*step;
+    // 横は 遅く 感じる との こと（P3）。奥ゆきの つりあい（D-017）は 変えず、**横だけ 速く**する
+    const stepX = step * 1.55;
+    const nx = player.x + ax*stepX, ny = player.y + ay*step;
     let movedX = false, movedY = false;
     if (ax !== 0 && walkable(nx, player.y)) { player.x = nx; movedX = true; }
     if (ay !== 0 && walkable(player.x, ny)) { player.y = ny; movedY = true; }
