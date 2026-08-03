@@ -127,11 +127,14 @@ with sync_playwright() as pw:
         d0 = pg.evaluate("window._ctrl.dbg()")
         # **画面から 出ないように 引きもどしながら 歩かせる。**
         # どまの 左は ざしきなので、ふつうに 歩かせると となりの 足音を 聞いてしまう
+        # 横移動が 速く なった（P3）ので、こまめに 引きもどす。
+        # 足音の 種類は 歩いている あいだに 記録され、最後に もう一度 画面内へ もどして 判定する
         pg.keyboard.down("ArrowLeft")
-        for _ in range(6):
-            pg.wait_for_timeout(150)
+        for _ in range(8):
+            pg.wait_for_timeout(110)
             pg.evaluate(f"window._ctrl.put({d0['x']},{d0['y']})")
         pg.keyboard.up("ArrowLeft")
+        pg.evaluate(f"window._ctrl.put({d0['x']},{d0['y']})")   # 出ていたら 画面内へ もどす
         f = pg.evaluate("window._ctrl.foot()")
         now = pg.evaluate("window._ctrl.dbg()")["cur"]
         ok = (f["last"] == want and now == s)
