@@ -180,6 +180,131 @@ function drawFishing() {
   ctx.restore();
 }
 
+// ===== spot の 雑な 絵（P5）=====
+// 写真の うえに **物が ある**と 分かるように、手で ざっくり かく。
+//   ・光る 目じるしは 置かない（実写に 浮く。D-048／D-066）
+//   ・地めんの 物（suika/saisen/…）は キャラより **後ろ**（layer:'ground'）、
+//     ぶらさがる 物（風鈴/日めくり）は キャラより **前**（layer:'hang'）
+// spot に `draw:'suika'` の ように 形の 名まえを つけると 出る。
+const SPOT_LAYER = { suika:'ground', saisen:'ground', monohoshi:'ground', drawer:'ground',
+                     fuurin:'hang', himekuri:'hang' };
+function drawSpots(layer) {
+  for (const sp of (SC[cur].spot || [])) {
+    if (!sp.draw || SPOT_LAYER[sp.draw] !== layer) continue;
+    // 地めんの物は 遠近で 大きさを 変える。ぶらさがる物（軒の 高い ところ）は
+    // 画面の y が 小さく 出て しまい 極端に 小さく なるので、ほどよい 固定 大きさ
+    const s = layer === 'hang' ? 1.15 : clamp(heightAt(sp.y) / 120, 0.6, 1.35);
+    const f = SPOT_ART[sp.draw];
+    if (f) f(sp.x, sp.y, s);
+  }
+}
+function ellShadow(x, y, w) {
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath(); ctx.ellipse(x, y, w, w * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+}
+const SPOT_ART = {
+  // すいか。みどりの たまに こい しま
+  suika: (x, y, s) => {
+    const r = 26 * s;
+    ellShadow(x, y + 2, r * 0.95);
+    ctx.save();
+    ctx.fillStyle = '#3f7d33';
+    ctx.beginPath(); ctx.ellipse(x, y - r * 0.7, r, r * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,54,18,0.75)'; ctx.lineWidth = 2.4 * s;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.ellipse(x + i * r * 0.34, y - r * 0.7, r * 0.16, r * 0.82, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+  // 賽銭箱。木の はこ、上に すのこと お金の あな
+  saisen: (x, y, s) => {
+    const w = 46 * s, hh = 30 * s;
+    ellShadow(x, y + 2, w * 0.6);
+    ctx.save();
+    ctx.fillStyle = '#6b4a2b';
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2, y); ctx.lineTo(x + w / 2, y);
+    ctx.lineTo(x + w / 2 - 4 * s, y - hh); ctx.lineTo(x - w / 2 + 4 * s, y - hh);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#5a3d22';                          // 上の すのこ面
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2 + 4 * s, y - hh); ctx.lineTo(x + w / 2 - 4 * s, y - hh);
+    ctx.lineTo(x + w / 2 - 10 * s, y - hh - 9 * s); ctx.lineTo(x - w / 2 + 10 * s, y - hh - 9 * s);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(28,18,8,0.7)'; ctx.lineWidth = 1.4 * s;
+    for (let i = 1; i < 5; i++) { const gx = x - w / 2 + 8 * s + i * (w - 16 * s) / 5;
+      ctx.beginPath(); ctx.moveTo(gx, y - hh); ctx.lineTo(gx, y - 3 * s); ctx.stroke(); }
+    ctx.fillStyle = '#20140a';                          // お金の あな
+    ctx.fillRect(x - w * 0.24, y - hh - 5 * s, w * 0.48, 3 * s);
+    ctx.restore();
+  },
+  // 物干しロープ。細い さおに せんたくばさみ だけ のこる
+  monohoshi: (x, y, s) => {
+    const w = 90 * s;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(90,74,54,0.85)'; ctx.lineWidth = 3 * s;   // 支柱
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.lineTo(x - w / 2, y - 54 * s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + w / 2, y); ctx.lineTo(x + w / 2, y - 54 * s); ctx.stroke();
+    ctx.strokeStyle = 'rgba(230,230,225,0.6)'; ctx.lineWidth = 1.5 * s;  // ロープ（たわむ）
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y - 50 * s);
+    ctx.quadraticCurveTo(x, y - 40 * s, x + w / 2, y - 50 * s); ctx.stroke();
+    ctx.fillStyle = '#c9543f';                                         // せんたくばさみ
+    for (const t of [-0.3, 0.15, 0.55]) {
+      const px = x + t * w, py = y - 46 * s + Math.abs(t) * 6 * s;
+      ctx.fillRect(px - 2 * s, py, 4 * s, 7 * s);
+    }
+    ctx.restore();
+  },
+  // 引き出し（スタンプカードの ある）。木の 小箱に カードが すこし のぞく
+  drawer: (x, y, s) => {
+    const w = 40 * s, hh = 26 * s;
+    ellShadow(x, y + 2, w * 0.55);
+    ctx.save();
+    ctx.fillStyle = '#7a5730'; ctx.fillRect(x - w / 2, y - hh, w, hh);
+    ctx.strokeStyle = 'rgba(30,20,10,0.6)'; ctx.lineWidth = 1.4 * s;
+    ctx.strokeRect(x - w / 2, y - hh, w, hh);
+    ctx.fillStyle = '#3a2814';                                          // とって
+    ctx.fillRect(x - 5 * s, y - hh * 0.62, 10 * s, 3 * s);
+    ctx.fillStyle = '#eee7d0';                                          // のぞく カード
+    ctx.fillRect(x - w * 0.3, y - hh - 6 * s, w * 0.6, 7 * s);
+    ctx.fillStyle = '#c9543f'; ctx.fillRect(x - w * 0.3, y - hh - 6 * s, w * 0.6, 2 * s);
+    ctx.restore();
+  },
+  // 軒下の 風鈴。ガラスの おわんと 舌、みじかい たんざく（風で ゆれる）。
+  // 明るい 窓を 背に しても 見えるよう、濃い ふち・暗い 留め具・赤い たんざくで はっきり
+  fuurin: (x, y, s) => {
+    const sway = Math.sin(elapsed * 1.6) * 4 * s;
+    ctx.save();
+    ctx.fillStyle = 'rgba(40,32,24,0.9)';                                // 軒の 留め具
+    ctx.fillRect(x - 7 * s, y - 30 * s, 14 * s, 4 * s);
+    ctx.strokeStyle = 'rgba(70,70,70,0.85)'; ctx.lineWidth = 1.4;        // つり糸
+    ctx.beginPath(); ctx.moveTo(x, y - 26 * s); ctx.lineTo(x + sway, y - 11 * s); ctx.stroke();
+    ctx.fillStyle = 'rgba(150,195,215,0.92)';                            // ガラス（青みを 濃く）
+    ctx.beginPath(); ctx.ellipse(x + sway, y, 11 * s, 10 * s, 0, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = 'rgba(40,70,90,0.95)'; ctx.lineWidth = 2;          // 濃い ふち
+    ctx.beginPath(); ctx.ellipse(x + sway, y, 11 * s, 10 * s, 0, Math.PI, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + sway - 11 * s, y); ctx.lineTo(x + sway + 11 * s, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(60,90,110,0.95)';                              // 舌
+    ctx.beginPath(); ctx.arc(x + sway * 1.4, y + 9 * s, 2.6 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d84a3a';                                           // たんざく（赤で 目立つ）
+    ctx.fillRect(x + sway * 1.6 - 2.5 * s, y + 11 * s, 5 * s, 14 * s);
+    ctx.restore();
+  },
+  // 日めくり。壁の 小さな こよみ（赤い 見出しと 数字）
+  himekuri: (x, y, s) => {
+    const w = 22 * s, hh = 30 * s;
+    ctx.save();
+    ctx.fillStyle = '#f3efe6'; ctx.fillRect(x - w / 2, y - hh, w, hh);
+    ctx.fillStyle = '#c23a2f'; ctx.fillRect(x - w / 2, y - hh, w, 8 * s);
+    ctx.strokeStyle = 'rgba(60,50,40,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2, y - hh, w, hh);
+    ctx.fillStyle = '#3a3a3a';
+    text('八', x, y - hh * 0.35, 12 * s, '#3a3a3a', 'center');
+    ctx.restore();
+  },
+};
+
 // ===== 画面下の 短い しらせ（トースト）=====
 let toastMsg = '', toastT = 0;
 function toast(s, dur) { toastMsg = s; toastT = dur || 1.4; }

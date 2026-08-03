@@ -312,6 +312,7 @@ function loop(now) {
   ctx.drawImage(sc.img, 0, 0, W, H);
   if (sc.nedoko && sc.nedoko.quad) drawFuton(sc.nedoko);
   for (const o of itemsAt(cur)) drawItem(o);   // 置かれた物は 地めんの上。キャラより さき
+  drawSpots('ground');                         // すいか・賽銭箱 など 地めんの物（P5）。キャラより 後ろ
 
   // ラジオたいそうの ひょうし。曲が おわったら もう はずまない
   const tb = (elapsed - taisoT0) * (TAISO_BPM/60);
@@ -352,6 +353,7 @@ function loop(now) {
     shadow(a.x, a.y, h, a.me ? 1 : (sh === undefined ? 0.65 : sh));
     drawChar(ciOf(a.k), a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
+  drawSpots('hang');   // 風鈴・日めくり など ぶらさがる物（P5）。キャラより 前
   // 蝶と あみは キャラより 前（とんでいるので）。場面の あいだは 出さない
   if (!inScene && !fadeTo) { drawBugs(); drawNet(); drawFishing(); }
 
