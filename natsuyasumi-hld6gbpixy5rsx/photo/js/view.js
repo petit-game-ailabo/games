@@ -131,6 +131,7 @@ function diaryToday(day) {
   const bugs = Object.keys(F).filter(k => k.indexOf('zukan:') === 0 && F[k] === day).map(k => k.slice(6));
   if (bugs.length) out.push(bugs.join('・') + ' を つかまえた');
   if (td('tsutta'))       out.push('さかなを つった');
+  if (td('kakigoori'))    out.push('かきごおりを つくった。つめたかった');
   if (td('mita_hotaru'))  out.push('ほたるを 見た。きれいだった');
   if (td('taiboku_nai'))  out.push('たおれ木を なたで きった');
   if (td('hachi_nai'))    out.push('はちを けむりで どかした');
