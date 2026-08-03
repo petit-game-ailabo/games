@@ -28,6 +28,7 @@ TESTS = [
     ("test_stamp.py",      "ラジオ体操の 判こ（毎朝）と スタンプカード（D4）"),
     ("test_nikki.py",      "絵日記で 1日を 終える（D5）"),
     ("test_kakigoori.py",  "かき氷：チルノが その場で つくる（D9）"),
+    ("test_kansatsu.py",   "自由研究：いねを かんさつして 観察日記（D9）"),
 ]
 
 want = sys.argv[1] if len(sys.argv) > 1 else ""

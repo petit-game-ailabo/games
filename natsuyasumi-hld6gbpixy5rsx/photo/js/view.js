@@ -173,6 +173,53 @@ VIEW.nikki = {
   },
 };
 
+// --- 自由研究の 観察日記（D9）。**そとの せかいの しょくぶつ**を かんさつ すると うまる。
+// しるしは `kansatsu:◯`。虫の 図鑑と 同じ 作り（6枠。いまは 見つかる ぶんだけ／のこりは 未実装で ？）。
+const KANSATSU_KINDS = ['いね', 'すぎ', 'あさがお', 'ひまわり', 'きのこ', 'ほおずき'];
+const KANSATSU_MEMO = {
+  'いね': 'おこめの もと。あきに みのる',
+  'すぎ': 'せの たかい 木。まっすぐ のびる',
+  'あさがお': 'あさ さいて ひるには しぼむ',
+  'ひまわり': 'おひさまの ほうを むく',
+  'きのこ': 'かげで そだつ。たべられる の？',
+  'ほおずき': 'あかい ちょうちんの ような み',
+};
+VIEW.kansatsu = {
+  draw: v => {
+    ctx.fillStyle = '#17140e'; ctx.fillRect(0, 0, W, H);
+    const cw = 700, ch = 400, cx = (W - cw) / 2, cy = (H - ch) / 2 + 6;
+    ctx.fillStyle = '#efe6cf'; ctx.fillRect(cx, cy, cw, ch);
+    ctx.strokeStyle = 'rgba(90,74,48,0.5)'; ctx.lineWidth = 2;
+    ctx.strokeRect(cx + 8, cy + 8, cw - 16, ch - 16);
+    text('じゆうけんきゅう　しょくぶつの かんさつ', cx + 26, cy + 44, 22, '#4a3d26');
+    const kinds = KANSATSU_KINDS, col = 3;
+    const bw = (cw - 52) / col, bh = 100, top = cy + 66;
+    let got = 0;
+    for (let i = 0; i < kinds.length; i++) {
+      const x = cx + 26 + (i % col) * bw, y = top + Math.floor(i / col) * bh;
+      const has = hasFlag('kansatsu:' + kinds[i]);
+      ctx.strokeStyle = 'rgba(120,102,70,0.4)'; ctx.lineWidth = 1;
+      ctx.strokeRect(x + 2, y, bw - 8, bh - 12);
+      if (has) {
+        got++;
+        // しょくぶつの え（手で。とったら みどり）
+        const mx = x + 30, my = y + bh / 2 - 6;
+        ctx.strokeStyle = '#3f7d33'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(mx, my + 18); ctx.lineTo(mx, my - 12); ctx.stroke();
+        ctx.fillStyle = '#5aa845';
+        ctx.beginPath(); ctx.ellipse(mx - 7, my, 7, 4, 0.6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(mx + 7, my - 6, 7, 4, -0.6, 0, Math.PI * 2); ctx.fill();
+        text(kinds[i], x + 52, y + 34, 16, '#4a3d26');
+        text(KANSATSU_MEMO[kinds[i]] || '', x + 16, y + bh - 24, 12, '#6b5c3e', 'normal');
+      } else {
+        text('？', x + bw / 2, y + bh / 2 + 4, 26, 'rgba(120,102,70,0.5)', 'center');
+      }
+    }
+    text(got + ' / ' + kinds.length, cx + cw - 26, cy + ch - 18, 18, '#6b5c3e', 'right');
+    text('スペースで とじる', W/2, H - 14, 14, 'rgba(226,238,220,0.55)', 'center', 'normal');
+  },
+};
+
 // --- 図鑑。とった ことの ある 種類が うまる。しるしは `zukan:◯`（虫取りが 立てる）。
 VIEW.zukan = {
   draw: v => {

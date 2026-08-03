@@ -287,8 +287,11 @@ function loop(now) {
       // その点で つかう 道具を 持っていたら「つかった」も ひく
       if (nearSpot.use && hasItem(nearSpot.use))
         fireTriggers('use', { spot:nearSpot.id, item:nearSpot.use });
-      if (nearSpot.scene && !hasFlag('spot:' + nearSpot.id) && state !== 'scene') {
-        setFlag('spot:' + nearSpot.id);
+      // ふつうは 一度きり（`spot:id` の しるし）。**`once` を 書くと そのしるしが 立つまで
+      // なんど でも**（観察のように「やめておく」を えらんでも また できる／D9）
+      const onceFlag = nearSpot.once || ('spot:' + nearSpot.id);
+      if (nearSpot.scene && !hasFlag(onceFlag) && state !== 'scene') {
+        if (!nearSpot.once) setFlag('spot:' + nearSpot.id);
         const q = buildScene(nearSpot.scene, { day:WORLD.day });
         if (q.length) { runScene(q); state = 'scene'; }
       }
