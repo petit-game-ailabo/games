@@ -53,8 +53,8 @@ with sync_playwright() as pw:
     print("あみ なしで ふった 後の 虫かご:", kago_noami)
     if kago_noami != kago0: fails.append("あみが ないのに とれてしまった")
 
-    # あみを 持たせて ふる → とれる
-    pg.evaluate("WORLD.items['ami'] = 1")
+    # あみを 持たせ、手に 持って ふる → とれる（P8：装備していないと ふれない）
+    pg.evaluate("WORLD.items['ami'] = 1; WORLD.hold = 'ami'")
     pool_before = pg.evaluate("leftToday('mushi:aze', 18)")
     pg.evaluate("""() => { const np = netPoint(); if (bugs[0]) { bugs[0].gx = np.x; bugs[0].gy = player.y; } advance = true; }""")
     pg.wait_for_timeout(250)
@@ -84,8 +84,8 @@ with sync_playwright() as pw:
     print("竿なしで キー:", near_water, "釣り=", f_nosao, "state=", st_nosao)
     if f_nosao is not None: fails.append("竿が ないのに 釣りが はじまった")
 
-    # 竿を 持たせて ふる → その場で 釣りが はじまる（state は play のまま＝別画面でない）
-    pg.evaluate("WORLD.items['sao'] = 1")
+    # 竿を 持たせ 手に 持って ふる → その場で 釣りが はじまる（state は play のまま＝別画面でない）
+    pg.evaluate("WORLD.items['sao'] = 1; WORLD.hold = 'sao'")
     pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(150)
     f_start = pg.evaluate("window._ctrl.fishing()")
     st_start = pg.evaluate("window._ctrl.dbg()")["state"]
@@ -114,6 +114,28 @@ with sync_playwright() as pw:
     # 釣りの あと ふつうに 歩ける（足どめが 解けている）
     st_after = pg.evaluate("window._ctrl.dbg()")["state"]
     if st_after != "play": fails.append("釣りの あと play に もどっていない")
+
+    # === P8：道具の 持ちかえ（数字キー）と 虫かごビュー（C） ===
+    pg.evaluate("window._ctrl.setYoru(false); window._ctrl.free()")
+    pg.evaluate("window._ctrl.goto('aze')"); pg.wait_for_timeout(300)
+    drain(pg); pg.evaluate("window._ctrl.free()")
+    pg.evaluate("WORLD.items = {'ami':1, 'sao':1}; WORLD.hold = 'ami'")
+    tools = pg.evaluate("toolsHeld()")
+    pg.keyboard.press("Digit2"); pg.wait_for_timeout(80)
+    hold2 = pg.evaluate("WORLD.hold")
+    pg.keyboard.press("Digit1"); pg.wait_for_timeout(80)
+    hold1 = pg.evaluate("WORLD.hold")
+    print("持ちかえ:", tools, " 2キー->", hold2, " 1キー->", hold1)
+    if len(tools) < 2: fails.append("道具が 2つ 持てていない")
+    elif hold2 != tools[1] or hold1 != tools[0]: fails.append("数字キーで 持ちかえられない")
+    # C で 虫かご → Esc で もどる（開いて すぐは とじない ガードが あるので 少し 待つ）
+    pg.keyboard.press("KeyC"); pg.wait_for_timeout(400)
+    st_view = pg.evaluate("state")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    st_back = pg.evaluate("state")
+    print("Cで虫かご:", st_view, " Escで:", st_back)
+    if st_view != "view": fails.append("C で 虫かごが 開かない")
+    if st_back != "play": fails.append("虫かごを とじても play に もどらない")
 
     print("errors:", errs[:3])
     if errs: fails.append("エラー " + str(errs[:2]))

@@ -17,6 +17,15 @@ window.addEventListener('keydown', e => {
   if (state === 'title' && e.code === 'KeyR') { wipeSave(); start(); }
   else if (state === 'title' && (e.code === 'Space' || e.code === 'Enter')) titlePress(null);
   else if (!e.repeat && (e.code === 'Space' || e.code === 'Enter')) advance = true;
+  // 移動キーを 押したら HUD を ちらっと 出す（P8）
+  if (state === 'play' && (e.code in MOVE)) hudPeek();
+  // 数字キーで 道具を 持ちかえ（1=あみ 2=さお…）。HUD も 出す
+  if (state === 'play' && !e.repeat && /^Digit[1-9]$/.test(e.code)) {
+    const tools = toolsHeld(), n = +e.code.slice(5);
+    if (n <= tools.length) { equip(tools[n - 1]); hudPeek(); }
+  }
+  // C で 虫かごの 中身を 見る（EDIT の コンソール出力とは かぶらないよう play のときだけ）
+  if (state === 'play' && !EDIT && e.code === 'KeyC') openView('mushikago');
   if (EDIT && e.code === 'Backspace') { editPts.pop(); e.preventDefault(); }
   if (EDIT && e.code === 'KeyC') console.log(JSON.stringify(editPts));
 });

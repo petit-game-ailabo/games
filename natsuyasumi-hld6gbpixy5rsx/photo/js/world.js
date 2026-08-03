@@ -21,6 +21,7 @@ const WORLD = {
   queue: [],         // あとで 効く よやく
   npcAdd: [],        // あとから ふえた NPC  [{place, who, x, y, talks}]
   npcGone: [],       // 居なくなった NPC     ['場所:だれ']
+  hold: '',          // いま 手に 持っている 道具（あみ／さお。数字キーで 持ちかえ・P8）
 };
 
 const LAST_DAY  = 31;                                  // 八月三十一日で なつやすみは おわる
@@ -35,7 +36,9 @@ function setFlag(k) { if (!hasFlag(k)) WORLD.flags[k] = WORLD.day; }
 // --- もちもの と 置かれた物
 // placed は 場所ごとの ならび： { doma: [{item:'sao', x:250, y:470}] }
 const hasItem = k => !!WORLD.items[k];
-function giveItem(k) { WORLD.items[k] = true; }
+// 道具（tool）を 手に 入れて、手が 空いていれば その場で 持つ（すぐ つかえるように・P8）。
+// wake トリガー（あみを 配る）でも 拾い物でも ここを 通るので、どちらでも 持てる
+function giveItem(k) { WORLD.items[k] = true; autoEquip(k); }
 function putItem(place, k, x, y) {
   const a = WORLD.placed[place] = WORLD.placed[place] || [];
   if (!a.some(o => o.item === k)) a.push({ item:k, x:x, y:y });
@@ -47,6 +50,14 @@ function takeItem(place, k) {
   giveItem(k);
 }
 const itemsAt = place => WORLD.placed[place] || [];
+
+// --- 手に 持つ 道具（P8）。数字キーで 持ちかえる。あみ／さお など tool の 物だけ
+function toolsHeld() { return Object.keys(WORLD.items).filter(k => (ITEMS[k] || {}).tool); }
+function holding(k) { return WORLD.hold === k && hasItem(k); }
+function equip(k) { if (hasItem(k)) WORLD.hold = k; }
+// 道具を 手に 入れたら、手が 空いていれば その場で 持つ（すぐ つかえるように）
+function autoEquip(k) { if ((ITEMS[k] || {}).tool && !holdingAnyTool()) WORLD.hold = k; }
+function holdingAnyTool() { return WORLD.hold && hasItem(WORLD.hold) && (ITEMS[WORLD.hold] || {}).tool; }
 
 // --- 数。**ずっと のこる もの**と **その日だけの もの**を 分ける。
 // ずっと のこる … 図鑑の 数・スタンプの 数・こわした 回数

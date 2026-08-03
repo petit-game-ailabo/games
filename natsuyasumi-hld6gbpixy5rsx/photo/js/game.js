@@ -26,7 +26,7 @@ function loop(now) {
     text('八月一日から 三十一日まで', W/2, 272, 15, '#a8c0a1', 'center', 'normal');
     text('やじるし / WASD で あるく　　Shift で はしる', W/2, 340, 16, '#c9dcc0', 'center');
     text('だれかや ものの そばで スペース / タップ で はなす・しらべる', W/2, 368, 16, '#c9dcc0', 'center');
-    text('スペース / タップ で セリフを つぎへ', W/2, 396, 16, '#c9dcc0', 'center');
+    text('スペース / タップ で セリフを つぎへ　　数字キーで 道具の 持ちかえ　C で むしかご', W/2, 396, 15, '#c9dcc0', 'center');
     text('ざしきの ふとんで じっとしていると 1にちが おわる', W/2, 424, 16, '#c9dcc0', 'center');
     // ねた ところから つづけられる。だまって つづきに するのは わかりにくいので、
     // ある ときだけ 出して、はじめから やりなおす道も のこす
@@ -113,6 +113,7 @@ function loop(now) {
     }
     if (ax > 0.2) player.face = 1; else if (ax < -0.2) player.face = -1;
     player.bob += dt * (player.running ? 15 : 9);
+    hudPeek();                     // 動いたら HUD を ちらっと（P8）
   } else if (!walkTo) {
     player.bob += dt * 1.6;
   }
@@ -266,8 +267,8 @@ function loop(now) {
   // --- そばの 点を 調べる／物を ひろう。**キーを 押したときだけ**（P1）。
   // 会話を はじめた フレームは advance を 使いきっているので ここには 来ない
   if (!inScene && !fadeTo && !talkNpc && !fishing && state !== 'scene' && advance) {
-    if (nearSpot && nearSpot.fish && hasItem('sao')) {
-      // 水べで 竿を ふる → その場で 釣り（P4b・別画面に とばない）
+    if (nearSpot && nearSpot.fish && holding('sao')) {
+      // 水べで 竿を ふる → その場で 釣り（P4b・別画面に とばない）。竿を **手に 持って**いること
       advance = false;
       startFishing();
     } else if (nearSpot) {
@@ -290,10 +291,10 @@ function loop(now) {
       const q = [{ k:'say', who:'cirno',
                    text: it.found || ((it.name||o.item) + ' を みつけた') }];
       q.push(...collectTriggers('take', { item:o.item }));
-      runScene(q);
+      runScene(q);   // 道具の 装備は takeItem→giveItem で 自動（P8）
       state = 'scene';
-    } else if (hasItem('ami') && bugsActive()) {
-      // あみを 持って 野に いる ときは、キーで その場で あみを ふる（P4・別画面に とばない）
+    } else if (holding('ami') && bugsActive()) {
+      // あみを **手に 持って** 野に いる ときは、キーで その場で あみを ふる（P4）
       advance = false;
       swingNet();
     }
@@ -307,6 +308,7 @@ function loop(now) {
   if (!inScene && !fadeTo) updateBugs(dt);   // 画面の中を とぶ 蝶（P4）
   else bugs = [];                            // 場面の あいだは 出さない
   toastTick(dt);                 // 画面下の 短い しらせ
+  hudTick(dt);                   // 移動キーで ちらっと 出る HUD（P8）
 
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
@@ -416,12 +418,13 @@ function loop(now) {
   else if (!fadeTo && !fishing) {
     let hint = null;
     if (nearNpc && !nearNpc.engaged) hint = '▶ はなす';
-    else if (nearSpot && nearSpot.fish && hasItem('sao')) hint = '▶ さおを ふる';
+    else if (nearSpot && nearSpot.fish && holding('sao')) hint = '▶ さおを ふる';
     else if (nearSpot && nearSpot.name) hint = nearSpot.name + '　　▶ しらべる';
     else if (nearItem) {
       const it = ITEMS[nearItem.item] || {};
       hint = (it.name || nearItem.item) + '　　▶ ひろう';
     }
+    else if (holding('ami') && bugsActive()) hint = '▶ あみを ふる';
     if (hint) {
       ctx.save();
       ctx.fillStyle = 'rgba(8,12,9,0.42)'; ctx.fillRect(0, H-46, W, 46);
@@ -430,6 +433,7 @@ function loop(now) {
     }
   }
   drawToast();   // 「つかまえた！」などの 短い しらせ（P4）
+  if (!inScene) drawHud();   // 移動キーで ちらっと 出る 持ちもの・虫かご（P8）
 
   if (fade > 0) {
     // 白い光だと 目に いたい。くらくして 切りかえる

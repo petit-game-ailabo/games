@@ -104,7 +104,7 @@ function swingNet() {
 
 // あみの 絵。ふった しゅんかん だけ、プレイヤーの 前で 弧を えがく（キャラの ポーズは 変えない）
 function drawNet() {
-  const held = hasItem('ami') && bugsActive();
+  const held = holding('ami') && bugsActive();
   const sw = elapsed - netT;
   if (!held && !(sw >= 0 && sw < 0.4)) return;
   const np = netPoint();
@@ -304,6 +304,40 @@ const SPOT_ART = {
     ctx.restore();
   },
 };
+
+// ===== HUD（P8）=====
+// ふだんは 隠れていて、**移動キーを 押すと 少しの間だけ** 出る（常時だと ゲーム感が 強い）。
+//   ・持ちもの（あみ／さお）を 数字キーで 持ちかえ（いま持っているのを 枠で かこむ）
+//   ・虫かごの 数、C で 中身を 見る
+let hudT = 0;
+function hudTick(dt) { if (hudT > 0) hudT -= dt; }
+function hudPeek() { hudT = 2.6; }
+function drawHud() {
+  if (hudT <= 0) return;
+  const a = clamp(hudT > 0.5 ? 1 : hudT / 0.5, 0, 1);
+  const tools = toolsHeld();
+  const kago = numOf('mushikago');
+  if (!tools.length && !kago) return;
+  ctx.save(); ctx.globalAlpha = a;
+  const pad = 10, x0 = W - 236, y0 = 44;
+  ctx.fillStyle = 'rgba(8,12,9,0.5)'; ctx.fillRect(x0, y0, 226, 62);
+  // 道具
+  let x = x0 + pad;
+  ctx.font = '15px system-ui, sans-serif';
+  for (let i = 0; i < tools.length; i++) {
+    const k = tools[i], nm = (ITEMS[k] || {}).name || k, on = holding(k);
+    const label = (i + 1) + ' ' + nm;
+    const wtxt = ctx.measureText(label).width + 12;
+    if (on) { ctx.fillStyle = 'rgba(255,230,150,0.22)'; ctx.fillRect(x - 2, y0 + 8, wtxt, 22);
+              ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 2, y0 + 8, wtxt, 22); }
+    text(label, x + 4, y0 + 24, 15, on ? '#ffe8a8' : '#cfe0c8');
+    x += wtxt + 8;
+  }
+  if (!tools.length) text('（道具は まだ ない）', x0 + pad, y0 + 24, 14, '#9fb69a');
+  // 虫かご
+  text('むしかご ×' + kago + '　[C でみる]', x0 + pad, y0 + 48, 14, '#cfe0c8');
+  ctx.restore();
+}
 
 // ===== 画面下の 短い しらせ（トースト）=====
 let toastMsg = '', toastT = 0;

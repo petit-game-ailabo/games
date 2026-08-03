@@ -19,7 +19,9 @@ function openView(name, cfg) {
   state = 'view';
   return true;
 }
-function closeView() { view = null; state = 'scene'; }
+// 場面から 開いたら 場面へ、じゆう行動から 開いたら じゆう行動へ もどる
+// （HUD の C で 直接 開くと 場面が ないので、'scene' 固定だと 落ちる）
+function closeView() { view = null; state = scene ? 'scene' : 'play'; }
 function viewStep(dt) {
   if (!view) { state = 'scene'; return; }
   view.t += dt;
