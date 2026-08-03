@@ -66,14 +66,18 @@ function loop(now) {
   if (inScene) stepScene(dt);
   const sc = SC[cur];
 
+  // 釣り（P4b）。あたりの あいだに 押すと つれる。**ほかの 反応より さきに** advance を うけとる
+  // （その場での 釣りなので、話しかけ・調べる・網ふりに 取られないように）
+  if (!inScene && !fadeTo) fishingTick(dt);
+
   if (!fadeTo && !walkable(player.x, player.y)) {
     const f = nearestFree(player.x, player.y);
     player.x = f.x; player.y = f.y;
   }
 
-  // --- うごく（自由行動のときだけ）
+  // --- うごく（自由行動のときだけ）。釣りの あいだは 足を とめる
   let ax=0, ay=0, tilt=0;
-  if (!fadeTo && !inScene) {
+  if (!fadeTo && !inScene && !fishing) {
     for (const c in MOVE) if (keys[c]) { ax += MOVE[c][0]; ay += MOVE[c][1]; }
     if (ax || ay) { const m = Math.hypot(ax,ay); ax/=m; ay/=m; tilt = 1; }
     if (stick.on) {
@@ -224,7 +228,7 @@ function loop(now) {
   // 場面が おわった直後に となりに 居あわせただけで はじまらないように、
   // いちど はなれてから でないと 会話しない
   if (!anyNear) talkLock = false;
-  if (fadeTo || inScene || talkLock) nearNpc = null;
+  if (fadeTo || inScene || talkLock || fishing) nearNpc = null;
 
   let near = null;
   if (nearNpc) {
@@ -261,8 +265,12 @@ function loop(now) {
 
   // --- そばの 点を 調べる／物を ひろう。**キーを 押したときだけ**（P1）。
   // 会話を はじめた フレームは advance を 使いきっているので ここには 来ない
-  if (!inScene && !fadeTo && !talkNpc && state !== 'scene' && advance) {
-    if (nearSpot) {
+  if (!inScene && !fadeTo && !talkNpc && !fishing && state !== 'scene' && advance) {
+    if (nearSpot && nearSpot.fish && hasItem('sao')) {
+      // 水べで 竿を ふる → その場で 釣り（P4b・別画面に とばない）
+      advance = false;
+      startFishing();
+    } else if (nearSpot) {
       advance = false;
       fireTriggers('near', { spot:nearSpot.id });
       // その点で つかう 道具を 持っていたら「つかった」も ひく
@@ -345,7 +353,7 @@ function loop(now) {
     drawChar(ciOf(a.k), a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
   // 蝶と あみは キャラより 前（とんでいるので）。場面の あいだは 出さない
-  if (!inScene && !fadeTo) { drawBugs(); drawNet(); }
+  if (!inScene && !fadeTo) { drawBugs(); drawNet(); drawFishing(); }
 
   // よるの ぐあい。晩ごはんが すむと ゆっくり よるに なる。
   // **ゆうがた（あたたかい）と よる（つめたい）は 別のもの。**
@@ -403,9 +411,10 @@ function loop(now) {
   }
   // そばに 相手が いるとき、何が できるかを そっと 出す（P1）。**写真に 光は のせない。**
   // 実写の うえに 目じるしを かくと 貼りものに 見えるので、画面下の もじだけで 知らせる
-  else if (!fadeTo) {
+  else if (!fadeTo && !fishing) {
     let hint = null;
     if (nearNpc && !nearNpc.engaged) hint = '▶ はなす';
+    else if (nearSpot && nearSpot.fish && hasItem('sao')) hint = '▶ さおを ふる';
     else if (nearSpot && nearSpot.name) hint = nearSpot.name + '　　▶ しらべる';
     else if (nearItem) {
       const it = ITEMS[nearItem.item] || {};
@@ -534,6 +543,8 @@ if (qs.has('record') || EDIT) {
     act: () => { advance = true; },
     near: () => ({ spot: nearSpot ? nearSpot.id : null,
                    item: nearItem ? nearItem.item : null }),
+    bugs: () => bugs.map(b => ({ kind:b.kind, gx:Math.round(b.gx), gy:Math.round(b.gy) })),
+    fishing: () => fishing ? { phase:fishing.phase, t:+fishing.t.toFixed(2), result:fishing.result } : null,
     sleep: () => sleepNow(),
     mini: () => mini ? { name:mini.name, t:+mini.t.toFixed(1), out:mini.out, phase:mini.d.phase, d:mini.d } : null,
     view: () => view ? { name:view.name, t:+view.t.toFixed(1) } : null,

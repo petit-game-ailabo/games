@@ -43,60 +43,8 @@ function miniStep(dt) {
 
 function miniDraw() { if (mini && mini.def.draw) mini.def.draw(mini); }
 
-// --- 釣り。うきを じっと 見て、**あたり（！）が 来た あいだ**に おす。
-//   はやすぎ（あたりの まえに おす）／おそすぎ（にげる）は とれない。
-//   とれたら result=1、だめなら 0。あたりの 時こくは 毎回 ちがう。
-//   phase … machi（待ち）→ atari（あたり）→ owari（けっかを 見せる）
-MINI.tsuri = {
-  start: m => {
-    m.d.phase = 'machi';
-    m.d.bite  = 1.2 + Math.random() * 2.3;   // あたりが 来る 時こく
-    m.d.win   = m.cfg.win || 0.85;            // おせる あいだ
-    m.d.msg   = 'うきを みてて…';
-    m.d.bob   = 0;
-  },
-  step: (m, dt) => {
-    m.d.bob += dt;
-    if (m.d.phase === 'machi') {
-      if (advance) {                          // あたりの まえに おした
-        advance = false;
-        m.d.phase = 'owari'; m.d.msg = 'はやすぎた。にげられた';
-        m.d.endT = m.t; m.result = 0;
-      } else if (m.t >= m.d.bite) {
-        m.d.phase = 'atari'; m.d.msg = 'きた！ いま！'; m.d.atariT = m.t;
-      }
-    } else if (m.d.phase === 'atari') {
-      if (advance) {                          // あたりの あいだに おした＝とれた
-        advance = false;
-        m.d.phase = 'owari'; m.d.msg = 'つれた！';
-        m.d.endT = m.t; m.result = 1;
-      } else if (m.t >= m.d.atariT + m.d.win) {
-        m.d.phase = 'owari'; m.d.msg = 'にげられた…';
-        m.d.endT = m.t; m.result = 0;
-      }
-    } else {                                  // owari：すこし 見せてから おわる
-      if (m.t >= m.d.endT + 1.1) m.done = true;
-    }
-  },
-  draw: m => {
-    ctx.fillStyle = '#12303f'; ctx.fillRect(0, 0, W, H);
-    // ゆれる 水めん
-    ctx.strokeStyle = 'rgba(120,170,190,0.30)'; ctx.lineWidth = 2;
-    for (let i = 0; i < 5; i++) {
-      const y = H*0.4 + i*24 + Math.sin(m.d.bob*1.5 + i)*3;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
-    // うき。あたりの あいだは あかく はねる
-    const atari = m.d.phase === 'atari';
-    const bx = W/2, by = H*0.52 + Math.sin(m.d.bob*2.2)*4 + (atari ? Math.sin(m.t*42)*7 : 0);
-    ctx.fillStyle = '#c23a2f'; ctx.fillRect(bx-2, by-22, 4, 14);
-    ctx.fillStyle = atari ? '#ff5a4d' : '#eceff0';
-    ctx.beginPath(); ctx.arc(bx, by, 9, 0, Math.PI*2); ctx.fill();
-    // ことば
-    text(m.d.msg, W/2, H*0.2, 26, atari ? '#ffe36b' : '#cfe6ee', 'center');
-    if (atari) text('スペース！', W/2, H*0.8, 22, '#ffe36b', 'center');
-  },
-};
+// 釣り（MINI.tsuri）も **画面の中で やる 方式**（js/field.js の FISH）に 置きかわった（P4b／D-074）。
+//   水べで 竿を ふると うきが 水に 入り、その場で 釣る。別画面には とばない。
 
 // 虫とり（MINI.mushi）は **画面の中で やる 方式**（js/field.js）に 置きかわった（P4／D-065）。
 //   蝶が 世界を とんでいて、あみを 持って そばで ふって とる。別画面には とばない。

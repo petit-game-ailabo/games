@@ -120,6 +120,66 @@ function drawNet() {
   ctx.restore();
 }
 
+// ===== 釣り（P4b）=====
+// 水べで 竿を ふると、**その場で** うきが 水に 入る（別画面に とばない）。
+//   うきを 見て、あたり（！）の あいだに キーを 押すと つれる。はやすぎ／おそすぎは にげる。
+//   phase … machi（待ち）→ atari（あたり）→ owari（けっかを 見せる）
+let fishing = null;
+function startFishing() {
+  const sp = (SC[cur].spot || []).find(s => s.fish) || { x: player.x, y: player.y };
+  fishing = {
+    phase: 'machi', t: 0,
+    bite: 1.2 + Math.random() * 2.3,   // あたりが 来る 時こく
+    win: 0.9,                          // おせる あいだ
+    msg: 'うきを みてて…',
+    // うきは 水べの spot の すこし 奥。竿の 先から のびる
+    fx: sp.x + 8, fy: sp.y - 6,
+    result: 0,
+  };
+}
+function fishingTick(dt) {
+  if (!fishing) return;
+  const f = fishing; f.t += dt;
+  if (f.phase === 'machi') {
+    if (advance) { advance = false; f.phase = 'owari'; f.msg = 'はやすぎた。にげられた'; f.endT = f.t; f.result = 0; }
+    else if (f.t >= f.bite) { f.phase = 'atari'; f.msg = 'きた！ いま！'; f.atariT = f.t; }
+  } else if (f.phase === 'atari') {
+    if (advance) { advance = false; f.phase = 'owari'; f.msg = 'つれた！'; f.endT = f.t; f.result = 1; }
+    else if (f.t >= f.atariT + f.win) { f.phase = 'owari'; f.msg = 'にげられた…'; f.endT = f.t; f.result = 0; }
+  } else {
+    if (f.t >= f.endT + 1.2) {
+      if (f.result) { addNum('tsuri'); setFlag('tsutta'); toast('さかなを つった！', 1.8); }
+      else toast(f.msg, 1.4);
+      fishing = null;
+    }
+  }
+}
+function drawFishing() {
+  if (!fishing) return;
+  const f = fishing, atari = f.phase === 'atari';
+  // 竿：プレイヤーの 手もとから うきへ。糸も
+  const hx = player.x + (player.face || 1) * 14, hy = player.y - heightAt(player.y) * 0.5;
+  const by = f.fy + Math.sin(elapsed * 2.2) * 3 + (atari ? Math.sin(elapsed * 40) * 6 : 0);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(90,70,50,0.9)'; ctx.lineWidth = 2;   // 竿
+  ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + (player.face || 1) * 26, hy - 26); ctx.stroke();
+  ctx.strokeStyle = 'rgba(230,235,235,0.5)'; ctx.lineWidth = 1; // 糸
+  ctx.beginPath(); ctx.moveTo(hx + (player.face || 1) * 26, hy - 26); ctx.lineTo(f.fx, by); ctx.stroke();
+  // うき
+  ctx.fillStyle = '#c23a2f'; ctx.fillRect(f.fx - 2, by - 13, 4, 9);
+  ctx.fillStyle = atari ? '#ff5a4d' : '#eceff0';
+  ctx.beginPath(); ctx.arc(f.fx, by, 7, 0, Math.PI * 2); ctx.fill();
+  // 波紋
+  ctx.strokeStyle = 'rgba(180,210,220,0.35)'; ctx.lineWidth = 1.5;
+  const rr = 8 + (elapsed * 18 % 22);
+  ctx.beginPath(); ctx.ellipse(f.fx, by + 3, rr, rr * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+  // ことば
+  ctx.fillStyle = 'rgba(8,12,9,0.5)'; ctx.fillRect(0, 26, W, 40);
+  text(f.msg, W / 2, 54, 22, atari ? '#ffe36b' : '#dcecef', 'center');
+  if (atari) text('いま スペース！', W / 2, H - 60, 20, '#ffe36b', 'center');
+  ctx.restore();
+}
+
 // ===== 画面下の 短い しらせ（トースト）=====
 let toastMsg = '', toastT = 0;
 function toast(s, dur) { toastMsg = s; toastT = dur || 1.4; }

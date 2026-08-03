@@ -72,6 +72,49 @@ with sync_playwright() as pw:
     print("夜の 蝶:", n_night)
     if n_night != 0: fails.append("夜なのに 蝶が とんでいる")
 
+    # === 釣り（P4b）：水べで 竿を ふる → その場で 釣り（別画面に とばない） ===
+    pg.evaluate("window._ctrl.setYoru(false)")
+    pg.evaluate("delete WORLD.items['sao']")
+    # 水べ aze_mizu2(700,470) の そばへ。まず 竿 なし＝釣れない
+    pg.evaluate("window._ctrl.free(); window._ctrl.put(700, 500)"); pg.wait_for_timeout(200)
+    near_water = pg.evaluate("window._ctrl.near()")
+    pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(150)
+    f_nosao = pg.evaluate("window._ctrl.fishing()")
+    st_nosao = pg.evaluate("window._ctrl.dbg()")["state"]
+    print("竿なしで キー:", near_water, "釣り=", f_nosao, "state=", st_nosao)
+    if f_nosao is not None: fails.append("竿が ないのに 釣りが はじまった")
+
+    # 竿を 持たせて ふる → その場で 釣りが はじまる（state は play のまま＝別画面でない）
+    pg.evaluate("WORLD.items['sao'] = 1")
+    pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(150)
+    f_start = pg.evaluate("window._ctrl.fishing()")
+    st_start = pg.evaluate("window._ctrl.dbg()")["state"]
+    print("竿ありで キー: 釣り=", f_start, "state=", st_start)
+    if not f_start: fails.append("竿を もっても 釣りが はじまらない")
+    if st_start != "play": fails.append("釣りで 別画面（state）に とんでいる: " + str(st_start))
+
+    # あたりが 来るまで 待って、あたりの あいだに 押す → つれる
+    tsuri0 = pg.evaluate("numOf('tsuri')")
+    got = False
+    for _ in range(80):
+        pg.wait_for_timeout(100)
+        fs = pg.evaluate("window._ctrl.fishing()")
+        if fs and fs["phase"] == "atari":
+            pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(100)
+            got = True; break
+        if fs is None: break
+    pg.wait_for_timeout(1500)   # owari の 見せ が おわるまで
+    tsuri1 = pg.evaluate("numOf('tsuri')")
+    tsutta = pg.evaluate("() => hasFlag('tsutta')")
+    print(f"あたりで 押した: {got}  つり {tsuri0}->{tsuri1}  つったフラグ={tsutta}")
+    if not got: fails.append("あたりが 来ない（釣りが 進まない）")
+    if tsuri1 != tsuri0 + 1: fails.append("あたりで 押しても 釣れていない")
+    fs_end = pg.evaluate("window._ctrl.fishing()")
+    if fs_end is not None: fails.append("釣りが おわらない（play に もどらない）")
+    # 釣りの あと ふつうに 歩ける（足どめが 解けている）
+    st_after = pg.evaluate("window._ctrl.dbg()")["state"]
+    if st_after != "play": fails.append("釣りの あと play に もどっていない")
+
     print("errors:", errs[:3])
     if errs: fails.append("エラー " + str(errs[:2]))
     b.close()
