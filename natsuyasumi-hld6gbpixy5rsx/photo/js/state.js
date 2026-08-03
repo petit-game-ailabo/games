@@ -132,6 +132,9 @@ function sleepNow() {
     return;
   }
   newDay(WORLD.day + 1);
+  // あたらしい 日の はじまり。**wake は 毎朝の フック**（ラジオ体操の 判こ など・D4）。
+  // start()／resume() の startMorning だけでなく、ふつうに ねて 起きた 日にも 要る
+  fireTriggers('wake', {}, false);
   saveWorld();
   runScene([...night, ...morningScript(WORLD.day)]);
   state = 'scene'; resetDay();

@@ -25,6 +25,7 @@ TESTS = [
     ("test_field.py",      "画面の中の 虫とり：蝶を あみで その場で とる（P4a）"),
     ("test_gate.py",       "塞がれた道：見てから 道具で 自分で どかす（P6）"),
     ("test_hotaru.py",     "夜の あぜみちに ほたる（D8）"),
+    ("test_stamp.py",      "ラジオ体操の 判こ（毎朝）と スタンプカード（D4）"),
 ]
 
 want = sys.argv[1] if len(sys.argv) > 1 else ""
