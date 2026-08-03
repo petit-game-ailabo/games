@@ -180,6 +180,9 @@ function loop(now) {
     const g = gateAt(player.x, player.y, 26);
     if (g && g !== gateSaid) {
       gateSaid = g;
+      // **障害を「見た」しるしを 立てる**（P6）。これが 立って はじめて 朝ごはんで
+      // 道具の ヒントが 出る。見てないのに 解決を 出さないための 要（D-077）
+      if (g.saw) setFlag(g.saw);
       if (g.why) { runScene([{ k:'say', who:'cirno', text:g.why }]); state = 'scene'; }
     } else if (!g) gateSaid = null;
   }
@@ -267,7 +270,14 @@ function loop(now) {
   // --- そばの 点を 調べる／物を ひろう。**キーを 押したときだけ**（P1）。
   // 会話を はじめた フレームは advance を 使いきっているので ここには 来ない
   if (!inScene && !fadeTo && !talkNpc && !fishing && state !== 'scene' && advance) {
-    if (nearSpot && nearSpot.fish && holding('sao')) {
+    const cg = gateAt(player.x, player.y, 26);
+    if (cg && cg.cut && hasItem(cg.cut.item)) {
+      // 塞がれた道を **道具で 自分で** どかす（P6・道具さえ あれば 自分で）。
+      // 道具は 障害を 見た あとの 朝ごはんで もらう（see-first・D-077）
+      advance = false;
+      setFlag(cg.cut.flag);
+      runScene([{ k:'say', who:'cirno', text: cg.cut.say }]); state = 'scene';
+    } else if (nearSpot && nearSpot.fish && holding('sao')) {
       // 水べで 竿を ふる → その場で 釣り（P4b・別画面に とばない）。竿を **手に 持って**いること
       advance = false;
       startFishing();
@@ -417,7 +427,9 @@ function loop(now) {
   // 実写の うえに 目じるしを かくと 貼りものに 見えるので、画面下の もじだけで 知らせる
   else if (!fadeTo && !fishing) {
     let hint = null;
+    const hg = gateAt(player.x, player.y, 26);
     if (nearNpc && !nearNpc.engaged) hint = '▶ はなす';
+    else if (hg && hg.cut && hasItem(hg.cut.item)) hint = '▶ ' + (hg.cut.prompt || 'どうぐを つかう');
     else if (nearSpot && nearSpot.fish && holding('sao')) hint = '▶ さおを ふる';
     else if (nearSpot && nearSpot.name) hint = nearSpot.name + '　　▶ しらべる';
     else if (nearItem) {

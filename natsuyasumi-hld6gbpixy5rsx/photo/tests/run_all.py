@@ -23,6 +23,7 @@ TESTS = [
     ("test_yoyaku.py",     "きょう行った ところが ごはんの 話に なる（よやく）"),
     ("test_oto.py",        "時間帯で 鳴くものが 変わる（耳でも 時間が わかる）"),
     ("test_field.py",      "画面の中の 虫とり：蝶を あみで その場で とる（P4a）"),
+    ("test_gate.py",       "塞がれた道：見てから 道具で 自分で どかす（P6）"),
 ]
 
 want = sys.argv[1] if len(sys.argv) > 1 else ""
