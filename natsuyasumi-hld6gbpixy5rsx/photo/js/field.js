@@ -120,6 +120,47 @@ function drawNet() {
   ctx.restore();
 }
 
+// ===== 蛍（D8）=====
+// **晩ごはんの あと（夜）に あぜみちへ 行くと**、ほたるが ふわふわ とぶ。
+// 捕まえる ものでは なく、ただ きれいな よるの 情景（P7 の あかるさ／わくわく の 側）。
+let hotaru = [];
+function hotaruOn() { return cur === 'aze' && WORLD.yoruDone; }
+function spawnHotaru() {
+  return {
+    x: 90 + Math.random() * (W - 180),
+    y: 260 + Math.random() * 180,
+    a: Math.random() * 6.28, sp: 10 + Math.random() * 16,
+    blink: Math.random() * 6.28, ph: Math.random() * 6.28,
+  };
+}
+function updateHotaru(dt) {
+  if (!hotaruOn()) { hotaru = []; return; }
+  while (hotaru.length < 11) hotaru.push(spawnHotaru());
+  for (const f of hotaru) {
+    f.a += (Math.random() - 0.5) * dt * 2.4;
+    f.x += Math.cos(f.a) * f.sp * dt;
+    f.y += Math.sin(f.a) * f.sp * 0.5 * dt;
+    f.blink += dt;
+    if (f.x < 70) { f.x = 70; f.a = Math.PI - f.a; }
+    if (f.x > W - 70) { f.x = W - 70; f.a = Math.PI - f.a; }
+    if (f.y < 250) f.y = 250;
+    if (f.y > 460) f.y = 460;
+  }
+}
+function drawHotaru() {
+  if (!hotaruOn()) return;
+  for (const f of hotaru) {
+    const g = 0.3 + 0.7 * Math.abs(Math.sin(f.blink * 2.1 + f.ph));
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(150,230,120,' + (0.45 * g).toFixed(2) + ')';   // にじむ 光
+    ctx.beginPath(); ctx.arc(f.x, f.y, 5 + 3 * g, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(238,255,205,' + (0.9 * g).toFixed(2) + ')';     // しん
+    ctx.beginPath(); ctx.arc(f.x, f.y, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+}
+
 // ===== 釣り（P4b）=====
 // 水べで 竿を ふると、**その場で** うきが 水に 入る（別画面に とばない）。
 //   うきを 見て、あたり（！）の あいだに キーを 押すと つれる。はやすぎ／おそすぎは にげる。

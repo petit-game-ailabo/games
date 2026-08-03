@@ -317,6 +317,7 @@ function loop(now) {
   mizuTick();                    // 水の音。**音源に 近いほど 大きい**
   if (!inScene && !fadeTo) updateBugs(dt);   // 画面の中を とぶ 蝶（P4）
   else bugs = [];                            // 場面の あいだは 出さない
+  updateHotaru(dt);              // 夜の あぜみちの ほたる（D8）。場面中も とぶ
   toastTick(dt);                 // 画面下の 短い しらせ
   hudTick(dt);                   // 移動キーで ちらっと 出る HUD（P8）
 
@@ -366,6 +367,7 @@ function loop(now) {
     drawChar(ciOf(a.k), a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
   drawSpots('hang');   // 風鈴・日めくり など ぶらさがる物（P5）。キャラより 前
+  drawHotaru();        // 夜の ほたる（D8）。場面中も 出す（よるの あぜみちの 情景）
   // 蝶と あみは キャラより 前（とんでいるので）。場面の あいだは 出さない
   if (!inScene && !fadeTo) { drawBugs(); drawNet(); drawFishing(); }
 
