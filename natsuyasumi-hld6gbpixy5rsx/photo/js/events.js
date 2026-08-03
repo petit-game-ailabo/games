@@ -103,6 +103,9 @@ function buildScene(name, ctx) {
   const out = [];
   const walk = list => {
     for (const st of list) {
+      // `if` の when は **実行中に 見る 条件**（分かれ道）。組み立て時に 見て 落とすと
+      // 場面から きえてしまう ので、if は そのまま 残す（scene.js が 走行中に 判定する）
+      if (st.k === 'if') { out.push(buildStep(st, ctx, an)); continue; }
       if (st.steps) { if (matchWhen(st.when, ctx)) walk(st.steps); }
       else if (matchWhen(st.when, ctx)) out.push(buildStep(st, ctx, an));
     }

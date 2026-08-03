@@ -495,7 +495,7 @@ if (qs.has('record') || EDIT) {
     put: (x,y) => { player.x = x; player.y = y; },
     free: () => { endScene(); talkLock = false; },
     sleep: () => sleepNow(),
-    mini: () => mini ? { name:mini.name, t:+mini.t.toFixed(1), out:mini.out } : null,
+    mini: () => mini ? { name:mini.name, t:+mini.t.toFixed(1), out:mini.out, phase:mini.d.phase } : null,
     view: () => view ? { name:view.name, t:+view.t.toFixed(1) } : null,
     viewOpen: (n, c) => openView(n, c),
     stamp: d => setFlag('stamp:' + d),
