@@ -13,6 +13,9 @@
 const MINI = {};
 let mini = null;
 
+// 虫の 種類。虫かご（数）と 図鑑（種類ごとの しるし zukan:◯）で つかう
+const MUSHI_KINDS = ['とんぼ', 'ちょう', 'かぶと', 'せみ', 'こがね', 'ばった'];
+
 function startMini(name, cfg, out) {
   const def = MINI[name];
   if (!def) return false;              // 知らない 名まえ。場面を 止めずに 素通りする
@@ -132,8 +135,13 @@ MINI.mushi = {
       if (advance && d.swing < 0) { advance = false; d.swing = m.t; }
       if (d.swing >= 0) {
         if (Math.abs(d.bx - d.nx) < 44) {
-          d.phase = 'tore'; d.msg = 'つかまえた！'; d.endT = m.t;
           m.result = 1; useToday(d.pool, d.max);
+          // 何を とったか。out の 数 1つでは 種類を 返せないので、ここで じかに
+          // 虫かご（数）と 図鑑（種類ごとの しるし）に かきこむ
+          d.tore = MUSHI_KINDS[Math.floor(Math.random() * MUSHI_KINDS.length)];
+          addNum('mushikago');
+          setFlag('zukan:' + d.tore);
+          d.phase = 'tore'; d.msg = 'つかまえた！（' + d.tore + '）'; d.endT = m.t;
         } else if (m.t > d.swing + 0.28) d.swing = -1;
       }
       if (m.t > (m.cfg.time || 7)) { d.phase = 'nige'; d.msg = 'にげられた…'; d.endT = m.t; m.result = 0; }
