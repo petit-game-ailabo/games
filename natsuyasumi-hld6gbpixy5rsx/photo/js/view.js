@@ -25,7 +25,10 @@ function closeView() { view = null; state = scene ? 'scene' : 'play'; }
 function viewStep(dt) {
   if (!view) { state = 'scene'; return; }
   view.t += dt;
-  if (advance && view.t > 0.25) { advance = false; closeView(); }
+  if (advance && view.t > 0.25) { advance = false; closeView(); return; }
+  // `hold` を もつ 画面（絵日記など、こちらから 開くのでなく ながれの 中で 出るもの）は、
+  // キーを 押さなくても すこし 見せてから ひとりでに とじる（ねる ながれを 止めないため）
+  if (view.def.hold && view.t > view.def.hold) closeView();
 }
 function viewDraw() { if (view && view.def.draw) view.def.draw(view); }
 
@@ -105,6 +108,66 @@ VIEW.mushikago = {
     ctx.restore();
     text('むしかご', W/2, cy - rh - 26, 24, '#cfe6b0', 'center');
     text(n + ' ひき', W/2, cy + rh + 34, 20, '#cfe6b0', 'center');
+    text('スペースで とじる', W/2, H - 14, 14, 'rgba(226,238,220,0.55)', 'center', 'normal');
+  },
+};
+
+// --- 絵日記。**その日の 記録**（行った ところ・きょう 立った しるし）を みじかい ことばに して 綴じる（D5）。
+// ねる まえに 出て、1日を しめくくる。**`hold` で しばらく 見せて ひとりでに とじる**（ねる ながれを 止めない）。
+// ねる ときに **その日づけの うちに** 確定させて ここに しまう（`sleepNow` が 立てる）。
+// 夜の場面は newDay の あとに 再生されるので、view の 中で 読むと 翌日づけに なってしまう（G3）
+let diaryData = null;
+function diaryToday(day) {
+  day = day === undefined ? WORLD.day : day;
+  const out = [];
+  const placeName = { doma:'どま', rouka:'ろうか', iemae:'いえのまえ', aze:'あぜみち', mori:'もりのみち' };
+  const went = [];
+  for (const p in WORLD.visited) {
+    const arr = WORLD.visited[p];
+    if (arr && arr[arr.length - 1] === day && placeName[p]) went.push(placeName[p]);
+  }
+  if (went.length) out.push(went.join('・') + ' へ いった');
+  const F = WORLD.flags, td = k => F[k] === day;
+  const bugs = Object.keys(F).filter(k => k.indexOf('zukan:') === 0 && F[k] === day).map(k => k.slice(6));
+  if (bugs.length) out.push(bugs.join('・') + ' を つかまえた');
+  if (td('tsutta'))       out.push('さかなを つった');
+  if (td('mita_hotaru'))  out.push('ほたるを 見た。きれいだった');
+  if (td('taiboku_nai'))  out.push('たおれ木を なたで きった');
+  if (td('hachi_nai'))    out.push('はちを けむりで どかした');
+  if (td('kowashita'))    out.push('……さいせんばこを こわして しまった');
+  if (td('stamp:' + day)) out.push('ラジオたいそうに でた');
+  if (!out.length)        out.push('のんびり すごした 一日だった');
+  return out;
+}
+VIEW.nikki = {
+  hold: 6.5,                              // 6.5秒 見せて ひとりでに とじる（スペースで はやく とじられる）
+  open: v => {
+    // ねる ときに 確定させた その日ぶんを つかう。無ければ いまの日で 作る（保険）
+    v.d.day   = diaryData ? diaryData.day   : WORLD.day;
+    v.d.lines = diaryData ? diaryData.lines : diaryToday();
+  },
+  draw: v => {
+    ctx.fillStyle = '#12101a'; ctx.fillRect(0, 0, W, H);
+    const cw = 720, ch = 424, cx = (W - cw) / 2, cy = (H - ch) / 2 + 6;
+    ctx.fillStyle = '#f3eeda'; ctx.fillRect(cx, cy, cw, ch);
+    ctx.strokeStyle = 'rgba(90,74,48,0.5)'; ctx.lineWidth = 2;
+    ctx.strokeRect(cx + 8, cy + 8, cw - 16, ch - 16);
+    text('えにっき', cx + 30, cy + 50, 26, '#4a3d26');
+    text('八月' + hiduke(v.d.day || WORLD.day) + '日', cx + cw - 30, cy + 50, 22, '#7a6a4a', 'right');
+    // ちいさな え（お日さま）。日記らしい らくがき
+    const sx = cx + cw - 84, sy = cy + 104;
+    ctx.strokeStyle = '#d99a2a'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.arc(sx, sy, 18, 0, Math.PI * 2); ctx.stroke();
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(sx + Math.cos(a) * 24, sy + Math.sin(a) * 24);
+      ctx.lineTo(sx + Math.cos(a) * 30, sy + Math.sin(a) * 30); ctx.stroke(); }
+    // よこ線（ノートっぽく）＋ きょうの できごと
+    ctx.strokeStyle = 'rgba(120,140,180,0.30)'; ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) { const ly = cy + 150 + i * 44;
+      ctx.beginPath(); ctx.moveTo(cx + 34, ly); ctx.lineTo(cx + cw - 120, ly); ctx.stroke(); }
+    const lines = v.d.lines || [];
+    for (let i = 0; i < lines.length && i < 6; i++)
+      text('・ ' + lines[i], cx + 40, cy + 144 + i * 44, 20, '#3a3226');
     text('スペースで とじる', W/2, H - 14, 14, 'rgba(226,238,220,0.55)', 'center', 'normal');
   },
 };

@@ -125,6 +125,9 @@ function sleepNow() {
   // newDay の あとで 組むと day が もう 進んでいて、絵日記など 日別の 出しものが
   // 翌日づけに なってしまう（いまの night は 日別分岐が ないので 見た目は 同じだが、D5 の 前提）
   const night = nightScript();
+  // 絵日記（D5）は **その日づけの うちに** 中身を 確定させる。newDay の あとに 綴じると
+  // 翌日づけを 拾ってしまう（G3）。VIEW.nikki は この diaryData を 読む
+  diaryData = { day: WORLD.day, lines: diaryToday(WORLD.day) };
   // 八月三十一日の よるで なつやすみは おわる。つぎの朝は 来ない
   if (WORLD.day >= LAST_DAY) {
     runScene([...night, ...buildScene('owari', { day:WORLD.day })]);
