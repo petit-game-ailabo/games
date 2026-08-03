@@ -100,7 +100,8 @@ with sync_playwright() as pw:
         pg.screenshot(path=os.path.join(OUT, "q_item.png"))
         if "sao" in pg.evaluate("window._ctrl.items()")["mochi"]:
             fails.append("はなれているのに ひろってしまう")
-        pg.evaluate(f"window._ctrl.put({o['x']},{o['y']})"); pg.wait_for_timeout(700)
+        pg.evaluate(f"window._ctrl.put({o['x']},{o['y']})"); pg.wait_for_timeout(300)
+        pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(400)   # P1：キーで ひろう
         got = pg.evaluate("window._ctrl.items()")
         sc = pg.evaluate("window._ctrl.scene()")
         line = sc["say"][1] if sc and sc["say"] else ""

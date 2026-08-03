@@ -150,6 +150,7 @@ with sync_playwright() as pw:
         pg.evaluate("window._ctrl.free()")   # 場面あけの talkLock を はずす
         x, y = NPC_AT[s]
         pg.evaluate(f"window._ctrl.put({x+30},{y+18})"); pg.wait_for_timeout(500)
+        pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(200)   # P1：キーで 話しかける
         t0 = pg.evaluate("window._ctrl.talk()")
         if not t0:
             fails.append(f"{s}: 近づいてもはなしが始まらない"); print(f"  {s:8s} NG 始まらない"); continue
@@ -176,7 +177,8 @@ with sync_playwright() as pw:
     pg.reload(); pg.wait_for_timeout(3200)
     pg.evaluate("window._ctrl.start()"); pg.wait_for_timeout(400); pg.evaluate("window._ctrl.free()"); pg.wait_for_timeout(800)
     pg.evaluate("window._ctrl.goto('aze')"); pg.wait_for_timeout(300)
-    pg.evaluate("window._ctrl.put(426,442)"); pg.wait_for_timeout(3000)
+    pg.evaluate("window._ctrl.put(426,442)"); pg.wait_for_timeout(300)
+    pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(2700)   # P1：キーで 話しかけて 進める
     a = pg.evaluate("window._ctrl.talk()")
     pg.evaluate("window._ctrl.put(560,530)"); pg.wait_for_timeout(2500)
     away = pg.evaluate("window._ctrl.talk()")

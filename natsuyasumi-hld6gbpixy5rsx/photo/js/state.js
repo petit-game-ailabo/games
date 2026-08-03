@@ -23,6 +23,7 @@ let nedokoT = 0, nedokoArmed = false;
 let nightT = 0;            // よるの ぐあい 0〜1。晩ごはんが すむと ゆっくり 1 へ
 let firedScreen = null;    // 'enter' の ひきがねを もう ひいた画面。じぶんで移ると 空にもどす
 let nearSpot = null;       // いま そばに ある 点（画面の中の 調べられる ところ）
+let nearItem = null;       // いま そばに ある 置かれた物（キーで ひろう）
 let gateSaid = null;       // わけを 言った せき止め。はなれるまで 言いなおさない
 
 function moveMove(x, y, spd, dt) {   // 目的地へ 一歩ぶん すすむ（壁ぞいにすべる）
@@ -92,7 +93,7 @@ function linesOf(n, place) { return linesPick(n, place).L; }
 function resetDay() {
   applyNpcChanges();   // あとから ふえた／消えた NPC を つけ直す
   for (const k in SC) for (const n of (SC[k].npc || [])) {
-    n.idx = 0; n.done = !linesOf(n, k);   // その NPC の 画面 k で 見る
+    n.idx = 0; n.done = !linesOf(n, k); n.engaged = false;   // その NPC の 画面 k で 見る
   }
   talkNpc = null; nedokoT = 0; nedokoArmed = false;
   WORLD.steps = 0; WORLD.mukaeDone = false; WORLD.yoruDone = false;

@@ -25,7 +25,7 @@ function loop(now) {
     text('しゃしんの なかを あるく', W/2, 240, 18, '#dbead2', 'center');
     text('八月一日から 三十一日まで', W/2, 272, 15, '#a8c0a1', 'center', 'normal');
     text('やじるし / WASD で あるく　　Shift で はしる', W/2, 340, 16, '#c9dcc0', 'center');
-    text('だれかの そばに いると はなしを してくれる', W/2, 368, 16, '#c9dcc0', 'center');
+    text('だれかや ものの そばで スペース / タップ で はなす・しらべる', W/2, 368, 16, '#c9dcc0', 'center');
     text('スペース / タップ で セリフを つぎへ', W/2, 396, 16, '#c9dcc0', 'center');
     text('ざしきの ふとんで じっとしていると 1にちが おわる', W/2, 424, 16, '#c9dcc0', 'center');
     // ねた ところから つづけられる。だまって つづきに するのは わかりにくいので、
@@ -177,7 +177,8 @@ function loop(now) {
     } else if (!g) gateSaid = null;
   }
 
-  const wasSpot = nearSpot;
+  // 画面の中の 点。そばに 行くと 名まえが 出る。**調べるのは キーを 押したとき**（P1）。
+  // ここでは そばの 点を 見つけるだけ。ひきがねは 下の「調べる／ひろう」で ひく
   nearSpot = null;
   if (!inScene && !fadeTo && !talkNpc && state !== 'scene') {
     for (const sp of (SC[cur].spot || [])) {
@@ -186,35 +187,13 @@ function loop(now) {
       nearSpot = sp;
       break;
     }
-    // **近づいた しゅんかん だけ** ひく。そばに 居るあいだ 何度も ひかない
-    if (nearSpot && nearSpot !== wasSpot) {
-      fireTriggers('near', { spot:nearSpot.id });
-      // その点で つかう 道具を 持っていたら「つかった」も ひく
-      if (nearSpot.use && hasItem(nearSpot.use))
-        fireTriggers('use', { spot:nearSpot.id, item:nearSpot.use });
-      if (nearSpot.scene && !hasFlag('spot:' + nearSpot.id) && state !== 'scene') {
-        setFlag('spot:' + nearSpot.id);
-        const q = buildScene(nearSpot.scene, { day:WORLD.day });
-        if (q.length) { runScene(q); state = 'scene'; }
-      }
-    }
   }
 
-  // --- 置かれた物を ひろう。ボタンは いらない（会話と おなじ考え方）
+  // 置かれた物も、近づいただけでは ひろわない。そばで キーを 押したら ひろう（P1）
+  nearItem = null;
   if (!inScene && !fadeTo && !talkNpc && state !== 'scene') {
     for (const o of itemsAt(cur)) {
-      if (groundDist(player.x, player.y, o.x, o.y) < 1.1) {
-        const it = ITEMS[o.item] || {};
-        takeItem(cur, o.item);
-        // ひろったことを 起点に できるように、**ひきがねを 通す**。
-        // ひきがねが 足した セリフは ひとことの うしろに つなげる
-        const q = [{ k:'say', who:'cirno',
-                     text: it.found || ((it.name||o.item) + ' を みつけた') }];
-        q.push(...collectTriggers('take', { item:o.item }));
-        runScene(q);
-        state = 'scene';
-        break;
-      }
+      if (groundDist(player.x, player.y, o.x, o.y) < 1.1) { nearItem = o; break; }
     }
   }
 
@@ -228,20 +207,28 @@ function loop(now) {
     } else nedokoT = 0;
   }
 
-  // --- はなし。そばに居るあいだ だけ すすむ。ぜんぶ おわったら もう ひらかない
-  let near = null, anyNear = false;
+  // --- はなし。**そばで キーを 押すと はじまる**（P1。近づいただけでは はじめない）。
+  // いちど はなしかけた 相手は はなれても 覚えていて、戻れば つづきから すすむ。
+  // キャラ同士の 自動会話（場面）は これとは 別で、そのまま
+  let nearNpc = null, anyNear = false;
   for (const n of (sc.npc || [])) {
     for (const w of n.who) {
       if (groundDist(player.x, player.y, w[1], w[2]) < TALK_R) {
         anyNear = true;
-        if (!n.done && !near) near = n;
+        if (!n.done && !nearNpc) nearNpc = n;
       }
     }
   }
   // 場面が おわった直後に となりに 居あわせただけで はじまらないように、
   // いちど はなれてから でないと 会話しない
   if (!anyNear) talkLock = false;
-  if (fadeTo || inScene || talkLock) near = null;
+  if (fadeTo || inScene || talkLock) nearNpc = null;
+
+  let near = null;
+  if (nearNpc) {
+    if (nearNpc.engaged) near = nearNpc;                 // もう 話しかけた 相手＝つづける
+    else if (advance) { nearNpc.engaged = true; near = nearNpc; advance = false; }  // キーで はじめる
+  }
   if (near !== talkNpc) { talkNpc = near; lineT = 0; }
   if (talkNpc) {
     const pick = linesPick(talkNpc);
@@ -267,6 +254,34 @@ function loop(now) {
           fireTriggers('talk', { who });
         }
       }
+    }
+  }
+
+  // --- そばの 点を 調べる／物を ひろう。**キーを 押したときだけ**（P1）。
+  // 会話を はじめた フレームは advance を 使いきっているので ここには 来ない
+  if (!inScene && !fadeTo && !talkNpc && state !== 'scene' && advance) {
+    if (nearSpot) {
+      advance = false;
+      fireTriggers('near', { spot:nearSpot.id });
+      // その点で つかう 道具を 持っていたら「つかった」も ひく
+      if (nearSpot.use && hasItem(nearSpot.use))
+        fireTriggers('use', { spot:nearSpot.id, item:nearSpot.use });
+      if (nearSpot.scene && !hasFlag('spot:' + nearSpot.id) && state !== 'scene') {
+        setFlag('spot:' + nearSpot.id);
+        const q = buildScene(nearSpot.scene, { day:WORLD.day });
+        if (q.length) { runScene(q); state = 'scene'; }
+      }
+    } else if (nearItem) {
+      advance = false;
+      const o = nearItem, it = ITEMS[o.item] || {};
+      takeItem(cur, o.item);
+      // ひろったことを 起点に できるように、**ひきがねを 通す**。
+      // ひきがねが 足した セリフは ひとことの うしろに つなげる
+      const q = [{ k:'say', who:'cirno',
+                   text: it.found || ((it.name||o.item) + ' を みつけた') }];
+      q.push(...collectTriggers('take', { item:o.item }));
+      runScene(q);
+      state = 'scene';
     }
   }
 
@@ -375,13 +390,22 @@ function loop(now) {
     const li = linesOf(talkNpc)[talkNpc.idx || 0];
     sayBox(li[0], li[1]);
   }
-  // そばに ある 点の 名まえ。**写真に 光を のせない。**
-  // 実写の うえに 目じるしを かくと 貼りものに 見えるので、もじだけ そっと 出す
-  else if (nearSpot && nearSpot.name) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(8,12,9,0.42)'; ctx.fillRect(0, H-46, W, 46);
-    text(nearSpot.name, W/2, H-18, 17, 'rgba(246,250,242,0.92)', 'center');
-    ctx.restore();
+  // そばに 相手が いるとき、何が できるかを そっと 出す（P1）。**写真に 光は のせない。**
+  // 実写の うえに 目じるしを かくと 貼りものに 見えるので、画面下の もじだけで 知らせる
+  else if (!fadeTo) {
+    let hint = null;
+    if (nearNpc && !nearNpc.engaged) hint = '▶ はなす';
+    else if (nearSpot && nearSpot.name) hint = nearSpot.name + '　　▶ しらべる';
+    else if (nearItem) {
+      const it = ITEMS[nearItem.item] || {};
+      hint = (it.name || nearItem.item) + '　　▶ ひろう';
+    }
+    if (hint) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(8,12,9,0.42)'; ctx.fillRect(0, H-46, W, 46);
+      text(hint, W/2, H-18, 17, 'rgba(246,250,242,0.92)', 'center');
+      ctx.restore();
+    }
   }
 
   if (fade > 0) {
@@ -494,6 +518,10 @@ if (qs.has('record') || EDIT) {
     goto: (id, at) => { if (SC[id]) enter(id, at); },
     put: (x,y) => { player.x = x; player.y = y; },
     free: () => { endScene(); talkLock = false; },
+    // そばの 相手に「はなす／しらべる／ひろう」を する（キー入力の 代わり・P1）
+    act: () => { advance = true; },
+    near: () => ({ spot: nearSpot ? nearSpot.id : null,
+                   item: nearItem ? nearItem.item : null }),
     sleep: () => sleepNow(),
     mini: () => mini ? { name:mini.name, t:+mini.t.toFixed(1), out:mini.out, phase:mini.d.phase, d:mini.d } : null,
     view: () => view ? { name:view.name, t:+view.t.toFixed(1) } : null,

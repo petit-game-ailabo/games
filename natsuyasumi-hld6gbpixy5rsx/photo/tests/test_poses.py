@@ -83,9 +83,10 @@ with sync_playwright() as pw:
     print(f"  2.5秒後: talking={d2['talking']}")
     if d2["talking"]: fails.append("その場に いるだけで 会話が はじまってしまう")
 
-    # 6) いちど はなれて 近づけば ちゃんと はじまる
+    # 6) いちど はなれて 近づき、キーを 押せば ちゃんと はじまる（P1）
     pg.evaluate("window._ctrl.put(180,470)"); pg.wait_for_timeout(600)
-    pg.evaluate("window._ctrl.put(500,505)"); pg.wait_for_timeout(800)
+    pg.evaluate("window._ctrl.put(500,505)"); pg.wait_for_timeout(400)
+    pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(300)
     d3 = pg.evaluate("window._ctrl.dbg()")
     t3 = pg.evaluate("window._ctrl.talk()")
     print(f"  はなれて 戻ったら: talking={d3['talking']} {t3 and t3['line']}")

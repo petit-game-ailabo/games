@@ -49,6 +49,14 @@ with sync_playwright() as pw:
             if d["cur"] != s:
                 print(f"     {tag:9s} （画面のはしを越えて {d['cur']} へ。判定できず）")
                 continue
+            # P1：近づいただけでは はじまらない。キー入力で 話しかける。
+            # ただし 画面に入った ときの 自動会話（もりの ミスティア など）が
+            # put の あとから 遅れて 出ることが あるので、流しきって から 話しかける
+            for _ in range(40):
+                if not pg.evaluate("window._ctrl.scene()"): break
+                pg.keyboard.press("Space"); pg.wait_for_timeout(120)
+            pg.evaluate("window._ctrl.free()")
+            pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(140)
             gd = pg.evaluate("window._ctrl.gdist()")
             mind = min(min(row) for row in gd) if gd else None
             talk = pg.evaluate("window._ctrl.talk()") is not None

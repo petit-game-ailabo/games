@@ -89,7 +89,8 @@ with sync_playwright() as pw:
 
     # 2日目の会話は 1日目とちがう
     pg.evaluate("window._ctrl.goto('aze','temae')"); pg.wait_for_timeout(400)
-    pg.evaluate("window._ctrl.put(400,436)"); pg.wait_for_timeout(700)
+    pg.evaluate("window._ctrl.put(400,436)"); pg.wait_for_timeout(500)
+    pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(200)   # P1：キーで 話しかける
     t = pg.evaluate("window._ctrl.talk()")
     print("  あぜみち 2日目のはなし:", t)
     if not t: fails.append("2日目に あぜみちで はなさない")
@@ -101,7 +102,8 @@ with sync_playwright() as pw:
         pg.wait_for_timeout(200)
         if pg.evaluate("window._ctrl.scene()") is None: break
     pg.evaluate("window._ctrl.goto('aze','temae')"); pg.wait_for_timeout(300)
-    pg.evaluate("window._ctrl.put(400,436)"); pg.wait_for_timeout(700)
+    pg.evaluate("window._ctrl.put(400,436)"); pg.wait_for_timeout(500)
+    pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(200)   # キーを 押しても 3日目は しずか
     t3 = pg.evaluate("window._ctrl.talk()")
     d5 = pg.evaluate("window._ctrl.dbg()")
     print("  3日目:", d5, "はなし:", t3)
