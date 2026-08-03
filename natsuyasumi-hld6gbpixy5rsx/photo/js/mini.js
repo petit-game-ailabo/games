@@ -98,80 +98,8 @@ MINI.tsuri = {
   },
 };
 
-// --- 虫とり。あみを 左右に うごかし、虫に かさねて スペースで ふる。
-//   **その日その場所の 虫は かぎりが ある**（cfg.pool の のこり。DESIGN §6）。
-//   とれたら result=1、にげられたら 0。もう いない ときも 0。
-//   phase … oi（おいかけ）→ tore（とれた）／nige（にげた）／none（もう いない）
-//   cfg … { pool:'mushi:aze', max:18, time:7 }
-MINI.mushi = {
-  start: m => {
-    const d = m.d;
-    d.pool = m.cfg.pool || 'mushi'; d.max = m.cfg.max || 18;
-    d.left = leftToday(d.pool, d.max);
-    d.nx = W / 2; d.swing = -1;
-    if (d.left <= 0) { d.phase = 'none'; d.msg = 'きょうは もう いない'; d.endT = 0; m.result = 0; return; }
-    d.phase = 'oi'; d.msg = 'あみで つかまえて';
-    d.bx = 120 + Math.random() * (W - 240);
-    d.by = H * 0.42;
-    d.bvx = (Math.random() < 0.5 ? -1 : 1) * (110 + Math.random() * 70);
-    d.turn = 0.8 + Math.random() * 1.4;
-  },
-  step: (m, dt) => {
-    const d = m.d;
-    if (d.phase === 'oi') {
-      // あみ：矢印 か、タッチなら ゆびの ところ
-      if (keys.ArrowLeft || keys.KeyA)  d.nx -= 320 * dt;
-      if (keys.ArrowRight || keys.KeyD) d.nx += 320 * dt;
-      if (stick.on) d.nx = stick.x;
-      d.nx = clamp(d.nx, 40, W - 40);
-      // 虫：ふらふら 飛ぶ。ときどき むきを かえる
-      d.turn -= dt;
-      if (d.turn <= 0) { d.bvx = -d.bvx * (0.7 + Math.random() * 0.6); d.turn = 0.8 + Math.random() * 1.4; }
-      d.bx += d.bvx * dt;
-      if (d.bx < 60)     { d.bx = 60;     d.bvx = Math.abs(d.bvx); }
-      if (d.bx > W - 60) { d.bx = W - 60; d.bvx = -Math.abs(d.bvx); }
-      d.by = H * 0.42 + Math.sin(m.t * 3.3) * 26;
-      // ふる。あみの よこ位置が 虫に かさなっていれば とれる
-      if (advance && d.swing < 0) { advance = false; d.swing = m.t; }
-      if (d.swing >= 0) {
-        if (Math.abs(d.bx - d.nx) < 44) {
-          m.result = 1; useToday(d.pool, d.max);
-          // 何を とったか。out の 数 1つでは 種類を 返せないので、ここで じかに
-          // 虫かご（数）と 図鑑（種類ごとの しるし）に かきこむ
-          d.tore = MUSHI_KINDS[Math.floor(Math.random() * MUSHI_KINDS.length)];
-          addNum('mushikago');
-          setFlag('zukan:' + d.tore);
-          d.phase = 'tore'; d.msg = 'つかまえた！（' + d.tore + '）'; d.endT = m.t;
-        } else if (m.t > d.swing + 0.28) d.swing = -1;
-      }
-      if (m.t > (m.cfg.time || 7)) { d.phase = 'nige'; d.msg = 'にげられた…'; d.endT = m.t; m.result = 0; }
-    } else {
-      if (m.t >= d.endT + 1.1) m.done = true;
-    }
-  },
-  draw: m => {
-    const d = m.d;
-    ctx.fillStyle = '#0e1c10'; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = 'rgba(120,170,110,0.22)'; ctx.lineWidth = 2;
-    for (let i = 0; i < 6; i++) { const y = H*0.72 + i*11;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-    if (d.phase !== 'none') {
-      // 虫（はねが ぱたぱた）
-      const flap = 6 + Math.abs(Math.sin(m.t * 22)) * 5;
-      ctx.fillStyle = '#ffe36b';
-      ctx.beginPath(); ctx.ellipse(d.bx, d.by, flap, 8, 0, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#7a6a20'; ctx.fillRect(d.bx - 1, d.by - 7, 2, 14);
-      // あみ（ふると 上へ のびる）
-      const sw = d.swing >= 0, ny = H*0.64 - (sw ? 44 : 0);
-      ctx.strokeStyle = '#d8d2c4'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(d.nx, H - 8); ctx.lineTo(d.nx, ny); ctx.stroke();
-      ctx.strokeStyle = sw ? '#fff' : '#b7c7d0';
-      ctx.beginPath(); ctx.arc(d.nx, ny - 18, 18, 0, Math.PI*2); ctx.stroke();
-    }
-    text(d.msg, W/2, H*0.15, 26, d.phase === 'tore' ? '#ffe36b' : '#cfe6ee', 'center');
-    if (d.phase === 'oi') text('← →  で あみ　スペースで ふる', W/2, H*0.9, 18, '#9fc39a', 'center');
-  },
-};
+// 虫とり（MINI.mushi）は **画面の中で やる 方式**（js/field.js）に 置きかわった（P4／D-065）。
+//   蝶が 世界を とんでいて、あみを 持って そばで ふって とる。別画面には とばない。
 
 // --- 仕組みが 動くかを たしかめる ためだけの もの。**本番では つかわない。**
 // cfg.s 秒 待って、そのあいだに スペースを おした 回数を かえす

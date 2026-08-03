@@ -284,6 +284,10 @@ function loop(now) {
       q.push(...collectTriggers('take', { item:o.item }));
       runScene(q);
       state = 'scene';
+    } else if (hasItem('ami') && bugsActive()) {
+      // あみを 持って 野に いる ときは、キーで その場で あみを ふる（P4・別画面に とばない）
+      advance = false;
+      swingNet();
     }
   }
 
@@ -292,6 +296,9 @@ function loop(now) {
   footTick();                    // 足音。画面ごとに ふみごこちが ちがう
   utaTick(dt);                   // 遠くの うた。地図の かわりに 耳で さがす
   mizuTick();                    // 水の音。**音源に 近いほど 大きい**
+  if (!inScene && !fadeTo) updateBugs(dt);   // 画面の中を とぶ 蝶（P4）
+  else bugs = [];                            // 場面の あいだは 出さない
+  toastTick(dt);                 // 画面下の 短い しらせ
 
   // --- えがく
   ctx.drawImage(sc.img, 0, 0, W, H);
@@ -337,6 +344,8 @@ function loop(now) {
     shadow(a.x, a.y, h, a.me ? 1 : (sh === undefined ? 0.65 : sh));
     drawChar(ciOf(a.k), a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
+  // 蝶と あみは キャラより 前（とんでいるので）。場面の あいだは 出さない
+  if (!inScene && !fadeTo) { drawBugs(); drawNet(); }
 
   // よるの ぐあい。晩ごはんが すむと ゆっくり よるに なる。
   // **ゆうがた（あたたかい）と よる（つめたい）は 別のもの。**
@@ -409,6 +418,7 @@ function loop(now) {
       ctx.restore();
     }
   }
+  drawToast();   // 「つかまえた！」などの 短い しらせ（P4）
 
   if (fade > 0) {
     // 白い光だと 目に いたい。くらくして 切りかえる
