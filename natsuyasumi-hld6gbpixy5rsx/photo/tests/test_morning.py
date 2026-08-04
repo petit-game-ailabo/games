@@ -96,18 +96,19 @@ with sync_playwright() as pw:
     if not t: fails.append("2日目に あぜみちで はなさない")
     elif "よるに ここ" not in t["line"][1]: fails.append("2日目なのに 1日目のセリフ: " + str(t))
 
-    # 3日目は しずか（会話なし）
+    # 3日目は 範囲キー "3-7" の 会話が 出る（D0で 3日目以降の しずかを うめた）
     pg.evaluate("window._ctrl.sleep()"); pg.wait_for_timeout(400)
     for i in range(700):
         pg.wait_for_timeout(200)
         if pg.evaluate("window._ctrl.scene()") is None: break
     pg.evaluate("window._ctrl.goto('aze','temae')"); pg.wait_for_timeout(300)
     pg.evaluate("window._ctrl.put(400,436)"); pg.wait_for_timeout(500)
-    pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(200)   # キーを 押しても 3日目は しずか
+    pg.evaluate("window._ctrl.act()"); pg.wait_for_timeout(200)   # キーで 話しかける
     t3 = pg.evaluate("window._ctrl.talk()")
     d5 = pg.evaluate("window._ctrl.dbg()")
     print("  3日目:", d5, "はなし:", t3)
-    if t3 is not None: fails.append("3日目は しずかなはずが はなしている")
+    if t3 is None: fails.append("3日目に 範囲(3-7)の 会話が 出ない")
+    elif "むし" not in t3["line"][1]: fails.append("3日目なのに 3-7の セリフでない: " + str(t3))
 
     fps = pg.evaluate("""() => new Promise(r=>{let n=0,t0=performance.now();
         (function f(){n++; if(performance.now()-t0<2000) requestAnimationFrame(f);

@@ -30,6 +30,7 @@ TESTS = [
     ("test_kakigoori.py",  "かき氷：チルノが その場で つくる（D9）"),
     ("test_kansatsu.py",   "自由研究：いねを かんさつして 観察日記（D9）"),
     ("test_gohan.py",      "ごはんの絵が 毎日ちがう（D13）"),
+    ("test_days.py",       "日づけの 範囲キー（\"3-7\"）で 会話を 書ける（D0）"),
 ]
 
 want = sys.argv[1] if len(sys.argv) > 1 else ""

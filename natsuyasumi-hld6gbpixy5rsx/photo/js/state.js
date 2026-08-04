@@ -71,10 +71,25 @@ function enter(id, at) {
 // 気づくため（game.js の talk が 見て、idx を もどして 話しなおす）。
 // place … その NPC の いる 画面。省くと いまの画面（cur）。resetDay は 全画面を
 // まとめて 見るので、when:{place} が その画面で 正しく 効くよう 画面を わたす（G4）。
+// 日づけの キーは ふつう "1" "2" の ような ぴったりの 数。だが 29日ぶんを ぜんぶ
+// 手で 書くのは 多いので、**範囲キー**も 引ける ようにした（D0）：
+//   "3-7"  … 3日から 7日まで   ／  "8+"  … 8日いこう ずっと
+// ぴったりの 日が あれば それを 優先。無ければ 範囲キーの うち あう さいしょを つかう。
+function pickDayKey(t) {
+  if (t[WORLD.day] !== undefined) return WORLD.day;
+  for (const k in t) {
+    const m = /^(\d+)-(\d+)$/.exec(k) || /^(\d+)\+$/.exec(k);
+    if (!m) continue;
+    const a = +m[1], b = m[2] !== undefined ? +m[2] : Infinity;
+    if (WORLD.day >= a && WORLD.day <= b) return k;
+  }
+  return null;
+}
 function linesPick(n, place) {
   const t = talksOf(n);
   if (!t) return { L:null, key:null };
-  const v = t[WORLD.day];
+  const dk = pickDayKey(t);
+  const v = dk === null ? null : t[dk];
   if (!v) return { L:null, key:null };
   // ふつうは [話し手, ことば] の ならび（v[0] は 配列）。
   // でも v[0] が オブジェクトなら、それは {when, lines} の かたまりの ならび。
