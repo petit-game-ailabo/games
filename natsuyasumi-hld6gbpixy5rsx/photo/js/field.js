@@ -333,6 +333,29 @@ const SPOT_ART = {
     ctx.fillRect(x + sway * 1.6 - 2.5 * s, y + 11 * s, 5 * s, 14 * s);
     ctx.restore();
   },
+  // 手前の 木の みき（E2・前景）。下から 上へ のびる 太い 幹。near ほど 太い。
+  // 道の 縁に 置くと「その先は 木立＝通れない」の 目じるしに なる（P9）。回りこみも する
+  ki: (x, y, s) => {
+    const w = 30 * s, hgt = 250 * s;
+    ctx.save();
+    ctx.fillStyle = '#6d5a45';                          // みき（すぎの樹皮の 灰茶）
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2, y); ctx.lineTo(x - w * 0.36, y - hgt);
+    ctx.lineTo(x + w * 0.36, y - hgt); ctx.lineTo(x + w / 2, y);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(40,30,20,0.35)';              // 右がわの 影
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.1, y); ctx.lineTo(x + w * 0.06, y - hgt);
+    ctx.lineTo(x + w * 0.36, y - hgt); ctx.lineTo(x + w / 2, y);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(210,196,170,0.28)';           // 左がわの あかるみ
+    ctx.fillRect(x - w * 0.42, y - hgt, w * 0.16, hgt);
+    ctx.strokeStyle = 'rgba(50,38,26,0.4)'; ctx.lineWidth = 1.5 * s;  // 樹皮の たて線
+    for (let i = -1; i <= 2; i++) {
+      ctx.beginPath(); ctx.moveTo(x + i * w * 0.2, y); ctx.lineTo(x + i * w * 0.16, y - hgt); ctx.stroke();
+    }
+    ctx.restore();
+  },
   // 手前の 草むら（E2・前景）。何本かの 葉を たばねて かく。near ほど 大きい。
   // キャラより 前に 来る ことが ある（回りこみ）ので、根もとは 濃く 葉先は うすく
   kusamura: (x, y, s) => {
