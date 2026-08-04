@@ -17,7 +17,8 @@ threading.Thread(target=srv.serve_forever, daemon=True).start()
 fails = []
 
 # steps → こう 鳴いてほしい
-WANT = [(0, "asa"), (2, "asa"), (6, "hiru"), (13, "hiru"), (16, "yugata"), (23, "yugata")]
+# DAY_STEPS=16（D11）に あわせた しきい値。dayT=steps/16。asa<0.12 / yugata>0.62
+WANT = [(0, "asa"), (1, "asa"), (3, "hiru"), (8, "hiru"), (10, "yugata"), (15, "yugata")]
 
 with sync_playwright() as pw:
     b = pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
