@@ -41,28 +41,34 @@ with sync_playwright() as pw:
     pg.evaluate("window._ctrl.start()"); pg.wait_for_timeout(400)
     drain(pg); pg.evaluate("window._ctrl.free()")
 
-    d4 = npc_lines_on(pg, 4, "aze")
-    d5 = npc_lines_on(pg, 5, "aze")
-    d8 = npc_lines_on(pg, 8, "aze")
-    d2 = npc_lines_on(pg, 2, "aze")
+    d4  = npc_lines_on(pg, 4, "aze")    # "3-7"
+    d5  = npc_lines_on(pg, 5, "aze")    # おなじ 範囲
+    d10 = npc_lines_on(pg, 10, "aze")   # "8-14"
+    d15 = npc_lines_on(pg, 15, "aze")   # まだ ない
+    d2  = npc_lines_on(pg, 2, "aze")
     print("あぜ 日4:", d4)
-    print("あぜ 日5:", d5)
-    print("あぜ 日8:", d8)
-    print("あぜ 日2:", d2)
+    print("あぜ 日10:", d10)
+    print("あぜ 日15:", d15)
     if d4["n"] < 1 or "むし" not in (d4["first"] or ""):
         fails.append("日4に 範囲(3-7)の 会話が 出ない: " + str(d4))
     if d5["first"] != d4["first"]:
         fails.append("日5が 日4と ちがう（範囲なのに）")
-    if d8["n"] != 0:
-        fails.append("日8は まだ しずかな はず: " + str(d8))
+    if d10["n"] < 1 or "とんぼ" not in (d10["first"] or ""):
+        fails.append("日10に 範囲(8-14)の 会話が 出ない: " + str(d10))
+    if d10["first"] == d4["first"]:
+        fails.append("日10が 日4と 同じ（範囲が 切りかわっていない）")
+    if d15["n"] != 0:
+        fails.append("日15は まだ しずかな はず: " + str(d15))
     if d2["n"] < 1:
         fails.append("日2の 会話が 壊れた: " + str(d2))
 
-    # 6画面 すべてに 日4の 会話が 入ったか
+    # 6画面 すべてに 日4・日10の 会話が 入ったか
     for scr in ["zashiki", "doma", "rouka", "iemae", "mori"]:
-        r = npc_lines_on(pg, 4, scr)
-        print(f"  {scr} 日4:", r["n"], r["first"])
-        if r["n"] < 1: fails.append(f"{scr}: 日4の 会話が ない")
+        r4 = npc_lines_on(pg, 4, scr)
+        r10 = npc_lines_on(pg, 10, scr)
+        print(f"  {scr} 日4:{r4['n']} 日10:{r10['n']}")
+        if r4["n"] < 1: fails.append(f"{scr}: 日4の 会話が ない")
+        if r10["n"] < 1: fails.append(f"{scr}: 日10の 会話が ない")
 
     print("errors:", errs[:3])
     if errs: fails.append("エラー " + str(errs[:2]))
