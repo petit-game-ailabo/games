@@ -175,7 +175,7 @@ with sync_playwright() as pw:
                   matchWhen({toki:'asa'}, {})]); }
       WORLD.steps = 24; WORLD.yoruDone = true;
       out.push([24, ambKind(), matchWhen({toki:'yoru'}, {}), matchWhen({toki:'asa'}, {})]);
-      WORLD.yoruDone = false; WORLD.steps = 12;
+      WORLD.yoruDone = false; WORLD.steps = 8;   // DAY_STEPS=16 で dayT=0.5＝ひる（D11）
       return { rows: out,
                list: [matchWhen({toki:['hiru','yoru']}, {}), matchWhen({toki:['asa']}, {})],
                fine: [matchWhen({tokiFrom:0.4}, {}), matchWhen({tokiFrom:0.6}, {})],

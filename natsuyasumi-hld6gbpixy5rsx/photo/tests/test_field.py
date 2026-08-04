@@ -137,6 +137,15 @@ with sync_playwright() as pw:
     if st_view != "view": fails.append("C で 虫かごが 開かない")
     if st_back != "play": fails.append("虫かごを とじても play に もどらない")
 
+    # V で 図鑑（ずかん）も 開く（in-world 化で 消えていた 導線・D-090）
+    pg.keyboard.press("KeyV"); pg.wait_for_timeout(400)
+    v_view = pg.evaluate("window._ctrl.view()")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    v_back = pg.evaluate("state")
+    print("Vで図鑑:", v_view, " Escで:", v_back)
+    if not v_view or v_view["name"] != "zukan": fails.append("V で 図鑑が 開かない")
+    if v_back != "play": fails.append("図鑑を とじても play に もどらない")
+
     print("errors:", errs[:3])
     if errs: fails.append("エラー " + str(errs[:2]))
     b.close()

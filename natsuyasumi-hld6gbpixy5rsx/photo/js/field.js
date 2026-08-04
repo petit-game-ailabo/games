@@ -430,7 +430,7 @@ function drawHud() {
   }
   if (!tools.length) text('（道具は まだ ない）', x0 + pad, y0 + 24, 14, '#9fb69a');
   // 虫かご
-  text('むしかご ×' + kago + '　[C でみる]', x0 + pad, y0 + 48, 14, '#cfe0c8');
+  text('むしかご ×' + kago + '　[C かご / V ずかん]', x0 + pad, y0 + 48, 14, '#cfe0c8');
   ctx.restore();
 }
 

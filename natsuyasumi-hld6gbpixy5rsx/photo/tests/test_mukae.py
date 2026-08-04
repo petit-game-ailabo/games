@@ -35,6 +35,12 @@ with sync_playwright() as pw:
         # 晩ごはんは とめておく。ここで 見たいのは むかえ だけ（晩ごはんは test_yoru.py）
         pg.evaluate("window._ctrl.setYoru(true)")
         pg.evaluate(f"window._ctrl.goto('{s}')"); pg.wait_for_timeout(500)
+        # 画面に入った ときの 場面（もりの mori_hatsu など）を 流しきってから むかえを ためす。
+        # でないと 入場の場面を むかえと 見まちがえ、それが おわった すきまで 取りこぼす（フレーク）
+        for _ in range(40):
+            if not pg.evaluate("window._ctrl.scene()"): break
+            pg.keyboard.press("Space"); pg.wait_for_timeout(100)
+        pg.evaluate("window._ctrl.free()")
         # 会話が はじまっていたら 離しておく
         pg.evaluate("window._ctrl.setSteps(24)"); pg.wait_for_timeout(400)
         began = pg.evaluate("window._ctrl.dbg()")["scene"]

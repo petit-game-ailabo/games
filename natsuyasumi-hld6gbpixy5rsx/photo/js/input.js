@@ -24,8 +24,11 @@ window.addEventListener('keydown', e => {
     const tools = toolsHeld(), n = +e.code.slice(5);
     if (n <= tools.length) { equip(tools[n - 1]); hudPeek(); }
   }
-  // C で 虫かごの 中身を 見る（EDIT の コンソール出力とは かぶらないよう play のときだけ）
+  // C で 虫かごの 中身、V で 図鑑（とった 種類）を 見る（play のときだけ）。
+  // 図鑑は もともと 虫取りの あとの「見る？」で 開いていたが、その口が in-world 化(D-073)で
+  // 消えていたので、いつでも 開ける キーに した（→ D-090）
   if (state === 'play' && !EDIT && e.code === 'KeyC') openView('mushikago');
+  if (state === 'play' && !EDIT && e.code === 'KeyV') openView('zukan');
   if (EDIT && e.code === 'Backspace') { editPts.pop(); e.preventDefault(); }
   if (EDIT && e.code === 'KeyC') console.log(JSON.stringify(editPts));
 });
