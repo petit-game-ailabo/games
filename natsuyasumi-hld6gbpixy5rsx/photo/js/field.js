@@ -333,6 +333,24 @@ const SPOT_ART = {
     ctx.fillRect(x + sway * 1.6 - 2.5 * s, y + 11 * s, 5 * s, 14 * s);
     ctx.restore();
   },
+  // 手前の 草むら（E2・前景）。何本かの 葉を たばねて かく。near ほど 大きい。
+  // キャラより 前に 来る ことが ある（回りこみ）ので、根もとは 濃く 葉先は うすく
+  kusamura: (x, y, s) => {
+    ctx.save();
+    const blades = 9, w = 46 * s, hgt = 40 * s;
+    for (let i = 0; i < blades; i++) {
+      const t = i / (blades - 1) - 0.5;               // -0.5..0.5
+      const bx = x + t * w, lean = t * 14 * s + (Math.sin(elapsed * 0.9 + i) * 2 * s);
+      const bh = hgt * (0.7 + 0.5 * (1 - Math.abs(t) * 1.4));
+      const g = 90 + i % 3 * 20;
+      ctx.strokeStyle = 'rgb(' + (52 + i % 2 * 14) + ',' + g + ',' + (44 + i % 2 * 10) + ')';
+      ctx.lineWidth = 3.2 * s; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(bx, y);
+      ctx.quadraticCurveTo(bx + lean * 0.5, y - bh * 0.6, bx + lean, y - bh);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
   // とび石。水べに ぽつぽつ ある ひらたい 石（D10・意味のない 小川を わたる 遊び）。
   // ゲーム的な ごほうびは つけない。ただ 石を つたって いける だけ
   ishi: (x, y, s) => {

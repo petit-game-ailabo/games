@@ -348,8 +348,16 @@ function loop(now) {
   }
   actors.push({ k:'cirno', x:player.x, y:player.y, me:true,
                 pose:inScene ? playerPose : 'idle', face:player.face });
+  // 前景（E2）：手前の 草・柱 など。**y で いっしょに 並べる**ので、その物より 奥の キャラは
+  // 後ろに、手前の キャラは 前に えがかれる（HD-2D の 回りこみ）。`draw` は field.js の 手描き
+  for (const f of (sc.front || [])) actors.push({ front:true, draw:f.draw, x:f.x, y:f.y, s:f.s });
   actors.sort((a,b) => a.y - b.y);
   for (const a of actors) {
+    if (a.front) {   // 前景の 物。キャラと 同じ ならびで、遠近で 大きさを 変える
+      const fs = a.s || clamp(heightAt(a.y) / 120, 0.6, 1.7);
+      const fn = SPOT_ART[a.draw]; if (fn) fn(a.x, a.y, fs);
+      continue;
+    }
     let h = heightAt(a.y);
     let off;
     if (a.pose === 'taiso') {
