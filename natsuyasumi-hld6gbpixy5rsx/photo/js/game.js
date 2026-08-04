@@ -329,6 +329,7 @@ function loop(now) {
   if (sc.nedoko && sc.nedoko.quad) drawFuton(sc.nedoko);
   for (const o of itemsAt(cur)) drawItem(o);   // 置かれた物は 地めんの上。キャラより さき
   drawSpots('ground');                         // すいか・賽銭箱 など 地めんの物（P5）。キャラより 後ろ
+  drawGohan();                                 // ごはんの絵（D13）。ちゃぶ台は キャラより 後ろ
 
   // ラジオたいそうの ひょうし。曲が おわったら もう はずまない
   const tb = (elapsed - taisoT0) * (TAISO_BPM/60);

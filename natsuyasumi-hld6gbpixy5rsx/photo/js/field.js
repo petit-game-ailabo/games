@@ -346,6 +346,48 @@ const SPOT_ART = {
   },
 };
 
+// ===== ごはんの絵（D13）=====
+// 朝ごはん・晩ごはんの 場面で、**日ごとに ちがう** おかずを ちゃぶ台に かく（§1・演出）。
+// `{k:'gohan', at:'breakfast'|'dinner'}` で 出て、場面が おわると 消える。
+// 中身は [ずれx, ずれy, いろ]。器は 白、中身は その いろ。絵は 手で かく（写真の上）
+let gohanShow = null;
+const GOHAN = {
+  breakfast: [
+    { name:'ごはんと みそしる', items:[[-26,1,'#f4efe2'],[2,3,'#7a4a22'],[28,-3,'#eccb66']] },
+    { name:'おにぎり',         items:[[-20,1,'#f4efe2'],[6,1,'#f4efe2'],[-6,-7,'#2f3a24']] },
+    { name:'たまごかけごはん',  items:[[-8,1,'#f4efe2'],[20,3,'#e8b84a']] },
+    { name:'おかゆと うめぼし',  items:[[-2,1,'#f6f2e8'],[20,5,'#b23a2f']] },
+  ],
+  dinner: [
+    { name:'カレーライス',     items:[[-8,1,'#f4efe2'],[16,2,'#8a5a1e']] },
+    { name:'やきざかなと ごはん', items:[[-22,2,'#f4efe2'],[16,-2,'#9aa0a2']] },
+    { name:'やさいいため',     items:[[-4,1,'#5aa845'],[20,4,'#e0803a']] },
+    { name:'なすの にもの',     items:[[-6,1,'#4b2e5e'],[18,4,'#f4efe2']] },
+    { name:'そうめん',         items:[[-2,1,'#eef2f4'],[18,6,'#3f7d33']] },
+  ],
+};
+function gohanFor(at, day) {
+  const menu = GOHAN[at] || GOHAN.breakfast;
+  return menu[(day - 1) % menu.length];
+}
+function drawGohan() {
+  if (!gohanShow || cur !== 'doma') return;
+  const cx = 548, cy = 502;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';                          // かげ
+  ctx.beginPath(); ctx.ellipse(cx, cy + 9, 54, 15, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7a4a24';                                   // ちゃぶ台
+  ctx.beginPath(); ctx.ellipse(cx, cy, 50, 20, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,24,10,0.5)'; ctx.lineWidth = 2; ctx.stroke();
+  for (const [dx, dy, col] of gohanShow.items) {
+    ctx.fillStyle = '#ece6d6';                                 // 器
+    ctx.beginPath(); ctx.ellipse(cx + dx, cy + dy, 11, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = col;                                       // 中身
+    ctx.beginPath(); ctx.ellipse(cx + dx, cy + dy - 1, 7, 3.4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 // ===== HUD（P8）=====
 // ふだんは 隠れていて、**移動キーを 押すと 少しの間だけ** 出る（常時だと ゲーム感が 強い）。
 //   ・持ちもの（あみ／さお）を 数字キーで 持ちかえ（いま持っているのを 枠で かこむ）

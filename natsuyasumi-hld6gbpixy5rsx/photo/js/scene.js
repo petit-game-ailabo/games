@@ -15,6 +15,7 @@ function sceneJump(id) {
 function endScene() {
   scene = null; state = 'play'; cast = []; sceneSay = null; sceneSel = null; walkTo = null;
   playerPose = 'idle'; taisoT0 = -99; veil = 0;
+  gohanShow = null;                        // ごはんの絵（D13）は 場面が おわると 消える
   nedokoArmed = false; talkLock = true;   // 場面あけに かってに 会話が はじまらないように
 }
 const TO_OUT = 0.55, TO_IN = 0.75;        // 場面の切りかわり：くらくなる／あかるくなる
@@ -38,6 +39,7 @@ function stepScene(dt) {
       case 'view':  if (openView(st.name, st.cfg)) return; break;
       // 書いてある ところへ とぶ。**組み立てるときでは なく、いま 見て 決める**
       case 'sound': playSfx(st.name); break;   // 場面の 音（ものが われる など）
+      case 'gohan': gohanShow = gohanFor(st.at, WORLD.day); break;   // 日ごとの ごはんの絵（D13）
       case 'goto':  if (sceneJump(st.id)) return; break;
       case 'if':    if (matchWhen(st.when, { day:WORLD.day }) && sceneJump(st.go)) return;
                     break;
@@ -81,6 +83,7 @@ function stepScene(dt) {
     case 'view':  done = (state !== 'view'); break;   // とじたら つぎへ
     case 'goto':  done = true; break;     // とび先が 見つからなかった ときだけ ここ
     case 'sound': done = true; break;
+    case 'gohan': done = true; break;
     case 'if':    done = true; break;
     // えらぶ。**ここは 時間では 進まない。**えらぶまで 待つ
     case 'sel':
