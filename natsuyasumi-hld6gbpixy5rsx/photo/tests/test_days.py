@@ -44,11 +44,13 @@ with sync_playwright() as pw:
     d4  = npc_lines_on(pg, 4, "aze")    # "3-7"
     d5  = npc_lines_on(pg, 5, "aze")    # おなじ 範囲
     d10 = npc_lines_on(pg, 10, "aze")   # "8-14"
-    d15 = npc_lines_on(pg, 15, "aze")   # まだ ない
+    d18 = npc_lines_on(pg, 18, "aze")   # "15-21"
+    d15 = npc_lines_on(pg, 22, "aze")   # まだ ない（22日）
     d2  = npc_lines_on(pg, 2, "aze")
     print("あぜ 日4:", d4)
     print("あぜ 日10:", d10)
-    print("あぜ 日15:", d15)
+    print("あぜ 日18:", d18)
+    print("あぜ 日22:", d15)
     if d4["n"] < 1 or "むし" not in (d4["first"] or ""):
         fails.append("日4に 範囲(3-7)の 会話が 出ない: " + str(d4))
     if d5["first"] != d4["first"]:
@@ -57,8 +59,12 @@ with sync_playwright() as pw:
         fails.append("日10に 範囲(8-14)の 会話が 出ない: " + str(d10))
     if d10["first"] == d4["first"]:
         fails.append("日10が 日4と 同じ（範囲が 切りかわっていない）")
+    if d18["n"] < 1 or "あかとんぼ" not in (d18["first"] or ""):
+        fails.append("日18に 範囲(15-21)の 会話が 出ない: " + str(d18))
+    if d18["first"] == d10["first"]:
+        fails.append("日18が 日10と 同じ（範囲が 切りかわっていない）")
     if d15["n"] != 0:
-        fails.append("日15は まだ しずかな はず: " + str(d15))
+        fails.append("日22は まだ しずかな はず: " + str(d15))
     if d2["n"] < 1:
         fails.append("日2の 会話が 壊れた: " + str(d2))
 
