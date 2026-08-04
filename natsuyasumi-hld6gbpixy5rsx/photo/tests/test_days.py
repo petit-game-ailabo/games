@@ -45,12 +45,14 @@ with sync_playwright() as pw:
     d5  = npc_lines_on(pg, 5, "aze")    # おなじ 範囲
     d10 = npc_lines_on(pg, 10, "aze")   # "8-14"
     d18 = npc_lines_on(pg, 18, "aze")   # "15-21"
-    d15 = npc_lines_on(pg, 22, "aze")   # まだ ない（22日）
+    d25 = npc_lines_on(pg, 25, "aze")   # "22-30"
+    d31 = npc_lines_on(pg, 31, "aze")   # ぴったり "31"（範囲より 優先）
     d2  = npc_lines_on(pg, 2, "aze")
     print("あぜ 日4:", d4)
     print("あぜ 日10:", d10)
     print("あぜ 日18:", d18)
-    print("あぜ 日22:", d15)
+    print("あぜ 日25:", d25)
+    print("あぜ 日31:", d31)
     if d4["n"] < 1 or "むし" not in (d4["first"] or ""):
         fails.append("日4に 範囲(3-7)の 会話が 出ない: " + str(d4))
     if d5["first"] != d4["first"]:
@@ -63,8 +65,11 @@ with sync_playwright() as pw:
         fails.append("日18に 範囲(15-21)の 会話が 出ない: " + str(d18))
     if d18["first"] == d10["first"]:
         fails.append("日18が 日10と 同じ（範囲が 切りかわっていない）")
-    if d15["n"] != 0:
-        fails.append("日22は まだ しずかな はず: " + str(d15))
+    if d25["n"] < 1:
+        fails.append("日25に 範囲(22-30)の 会話が 出ない: " + str(d25))
+    # 31日は ぴったりキーが 範囲(22-30)より 優先されること
+    if d31["n"] < 1 or "さいご" not in (d31["first"] or ""):
+        fails.append("31日の 特別な 会話が 出ない（範囲が 優先されている？）: " + str(d31))
     if d2["n"] < 1:
         fails.append("日2の 会話が 壊れた: " + str(d2))
 
