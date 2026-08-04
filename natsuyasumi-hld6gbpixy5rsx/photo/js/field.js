@@ -228,7 +228,7 @@ function drawFishing() {
 //     ぶらさがる 物（風鈴/日めくり）は キャラより **前**（layer:'hang'）
 // spot に `draw:'suika'` の ように 形の 名まえを つけると 出る。
 const SPOT_LAYER = { suika:'ground', saisen:'ground', monohoshi:'ground', drawer:'ground',
-                     fuurin:'hang', himekuri:'hang' };
+                     fuurin:'hang', himekuri:'hang', ishi:'ground' };
 function drawSpots(layer) {
   for (const sp of (SC[cur].spot || [])) {
     if (!sp.draw || SPOT_LAYER[sp.draw] !== layer) continue;
@@ -331,6 +331,18 @@ const SPOT_ART = {
     ctx.beginPath(); ctx.arc(x + sway * 1.4, y + 9 * s, 2.6 * s, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#d84a3a';                                           // たんざく（赤で 目立つ）
     ctx.fillRect(x + sway * 1.6 - 2.5 * s, y + 11 * s, 5 * s, 14 * s);
+    ctx.restore();
+  },
+  // とび石。水べに ぽつぽつ ある ひらたい 石（D10・意味のない 小川を わたる 遊び）。
+  // ゲーム的な ごほうびは つけない。ただ 石を つたって いける だけ
+  ishi: (x, y, s) => {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.16)';
+    ctx.beginPath(); ctx.ellipse(x, y + 3 * s, 15 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8b8577';                       // 石
+    ctx.beginPath(); ctx.ellipse(x, y, 14 * s, 8 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(220,216,204,0.5)';         // 上の ひかり
+    ctx.beginPath(); ctx.ellipse(x - 3 * s, y - 2 * s, 7 * s, 3 * s, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   },
   // 日めくり。壁の 小さな こよみ（赤い 見出しと 数字）
