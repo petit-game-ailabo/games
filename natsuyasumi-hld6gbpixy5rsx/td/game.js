@@ -234,9 +234,13 @@ const INTRO = { onEnd: 'none', lines: [    // はじめの 導き（初回だけ
   ['cirno', '（スペース＝はなす／しらべる、Z＝ねる、N＝えにっき）'],
 ] };
 function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
-// --- 天気（その日で 決まる・晴れ／雨）。雨は 空気を かえ、**畑に みずを やる**
-function weatherOf(d) { const x = Math.sin(d * 127.1) * 43758.5453; return (x - Math.floor(x)) < 0.28; }
-function isRainy() { return weatherOf(day); }
+// --- 天気（その日で 決まる）。晴れ／くもり／あめ／猛暑。日々の 表情を つける
+function weatherOf(d) {
+  const x = Math.sin(d * 127.1) * 43758.5453, f = x - Math.floor(x);
+  return f < 0.20 ? 'rain' : (f < 0.34 ? 'cloudy' : (f < 0.46 ? 'hot' : 'sunny'));
+}
+function isRainy() { return weatherOf(day) === 'rain'; }
+const WEATHER_NAME = { rain: 'あめ', cloudy: 'くもり', hot: '猛暑', sunny: '晴れ' };
 // --- 夏まつりの 花火（5日ごとの 晴れた夜）。花火は 粒子＝コードで きれいに 描ける
 function isFestival() { return day % 5 === 0 && !isRainy(); }
 const fireworks = [];           // {x,y,peakY,state,parts,hue}
@@ -261,8 +265,11 @@ function newDay() {
   if (isRainy()) for (const p of garden) p.watered = true;   // 雨の日は 畑に みずが やれる
   const morning = tod >= 5 && tod < 10;
   dayMsg = `${day}日目`;
+  const wt = weatherOf(day);
   daySub = isFestival() ? 'きょうは なつまつり！ よるに はなびが あがる'
-         : isRainy() ? 'あめ ふり。はたけには めぐみの あめ'
+         : wt === 'rain' ? 'あめ ふり。はたけには めぐみの あめ'
+         : wt === 'hot' ? 'きょうは 猛暑。みずあそびが きもちいい'
+         : wt === 'cloudy' ? 'くもりぞら。すずしくて すごしやすい'
          : (morning ? 'あさごはんを たべた ・ そとへ でよう' : `なつやすみ のこり ${nokori()}日`);
   dayMsgT = 3.4;
   save();
@@ -710,10 +717,20 @@ function loop(now) {
     vg.addColorStop(0, 'rgba(4,6,16,0)'); vg.addColorStop(1, `rgba(4,6,16,${dark})`);
     g.fillStyle = vg; g.fillRect(0, 0, VW, VH);
   }
-  // 朝もや（晴れの あさ 5〜8時・6時ごろ 濃い）。しっとり した 夏の あさ
-  if (!isRainy() && tod >= 5 && tod < 8) {
+  // 朝もや（あさ 5〜8時・6時ごろ 濃い）。しっとり した 夏の あさ
+  if (weatherOf(day) !== 'rain' && tod >= 5 && tod < 8) {
     const fog = (1 - Math.abs(tod - 6.2) / 1.8) * 0.33;
     if (fog > 0) { g.fillStyle = `rgba(232,238,240,${fog})`; g.fillRect(0, 0, VW, VH); }
+  }
+  // くもり：うっすら 灰色。猛暑：まひるに あつい 陽射し＋陽炎
+  const wx = weatherOf(day);
+  if (wx === 'cloudy') { g.fillStyle = 'rgba(120,126,138,0.16)'; g.fillRect(0, 0, VW, VH); }
+  if (wx === 'hot' && tod >= 10 && tod < 16) {
+    g.fillStyle = 'rgba(255,238,170,0.10)'; g.fillRect(0, 0, VW, VH);
+    g.save(); g.globalCompositeOperation = 'lighter';   // 陽炎（地面ぎわの ゆらぎ）
+    for (let i = 0; i < 8; i++) { const yy = VH - 30 - i*14 + Math.sin(now/200 + i)*3;
+      g.fillStyle = `rgba(255,250,220,0.03)`; g.fillRect(0, yy, VW, 6); }
+    g.restore();
   }
   // 蛍の あかり（くらさの上で 光る）。lighter で ふわっと 加算
   if (flies.length) {
@@ -793,7 +810,7 @@ function loop(now) {
     g.fillText('Zねる ・ Nえにっき ・ Cずかん ・ Hけす', 14, 44);
     // とけい（右上）：時刻と じかんたい
     const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
-    const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)}${isRainy() ? ' ・ あめ' : ''}`;
+    const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)} ・ ${WEATHER_NAME[weatherOf(day)]}`;
     g.font = '600 15px system-ui'; g.textAlign = 'right';
     g.fillStyle = 'rgba(8,12,9,0.45)';
     const cw = g.measureText(clk).width; g.fillRect(VW - cw - 26, 10, cw + 16, 24);
