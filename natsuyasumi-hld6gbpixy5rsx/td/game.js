@@ -103,7 +103,7 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false };
 function pickLines(npc) {
   // だいようせい：はじめて ひまわりが さいた あとに 気づいて よろこぶ
   if (npc.ci === 3 && bloomTotal > 0 && !flags.daiThanked) {
@@ -119,6 +119,11 @@ function pickLines(npc) {
   if (npc.ci === 5 && caughtHotaru >= 5 && !flags.wriggleHotaru) {
     flags.wriggleHotaru = true; save();
     return [['wriggle','ほたる、いっぱい つかまえたな'],['cirno','よるの にわで ひかってた'],['wriggle','にがして やると また 光るぞ'],['cirno','うん、そうする']];
+  }
+  // リグル：虫を もっていたら 虫相撲に さそう（会話のあと 勝負）
+  if (npc.ci === 5 && dexCount(bugDex) > 0) {
+    talkThen = 'sumo';
+    return [['wriggle','いい 虫 つかまえたな'],['cirno','つよいんだから！'],['wriggle','じゃあ 虫相撲、しようぜ'],['cirno','うけて たつ！']];
   }
   const s = npc.sets; return s[timeKey(tod)] || s.hiru || s.asa;
 }
@@ -193,6 +198,8 @@ let dexOpen = false;            // Cキーで いきもの図鑑
 let fishDex = {}, bugDex = {};  // つった魚・とった虫 の かず（index→数）
 let fishing = null;            // 釣りの さいちゅう {phase,t,biteAt,win,fish,x,y}
 const critters = [];          // 世界を とぶ 虫（cutebugs）{x,y,bi,vx,vy,ph,life}
+let sumo = null, sumoWins = 0; // 虫相撲 {pos,my,op,phase,result,t}
+let talkThen = null;          // 会話が おわった あとに する こと（'sumo' など）
 let daySub = '';                // 日の しらせの 2行目（あさごはん／のこり日数）
 // --- その日の リズム：あさ 体操→スタンプ、よる おそくなると けーねが お迎え（門限）
 let taisoToday = false, taisoStamps = 0;   // 今日 体操したか／スタンプ 総数
@@ -307,6 +314,25 @@ function catchBug(cr) {
   passTime(0.5); save();
 }
 function dexCount(d) { let n = 0; for (const k in d) if (d[k] > 0) n++; return n; }
+// --- 虫相撲。つかまえた 虫で リグルと 勝負。スペース連打で おし返す
+function bugPower(bi) { return [5,3,3,2][bi] || 3; }         // カブトが つよい
+function bestBug() { let b=-1, p=-1; for (const k in bugDex) { if (bugDex[k]>0) { const bi=+k, pw=bugPower(bi); if (pw>p){p=pw;b=bi;} } } return b; }
+function sumoStart() {
+  const my = bestBug(); if (my < 0) return;
+  sumo = { pos: 0, my, op: (rnd()*BUGS.length)|0, phase: 'fight', result: null, t: 0 };
+}
+function tickSumo(dt, pressed) {
+  const s = sumo; s.t += dt;
+  if (s.phase === 'fight') {
+    s.pos -= bugPower(s.op) * 0.13 * dt;         // 相手が おしてくる
+    if (pressed) s.pos += bugPower(s.my) * 0.05; // 連打で おし返す
+    s.pos = clamp(s.pos, -1.1, 1.1);
+    if (s.pos >= 1) { s.phase='result'; s.result='win'; s.t=0; sumoWins++; flags.everSumo=true; save(); }
+    else if (s.pos <= -1) { s.phase='result'; s.result='lose'; s.t=0; }
+  } else if (pressed || s.t > 2.8) {
+    const w = s.result; sumo = null; if (w === 'win') passTime(1.0);
+  }
+}
 // 虫（世界を とぶ cutebugs）
 const BUG_R = TS * 0.95;
 function matchBugTime(bi) { return BUGS[bi].night ? isNight() : !isNight(); }  // 夜の虫は夜・昼の虫は昼
@@ -327,7 +353,7 @@ function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
-    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, px: player.x, py: player.y })); } catch (e) {}
+    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, sumoWins, px: player.x, py: player.y })); } catch (e) {}
 }
 function load() {
   try {
@@ -338,7 +364,7 @@ function load() {
     if (Array.isArray(s.diary)) diary = s.diary;
     if (s.today) today = s.today;
     bloomTotal = s.bloomTotal || 0;
-    taisoStamps = s.taisoStamps || 0; taisoToday = !!s.taisoToday;
+    taisoStamps = s.taisoStamps || 0; taisoToday = !!s.taisoToday; sumoWins = s.sumoWins || 0;
     if (s.flags) Object.assign(flags, s.flags);
     if (s.fishDex) fishDex = s.fishDex;
     if (s.bugDex) bugDex = s.bugDex;
@@ -411,7 +437,7 @@ function loop(now) {
 
     // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。話している あいだは 足を とめる
     let ax = 0, ay = 0;
-    if (!talkNpc && !sleepPhase && !diaryOpen && !dexOpen && !fishing) {
+    if (!talkNpc && !sleepPhase && !diaryOpen && !dexOpen && !fishing && !sumo) {
       if (keys['arrowleft']||keys['a']) ax -= 1;
       if (keys['arrowright']||keys['d']) ax += 1;
       if (keys['arrowup']||keys['w']) ay -= 1;
@@ -484,19 +510,21 @@ function loop(now) {
     }
     // キーで 会話／体操／うえる・みずやり／水あそび／蛍つかまえ（近づいただけでは 始めない・P1）
     if (fishing) { tickFishing(dt, act); act = false; }     // 釣り中は スペースを 釣りへ
+    else if (sumo) { tickSumo(dt, act); act = false; }      // 虫相撲中は スペースを 相撲へ
     else {
       if (act && diaryOpen) { diaryOpen = false; act = false; }
       if (act && dexOpen) { dexOpen = false; act = false; }
       if (act) {
         if (talkNpc) {
           if (++talkIdx >= talkLines.length) {
-            const end = talkNpc.onEnd; talkNpc = null; talkIdx = 0; talkLines = null;
+            const end = talkNpc.onEnd, then = talkThen; talkNpc = null; talkIdx = 0; talkLines = null; talkThen = null;
             if (end === 'sleep') startSleep();
+            else if (then === 'sumo') sumoStart();
             else if (end === 'none') { /* 導き・独白は 時間を 使わない */ }
             else passTime(1.0);
           }
         }
-        else if (near) { talkNpc = near; talkIdx = 0; talkLines = pickLines(near); }
+        else if (near) { talkNpc = near; talkIdx = 0; talkThen = null; talkLines = pickLines(near); }
         else if (nearRadio && canTaiso()) { doTaiso(); }
         else if (onField) {
           if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
@@ -680,8 +708,9 @@ function loop(now) {
   }
 
   if (mode === 'play') {
-    // 会話の まど／釣り／足もとの したこと
+    // 会話の まど／釣り／虫相撲／足もとの したこと
     if (talkNpc) drawSay(talkLines[talkIdx]);
+    else if (sumo) drawSumo(sumo);
     else if (fishing) {
       if (fishing.phase === 'result') drawFishResult(fishing);
       else {
@@ -814,6 +843,7 @@ function drawDiary() {
     ['ラジオたいそう', taisoStamps > 0],
     ['さかなを つった', flags.everFish],
     ['むしを つかまえた', flags.everMushi],
+    ['むしずもうで かった', flags.everSumo],
   ];
   const cx2 = bx + bw*0.52;
   g.font = '600 15px system-ui'; g.fillStyle = '#6b5836';
@@ -944,6 +974,29 @@ function drawDex() {
   g.fillStyle = 'rgba(70,80,50,0.6)'; g.font = '13px system-ui'; g.textAlign = 'right';
   g.fillText('Cか スペースで とじる', bx+bw-24, by+bh-16); g.textAlign = 'left';
   g.restore();
+}
+// 虫相撲の えがき（土俵の上で 2匹が おしあう）
+function drawSumo(s) {
+  g.save();
+  g.fillStyle = 'rgba(8,10,16,0.62)'; g.fillRect(0, VH/2-96, VW, 192);
+  g.fillStyle = '#ffe6a8'; g.font = '700 20px system-ui'; g.textAlign = 'center';
+  g.fillText('むしずもう！', VW/2, VH/2-58);
+  const cx = VW/2 + s.pos*150, cy = VH/2+4;
+  g.strokeStyle = 'rgba(255,255,255,0.28)'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(VW/2-172, cy+34); g.lineTo(VW/2+172, cy+34); g.stroke();
+  drawBugSprite(s.my, cx-28, cy, 3.2);   // 自分
+  drawBugSprite(s.op, cx+28, cy, 3.2);   // 相手
+  // ゲージ
+  g.fillStyle = 'rgba(255,255,255,0.15)'; g.fillRect(VW/2-150, VH/2+52, 300, 10);
+  g.fillStyle = '#8fdc5a'; g.fillRect(VW/2-150, VH/2+52, 150 + s.pos*150, 10);
+  if (s.phase === 'result') {
+    g.fillStyle = s.result === 'win' ? '#ffe23a' : '#dfe6f0'; g.font = '700 26px system-ui';
+    g.fillText(s.result === 'win' ? 'かった！' : 'まけた…', VW/2, VH/2+92);
+    g.fillStyle = 'rgba(230,238,250,0.6)'; g.font = '13px system-ui'; g.fillText('スペースで つづける', VW/2, VH/2+114);
+  } else {
+    g.fillStyle = '#fff'; g.font = '600 16px system-ui'; g.fillText('スペース れんだ！', VW/2, VH/2+92);
+  }
+  g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 load();                               // つづきの 夏から
