@@ -95,7 +95,7 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false };
 function pickLines(npc) {
   // だいようせい：はじめて ひまわりが さいた あとに 気づいて よろこぶ
   if (npc.ci === 3 && bloomTotal > 0 && !flags.daiThanked) {
@@ -189,6 +189,12 @@ const MUKAE = { onEnd: 'sleep', lines: [   // 夜ふかしすると 慧音が �
   ['keine', 'チルノ、こんな じかんまで そとに いたの？'],
   ['cirno', 'ほたるが きれいで、つい…'],
   ['keine', 'もう おそいよ。さあ、おうちへ かえろう'],
+] };
+const INTRO = { onEnd: 'none', lines: [    // はじめの 導き（初回だけ）
+  ['cirno', 'わ〜、なつやすみだ！'],
+  ['cirno', 'ことしは おじいちゃんちの うらの にわ'],
+  ['cirno', 'ひまわり うえたり、むしとったり…'],
+  ['cirno', '（スペース＝はなす／しらべる、Z＝ねる、N＝えにっき）'],
 ] };
 function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
 // --- 天気（その日で 決まる・晴れ／雨）。雨は 空気を かえ、**畑に みずを やる**
@@ -334,7 +340,7 @@ function loop(now) {
   if (ready < 2) { g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH); requestAnimationFrame(loop); return; }
 
   // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
-  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); act = false; } }
+  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; save(); } act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
   let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, pc = 0, pr = 0;
@@ -416,6 +422,7 @@ function loop(now) {
         if (++talkIdx >= talkLines.length) {
           const end = talkNpc.onEnd; talkNpc = null; talkIdx = 0; talkLines = null;
           if (end === 'sleep') startSleep();
+          else if (end === 'none') { /* 導き・独白は 時間を 使わない */ }
           else passTime(1.0);
         }
       }
