@@ -551,10 +551,15 @@ function snapshot() {
 }
 function startSleep() { if (sleepPhase <= 0 && !talkNpc) { pendingPhoto = snapshot(); sleepPhase = 2.0; } }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
-function save() {
+let saveTimer = 0;
+function writeSave() {
   try { localStorage.setItem('natsuyasumi_td',
     JSON.stringify({ ver: 1, day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, fishMax, sumoWins, sumoToday, reqDone, px: player.x, py: player.y })); } catch (e) {}
 }
+// 書込は debounce（行動ごとの 同期書込＝モバイルの ジャンク/電池を さける）
+function save() { if (saveTimer) clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = 0; writeSave(); }, 1000); }
+function flushSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; } writeSave(); }
+function cancelSave() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; } }   // やり直し前に 保留書込を 取消
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem('natsuyasumi_td') || 'null');
@@ -638,7 +643,7 @@ function importData() {
     if (d.s) localStorage.setItem('natsuyasumi_td', d.s);
     if (d.m) localStorage.setItem('natsuyasumi_td_memory', d.m);
     if (d.o) localStorage.setItem('natsuyasumi_td_opt', d.o);
-    removeEventListener('beforeunload', onUnload); location.reload();
+    removeEventListener('beforeunload', onUnload); cancelSave(); location.reload();
   } catch (e) { dayMsg = 'よみこめなかった…'; daySub = ''; dayMsgT = 2; }
 }
 let endT = 0;                     // エンディングの 経過（フェード用）
@@ -688,7 +693,7 @@ cv.addEventListener('pointerdown', e => {
     }
     if (Math.abs(y - 440) < 14) {
       if (Math.abs(x - L) < 64) { opt.nonbiri = !opt.nonbiri; saveOpt(); uiTap(); e.preventDefault(); return; }
-      if (Math.abs(x - R) < 64) { uiTap(); if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', onUnload); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; } e.preventDefault(); return; }
+      if (Math.abs(x - R) < 64) { uiTap(); if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', onUnload); cancelSave(); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; } e.preventDefault(); return; }
     }
     if (x < VW*0.5) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.0; uiTap(); } else { pauseOpen = false; resetArm = false; uiTap(); }
     e.preventDefault(); return;
@@ -754,7 +759,7 @@ function loop(now) {
                              : ['cirno', '（スペース＝はなす/しらべる、Z＝ねる、N＝えにっき）'];
       const l0 = lastSummer ? ['cirno', `ことしも なつやすみ！（${(lastSummer.year||0)+1}回目の なつ）`] : INTRO.lines[0];
       talkNpc = INTRO; talkIdx = 0; talkLines = [l0, INTRO.lines[1], INTRO.lines[2], ctrl]; sayT = 0; save(); } act = false; } }
-  if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', onUnload); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
+  if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', onUnload); cancelSave(); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
   let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearStall = false, nearBug = null, nearBugD = 1e9, nearHikari = false, pc = 0, pr = 0;
   if (mode === 'play') {
@@ -1815,6 +1820,6 @@ load();                               // つづきの 夏から
 makeRequest();                        // きょうの おねがい（load後の day で）
 try { const s = JSON.parse(localStorage.getItem('natsuyasumi_td')||'null'); if (s && s.reqDone) reqDone = true; } catch(e) {}
 loadMemory();                         // 去年の なつの 思い出（タイトルに 出す）
-function onUnload() { if (mode !== 'title') save(); }   // タイトルだけの 訪問では セーブしない
+function onUnload() { if (mode !== 'title') flushSave(); }   // 離脱時は 即 書き出し（タイトルだけの 訪問は 除く）
 addEventListener('beforeunload', onUnload);
 requestAnimationFrame(loop);
