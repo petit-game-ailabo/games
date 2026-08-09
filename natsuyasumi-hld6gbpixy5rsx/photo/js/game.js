@@ -40,7 +40,7 @@ function loop(now) {
     } else {
       text(usingTouch ? 'がめんを ドラッグ ではじまる' : 'スペースキー ではじまる', W/2, 456, 16, '#c9dcc0', 'center');
     }
-    text('背景写真: Guilhem Vellut / 663highland / Fumihiko Ueno（CC BY・Wikimedia Commons）',
+    text('背景: Wikimedia Commons CC BY（Guilhem Vellut / 663highland / Fumihiko Ueno）を 2D化・改変',
          W/2, 502, 12, 'rgba(226,238,220,0.72)', 'center', 'normal');
     text('キャラ: Majstek — 非商用　／　ラジオたいそうの曲は じさく（原曲は使っていません）',
          W/2, 520, 12, 'rgba(226,238,220,0.72)', 'center', 'normal');
