@@ -354,6 +354,10 @@ function rainbowNow() { return showerDay() && tod >= 16 && tod < 17.8; }
 function isFestival() { return day % 5 === 0 && !isRainy(); }
 const fireworks = [];           // {x,y,peakY,state,parts,hue}
 let fwTimer = 0;
+// 動き酔い/前庭障害への配慮：OSの「動きを減らす」設定を尊重し、装飾の動きだけ 間引く。
+// 蛍・魚など 遊びに関わる ものは 減らさない（捕れなくなる）。装飾（花火の派手さ/頻度・雨すじ・スズメ・蝶・粒子）を 控える。
+let reduceMotion = false;
+try { const mq = matchMedia('(prefers-reduced-motion: reduce)'); reduceMotion = mq.matches; mq.addEventListener('change', ev => { reduceMotion = ev.matches; }); } catch (e) {}
 function launchFirework() {
   fireworks.push({ x: VW*(0.2 + rnd()*0.6), y: VH*0.92, peakY: VH*(0.12 + rnd()*0.26),
                    state: 'rise', parts: [], hue: rnd()*360 });
@@ -428,7 +432,7 @@ function doOmairi() {
 // --- 釣り（池のふちで）。うき＝コードの さざ波、魚＝本物スプライト。あたりで スペース
 const ripples = [];             // {x,y,t}  ひろがって 消える 輪
 const puffs = [];               // 小粒子（土・水しぶき・葉）{x,y,vx,vy,life,col}
-function spawnPuff(x, y, col, n) { for (let i = 0; i < n; i++) puffs.push({ x, y, vx: (rnd()-0.5)*46, vy: -rnd()*46-8, life: 1, col }); }
+function spawnPuff(x, y, col, n) { const m = reduceMotion ? Math.ceil(n/2) : n; for (let i = 0; i < m; i++) puffs.push({ x, y, vx: (rnd()-0.5)*46, vy: -rnd()*46-8, life: 1, col }); }
 function waterNextTo(pc, pr) {
   for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
     const c = pc+dc, r = pr+dr;
@@ -838,7 +842,7 @@ function loop(now) {
     }
     // 道ばたの スズメ（昼・近くに 道が あると たまに とびたつ）
     sparrowTimer -= dt;
-    if (sparrowTimer <= 0) { sparrowTimer = 3 + rnd()*4;
+    if (sparrowTimer <= 0) { sparrowTimer = reduceMotion ? 12 + rnd()*8 : 3 + rnd()*4;
       if (!isNight() && !isRainy() && player.moving) {
         const pcc = Math.floor(player.x/TS), prr = Math.floor(player.y/TS); let pc2 = null;
         for (let dr=-2;dr<=2&&!pc2;dr++) for (let dc=-2;dc<=2;dc++) { const c=pcc+dc,r=prr+dr; if (map[r]&&map[r][c]===PATH){pc2=[c,r];break;} }
@@ -918,7 +922,7 @@ function loop(now) {
       if (Math.hypot(hikari.x - player.x, hikari.y - player.y) < TS*0.95) nearHikari = true;
     } else if (!nearHome || !isNight()) hikari = null;
     // 昼の蝶：花の 多い ところに あつまる（見るだけ・原っぱの 空気）
-    if (!isNight() && !isRainy() && !showerNow() && flutters.length < 5 && rnd() < 0.05) spawnFlutter();
+    if (!isNight() && !isRainy() && !showerNow() && flutters.length < (reduceMotion?2:5) && rnd() < (reduceMotion?0.02:0.05)) spawnFlutter();
     for (let i = flutters.length - 1; i >= 0; i--) {
       const fl = flutters[i]; fl.ph += dt * 3;
       if (rnd() < 0.05) { fl.vx = (rnd()-0.5)*40; fl.vy = (rnd()-0.5)*34; }
@@ -949,14 +953,14 @@ function loop(now) {
     // 小粒子（土・水・葉）
     for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 96*dt; p.life -= dt*1.6; if (p.life <= 0) puffs.splice(i, 1); }
     // 夏まつりの 花火（晴れた 祭りの夜）。あがっては ひらいて 消える
-    if (isFestival() && isNight()) { fwTimer -= dt; if (fwTimer <= 0) { launchFirework(); fwTimer = 1.3 + rnd()*1.7; } }
+    if (isFestival() && isNight()) { fwTimer -= dt; if (fwTimer <= 0) { launchFirework(); fwTimer = reduceMotion ? 3.4 + rnd()*2.4 : 1.3 + rnd()*1.7; } }
     for (let i = fireworks.length - 1; i >= 0; i--) {
       const fw = fireworks[i];
       if (fw.state === 'rise') {
         fw.y -= 260 * dt;
         if (fw.y <= fw.peakY) {
           fw.state = 'burst'; flags.sawHanabi = true; if (typeof fireworkBoom === 'function') fireworkBoom();
-          const n = 34 + (rnd()*16|0);
+          const n = reduceMotion ? 14 : 34 + (rnd()*16|0);
           for (let k = 0; k < n; k++) { const a = rnd()*6.283, sp = 40 + rnd()*130;
             fw.parts.push({ x: fw.x, y: fw.y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 1 }); }
         }
@@ -1264,7 +1268,7 @@ function loop(now) {
     g.fillStyle = 'rgba(70,90,120,0.20)'; g.fillRect(0, 0, VW, VH);
     g.save(); g.strokeStyle = 'rgba(185,205,230,0.32)'; g.lineWidth = 1;
     const sp = now * 0.7;
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0, N = reduceMotion ? 42 : 120; i < N; i++) {
       const x = ((i*89 + sp) % (VW + 40)) - 20;
       const y = ((i*57 + sp*1.7) % (VH + 40)) - 20;
       g.beginPath(); g.moveTo(x, y); g.lineTo(x - 5, y + 13); g.stroke();
@@ -1646,7 +1650,7 @@ function drawTitle(now) {
     g.fillText(`きょねん(${lastSummer.year}年目)：ほたる${lastSummer.hotaru}・ひまわり${lastSummer.bloom}・ずかん 魚${lastSummer.fish}/${FISH.length} 虫${lastSummer.bug}/${BUGS.length}${lastSummer.hakase ? ' ★はかせ' : ''}`, VW/2, VH/2 + 92);
   }
   g.fillStyle = 'rgba(230,238,220,0.45)'; g.font = '11px system-ui';
-  g.fillText('東方Project二次創作 ・ キャラ:Majstek ・ タイル:ansimuz ・ 魚:CraftPix.net 2D Game Assets ・ 虫:madameberry', VW/2, VH - 14);
+  g.fillText('東方Project二次創作 ・ キャラ:Majstek ・ タイル:ansimuz ・ 魚:CraftPix.net 2D Game Assets ・ 虫:MadameBerry', VW/2, VH - 14);
   g.textAlign = 'left'; g.restore();
 }
 // 夏の アルバム（えにっきの 写真を Imageに）。エンディングで 見せる
@@ -1691,7 +1695,7 @@ function drawEnding(now) {
   }
   // クレジット（帰属の 二重露出・商用の 体裁）
   g.fillStyle = 'rgba(210,220,235,0.5)'; g.font = '11px system-ui';
-  g.fillText('キャラ:Majstek ・ タイル:ansimuz ・ 魚:CraftPix.net 2D Game Assets ・ 虫:madameberry', VW/2, VH-26);
+  g.fillText('キャラ:Majstek ・ タイル:ansimuz ・ 魚:CraftPix.net 2D Game Assets ・ 虫:MadameBerry', VW/2, VH-26);
   g.fillText('『ぼくのなつやすみ』へのオマージュ ・ 東方Project 二次創作', VW/2, VH-12);
   g.textAlign = 'left'; g.restore();
 }
@@ -1853,7 +1857,7 @@ function drawPause() {
     '― クレジット（東方Project 二次創作）―',
     '　キャラ絵：Majstek（非商用・差し替え前提）',
     '　タイル：ansimuz(CC0) ・ 魚：CraftPix.net 2D Game Assets(OGA-BY)',
-    '　虫：madameberry(CC0) ・ 音：手続き生成(自作)',
+    '　虫：MadameBerry(CC0) ・ 音：手続き生成(自作)',
   ];
   let yy = by+114; for (const s of lines) { g.fillText(s, VW/2, yy); yy += 22; }
   // ボタン（3×2）：もじ速さ / BGM ・ のんびり / はじめから ・ データ かきだす / よみこむ
