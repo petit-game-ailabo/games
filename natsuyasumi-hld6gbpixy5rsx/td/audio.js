@@ -245,7 +245,7 @@ function ambKindOf(tod) {
   return 'hiru';
 }
 // game.js から 毎フレーム 呼ぶ。来ては 去る 音を まばらに 鳴らす
-function ambientTick(dt, tod) {
+function ambientTick(dt, tod, late) {
   if (!AC || muted) return;
   ambTimer -= dt;
   if (ambTimer > 0) return;
@@ -257,12 +257,15 @@ function ambientTick(dt, tod) {
     if (Math.random() < 0.3) karasu(vol*1.1); else suzumushi(vol*0.9);
     ambTimer += 0.8;                                    // よるは まばら
   } else if (kind === 'yugata') {
-    if (Math.random() < 0.45) suzumushi(vol*0.85);
+    // 晩夏は ひぐらしを 濃く（夏の 終わりの 気配）
+    if (Math.random() < (late ? 0.25 : 0.45)) suzumushi(vol*0.85);
     else cicada(vol*0.9, 1500 + Math.random()*400, 1.6 + Math.random()*1.4);   // ひぐらし
   } else if (kind === 'asa') {
     kotori(vol*0.9);
     ambTimer *= 0.7;                                    // あさは にぎやか
   } else {
-    cicada(vol, 3000 + Math.random()*700, 0.8 + Math.random()*1.4);            // ひる＝セミ
+    // ひる＝セミ。晩夏は 高く みじかい（ツクツクボウシ寄り）、序盤は 低く長い（アブラゼミ）
+    if (late) cicada(vol*0.95, 3600 + Math.random()*600, 0.45 + Math.random()*0.5);
+    else cicada(vol, 2900 + Math.random()*700, 0.9 + Math.random()*1.4);
   }
 }

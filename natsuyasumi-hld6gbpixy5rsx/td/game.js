@@ -677,7 +677,7 @@ function loop(now) {
     if (dayMsgT > 0) dayMsgT -= dt;
     if (calT > 0) calT -= dt;       // こよみめくり
     if (talkNpc) sayT += dt;        // 文字送り
-    ambientTick(dt, tod);           // 夏の音（時間帯で 鳴き分け）
+    ambientTick(dt, tod, nokori() <= 10);   // 夏の音（時間帯＋晩夏で 鳴き分け）
     // 最終夜：いちばん 仲よくなった 子と ふたりの 場面（絆の 回収）
     if (day >= SUMMER_DAYS && isNight() && !flags.lastNight && !talkNpc && !sleepPhase && !fishing && !sumo && !matsuri && !mukaeShown) {
       flags.lastNight = true;
