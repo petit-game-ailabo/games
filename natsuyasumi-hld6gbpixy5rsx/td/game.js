@@ -1451,8 +1451,8 @@ function drawTitle(now) {
     g.fillStyle = 'rgba(255,236,190,0.8)'; g.font = '13px system-ui';
     g.fillText(`きょねん(${lastSummer.year}年目)：ほたる${lastSummer.hotaru}・ひまわり${lastSummer.bloom}・ずかん 魚${lastSummer.fish}/${FISH.length} 虫${lastSummer.bug}/${BUGS.length}${lastSummer.hakase ? ' ★はかせ' : ''}`, VW/2, VH/2 + 92);
   }
-  g.fillStyle = 'rgba(230,238,220,0.4)'; g.font = '12px system-ui';
-  g.fillText('東方Project 二次創作 ・ タイル: CC0 Top Down Adventure Assets', VW/2, VH - 16);
+  g.fillStyle = 'rgba(230,238,220,0.45)'; g.font = '11px system-ui';
+  g.fillText('東方Project二次創作 ・ キャラ:Majstek ・ タイル:ansimuz ・ 魚:CraftPix.net 2D Game Assets ・ 虫:madameberry', VW/2, VH - 14);
   g.textAlign = 'left'; g.restore();
 }
 // 夏の アルバム（えにっきの 写真を Imageに）。エンディングで 見せる
@@ -1647,10 +1647,10 @@ function drawPause() {
     '　きめる・はなす・つる・とる：スペース／右タップ',
     '　ねる：Z　えにっき：N　ずかん：C',
     '',
-    '― クレジット ―',
-    '　東方Project 二次創作（キャラ絵は 非商用・差し替え前提）',
-    '　タイル ansimuz(CC0) / 魚 CraftPix(OGA-BY) / 虫 madameberry(CC0)',
-    '　音：手続き生成（自作）',
+    '― クレジット（東方Project 二次創作）―',
+    '　キャラ絵：Majstek（非商用・差し替え前提）',
+    '　タイル：ansimuz(CC0) ・ 魚：CraftPix.net 2D Game Assets(OGA-BY)',
+    '　虫：madameberry(CC0) ・ 音：手続き生成(自作)',
   ];
   let yy = by+120; for (const s of lines) { g.fillText(s, VW/2, yy); yy += 24; }
   // ボタン：のんびりモード / はじめから
