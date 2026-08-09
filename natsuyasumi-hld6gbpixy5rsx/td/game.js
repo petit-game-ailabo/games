@@ -364,9 +364,15 @@ function startFishing(spot) {
   ripples.push({ x: spot.x, y: spot.y, t: 0 });
   if (typeof mizuSfx === 'function') mizuSfx();
 }
+function fishW(i) {                                   // 天気で 釣果が かわる
+  let w = FISH[i].w; const wt = weatherOf(day), n = FISH[i].n;
+  if (wt === 'rain') { if (n === 'ナマズ') w *= 3; if (n === 'なぞの さかな') w *= 1.6; }
+  else if (wt === 'hot') { if (n === 'メダカ') w *= 1.8; if (n === 'ナマズ' || n === 'コイ') w *= 0.5; }
+  return w;
+}
 function pickFish() {
-  let tot = 0; for (const f of FISH) tot += f.w;
-  let r = rnd()*tot; for (let i = 0; i < FISH.length; i++) { r -= FISH[i].w; if (r <= 0) return i; } return 0;
+  let tot = 0; for (let i = 0; i < FISH.length; i++) tot += fishW(i);
+  let r = rnd()*tot; for (let i = 0; i < FISH.length; i++) { r -= fishW(i); if (r <= 0) return i; } return 0;
 }
 // 釣りの 進行（毎フレーム・playのとき）。act＝スペースを 受けとって さばく
 function tickFishing(dt, pressed) {
@@ -628,8 +634,9 @@ function loop(now) {
       const d = Math.hypot(f.x - player.x, f.y - player.y);
       if (d < flyD) { flyD = d; nearFly = f; }
     }
-    // 世界を とぶ 虫（cutebugs）。昼＝トンボ/ハチ、夜＝カブト/ガ。草・木のそばに わく
-    if (!isRainy() && critters.length < 6 && rnd() < 0.05) spawnCritter();
+    // 世界を とぶ 虫（cutebugs）。昼＝トンボ/ハチ、夜＝カブト/ガ。草・木のそばに わく（天気で 増減）
+    const bugRate = weatherOf(day) === 'hot' ? 0.075 : (weatherOf(day) === 'cloudy' ? 0.03 : 0.05);
+    if (!isRainy() && !showerNow() && critters.length < 6 && rnd() < bugRate) spawnCritter();
     for (let i = critters.length - 1; i >= 0; i--) {
       const cr = critters[i]; cr.ph += dt * 2;
       if (rnd() < 0.04) { cr.vx = (rnd()-0.5)*46; cr.vy = (rnd()-0.5)*46; }
