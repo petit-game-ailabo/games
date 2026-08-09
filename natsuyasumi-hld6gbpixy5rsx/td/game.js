@@ -72,6 +72,16 @@ const SIGN = { c: 29, r: 39 };              // 道しるべ（川むこうの �
 SOLID.add(PADDY);                           // 水田は 入れない（あぜ道を あるく）
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
+// --- ミニマップ（静的マップを 1回だけ 小さく 焼く）。広い田舎の 迷子ふせぎ
+function mmColor(t) {
+  if (t === TREE) return '#2f5a2a';
+  if (t === WATER || t === PADDY) return '#4a78c0';
+  if (t === STONE) return '#9aa2ab';
+  if (t === PATH) return '#d8b878';
+  return '#7fae55';
+}
+const mmCanvas = document.createElement('canvas'); mmCanvas.width = MW; mmCanvas.height = MH;
+(function () { const c = mmCanvas.getContext('2d'); for (let r = 0; r < MH; r++) for (let cc = 0; cc < MW; cc++) { c.fillStyle = mmColor(map[r][cc]); c.fillRect(cc, r, 1, 1); } })();
 
 // --- 画像
 const tiles = new Image(); tiles.src = 'assets/tileset-world.png';
@@ -894,6 +904,17 @@ function loop(now) {
     g.fillText('うらの にわ', 14, 26);
     g.fillStyle = 'rgba(230,238,220,0.5)'; g.font = '12px system-ui';
     g.fillText('Zねる ・ Nえにっき ・ Cずかん ・ Hけす', 14, 44);
+    // ミニマップ（左上）。道/水/家/神社＋自分＋きょうの おねがい先
+    const s = 1.5, mx = 14, my = 54, mw = MW*s, mh = MH*s;
+    g.save();
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(mx-2, my-2, mw+4, mh+4);
+    g.drawImage(mmCanvas, mx, my, mw, mh);
+    const dot = (c, r, col, sz) => { g.fillStyle = col; g.fillRect(mx + c*s - sz/2, my + r*s - sz/2, sz, sz); };
+    dot(19, 5, '#ffd24a', 4);                    // 家
+    dot(SHRINE.c, SHRINE.r, '#e24a4a', 4);       // 神社
+    if (request && !reqDone) { const n = npcs.find(x => x.ci === request.ci); if (n) dot(Math.floor(n.x/TS), Math.floor(n.y/TS), '#ff9a3a', 4 + (Math.sin(now/200)>0?1:0)); }  // おねがい先（点滅）
+    dot(Math.floor(player.x/TS), Math.floor(player.y/TS), '#ffffff', 4);   // 自分
+    g.restore();
     // とけい（右上）：時刻と じかんたい
     const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
     const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)} ・ ${WEATHER_NAME[weatherOf(day)]}`;
