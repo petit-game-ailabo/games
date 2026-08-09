@@ -672,6 +672,11 @@ function loop(now) {
     vg.addColorStop(0, 'rgba(4,6,16,0)'); vg.addColorStop(1, `rgba(4,6,16,${dark})`);
     g.fillStyle = vg; g.fillRect(0, 0, VW, VH);
   }
+  // 朝もや（晴れの あさ 5〜8時・6時ごろ 濃い）。しっとり した 夏の あさ
+  if (!isRainy() && tod >= 5 && tod < 8) {
+    const fog = (1 - Math.abs(tod - 6.2) / 1.8) * 0.33;
+    if (fog > 0) { g.fillStyle = `rgba(232,238,240,${fog})`; g.fillRect(0, 0, VW, VH); }
+  }
   // 蛍の あかり（くらさの上で 光る）。lighter で ふわっと 加算
   if (flies.length) {
     g.save(); g.globalCompositeOperation = 'lighter';
