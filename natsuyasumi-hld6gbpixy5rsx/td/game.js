@@ -71,6 +71,7 @@ rect(SHRINE.c-2, SHRINE.r-2, 6, 5, G);      // 神社の 庭を きれいに
 const SCARECROW = { c: 24, r: 23 };         // 案山子（田んぼの ふち）
 const SIGN = { c: 29, r: 39 };              // 道しるべ（川むこうの 分かれ道）
 const JIZO = { c: 24, r: 31 };              // お地蔵さん（川の 北岸・道ばた）
+const HIDDEN = { c: 8, r: 57 };             // 隠しスポット：ご神木（原っぱの おく）。夜に 光る蝶
 SOLID.add(PADDY);                           // 水田は 入れない（あぜ道を あるく）
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
@@ -94,7 +95,7 @@ let ready = 0; const need = 4;
 tiles.onload = () => ready++; chars.onload = () => ready++; fishImg.onload = () => ready++; bugsImg.onload = () => ready++;
 // 魚（fish.png：64x28 の 6マス）と 虫（bugs.png：16x16 の 5マス）
 const FISH_CW = 64, FISH_CH = 28;
-const FISH = [ {n:'メダカ',w:22}, {n:'フナ',w:20}, {n:'ワカサギ',w:16}, {n:'ナマズ',w:12}, {n:'コイ',w:9}, {n:'なぞの さかな',w:4} ];
+const FISH = [ {n:'メダカ',w:22,size:4}, {n:'フナ',w:20,size:22}, {n:'ワカサギ',w:16,size:12}, {n:'ナマズ',w:12,size:55}, {n:'コイ',w:9,size:65}, {n:'なぞの さかな',w:4,size:95} ];
 const BUG_CW = 16;   // s = bugs.png の 列（0カブト 1トンボ 2ホタル 3ハチ 4ガ）。蛍は 別システムなので 除外
 const BUGS = [ {n:'カブトムシ',s:0,night:true}, {n:'トンボ',s:1}, {n:'ハチ',s:3}, {n:'ガ',s:4,night:true} ];
 
@@ -130,7 +131,8 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0 };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0, hikaricho: false };
+let hikari = null;              // 隠しスポットの 光る蝶（夜・未捕獲のときだけ）
 // --- きょうの おねがい（NPCが 1日1個。達成で お礼＋ありがとう数）。「今日これをやろう」の 芯
 const REQS = [
   { ci: 3, who: 'dai',     ask: 'ほたるを 3びき つかまえて みせて', check: () => today.hotaru >= 3, ok: 'わあ、ありがとう！ きれいだね' },
@@ -246,6 +248,7 @@ let bloomTotal = 0;             // これまで さかせた ひまわり
 let diaryOpen = false;          // Nキーで えにっきを ひらく
 let dexOpen = false;            // Cキーで いきもの図鑑
 let fishDex = {}, bugDex = {};  // つった魚・とった虫 の かず（index→数）
+let fishMax = {};               // 魚ごとの さいだい サイズ（cm）＝長期目標
 let lastSummer = null;          // きょねんの なつの 思い出（別キー・年を またいで のこる）
 let fishing = null;            // 釣りの さいちゅう {phase,t,biteAt,win,fish,x,y}
 const critters = [];          // 世界を とぶ 虫（cutebugs）{x,y,bi,vx,vy,ph,life}
@@ -386,7 +389,9 @@ function tickFishing(dt, pressed) {
   } else if (f.phase === 'bite') {
     if (pressed) {                                       // アワセ 成功
       const fi = pickFish(); fishDex[fi] = (fishDex[fi]||0) + 1; today.fish = true; flags.everFish = true;
-      f.phase = 'result'; f.t = 0; f.fish = fi; f.win = true; passTime(1.0); save();
+      const sz = Math.round(FISH[fi].size * (0.6 + rnd()*0.8));   // 大きさ（cm・ばらつき）
+      f.record = sz > (fishMax[fi]||0); if (f.record) fishMax[fi] = sz;
+      f.phase = 'result'; f.t = 0; f.fish = fi; f.size = sz; f.win = true; passTime(1.0); save();
     } else if (f.t > 0.85) { f.phase = 'result'; f.t = 0; f.win = false; }  // にげられた
   } else {                                                // result
     if (pressed || f.t > 2.6) fishing = null;
@@ -449,7 +454,7 @@ function startSleep() { if (sleepPhase <= 0 && !talkNpc) { pendingPhoto = snapsh
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
-    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, sumoWins, sumoToday, reqDone, px: player.x, py: player.y })); } catch (e) {}
+    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, fishMax, sumoWins, sumoToday, reqDone, px: player.x, py: player.y })); } catch (e) {}
 }
 function load() {
   try {
@@ -464,6 +469,7 @@ function load() {
     if (s.flags) Object.assign(flags, s.flags);
     if (s.fishDex) fishDex = s.fishDex;
     if (s.bugDex) bugDex = s.bugDex;
+    if (s.fishMax) fishMax = s.fishMax;
     if (s.px != null) { player.x = s.px; player.y = s.py; }
     if (solidAt(player.x, player.y)) { player.x = 20 * TS; player.y = 9 * TS; }  // 旧マップの 位置が 壁なら 家へ
   } catch (e) {}
@@ -585,7 +591,7 @@ function loop(now) {
   if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
-  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearBug = null, nearBugD = 1e9, pc = 0, pr = 0;
+  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearBug = null, nearBugD = 1e9, nearHikari = false, pc = 0, pr = 0;
   if (mode === 'play') {
     // 時間は **勝手には 進まない**（急かさない）。ねむり中だけ つぎの朝へ とぶ
     if (sleepPhase > 0) {
@@ -649,6 +655,15 @@ function loop(now) {
       const d = Math.hypot(cr.x - player.x, cr.y - player.y);
       if (d < BUG_R && (!nearBug || d < nearBugD)) { nearBug = cr; nearBugD = d; }
     }
+    // 隠しスポットの 光る蝶（夜・ご神木の そば・未捕獲）。ふわり ただよう
+    const hdx = (HIDDEN.c+0.5)*TS - player.x, hdy = (HIDDEN.r+0.5)*TS - player.y, nearHome = Math.hypot(hdx, hdy) < TS*6;
+    if (isNight() && !flags.hikaricho && nearHome) {
+      if (!hikari) hikari = { x: (HIDDEN.c+0.5)*TS + (rnd()-0.5)*TS*3, y: (HIDDEN.r+0.5)*TS + (rnd()-0.5)*TS*2, ph: rnd()*6.28, vx: 0, vy: 0 };
+      hikari.ph += dt*2.2;
+      if (rnd() < 0.04) { hikari.vx = (rnd()-0.5)*30; hikari.vy = (rnd()-0.5)*30; }
+      hikari.x += hikari.vx*dt; hikari.y += hikari.vy*dt;
+      if (Math.hypot(hikari.x - player.x, hikari.y - player.y) < TS*0.95) nearHikari = true;
+    } else if (!nearHome || !isNight()) hikari = null;
     // そばの 仲間（話しかけ用）。夜は みんな 家に かえる（門限と 同じ）＝昼だけ
     let bestD = TALK_R;
     if (!isNight()) for (const n of npcs) { const d = Math.hypot(n.x - player.x, n.y - player.y); if (d < bestD) { bestD = d; near = n; } }
@@ -711,6 +726,7 @@ function loop(now) {
           }
           else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
         }
+        else if (nearHikari) { flags.hikaricho = true; hikari = null; dayMsg = '★ ひかりちょうを つかまえた！'; daySub = 'よるの もりの ひみつ'; dayMsgT = 3.2; passTime(0.5); save(); }
         else if (nearShrine) { doOmairi(); }
         else if (waterSpot) { startFishing(waterSpot); }
         else if (nearBug) { catchBug(nearBug); }
@@ -880,6 +896,19 @@ function loop(now) {
       g.fillStyle = gr; g.beginPath(); g.arc(lx, ly, TS*1.1, 0, 6.283); g.fill(); g.restore();
     }
   }
+  // 光る蝶（隠しスポット・夜）。加算で ふんわり 光る
+  if (hikari) {
+    const hx = hikari.x - cam.x, hy = hikari.y - cam.y, pulse = 0.6 + 0.4*Math.sin(hikari.ph);
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const gr = g.createRadialGradient(hx, hy, 0, hx, hy, TS*0.9);
+    gr.addColorStop(0, `rgba(180,230,255,${0.8*pulse})`); gr.addColorStop(1, 'rgba(120,180,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(hx, hy, TS*0.9, 0, 6.283); g.fill();
+    g.fillStyle = `rgba(230,245,255,${pulse})`;            // 羽（2枚・ひらひら）
+    const w = 3 + Math.abs(Math.sin(hikari.ph*3))*2;
+    g.beginPath(); g.ellipse(hx-3, hy, w, 4, 0.4, 0, 6.283); g.fill();
+    g.beginPath(); g.ellipse(hx+3, hy, w, 4, -0.4, 0, 6.283); g.fill();
+    g.restore();
+  }
   // 花火（空に・加算で 光る）
   if (fireworks.length) {
     g.save(); g.globalCompositeOperation = 'lighter';
@@ -942,6 +971,7 @@ function loop(now) {
     const dot = (c, r, col, sz) => { g.fillStyle = col; g.fillRect(mx + c*s - sz/2, my + r*s - sz/2, sz, sz); };
     dot(19, 5, '#ffd24a', 4);                    // 家
     dot(SHRINE.c, SHRINE.r, '#e24a4a', 4);       // 神社
+    if (!flags.hikaricho) { g.fillStyle = '#fff'; g.font = '9px system-ui'; g.textAlign = 'center'; g.fillText('?', mx + (HIDDEN.c+0.5)*s, my + (HIDDEN.r+0.5)*s + 3); g.textAlign = 'left'; }  // 隠しスポット
     if (request && !reqDone) { const n = npcs.find(x => x.ci === request.ci); if (n) dot(Math.floor(n.x/TS), Math.floor(n.y/TS), '#ff9a3a', 4 + (Math.sin(now/200)>0?1:0)); }  // おねがい先（点滅）
     dot(Math.floor(player.x/TS), Math.floor(player.y/TS), '#ffffff', 4);   // 自分
     g.restore();
@@ -985,6 +1015,7 @@ function loop(now) {
     else {
       let lbl = null;
       if (near) lbl = '▶ はなす';
+      else if (nearHikari) lbl = '▶ つかまえる';
       else if (nearShrine) lbl = '▶ おまいり';
       else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
       else if (onField) lbl = !fieldPlot ? '▶ うえる' : (fieldPlot.stage >= 4 ? '▶ しゅうかく' : (!fieldPlot.watered ? '▶ みずやり' : 'すくすく…'));
@@ -1124,6 +1155,17 @@ function drawProps() {
     g.fillText('← はらっぱ・神社', x, gy-25); g.fillText('いけ →', x, gy-18); g.textAlign = 'left';
     g.restore();
   }
+  // ご神木（隠しスポット）。大きな 木＋しめ縄
+  x = (HIDDEN.c+0.5)*TS - cam.x; gy = (HIDDEN.r+1)*TS - cam.y;
+  if (x > -60 && x < VW+60 && gy > -80 && gy < VH+40) {
+    g.save();
+    g.fillStyle = 'rgba(10,20,8,0.25)'; g.beginPath(); g.ellipse(x, gy, 20, 6, 0, 0, 6.283); g.fill();
+    g.fillStyle = '#5c3d22'; g.fillRect(x-7, gy-30, 14, 30);                   // みき
+    g.fillStyle = '#eae0c0'; g.fillRect(x-9, gy-24, 18, 4);                    // しめ縄
+    g.fillStyle = '#2f6a34'; g.beginPath(); g.arc(x, gy-46, 26, 0, 6.283); g.fill();  // こずえ
+    g.fillStyle = '#3a7a3e'; g.beginPath(); g.arc(x-14, gy-40, 15, 0, 6.283); g.arc(x+14, gy-42, 15, 0, 6.283); g.fill();
+    g.restore();
+  }
   // お地蔵さん（道ばた）。石＋赤い よだれかけ
   x = (JIZO.c+0.5)*TS - cam.x; gy = (JIZO.r+1)*TS - cam.y;
   if (x > -30 && x < VW+30 && gy > -40 && gy < VH+30) {
@@ -1224,6 +1266,7 @@ function drawDiary() {
     ['むしを つかまえた', flags.everMushi],
     ['むしずもうで かった', flags.everSumo],
     ['じんじゃに おまいり', flags.everOmairi],
+    ['ひかりちょうを みつけた', flags.hikaricho],
   ];
   const cx2 = bx + bw*0.52;
   g.font = '600 15px system-ui'; g.fillStyle = '#6b5836';
@@ -1328,8 +1371,9 @@ function drawFishResult(f) {
   g.strokeStyle = 'rgba(180,200,230,0.28)'; g.lineWidth = 1; g.stroke();
   if (f.win) {
     drawFishSprite(f.fish, bx+90, by+bh/2, 2.6);
-    g.fillStyle = '#ffe6a8'; g.font = '700 22px system-ui'; g.fillText(`${FISH[f.fish].n} を つった！`, bx+180, by+bh/2-2);
-    g.fillStyle = 'rgba(230,238,250,0.75)'; g.font = '14px system-ui'; g.fillText(`いままでに ${(fishDex[f.fish]||0)} ひき`, bx+180, by+bh/2+26);
+    g.fillStyle = '#ffe6a8'; g.font = '700 22px system-ui'; g.fillText(`${FISH[f.fish].n}  ${f.size}cm！`, bx+180, by+bh/2-6);
+    g.fillStyle = f.record ? '#ffe23a' : 'rgba(230,238,250,0.75)'; g.font = '14px system-ui';
+    g.fillText(f.record ? '★ さいだい きろく こうしん！' : `さいだい ${fishMax[f.fish]||f.size}cm`, bx+180, by+bh/2+22);
   } else {
     g.fillStyle = '#eef3ff'; g.font = '700 22px system-ui'; g.textAlign = 'center';
     g.fillText('にげられた…', VW/2, by+bh/2+2); g.textAlign = 'left';
@@ -1358,7 +1402,7 @@ function drawDex() {
     if (got) {
       drawFishSprite(i, cx, cy, 1.4);
       g.fillStyle = '#3f5230'; g.font = '13px system-ui'; g.textAlign = 'center';
-      g.fillText(f.n, cx, by+156); g.fillStyle='#7a8a5c'; g.fillText(`×${fishDex[i]}`, cx, by+172);
+      g.fillText(f.n, cx, by+156); g.fillStyle='#7a8a5c'; g.fillText(`×${fishDex[i]}${fishMax[i]?' ・'+fishMax[i]+'cm':''}`, cx, by+172);
     } else { g.fillStyle = '#b7bfa6'; g.font = '700 22px system-ui'; g.textAlign = 'center'; g.fillText('？', cx, cy+6); }
     g.textAlign = 'left';
   });
