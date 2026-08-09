@@ -177,7 +177,9 @@ function pickLines(npc) {
   // きょうの おねがい（達成してたら お礼／まだなら たのむ）。ふだんの 会話より 優先
   if (request && npc.ci === request.ci && !reqDone) {
     if (request.check()) { reqDone = true; flags.helped = (flags.helped||0) + 1; flags.bond[npc.ci] = (flags.bond[npc.ci]||0) + 2; save();
-      return [[request.who, request.ok], ['cirno', 'えへへ']]; }
+      const extra = flags.helped === 3 ? [[request.who, 'おれいに レア魚の いる ばしょを おしえるよ']]
+                  : flags.helped === 6 ? [[request.who, 'よく てつだって くれるね。たよりに してる']] : [];
+      return [[request.who, request.ok], ['cirno', `おてつだいスタンプ ${flags.helped}こ！`], ...extra]; }
     return [[request.who, 'おねがい！ ' + request.ask], ['cirno', 'やってみる！']];
   }
   // だいようせい：はじめて ひまわりが さいた あとに 気づいて よろこぶ
@@ -408,6 +410,7 @@ function fishW(i) {                                   // 天気で 釣果が か
   let w = FISH[i].w; const wt = weatherOf(day), n = FISH[i].n;
   if (wt === 'rain') { if (n === 'ナマズ') w *= 3; if (n === 'なぞの さかな') w *= 1.6; }
   else if (wt === 'hot') { if (n === 'メダカ') w *= 1.8; if (n === 'ナマズ' || n === 'コイ') w *= 0.5; }
+  if ((flags.helped||0) >= 3 && n === 'なぞの さかな') w *= 2.2;   // おねがい実利：レア魚の 居場所を 教わった
   return w;
 }
 function pickFish() {
@@ -1463,7 +1466,7 @@ function drawEnding(now) {
   g.fillText(`ほたる ${caughtHotaru}・ひまわり ${bloomTotal}・たいそう ${taisoStamps}・ずかん 魚${dexCount(fishDex)}/${FISH.length} 虫${dexCount(bugDex)}/${BUGS.length}${(flags.kingyo||0)>0?'・きんぎょ '+flags.kingyo:''}`, VW/2, 214);
   if (flags.kenkyuDone) { g.fillStyle = '#ffe23a'; g.font = '700 18px system-ui'; g.fillText('★ しょうごう：なつやすみ はかせ', VW/2, 244); }
   if (flags.bond && Object.keys(flags.bond).length) { g.fillStyle = 'rgba(255,210,220,0.9)'; g.font = '15px system-ui';
-    g.fillText(`いちばん なかよし：${NAMES[bestBondCi()]}`, VW/2, flags.kenkyuDone ? 268 : 244); }
+    g.fillText(`いちばん なかよし：${NAMES[bestBondCi()]}${(flags.helped||0)>0?'　おてつだい '+flags.helped+'かい':''}`, VW/2, flags.kenkyuDone ? 268 : 244); }
   // 夏の アルバム（きょうの一枚たち）
   if (albumImgs.length) {
     g.fillStyle = 'rgba(255,236,190,0.85)'; g.font = '600 15px system-ui'; g.fillText('なつの アルバム', VW/2, 286);
