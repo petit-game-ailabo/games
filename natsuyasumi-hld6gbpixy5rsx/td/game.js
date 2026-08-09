@@ -70,6 +70,7 @@ const SHRINE = { c: 12, r: 55 };            // 神社（原っぱの おく）�
 rect(SHRINE.c-2, SHRINE.r-2, 6, 5, G);      // 神社の 庭を きれいに
 const SCARECROW = { c: 24, r: 23 };         // 案山子（田んぼの ふち）
 const SIGN = { c: 29, r: 39 };              // 道しるべ（川むこうの 分かれ道）
+const JIZO = { c: 24, r: 31 };              // お地蔵さん（川の 北岸・道ばた）
 SOLID.add(PADDY);                           // 水田は 入れない（あぜ道を あるく）
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
@@ -129,7 +130,7 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0 };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0 };
 // --- きょうの おねがい（NPCが 1日1個。達成で お礼＋ありがとう数）。「今日これをやろう」の 芯
 const REQS = [
   { ci: 3, who: 'dai',     ask: 'ほたるを 3びき つかまえて みせて', check: () => today.hotaru >= 3, ok: 'わあ、ありがとう！ きれいだね' },
@@ -240,7 +241,7 @@ let garden = [];                  // はたけ（{c,r,stage,watered}）
 let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
 // --- 自由研究の きろく（えにっき＋ずかん）。テキストだけ＝絵が いらない
 let diary = [];                  // [{d, text}]  その日の しめくくり
-let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false };  // 今日 やったこと
+let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false };  // 今日 やったこと
 let bloomTotal = 0;             // これまで さかせた ひまわり
 let diaryOpen = false;          // Nキーで えにっきを ひらく
 let dexOpen = false;            // Cキーで いきもの図鑑
@@ -296,7 +297,7 @@ function passTime(h) {
 function newDay() {
   recordDiary();                 // その日の しめくくりを えにっきへ
   day++;
-  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false };
+  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false };
   taisoToday = false; mukaeShown = false; sumoToday = false;   // あたらしい日：体操・お迎え・相撲も リセット
   makeRequest();                                                // きょうの おねがいを えらぶ
   growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
@@ -322,6 +323,7 @@ function recordDiary() {
   if (today.hotaru) p.push(`ほたるを ${today.hotaru}ひき つかまえた`);
   if (today.planted) p.push(`たねを ${today.planted}つ まいた`);
   if (today.watered) p.push('はたけに みずを あげた');
+  if (today.harvest) p.push('さくもつを しゅうかくした');
   if (today.bloomed) p.push('ひまわりが さいた！');
   if (!p.length) p.push('のんびり すごした');
   diary.push({ d: day, text: p.join('。') + '。', photo: pendingPhoto });
@@ -700,6 +702,13 @@ function loop(now) {
         else if (nearRadio && canTaiso()) { doTaiso(); }
         else if (onField) {
           if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false, crop: CROPS[(pc+pr)%3] }); today.planted++; passTime(1.0); save(); }
+          else if (fieldPlot.stage >= 4) {           // 収穫（そだて切りで 終わらせない）
+            const nm = fieldPlot.crop === 'tomato' ? 'トマト' : (fieldPlot.crop === 'asagao' ? 'あさがおの たね' : 'ひまわりの たね');
+            flags.harvested = (flags.harvested||0) + 1; today.harvest = true;
+            garden.splice(garden.indexOf(fieldPlot), 1);
+            dayMsg = 'しゅうかく！ ' + nm; daySub = 'また うえられる'; dayMsgT = 2.2;
+            passTime(0.5); save();
+          }
           else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
         }
         else if (nearShrine) { doOmairi(); }
@@ -978,7 +987,7 @@ function loop(now) {
       if (near) lbl = '▶ はなす';
       else if (nearShrine) lbl = '▶ おまいり';
       else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
-      else if (onField) lbl = !fieldPlot ? '▶ うえる' : (!fieldPlot.watered ? '▶ みずやり' : (fieldPlot.stage >= 4 ? 'さいた！' : 'すくすく…'));
+      else if (onField) lbl = !fieldPlot ? '▶ うえる' : (fieldPlot.stage >= 4 ? '▶ しゅうかく' : (!fieldPlot.watered ? '▶ みずやり' : 'すくすく…'));
       else if (waterSpot) lbl = '▶ つる';
       else if (nearBug) lbl = '▶ むしとり';
       else if (nearRest) lbl = '▶ ひとやすみ';
@@ -1049,7 +1058,7 @@ function drawSay(line) {
 function drawPaddy(dx, dy, c, r) {
   g.fillStyle = '#6a9fae'; g.fillRect(dx, dy, TS, TS);                 // 水
   g.fillStyle = 'rgba(255,255,255,0.07)'; g.fillRect(dx, dy + TS*0.28, TS, 2);  // 反射
-  g.fillStyle = '#4f9440';                                             // 稲の 束（2x2）
+  g.fillStyle = nokori() <= 10 ? '#cba63a' : '#4f9440';               // 稲（晩夏は 黄金）
   const seed = ((c*73 + r*131) % 5) - 2;
   for (let ry = 0; ry < 2; ry++) for (let rx = 0; rx < 2; rx++) {
     const x = dx + TS*0.3 + rx*TS*0.4 + seed, y = dy + TS*0.34 + ry*TS*0.36;
@@ -1113,6 +1122,16 @@ function drawProps() {
     g.strokeStyle = '#5c3d22'; g.lineWidth = 1.5; g.strokeRect(x-26, gy-36, 52, 22);
     g.fillStyle = '#33240f'; g.font = '600 10px system-ui'; g.textAlign = 'center';
     g.fillText('← はらっぱ・神社', x, gy-25); g.fillText('いけ →', x, gy-18); g.textAlign = 'left';
+    g.restore();
+  }
+  // お地蔵さん（道ばた）。石＋赤い よだれかけ
+  x = (JIZO.c+0.5)*TS - cam.x; gy = (JIZO.r+1)*TS - cam.y;
+  if (x > -30 && x < VW+30 && gy > -40 && gy < VH+30) {
+    g.save();
+    g.fillStyle = 'rgba(10,20,8,0.2)'; g.beginPath(); g.ellipse(x, gy, 9, 3, 0, 0, 6.283); g.fill();
+    g.fillStyle = '#9a9da3'; g.beginPath(); g.moveTo(x-7, gy); g.lineTo(x-7, gy-16); g.arc(x, gy-16, 7, Math.PI, 0); g.lineTo(x+7, gy); g.closePath(); g.fill();  // 石体
+    g.fillStyle = '#c0392b'; g.fillRect(x-6, gy-9, 12, 5);                     // よだれかけ
+    g.fillStyle = '#5a5d63'; g.beginPath(); g.arc(x-2.4, gy-17, 1, 0, 6.283); g.arc(x+2.4, gy-17, 1, 0, 6.283); g.fill();  // 目
     g.restore();
   }
 }
