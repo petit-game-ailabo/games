@@ -131,7 +131,22 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0, hikaricho: false, kingyo: 0 };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0, hikaricho: false, kingyo: 0, hints: {} };
+function hint(key, text) { if (flags.hints && !flags.hints[key]) { flags.hints[key] = true; dayMsg = text; daySub = ''; dayMsgT = 2.6; save(); } }
+// 自由研究の チェックリスト（drawDiaryと 終盤ナッジで 共用）
+function kenkyuList() {
+  return [
+    ['ひまわりを さかせた', bloomTotal > 0],
+    ['ほたるを つかまえた', caughtHotaru > 0],
+    ['はなびを みた', flags.sawHanabi],
+    ['ラジオたいそう', taisoStamps > 0],
+    ['さかなを つった', flags.everFish],
+    ['むしを つかまえた', flags.everMushi],
+    ['むしずもうで かった', flags.everSumo],
+    ['じんじゃに おまいり', flags.everOmairi],
+    ['ひかりちょうを みつけた', flags.hikaricho],
+  ];
+}
 let hikari = null;              // 隠しスポットの 光る蝶（夜・未捕獲のときだけ）
 // --- きょうの おねがい（NPCが 1日1個。達成で お礼＋ありがとう数）。「今日これをやろう」の 芯
 const REQS = [
@@ -728,6 +743,16 @@ function loop(now) {
       }
     }
     // キーで 会話／体操／うえる・みずやり／水あそび／蛍つかまえ（近づいただけでは 始めない・P1）
+    // 初回だけの ヒント（増えた あそびを 取りこぼさせない）
+    if (!talkNpc && !fishing && !sumo && !matsuri) {
+      if (nearStall) hint('stall', 'おまつりの 屋台！ スペースで きんぎょすくい');
+      else if (nearShrine) hint('shrine', 'じんじゃ：スペースで おまいり できる');
+      else if (waterSpot) hint('pond', 'みずべ：スペースで つりが できる');
+      else if (onField && !fieldPlot) hint('field', 'はたけ：スペースで たねを うえる');
+      else if (nearBug) hint('bug', 'むしに ちかづいて スペースで つかまえる');
+      else if (nearRest) hint('rest', 'えんだい：スペースで ひとやすみ（時間が すすむ）');
+      else if (isNight() && nearHome && !flags.hikaricho) hint('goshinboku', 'よるの ご神木… なにか いる？');
+    }
     if (fishing) { tickFishing(dt, act); act = false; }     // 釣り中は スペースを 釣りへ
     else if (sumo) { tickSumo(dt, act); act = false; }      // 虫相撲中は スペースを 相撲へ
     else if (matsuri) { tickMatsuri(dt, act); act = false; } // 金魚すくい中
@@ -1040,6 +1065,12 @@ function loop(now) {
       g.font = '12px system-ui'; g.textAlign = 'right'; g.fillStyle = 'rgba(255,220,150,0.85)';
       g.fillText(`おねがい：${request.ask}`, VW - 14, 84); g.textAlign = 'left';
     }
+    // 終盤（のこり5日以下）の やりのこし ナッジ（自由研究の 未達を そっと）
+    if (nokori() <= 5) {
+      const undone = kenkyuList().find(it => !it[1]);
+      if (undone) { g.font = '12px system-ui'; g.textAlign = 'right'; g.fillStyle = 'rgba(255,180,120,0.9)';
+        g.fillText(`まだ：${undone[0]} ・ あと ${nokori()}日`, VW - 14, 102); g.textAlign = 'left'; }
+    }
     // つかまえた 蛍の かず（夜／持っていれば）
     if (caughtHotaru > 0 || isNight()) {
       g.font = '600 13px system-ui'; g.textAlign = 'right';
@@ -1308,17 +1339,7 @@ function drawDiary() {
   g.fillText(`つかまえた ほたる：${caughtHotaru} ひき`, cx, by + 104);
   g.fillText(`さかせた ひまわり：${bloomTotal} りん`, cx, by + 130);
   // じゆうけんきゅう チェックリスト（やったこと）。右がわに ならべる
-  const chk = [
-    ['ひまわりを さかせた', bloomTotal > 0],
-    ['ほたるを つかまえた', caughtHotaru > 0],
-    ['はなびを みた', flags.sawHanabi],
-    ['ラジオたいそう', taisoStamps > 0],
-    ['さかなを つった', flags.everFish],
-    ['むしを つかまえた', flags.everMushi],
-    ['むしずもうで かった', flags.everSumo],
-    ['じんじゃに おまいり', flags.everOmairi],
-    ['ひかりちょうを みつけた', flags.hikaricho],
-  ];
+  const chk = kenkyuList();
   const cx2 = bx + bw*0.52;
   g.font = '600 15px system-ui'; g.fillStyle = '#6b5836';
   g.fillText('じゆうけんきゅう', cx2, by + 78);
