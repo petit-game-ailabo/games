@@ -219,6 +219,18 @@ function popSfx() {
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.13, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
   o.connect(g); g.connect(ambGain); o.start(t); o.stop(t + 0.2);
 }
+// --- カエル（よるの 田んぼ）。ひくい「ゲコッ」を 2つ
+function frog(vol) {
+  if (!AC) return; const t = AC.currentTime;
+  for (let i = 0; i < 2; i++) {
+    const tt = t + i*0.15;
+    const o = AC.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(165, tt); o.frequency.exponentialRampToValueAtTime(110, tt + 0.1);
+    const bp = AC.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 520;
+    const g = AC.createGain(); g.gain.setValueAtTime(0.0001, tt); g.gain.linearRampToValueAtTime(vol, tt + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.12);
+    o.connect(bp); bp.connect(g); g.connect(ambGain); o.start(tt); o.stop(tt + 0.15);
+  }
+}
 // --- 花火：打ち上げ「ヒュー」と 破裂「ドン」
 function fireworkLaunch() {
   if (!AC) return; const t = AC.currentTime;

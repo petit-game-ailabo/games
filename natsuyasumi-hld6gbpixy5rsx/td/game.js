@@ -289,6 +289,7 @@ const SUMMER_DAYS = 31;
 let garden = [];                  // はたけ（{c,r,stage,watered}）
 let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
 let calT = 0;                     // 朝の こよみめくり 演出タイマー
+let frogTimer = 0;               // 夜の 田んぼの カエル
 // --- 自由研究の きろく（えにっき＋ずかん）。テキストだけ＝絵が いらない
 let diary = [];                  // [{d, text}]  その日の しめくくり
 let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false };  // 今日 やったこと
@@ -714,6 +715,15 @@ function loop(now) {
     if (calT > 0) calT -= dt;       // こよみめくり
     if (talkNpc) sayT += dt;        // 文字送り
     ambientTick(dt, tod, nokori() <= 10);   // 夏の音（時間帯＋晩夏で 鳴き分け）
+    // 夜の 田んぼ：カエルの 声（水田が そばに あるとき）
+    frogTimer -= dt;
+    if (frogTimer <= 0) { frogTimer = 1.4 + rnd()*2.6;
+      if (isNight() && typeof frog === 'function') {
+        const pcc = Math.floor(player.x/TS), prr = Math.floor(player.y/TS); let paddyNear = false;
+        for (let dr=-3;dr<=3&&!paddyNear;dr++) for (let dc=-3;dc<=3;dc++) { const c=pcc+dc,r=prr+dr; if (map[r]&&map[r][c]===PADDY){paddyNear=true;break;} }
+        if (paddyNear) frog(0.05);
+      }
+    }
     // 最終夜：いちばん 仲よくなった 子と ふたりの 場面（絆の 回収）
     if (day >= SUMMER_DAYS && isNight() && !flags.lastNight && !talkNpc && !sleepPhase && !fishing && !sumo && !matsuri && !mukaeShown) {
       flags.lastNight = true;
