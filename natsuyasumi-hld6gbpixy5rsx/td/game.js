@@ -630,22 +630,60 @@ function cps() { return [16, 34, 72][opt.textSpeed] != null ? [16, 34, 72][opt.t
 try { const o = JSON.parse(localStorage.getItem('natsuyasumi_td_opt') || 'null'); if (o) Object.assign(opt, o); } catch (e) {}
 function saveOpt() { try { localStorage.setItem('natsuyasumi_td_opt', JSON.stringify(opt)); } catch (e) {} }
 // データの かきだし／よみこみ（localStorage消去でも 図鑑を まもる 保険）
-function exportData() {
-  try {
-    const d = JSON.stringify({ s: localStorage.getItem('natsuyasumi_td'), m: localStorage.getItem('natsuyasumi_td_memory'), o: localStorage.getItem('natsuyasumi_td_opt') });
-    if (navigator.clipboard) navigator.clipboard.writeText(d).catch(() => {});
-    dayMsg = 'データを コピーした'; daySub = 'メモ帳などに はって 保管してね'; dayMsgT = 2.8;
-  } catch (e) {}
+// prompt() は モバイルで 出ない/無効なことが 多い → DOMオーバーレイの テキストエリアで
+// スマホからも かきだし/よみこみ できるように。成否は 正直に 表示し、読込は 上書き確認つき。
+let dataUI = null;
+function ensureDataUI() {
+  if (dataUI) return dataUI;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(6,8,14,0.78);font-family:system-ui;padding:16px;box-sizing:border-box';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#f2eedf;border-radius:14px;padding:16px;width:min(560px,92vw);max-height:88vh;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,0.4)';
+  const title = document.createElement('div'); title.style.cssText = 'font-weight:700;font-size:18px;color:#3f4a30';
+  const note = document.createElement('div'); note.style.cssText = 'font-size:13px;color:#5a6048;line-height:1.5';
+  const ta = document.createElement('textarea'); ta.style.cssText = 'width:100%;height:120px;box-sizing:border-box;font-size:13px;font-family:monospace;border:1px solid #b8b49f;border-radius:8px;padding:8px;resize:none;background:#fff;color:#222';
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap';
+  const mkBtn = (bg) => { const b = document.createElement('button'); b.style.cssText = `font-size:14px;font-family:system-ui;padding:9px 16px;border-radius:8px;border:none;cursor:pointer;background:${bg};color:#fff;font-weight:600`; return b; };
+  const okBtn = mkBtn('#6fae6e'); const cancelBtn = mkBtn('#9a927e'); cancelBtn.textContent = 'とじる';
+  row.append(okBtn, cancelBtn); box.append(title, note, ta, row); wrap.append(box); document.body.append(wrap);
+  const close = () => { wrap.style.display = 'none'; };
+  cancelBtn.onclick = close;
+  wrap.addEventListener('pointerdown', e => { if (e.target === wrap) close(); });   // 外側タップで とじる
+  dataUI = { wrap, title, note, ta, okBtn, cancelBtn, close };
+  return dataUI;
 }
-function importData() {
-  try {
-    const t = prompt('データを はりつけてね'); if (!t) return;
-    const d = JSON.parse(t);
-    if (d.s) localStorage.setItem('natsuyasumi_td', d.s);
-    if (d.m) localStorage.setItem('natsuyasumi_td_memory', d.m);
-    if (d.o) localStorage.setItem('natsuyasumi_td_opt', d.o);
-    removeEventListener('beforeunload', onUnload); cancelSave(); location.reload();
-  } catch (e) { dayMsg = 'よみこめなかった…'; daySub = ''; dayMsgT = 2; }
+function openExportUI() {
+  const u = ensureDataUI();
+  let d; try { d = JSON.stringify({ s: localStorage.getItem('natsuyasumi_td'), m: localStorage.getItem('natsuyasumi_td_memory'), o: localStorage.getItem('natsuyasumi_td_opt') }); } catch (e) { d = ''; }
+  u.title.textContent = 'データを かきだす';
+  u.note.textContent = 'このぶんを ぜんぶ コピーして、メモ帳などに 保管してね。';
+  u.ta.value = d; u.ta.readOnly = true; u.okBtn.textContent = 'コピー';
+  u.okBtn.onclick = () => {
+    u.ta.focus(); u.ta.select();
+    const done = (ok) => { u.note.textContent = ok ? 'コピーできた！ メモ帳などに はって 保管してね。' : 'コピーできなかった…上の ぶんを 手で えらんで コピーしてね。'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(d).then(() => done(true)).catch(() => { let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} done(ok); });
+    } else { let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} done(ok); }
+  };
+  u.wrap.style.display = 'flex';
+}
+function openImportUI() {
+  const u = ensureDataUI();
+  u.title.textContent = 'データを よみこむ';
+  u.note.textContent = 'かきだした データを はりつけてね。※いまの なつやすみは きえます。';
+  u.ta.value = ''; u.ta.readOnly = false; u.ta.placeholder = 'ここに データを はりつけ'; u.okBtn.textContent = 'よみこむ（いまのは消える）';
+  u.okBtn.onclick = () => {
+    const t = u.ta.value.trim(); if (!t) { u.note.textContent = 'データが からっぽ。はりつけてね。'; return; }
+    let d; try { d = JSON.parse(t); } catch (e) { u.note.textContent = 'よみこめない かたち…コピーミスかも。'; return; }
+    if (!d || (!d.s && !d.m && !d.o)) { u.note.textContent = 'この ゲームの データじゃ ないみたい。'; return; }
+    try {
+      if (d.s) localStorage.setItem('natsuyasumi_td', d.s);
+      if (d.m) localStorage.setItem('natsuyasumi_td_memory', d.m);
+      if (d.o) localStorage.setItem('natsuyasumi_td_opt', d.o);
+      removeEventListener('beforeunload', onUnload); cancelSave(); location.reload();
+    } catch (e) { u.note.textContent = 'ほぞんに しっぱい…（容量オーバーかも）'; }
+  };
+  u.wrap.style.display = 'flex';
 }
 let endT = 0;                     // エンディングの 経過（フェード用）
 addEventListener('keydown', e => {
@@ -654,8 +692,8 @@ addEventListener('keydown', e => {
   if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; if (!pauseOpen) resetArm = false; uiTap(); return; }
   if (!e.repeat && (e.key==='m'||e.key==='M')) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.2; }
   if (!e.repeat && (e.key==='b'||e.key==='B')) { opt.bgm = !opt.bgm; saveOpt(); if (typeof setBgm==='function') setBgm(opt.bgm); uiTap(); }
-  if (pauseOpen && !e.repeat && (e.key==='e'||e.key==='E')) { exportData(); return; }   // 設定中：データ かきだし
-  if (pauseOpen && !e.repeat && (e.key==='i'||e.key==='I')) { importData(); return; }   // 設定中：データ よみこみ
+  if (pauseOpen && !e.repeat && (e.key==='e'||e.key==='E')) { openExportUI(); return; }   // 設定中：データ かきだし
+  if (pauseOpen && !e.repeat && (e.key==='i'||e.key==='I')) { openImportUI(); return; }   // 設定中：データ よみこみ
   if (pauseOpen) return;          // ポーズ中は ほかの キーは 無効
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
   if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
@@ -688,13 +726,17 @@ cv.addEventListener('pointerdown', e => {
   touchMode = true; initAudio(); const [x, y] = canvasXY(e);
   if (mode === 'play' && pauseOpen) {                     // ポーズ中：ボタン→なければ 左=音量/右=とじる
     const L = VW/2-70, R = VW/2+70;
-    if (Math.abs(y - 404) < 14) {
+    if (Math.abs(y - 386) < 14) {
       if (Math.abs(x - L) < 64) { opt.textSpeed = (opt.textSpeed+1) % 3; saveOpt(); uiTap(); e.preventDefault(); return; }
       if (Math.abs(x - R) < 64) { opt.bgm = !opt.bgm; saveOpt(); if (typeof setBgm==='function') setBgm(opt.bgm); uiTap(); e.preventDefault(); return; }
     }
-    if (Math.abs(y - 440) < 14) {
+    if (Math.abs(y - 416) < 14) {
       if (Math.abs(x - L) < 64) { opt.nonbiri = !opt.nonbiri; saveOpt(); uiTap(); e.preventDefault(); return; }
       if (Math.abs(x - R) < 64) { uiTap(); if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', onUnload); cancelSave(); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; } e.preventDefault(); return; }
+    }
+    if (Math.abs(y - 446) < 14) {   // データ：かきだす / よみこむ（モバイルからも）
+      if (Math.abs(x - L) < 64) { openExportUI(); uiTap(); e.preventDefault(); return; }
+      if (Math.abs(x - R) < 64) { openImportUI(); uiTap(); e.preventDefault(); return; }
     }
     if (Math.abs(y - 156) < 15) {   // 音量ぎょう：左=おと(全体) / 右=こうか音
       if (x < VW/2) { cycleVolume(); } else { opt.sfxIdx = (opt.sfxIdx+1) % 3; saveOpt(); applySfx(); }
@@ -1806,20 +1848,22 @@ function drawPause() {
     '　タイル：ansimuz(CC0) ・ 魚：CraftPix.net 2D Game Assets(OGA-BY)',
     '　虫：madameberry(CC0) ・ 音：手続き生成(自作)',
   ];
-  let yy = by+120; for (const s of lines) { g.fillText(s, VW/2, yy); yy += 24; }
-  // ボタン（2×2）：もじ速さ / BGM / のんびり / はじめから
+  let yy = by+114; for (const s of lines) { g.fillText(s, VW/2, yy); yy += 22; }
+  // ボタン（3×2）：もじ速さ / BGM ・ のんびり / はじめから ・ データ かきだす / よみこむ
   const btn = (cx, cy, label, on) => {
     g.fillStyle = on ? 'rgba(120,170,110,0.45)' : 'rgba(120,120,110,0.22)'; g.fillRect(cx-64, cy-13, 128, 26);
     g.strokeStyle = 'rgba(90,80,60,0.4)'; g.lineWidth = 1; g.strokeRect(cx-64, cy-13, 128, 26);
     g.fillStyle = '#3f4a30'; g.font = '600 13px system-ui'; g.textAlign = 'center'; g.fillText(label, cx, cy+4);
   };
   const L = VW/2-70, R = VW/2+70;
-  btn(L, 404, 'もじ：' + ['ゆっくり', 'ふつう', 'はやい'][opt.textSpeed], false);
-  btn(R, 404, 'BGM：' + (opt.bgm ? 'ON' : 'OFF'), opt.bgm);
-  btn(L, 440, 'のんびり：' + (opt.nonbiri ? 'ON' : 'OFF'), opt.nonbiri);
-  btn(R, 440, resetArm ? 'ほんとうに？' : 'はじめから', false);
+  btn(L, 386, 'もじ：' + ['ゆっくり', 'ふつう', 'はやい'][opt.textSpeed], false);
+  btn(R, 386, 'BGM：' + (opt.bgm ? 'ON' : 'OFF'), opt.bgm);
+  btn(L, 416, 'のんびり：' + (opt.nonbiri ? 'ON' : 'OFF'), opt.nonbiri);
+  btn(R, 416, resetArm ? 'ほんとうに？' : 'はじめから', false);
+  btn(L, 446, 'データ かきだす', false);
+  btn(R, 446, 'データ よみこむ', false);
   g.fillStyle = 'rgba(90,96,72,0.72)'; g.font = '11px system-ui'; g.textAlign = 'center';
-  g.fillText('データは この端末に ほぞん（E かきだす／I よみこむ）　｜　Pか Escで とじる', VW/2, by+bh-6);
+  g.fillText('データは この端末に ほぞん　｜　Pか Escで とじる', VW/2, by+bh-4);
   g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
