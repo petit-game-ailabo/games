@@ -131,7 +131,7 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0, hikaricho: false };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0, hikaricho: false, kingyo: 0 };
 let hikari = null;              // 隠しスポットの 光る蝶（夜・未捕獲のときだけ）
 // --- きょうの おねがい（NPCが 1日1個。達成で お礼＋ありがとう数）。「今日これをやろう」の 芯
 const REQS = [
@@ -253,6 +253,8 @@ let lastSummer = null;          // きょねんの なつの 思い出（別キ�
 let fishing = null;            // 釣りの さいちゅう {phase,t,biteAt,win,fish,x,y}
 const critters = [];          // 世界を とぶ 虫（cutebugs）{x,y,bi,vx,vy,ph,life}
 let sumo = null, sumoWins = 0, sumoToday = false; // 虫相撲 {pos,my,op,phase,result,t}／その日 挑んだか
+let matsuri = null;            // 金魚すくい（祭りの夜）{t,caught,cool,poiX,poiY,fish[],phase}
+const STALL = { c: 28, r: 4 }; // 屋台（うちの庭・祭りの夜だけ 出る）
 let talkThen = null;          // 会話が おわった あとに する こと（'sumo' など）
 let daySub = '';                // 日の しらせの 2行目（あさごはん／のこり日数）
 // --- その日の リズム：あさ 体操→スタンプ、よる おそくなると けーねが お迎え（門限）
@@ -405,6 +407,30 @@ function catchBug(cr) {
   passTime(0.5); save();
 }
 function dexCount(d) { let n = 0; for (const k in d) if (d[k] > 0) n++; return n; }
+// --- 金魚すくい（祭りの夜）。ポイ(網)を うごかして 金魚を すくう。12秒
+function startMatsuri() {
+  const fish = []; for (let i = 0; i < 6; i++) fish.push({ x: VW/2 + (rnd()-0.5)*260, y: VH/2 + (rnd()-0.5)*120, vx: (rnd()-0.5)*60, vy: (rnd()-0.5)*40 });
+  matsuri = { t: 0, caught: 0, cool: 0, poiX: VW/2, poiY: VH/2, fish, phase: 'play' };
+}
+function tickMatsuri(dt, pressed) {
+  const m = matsuri;
+  if (m.phase === 'result') { if (pressed || m.t > 4) { flags.kingyo = (flags.kingyo||0) + m.caught; matsuri = null; } m.t += dt; return; }
+  m.t += dt; m.cool -= dt;
+  const sp = 260 * dt;
+  if (keys['arrowleft']||keys['a']) m.poiX -= sp; if (keys['arrowright']||keys['d']) m.poiX += sp;
+  if (keys['arrowup']||keys['w']) m.poiY -= sp; if (keys['arrowdown']||keys['s']) m.poiY += sp;
+  m.poiX = clamp(m.poiX, VW/2-150, VW/2+150); m.poiY = clamp(m.poiY, VH/2-90, VH/2+90);
+  for (const f of m.fish) {
+    if (rnd() < 0.03) { f.vx = (rnd()-0.5)*70; f.vy = (rnd()-0.5)*50; }
+    f.x += f.vx*dt; f.y += f.vy*dt;
+    if (f.x < VW/2-150 || f.x > VW/2+150) f.vx *= -1; if (f.y < VH/2-90 || f.y > VH/2+90) f.vy *= -1;
+  }
+  if (pressed && m.cool <= 0) {                       // すくう
+    m.cool = 0.4;
+    for (let i = m.fish.length-1; i >= 0; i--) { if (Math.hypot(m.fish[i].x - m.poiX, m.fish[i].y - m.poiY) < 22) { m.fish.splice(i,1); m.caught++; if (typeof mizuSfx==='function') mizuSfx(); } }
+  }
+  if (m.t > 12 || m.fish.length === 0) { m.phase = 'result'; m.t = 0; }
+}
 // --- 虫相撲。つかまえた 虫で リグルと 勝負。スペース連打で おし返す
 function bugPower(bi) { return [5,3,3,2][bi] || 3; }         // カブトが つよい
 function bestBug() { let b=-1, p=-1; for (const k in bugDex) { if (bugDex[k]>0) { const bi=+k, pw=bugPower(bi); if (pw>p){p=pw;b=bi;} } } return b; }
@@ -591,7 +617,7 @@ function loop(now) {
   if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
-  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearBug = null, nearBugD = 1e9, nearHikari = false, pc = 0, pr = 0;
+  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearStall = false, nearBug = null, nearBugD = 1e9, nearHikari = false, pc = 0, pr = 0;
   if (mode === 'play') {
     // 時間は **勝手には 進まない**（急かさない）。ねむり中だけ つぎの朝へ とぶ
     if (sleepPhase > 0) {
@@ -605,7 +631,7 @@ function loop(now) {
 
     // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。話している あいだは 足を とめる
     let ax = 0, ay = 0;
-    if (!talkNpc && !sleepPhase && !diaryOpen && !dexOpen && !fishing && !sumo && !pauseOpen) {
+    if (!talkNpc && !sleepPhase && !diaryOpen && !dexOpen && !fishing && !sumo && !matsuri && !pauseOpen) {
       if (keys['arrowleft']||keys['a']) ax -= 1;
       if (keys['arrowright']||keys['d']) ax += 1;
       if (keys['arrowup']||keys['w']) ay -= 1;
@@ -674,6 +700,7 @@ function loop(now) {
     nearRadio = Math.hypot((RADIO.c+0.5)*TS - player.x, (RADIO.r+0.5)*TS - player.y) < TS*1.3;
     nearRest = Math.hypot((REST.c+0.5)*TS - player.x, (REST.r+0.5)*TS - player.y) < TS*1.3;
     nearShrine = Math.hypot((SHRINE.c+0.5)*TS - player.x, (SHRINE.r+0.5)*TS - player.y) < TS*1.5;
+    nearStall = isFestival() && isNight() && Math.hypot((STALL.c+0.5)*TS - player.x, (STALL.r+0.5)*TS - player.y) < TS*1.6;
     waterSpot = waterNextTo(pc, pr);          // 池の ふちに いるか
     // 雨は 水面を たたく＝画面内の 水セルに 波紋を ちらす
     if ((isRainy() || showerNow()) && ripples.length < 24) for (let k = 0; k < 2; k++) {
@@ -703,6 +730,7 @@ function loop(now) {
     // キーで 会話／体操／うえる・みずやり／水あそび／蛍つかまえ（近づいただけでは 始めない・P1）
     if (fishing) { tickFishing(dt, act); act = false; }     // 釣り中は スペースを 釣りへ
     else if (sumo) { tickSumo(dt, act); act = false; }      // 虫相撲中は スペースを 相撲へ
+    else if (matsuri) { tickMatsuri(dt, act); act = false; } // 金魚すくい中
     else if (!pauseOpen) {
       if (act && diaryOpen) { diaryOpen = false; act = false; }
       if (act && dexOpen) { dexOpen = false; act = false; }
@@ -731,6 +759,7 @@ function loop(now) {
           }
           else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
         }
+        else if (nearStall) { startMatsuri(); }
         else if (nearHikari) { flags.hikaricho = true; hikari = null; dayMsg = '★ ひかりちょうを つかまえた！'; daySub = 'よるの もりの ひみつ'; dayMsgT = 3.2; passTime(0.5); save(); }
         else if (nearShrine) { doOmairi(); }
         else if (waterSpot) { startFishing(waterSpot); }
@@ -819,6 +848,21 @@ function loop(now) {
   }
   drawShrine();                          // 神社（鳥居＋祠＋狛犬）
   drawProps();                           // 案山子・道しるべ看板
+  if (isFestival() && isNight()) {       // 祭りの夜だけ 屋台
+    const sx = (STALL.c+0.5)*TS - cam.x, sy = (STALL.r+1)*TS - cam.y;
+    if (sx > -60 && sx < VW+60) {
+      g.save();
+      g.fillStyle = '#8a4a3a'; g.fillRect(sx-28, sy-40, 56, 6);            // 屋根
+      g.fillStyle = '#b5563f'; for (let i=0;i<7;i++){ if(i%2){ g.fillRect(sx-28+i*8, sy-40, 8, 6);} }  // 紅白しま
+      g.fillStyle = '#6b4a2a'; g.fillRect(sx-26, sy-34, 4, 34); g.fillRect(sx+22, sy-34, 4, 34);  // 柱
+      g.fillStyle = '#d9c07a'; g.fillRect(sx-24, sy-18, 48, 10);            // 台
+      g.fillStyle = '#3aa0d0'; g.fillRect(sx-20, sy-16, 40, 6);            // 水そう（金魚）
+      // 提灯
+      for (const s of [-1,1]) { g.fillStyle = '#e24a4a'; g.beginPath(); g.arc(sx + s*22, sy-36, 5, 0, 6.283); g.fill(); }
+      g.fillStyle = 'rgba(255,246,220,0.95)'; g.font = '600 10px system-ui'; g.textAlign='center'; g.fillText('きんぎょすくい', sx, sy-44); g.textAlign='left';
+      g.restore();
+    }
+  }
   // 世界を とぶ 虫（cutebugs）。ふわっと 出て 消える
   for (const cr of critters) {
     const cx = cr.x - cam.x, cy = cr.y - cam.y;
@@ -1008,6 +1052,7 @@ function loop(now) {
     // 会話の まど／釣り／虫相撲／足もとの したこと
     if (talkNpc) drawSay(talkLines[talkIdx]);
     else if (sumo) drawSumo(sumo);
+    else if (matsuri) drawMatsuri();
     else if (fishing) {
       if (fishing.phase === 'result') drawFishResult(fishing);
       else {
@@ -1020,6 +1065,7 @@ function loop(now) {
     else {
       let lbl = null;
       if (near) lbl = '▶ はなす';
+      else if (nearStall) lbl = '▶ きんぎょすくい';
       else if (nearHikari) lbl = '▶ つかまえる';
       else if (nearShrine) lbl = '▶ おまいり';
       else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
@@ -1426,6 +1472,32 @@ function drawDex() {
   g.fillStyle = 'rgba(70,80,50,0.6)'; g.font = '13px system-ui'; g.textAlign = 'right';
   g.fillText('Cか スペースで とじる', bx+bw-24, by+bh-16); g.textAlign = 'left';
   g.restore();
+}
+// 金魚すくいの えがき
+function drawMatsuri() {
+  const m = matsuri;
+  g.save();
+  g.fillStyle = 'rgba(8,10,20,0.55)'; g.fillRect(0, 0, VW, VH);
+  // 水そう
+  g.fillStyle = 'rgba(70,160,210,0.5)'; g.fillRect(VW/2-158, VH/2-98, 316, 196);
+  g.strokeStyle = 'rgba(255,255,255,0.4)'; g.lineWidth = 3; g.strokeRect(VW/2-158, VH/2-98, 316, 196);
+  g.fillStyle = '#ffe6a8'; g.font = '700 18px system-ui'; g.textAlign = 'center';
+  g.fillText(`きんぎょすくい　すくった：${m.caught}`, VW/2, VH/2-112);
+  // 金魚（コイ=赤 スプライトを 小さく）
+  for (const f of m.fish) drawFishSprite(4, f.x, f.y, 0.7);
+  // ポイ（網）
+  if (m.phase === 'play') {
+    g.strokeStyle = '#eee'; g.lineWidth = 2; g.beginPath(); g.arc(m.poiX, m.poiY, 20, 0, 6.283); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.12)'; g.fill();
+    g.strokeStyle = '#c08a4a'; g.lineWidth = 3; g.beginPath(); g.moveTo(m.poiX+14, m.poiY+14); g.lineTo(m.poiX+34, m.poiY+34); g.stroke();
+    g.fillStyle = 'rgba(246,250,242,0.9)'; g.font = '14px system-ui';
+    g.fillText(`のこり ${Math.max(0, Math.ceil(12-m.t))}秒　やじるしで うごかす・スペースで すくう`, VW/2, VH/2+118);
+  } else {
+    g.fillStyle = '#ffe23a'; g.font = '700 24px system-ui';
+    g.fillText(`${m.caught}ひき すくった！`, VW/2, VH/2+4);
+    g.fillStyle = 'rgba(230,238,250,0.7)'; g.font = '14px system-ui'; g.fillText('スペースで つづける', VW/2, VH/2+40);
+  }
+  g.textAlign = 'left'; g.restore();
 }
 // 虫相撲の えがき（土俵の上で 2匹が おしあう）
 function drawSumo(s) {
