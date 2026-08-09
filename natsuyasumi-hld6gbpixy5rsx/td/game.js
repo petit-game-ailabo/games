@@ -624,7 +624,8 @@ let showHud = true;               // 時計・こよみの 表示。**最後に 
 let mode = 'title';               // 'title'（はじめる前）| 'play'（あそぶ）| 'ending'（夏の おわり）
 let pauseOpen = false;            // ポーズ／せってい（音量・あそびかた・クレジット）
 let resetArm = false;             // 「はじめから」の 二度押し 確認
-const opt = { nonbiri: false, textSpeed: 1, bgm: false };   // のんびり／文字送り速さ／BGM(既定OFF)。別キーで のこす
+const opt = { nonbiri: false, textSpeed: 1, bgm: false, sfxIdx: 0 };   // のんびり／文字速さ／BGM／効果音(0大1小2消)。別キーで のこす
+function applySfx() { if (typeof setSfxVol === 'function') setSfxVol([1, 0.5, 0][opt.sfxIdx] != null ? [1, 0.5, 0][opt.sfxIdx] : 1); }
 function cps() { return [16, 34, 72][opt.textSpeed] != null ? [16, 34, 72][opt.textSpeed] : 34; }   // 文字/秒
 try { const o = JSON.parse(localStorage.getItem('natsuyasumi_td_opt') || 'null'); if (o) Object.assign(opt, o); } catch (e) {}
 function saveOpt() { try { localStorage.setItem('natsuyasumi_td_opt', JSON.stringify(opt)); } catch (e) {} }
@@ -695,7 +696,11 @@ cv.addEventListener('pointerdown', e => {
       if (Math.abs(x - L) < 64) { opt.nonbiri = !opt.nonbiri; saveOpt(); uiTap(); e.preventDefault(); return; }
       if (Math.abs(x - R) < 64) { uiTap(); if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', onUnload); cancelSave(); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; } e.preventDefault(); return; }
     }
-    if (x < VW*0.5) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.0; uiTap(); } else { pauseOpen = false; resetArm = false; uiTap(); }
+    if (Math.abs(y - 156) < 15) {   // 音量ぎょう：左=おと(全体) / 右=こうか音
+      if (x < VW/2) { cycleVolume(); } else { opt.sfxIdx = (opt.sfxIdx+1) % 3; saveOpt(); applySfx(); }
+      uiTap(); e.preventDefault(); return;
+    }
+    pauseOpen = false; resetArm = false; uiTap();   // ほかを タップ＝とじる
     e.preventDefault(); return;
   }
   if (mode === 'play' && Math.hypot(x - (VW-28), y - 24) < 22) { pauseOpen = true; uiTap(); e.preventDefault(); return; }  // ⚙
@@ -754,7 +759,7 @@ function loop(now) {
   }
 
   // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
-  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (typeof setBgm === 'function') setBgm(opt.bgm); if (!flags.introDone) { flags.introDone = true;
+  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (typeof setBgm === 'function') setBgm(opt.bgm); applySfx(); if (!flags.introDone) { flags.introDone = true;
       const ctrl = touchMode ? ['cirno', '（左はんぶん＝うごく・右タップ＝はなす/きめる・下のボタン＝ねる/ずかん）']
                              : ['cirno', '（スペース＝はなす/しらべる、Z＝ねる、N＝えにっき）'];
       const l0 = lastSummer ? ['cirno', `ことしも なつやすみ！（${(lastSummer.year||0)+1}回目の なつ）`] : INTRO.lines[0];
@@ -1787,8 +1792,8 @@ function drawPause() {
   g.moveTo(bx+r,by); g.arcTo(bx+bw,by,bx+bw,by+bh,r); g.arcTo(bx+bw,by+bh,bx,by+bh,r); g.arcTo(bx,by+bh,bx,by,r); g.arcTo(bx,by,bx+bw,by,r); g.fill();
   g.fillStyle = '#3f4a30'; g.font = '700 24px system-ui'; g.textAlign = 'center';
   g.fillText('せってい', VW/2, by+42);
-  g.fillStyle = '#4a5238'; g.font = '17px system-ui';
-  g.fillText(`おと：${volLabel()}    （Mキー／左タップで きりかえ）`, VW/2, by+86);
+  g.fillStyle = '#4a5238'; g.font = '16px system-ui';
+  g.fillText(`おと：${volLabel()}　｜　こうか音：${['大','小','消'][opt.sfxIdx]}　（この行を タップ／Mキー）`, VW/2, by+86);
   g.font = '15px system-ui'; g.fillStyle = '#5a6048';
   const lines = [
     '― あそびかた ―',
@@ -1813,9 +1818,8 @@ function drawPause() {
   btn(R, 404, 'BGM：' + (opt.bgm ? 'ON' : 'OFF'), opt.bgm);
   btn(L, 440, 'のんびり：' + (opt.nonbiri ? 'ON' : 'OFF'), opt.nonbiri);
   btn(R, 440, resetArm ? 'ほんとうに？' : 'はじめから', false);
-  g.fillStyle = 'rgba(90,96,72,0.7)'; g.font = '12px system-ui'; g.textAlign = 'center';
-  g.fillText('データは この端末に ほぞん（E かきだす／I よみこむ）', VW/2, by+bh-22);
-  g.fillText('おと：左タップ ／ Pか Escで とじる', VW/2, by+bh-6);
+  g.fillStyle = 'rgba(90,96,72,0.72)'; g.font = '11px system-ui'; g.textAlign = 'center';
+  g.fillText('データは この端末に ほぞん（E かきだす／I よみこむ）　｜　Pか Escで とじる', VW/2, by+bh-6);
   g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }

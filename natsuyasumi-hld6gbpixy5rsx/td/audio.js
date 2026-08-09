@@ -16,6 +16,7 @@ function volLabel() { return ['消', '小', '小', '中', '中', '大', '大', '
 let rainGain = null;            // 雨の 常時音（ゲインで 出し入れ）
 let brookGain = null;           // 川の せせらぎ（水に 近いほど 大きく）
 let bgmGain = null, bgmTimer = 0, bgmOn = false;   // プレイ中BGM（既定OFF・場面連動・別音量）
+let sfxGain = null, sfxVol = 1;                     // 効果音の 別バス（個別音量）
 
 function noiseBuf(sec) {
   const len = Math.ceil(AC.sampleRate * sec);
@@ -38,7 +39,10 @@ function initAudio() {
   rainGain = AC.createGain(); rainGain.gain.value = 0;
   rs.connect(rlp); rlp.connect(rhp); rhp.connect(rainGain); rainGain.connect(ambGain); rs.start();
   bgmGain = AC.createGain(); bgmGain.gain.value = 0; bgmGain.connect(ambGain);   // BGM 別ゲイン（既定0）
+  sfxGain = AC.createGain(); sfxGain.gain.value = sfxVol; sfxGain.connect(ambGain);   // SFX 別ゲイン（効果音だけ 個別に）
 }
+function setSfxVol(v) { sfxVol = v; if (AC && sfxGain) sfxGain.gain.setTargetAtTime(v, AC.currentTime, 0.1); }
+function sfxOut() { return sfxGain || ambGain; }   // SFXの 出力先（未初期化なら amb）
 // BGMの ON/OFF（既定OFF）
 function setBgm(on) { bgmOn = on; if (AC && bgmGain) bgmGain.gain.setTargetAtTime(on ? 0.14 : 0, AC.currentTime, 0.5); }
 // 場面で 曲想が かわる やわらかい パッド。mood: 'day'|'night'|'festival'|'late'
@@ -189,7 +193,7 @@ function taisoJingle() {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.linearRampToValueAtTime(0.14, t + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-    o.connect(bp); bp.connect(g); g.connect(ambGain);
+    o.connect(bp); bp.connect(g); g.connect(sfxOut());
     o.start(t); o.stop(t + 0.2);
   });
 }
@@ -206,7 +210,7 @@ function footstep(kind) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
   g.gain.exponentialRampToValueAtTime(0.0001, t + (kind === 'water' ? 0.16 : 0.09));
-  s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t + 0.2);
+  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.2);
 }
 // --- 水あそびの ぱしゃ（みじかい 水音）。ノイズの 破裂＋ひくい ぽちゃん
 function mizuSfx() {
@@ -218,13 +222,13 @@ function mizuSfx() {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(0.28, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-  s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t + 0.26);
+  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.26);
   const o = AC.createOscillator(); o.type='sine';
   o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(240, t + 0.16);
   const og = AC.createGain();
   og.gain.setValueAtTime(0.0001, t); og.gain.linearRampToValueAtTime(0.12, t + 0.02);
   og.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
-  o.connect(og); og.connect(ambGain); o.start(t); o.stop(t + 0.24);
+  o.connect(og); og.connect(sfxOut()); o.start(t); o.stop(t + 0.24);
 }
 // --- 畑：土をかける「ザッ」／収穫の「ポン」
 function soilSfx() {
@@ -232,20 +236,20 @@ function soilSfx() {
   const s = AC.createBufferSource(); s.buffer = shortNoise;
   const bp = AC.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 620;
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.13, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-  s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t + 0.18);
+  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.18);
 }
 function popSfx() {
   if (!AC) return; const t = AC.currentTime;
   const o = AC.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(440, t); o.frequency.exponentialRampToValueAtTime(880, t + 0.08);
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.13, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-  o.connect(g); g.connect(ambGain); o.start(t); o.stop(t + 0.2);
+  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.2);
 }
 // --- UIの クリック音（メニュー開閉・ボタン）
 function uiSfx() {
   if (!AC) return; const t = AC.currentTime;
   const o = AC.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(660, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.03);
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
-  o.connect(g); g.connect(ambGain); o.start(t); o.stop(t + 0.1);
+  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.1);
 }
 // --- カエル（よるの 田んぼ）。ひくい「ゲコッ」を 2つ
 function frog(vol) {
@@ -265,17 +269,17 @@ function fireworkLaunch() {
   const o = AC.createOscillator(); o.type = 'sine';
   o.frequency.setValueAtTime(380, t); o.frequency.exponentialRampToValueAtTime(1150, t + 0.5);
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.04, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-  o.connect(g); g.connect(ambGain); o.start(t); o.stop(t + 0.6);
+  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.6);
 }
 function fireworkBoom() {
   if (!AC || !shortNoise) return; const t = AC.currentTime;
   const s = AC.createBufferSource(); s.buffer = shortNoise;
   const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 850;
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-  s.connect(lp); lp.connect(g); g.connect(ambGain); s.start(t); s.stop(t + 0.6);
+  s.connect(lp); lp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.6);
   const o = AC.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.4);
   const og = AC.createGain(); og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.28, t + 0.02); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-  o.connect(og); og.connect(ambGain); o.start(t); o.stop(t + 0.55);
+  o.connect(og); og.connect(sfxOut()); o.start(t); o.stop(t + 0.55);
 }
 // --- いま 何が 鳴く 時間帯か（時計を 見なくても 耳で 夏が わかる）
 function ambKindOf(tod) {
