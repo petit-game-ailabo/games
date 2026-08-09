@@ -294,6 +294,8 @@ let garden = [];                  // はたけ（{c,r,stage,watered}）
 let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
 let calT = 0;                     // 朝の こよみめくり 演出タイマー
 let frogTimer = 0;               // 夜の 田んぼの カエル
+let sparrowTimer = 0;            // 道ばたの スズメ（昼・とびたつ）
+const sparrows = [];             // {x,y,vx,vy,life}
 // --- 自由研究の きろく（えにっき＋ずかん）。テキストだけ＝絵が いらない
 let diary = [];                  // [{d, text}]  その日の しめくくり
 let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false };  // 今日 やったこと
@@ -750,6 +752,16 @@ function loop(now) {
         if (paddyNear) frog(0.05);
       }
     }
+    // 道ばたの スズメ（昼・近くに 道が あると たまに とびたつ）
+    sparrowTimer -= dt;
+    if (sparrowTimer <= 0) { sparrowTimer = 3 + rnd()*4;
+      if (!isNight() && !isRainy() && player.moving) {
+        const pcc = Math.floor(player.x/TS), prr = Math.floor(player.y/TS); let pc2 = null;
+        for (let dr=-2;dr<=2&&!pc2;dr++) for (let dc=-2;dc<=2;dc++) { const c=pcc+dc,r=prr+dr; if (map[r]&&map[r][c]===PATH){pc2=[c,r];break;} }
+        if (pc2) { sparrows.push({ x:(pc2[0]+0.5)*TS, y:(pc2[1]+0.5)*TS, vx:(rnd()-0.5)*70, vy:-60-rnd()*40, life:1 }); if (typeof kotori==='function') kotori(0.05); }
+      }
+    }
+    for (let i = sparrows.length-1; i >= 0; i--) { const s = sparrows[i]; s.x += s.vx*dt; s.y += s.vy*dt; s.vy += 40*dt; s.life -= dt/1.4; if (s.life <= 0) sparrows.splice(i,1); }
     // BGM（場面連動・既定OFF）
     if (typeof bgmTick === 'function') bgmTick(dt, nokori() <= 3 ? 'late' : ((isFestival() && isNight()) ? 'festival' : (isNight() ? 'night' : 'day')));
     // 最終夜：いちばん 仲よくなった 子と ふたりの 場面（絆の 回収）
@@ -1019,6 +1031,15 @@ function loop(now) {
       g.fillStyle = 'rgba(255,246,220,0.95)'; g.font = '600 10px system-ui'; g.textAlign='center'; g.fillText('きんぎょすくい', sx, sy-44); g.textAlign='left';
       g.restore();
     }
+  }
+  // 道ばたの スズメ（とびたつ）。ちゃいろい 小鳥
+  for (const s of sparrows) {
+    const sx = s.x - cam.x, sy = s.y - cam.y, flap = Math.sin(s.life*30) > 0 ? -2 : 2;
+    if (sx < -20 || sy < -20 || sx > VW+20 || sy > VH+20) continue;
+    g.save(); g.globalAlpha = Math.max(0, Math.min(1, s.life*1.5));
+    g.fillStyle = '#8a6a44'; g.fillRect(sx-2, sy-2, 4, 4);            // からだ
+    g.fillStyle = '#6b4f30'; g.fillRect(sx-6, sy+flap, 4, 2); g.fillRect(sx+2, sy-flap, 4, 2);  // 羽
+    g.restore();
   }
   // 昼の蝶（花に あつまる）。色つきの 羽が ひらひら
   for (const fl of flutters) {
