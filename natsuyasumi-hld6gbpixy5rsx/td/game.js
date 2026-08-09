@@ -459,7 +459,7 @@ function tickFishing(dt, pressed) {
       const sz = Math.round(FISH[fi].size * (0.6 + rnd()*0.8));   // 大きさ（cm・ばらつき）
       f.record = sz > (fishMax[fi]||0); if (f.record) fishMax[fi] = sz;
       f.phase = 'result'; f.t = 0; f.fish = fi; f.size = sz; f.win = true; passTime(1.0); save();
-    } else if (f.t > 0.85) { f.phase = 'result'; f.t = 0; f.win = false; }  // にげられた
+    } else if (f.t > (opt.nonbiri ? 1.5 : 0.85)) { f.phase = 'result'; f.t = 0; f.win = false; }  // にげられた（のんびりは 甘め）
   } else {                                                // result
     if (pressed || f.t > 2.6) fishing = null;
   }
@@ -490,11 +490,12 @@ function tickMatsuri(dt, pressed) {
     f.x += f.vx*dt; f.y += f.vy*dt;
     if (f.x < VW/2-150 || f.x > VW/2+150) f.vx *= -1; if (f.y < VH/2-90 || f.y > VH/2+90) f.vy *= -1;
   }
-  if (pressed && m.cool <= 0) {                       // すくう
+  if (pressed && m.cool <= 0) {                       // すくう（のんびりは 網 大きめ）
     m.cool = 0.4;
-    for (let i = m.fish.length-1; i >= 0; i--) { if (Math.hypot(m.fish[i].x - m.poiX, m.fish[i].y - m.poiY) < 22) { m.fish.splice(i,1); m.caught++; if (typeof mizuSfx==='function') mizuSfx(); } }
+    const rr = opt.nonbiri ? 30 : 22;
+    for (let i = m.fish.length-1; i >= 0; i--) { if (Math.hypot(m.fish[i].x - m.poiX, m.fish[i].y - m.poiY) < rr) { m.fish.splice(i,1); m.caught++; if (typeof mizuSfx==='function') mizuSfx(); } }
   }
-  if (m.t > 12 || m.fish.length === 0) { m.phase = 'result'; m.t = 0; }
+  if (m.t > (opt.nonbiri ? 16 : 12) || m.fish.length === 0) { m.phase = 'result'; m.t = 0; }
 }
 // --- 虫相撲。つかまえた 虫で リグルと 勝負。スペース連打で おし返す
 function bugPower(bi) { return [5,3,3,2][bi] || 3; }         // カブトが つよい
@@ -507,7 +508,7 @@ function sumoStart() {
 function tickSumo(dt, pressed) {
   const s = sumo; s.t += dt;
   if (s.phase === 'fight') {
-    s.pos -= bugPower(s.op) * 0.13 * dt;         // 相手が おしてくる
+    s.pos -= bugPower(s.op) * (opt.nonbiri ? 0.09 : 0.13) * dt;   // 相手が おしてくる（のんびりは 弱め）
     if (pressed) s.pos += bugPower(s.my) * 0.05; // 連打で おし返す
     s.pos = clamp(s.pos, -1.1, 1.1);
     if (s.pos >= 1) { s.phase='result'; s.result='win'; s.t=0; sumoWins++; flags.everSumo=true; save(); }
@@ -1655,7 +1656,7 @@ function drawMatsuri() {
     g.fillStyle = 'rgba(255,255,255,0.12)'; g.fill();
     g.strokeStyle = '#c08a4a'; g.lineWidth = 3; g.beginPath(); g.moveTo(m.poiX+14, m.poiY+14); g.lineTo(m.poiX+34, m.poiY+34); g.stroke();
     g.fillStyle = 'rgba(246,250,242,0.9)'; g.font = '14px system-ui';
-    g.fillText(`のこり ${Math.max(0, Math.ceil(12-m.t))}秒　やじるしで うごかす・スペースで すくう`, VW/2, VH/2+118);
+    g.fillText(`のこり ${Math.max(0, Math.ceil((opt.nonbiri?16:12)-m.t))}秒　やじるしで うごかす・スペースで すくう`, VW/2, VH/2+118);
   } else {
     g.fillStyle = '#ffe23a'; g.font = '700 24px system-ui';
     g.fillText(`${m.caught}ひき すくった！`, VW/2, VH/2+4);
