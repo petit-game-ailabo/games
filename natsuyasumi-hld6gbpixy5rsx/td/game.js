@@ -368,11 +368,15 @@ function spawnCritter() {
   const cand = BUGS.map((b,i)=>i).filter(matchBugTime);
   if (!cand.length) return;
   const bi = cand[(rnd()*cand.length)|0];
-  for (let tr = 0; tr < 10; tr++) {
+  const wantTree = !!BUGS[bi].night;   // 夜の虫（カブト・ガ）は 木のそば＝森の際に
+  for (let tr = 0; tr < 12; tr++) {
     const c = Math.floor(player.x/TS) + ((rnd()*18|0)-9), r = Math.floor(player.y/TS) + ((rnd()*12|0)-6);
     if (c<1||r<1||c>=MW-1||r>=MH-1) continue;
     const t = map[r][c];
-    if (t===G || t===G2 || t===FLOWER || t===PLANT) { critters.push({ x:c*TS+TS/2, y:r*TS+TS/2, bi, vx:0, vy:0, ph:rnd()*6.28, life:0 }); return; }
+    if (!(t===G || t===G2 || t===FLOWER || t===PLANT)) continue;
+    const treeAdj = [[1,0],[-1,0],[0,1],[0,-1]].some(([dc,dr]) => (map[r+dr] && map[r+dr][c+dc]) === TREE);
+    if (wantTree && !treeAdj) continue;
+    critters.push({ x:c*TS+TS/2, y:r*TS+TS/2, bi, vx:0, vy:0, ph:rnd()*6.28, life:0 }); return;
   }
 }
 // --- ねむる（Zキー）。まっくらに とけて つぎの朝へ
