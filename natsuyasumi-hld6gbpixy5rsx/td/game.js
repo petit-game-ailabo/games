@@ -14,48 +14,56 @@ const VW = cv.width, VH = cv.height;
 const G = 0, G2 = 2, PATH = 22, WATER = 43, TREE = 44, PLANT = 73, FLOWER = 74, BUSH = 1;
 const SOLID = new Set([WATER, TREE, BUSH]);
 
-// --- 広い庭を つくる（決まった 乱数で 毎回おなじ）。ほの暮しの庭ふうに スクロールする 広さ
-const MW = 44, MH = 34;
+// --- 夏休みの 田舎（決まった 乱数で 毎回おなじ）。**森が ベース＝入れない**。
+//   道と ひらけた場所だけを 切り開く。うち→田んぼ道→川(飛び石)→分岐、と 出かける
+const MW = 56, MH = 64;
+const STONE = 990;              // 飛び石（水の上・歩ける）。タイルには 無い＝コードで えがく
 let seed = 20260809;
 function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
 const map = [];
-for (let r = 0; r < MH; r++) {
-  const row = [];
-  for (let c = 0; c < MW; c++) row.push(rnd() < 0.16 ? G2 : G);   // 草（すこし ムラ）
-  map.push(row);
-}
+for (let r = 0; r < MH; r++) { const row = []; for (let c = 0; c < MW; c++) row.push(TREE); map.push(row); }  // ぜんぶ 森
 function set(c, r, v) { if (c>=0&&r>=0&&c<MW&&r<MH) map[r][c] = v; }
 function rect(c0, r0, w, h, v) { for (let r=r0;r<r0+h;r++) for (let c=c0;c<c0+w;c++) set(c,r,v); }
-// まわりを 木で 囲う（2重）
-for (let c=0;c<MW;c++){ set(c,0,TREE); set(c,1,TREE); set(c,MH-1,TREE); set(c,MH-2,TREE); }
-for (let r=0;r<MH;r++){ set(0,r,TREE); set(1,r,TREE); set(MW-1,r,TREE); set(MW-2,r,TREE); }
-// 池
-rect(6, 6, 5, 4, WATER);
-// 道（十字＋まわり道）
-rect(3, 16, MW-6, 2, PATH);
-rect(20, 3, 2, MH-6, PATH);
-// はたけ（土。ひまわりを うえる 場所）
-const FIELD = { c: 28, r: 20, w: 8, h: 6 };
+function clearing(c0, r0, w, h) { for (let r=r0;r<r0+h;r++) for (let c=c0;c<c0+w;c++) set(c,r, rnd()<0.16?G2:G); }  // ひらけた 草地
+function vpath(c, r0, r1, w) { for (let r=r0;r<=r1;r++) for (let k=0;k<w;k++) set(c+k,r,PATH); }
+function hpath(r, c0, c1, w) { for (let c=c0;c<=c1;c++) for (let k=0;k<w;k++) set(c,r+k,PATH); }
+// 田んぼ（あぜ道で 区切られた 水田）。あぜ＝歩ける・水＝入れない
+function paddy(c0, r0, w, h) { for (let r=r0;r<r0+h;r++) for (let c=c0;c<c0+w;c++) set(c,r, (((c-c0)%5===0)||((r-r0)%4===0)) ? PATH : WATER); }
+
+clearing(13, 2, 30, 13);        // ① うち（スタート地点の 庭）
+clearing(5, 15, 46, 17);        // ② 田んぼ ゾーン
+clearing(5, 37, 46, 24);        // ③ 川むこう（分岐）
+paddy(8, 16, 15, 14);           // 田んぼ・左
+paddy(30, 16, 16, 14);          // 田んぼ・右
+vpath(26, 13, 61, 2);           // 背骨の道（うち→田んぼ道→川→むこう）
+hpath(48, 10, 27, 2);           // 分岐・左（原っぱへ）
+hpath(49, 26, 46, 2);           // 分岐・右（川べり・池へ）
+vpath(12, 48, 58, 2);           // 原っぱへ 下る
+vpath(44, 49, 57, 2);           // 池へ 下る
+rect(2, 33, MW-4, 4, WATER);    // 川（よこ一文字）
+[33,34,35,36].forEach(r => set(26, r, STONE));   // 飛び石（1れつ）で わたる
+set(26,32,PATH); set(26,37,PATH);                // 岸に つなぐ
+rect(38, 51, 6, 5, WATER);      // 川むこうの 小さな池（釣り）
+// はたけ（うちの庭・ひまわり）
+const FIELD = { c: 30, r: 6, w: 7, h: 5 };
 rect(FIELD.c, FIELD.r, FIELD.w, FIELD.h, PATH);
 function inField(c, r) { return c>=FIELD.c && c<FIELD.c+FIELD.w && r>=FIELD.r && r<FIELD.r+FIELD.h; }
-// 木・花を すこし ちらす（道・水・畑の 上には 置かない）
-for (let i=0;i<120;i++){
+// 木・花・やぶを ちらす（草の上だけ）
+for (let i=0;i<300;i++){
   const c = 2 + (rnd()*(MW-4)|0), r = 2 + (rnd()*(MH-4)|0);
   if (map[r][c] !== G && map[r][c] !== G2) continue;
   const k = rnd();
-  map[r][c] = k < 0.45 ? TREE : (k < 0.6 ? BUSH : (k < 0.8 ? FLOWER : PLANT));
+  map[r][c] = k < 0.4 ? TREE : (k < 0.55 ? BUSH : (k < 0.78 ? FLOWER : PLANT));
 }
-
-// ラジオ体操の 広場（あさ ここで 体操→スタンプ）。まわりを 草に して 木を どける
-const RADIO = { c: 24, r: 14 };
-rect(RADIO.c-1, RADIO.r-1, 3, 3, G);
-// うちの まわり（拠点の 気配）。きれいな 単体タイルだけ 置く＝絵が くずれない
-// 37=壺 47=木桶 28=木箱 33=たる。まわりを 草に して きれいに 置く
-rect(16, 13, 6, 4, G);
-const HOME_OBJS = [[17,14,37],[19,14,48],[16,14,28],[20,14,33]];  // 壺・木桶・木箱・たる
+// 原っぱ（川むこう左）は 花を おおめに
+for (let r=50;r<59;r++) for (let c=8;c<19;c++) { if ((map[r][c]===G||map[r][c]===G2) && rnd()<0.5) map[r][c]=FLOWER; }
+// うち まわりを ととのえる（ちらしの あと）：広場を 草に もどして 物を おく
+const RADIO = { c: 22, r: 5 };              // ラジオ体操の 広場（あさ→スタンプ）
+const REST  = { c: 18, r: 6 };              // 縁台（ひとやすみ→時間すすむ）
+rect(14, 3, 12, 9, G);                      // うちの 広場を きれいに
+const HOME_OBJS = [[17,4,37],[19,4,48],[16,4,28],[20,4,33]];  // 壺・木桶・木箱・たる
 for (const [c,r,t] of HOME_OBJS) set(c,r,t);
 [28,33,37,48].forEach(t => SOLID.add(t));   // 置いた ものは とおれない
-const REST = { c: 18, r: 15 };              // 縁台（ひとやすみ→時間が すすむ）
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
 
@@ -79,22 +87,22 @@ const WHO = { cirno:'チルノ', dai:'だいようせい', marisa:'まりさ', r
 
 // --- プレイヤー（足もと＝下中央）と 立ってる 仲間。道の 交点あたりから。
 // 仲間は そばで キーを 押すと 話す（P1と 同じ：近づいただけでは 始めない）。あたたかいトーン
-const player = { x: 21 * TS, y: 17 * TS, ci: 2, face: 1, bob: 0, moving: false };
+const player = { x: 20 * TS, y: 9 * TS, ci: 2, face: 1, bob: 0, moving: false };
 // 仲間の 会話は **時間帯で かわる**（asa／hiru／yugata／yoru）。同じ夏でも 一日で 表情が うつる
 const npcs = [
-  { ci: 3, x: 24 * TS, y: 12 * TS, sets: {   // だいようせい
+  { ci: 3, x: 24 * TS, y: 4 * TS, sets: {   // だいようせい（うちの 庭）
     asa:    [['dai','おはよう、チルノちゃん'],['cirno','ん、おはよ'],['dai','きょうは なにを する？'],['cirno','うーん、かんがえ中！']],
     hiru:   [['dai','この にわ、ひろいねえ'],['cirno','ぜんぶ あたいの ばしょ！'],['dai','じゃあ てつだうよ'],['cirno','うん、たのむ！']],
     yugata: [['dai','そろそろ ゆうがた だね'],['cirno','もう そんな じかん？'],['dai','よるは はやめに ね'],['cirno','わかってるよ〜']],
     yoru:   [['dai','まだ おきてたの？'],['cirno','ほたるが きれいで'],['dai','わたしも みたいな'],['cirno','じゃあ いっしょに！']],
   } },
-  { ci: 1, x: 14 * TS, y: 22 * TS, sets: {   // まりさ
+  { ci: 1, x: 24 * TS, y: 20 * TS, sets: {   // まりさ（田んぼ道）
     asa:    [['marisa','よお、はやいな'],['cirno','ラジオたいそう した？'],['marisa','これから いくとこ'],['cirno','いっしょに いこ！']],
     hiru:   [['marisa','いい てんきだ'],['cirno','おさんぽ びより！'],['marisa','はたけ、なんか うえたか？'],['cirno','ひまわり うえたいな']],
     yugata: [['marisa','ゆうやけ、きれいだな'],['cirno','うん、あかいね'],['marisa','なつって かんじだ'],['cirno','ずっと つづけば いいのに']],
     yoru:   [['marisa','よるは しずかだな'],['cirno','むしの こえが する'],['marisa','こわく ないか？'],['cirno','へ、へいきだもん！']],
   } },
-  { ci: 5, x: 31 * TS, y: 23 * TS, sets: {   // リグル（はたけの そば）
+  { ci: 5, x: 24 * TS, y: 44 * TS, sets: {   // リグル（川むこう）
     asa:    [['wriggle','あさは むしが げんきだ'],['cirno','ほんと？'],['wriggle','くさむらを のぞいて みな'],['cirno','うん、みてみる']],
     hiru:   [['wriggle','このあたり、むしが おおいぞ'],['cirno','つかまえて いい？'],['wriggle','あみが あればな'],['cirno','あみ、ほしいなあ']],
     yugata: [['wriggle','ゆうがたは ひぐらしが なく'],['cirno','かなかな…って やつ？'],['wriggle','そう、それ'],['cirno','なんだか せつない ね']],
@@ -369,6 +377,7 @@ function load() {
     if (s.fishDex) fishDex = s.fishDex;
     if (s.bugDex) bugDex = s.bugDex;
     if (s.px != null) { player.x = s.px; player.y = s.py; }
+    if (solidAt(player.x, player.y)) { player.x = 20 * TS; player.y = 9 * TS; }  // 旧マップの 位置が 壁なら 家へ
   } catch (e) {}
 }
 // はたけの成長：まえの日に みずを あげた 苗が ひと段階 のびる（0種→1芽→2葉→3つぼみ→4さいた）
@@ -552,8 +561,11 @@ function loop(now) {
     for (let c = c0; c <= c0 + VW/TS + 1 && c < MW; c++) {
       if (r < 0 || c < 0) continue;
       const t = map[r][c], dx = c*TS - cam.x, dy = r*TS - cam.y;
-      if (t !== G && t !== G2) drawTile(G, dx, dy);   // 透ける絵は 下に 草
-      drawTile(t, dx, dy);
+      if (t === STONE) { drawTile(WATER, dx, dy); drawStone(dx, dy); }   // 飛び石＝水の上に 石
+      else {
+        if (t !== G && t !== G2) drawTile(G, dx, dy); // 透ける絵は 下に 草
+        drawTile(t, dx, dy);
+      }
       if (inField(c, r)) drawFurrow(dx, dy);          // 畑は うねを ひく
     }
   }
@@ -775,6 +787,14 @@ function drawSay(line) {
   g.fillStyle = '#eef3ff'; g.font = '20px system-ui'; g.fillText(line[1], bx+24, by+62);
   g.fillStyle = 'rgba(230,238,250,0.5)'; g.font = '13px system-ui';
   g.fillText('スペースで つぎへ', bx+bw-150, by+bh-12);
+  g.restore();
+}
+// 飛び石（水の上の 石）
+function drawStone(dx, dy) {
+  g.save();
+  g.fillStyle = 'rgba(10,20,30,0.25)'; g.beginPath(); g.ellipse(dx+TS/2, dy+TS/2+4, TS*0.4, TS*0.24, 0, 0, 6.283); g.fill();
+  g.fillStyle = '#8a8f96'; g.beginPath(); g.ellipse(dx+TS/2, dy+TS/2, TS*0.38, TS*0.3, 0, 0, 6.283); g.fill();
+  g.fillStyle = '#aab0b7'; g.beginPath(); g.ellipse(dx+TS/2-3, dy+TS/2-3, TS*0.22, TS*0.16, 0, 0, 6.283); g.fill();
   g.restore();
 }
 // 畑の うね（土に ほそい 線）
