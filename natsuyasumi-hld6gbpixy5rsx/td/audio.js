@@ -139,6 +139,24 @@ function taisoJingle() {
     o.start(t); o.stop(t + 0.2);
   });
 }
+// --- 水あそびの ぱしゃ（みじかい 水音）。ノイズの 破裂＋ひくい ぽちゃん
+function mizuSfx() {
+  if (!AC || !shortNoise) return;
+  const t = AC.currentTime;
+  const s = AC.createBufferSource(); s.buffer = shortNoise;
+  const bp = AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1400; bp.Q.value=0.6;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.28, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t + 0.26);
+  const o = AC.createOscillator(); o.type='sine';
+  o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(240, t + 0.16);
+  const og = AC.createGain();
+  og.gain.setValueAtTime(0.0001, t); og.gain.linearRampToValueAtTime(0.12, t + 0.02);
+  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+  o.connect(og); og.connect(ambGain); o.start(t); o.stop(t + 0.24);
+}
 // --- いま 何が 鳴く 時間帯か（時計を 見なくても 耳で 夏が わかる）
 function ambKindOf(tod) {
   if (tod >= 19 || tod < 5) return 'yoru';

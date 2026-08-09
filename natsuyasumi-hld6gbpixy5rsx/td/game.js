@@ -146,7 +146,7 @@ let garden = [];                  // はたけ（{c,r,stage,watered}）
 let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
 // --- 自由研究の きろく（えにっき＋ずかん）。テキストだけ＝絵が いらない
 let diary = [];                  // [{d, text}]  その日の しめくくり
-let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false };  // 今日 やったこと
+let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, mizu: false };  // 今日 やったこと
 let bloomTotal = 0;             // これまで さかせた ひまわり
 let diaryOpen = false;          // Nキーで えにっきを ひらく
 let daySub = '';                // 日の しらせの 2行目（あさごはん／のこり日数）
@@ -169,7 +169,7 @@ function passTime(h) {
 function newDay() {
   recordDiary();                 // その日の しめくくりを えにっきへ
   day++;
-  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false };
+  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, mizu: false };
   taisoToday = false; mukaeShown = false;      // あたらしい日：体操やりなおし・お迎えも リセット
   growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
   const morning = tod >= 5 && tod < 10;
@@ -181,6 +181,7 @@ function newDay() {
 function recordDiary() {
   const p = [];
   if (today.taiso) p.push('ラジオたいそうを した');
+  if (today.mizu) p.push('いけで みずあそびを した');
   if (today.hotaru) p.push(`ほたるを ${today.hotaru}ひき つかまえた`);
   if (today.planted) p.push(`たねを ${today.planted}つ まいた`);
   if (today.watered) p.push('はたけに みずを あげた');
@@ -197,6 +198,23 @@ function doTaiso() {
   passTime(0.5); save();
 }
 function canTaiso() { return tod >= 5 && tod < 9 && !taisoToday; }
+// --- 水あそび（池のふちで）。さざ波は コードで えがく＝絵が くずれない
+const ripples = [];             // {x,y,t}  ひろがって 消える 輪
+function doMizu(wx, wy) {
+  for (let i = 0; i < 3; i++) ripples.push({ x: wx + (rnd()-0.5)*14, y: wy + (rnd()-0.5)*10, t: -i*0.18 });
+  today.mizu = true;
+  if (typeof mizuSfx === 'function') mizuSfx();
+  dayMsg = 'つめたくて きもちいい！'; daySub = ''; dayMsgT = 2.0;
+  passTime(0.5); save();
+}
+// 足もとの となりに 水が あるか（あれば その 水セルの 中心を かえす）
+function waterNextTo(pc, pr) {
+  for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    const c = pc+dc, r = pr+dr;
+    if (r>=0 && r<MH && c>=0 && c<MW && map[r][c] === WATER) return { x: (c+0.5)*TS, y: (r+0.5)*TS };
+  }
+  return null;
+}
 // --- ねむる（Zキー）。まっくらに とけて つぎの朝へ
 let sleepPhase = 0;              // 0=起きてる。2.0→0 へ。1.0で 朝に とぶ
 function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
@@ -270,7 +288,7 @@ function loop(now) {
   if (mode === 'title') { if (act) { mode = 'play'; initAudio(); act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
-  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, pc = 0, pr = 0;
+  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, pc = 0, pr = 0;
   if (mode === 'play') {
     // 時間は **勝手には 進まない**（急かさない）。ねむり中だけ つぎの朝へ とぶ
     if (sleepPhase > 0) {
@@ -320,7 +338,10 @@ function loop(now) {
     onField = inField(pc, pr);
     fieldPlot = onField ? plotAt(pc, pr) : null;
     nearRadio = Math.hypot((RADIO.c+0.5)*TS - player.x, (RADIO.r+0.5)*TS - player.y) < TS*1.3;
-    // キーで 会話／体操／うえる・みずやり／蛍つかまえ（近づいただけでは 始めない・P1）
+    waterSpot = waterNextTo(pc, pr);          // 池の ふちに いるか
+    // さざ波を すすめる（ひろがって 消える）
+    for (let i = ripples.length - 1; i >= 0; i--) { ripples[i].t += dt; if (ripples[i].t > 1.1) ripples.splice(i, 1); }
+    // キーで 会話／体操／うえる・みずやり／水あそび／蛍つかまえ（近づいただけでは 始めない・P1）
     if (act && diaryOpen) { diaryOpen = false; act = false; }
     if (act) {
       if (talkNpc) {
@@ -336,6 +357,7 @@ function loop(now) {
         if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
         else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
       }
+      else if (waterSpot) { doMizu(waterSpot.x, waterSpot.y); }
       else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; today.hotaru++; nearFly = null; passTime(0.5); save(); }
       act = false;
     }
@@ -372,6 +394,13 @@ function loop(now) {
       g.fillText('ラジオたいそう', mx, my - TS - 4); g.textAlign = 'left';
     }
     g.restore();
+  }
+  // 水あそびの さざ波（水の 上に ひろがる 輪）
+  for (const rp of ripples) {
+    if (rp.t < 0) continue;
+    const rx = rp.x - cam.x, ry = rp.y - cam.y, rad = 4 + rp.t*22, a = (1 - rp.t/1.1) * 0.5;
+    g.save(); g.strokeStyle = `rgba(220,240,255,${a})`; g.lineWidth = 2;
+    g.beginPath(); g.ellipse(rx, ry, rad, rad*0.6, 0, 0, 6.283); g.stroke(); g.restore();
   }
   // y で ならべて 前後（キャラ＋ひまわり を 足もとで ソート）
   const plants = garden.map(p => ({ x: p.c*TS + TS/2, y: p.r*TS + TS, plant: p }));
@@ -449,6 +478,7 @@ function loop(now) {
       if (near) lbl = '▶ はなす';
       else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
       else if (onField) lbl = !fieldPlot ? '▶ うえる' : (!fieldPlot.watered ? '▶ みずやり' : (fieldPlot.stage >= 4 ? 'さいた！' : 'すくすく…'));
+      else if (waterSpot) lbl = '▶ みずあそび';
       else if (nearFly) lbl = '▶ つかまえる';
       if (lbl) {
         g.fillStyle = 'rgba(8,12,9,0.5)'; g.fillRect(0, VH-40, VW, 40);
