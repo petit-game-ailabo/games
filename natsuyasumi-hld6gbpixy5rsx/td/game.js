@@ -118,10 +118,26 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0 };
+// --- きょうの おねがい（NPCが 1日1個。達成で お礼＋ありがとう数）。「今日これをやろう」の 芯
+const REQS = [
+  { ci: 3, who: 'dai',     ask: 'ほたるを 3びき つかまえて みせて', check: () => today.hotaru >= 3, ok: 'わあ、ありがとう！ きれいだね' },
+  { ci: 1, who: 'marisa',  ask: 'さかなを つって みせてよ',         check: () => today.fish,        ok: 'おっ やるな！ ごちそうさま' },
+  { ci: 5, who: 'wriggle', ask: 'むしを つかまえて みせて',         check: () => today.mushi,       ok: 'いい むしだ！ ありがとな' },
+  { ci: 3, who: 'dai',     ask: 'いっしょに ラジオたいそう しよ',   check: () => today.taiso,       ok: 'いっしょに できて うれしい' },
+  { ci: 1, who: 'marisa',  ask: 'ひまわりに みずを あげてきて',     check: () => today.watered,     ok: 'えらい！ おおきく なるね' },
+];
+let request = null, reqDone = false;
+function makeRequest() { request = REQS[day % REQS.length]; reqDone = false; }
 // 自由研究（やること）が ぜんぶ 済んだか＝ご褒美の 条件
 function kenkyuDone() { return bloomTotal>0 && caughtHotaru>0 && flags.sawHanabi && taisoStamps>0 && flags.everFish && flags.everMushi && flags.everSumo && flags.everOmairi; }
 function pickLines(npc) {
+  // きょうの おねがい（達成してたら お礼／まだなら たのむ）。ふだんの 会話より 優先
+  if (request && npc.ci === request.ci && !reqDone) {
+    if (request.check()) { reqDone = true; flags.helped = (flags.helped||0) + 1; save();
+      return [[request.who, request.ok], ['cirno', 'えへへ']]; }
+    return [[request.who, 'おねがい！ ' + request.ask], ['cirno', 'やってみる！']];
+  }
   // だいようせい：はじめて ひまわりが さいた あとに 気づいて よろこぶ
   if (npc.ci === 3 && bloomTotal > 0 && !flags.daiThanked) {
     flags.daiThanked = true; save();
@@ -261,6 +277,7 @@ function newDay() {
   day++;
   today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false };
   taisoToday = false; mukaeShown = false; sumoToday = false;   // あたらしい日：体操・お迎え・相撲も リセット
+  makeRequest();                                                // きょうの おねがいを えらぶ
   growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
   if (isRainy()) for (const p of garden) p.watered = true;   // 雨の日は 畑に みずが やれる
   const morning = tod >= 5 && tod < 10;
@@ -395,7 +412,7 @@ function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
-    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, sumoWins, sumoToday, px: player.x, py: player.y })); } catch (e) {}
+    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, sumoWins, sumoToday, reqDone, px: player.x, py: player.y })); } catch (e) {}
 }
 function load() {
   try {
@@ -819,6 +836,11 @@ function loop(now) {
     g.font = '600 13px system-ui'; g.textAlign = 'right';
     g.fillStyle = 'rgba(255,236,190,0.92)';
     g.fillText(`${day}日目 ・ のこり ${nokori()}日`, VW - 14, 47); g.textAlign = 'left';
+    // きょうの おねがい（未達なら 出す）
+    if (request && !reqDone) {
+      g.font = '12px system-ui'; g.textAlign = 'right'; g.fillStyle = 'rgba(255,220,150,0.85)';
+      g.fillText(`おねがい：${request.ask}`, VW - 14, 84); g.textAlign = 'left';
+    }
     // つかまえた 蛍の かず（夜／持っていれば）
     if (caughtHotaru > 0 || isNight()) {
       g.font = '600 13px system-ui'; g.textAlign = 'right';
@@ -1215,6 +1237,8 @@ function drawSumo(s) {
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 load();                               // つづきの 夏から
+makeRequest();                        // きょうの おねがい（load後の day で）
+try { const s = JSON.parse(localStorage.getItem('natsuyasumi_td')||'null'); if (s && s.reqDone) reqDone = true; } catch(e) {}
 loadMemory();                         // 去年の なつの 思い出（タイトルに 出す）
 addEventListener('beforeunload', save);
 requestAnimationFrame(loop);
