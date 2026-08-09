@@ -115,7 +115,9 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false };
+// 自由研究（やること）が ぜんぶ 済んだか＝ご褒美の 条件
+function kenkyuDone() { return bloomTotal>0 && caughtHotaru>0 && flags.sawHanabi && taisoStamps>0 && flags.everFish && flags.everMushi && flags.everSumo && flags.everOmairi; }
 function pickLines(npc) {
   // だいようせい：はじめて ひまわりが さいた あとに 気づいて よろこぶ
   if (npc.ci === 3 && bloomTotal > 0 && !flags.daiThanked) {
@@ -560,6 +562,13 @@ function loop(now) {
         act = false;
       }
     }
+    // 自由研究 コンプの ご褒美（1回だけ・お祝い花火＋称号）
+    if (!flags.kenkyuDone && kenkyuDone()) {
+      flags.kenkyuDone = true;
+      dayMsg = '★ じゆうけんきゅう かんせい！'; daySub = 'すごい！ なつやすみ はかせ だね'; dayMsgT = 4.2;
+      for (let i = 0; i < 4; i++) launchFirework();
+      save();
+    }
     // 夏の おわり（さいごの日を こえたら）
     if (day > SUMMER_DAYS) { mode = 'ending'; endT = 0; }
   }
@@ -989,8 +998,9 @@ function drawEnding(now) {
   g.fillText(`つかまえた ほたる：${caughtHotaru} ひき`, VW/2, 244);
   g.fillText(`さかせた ひまわり：${bloomTotal} りん`, VW/2, 276);
   g.fillText(`ラジオたいそう：${taisoStamps} かい`, VW/2, 308);
+  if (flags.kenkyuDone) { g.fillStyle = '#ffe23a'; g.font = '700 18px system-ui'; g.fillText('★ しょうごう：なつやすみ はかせ', VW/2, 344); }
   g.fillStyle = 'rgba(230,238,250,0.85)'; g.font = '16px system-ui';
-  g.fillText('また、らいねんの なつに。', VW/2, 366);
+  g.fillText('また、らいねんの なつに。', VW/2, 372);
   if (endT > 1.2) {
     g.fillStyle = `rgba(255,255,255,${0.4 + 0.4*Math.sin(now/400)})`; g.font = '600 16px system-ui';
     g.fillText('スペースで もう いちど', VW/2, 424);
@@ -1035,7 +1045,8 @@ function drawDex() {
   g.arcTo(bx,by+bh,bx,by,r); g.arcTo(bx,by,bx+bw,by,r); g.fill();
   g.strokeStyle = 'rgba(90,110,70,0.4)'; g.lineWidth = 2; g.stroke();
   g.fillStyle = '#3f5230'; g.font = '700 24px system-ui';
-  g.fillText(`いきもの ずかん   さかな ${dexCount(fishDex)}/${FISH.length}・むし ${dexCount(bugDex)}/${BUGS.length}`, bx+28, by+40);
+  const full = dexCount(fishDex) === FISH.length && dexCount(bugDex) === BUGS.length;
+  g.fillText(`いきもの ずかん   さかな ${dexCount(fishDex)}/${FISH.length}・むし ${dexCount(bugDex)}/${BUGS.length}${full ? '   ★コンプリート！' : ''}`, bx+28, by+40);
   // さかな
   g.fillStyle = '#4a6038'; g.font = '600 17px system-ui'; g.fillText('さかな', bx+28, by+78);
   FISH.forEach((f, i) => {
