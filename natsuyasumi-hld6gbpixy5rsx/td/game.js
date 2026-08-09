@@ -231,6 +231,8 @@ function plotAt(c, r) { return garden.find(p => p.c === c && p.r === r); }
 const keys = {};
 let act = false;
 let showHud = true;               // 時計・こよみの 表示。**最後に false にすれば 消える**（Hキーで 切替）
+let mode = 'title';               // 'title'（はじめる前）| 'play'（あそぶ）| 'ending'（夏の おわり）
+let endT = 0;                     // エンディングの 経過（フェード用）
 addEventListener('keydown', e => {
   initAudio();                    // 最初の キーで 夏の音を 起こす（自動再生ポリシー対策）
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
@@ -264,80 +266,86 @@ function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (ready < 2) { g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH); requestAnimationFrame(loop); return; }
 
-  // 時間は **勝手には 進まない**（急かさない）。行動した ぶんだけ すすむ＝passTime()
-  // ねむり中だけ：まっくらの まん中で つぎの朝へ とぶ
-  if (sleepPhase > 0) {
-    const before = sleepPhase; sleepPhase -= dt;
-    if (before > 1.0 && sleepPhase <= 1.0) { tod = 7; newDay(); }
-    if (sleepPhase < 0) sleepPhase = 0;         // 0を またがず ぴったり 起きる
-  }
-  if (dayMsgT > 0) dayMsgT -= dt;
-  ambientTick(dt, tod);           // 夏の音（時間帯で 鳴き分け）
+  // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
+  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); act = false; } }
+  if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
-  // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。**話している あいだは 足を とめる**
-  let ax = 0, ay = 0;
-  if (!talkNpc && !sleepPhase && !diaryOpen) {
-    if (keys['arrowleft']||keys['a']) ax -= 1;
-    if (keys['arrowright']||keys['d']) ax += 1;
-    if (keys['arrowup']||keys['w']) ay -= 1;
-    if (keys['arrowdown']||keys['s']) ay += 1;
-  }
-  if (ax || ay) { const m = Math.hypot(ax, ay); ax/=m; ay/=m; }
-  const spd = 175 * dt;                         // ← 速度アップ（108→175）
-  const nx = player.x + ax*spd, ny = player.y + ay*spd;
-  if (ax && !solidAt(nx, player.y)) player.x = nx;
-  if (ay && !solidAt(player.x, ny)) player.y = ny;
-  if (ax > 0.1) player.face = 1; else if (ax < -0.1) player.face = -1;
-  player.moving = !!(ax || ay);
-  player.bob += dt * (player.moving ? 11 : 2);
+  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, pc = 0, pr = 0;
+  if (mode === 'play') {
+    // 時間は **勝手には 進まない**（急かさない）。ねむり中だけ つぎの朝へ とぶ
+    if (sleepPhase > 0) {
+      const before = sleepPhase; sleepPhase -= dt;
+      if (before > 1.0 && sleepPhase <= 1.0) { tod = 7; newDay(); }
+      if (sleepPhase < 0) sleepPhase = 0;
+    }
+    if (dayMsgT > 0) dayMsgT -= dt;
+    ambientTick(dt, tod);           // 夏の音（時間帯で 鳴き分け）
 
-  // カメラ：プレイヤーを 中央に。はしは 地図の 外を 見せない
+    // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。話している あいだは 足を とめる
+    let ax = 0, ay = 0;
+    if (!talkNpc && !sleepPhase && !diaryOpen) {
+      if (keys['arrowleft']||keys['a']) ax -= 1;
+      if (keys['arrowright']||keys['d']) ax += 1;
+      if (keys['arrowup']||keys['w']) ay -= 1;
+      if (keys['arrowdown']||keys['s']) ay += 1;
+    }
+    if (ax || ay) { const m = Math.hypot(ax, ay); ax/=m; ay/=m; }
+    const spd = 175 * dt;
+    const nx = player.x + ax*spd, ny = player.y + ay*spd;
+    if (ax && !solidAt(nx, player.y)) player.x = nx;
+    if (ay && !solidAt(player.x, ny)) player.y = ny;
+    if (ax > 0.1) player.face = 1; else if (ax < -0.1) player.face = -1;
+    player.moving = !!(ax || ay);
+    player.bob += dt * (player.moving ? 11 : 2);
+
+    // 蛍：よるだけ ふわふわ わく。昼は しずかに 消える
+    if (isNight() && flies.length < FLY_MAX && rnd() < 0.06) spawnFly();
+    let flyD = FLY_R;
+    for (let i = flies.length - 1; i >= 0; i--) {
+      const f = flies[i];
+      f.ph += dt * 1.6;
+      if (rnd() < 0.03) { f.vx = (rnd()-0.5)*18; f.vy = (rnd()-0.5)*18; }
+      f.x += f.vx * dt; f.y += f.vy * dt;
+      f.life += dt * (isNight() ? 0.8 : -1.2);
+      if (f.life <= 0 && !isNight()) { flies.splice(i, 1); continue; }
+      f.life = clamp(f.life, 0, 1);
+      const d = Math.hypot(f.x - player.x, f.y - player.y);
+      if (d < flyD) { flyD = d; nearFly = f; }
+    }
+    // そばの 仲間（話しかけ用）。いちばん 近いのを ひとり
+    let bestD = TALK_R;
+    for (const n of npcs) { const d = Math.hypot(n.x - player.x, n.y - player.y); if (d < bestD) { bestD = d; near = n; } }
+    // 足もとの はたけ／体操の 広場
+    pc = Math.floor(player.x/TS); pr = Math.floor(player.y/TS);
+    onField = inField(pc, pr);
+    fieldPlot = onField ? plotAt(pc, pr) : null;
+    nearRadio = Math.hypot((RADIO.c+0.5)*TS - player.x, (RADIO.r+0.5)*TS - player.y) < TS*1.3;
+    // キーで 会話／体操／うえる・みずやり／蛍つかまえ（近づいただけでは 始めない・P1）
+    if (act && diaryOpen) { diaryOpen = false; act = false; }
+    if (act) {
+      if (talkNpc) {
+        if (++talkIdx >= talkNpc.lines.length) {
+          const end = talkNpc.onEnd; talkNpc = null; talkIdx = 0;
+          if (end === 'sleep') startSleep();
+          else passTime(1.0);
+        }
+      }
+      else if (near) { talkNpc = near; talkIdx = 0; }
+      else if (nearRadio && canTaiso()) { doTaiso(); }
+      else if (onField) {
+        if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
+        else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
+      }
+      else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; today.hotaru++; nearFly = null; passTime(0.5); save(); }
+      act = false;
+    }
+    // 夏の おわり（さいごの日を こえたら）
+    if (day > SUMMER_DAYS) { mode = 'ending'; endT = 0; }
+  }
+
+  // カメラ：いつも プレイヤーを 中央に（タイトルでも 主人公が 見える）
   cam.x = clamp(Math.round(player.x - VW/2), 0, MW*TS - VW);
   cam.y = clamp(Math.round(player.y - VH/2), 0, MH*TS - VH);
-
-  // 蛍：よるだけ ふわふわ わく。昼は しずかに 消える
-  if (isNight() && flies.length < FLY_MAX && rnd() < 0.06) spawnFly();
-  let nearFly = null, flyD = FLY_R;
-  for (let i = flies.length - 1; i >= 0; i--) {
-    const f = flies[i];
-    f.ph += dt * 1.6;
-    // ゆらゆら ただよう（ゆっくり）。ときどき むきを かえる
-    if (rnd() < 0.03) { f.vx = (rnd()-0.5)*18; f.vy = (rnd()-0.5)*18; }
-    f.x += f.vx * dt; f.y += f.vy * dt;
-    f.life += dt * (isNight() ? 0.8 : -1.2);          // 夜は 出て・昼は 引っこむ
-    if (f.life <= 0 && !isNight()) { flies.splice(i, 1); continue; }
-    f.life = clamp(f.life, 0, 1);
-    const d = Math.hypot(f.x - player.x, f.y - player.y);
-    if (d < flyD) { flyD = d; nearFly = f; }
-  }
-  // そばの 仲間（話しかけ用）。いちばん 近いのを ひとり
-  let near = null, bestD = TALK_R;
-  for (const n of npcs) { const d = Math.hypot(n.x - player.x, n.y - player.y); if (d < bestD) { bestD = d; near = n; } }
-  // 足もとの はたけ（うえる／みずやり）
-  const pc = Math.floor(player.x/TS), pr = Math.floor(player.y/TS);
-  const onField = inField(pc, pr);
-  const fieldPlot = onField ? plotAt(pc, pr) : null;
-  // ラジオ体操の 広場が そばか（あさだけ）
-  const nearRadio = Math.hypot((RADIO.c+0.5)*TS - player.x, (RADIO.r+0.5)*TS - player.y) < TS*1.3;
-  // キーで 会話／体操／うえる・みずやり／蛍つかまえ（近づいただけでは 始めない・P1）
-  if (act && diaryOpen) { diaryOpen = false; act = false; }   // えにっき中は スペースで とじる
-  if (act) {
-    if (talkNpc) {
-      if (++talkIdx >= talkNpc.lines.length) {
-        const end = talkNpc.onEnd; talkNpc = null; talkIdx = 0;
-        if (end === 'sleep') startSleep();      // お迎え→ そのまま ねる
-        else passTime(1.0);                      // ふつうの 会話は 1時間
-      }
-    }
-    else if (near) { talkNpc = near; talkIdx = 0; }
-    else if (nearRadio && canTaiso()) { doTaiso(); }
-    else if (onField) {
-      if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
-      else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
-    }
-    else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; today.hotaru++; nearFly = null; passTime(0.5); save(); }
-    act = false;
-  }
 
   // えがく（見えている ぶんだけ）
   g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH);
@@ -357,7 +365,7 @@ function loop(now) {
     g.save();
     g.fillStyle = 'rgba(210,180,120,0.5)'; g.strokeStyle = 'rgba(150,115,60,0.5)'; g.lineWidth = 2;
     g.beginPath(); g.ellipse(mx, my, TS*0.9, TS*0.55, 0, 0, 6.283); g.fill(); g.stroke();
-    if (canTaiso()) {
+    if (canTaiso() && mode === 'play') {
       g.fillStyle = 'rgba(20,26,40,0.7)';
       g.fillRect(mx - 52, my - TS - 20, 104, 22);
       g.fillStyle = '#ffe6a8'; g.font = '600 13px system-ui'; g.textAlign = 'center';
@@ -409,7 +417,7 @@ function loop(now) {
   }
 
   // --- HUD（ひかりの上。いつも 読める）。**showHud=false で ぜんぶ 消える**（Hキーで 切替・最後は 既定オフに）
-  if (showHud) {
+  if (showHud && mode === 'play') {
     g.fillStyle = 'rgba(230,238,220,0.9)'; g.font = '600 15px system-ui';
     g.fillText('うらの にわ', 14, 26);
     g.fillStyle = 'rgba(230,238,220,0.5)'; g.font = '12px system-ui';
@@ -433,42 +441,46 @@ function loop(now) {
     }
   }
 
-  // 会話の まど／足もとの したこと（はなす・うえる・みずやり・つかまえる）
-  if (talkNpc) drawSay(talkNpc.lines[talkIdx]);
-  else {
-    let lbl = null;
-    if (near) lbl = '▶ はなす';
-    else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
-    else if (onField) lbl = !fieldPlot ? '▶ うえる' : (!fieldPlot.watered ? '▶ みずやり' : (fieldPlot.stage >= 4 ? 'さいた！' : 'すくすく…'));
-    else if (nearFly) lbl = '▶ つかまえる';
-    if (lbl) {
-      g.fillStyle = 'rgba(8,12,9,0.5)'; g.fillRect(0, VH-40, VW, 40);
-      g.fillStyle = 'rgba(246,250,242,0.95)'; g.font = '600 17px system-ui'; g.textAlign = 'center';
-      g.fillText(lbl, VW/2, VH-15); g.textAlign = 'left';
+  if (mode === 'play') {
+    // 会話の まど／足もとの したこと（はなす・たいそう・うえる・みずやり・つかまえる）
+    if (talkNpc) drawSay(talkNpc.lines[talkIdx]);
+    else {
+      let lbl = null;
+      if (near) lbl = '▶ はなす';
+      else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
+      else if (onField) lbl = !fieldPlot ? '▶ うえる' : (!fieldPlot.watered ? '▶ みずやり' : (fieldPlot.stage >= 4 ? 'さいた！' : 'すくすく…'));
+      else if (nearFly) lbl = '▶ つかまえる';
+      if (lbl) {
+        g.fillStyle = 'rgba(8,12,9,0.5)'; g.fillRect(0, VH-40, VW, 40);
+        g.fillStyle = 'rgba(246,250,242,0.95)'; g.font = '600 17px system-ui'; g.textAlign = 'center';
+        g.fillText(lbl, VW/2, VH-15); g.textAlign = 'left';
+      }
+    }
+    if (diaryOpen) drawDiary();        // えにっき／ずかん（Nで ひらく）
+    // 「◯日目」の しらせ（すこし 出て 消える）
+    if (dayMsgT > 0) {
+      const a = Math.min(1, dayMsgT) * Math.min(1, (3.4 - dayMsgT) * 3);
+      g.save(); g.globalAlpha = Math.max(0, a);
+      g.fillStyle = 'rgba(8,10,20,0.7)'; g.fillRect(0, VH/2 - 40, VW, 80);
+      g.fillStyle = '#ffe6a8'; g.font = '600 26px system-ui'; g.textAlign = 'center';
+      g.fillText(dayMsg, VW/2, VH/2 - 2);
+      if (daySub) { g.fillStyle = 'rgba(240,244,255,0.85)'; g.font = '15px system-ui'; g.fillText(daySub, VW/2, VH/2 + 24); }
+      g.textAlign = 'left'; g.restore();
+    }
+    // ねむり：まっくらに とけて つぎの朝へ
+    if (sleepPhase > 0) {
+      const a = 1 - Math.abs(sleepPhase - 1.0);
+      g.fillStyle = `rgba(0,0,0,${a})`; g.fillRect(0, 0, VW, VH);
+      if (a > 0.6) {
+        g.fillStyle = `rgba(230,238,250,${(a-0.6)/0.4*0.8})`;
+        g.font = '600 20px system-ui'; g.textAlign = 'center';
+        g.fillText('…zzz', VW/2, VH/2); g.textAlign = 'left';
+      }
     }
   }
-  // えにっき／ずかん（Nで ひらく）
-  if (diaryOpen) drawDiary();
-  // 「◯日目」の しらせ（すこし 出て 消える）
-  if (dayMsgT > 0) {
-    const a = Math.min(1, dayMsgT) * Math.min(1, (3.4 - dayMsgT) * 3);
-    g.save(); g.globalAlpha = Math.max(0, a);
-    g.fillStyle = 'rgba(8,10,20,0.7)'; g.fillRect(0, VH/2 - 40, VW, 80);
-    g.fillStyle = '#ffe6a8'; g.font = '600 26px system-ui'; g.textAlign = 'center';
-    g.fillText(dayMsg, VW/2, VH/2 - 2);
-    if (daySub) { g.fillStyle = 'rgba(240,244,255,0.85)'; g.font = '15px system-ui'; g.fillText(daySub, VW/2, VH/2 + 24); }
-    g.textAlign = 'left'; g.restore();
-  }
-  // ねむり：まっくらに とけて つぎの朝へ
-  if (sleepPhase > 0) {
-    const a = 1 - Math.abs(sleepPhase - 1.0);   // 1.0で まっくら
-    g.fillStyle = `rgba(0,0,0,${a})`; g.fillRect(0, 0, VW, VH);
-    if (a > 0.6) {
-      g.fillStyle = `rgba(230,238,250,${(a-0.6)/0.4*0.8})`;
-      g.font = '600 20px system-ui'; g.textAlign = 'center';
-      g.fillText('…zzz', VW/2, VH/2); g.textAlign = 'left';
-    }
-  }
+  else if (mode === 'title') drawTitle(now);
+  else if (mode === 'ending') drawEnding(now);
+
   act = false;                         // 1フレームで つかいきる
   requestAnimationFrame(loop);
 }
@@ -559,6 +571,44 @@ function drawDiary() {
   g.fillStyle = 'rgba(90,74,46,0.6)'; g.font = '13px system-ui'; g.textAlign = 'right';
   g.fillText('Nか スペースで とじる', bx + bw - 24, by + bh - 16); g.textAlign = 'left';
   g.restore();
+}
+// タイトル（世界を うしろに、そっと 문字を のせる）
+function drawTitle(now) {
+  g.save();
+  g.fillStyle = 'rgba(6,10,18,0.5)'; g.fillRect(0, 0, VW, VH);
+  g.textAlign = 'center';
+  g.fillStyle = '#fdfbf4'; g.font = '700 56px system-ui';
+  g.fillText('なつやすみ', VW/2, VH/2 - 22);
+  g.fillStyle = 'rgba(255,236,190,0.92)'; g.font = '600 18px system-ui';
+  g.fillText('— ちいさな ひと夏 —', VW/2, VH/2 + 14);
+  const bl = 0.5 + 0.5*Math.sin(now/400);
+  g.fillStyle = `rgba(255,255,255,${0.35 + 0.55*bl})`; g.font = '600 20px system-ui';
+  g.fillText('スペースで はじめる', VW/2, VH/2 + 64);
+  g.fillStyle = 'rgba(230,238,220,0.4)'; g.font = '12px system-ui';
+  g.fillText('東方Project 二次創作 ・ タイル: CC0 Top Down Adventure Assets', VW/2, VH - 16);
+  g.textAlign = 'left'; g.restore();
+}
+// 夏の おわり（しずかに 暗くして、その夏の きろくを 見せる）
+function drawEnding(now) {
+  const a = Math.min(1, endT/2.0);
+  g.fillStyle = `rgba(4,6,12,${0.9*a})`; g.fillRect(0, 0, VW, VH);
+  if (endT < 0.4) return;
+  g.save(); g.globalAlpha = Math.min(1, (endT-0.4)/1.2); g.textAlign = 'center';
+  g.fillStyle = '#fdfbf4'; g.font = '700 40px system-ui';
+  g.fillText('なつやすみが おわった', VW/2, 140);
+  g.fillStyle = 'rgba(255,236,190,0.92)'; g.font = '600 18px system-ui';
+  g.fillText(`${SUMMER_DAYS}日の なつを すごした`, VW/2, 184);
+  g.fillStyle = '#eef3ff'; g.font = '17px system-ui';
+  g.fillText(`つかまえた ほたる：${caughtHotaru} ひき`, VW/2, 244);
+  g.fillText(`さかせた ひまわり：${bloomTotal} りん`, VW/2, 276);
+  g.fillText(`ラジオたいそう：${taisoStamps} かい`, VW/2, 308);
+  g.fillStyle = 'rgba(230,238,250,0.85)'; g.font = '16px system-ui';
+  g.fillText('また、らいねんの なつに。', VW/2, 366);
+  if (endT > 1.2) {
+    g.fillStyle = `rgba(255,255,255,${0.4 + 0.4*Math.sin(now/400)})`; g.font = '600 16px system-ui';
+    g.fillText('スペースで もう いちど', VW/2, 424);
+  }
+  g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 load();                               // つづきの 夏から
