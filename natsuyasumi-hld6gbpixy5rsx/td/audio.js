@@ -15,6 +15,7 @@ function cycleVolume() {
 function volLabel() { return ['消', '小', '小', '中', '中', '大', '大', '大', '大', '大'][Math.round(masterVol * 9)] || '大'; }
 let rainGain = null;            // 雨の 常時音（ゲインで 出し入れ）
 let brookGain = null;           // 川の せせらぎ（水に 近いほど 大きく）
+let bgmGain = null, bgmTimer = 0, bgmOn = false;   // プレイ中BGM（既定OFF・場面連動・別音量）
 
 function noiseBuf(sec) {
   const len = Math.ceil(AC.sampleRate * sec);
@@ -36,6 +37,26 @@ function initAudio() {
   const rhp = AC.createBiquadFilter(); rhp.type = 'highpass'; rhp.frequency.value = 300;
   rainGain = AC.createGain(); rainGain.gain.value = 0;
   rs.connect(rlp); rlp.connect(rhp); rhp.connect(rainGain); rainGain.connect(ambGain); rs.start();
+  bgmGain = AC.createGain(); bgmGain.gain.value = 0; bgmGain.connect(ambGain);   // BGM 別ゲイン（既定0）
+}
+// BGMの ON/OFF（既定OFF）
+function setBgm(on) { bgmOn = on; if (AC && bgmGain) bgmGain.gain.setTargetAtTime(on ? 0.14 : 0, AC.currentTime, 0.5); }
+// 場面で 曲想が かわる やわらかい パッド。mood: 'day'|'night'|'festival'|'late'
+function bgmTick(dt, mood) {
+  if (!AC || !bgmOn || muted) return;
+  bgmTimer -= dt; if (bgmTimer > 0) return;
+  bgmTimer = 2.4 + Math.random()*1.6;
+  const scales = { day:[0,4,7,11,14], night:[0,3,7,10,12], festival:[0,4,7,9,12], late:[0,3,5,8,10] };
+  const sc = scales[mood] || scales.day, base = (mood === 'night' || mood === 'late') ? 165 : 220;
+  const semi = sc[(Math.random()*sc.length)|0], f = base * Math.pow(2, semi/12);
+  const t = AC.currentTime, dur = 2.6;
+  for (const mul of [1, 1.5]) {
+    const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f*mul;
+    const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.06, t + 0.8); g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+    o.connect(lp); lp.connect(g); g.connect(bgmGain); o.start(t); o.stop(t + dur + 0.1);
+  }
 }
 // 雨の 音量（0=やむ）。game.js から 毎フレーム
 function setRainLevel(v) {

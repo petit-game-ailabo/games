@@ -616,7 +616,7 @@ let showHud = true;               // 時計・こよみの 表示。**最後に 
 let mode = 'title';               // 'title'（はじめる前）| 'play'（あそぶ）| 'ending'（夏の おわり）
 let pauseOpen = false;            // ポーズ／せってい（音量・あそびかた・クレジット）
 let resetArm = false;             // 「はじめから」の 二度押し 確認
-const opt = { nonbiri: false, textSpeed: 1 };   // のんびりモード／文字送り速さ(0遅1普2速)。別キーで のこす
+const opt = { nonbiri: false, textSpeed: 1, bgm: false };   // のんびり／文字送り速さ／BGM(既定OFF)。別キーで のこす
 function cps() { return [16, 34, 72][opt.textSpeed] != null ? [16, 34, 72][opt.textSpeed] : 34; }   // 文字/秒
 try { const o = JSON.parse(localStorage.getItem('natsuyasumi_td_opt') || 'null'); if (o) Object.assign(opt, o); } catch (e) {}
 function saveOpt() { try { localStorage.setItem('natsuyasumi_td_opt', JSON.stringify(opt)); } catch (e) {} }
@@ -626,6 +626,7 @@ addEventListener('keydown', e => {
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
   if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; if (!pauseOpen) resetArm = false; uiTap(); return; }
   if (!e.repeat && (e.key==='m'||e.key==='M')) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.2; }
+  if (!e.repeat && (e.key==='b'||e.key==='B')) { opt.bgm = !opt.bgm; saveOpt(); if (typeof setBgm==='function') setBgm(opt.bgm); uiTap(); }
   if (pauseOpen) return;          // ポーズ中は ほかの キーは 無効
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
   if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
@@ -657,11 +658,14 @@ function setStick(x, y) {
 cv.addEventListener('pointerdown', e => {
   touchMode = true; initAudio(); const [x, y] = canvasXY(e);
   if (mode === 'play' && pauseOpen) {                     // ポーズ中：ボタン→なければ 左=音量/右=とじる
-    if (Math.abs(y - 396) < 15 && Math.abs(x - VW/2) < 130) { opt.textSpeed = (opt.textSpeed+1) % 3; saveOpt(); uiTap(); e.preventDefault(); return; }  // 文字速さ
-    if (Math.abs(y - 424) < 15 && Math.abs(x - VW/2) < 130) { opt.nonbiri = !opt.nonbiri; saveOpt(); uiTap(); e.preventDefault(); return; }  // のんびり
-    if (Math.abs(y - 452) < 15 && Math.abs(x - VW/2) < 130) {  // はじめから（二度押し）
-      uiTap(); if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', onUnload); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; }
-      e.preventDefault(); return;
+    const L = VW/2-70, R = VW/2+70;
+    if (Math.abs(y - 404) < 14) {
+      if (Math.abs(x - L) < 64) { opt.textSpeed = (opt.textSpeed+1) % 3; saveOpt(); uiTap(); e.preventDefault(); return; }
+      if (Math.abs(x - R) < 64) { opt.bgm = !opt.bgm; saveOpt(); if (typeof setBgm==='function') setBgm(opt.bgm); uiTap(); e.preventDefault(); return; }
+    }
+    if (Math.abs(y - 440) < 14) {
+      if (Math.abs(x - L) < 64) { opt.nonbiri = !opt.nonbiri; saveOpt(); uiTap(); e.preventDefault(); return; }
+      if (Math.abs(x - R) < 64) { uiTap(); if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', onUnload); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; } e.preventDefault(); return; }
     }
     if (x < VW*0.5) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.0; uiTap(); } else { pauseOpen = false; resetArm = false; uiTap(); }
     e.preventDefault(); return;
@@ -722,7 +726,7 @@ function loop(now) {
   }
 
   // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
-  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
+  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (typeof setBgm === 'function') setBgm(opt.bgm); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', onUnload); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
   let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearStall = false, nearBug = null, nearBugD = 1e9, nearHikari = false, pc = 0, pr = 0;
@@ -746,6 +750,8 @@ function loop(now) {
         if (paddyNear) frog(0.05);
       }
     }
+    // BGM（場面連動・既定OFF）
+    if (typeof bgmTick === 'function') bgmTick(dt, nokori() <= 3 ? 'late' : ((isFestival() && isNight()) ? 'festival' : (isNight() ? 'night' : 'day')));
     // 最終夜：いちばん 仲よくなった 子と ふたりの 場面（絆の 回収）
     if (day >= SUMMER_DAYS && isNight() && !flags.lastNight && !talkNpc && !sleepPhase && !fishing && !sumo && !matsuri && !mukaeShown) {
       flags.lastNight = true;
@@ -1742,17 +1748,19 @@ function drawPause() {
     '　虫：madameberry(CC0) ・ 音：手続き生成(自作)',
   ];
   let yy = by+120; for (const s of lines) { g.fillText(s, VW/2, yy); yy += 24; }
-  // ボタン：のんびりモード / はじめから
-  const btn = (cy, label, on) => {
-    g.fillStyle = on ? 'rgba(120,170,110,0.45)' : 'rgba(120,120,110,0.22)'; g.fillRect(VW/2-130, cy-14, 260, 28);
-    g.strokeStyle = 'rgba(90,80,60,0.4)'; g.lineWidth = 1; g.strokeRect(VW/2-130, cy-14, 260, 28);
-    g.fillStyle = '#3f4a30'; g.font = '600 15px system-ui'; g.textAlign = 'center'; g.fillText(label, VW/2, cy+5);
+  // ボタン（2×2）：もじ速さ / BGM / のんびり / はじめから
+  const btn = (cx, cy, label, on) => {
+    g.fillStyle = on ? 'rgba(120,170,110,0.45)' : 'rgba(120,120,110,0.22)'; g.fillRect(cx-64, cy-13, 128, 26);
+    g.strokeStyle = 'rgba(90,80,60,0.4)'; g.lineWidth = 1; g.strokeRect(cx-64, cy-13, 128, 26);
+    g.fillStyle = '#3f4a30'; g.font = '600 13px system-ui'; g.textAlign = 'center'; g.fillText(label, cx, cy+4);
   };
-  btn(396, 'もじの はやさ：' + ['ゆっくり', 'ふつう', 'はやい'][opt.textSpeed], false);
-  btn(424, 'のんびりモード：' + (opt.nonbiri ? 'ON（門限なし）' : 'OFF'), opt.nonbiri);
-  btn(452, resetArm ? 'ほんとうに？ もう一度で はじめから' : 'はじめから', false);
+  const L = VW/2-70, R = VW/2+70;
+  btn(L, 404, 'もじ：' + ['ゆっくり', 'ふつう', 'はやい'][opt.textSpeed], false);
+  btn(R, 404, 'BGM：' + (opt.bgm ? 'ON' : 'OFF'), opt.bgm);
+  btn(L, 440, 'のんびり：' + (opt.nonbiri ? 'ON' : 'OFF'), opt.nonbiri);
+  btn(R, 440, resetArm ? 'ほんとうに？' : 'はじめから', false);
   g.fillStyle = 'rgba(90,96,72,0.7)'; g.font = '13px system-ui'; g.textAlign = 'center';
-  g.fillText('Pか Escで とじる', VW/2, by+bh-6);
+  g.fillText('おと：左タップ ／ Pか Escで とじる', VW/2, by+bh-6);
   g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
