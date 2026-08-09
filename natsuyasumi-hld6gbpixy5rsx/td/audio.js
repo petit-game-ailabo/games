@@ -40,6 +40,9 @@ function initAudio() {
   rs.connect(rlp); rlp.connect(rhp); rhp.connect(rainGain); rainGain.connect(ambGain); rs.start();
   bgmGain = AC.createGain(); bgmGain.gain.value = 0; bgmGain.connect(ambGain);   // BGM 別ゲイン（既定0）
   sfxGain = AC.createGain(); sfxGain.gain.value = sfxVol; sfxGain.connect(ambGain);   // SFX 別ゲイン（効果音だけ 個別に）
+  // iOS Safari 等は ユーザー操作内で作っても AC が suspended で始まる → 明示 resume しないと
+  // 初回タップが 無音になる（イントロが 鳴らない）。ここで 起こす。
+  if (AC.state === 'suspended') AC.resume();
 }
 function setSfxVol(v) { sfxVol = v; if (AC && sfxGain) sfxGain.gain.setTargetAtTime(v, AC.currentTime, 0.1); }
 function sfxOut() { return sfxGain || ambGain; }   // SFXの 出力先（未初期化なら amb）
