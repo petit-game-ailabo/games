@@ -612,6 +612,10 @@ function loop(now) {
         drawTile(t, dx, dy);
       }
       if (inField(c, r)) drawFurrow(dx, dy);          // 畑は うねを ひく
+      if (t === WATER && !isNight()) {                // 昼の 水面は きらめく
+        const tw = 0.5 + 0.5*Math.sin(now/280 + c*1.7 + r*0.9);
+        if (tw > 0.72) { g.fillStyle = `rgba(255,255,255,${(tw-0.72)*1.1})`; g.fillRect(dx + (c*13%(TS-4)) + 2, dy + (r*7%(TS-4)) + 2, 2, 2); }
+      }
     }
   }
   // ラジオ体操の 広場（丸い ゴザ）。あさ・未済なら 「たいそう」の ふだ
