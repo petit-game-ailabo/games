@@ -202,6 +202,28 @@ function pickLines(npc) {
     talkThen = 'sumo';
     return [['wriggle','いい 虫 つかまえたな'],['cirno','つよいんだから！'],['wriggle','じゃあ 虫相撲、しようぜ'],['cirno','うけて たつ！']];
   }
+  // 既視感よけ：天気や 日替わりの ひとことを ときどき（31日 通しても 鮮度）
+  const who = npc.ci === 1 ? 'marisa' : (npc.ci === 5 ? 'wriggle' : 'dai');
+  if (rnd() < 0.3) {
+    const wt = weatherOf(day);
+    const wp = {
+      rain:   [[who, 'あめ ふってきたね'], ['cirno', 'かえるが よろこんでる']],
+      hot:    [[who, 'きょうは あついね〜'], ['cirno', 'かわで およぎたい！']],
+      cloudy: [[who, 'くもりで すずしいね'], ['cirno', 'おさんぽ びより']],
+      sunny:  [[who, 'いい てんき！'], ['cirno', 'たくさん あそぼう']],
+    };
+    return wp[wt];
+  }
+  if (rnd() < 0.28) {
+    const daily = [
+      [[who, 'ラジオたいそう、した？'], ['cirno', 'もちろん！']],
+      [[who, 'よるの ほたる、みた？'], ['cirno', 'きれいだったよ']],
+      [[who, 'はたけ、どう？'], ['cirno', 'すくすく そだってる']],
+      [[who, 'おまつり、たのしみだね'], ['cirno', 'はなび みたい！']],
+      [[who, 'なつやすみ、あっという間だね'], ['cirno', 'まだまだ あそぶ！']],
+    ];
+    return daily[day % daily.length];
+  }
   const s = npc.sets; return s[timeKey(tod)] || s.hiru || s.asa;
 }
 const cam = { x: 0, y: 0 };
@@ -1200,9 +1222,11 @@ function loop(now) {
       const a = 1 - Math.abs(sleepPhase - 1.0);
       g.fillStyle = `rgba(0,0,0,${a})`; g.fillRect(0, 0, VW, VH);
       if (a > 0.6) {
-        g.fillStyle = `rgba(230,238,250,${(a-0.6)/0.4*0.8})`;
-        g.font = '600 20px system-ui'; g.textAlign = 'center';
-        g.fillText('…zzz', VW/2, VH/2); g.textAlign = 'left';
+        const fa = (a-0.6)/0.4*0.85;
+        g.fillStyle = `rgba(230,238,250,${fa})`; g.font = '600 20px system-ui'; g.textAlign = 'center';
+        g.fillText('…zzz', VW/2, VH/2 - 8);
+        g.fillStyle = `rgba(200,220,240,${fa*0.9})`; g.font = '14px system-ui';
+        g.fillText(`あすの てんき：${WEATHER_NAME[weatherOf(day+1)]}`, VW/2, VH/2 + 24); g.textAlign = 'left';
       }
     }
   }
@@ -1627,7 +1651,8 @@ function drawCalendar() {
   g.fillStyle = '#c0392b'; g.fillRect(cx-w/2, y, w, 30);
   g.fillStyle = '#fff'; g.font = '600 15px system-ui'; g.textAlign = 'center'; g.fillText('なつやすみ', cx, y+20);
   g.fillStyle = '#3a2a1a'; g.font = '700 46px system-ui'; g.fillText(`${day}`, cx, y+94);
-  g.fillStyle = '#8a6a3a'; g.font = '14px system-ui'; g.fillText(`日目 ・ のこり ${nokori()}日`, cx, y+122);
+  g.fillStyle = '#8a6a3a'; g.font = '14px system-ui'; g.fillText(`日目 ・ のこり ${nokori()}日`, cx, y+118);
+  g.fillStyle = '#5a7a9a'; g.font = '12px system-ui'; g.fillText(`きょうの てんき：${WEATHER_NAME[weatherOf(day)]}`, cx, y+136);
   g.fillStyle = 'rgba(0,0,0,0.18)'; g.beginPath(); g.arc(cx-42, y+9, 3, 0, 6.28); g.arc(cx+42, y+9, 3, 0, 6.28); g.fill();
   g.textAlign = 'left'; g.restore();
 }
