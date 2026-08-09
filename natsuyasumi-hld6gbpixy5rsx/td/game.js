@@ -143,7 +143,7 @@ function pickLines(npc) {
 }
 const cam = { x: 0, y: 0 };
 const TALK_R = TS * 1.4;                 // これより 近ければ 話しかけられる
-let talkNpc = null, talkIdx = 0, talkLines = null;   // 相手・何行目・いま 表示中の 台本
+let talkNpc = null, talkIdx = 0, talkLines = null, sayT = 0;   // 相手・何行目・台本・文字送り経過
 
 // --- 昼夜（ほの暮しの庭：昼は ほっこり／夜は すこし 不安）。時間で 空気の色が かわる
 // tod = 時刻(0〜24)。**時間は 勝手に 流れない**。行動した ぶんだけ passTime() で すすむ。朝8時から
@@ -246,7 +246,7 @@ function launchFirework() {
 function passTime(h) {
   tod += h;
   while (tod >= 24) { tod -= 24; newDay(); }
-  if (tod >= 22 && !mukaeShown && !sleepPhase && !talkNpc) { mukaeShown = true; talkNpc = MUKAE; talkIdx = 0; talkLines = MUKAE.lines; }
+  if (tod >= 22 && !mukaeShown && !sleepPhase && !talkNpc) { mukaeShown = true; talkNpc = MUKAE; talkIdx = 0; talkLines = MUKAE.lines; sayT = 0; }
 }
 function newDay() {
   recordDiary();                 // その日の しめくくりを えにっきへ
@@ -444,7 +444,7 @@ function loop(now) {
   if (ready < need) { g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH); requestAnimationFrame(loop); return; }
 
   // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
-  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; save(); } act = false; } }
+  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
   let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearBug = null, nearBugD = 1e9, pc = 0, pr = 0;
@@ -456,6 +456,7 @@ function loop(now) {
       if (sleepPhase < 0) sleepPhase = 0;
     }
     if (dayMsgT > 0) dayMsgT -= dt;
+    if (talkNpc) sayT += dt;        // 文字送り
     ambientTick(dt, tod);           // 夏の音（時間帯で 鳴き分け）
 
     // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。話している あいだは 足を とめる
@@ -540,15 +541,17 @@ function loop(now) {
       if (act && dexOpen) { dexOpen = false; act = false; }
       if (act) {
         if (talkNpc) {
-          if (++talkIdx >= talkLines.length) {
+          const full = talkLines[talkIdx][1].length;
+          if (sayT * 34 < full) { sayT = 99; }        // まだ 出しきってない→ いちど 全部だす
+          else if (++talkIdx >= talkLines.length) {
             const end = talkNpc.onEnd, then = talkThen; talkNpc = null; talkIdx = 0; talkLines = null; talkThen = null;
             if (end === 'sleep') startSleep();
             else if (then === 'sumo') sumoStart();
             else if (end === 'none') { /* 導き・独白は 時間を 使わない */ }
             else passTime(1.0);
-          }
+          } else { sayT = 0; }
         }
-        else if (near) { talkNpc = near; talkIdx = 0; talkThen = null; talkLines = pickLines(near); }
+        else if (near) { talkNpc = near; talkIdx = 0; talkThen = null; talkLines = pickLines(near); sayT = 0; }
         else if (nearRadio && canTaiso()) { doTaiso(); }
         else if (onField) {
           if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
@@ -815,16 +818,24 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 function drawSay(line) {
-  const bx = 70, by = VH - 118, bw = VW - 140, bh = 92, r = 14;
+  const bx = 70, by = VH - 122, bw = VW - 140, bh = 96, r = 14;
   g.save();
   g.fillStyle = 'rgba(10,14,26,0.82)';
   g.beginPath(); g.moveTo(bx+r,by); g.arcTo(bx+bw,by,bx+bw,by+bh,r); g.arcTo(bx+bw,by+bh,bx,by+bh,r);
   g.arcTo(bx,by+bh,bx,by,r); g.arcTo(bx,by,bx+bw,by,r); g.fill();
   g.strokeStyle = 'rgba(180,200,230,0.28)'; g.lineWidth = 1; g.stroke();
   g.fillStyle = '#ffe6a8'; g.font = '600 18px system-ui'; g.fillText(WHO[line[0]] || line[0], bx+24, by+30);
-  g.fillStyle = '#eef3ff'; g.font = '20px system-ui'; g.fillText(line[1], bx+24, by+62);
-  g.fillStyle = 'rgba(230,238,250,0.5)'; g.font = '13px system-ui';
-  g.fillText('スペースで つぎへ', bx+bw-150, by+bh-12);
+  // 文字送り＋折返し（枠に おさめる）
+  g.font = '20px system-ui'; g.fillStyle = '#eef3ff';
+  const shown = line[1].slice(0, Math.max(0, Math.floor(sayT * 34)));
+  const maxw = bw - 48; let lineStr = '', yy = by + 60; const lines = [];
+  for (const ch of shown) { if (g.measureText(lineStr + ch).width > maxw) { lines.push(lineStr); lineStr = ch; } else lineStr += ch; }
+  lines.push(lineStr);
+  for (const s of lines.slice(0, 2)) { g.fillText(s, bx+24, yy); yy += 26; }
+  if (shown.length >= line[1].length) {   // 出しきったら 「つぎへ」
+    g.fillStyle = 'rgba(230,238,250,0.5)'; g.font = '13px system-ui';
+    g.fillText('スペースで つぎへ', bx+bw-150, by+bh-12);
+  }
   g.restore();
 }
 // 水田（おだやかな 水＋稲の 束）。コードで えがく＝田んぼらしく くずれない
