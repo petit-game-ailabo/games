@@ -201,11 +201,13 @@ const keys = {};
 let act = false;
 let showHud = true;               // 時計・こよみの 表示。**最後に false にすれば 消える**（Hキーで 切替）
 addEventListener('keydown', e => {
+  initAudio();                    // 最初の キーで 夏の音を 起こす（自動再生ポリシー対策）
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
   if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
   if (!e.repeat && (e.key==='h'||e.key==='H')) showHud = !showHud;
   if (!e.repeat && (e.key==='n'||e.key==='N')) diaryOpen = !diaryOpen;
+  if (!e.repeat && (e.key==='m'||e.key==='M')) toggleMute();
   keys[e.key.toLowerCase()] = true;
 });
 addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
@@ -239,6 +241,7 @@ function loop(now) {
     if (sleepPhase < 0) sleepPhase = 0;         // 0を またがず ぴったり 起きる
   }
   if (dayMsgT > 0) dayMsgT -= dt;
+  ambientTick(dt, tod);           // 夏の音（時間帯で 鳴き分け）
 
   // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。**話している あいだは 足を とめる**
   let ax = 0, ay = 0;
