@@ -675,6 +675,11 @@ function loop(now) {
     nearRest = Math.hypot((REST.c+0.5)*TS - player.x, (REST.r+0.5)*TS - player.y) < TS*1.3;
     nearShrine = Math.hypot((SHRINE.c+0.5)*TS - player.x, (SHRINE.r+0.5)*TS - player.y) < TS*1.5;
     waterSpot = waterNextTo(pc, pr);          // 池の ふちに いるか
+    // 雨は 水面を たたく＝画面内の 水セルに 波紋を ちらす
+    if ((isRainy() || showerNow()) && ripples.length < 24) for (let k = 0; k < 2; k++) {
+      const c = Math.floor((cam.x + rnd()*VW)/TS), r = Math.floor((cam.y + rnd()*VH)/TS);
+      if (map[r] && map[r][c] === WATER) ripples.push({ x: (c+0.5)*TS, y: (r+0.5)*TS, t: 0 });
+    }
     // さざ波を すすめる（ひろがって 消える）
     for (let i = ripples.length - 1; i >= 0; i--) { ripples[i].t += dt; if (ripples[i].t > 1.1) ripples.splice(i, 1); }
     // 夏まつりの 花火（晴れた 祭りの夜）。あがっては ひらいて 消える
