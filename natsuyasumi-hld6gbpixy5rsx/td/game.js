@@ -165,6 +165,9 @@ const MUKAE = { onEnd: 'sleep', lines: [   // 夜ふかしすると 慧音が �
   ['keine', 'もう おそいよ。さあ、おうちへ かえろう'],
 ] };
 function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
+// --- 天気（その日で 決まる・晴れ／雨）。雨は 空気を かえ、**畑に みずを やる**
+function weatherOf(d) { const x = Math.sin(d * 127.1) * 43758.5453; return (x - Math.floor(x)) < 0.28; }
+function isRainy() { return weatherOf(day); }
 // 時間を すすめる（行動した ぶんだけ）。よなかを またいだら つぎの日へ。
 // **夜おそく（22時）に なると 慧音が お迎え＝門限**（夜中も ずっとは 遊べない）
 function passTime(h) {
@@ -178,9 +181,11 @@ function newDay() {
   today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, mizu: false };
   taisoToday = false; mukaeShown = false;      // あたらしい日：体操やりなおし・お迎えも リセット
   growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
+  if (isRainy()) for (const p of garden) p.watered = true;   // 雨の日は 畑に みずが やれる
   const morning = tod >= 5 && tod < 10;
   dayMsg = `${day}日目`;
-  daySub = morning ? 'あさごはんを たべた ・ そとへ でよう' : `なつやすみ のこり ${nokori()}日`;
+  daySub = isRainy() ? 'あめ ふり。はたけには めぐみの あめ'
+         : (morning ? 'あさごはんを たべた ・ そとへ でよう' : `なつやすみ のこり ${nokori()}日`);
   dayMsgT = 3.4;
   save();
 }
@@ -322,8 +327,8 @@ function loop(now) {
     player.moving = !!(ax || ay);
     player.bob += dt * (player.moving ? 11 : 2);
 
-    // 蛍：よるだけ ふわふわ わく。昼は しずかに 消える
-    if (isNight() && flies.length < FLY_MAX && rnd() < 0.06) spawnFly();
+    // 蛍：よるだけ ふわふわ わく（雨の 夜は でない）。昼は しずかに 消える
+    if (isNight() && !isRainy() && flies.length < FLY_MAX && rnd() < 0.06) spawnFly();
     let flyD = FLY_R;
     for (let i = flies.length - 1; i >= 0; i--) {
       const f = flies[i];
@@ -451,6 +456,20 @@ function loop(now) {
     g.restore();
   }
 
+  // 雨：空を くもらせ、ななめの すじを ふらせる（コード描画）。畑には めぐみ
+  if (isRainy()) {
+    g.fillStyle = 'rgba(70,90,120,0.20)'; g.fillRect(0, 0, VW, VH);
+    g.save(); g.strokeStyle = 'rgba(185,205,230,0.32)'; g.lineWidth = 1;
+    const sp = now * 0.7;
+    for (let i = 0; i < 120; i++) {
+      const x = ((i*89 + sp) % (VW + 40)) - 20;
+      const y = ((i*57 + sp*1.7) % (VH + 40)) - 20;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x - 5, y + 13); g.stroke();
+    }
+    g.restore();
+  }
+  if (typeof setRainLevel === 'function') setRainLevel(isRainy() && mode === 'play' ? 0.05 : 0);
+
   // --- HUD（ひかりの上。いつも 読める）。**showHud=false で ぜんぶ 消える**（Hキーで 切替・最後は 既定オフに）
   if (showHud && mode === 'play') {
     g.fillStyle = 'rgba(230,238,220,0.9)'; g.font = '600 15px system-ui';
@@ -459,7 +478,7 @@ function loop(now) {
     g.fillText('Zで ねる ・ Nで えにっき ・ Hで 表示けし', 14, 44);
     // とけい（右上）：時刻と じかんたい
     const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
-    const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)}`;
+    const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)}${isRainy() ? ' ・ あめ' : ''}`;
     g.font = '600 15px system-ui'; g.textAlign = 'right';
     g.fillStyle = 'rgba(8,12,9,0.45)';
     const cw = g.measureText(clk).width; g.fillRect(VW - cw - 26, 10, cw + 16, 24);

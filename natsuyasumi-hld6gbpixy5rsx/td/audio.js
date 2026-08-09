@@ -4,6 +4,7 @@
 'use strict';
 let AC = null, ambGain = null, shortNoise = null, longNoise = null;
 let ambTimer = 0, muted = false;
+let rainGain = null;            // 雨の 常時音（ゲインで 出し入れ）
 
 function noiseBuf(sec) {
   const len = Math.ceil(AC.sampleRate * sec);
@@ -19,6 +20,16 @@ function initAudio() {
   ambGain = AC.createGain(); ambGain.gain.value = 0.0; ambGain.connect(AC.destination);
   shortNoise = noiseBuf(0.3); longNoise = noiseBuf(3);
   ambGain.gain.linearRampToValueAtTime(muted ? 0 : 0.9, AC.currentTime + 1.6);
+  // 雨の 常時音：ノイズを こもらせた「ざあ」。ふだんは ゲイン0
+  const rs = AC.createBufferSource(); rs.buffer = longNoise; rs.loop = true;
+  const rlp = AC.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 1400;
+  const rhp = AC.createBiquadFilter(); rhp.type = 'highpass'; rhp.frequency.value = 300;
+  rainGain = AC.createGain(); rainGain.gain.value = 0;
+  rs.connect(rlp); rlp.connect(rhp); rhp.connect(rainGain); rainGain.connect(AC.destination); rs.start();
+}
+// 雨の 音量（0=やむ）。game.js から 毎フレーム
+function setRainLevel(v) {
+  if (AC && rainGain) rainGain.gain.setTargetAtTime(muted ? 0 : v, AC.currentTime, 0.4);
 }
 function toggleMute() {
   muted = !muted;
