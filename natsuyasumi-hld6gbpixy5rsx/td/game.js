@@ -139,16 +139,33 @@ function spawnFly() {
 // --- こよみ（ぼくなつの 魂：夏休みは すぎてゆく）
 let day = 1;                       // なつやすみ 何日目
 const SUMMER_DAYS = 31;
-let garden = [];                  // はたけ（後の 章で うめる）
+let garden = [];                  // はたけ（{c,r,stage,watered}）
 let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
+// --- 自由研究の きろく（えにっき＋ずかん）。テキストだけ＝絵が いらない
+let diary = [];                  // [{d, text}]  その日の しめくくり
+let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0 };  // 今日 やったこと
+let bloomTotal = 0;             // これまで さかせた ひまわり
+let diaryOpen = false;          // Nキーで えにっきを ひらく
 function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
 // 時間を すすめる（行動した ぶんだけ）。よなかを またいだら つぎの日へ
 function passTime(h) { tod += h; while (tod >= 24) { tod -= 24; newDay(); } }
 function newDay() {
+  recordDiary();                 // その日の しめくくりを えにっきへ
   day++;
-  growGarden();
+  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0 };
+  growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
   dayMsg = `${day}日目  —  なつやすみ のこり ${nokori()}日`; dayMsgT = 3.4;
   save();
+}
+function recordDiary() {
+  const p = [];
+  if (today.hotaru) p.push(`ほたるを ${today.hotaru}ひき つかまえた`);
+  if (today.planted) p.push(`たねを ${today.planted}つ まいた`);
+  if (today.watered) p.push('はたけに みずを あげた');
+  if (today.bloomed) p.push('ひまわりが さいた！');
+  if (!p.length) p.push('のんびり すごした');
+  diary.push({ d: day, text: p.join('。') + '。' });
+  if (diary.length > 40) diary.shift();
 }
 // --- ねむる（Zキー）。まっくらに とけて つぎの朝へ
 let sleepPhase = 0;              // 0=起きてる。2.0→0 へ。1.0で 朝に とぶ
@@ -156,7 +173,7 @@ function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
-    JSON.stringify({ day, tod, caughtHotaru, garden, px: player.x, py: player.y })); } catch (e) {}
+    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, px: player.x, py: player.y })); } catch (e) {}
 }
 function load() {
   try {
@@ -164,13 +181,16 @@ function load() {
     if (!s) return;
     day = s.day || 1; tod = s.tod == null ? 8 : s.tod; caughtHotaru = s.caughtHotaru || 0;
     if (Array.isArray(s.garden)) garden = s.garden;
+    if (Array.isArray(s.diary)) diary = s.diary;
+    if (s.today) today = s.today;
+    bloomTotal = s.bloomTotal || 0;
     if (s.px != null) { player.x = s.px; player.y = s.py; }
   } catch (e) {}
 }
 // はたけの成長：まえの日に みずを あげた 苗が ひと段階 のびる（0種→1芽→2葉→3つぼみ→4さいた）
 function growGarden() {
   for (const p of garden) {
-    if (p.watered && p.stage < 4) p.stage++;
+    if (p.watered && p.stage < 4) { p.stage++; if (p.stage === 4) { bloomTotal++; today.bloomed++; } }
     p.watered = false;             // あたらしい日：また みずやりが いる
   }
 }
@@ -185,6 +205,7 @@ addEventListener('keydown', e => {
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
   if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
   if (!e.repeat && (e.key==='h'||e.key==='H')) showHud = !showHud;
+  if (!e.repeat && (e.key==='n'||e.key==='N')) diaryOpen = !diaryOpen;
   keys[e.key.toLowerCase()] = true;
 });
 addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
@@ -221,7 +242,7 @@ function loop(now) {
 
   // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。**話している あいだは 足を とめる**
   let ax = 0, ay = 0;
-  if (!talkNpc && !sleepPhase) {
+  if (!talkNpc && !sleepPhase && !diaryOpen) {
     if (keys['arrowleft']||keys['a']) ax -= 1;
     if (keys['arrowright']||keys['d']) ax += 1;
     if (keys['arrowup']||keys['w']) ay -= 1;
@@ -263,14 +284,15 @@ function loop(now) {
   const onField = inField(pc, pr);
   const fieldPlot = onField ? plotAt(pc, pr) : null;
   // キーで 会話／うえる・みずやり／蛍つかまえ（近づいただけでは 始めない・P1）
+  if (act && diaryOpen) { diaryOpen = false; act = false; }   // えにっき中は スペースで とじる
   if (act) {
     if (talkNpc) { if (++talkIdx >= talkNpc.lines.length) { talkNpc = null; talkIdx = 0; passTime(1.0); } }
     else if (near) { talkNpc = near; talkIdx = 0; }
     else if (onField) {
-      if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); passTime(1.0); save(); }
-      else if (!fieldPlot.watered) { fieldPlot.watered = true; passTime(1.0); save(); }
+      if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
+      else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
     }
-    else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; nearFly = null; passTime(0.5); save(); }
+    else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; today.hotaru++; nearFly = null; passTime(0.5); save(); }
     act = false;
   }
 
@@ -334,7 +356,7 @@ function loop(now) {
     g.fillStyle = 'rgba(230,238,220,0.9)'; g.font = '600 15px system-ui';
     g.fillText('うらの にわ', 14, 26);
     g.fillStyle = 'rgba(230,238,220,0.5)'; g.font = '12px system-ui';
-    g.fillText('Zで ねる ・ Hで 表示けし', 14, 44);
+    g.fillText('Zで ねる ・ Nで えにっき ・ Hで 表示けし', 14, 44);
     // とけい（右上）：時刻と じかんたい
     const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
     const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)}`;
@@ -367,6 +389,8 @@ function loop(now) {
       g.fillText(lbl, VW/2, VH-15); g.textAlign = 'left';
     }
   }
+  // えにっき／ずかん（Nで ひらく）
+  if (diaryOpen) drawDiary();
   // 「◯日目」の しらせ（すこし 出て 消える）
   if (dayMsgT > 0) {
     const a = Math.min(1, dayMsgT) * Math.min(1, (3.4 - dayMsgT) * 3);
@@ -440,6 +464,40 @@ function drawPlant(stage, x, y, watered) {
     g.fillStyle = '#5c3413';
     for (let i = 0; i < 6; i++) { const a = i/6*6.283; g.beginPath(); g.arc(cx+Math.cos(a)*3, cy+Math.sin(a)*3, 1.2, 0, 6.283); g.fill(); }
   }
+  g.restore();
+}
+// えにっき／ずかん（自由研究の きろく）。紙のような まど＝絵が いらない
+function drawDiary() {
+  g.save();
+  g.fillStyle = 'rgba(6,8,14,0.55)'; g.fillRect(0, 0, VW, VH);   // うしろを 暗く
+  const bx = 90, by = 46, bw = VW - 180, bh = VH - 92, r = 16;
+  g.fillStyle = '#f3ecd8';                                        // 画用紙いろ
+  g.beginPath(); g.moveTo(bx+r,by); g.arcTo(bx+bw,by,bx+bw,by+bh,r); g.arcTo(bx+bw,by+bh,bx,by+bh,r);
+  g.arcTo(bx,by+bh,bx,by,r); g.arcTo(bx,by,bx+bw,by,r); g.fill();
+  g.strokeStyle = 'rgba(120,95,60,0.4)'; g.lineWidth = 2; g.stroke();
+  const cx = bx + 34;
+  g.fillStyle = '#5a4a2e'; g.font = '700 24px system-ui';
+  g.fillText('えにっき ・ じゆうけんきゅう', cx, by + 42);
+  // ずかん（あつめた もの）
+  g.font = '600 16px system-ui'; g.fillStyle = '#6b5836';
+  g.fillText(`なつやすみ ${day}日目 ・ のこり ${nokori()}日`, cx, by + 78);
+  g.fillText(`つかまえた ほたる：${caughtHotaru} ひき`, cx, by + 104);
+  g.fillText(`さかせた ひまわり：${bloomTotal} りん`, cx, by + 130);
+  g.strokeStyle = 'rgba(120,95,60,0.3)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(cx, by + 148); g.lineTo(bx + bw - 34, by + 148); g.stroke();
+  // えにっき（あたらしい順に 数日ぶん）
+  g.font = '15px system-ui'; g.fillStyle = '#4a3d24';
+  const recent = diary.slice(-8).reverse();
+  let yy = by + 178;
+  if (!recent.length) { g.fillStyle = '#8a7a58'; g.fillText('（まだ なにも かいてない。ねると その日の ことが のる）', cx, yy); }
+  for (const e of recent) {
+    g.fillStyle = '#7a6540'; g.font = '700 15px system-ui'; g.fillText(`${e.d}日目`, cx, yy);
+    g.fillStyle = '#4a3d24'; g.font = '15px system-ui'; g.fillText(e.text, cx + 72, yy);
+    yy += 26;
+    if (yy > by + bh - 30) break;
+  }
+  g.fillStyle = 'rgba(90,74,46,0.6)'; g.font = '13px system-ui'; g.textAlign = 'right';
+  g.fillText('Nか スペースで とじる', bx + bw - 24, by + bh - 16); g.textAlign = 'left';
   g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
