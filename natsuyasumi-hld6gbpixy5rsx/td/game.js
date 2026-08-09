@@ -92,6 +92,7 @@ const WHO = { cirno:'チルノ', dai:'だいようせい', marisa:'まりさ', r
 // --- プレイヤー（足もと＝下中央）と 立ってる 仲間。道の 交点あたりから。
 // 仲間は そばで キーを 押すと 話す（P1と 同じ：近づいただけでは 始めない）。あたたかいトーン
 const player = { x: 20 * TS, y: 9 * TS, ci: 2, face: 1, bob: 0, moving: false };
+let stepAcc = 0;                 // 足音の 歩幅カウンタ
 // 仲間の 会話は **時間帯で かわる**（asa／hiru／yugata／yoru）。同じ夏でも 一日で 表情が うつる
 const npcs = [
   { ci: 3, x: 24 * TS, y: 4 * TS, sets: {   // だいようせい（うちの 庭）
@@ -497,6 +498,14 @@ function loop(now) {
     if (ax > 0.1) player.face = 1; else if (ax < -0.1) player.face = -1;
     player.moving = !!(ax || ay);
     player.bob += dt * (player.moving ? 11 : 2);
+    // 足音（踏んだ タイルで 音色）。歩幅ごとに 1回
+    if (player.moving) { stepAcc += dt * 11;
+      if (stepAcc > 3.1) { stepAcc = 0;
+        const ft = map[Math.floor(player.y/TS)] && map[Math.floor(player.y/TS)][Math.floor(player.x/TS)];
+        const kind = ft === STONE ? 'water' : (ft === PATH ? 'path' : 'grass');
+        if (typeof footstep === 'function') footstep(kind);
+      }
+    } else stepAcc = 2.6;
 
     // 蛍：よるだけ ふわふわ わく（雨の 夜は でない）。昼は しずかに 消える
     if (isNight() && !isRainy() && flies.length < FLY_MAX && rnd() < 0.06) spawnFly();

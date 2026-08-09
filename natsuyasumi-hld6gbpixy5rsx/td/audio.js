@@ -163,6 +163,21 @@ function taisoJingle() {
     o.start(t); o.stop(t + 0.2);
   });
 }
+// --- 足音（踏んだ タイルで 音色が かわる）。short/やわらかい ノイズ
+function footstep(kind) {
+  if (!AC || !shortNoise) return;
+  const t = AC.currentTime;
+  const s = AC.createBufferSource(); s.buffer = shortNoise;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.value = kind === 'water' ? 1200 : (kind === 'path' ? 700 : 2000);   // 草=高い・土=低い・水=中
+  bp.Q.value = kind === 'water' ? 0.5 : 1.2;
+  const g = AC.createGain();
+  const vol = kind === 'water' ? 0.11 : 0.05;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + (kind === 'water' ? 0.16 : 0.09));
+  s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t + 0.2);
+}
 // --- 水あそびの ぱしゃ（みじかい 水音）。ノイズの 破裂＋ひくい ぽちゃん
 function mizuSfx() {
   if (!AC || !shortNoise) return;
