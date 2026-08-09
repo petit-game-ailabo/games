@@ -1245,12 +1245,15 @@ function loop(now) {
     g.save();
     g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(mx-2, my-2, mw+4, mh+4);
     g.drawImage(mmCanvas, mx, my, mw, mh);
-    const dot = (c, r, col, sz) => { g.fillStyle = col; g.fillRect(mx + c*s - sz/2, my + r*s - sz/2, sz, sz); };
-    dot(19, 5, '#ffd24a', 4);                    // 家
-    dot(SHRINE.c, SHRINE.r, '#e24a4a', 4);       // 神社
-    if (!flags.hikaricho) { g.fillStyle = '#fff'; g.font = '9px system-ui'; g.textAlign = 'center'; g.fillText('?', mx + (HIDDEN.c+0.5)*s, my + (HIDDEN.r+0.5)*s + 3); g.textAlign = 'left'; }  // 隠しスポット
-    if (request && !reqDone) { const n = npcs.find(x => x.ci === request.ci); if (n) dot(Math.floor(n.x/TS), Math.floor(n.y/TS), '#ff9a3a', 4 + (Math.sin(now/200)>0?1:0)); }  // おねがい先（点滅）
-    dot(Math.floor(player.x/TS), Math.floor(player.y/TS), '#ffffff', 4);   // 自分
+    // 色だけに 頼らない：形/記号でも 区別（色覚アクセシビリティ）
+    const glyph = (c, r, col, ch) => { g.fillStyle = col; g.font = '600 10px system-ui'; g.textAlign = 'center'; g.fillText(ch, mx + (c+0.5)*s, my + (r+0.5)*s + 3.5); g.textAlign = 'left'; };
+    glyph(19, 4, '#ffd24a', '⌂');                 // 家（記号）
+    glyph(SHRINE.c, SHRINE.r-1, '#e24a4a', '⛩');  // 神社
+    if (!flags.hikaricho) glyph(HIDDEN.c, HIDDEN.r-1, '#fff', '?');           // 隠しスポット
+    if (request && !reqDone) { const n = npcs.find(x => x.ci === request.ci); if (n && Math.sin(now/200) > -0.3) glyph(Math.floor(n.x/TS), Math.floor(n.y/TS)-1, '#ff9a3a', '★'); }  // おねがい先（★点滅）
+    // 自分：白＋黒フチ（明度でも 分かる）＋中心
+    const px = mx + (Math.floor(player.x/TS)+0.5)*s, py = my + (Math.floor(player.y/TS)+0.5)*s;
+    g.fillStyle = '#000'; g.fillRect(px-3, py-3, 6, 6); g.fillStyle = '#fff'; g.fillRect(px-2, py-2, 4, 4);
     g.restore();
     // とけい（右上）：時刻と じかんたい
     const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
