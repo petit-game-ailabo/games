@@ -92,7 +92,11 @@ const chars = new Image(); chars.src = 'data:image/png;base64,' + CHARS_B64;
 const fishImg = new Image(); fishImg.src = 'assets/fish.png';   // 釣り（CraftPix OGA-BY）
 const bugsImg = new Image(); bugsImg.src = 'assets/bugs.png';   // 虫取り（cutebugs CC0）
 let ready = 0; const need = 4;
-tiles.onload = () => ready++; chars.onload = () => ready++; fishImg.onload = () => ready++; bugsImg.onload = () => ready++;
+const assetOK = { t: true, c: true, f: true, b: true };   // 読込 失敗しても 進む（該当描画だけ スキップ）
+tiles.onload = () => ready++; tiles.onerror = () => { assetOK.t = false; ready++; };
+chars.onload = () => ready++; chars.onerror = () => { assetOK.c = false; ready++; };
+fishImg.onload = () => ready++; fishImg.onerror = () => { assetOK.f = false; ready++; };
+bugsImg.onload = () => ready++; bugsImg.onerror = () => { assetOK.b = false; ready++; };
 // 魚（fish.png：64x28 の 6マス）と 虫（bugs.png：16x16 の 5マス）
 const FISH_CW = 64, FISH_CH = 28;
 const FISH = [ {n:'メダカ',w:22,size:4}, {n:'フナ',w:20,size:22}, {n:'ワカサギ',w:16,size:12}, {n:'ナマズ',w:12,size:55}, {n:'コイ',w:9,size:65}, {n:'なぞの さかな',w:4,size:95} ];
@@ -679,6 +683,7 @@ function drawTouchControls() {
 }
 
 function drawTile(idx, dx, dy) {
+  if (!assetOK.t) { g.fillStyle = idx === WATER ? '#4a78c0' : (idx === PATH ? '#d8b878' : '#5f8f45'); g.fillRect(dx, dy, TS, TS); return; }  // タイル無しでも 色で 代替
   const sx = (idx % COLS) * T, sy = Math.floor(idx / COLS) * T;
   g.drawImage(tiles, sx, sy, T, T, dx, dy, TS, TS);
 }
@@ -687,6 +692,7 @@ function drawShadow(x, y) {
   g.beginPath(); g.ellipse(x, y - 3, TS*0.28, TS*0.12, 0, 0, Math.PI*2); g.fill(); g.restore();
 }
 function drawChar(ci, x, y, face) {
+  if (!assetOK.c) { g.save(); g.fillStyle = '#6cc'; g.fillRect(Math.round(x)-8, Math.round(y)-20, 16, 20); g.restore(); return; }  // キャラ絵 無しでも 四角で 代替
   const sx = (ci % 8) * 16, sy = Math.floor(ci / 8) * 16, h = TS + 8;
   g.save(); g.translate(Math.round(x), Math.round(y));
   if (face < 0) g.scale(-1, 1);
@@ -697,7 +703,13 @@ function drawChar(ci, x, y, face) {
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (ready < need) { g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH); requestAnimationFrame(loop); return; }
+  if (ready < need) {   // よみこみ中（黒画面で 固まらないよう 明示）
+    g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH);
+    g.fillStyle = `rgba(230,238,220,${0.5+0.4*Math.sin(now/300)})`; g.font = '600 20px system-ui'; g.textAlign = 'center';
+    g.fillText('よみこみちゅう…', VW/2, VH/2);
+    g.fillStyle = 'rgba(230,238,220,0.4)'; g.font = '13px system-ui'; g.fillText(`${ready}/${need}`, VW/2, VH/2+26);
+    g.textAlign = 'left'; requestAnimationFrame(loop); return;
+  }
 
   // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
   if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
@@ -1010,7 +1022,8 @@ function loop(now) {
     if (cx < -20 || cy < -20 || cx > VW+20 || cy > VH+20) continue;
     const bob = Math.sin(cr.ph) * 2;
     g.save(); g.globalAlpha = cr.life;
-    g.drawImage(bugsImg, BUGS[cr.bi].s*BUG_CW, 0, BUG_CW, BUG_CW, Math.round(cx-BUG_CW), Math.round(cy-BUG_CW+bob), BUG_CW*2, BUG_CW*2);
+    if (assetOK.b) g.drawImage(bugsImg, BUGS[cr.bi].s*BUG_CW, 0, BUG_CW, BUG_CW, Math.round(cx-BUG_CW), Math.round(cy-BUG_CW+bob), BUG_CW*2, BUG_CW*2);
+    else { g.fillStyle = '#5a7a3a'; g.fillRect(Math.round(cx)-6, Math.round(cy-BUG_CW+bob), 12, 12); }
     g.restore();
   }
   // y で ならべて 前後（キャラ＋ひまわり を 足もとで ソート）
@@ -1553,9 +1566,11 @@ function drawEnding(now) {
 }
 // 魚・虫の スプライトを 中央に えがく
 function drawFishSprite(fi, cx, cy, sc) {
+  if (!assetOK.f) { g.fillStyle = '#7ab0d0'; g.fillRect(cx-10, cy-4, 20, 8); return; }
   g.drawImage(fishImg, fi*FISH_CW, 0, FISH_CW, FISH_CH, Math.round(cx-FISH_CW*sc/2), Math.round(cy-FISH_CH*sc/2), FISH_CW*sc, FISH_CH*sc);
 }
 function drawBugSprite(bi, cx, cy, sc) {
+  if (!assetOK.b) { g.fillStyle = '#5a7a3a'; g.fillRect(cx-6, cy-6, 12, 12); return; }
   const s = BUGS[bi].s;
   g.drawImage(bugsImg, s*BUG_CW, 0, BUG_CW, BUG_CW, Math.round(cx-BUG_CW*sc/2), Math.round(cy-BUG_CW*sc/2), BUG_CW*sc, BUG_CW*sc);
 }
