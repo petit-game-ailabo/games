@@ -46,6 +46,9 @@ for (let i=0;i<120;i++){
   map[r][c] = k < 0.45 ? TREE : (k < 0.6 ? BUSH : (k < 0.8 ? FLOWER : PLANT));
 }
 
+// ラジオ体操の 広場（あさ ここで 体操→スタンプ）。まわりを 草に して 木を どける
+const RADIO = { c: 24, r: 14 };
+rect(RADIO.c-1, RADIO.r-1, 3, 3, G);
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
 
@@ -143,22 +146,41 @@ let garden = [];                  // はたけ（{c,r,stage,watered}）
 let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
 // --- 自由研究の きろく（えにっき＋ずかん）。テキストだけ＝絵が いらない
 let diary = [];                  // [{d, text}]  その日の しめくくり
-let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0 };  // 今日 やったこと
+let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false };  // 今日 やったこと
 let bloomTotal = 0;             // これまで さかせた ひまわり
 let diaryOpen = false;          // Nキーで えにっきを ひらく
+let daySub = '';                // 日の しらせの 2行目（あさごはん／のこり日数）
+// --- その日の リズム：あさ 体操→スタンプ、よる おそくなると けーねが お迎え（門限）
+let taisoToday = false, taisoStamps = 0;   // 今日 体操したか／スタンプ 総数
+let mukaeShown = false;         // その夜 いちど お迎えが 来たか
+const MUKAE = { onEnd: 'sleep', lines: [   // 夜ふかしすると 慧音が むかえに 来る
+  ['keine', 'チルノ、こんな じかんまで そとに いたの？'],
+  ['cirno', 'ほたるが きれいで、つい…'],
+  ['keine', 'もう おそいよ。さあ、おうちへ かえろう'],
+] };
 function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
-// 時間を すすめる（行動した ぶんだけ）。よなかを またいだら つぎの日へ
-function passTime(h) { tod += h; while (tod >= 24) { tod -= 24; newDay(); } }
+// 時間を すすめる（行動した ぶんだけ）。よなかを またいだら つぎの日へ。
+// **夜おそく（22時）に なると 慧音が お迎え＝門限**（夜中も ずっとは 遊べない）
+function passTime(h) {
+  tod += h;
+  while (tod >= 24) { tod -= 24; newDay(); }
+  if (tod >= 22 && !mukaeShown && !sleepPhase && !talkNpc) { mukaeShown = true; talkNpc = MUKAE; talkIdx = 0; }
+}
 function newDay() {
   recordDiary();                 // その日の しめくくりを えにっきへ
   day++;
-  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0 };
+  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false };
+  taisoToday = false; mukaeShown = false;      // あたらしい日：体操やりなおし・お迎えも リセット
   growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
-  dayMsg = `${day}日目  —  なつやすみ のこり ${nokori()}日`; dayMsgT = 3.4;
+  const morning = tod >= 5 && tod < 10;
+  dayMsg = `${day}日目`;
+  daySub = morning ? 'あさごはんを たべた ・ そとへ でよう' : `なつやすみ のこり ${nokori()}日`;
+  dayMsgT = 3.4;
   save();
 }
 function recordDiary() {
   const p = [];
+  if (today.taiso) p.push('ラジオたいそうを した');
   if (today.hotaru) p.push(`ほたるを ${today.hotaru}ひき つかまえた`);
   if (today.planted) p.push(`たねを ${today.planted}つ まいた`);
   if (today.watered) p.push('はたけに みずを あげた');
@@ -167,13 +189,21 @@ function recordDiary() {
   diary.push({ d: day, text: p.join('。') + '。' });
   if (diary.length > 40) diary.shift();
 }
+// ラジオ体操（あさ 5〜9時に 広場で）→ スタンプ
+function doTaiso() {
+  taisoToday = true; today.taiso = true; taisoStamps++;
+  if (typeof taisoJingle === 'function') taisoJingle();
+  dayMsg = 'ラジオたいそう！ スタンプ ゲット'; daySub = `スタンプ ${taisoStamps}こ`; dayMsgT = 2.6;
+  passTime(0.5); save();
+}
+function canTaiso() { return tod >= 5 && tod < 9 && !taisoToday; }
 // --- ねむる（Zキー）。まっくらに とけて つぎの朝へ
 let sleepPhase = 0;              // 0=起きてる。2.0→0 へ。1.0で 朝に とぶ
 function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
-    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, px: player.x, py: player.y })); } catch (e) {}
+    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, px: player.x, py: player.y })); } catch (e) {}
 }
 function load() {
   try {
@@ -184,6 +214,7 @@ function load() {
     if (Array.isArray(s.diary)) diary = s.diary;
     if (s.today) today = s.today;
     bloomTotal = s.bloomTotal || 0;
+    taisoStamps = s.taisoStamps || 0; taisoToday = !!s.taisoToday;
     if (s.px != null) { player.x = s.px; player.y = s.py; }
   } catch (e) {}
 }
@@ -286,11 +317,20 @@ function loop(now) {
   const pc = Math.floor(player.x/TS), pr = Math.floor(player.y/TS);
   const onField = inField(pc, pr);
   const fieldPlot = onField ? plotAt(pc, pr) : null;
-  // キーで 会話／うえる・みずやり／蛍つかまえ（近づいただけでは 始めない・P1）
+  // ラジオ体操の 広場が そばか（あさだけ）
+  const nearRadio = Math.hypot((RADIO.c+0.5)*TS - player.x, (RADIO.r+0.5)*TS - player.y) < TS*1.3;
+  // キーで 会話／体操／うえる・みずやり／蛍つかまえ（近づいただけでは 始めない・P1）
   if (act && diaryOpen) { diaryOpen = false; act = false; }   // えにっき中は スペースで とじる
   if (act) {
-    if (talkNpc) { if (++talkIdx >= talkNpc.lines.length) { talkNpc = null; talkIdx = 0; passTime(1.0); } }
+    if (talkNpc) {
+      if (++talkIdx >= talkNpc.lines.length) {
+        const end = talkNpc.onEnd; talkNpc = null; talkIdx = 0;
+        if (end === 'sleep') startSleep();      // お迎え→ そのまま ねる
+        else passTime(1.0);                      // ふつうの 会話は 1時間
+      }
+    }
     else if (near) { talkNpc = near; talkIdx = 0; }
+    else if (nearRadio && canTaiso()) { doTaiso(); }
     else if (onField) {
       if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
       else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
@@ -310,6 +350,20 @@ function loop(now) {
       drawTile(t, dx, dy);
       if (inField(c, r)) drawFurrow(dx, dy);          // 畑は うねを ひく
     }
+  }
+  // ラジオ体操の 広場（丸い ゴザ）。あさ・未済なら 「たいそう」の ふだ
+  {
+    const mx = (RADIO.c+0.5)*TS - cam.x, my = (RADIO.r+0.5)*TS - cam.y;
+    g.save();
+    g.fillStyle = 'rgba(210,180,120,0.5)'; g.strokeStyle = 'rgba(150,115,60,0.5)'; g.lineWidth = 2;
+    g.beginPath(); g.ellipse(mx, my, TS*0.9, TS*0.55, 0, 0, 6.283); g.fill(); g.stroke();
+    if (canTaiso()) {
+      g.fillStyle = 'rgba(20,26,40,0.7)';
+      g.fillRect(mx - 52, my - TS - 20, 104, 22);
+      g.fillStyle = '#ffe6a8'; g.font = '600 13px system-ui'; g.textAlign = 'center';
+      g.fillText('ラジオたいそう', mx, my - TS - 4); g.textAlign = 'left';
+    }
+    g.restore();
   }
   // y で ならべて 前後（キャラ＋ひまわり を 足もとで ソート）
   const plants = garden.map(p => ({ x: p.c*TS + TS/2, y: p.r*TS + TS, plant: p }));
@@ -384,6 +438,7 @@ function loop(now) {
   else {
     let lbl = null;
     if (near) lbl = '▶ はなす';
+    else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
     else if (onField) lbl = !fieldPlot ? '▶ うえる' : (!fieldPlot.watered ? '▶ みずやり' : (fieldPlot.stage >= 4 ? 'さいた！' : 'すくすく…'));
     else if (nearFly) lbl = '▶ つかまえる';
     if (lbl) {
@@ -398,9 +453,11 @@ function loop(now) {
   if (dayMsgT > 0) {
     const a = Math.min(1, dayMsgT) * Math.min(1, (3.4 - dayMsgT) * 3);
     g.save(); g.globalAlpha = Math.max(0, a);
-    g.fillStyle = 'rgba(8,10,20,0.7)'; g.fillRect(0, VH/2 - 34, VW, 68);
+    g.fillStyle = 'rgba(8,10,20,0.7)'; g.fillRect(0, VH/2 - 40, VW, 80);
     g.fillStyle = '#ffe6a8'; g.font = '600 26px system-ui'; g.textAlign = 'center';
-    g.fillText(dayMsg, VW/2, VH/2 + 9); g.textAlign = 'left'; g.restore();
+    g.fillText(dayMsg, VW/2, VH/2 - 2);
+    if (daySub) { g.fillStyle = 'rgba(240,244,255,0.85)'; g.font = '15px system-ui'; g.fillText(daySub, VW/2, VH/2 + 24); }
+    g.textAlign = 'left'; g.restore();
   }
   // ねむり：まっくらに とけて つぎの朝へ
   if (sleepPhase > 0) {

@@ -123,6 +123,22 @@ function sawasawa(vol) {
   s.start(t); s.stop(t + dur + 0.05);
 }
 
+// --- ラジオ体操の みじかい ジングル（あさ・スタンプ時）。ふえ風の 上りメロ
+function taisoJingle() {
+  if (!AC) return;
+  const t0 = AC.currentTime, mel = [0, 4, 7, 12, 7, 12];   // ドミソド…
+  mel.forEach((semi, i) => {
+    const t = t0 + i*0.16, f = 523.25 * Math.pow(2, semi/12);
+    const o = AC.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+    const bp = AC.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 2600;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.14, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o.connect(bp); bp.connect(g); g.connect(ambGain);
+    o.start(t); o.stop(t + 0.2);
+  });
+}
 // --- いま 何が 鳴く 時間帯か（時計を 見なくても 耳で 夏が わかる）
 function ambKindOf(tod) {
   if (tod >= 19 || tod < 5) return 'yoru';
