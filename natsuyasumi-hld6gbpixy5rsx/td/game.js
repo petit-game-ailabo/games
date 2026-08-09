@@ -87,7 +87,26 @@ const npcs = [
   } },
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
-function pickLines(npc) { const s = npc.sets; return s[timeKey(tod)] || s.hiru || s.asa; }
+// 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false };
+function pickLines(npc) {
+  // だいようせい：はじめて ひまわりが さいた あとに 気づいて よろこぶ
+  if (npc.ci === 3 && bloomTotal > 0 && !flags.daiThanked) {
+    flags.daiThanked = true; save();
+    return [['dai','わあ、ひまわりが さいてる！'],['cirno','あたいが そだてたの'],['dai','すごい！ おひさま みたい'],['cirno','えへへ、まいにち みずやり したから']];
+  }
+  // まりさ：体操を つづけたら ほめる
+  if (npc.ci === 1 && taisoStamps >= 3 && !flags.marisaStamp) {
+    flags.marisaStamp = true; save();
+    return [['marisa','まいあさ たいそう、えらいな'],['cirno','スタンプ たまってきた！'],['marisa','なつやすみの かがみだ'],['cirno','へへーん']];
+  }
+  // リグル：蛍を たくさん つかまえたら
+  if (npc.ci === 5 && caughtHotaru >= 5 && !flags.wriggleHotaru) {
+    flags.wriggleHotaru = true; save();
+    return [['wriggle','ほたる、いっぱい つかまえたな'],['cirno','よるの にわで ひかってた'],['wriggle','にがして やると また 光るぞ'],['cirno','うん、そうする']];
+  }
+  const s = npc.sets; return s[timeKey(tod)] || s.hiru || s.asa;
+}
 const cam = { x: 0, y: 0 };
 const TALK_R = TS * 1.4;                 // これより 近ければ 話しかけられる
 let talkNpc = null, talkIdx = 0, talkLines = null;   // 相手・何行目・いま 表示中の 台本
@@ -241,7 +260,7 @@ function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
-    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, px: player.x, py: player.y })); } catch (e) {}
+    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, px: player.x, py: player.y })); } catch (e) {}
 }
 function load() {
   try {
@@ -253,6 +272,7 @@ function load() {
     if (s.today) today = s.today;
     bloomTotal = s.bloomTotal || 0;
     taisoStamps = s.taisoStamps || 0; taisoToday = !!s.taisoToday;
+    if (s.flags) Object.assign(flags, s.flags);
     if (s.px != null) { player.x = s.px; player.y = s.py; }
   } catch (e) {}
 }
