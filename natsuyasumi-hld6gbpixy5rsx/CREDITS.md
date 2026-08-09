@@ -10,12 +10,13 @@
 - 条件: 非商用プロジェクトでの使用可 / 改変可 / **クレジット表記「Majstek」必須** / R-18用途は不可
 - 本作では 30 体分の 16x16 スプライトを 1 枚のアトラスに再構成して埋め込んでいます
 
-## タイルセット（地面・木・やぶ・岩・水）
+## タイルセット（`td/` 2D版：地面・木・やぶ・水・木造物）
 
-**Mana Seed — Seasonal Forest（summer サンプル）** — 作者: **Seliel the Shaper**
-- 配布元: https://seliel-the-shaper.itch.io/summer-forest
-- 無料サンプル版から必要なタイルだけを切り出し、独自アトラスに再構成して使用
-- 素材そのものの再配布は不可のため、ゲームの一部としてのみ同梱
+**Top Down Adventure Assets（"A Meta Data Game"）** — 作者: **Luis Zuno (@ansimuz)**
+- 配布元: https://ansimuz.itch.io/ ／ http://www.pixelgameart.org
+- ライセンス: **CC0 相当**（本人明記：個人/商用OK・改変OK・**再配布OK**）。ライセンス文 `td/assets/LICENSE-topdown-adventure.txt` 同梱
+- `td/assets/tileset-world.png` として そのまま使用。より綺麗な素材への 差し替えは 後で判断
+- ※ 旧記載の「Mana Seed（Seliel／再配布不可）」は 実体と異なるため 訂正した
 
 ## 生き物スプライト（`td/` 2D版：魚・虫）
 
