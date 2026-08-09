@@ -84,8 +84,7 @@ const TALK_R = TS * 1.4;                 // これより 近ければ 話しか�
 let talkNpc = null, talkIdx = 0;         // いま 話している 相手と 何行目か
 
 // --- 昼夜（ほの暮しの庭：昼は ほっこり／夜は すこし 不安）。時間で 空気の色が かわる
-// tod = 時刻(0〜24)。1日 = DAYSEC秒 で ひとまわり。朝8時から はじまる
-const DAYSEC = 240;
+// tod = 時刻(0〜24)。**時間は 勝手に 流れない**。行動した ぶんだけ passTime() で すすむ。朝8時から
 let tod = 8;
 // ひかりの色（かける＝multiply。255で そのまま・小さいほど 暗い/色づく）
 const LIGHT = [
@@ -143,6 +142,8 @@ const SUMMER_DAYS = 31;
 let garden = [];                  // はたけ（後の 章で うめる）
 let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
 function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
+// 時間を すすめる（行動した ぶんだけ）。よなかを またいだら つぎの日へ
+function passTime(h) { tod += h; while (tod >= 24) { tod -= 24; newDay(); } }
 function newDay() {
   day++;
   growGarden();
@@ -178,10 +179,12 @@ function plotAt(c, r) { return garden.find(p => p.c === c && p.r === r); }
 // --- 入力。act は 決定（スペース／エンター）。おしっぱなしでは 進まない（1回ぶん）
 const keys = {};
 let act = false;
+let showHud = true;               // 時計・こよみの 表示。**最後に false にすれば 消える**（Hキーで 切替）
 addEventListener('keydown', e => {
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
   if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
+  if (!e.repeat && (e.key==='h'||e.key==='H')) showHud = !showHud;
   keys[e.key.toLowerCase()] = true;
 });
 addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
@@ -207,15 +210,12 @@ function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (ready < 2) { g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH); requestAnimationFrame(loop); return; }
 
-  // ねむり中：時間は 止め、まっくらの まん中で つぎの朝へ とぶ
+  // 時間は **勝手には 進まない**（急かさない）。行動した ぶんだけ すすむ＝passTime()
+  // ねむり中だけ：まっくらの まん中で つぎの朝へ とぶ
   if (sleepPhase > 0) {
     const before = sleepPhase; sleepPhase -= dt;
     if (before > 1.0 && sleepPhase <= 1.0) { tod = 7; newDay(); }
     if (sleepPhase < 0) sleepPhase = 0;         // 0を またがず ぴったり 起きる
-  } else {
-    const prev = tod;
-    tod = (tod + dt * 24 / DAYSEC) % 24;         // 時刻を すすめる（1日＝DAYSEC秒）
-    if (tod < prev) newDay();                     // よなかを またいだ＝つぎの日
   }
   if (dayMsgT > 0) dayMsgT -= dt;
 
@@ -264,13 +264,13 @@ function loop(now) {
   const fieldPlot = onField ? plotAt(pc, pr) : null;
   // キーで 会話／うえる・みずやり／蛍つかまえ（近づいただけでは 始めない・P1）
   if (act) {
-    if (talkNpc) { if (++talkIdx >= talkNpc.lines.length) { talkNpc = null; talkIdx = 0; } }
+    if (talkNpc) { if (++talkIdx >= talkNpc.lines.length) { talkNpc = null; talkIdx = 0; passTime(1.0); } }
     else if (near) { talkNpc = near; talkIdx = 0; }
     else if (onField) {
-      if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); save(); }
-      else if (!fieldPlot.watered) { fieldPlot.watered = true; save(); }
+      if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); passTime(1.0); save(); }
+      else if (!fieldPlot.watered) { fieldPlot.watered = true; passTime(1.0); save(); }
     }
-    else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; nearFly = null; save(); }
+    else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; nearFly = null; passTime(0.5); save(); }
     act = false;
   }
 
@@ -329,27 +329,29 @@ function loop(now) {
     g.restore();
   }
 
-  // --- HUD（ひかりの上。いつも 読める）
-  g.fillStyle = 'rgba(230,238,220,0.9)'; g.font = '600 15px system-ui';
-  g.fillText('うらの にわ', 14, 26);
-  g.fillStyle = 'rgba(230,238,220,0.5)'; g.font = '12px system-ui';
-  g.fillText('Zで ねる', 14, 44);
-  // とけい（右上）：時刻と じかんたい
-  const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
-  const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)}`;
-  g.font = '600 15px system-ui'; g.textAlign = 'right';
-  g.fillStyle = 'rgba(8,12,9,0.45)';
-  const cw = g.measureText(clk).width; g.fillRect(VW - cw - 26, 10, cw + 16, 24);
-  g.fillStyle = 'rgba(246,250,242,0.95)'; g.fillText(clk, VW - 14, 27); g.textAlign = 'left';
-  // こよみ：なつやすみ のこり N日（時計の下）
-  g.font = '600 13px system-ui'; g.textAlign = 'right';
-  g.fillStyle = 'rgba(255,236,190,0.92)';
-  g.fillText(`${day}日目 ・ のこり ${nokori()}日`, VW - 14, 47); g.textAlign = 'left';
-  // つかまえた 蛍の かず（夜／持っていれば）
-  if (caughtHotaru > 0 || isNight()) {
+  // --- HUD（ひかりの上。いつも 読める）。**showHud=false で ぜんぶ 消える**（Hキーで 切替・最後は 既定オフに）
+  if (showHud) {
+    g.fillStyle = 'rgba(230,238,220,0.9)'; g.font = '600 15px system-ui';
+    g.fillText('うらの にわ', 14, 26);
+    g.fillStyle = 'rgba(230,238,220,0.5)'; g.font = '12px system-ui';
+    g.fillText('Zで ねる ・ Hで 表示けし', 14, 44);
+    // とけい（右上）：時刻と じかんたい
+    const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
+    const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)}`;
+    g.font = '600 15px system-ui'; g.textAlign = 'right';
+    g.fillStyle = 'rgba(8,12,9,0.45)';
+    const cw = g.measureText(clk).width; g.fillRect(VW - cw - 26, 10, cw + 16, 24);
+    g.fillStyle = 'rgba(246,250,242,0.95)'; g.fillText(clk, VW - 14, 27); g.textAlign = 'left';
+    // こよみ：なつやすみ のこり N日（時計の下）
     g.font = '600 13px system-ui'; g.textAlign = 'right';
-    g.fillStyle = 'rgba(220,255,150,0.9)';
-    g.fillText(`ほたる ${caughtHotaru}`, VW - 14, 66); g.textAlign = 'left';
+    g.fillStyle = 'rgba(255,236,190,0.92)';
+    g.fillText(`${day}日目 ・ のこり ${nokori()}日`, VW - 14, 47); g.textAlign = 'left';
+    // つかまえた 蛍の かず（夜／持っていれば）
+    if (caughtHotaru > 0 || isNight()) {
+      g.font = '600 13px system-ui'; g.textAlign = 'right';
+      g.fillStyle = 'rgba(220,255,150,0.9)';
+      g.fillText(`ほたる ${caughtHotaru}`, VW - 14, 66); g.textAlign = 'left';
+    }
   }
 
   // 会話の まど／足もとの したこと（はなす・うえる・みずやり・つかまえる）
