@@ -275,6 +275,14 @@ let fishMax = {};               // 魚ごとの さいだい サイズ（cm）�
 let lastSummer = null;          // きょねんの なつの 思い出（別キー・年を またいで のこる）
 let fishing = null;            // 釣りの さいちゅう {phase,t,biteAt,win,fish,x,y}
 const critters = [];          // 世界を とぶ 虫（cutebugs）{x,y,bi,vx,vy,ph,life}
+const flutters = [];          // 昼の蝶（原っぱの 花に あつまる・見るだけ）{x,y,ph,vx,vy,hue,life}
+function spawnFlutter() {
+  for (let tr = 0; tr < 10; tr++) {
+    const c = Math.floor(player.x/TS) + ((rnd()*16|0)-8), r = Math.floor(player.y/TS) + ((rnd()*10|0)-5);
+    if (c<1||r<1||c>=MW-1||r>=MH-1) continue;
+    if (map[r][c] === FLOWER) { flutters.push({ x:c*TS+TS/2, y:r*TS+TS/2, ph:rnd()*6.28, vx:0, vy:0, hue:[45,320,190,10][(rnd()*4|0)], life:0 }); return; }
+  }
+}
 let sumo = null, sumoWins = 0, sumoToday = false; // 虫相撲 {pos,my,op,phase,result,t}／その日 挑んだか
 let matsuri = null;            // 金魚すくい（祭りの夜）{t,caught,cool,poiX,poiY,fish[],phase}
 const STALL = { c: 28, r: 4 }; // 屋台（うちの庭・祭りの夜だけ 出る）
@@ -722,6 +730,16 @@ function loop(now) {
       hikari.x += hikari.vx*dt; hikari.y += hikari.vy*dt;
       if (Math.hypot(hikari.x - player.x, hikari.y - player.y) < TS*0.95) nearHikari = true;
     } else if (!nearHome || !isNight()) hikari = null;
+    // 昼の蝶：花の 多い ところに あつまる（見るだけ・原っぱの 空気）
+    if (!isNight() && !isRainy() && !showerNow() && flutters.length < 5 && rnd() < 0.05) spawnFlutter();
+    for (let i = flutters.length - 1; i >= 0; i--) {
+      const fl = flutters[i]; fl.ph += dt * 3;
+      if (rnd() < 0.05) { fl.vx = (rnd()-0.5)*40; fl.vy = (rnd()-0.5)*34; }
+      fl.x += fl.vx*dt; fl.y += fl.vy*dt;
+      fl.life += dt * ((!isNight() && !isRainy()) ? 0.6 : -1.2);
+      if (fl.life <= 0 && (isNight() || isRainy())) { flutters.splice(i, 1); continue; }
+      fl.life = clamp(fl.life, 0, 1);
+    }
     // そばの 仲間（話しかけ用）。夜は みんな 家に かえる（門限と 同じ）＝昼だけ
     let bestD = TALK_R;
     if (!isNight()) for (const n of npcs) { const d = Math.hypot(n.x - player.x, n.y - player.y); if (d < bestD) { bestD = d; near = n; } }
@@ -904,6 +922,18 @@ function loop(now) {
       g.fillStyle = 'rgba(255,246,220,0.95)'; g.font = '600 10px system-ui'; g.textAlign='center'; g.fillText('きんぎょすくい', sx, sy-44); g.textAlign='left';
       g.restore();
     }
+  }
+  // 昼の蝶（花に あつまる）。色つきの 羽が ひらひら
+  for (const fl of flutters) {
+    const fx = fl.x - cam.x, fy = fl.y - cam.y - Math.abs(Math.sin(fl.ph))*3;
+    if (fx < -20 || fy < -20 || fx > VW+20 || fy > VH+20) continue;
+    const w = 2 + Math.abs(Math.sin(fl.ph*2))*3;
+    g.save(); g.globalAlpha = fl.life;
+    g.fillStyle = `hsl(${fl.hue},80%,62%)`;
+    g.beginPath(); g.ellipse(fx-3, fy, w, 4, 0.5, 0, 6.283); g.fill();
+    g.beginPath(); g.ellipse(fx+3, fy, w, 4, -0.5, 0, 6.283); g.fill();
+    g.fillStyle = '#3a2a1a'; g.fillRect(fx-0.5, fy-3, 1, 6);   // からだ
+    g.restore();
   }
   // 世界を とぶ 虫（cutebugs）。ふわっと 出て 消える
   for (const cr of critters) {
