@@ -113,6 +113,27 @@ function todName(h) {
   if (h < 15) return 'ひる'; if (h < 17) return 'ひるさがり'; if (h < 19) return 'ゆうがた';
   if (h < 21) return 'よる'; return 'よる';
 }
+function isNight() { return tod >= 19 || tod < 4.5; }
+
+// --- 蛍（よるだけ）。ひかりの点なので コードで きれいに 描ける＝絵柄が くずれない。
+//   夜の 不安と 幻想の 両方。近づいて スペースで つかまえる（P1と 同じ：キーで）
+const flies = [];               // {x,y,ph,vx,vy,life}  life:0→1 で ふわっと 出て 消える
+const FLY_MAX = 16;
+const FLY_R = TS * 0.95;        // これより 近ければ つかまえられる
+let caughtHotaru = 0;
+function spawnFly() {
+  // プレイヤーの まわり（1画面ぶん）で 草の上に わく
+  for (let tries = 0; tries < 12; tries++) {
+    const c = Math.floor(player.x/TS) + ((rnd()*20|0) - 10);
+    const r = Math.floor(player.y/TS) + ((rnd()*14|0) - 7);
+    if (c<1||r<1||c>=MW-1||r>=MH-1) continue;
+    const t = map[r][c];
+    if (t === G || t === G2 || t === WATER || t === FLOWER || t === PLANT) {
+      flies.push({ x: c*TS + TS/2, y: r*TS + TS/2, ph: rnd()*6.28, vx: 0, vy: 0, life: 0 });
+      return;
+    }
+  }
+}
 
 // --- 入力。act は 決定（スペース／エンター）。おしっぱなしでは 進まない（1回ぶん）
 const keys = {};
@@ -168,13 +189,29 @@ function loop(now) {
   cam.x = clamp(Math.round(player.x - VW/2), 0, MW*TS - VW);
   cam.y = clamp(Math.round(player.y - VH/2), 0, MH*TS - VH);
 
+  // 蛍：よるだけ ふわふわ わく。昼は しずかに 消える
+  if (isNight() && flies.length < FLY_MAX && rnd() < 0.06) spawnFly();
+  let nearFly = null, flyD = FLY_R;
+  for (let i = flies.length - 1; i >= 0; i--) {
+    const f = flies[i];
+    f.ph += dt * 1.6;
+    // ゆらゆら ただよう（ゆっくり）。ときどき むきを かえる
+    if (rnd() < 0.03) { f.vx = (rnd()-0.5)*18; f.vy = (rnd()-0.5)*18; }
+    f.x += f.vx * dt; f.y += f.vy * dt;
+    f.life += dt * (isNight() ? 0.8 : -1.2);          // 夜は 出て・昼は 引っこむ
+    if (f.life <= 0 && !isNight()) { flies.splice(i, 1); continue; }
+    f.life = clamp(f.life, 0, 1);
+    const d = Math.hypot(f.x - player.x, f.y - player.y);
+    if (d < flyD) { flyD = d; nearFly = f; }
+  }
   // そばの 仲間（話しかけ用）。いちばん 近いのを ひとり
   let near = null, bestD = TALK_R;
   for (const n of npcs) { const d = Math.hypot(n.x - player.x, n.y - player.y); if (d < bestD) { bestD = d; near = n; } }
-  // キーで 会話を はじめる／つぎへ（近づいただけでは 始めない・P1）
+  // キーで 会話／つぎへ／蛍つかまえ（近づいただけでは 始めない・P1）
   if (act) {
     if (talkNpc) { if (++talkIdx >= talkNpc.lines.length) { talkNpc = null; talkIdx = 0; } }
     else if (near) { talkNpc = near; talkIdx = 0; }
+    else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; nearFly = null; }
     act = false;
   }
 
@@ -211,6 +248,24 @@ function loop(now) {
     vg.addColorStop(0, 'rgba(4,6,16,0)'); vg.addColorStop(1, `rgba(4,6,16,${dark})`);
     g.fillStyle = vg; g.fillRect(0, 0, VW, VH);
   }
+  // 蛍の あかり（くらさの上で 光る）。lighter で ふわっと 加算
+  if (flies.length) {
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (const f of flies) {
+      const fx = f.x - cam.x, fy = f.y - cam.y;
+      if (fx < -20 || fy < -20 || fx > VW+20 || fy > VH+20) continue;
+      const pulse = 0.55 + 0.45 * Math.sin(f.ph);
+      const a = f.life * pulse;
+      const rad = TS * (0.5 + 0.25 * pulse);
+      const gr = g.createRadialGradient(fx, fy, 0, fx, fy, rad);
+      gr.addColorStop(0, `rgba(220,255,150,${0.9*a})`);
+      gr.addColorStop(0.4, `rgba(150,230,90,${0.45*a})`);
+      gr.addColorStop(1, 'rgba(120,200,70,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(fx, fy, rad, 0, 6.284); g.fill();
+      g.fillStyle = `rgba(245,255,210,${a})`; g.beginPath(); g.arc(fx, fy, 1.6, 0, 6.284); g.fill();
+    }
+    g.restore();
+  }
 
   // --- HUD（ひかりの上。いつも 読める）
   g.fillStyle = 'rgba(230,238,220,0.9)'; g.font = '600 15px system-ui';
@@ -222,13 +277,19 @@ function loop(now) {
   g.fillStyle = 'rgba(8,12,9,0.45)';
   const cw = g.measureText(clk).width; g.fillRect(VW - cw - 26, 10, cw + 16, 24);
   g.fillStyle = 'rgba(246,250,242,0.95)'; g.fillText(clk, VW - 14, 27); g.textAlign = 'left';
+  // つかまえた 蛍の かず（夜／持っていれば）
+  if (caughtHotaru > 0 || isNight()) {
+    g.font = '600 14px system-ui'; g.textAlign = 'right';
+    g.fillStyle = 'rgba(220,255,150,0.9)';
+    g.fillText(`ほたる ${caughtHotaru}`, VW - 14, 50); g.textAlign = 'left';
+  }
 
-  // 会話の まど／「▶ はなす」の 出し
+  // 会話の まど／「▶ はなす」「▶ つかまえる」の 出し
   if (talkNpc) drawSay(talkNpc.lines[talkIdx]);
-  else if (near) {
+  else if (near || nearFly) {
     g.fillStyle = 'rgba(8,12,9,0.5)'; g.fillRect(0, VH-40, VW, 40);
     g.fillStyle = 'rgba(246,250,242,0.95)'; g.font = '600 17px system-ui'; g.textAlign = 'center';
-    g.fillText('▶ はなす', VW/2, VH-15); g.textAlign = 'left';
+    g.fillText(near ? '▶ はなす' : '▶ つかまえる', VW/2, VH-15); g.textAlign = 'left';
   }
   act = false;                         // 1フレームで つかいきる
   requestAnimationFrame(loop);
