@@ -67,6 +67,8 @@ for (const [c,r,t] of HOME_OBJS) set(c,r,t);
 [28,33,37,48].forEach(t => SOLID.add(t));   // 置いた ものは とおれない
 const SHRINE = { c: 12, r: 55 };            // 神社（原っぱの おく）。鳥居＋祠、おまいり できる
 rect(SHRINE.c-2, SHRINE.r-2, 6, 5, G);      // 神社の 庭を きれいに
+const SCARECROW = { c: 24, r: 23 };         // 案山子（田んぼの ふち）
+const SIGN = { c: 29, r: 39 };              // 道しるべ（川むこうの 分かれ道）
 SOLID.add(PADDY);                           // 水田は 入れない（あぜ道を あるく）
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
@@ -673,7 +675,8 @@ function loop(now) {
     g.fillStyle = '#5c3d22'; g.fillRect(bx - TS*0.42, by + 2, 4, 9); g.fillRect(bx + TS*0.42 - 4, by + 2, 4, 9);
     g.restore();
   }
-  drawShrine();                          // 神社（鳥居＋祠）
+  drawShrine();                          // 神社（鳥居＋祠＋狛犬）
+  drawProps();                           // 案山子・道しるべ看板
   // 世界を とぶ 虫（cutebugs）。ふわっと 出て 消える
   for (const cr of critters) {
     const cx = cr.x - cam.x, cy = cr.y - cam.y;
@@ -923,7 +926,39 @@ function drawShrine() {
     g.fillStyle = isNight() ? '#ffd27a' : '#3a2a12'; g.fillRect(lx-4, gy-25, 8, 6);  // 火（夜は ともる）
     g.fillStyle = '#6c6f76'; g.beginPath(); g.moveTo(lx-9, gy-28); g.lineTo(lx, gy-34); g.lineTo(lx+9, gy-28); g.closePath(); g.fill();  // 笠
   }
+  // 狛犬（左右）
+  for (const s of [-1, 1]) {
+    const kx = cx + s*(tw/2 + 30);
+    g.fillStyle = '#9a9da3'; g.fillRect(kx-5, gy-11, 10, 11);                   // 体（すわり）
+    g.beginPath(); g.arc(kx, gy-13, 5, 0, 6.283); g.fill();                     // 頭
+    g.fillStyle = '#6c6f76'; g.fillRect(kx-6, gy-1, 12, 2);                     // 台石
+  }
   g.restore();
+}
+// 案山子・道しるべ（コード図形で 密度を 出す）
+function drawProps() {
+  // 案山子
+  let x = (SCARECROW.c+0.5)*TS - cam.x, gy = (SCARECROW.r+1)*TS - cam.y;
+  if (x > -40 && x < VW+40 && gy > -60 && gy < VH+40) {
+    g.save();
+    g.fillStyle = 'rgba(10,20,8,0.2)'; g.beginPath(); g.ellipse(x, gy, 10, 3, 0, 0, 6.283); g.fill();
+    g.fillStyle = '#7a5230'; g.fillRect(x-2, gy-34, 4, 34); g.fillRect(x-14, gy-26, 28, 3);   // 支柱＋腕
+    g.fillStyle = '#4a6ea0'; g.beginPath(); g.moveTo(x, gy-28); g.lineTo(x-11, gy-8); g.lineTo(x+11, gy-8); g.closePath(); g.fill();  // 服
+    g.fillStyle = '#d9c37a'; g.beginPath(); g.arc(x, gy-32, 6, 0, 6.283); g.fill();           // わら頭
+    g.fillStyle = '#b79a5a'; g.beginPath(); g.moveTo(x-10, gy-33); g.lineTo(x, gy-43); g.lineTo(x+10, gy-33); g.closePath(); g.fill();  // 笠
+    g.restore();
+  }
+  // 道しるべ看板
+  x = (SIGN.c+0.5)*TS - cam.x; gy = (SIGN.r+1)*TS - cam.y;
+  if (x > -60 && x < VW+60 && gy > -50 && gy < VH+40) {
+    g.save();
+    g.fillStyle = '#6b4a2a'; g.fillRect(x-2, gy-30, 4, 30);                     // 柱
+    g.fillStyle = '#8a6a3a'; g.fillRect(x-26, gy-36, 52, 22);
+    g.strokeStyle = '#5c3d22'; g.lineWidth = 1.5; g.strokeRect(x-26, gy-36, 52, 22);
+    g.fillStyle = '#33240f'; g.font = '600 10px system-ui'; g.textAlign = 'center';
+    g.fillText('← はらっぱ・神社', x, gy-25); g.fillText('いけ →', x, gy-18); g.textAlign = 'left';
+    g.restore();
+  }
 }
 // 飛び石（水の上の 石）
 function drawStone(dx, dy) {
