@@ -43,6 +43,9 @@ function initAudio() {
 }
 function setSfxVol(v) { sfxVol = v; if (AC && sfxGain) sfxGain.gain.setTargetAtTime(v, AC.currentTime, 0.1); }
 function sfxOut() { return sfxGain || ambGain; }   // SFXの 出力先（未初期化なら amb）
+// ノードの後始末：source終了時に 中間ノード(filter/gain等)を disconnect。
+// 一過性の音を 毎回 生成するので、長時間プレイで ノードが 積み上がらないよう 明示解放する。
+function freeOnEnd(src, nodes) { src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch (e) {} } }; }
 // BGMの ON/OFF（既定OFF）
 function setBgm(on) { bgmOn = on; if (AC && bgmGain) bgmGain.gain.setTargetAtTime(on ? 0.14 : 0, AC.currentTime, 0.5); }
 // 場面で 曲想が かわる やわらかい パッド。mood: 'day'|'night'|'festival'|'late'
@@ -59,7 +62,7 @@ function bgmTick(dt, mood) {
     const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t);
     g.gain.linearRampToValueAtTime(0.06, t + 0.8); g.gain.linearRampToValueAtTime(0.0001, t + dur);
     const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
-    o.connect(lp); lp.connect(g); g.connect(bgmGain); o.start(t); o.stop(t + dur + 0.1);
+    o.connect(lp); lp.connect(g); g.connect(bgmGain); o.start(t); o.stop(t + dur + 0.1); freeOnEnd(o, [o, lp, g]);
   }
 }
 // 雨の 音量（0=やむ）。game.js から 毎フレーム
@@ -101,7 +104,7 @@ function cicada(vol, freq, dur) {
   g.gain.setValueAtTime(0, t);
   g.gain.linearRampToValueAtTime(vol, t+dur*0.25);
   g.gain.linearRampToValueAtTime(0, t+dur);
-  s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t+dur+0.05);
+  s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t+dur+0.05); freeOnEnd(s, [s, bp, g]);
 }
 // --- 小鳥（あさ）。ちゅんちゅん を 2〜4こ
 function kotori(vol) {
@@ -119,7 +122,7 @@ function kotori(vol) {
     g.gain.linearRampToValueAtTime(vol, t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
     o.connect(bp); bp.connect(g); g.connect(ambGain);
-    o.start(t); o.stop(t + 0.12);
+    o.start(t); o.stop(t + 0.12); freeOnEnd(o, [o, bp, g]);
   }
 }
 // --- 鈴虫（ゆうがた〜よる）。高い「リーン」を こまかく ふるわせる
@@ -133,7 +136,7 @@ function suzumushi(vol) {
     const bp = AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value = f; bp.Q.value = 14;
     const ng = AC.createGain(); ng.gain.value = 0.5;
     s.connect(bp); bp.connect(ng); ng.connect(g);
-    s.start(t0); s.stop(t0 + dur + 0.05);
+    s.start(t0); s.stop(t0 + dur + 0.05); freeOnEnd(s, [s, bp, ng]);
   }
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.linearRampToValueAtTime(vol, t0 + 0.12);
@@ -143,7 +146,7 @@ function suzumushi(vol) {
   const amg = AC.createGain(); amg.gain.value = vol*0.6;
   am.connect(amg); amg.connect(g.gain);
   o.connect(g); g.connect(ambGain);
-  o.start(t0); am.start(t0); o.stop(t0 + dur + 0.05); am.stop(t0 + dur + 0.05);
+  o.start(t0); am.start(t0); o.stop(t0 + dur + 0.05); am.stop(t0 + dur + 0.05); freeOnEnd(o, [o, g, am, amg]);
 }
 // --- カラス（よる）。しりさがりの「カー」を 2〜3回
 function karasu(vol) {
@@ -161,7 +164,7 @@ function karasu(vol) {
     g.gain.setValueAtTime(vol, t + dur*0.6);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(bp); bp.connect(g); g.connect(ambGain);
-    o.start(t); o.stop(t + dur + 0.05);
+    o.start(t); o.stop(t + dur + 0.05); freeOnEnd(o, [o, bp, g]);
   }
 }
 // --- 葉ずれ（風）。ひくい うなりは 入れない（こわくなる）
@@ -178,7 +181,7 @@ function sawasawa(vol) {
   g.gain.linearRampToValueAtTime(vol*0.65, t + dur*0.65);
   g.gain.linearRampToValueAtTime(0.0001, t + dur);
   s.connect(bp); bp.connect(hp); hp.connect(g); g.connect(ambGain);
-  s.start(t); s.stop(t + dur + 0.05);
+  s.start(t); s.stop(t + dur + 0.05); freeOnEnd(s, [s, bp, hp, g]);
 }
 
 // --- ラジオ体操の みじかい ジングル（あさ・スタンプ時）。ふえ風の 上りメロ
@@ -194,7 +197,7 @@ function taisoJingle() {
     g.gain.linearRampToValueAtTime(0.14, t + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
     o.connect(bp); bp.connect(g); g.connect(sfxOut());
-    o.start(t); o.stop(t + 0.2);
+    o.start(t); o.stop(t + 0.2); freeOnEnd(o, [o, bp, g]);
   });
 }
 // --- 足音（踏んだ タイルで 音色が かわる）。short/やわらかい ノイズ
@@ -210,7 +213,7 @@ function footstep(kind) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
   g.gain.exponentialRampToValueAtTime(0.0001, t + (kind === 'water' ? 0.16 : 0.09));
-  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.2);
+  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.2); freeOnEnd(s, [s, bp, g]);
 }
 // --- 水あそびの ぱしゃ（みじかい 水音）。ノイズの 破裂＋ひくい ぽちゃん
 function mizuSfx() {
@@ -222,13 +225,13 @@ function mizuSfx() {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(0.28, t + 0.01);
   g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.26);
+  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.26); freeOnEnd(s, [s, bp, g]);
   const o = AC.createOscillator(); o.type='sine';
   o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(240, t + 0.16);
   const og = AC.createGain();
   og.gain.setValueAtTime(0.0001, t); og.gain.linearRampToValueAtTime(0.12, t + 0.02);
   og.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
-  o.connect(og); og.connect(sfxOut()); o.start(t); o.stop(t + 0.24);
+  o.connect(og); og.connect(sfxOut()); o.start(t); o.stop(t + 0.24); freeOnEnd(o, [o, og]);
 }
 // --- 畑：土をかける「ザッ」／収穫の「ポン」
 function soilSfx() {
@@ -236,20 +239,20 @@ function soilSfx() {
   const s = AC.createBufferSource(); s.buffer = shortNoise;
   const bp = AC.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 620;
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.13, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
-  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.18);
+  s.connect(bp); bp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.18); freeOnEnd(s, [s, bp, g]);
 }
 function popSfx() {
   if (!AC) return; const t = AC.currentTime;
   const o = AC.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(440, t); o.frequency.exponentialRampToValueAtTime(880, t + 0.08);
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.13, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.2);
+  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.2); freeOnEnd(o, [o, g]);
 }
 // --- UIの クリック音（メニュー開閉・ボタン）
 function uiSfx() {
   if (!AC) return; const t = AC.currentTime;
   const o = AC.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(660, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.03);
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
-  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.1);
+  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.1); freeOnEnd(o, [o, g]);
 }
 // --- カエル（よるの 田んぼ）。ひくい「ゲコッ」を 2つ
 function frog(vol) {
@@ -260,7 +263,7 @@ function frog(vol) {
     o.frequency.setValueAtTime(165, tt); o.frequency.exponentialRampToValueAtTime(110, tt + 0.1);
     const bp = AC.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 520;
     const g = AC.createGain(); g.gain.setValueAtTime(0.0001, tt); g.gain.linearRampToValueAtTime(vol, tt + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.12);
-    o.connect(bp); bp.connect(g); g.connect(ambGain); o.start(tt); o.stop(tt + 0.15);
+    o.connect(bp); bp.connect(g); g.connect(ambGain); o.start(tt); o.stop(tt + 0.15); freeOnEnd(o, [o, bp, g]);
   }
 }
 // --- 花火：打ち上げ「ヒュー」と 破裂「ドン」
@@ -269,17 +272,17 @@ function fireworkLaunch() {
   const o = AC.createOscillator(); o.type = 'sine';
   o.frequency.setValueAtTime(380, t); o.frequency.exponentialRampToValueAtTime(1150, t + 0.5);
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.04, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.6);
+  o.connect(g); g.connect(sfxOut()); o.start(t); o.stop(t + 0.6); freeOnEnd(o, [o, g]);
 }
 function fireworkBoom() {
   if (!AC || !shortNoise) return; const t = AC.currentTime;
   const s = AC.createBufferSource(); s.buffer = shortNoise;
   const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 850;
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-  s.connect(lp); lp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.6);
+  s.connect(lp); lp.connect(g); g.connect(sfxOut()); s.start(t); s.stop(t + 0.6); freeOnEnd(s, [s, lp, g]);
   const o = AC.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.4);
   const og = AC.createGain(); og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.28, t + 0.02); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-  o.connect(og); og.connect(sfxOut()); o.start(t); o.stop(t + 0.55);
+  o.connect(og); og.connect(sfxOut()); o.start(t); o.stop(t + 0.55); freeOnEnd(o, [o, og]);
 }
 // --- いま 何が 鳴く 時間帯か（時計を 見なくても 耳で 夏が わかる）
 function ambKindOf(tod) {

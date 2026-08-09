@@ -1662,8 +1662,8 @@ function drawEnding(now) {
   g.fillText('なつやすみが おわった', VW/2, 140);
   g.fillStyle = 'rgba(255,236,190,0.92)'; g.font = '600 18px system-ui';
   g.fillText(`${SUMMER_DAYS}日の なつを すごした`, VW/2, 184);
-  g.fillStyle = '#eef3ff'; g.font = '16px system-ui';
-  g.fillText(`ほたる ${caughtHotaru}・ひまわり ${bloomTotal}・たいそう ${taisoStamps}・ずかん 魚${dexCount(fishDex)}/${FISH.length} 虫${dexCount(bugDex)}/${BUGS.length}${(flags.kingyo||0)>0?'・きんぎょ '+flags.kingyo:''}`, VW/2, 214);
+  g.fillStyle = '#eef3ff';
+  fitText(`ほたる ${caughtHotaru}・ひまわり ${bloomTotal}・たいそう ${taisoStamps}・ずかん 魚${dexCount(fishDex)}/${FISH.length} 虫${dexCount(bugDex)}/${BUGS.length}${(flags.kingyo||0)>0?'・きんぎょ '+flags.kingyo:''}`, VW/2, 214, VW-120, '', 16);
   if (flags.kenkyuDone) { g.fillStyle = '#ffe23a'; g.font = '700 18px system-ui'; g.fillText('★ しょうごう：なつやすみ はかせ', VW/2, 244); }
   if (flags.bond && Object.keys(flags.bond).length) { g.fillStyle = 'rgba(255,210,220,0.9)'; g.font = '15px system-ui';
     g.fillText(`いちばん なかよし：${NAMES[bestBondCi()]}${(flags.helped||0)>0?'　おてつだい '+flags.helped+'かい':''}`, VW/2, flags.kenkyuDone ? 268 : 244); }
@@ -1733,11 +1733,11 @@ function drawDex() {
   g.beginPath(); g.moveTo(bx+r,by); g.arcTo(bx+bw,by,bx+bw,by+bh,r); g.arcTo(bx+bw,by+bh,bx,by+bh,r);
   g.arcTo(bx,by+bh,bx,by,r); g.arcTo(bx,by,bx+bw,by,r); g.fill();
   g.strokeStyle = 'rgba(90,110,70,0.4)'; g.lineWidth = 2; g.stroke();
-  g.fillStyle = '#3f5230'; g.font = '700 24px system-ui';
+  g.fillStyle = '#3f5230';
   const fN = lifeDexCount(lifeFishCount, FISH.length), bN = lifeDexCount(lifeBugCount, BUGS.length);
   const kg = (flags.kingyo||0) + ((lastSummer && lastSummer.lifeKingyo) || 0);
   const full = fN === FISH.length && bN === BUGS.length;
-  g.fillText(`いきもの ずかん（せいがい）  さかな ${fN}/${FISH.length}・むし ${bN}/${BUGS.length}${kg>0?'・きんぎょ '+kg:''}${full ? '  ★コンプ！' : ''}`, bx+28, by+40);
+  fitText(`いきもの ずかん（せいがい）  さかな ${fN}/${FISH.length}・むし ${bN}/${BUGS.length}${kg>0?'・きんぎょ '+kg:''}${full ? '  ★コンプ！' : ''}`, bx+28, by+40, bw-56, '700', 24);
   // さかな（生涯 累積）
   g.fillStyle = '#4a6038'; g.font = '600 17px system-ui'; g.fillText('さかな', bx+28, by+78);
   FISH.forEach((f, i) => {
@@ -1872,6 +1872,12 @@ function drawPause() {
   g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+// 文字を 最大幅に 収める（生涯カウンタが 何年で 桁増えしても レイアウトを 割らない）
+function fitText(text, x, y, maxW, weight, size) {
+  let sz = size; const f = () => (weight ? weight + ' ' : '') + sz + 'px system-ui';
+  g.font = f(); while (sz > 9 && g.measureText(text).width > maxW) { sz--; g.font = f(); }
+  g.fillText(text, x, y);
+}
 load();                               // つづきの 夏から
 makeRequest();                        // きょうの おねがい（load後の day で）
 try { const s = JSON.parse(localStorage.getItem('natsuyasumi_td')||'null'); if (s && s.reqDone) reqDone = true; } catch(e) {}
