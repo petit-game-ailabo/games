@@ -86,8 +86,16 @@ function setBrookLevel(v) {
 }
 function toggleMute() {
   muted = !muted;
-  if (AC && ambGain) ambGain.gain.setTargetAtTime(muted ? 0 : 0.9, AC.currentTime, 0.2);
+  if (AC && ambGain) ambGain.gain.setTargetAtTime(muted ? 0 : masterVol, AC.currentTime, 0.2);  // 解除時は 現在の音量へ（0.9固定にしない）
   return muted;
+}
+// 環境音マスター音量の 取得/復元（設定を 起動間で のこすため。opt側に 保存する）
+function getMasterVol() { return masterVol; }
+function setMasterVol(v) { masterVol = v; muted = (v === 0); applyMaster(); }
+// タブ復帰時の 再開（バックグラウンドで AC が suspend されると 戻っても 無音のままになる）
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && AC && AC.state === 'suspended') AC.resume(); });
+  addEventListener('focus', () => { if (AC && AC.state === 'suspended') AC.resume(); });
 }
 
 // --- セミ（ひる）／ひぐらし（ゆうがた・低め）。ざらついた ノイズを こまかく ふるわせる

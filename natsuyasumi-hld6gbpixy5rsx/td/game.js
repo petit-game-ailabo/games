@@ -624,11 +624,13 @@ let showHud = true;               // 時計・こよみの 表示。**最後に 
 let mode = 'title';               // 'title'（はじめる前）| 'play'（あそぶ）| 'ending'（夏の おわり）
 let pauseOpen = false;            // ポーズ／せってい（音量・あそびかた・クレジット）
 let resetArm = false;             // 「はじめから」の 二度押し 確認
-const opt = { nonbiri: false, textSpeed: 1, bgm: false, sfxIdx: 0 };   // のんびり／文字速さ／BGM／効果音(0大1小2消)。別キーで のこす
+const opt = { nonbiri: false, textSpeed: 1, bgm: false, sfxIdx: 0, vol: 0.9 };   // のんびり／文字速さ／BGM／効果音(0大1小2消)／環境音マスター音量。別キーで のこす
 function applySfx() { if (typeof setSfxVol === 'function') setSfxVol([1, 0.5, 0][opt.sfxIdx] != null ? [1, 0.5, 0][opt.sfxIdx] : 1); }
 function cps() { return [16, 34, 72][opt.textSpeed] != null ? [16, 34, 72][opt.textSpeed] : 34; }   // 文字/秒
 try { const o = JSON.parse(localStorage.getItem('natsuyasumi_td_opt') || 'null'); if (o) Object.assign(opt, o); } catch (e) {}
+if (typeof setMasterVol === 'function' && opt.vol != null) setMasterVol(opt.vol);   // 保存した 環境音量を 復元（initAudio前でも モジュール変数に 効く）
 function saveOpt() { try { localStorage.setItem('natsuyasumi_td_opt', JSON.stringify(opt)); } catch (e) {} }
+function bumpVolume() { const l = cycleVolume(); if (typeof getMasterVol === 'function') { opt.vol = getMasterVol(); saveOpt(); } return l; }   // 音量を まわして 保存
 // データの かきだし／よみこみ（localStorage消去でも 図鑑を まもる 保険）
 // prompt() は モバイルで 出ない/無効なことが 多い → DOMオーバーレイの テキストエリアで
 // スマホからも かきだし/よみこみ できるように。成否は 正直に 表示し、読込は 上書き確認つき。
@@ -695,7 +697,7 @@ addEventListener('keydown', e => {
   initAudio();                    // 最初の キーで 夏の音を 起こす（自動再生ポリシー対策）
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
   if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; if (!pauseOpen) resetArm = false; uiTap(); return; }
-  if (!e.repeat && (e.key==='m'||e.key==='M')) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.2; }
+  if (!e.repeat && (e.key==='m'||e.key==='M')) { const l = bumpVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.2; }
   if (!e.repeat && (e.key==='b'||e.key==='B')) { opt.bgm = !opt.bgm; saveOpt(); if (typeof setBgm==='function') setBgm(opt.bgm); uiTap(); }
   if (pauseOpen && !e.repeat && (e.key==='e'||e.key==='E')) { openExportUI(); return; }   // 設定中：データ かきだし
   if (pauseOpen && !e.repeat && (e.key==='i'||e.key==='I')) { openImportUI(); return; }   // 設定中：データ よみこみ
@@ -744,7 +746,7 @@ cv.addEventListener('pointerdown', e => {
       if (Math.abs(x - R) < 64) { openImportUI(); uiTap(); e.preventDefault(); return; }
     }
     if (Math.abs(y - 156) < 15) {   // 音量ぎょう：左=おと(全体) / 右=こうか音
-      if (x < VW/2) { cycleVolume(); } else { opt.sfxIdx = (opt.sfxIdx+1) % 3; saveOpt(); applySfx(); }
+      if (x < VW/2) { bumpVolume(); } else { opt.sfxIdx = (opt.sfxIdx+1) % 3; saveOpt(); applySfx(); }
       uiTap(); e.preventDefault(); return;
     }
     pauseOpen = false; resetArm = false; uiTap();   // ほかを タップ＝とじる
