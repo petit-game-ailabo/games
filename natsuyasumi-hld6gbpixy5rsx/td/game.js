@@ -303,6 +303,7 @@ let dexOpen = false;            // Cキーで いきもの図鑑
 let fishDex = {}, bugDex = {};  // つった魚・とった虫 の かず（index→数）
 let fishMax = {};               // 魚ごとの さいだい サイズ（cm）＝長期目標
 let lastSummer = null;          // きょねんの なつの 思い出（別キー・年を またいで のこる）
+let hasSave = false;            // つづきの セーブが あるか（タイトル表示用）
 let fishing = null;            // 釣りの さいちゅう {phase,t,biteAt,win,fish,x,y}
 const critters = [];          // 世界を とぶ 虫（cutebugs）{x,y,bi,vx,vy,ph,life}
 const flutters = [];          // 昼の蝶（原っぱの 花に あつまる・見るだけ）{x,y,ph,vx,vy,hue,life}
@@ -555,6 +556,7 @@ function load() {
   try {
     const s = JSON.parse(localStorage.getItem('natsuyasumi_td') || 'null');
     if (!s) return;
+    hasSave = true;
     // s.ver で 将来 マイグレーション（今は 項目ごとに ガードして 前方互換）
     if (s.ver && s.ver > 1) return;   // 未来の 新形式は 読まない（壊さない）
     day = s.day || 1; tod = s.tod == null ? 8 : s.tod; caughtHotaru = s.caughtHotaru || 0;
@@ -622,14 +624,14 @@ let endT = 0;                     // エンディングの 経過（フェード
 addEventListener('keydown', e => {
   initAudio();                    // 最初の キーで 夏の音を 起こす（自動再生ポリシー対策）
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
-  if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; if (!pauseOpen) resetArm = false; return; }
+  if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; if (!pauseOpen) resetArm = false; uiTap(); return; }
   if (!e.repeat && (e.key==='m'||e.key==='M')) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.2; }
   if (pauseOpen) return;          // ポーズ中は ほかの キーは 無効
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
   if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
   if (!e.repeat && (e.key==='h'||e.key==='H')) showHud = !showHud;
-  if (!e.repeat && (e.key==='n'||e.key==='N')) diaryOpen = !diaryOpen;
-  if (!e.repeat && (e.key==='c'||e.key==='C')) dexOpen = !dexOpen;
+  if (!e.repeat && (e.key==='n'||e.key==='N')) { diaryOpen = !diaryOpen; uiTap(); }
+  if (!e.repeat && (e.key==='c'||e.key==='C')) { dexOpen = !dexOpen; uiTap(); }
   keys[e.key.toLowerCase()] = true;
 });
 addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
@@ -644,6 +646,7 @@ const BTN = {
   dex:   { x: VW - 142, y: VH - 158, r: 27, label: 'C' },
 };
 function canvasXY(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * (VW / r.width), (e.clientY - r.top) * (VH / r.height)]; }
+function uiTap() { if (typeof uiSfx === 'function') uiSfx(); if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} } }
 function clearArrows() { keys['arrowleft'] = keys['arrowright'] = keys['arrowup'] = keys['arrowdown'] = false; }
 function setStick(x, y) {
   const dx = x - STICK.x, dy = y - STICK.y, dead = 12;
@@ -654,19 +657,19 @@ function setStick(x, y) {
 cv.addEventListener('pointerdown', e => {
   touchMode = true; initAudio(); const [x, y] = canvasXY(e);
   if (mode === 'play' && pauseOpen) {                     // ポーズ中：ボタン→なければ 左=音量/右=とじる
-    if (Math.abs(y - 396) < 15 && Math.abs(x - VW/2) < 130) { opt.textSpeed = (opt.textSpeed+1) % 3; saveOpt(); e.preventDefault(); return; }  // 文字速さ
-    if (Math.abs(y - 424) < 15 && Math.abs(x - VW/2) < 130) { opt.nonbiri = !opt.nonbiri; saveOpt(); e.preventDefault(); return; }  // のんびり
+    if (Math.abs(y - 396) < 15 && Math.abs(x - VW/2) < 130) { opt.textSpeed = (opt.textSpeed+1) % 3; saveOpt(); uiTap(); e.preventDefault(); return; }  // 文字速さ
+    if (Math.abs(y - 424) < 15 && Math.abs(x - VW/2) < 130) { opt.nonbiri = !opt.nonbiri; saveOpt(); uiTap(); e.preventDefault(); return; }  // のんびり
     if (Math.abs(y - 452) < 15 && Math.abs(x - VW/2) < 130) {  // はじめから（二度押し）
-      if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; }
+      uiTap(); if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', onUnload); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; }
       e.preventDefault(); return;
     }
-    if (x < VW*0.5) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.0; } else { pauseOpen = false; resetArm = false; }
+    if (x < VW*0.5) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.0; uiTap(); } else { pauseOpen = false; resetArm = false; uiTap(); }
     e.preventDefault(); return;
   }
-  if (mode === 'play' && Math.hypot(x - (VW-28), y - 24) < 22) { pauseOpen = true; e.preventDefault(); return; }  // ⚙
+  if (mode === 'play' && Math.hypot(x - (VW-28), y - 24) < 22) { pauseOpen = true; uiTap(); e.preventDefault(); return; }  // ⚙
   if (mode !== 'play') { act = true; e.preventDefault(); return; }        // タイトル/エンディングは タップで
   for (const k in BTN) { const bd = BTN[k]; if (Math.hypot(x - bd.x, y - bd.y) < bd.r + 8) {
-    if (k === 'act') act = true; else if (k === 'sleep') startSleep(); else if (k === 'diary') diaryOpen = !diaryOpen; else if (k === 'dex') dexOpen = !dexOpen;
+    if (k === 'act') act = true; else if (k === 'sleep') { startSleep(); uiTap(); } else if (k === 'diary') { diaryOpen = !diaryOpen; uiTap(); } else if (k === 'dex') { dexOpen = !dexOpen; uiTap(); }
     e.preventDefault(); return; } }
   if (x < VW * 0.5) { stickId = e.pointerId; setStick(x, y); }             // 左半分＝スティック
   else act = true;                                                          // 右半分タップ＝決定／会話送り
@@ -720,7 +723,7 @@ function loop(now) {
 
   // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
   if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
-  if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
+  if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', onUnload); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
   let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearStall = false, nearBug = null, nearBugD = 1e9, nearHikari = false, pc = 0, pr = 0;
   if (mode === 'play') {
@@ -1523,7 +1526,7 @@ function drawTitle(now) {
   g.fillText('— ちいさな ひと夏 —', VW/2, VH/2 + 14);
   const bl = 0.5 + 0.5*Math.sin(now/400);
   g.fillStyle = `rgba(255,255,255,${0.35 + 0.55*bl})`; g.font = '600 20px system-ui';
-  g.fillText('スペースで はじめる', VW/2, VH/2 + 64);
+  g.fillText(hasSave ? `スペースで つづき（${day}日目）` : 'スペースで あたらしい なつ', VW/2, VH/2 + 64);
   if (lastSummer) {                    // 去年の なつの 思い出（つみ重なる）
     g.fillStyle = 'rgba(255,236,190,0.8)'; g.font = '13px system-ui';
     g.fillText(`きょねん(${lastSummer.year}年目)：ほたる${lastSummer.hotaru}・ひまわり${lastSummer.bloom}・ずかん 魚${lastSummer.fish}/${FISH.length} 虫${lastSummer.bug}/${BUGS.length}${lastSummer.hakase ? ' ★はかせ' : ''}`, VW/2, VH/2 + 92);
@@ -1757,5 +1760,6 @@ load();                               // つづきの 夏から
 makeRequest();                        // きょうの おねがい（load後の day で）
 try { const s = JSON.parse(localStorage.getItem('natsuyasumi_td')||'null'); if (s && s.reqDone) reqDone = true; } catch(e) {}
 loadMemory();                         // 去年の なつの 思い出（タイトルに 出す）
-addEventListener('beforeunload', save);
+function onUnload() { if (mode !== 'title') save(); }   // タイトルだけの 訪問では セーブしない
+addEventListener('beforeunload', onUnload);
 requestAnimationFrame(loop);

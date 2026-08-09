@@ -219,6 +219,13 @@ function popSfx() {
   const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.13, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
   o.connect(g); g.connect(ambGain); o.start(t); o.stop(t + 0.2);
 }
+// --- UIの クリック音（メニュー開閉・ボタン）
+function uiSfx() {
+  if (!AC) return; const t = AC.currentTime;
+  const o = AC.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(660, t); o.frequency.exponentialRampToValueAtTime(900, t + 0.03);
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+  o.connect(g); g.connect(ambGain); o.start(t); o.stop(t + 0.1);
+}
 // --- カエル（よるの 田んぼ）。ひくい「ゲコッ」を 2つ
 function frog(vol) {
   if (!AC) return; const t = AC.currentTime;
