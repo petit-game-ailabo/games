@@ -81,6 +81,39 @@ const cam = { x: 0, y: 0 };
 const TALK_R = TS * 1.4;                 // これより 近ければ 話しかけられる
 let talkNpc = null, talkIdx = 0;         // いま 話している 相手と 何行目か
 
+// --- 昼夜（ほの暮しの庭：昼は ほっこり／夜は すこし 不安）。時間で 空気の色が かわる
+// tod = 時刻(0〜24)。1日 = DAYSEC秒 で ひとまわり。朝8時から はじまる
+const DAYSEC = 240;
+let tod = 8;
+// ひかりの色（かける＝multiply。255で そのまま・小さいほど 暗い/色づく）
+const LIGHT = [
+  { t: 0,  c: [58, 68, 120] },   // まよなか（ふかい あお・くらい）
+  { t: 5,  c: [70, 78, 122] },   // よあけ前
+  { t: 6.5,c: [205, 150, 138] }, // よあけ（あかね）
+  { t: 8,  c: [255, 250, 240] }, // あさ
+  { t: 12, c: [255, 255, 255] }, // まひる
+  { t: 16, c: [255, 244, 224] }, // ひるさがり
+  { t: 18, c: [255, 168, 108] }, // ゆうやけ
+  { t: 19.5,c:[150, 110, 145] }, // たそがれ
+  { t: 21, c: [70, 80, 132] },   // よる
+  { t: 24, c: [58, 68, 120] },   // → まよなかへ つなぐ
+];
+function ambient(h) {
+  for (let i = 0; i < LIGHT.length - 1; i++) {
+    const a = LIGHT[i], b = LIGHT[i + 1];
+    if (h >= a.t && h <= b.t) {
+      const k = (h - a.t) / (b.t - a.t);
+      return [0,1,2].map(j => Math.round(a.c[j] + (b.c[j] - a.c[j]) * k));
+    }
+  }
+  return [255, 255, 255];
+}
+function todName(h) {
+  if (h < 5) return 'まよなか'; if (h < 7) return 'よあけ'; if (h < 11) return 'あさ';
+  if (h < 15) return 'ひる'; if (h < 17) return 'ひるさがり'; if (h < 19) return 'ゆうがた';
+  if (h < 21) return 'よる'; return 'よる';
+}
+
 // --- 入力。act は 決定（スペース／エンター）。おしっぱなしでは 進まない（1回ぶん）
 const keys = {};
 let act = false;
@@ -111,6 +144,8 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (ready < 2) { g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH); requestAnimationFrame(loop); return; }
+
+  tod = (tod + dt * 24 / DAYSEC) % 24;          // 時刻を すすめる（1日＝DAYSEC秒）
 
   // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。**話している あいだは 足を とめる**
   let ax = 0, ay = 0;
@@ -162,8 +197,31 @@ function loop(now) {
     const off = e === player && player.moving ? Math.abs(Math.sin(player.bob)) * 3 : 0;
     drawChar(e.ci, ex, ey - off, e.face || 1);
   }
+  // 昼夜：ひかりの色を かける（キャラ・地面ぜんぶ 染める）。UIより 下、世界より 上
+  const [lr, lg, lb] = ambient(tod);
+  if (lr < 255 || lg < 255 || lb < 255) {
+    g.save(); g.globalCompositeOperation = 'multiply';
+    g.fillStyle = `rgb(${lr},${lg},${lb})`; g.fillRect(0, 0, VW, VH);
+    g.restore();
+  }
+  // 夜は すみを すこし くらく（不安げな 気配。まわりが 見えにくい）
+  const dark = tod >= 19 || tod < 5 ? 0.34 : (tod >= 18 || tod < 6 ? 0.16 : 0);
+  if (dark > 0) {
+    const vg = g.createRadialGradient(VW/2, VH/2, VH*0.28, VW/2, VH/2, VH*0.78);
+    vg.addColorStop(0, 'rgba(4,6,16,0)'); vg.addColorStop(1, `rgba(4,6,16,${dark})`);
+    g.fillStyle = vg; g.fillRect(0, 0, VW, VH);
+  }
+
+  // --- HUD（ひかりの上。いつも 読める）
   g.fillStyle = 'rgba(230,238,220,0.9)'; g.font = '600 15px system-ui';
   g.fillText('うらの にわ', 14, 26);
+  // とけい（右上）：時刻と じかんたい
+  const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
+  const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)}`;
+  g.font = '600 15px system-ui'; g.textAlign = 'right';
+  g.fillStyle = 'rgba(8,12,9,0.45)';
+  const cw = g.measureText(clk).width; g.fillRect(VW - cw - 26, 10, cw + 16, 24);
+  g.fillStyle = 'rgba(246,250,242,0.95)'; g.fillText(clk, VW - 14, 27); g.textAlign = 'left';
 
   // 会話の まど／「▶ はなす」の 出し
   if (talkNpc) drawSay(talkNpc.lines[talkIdx]);
