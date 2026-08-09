@@ -132,8 +132,8 @@ function pickLines(npc) {
     flags.wriggleHotaru = true; save();
     return [['wriggle','ほたる、いっぱい つかまえたな'],['cirno','よるの にわで ひかってた'],['wriggle','にがして やると また 光るぞ'],['cirno','うん、そうする']];
   }
-  // リグル：虫を もっていたら 虫相撲に さそう（会話のあと 勝負）
-  if (npc.ci === 5 && dexCount(bugDex) > 0) {
+  // リグル：虫を もっていたら 虫相撲に さそう（1日1回だけ。ふだんは 時間帯の 会話）
+  if (npc.ci === 5 && dexCount(bugDex) > 0 && !sumoToday) {
     talkThen = 'sumo';
     return [['wriggle','いい 虫 つかまえたな'],['cirno','つよいんだから！'],['wriggle','じゃあ 虫相撲、しようぜ'],['cirno','うけて たつ！']];
   }
@@ -210,7 +210,7 @@ let dexOpen = false;            // Cキーで いきもの図鑑
 let fishDex = {}, bugDex = {};  // つった魚・とった虫 の かず（index→数）
 let fishing = null;            // 釣りの さいちゅう {phase,t,biteAt,win,fish,x,y}
 const critters = [];          // 世界を とぶ 虫（cutebugs）{x,y,bi,vx,vy,ph,life}
-let sumo = null, sumoWins = 0; // 虫相撲 {pos,my,op,phase,result,t}
+let sumo = null, sumoWins = 0, sumoToday = false; // 虫相撲 {pos,my,op,phase,result,t}／その日 挑んだか
 let talkThen = null;          // 会話が おわった あとに する こと（'sumo' など）
 let daySub = '';                // 日の しらせの 2行目（あさごはん／のこり日数）
 // --- その日の リズム：あさ 体操→スタンプ、よる おそくなると けーねが お迎え（門限）
@@ -250,7 +250,7 @@ function newDay() {
   recordDiary();                 // その日の しめくくりを えにっきへ
   day++;
   today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false };
-  taisoToday = false; mukaeShown = false;      // あたらしい日：体操やりなおし・お迎えも リセット
+  taisoToday = false; mukaeShown = false; sumoToday = false;   // あたらしい日：体操・お迎え・相撲も リセット
   growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
   if (isRainy()) for (const p of garden) p.watered = true;   // 雨の日は 畑に みずが やれる
   const morning = tod >= 5 && tod < 10;
@@ -338,6 +338,7 @@ function bugPower(bi) { return [5,3,3,2][bi] || 3; }         // カブトが つ
 function bestBug() { let b=-1, p=-1; for (const k in bugDex) { if (bugDex[k]>0) { const bi=+k, pw=bugPower(bi); if (pw>p){p=pw;b=bi;} } } return b; }
 function sumoStart() {
   const my = bestBug(); if (my < 0) return;
+  sumoToday = true;              // その日は もう さそわれない（ふだんの 会話に もどる）
   sumo = { pos: 0, my, op: (rnd()*BUGS.length)|0, phase: 'fight', result: null, t: 0 };
 }
 function tickSumo(dt, pressed) {
@@ -372,7 +373,7 @@ function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
-    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, sumoWins, px: player.x, py: player.y })); } catch (e) {}
+    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, sumoWins, sumoToday, px: player.x, py: player.y })); } catch (e) {}
 }
 function load() {
   try {
@@ -383,7 +384,7 @@ function load() {
     if (Array.isArray(s.diary)) diary = s.diary;
     if (s.today) today = s.today;
     bloomTotal = s.bloomTotal || 0;
-    taisoStamps = s.taisoStamps || 0; taisoToday = !!s.taisoToday; sumoWins = s.sumoWins || 0;
+    taisoStamps = s.taisoStamps || 0; taisoToday = !!s.taisoToday; sumoWins = s.sumoWins || 0; sumoToday = !!s.sumoToday;
     if (s.flags) Object.assign(flags, s.flags);
     if (s.fishDex) fishDex = s.fishDex;
     if (s.bugDex) bugDex = s.bugDex;
@@ -677,6 +678,18 @@ function loop(now) {
     }
     g.restore();
   }
+  // 神社の 灯籠の あかり（夜・加算）。原っぱの おくへの 導線
+  if (isNight()) {
+    const ly = (SHRINE.r+1)*TS - 26 - cam.y;
+    for (const s of [-1, 1]) {
+      const lx = (SHRINE.c+0.5)*TS + s*(TS*0.85+14) - cam.x;
+      if (lx < -30 || lx > VW+30 || ly < -30 || ly > VH+30) continue;
+      g.save(); g.globalCompositeOperation = 'lighter';
+      const gr = g.createRadialGradient(lx, ly, 0, lx, ly, TS*1.1);
+      gr.addColorStop(0, 'rgba(255,200,110,0.7)'); gr.addColorStop(1, 'rgba(255,180,90,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(lx, ly, TS*1.1, 0, 6.283); g.fill(); g.restore();
+    }
+  }
   // 花火（空に・加算で 光る）
   if (fireworks.length) {
     g.save(); g.globalCompositeOperation = 'lighter';
@@ -834,6 +847,14 @@ function drawShrine() {
   g.fillStyle = '#6b4a2a'; g.fillRect(sx-11, sy-16, 22, 16);                    // 本体
   g.fillStyle = '#4a3320'; g.beginPath(); g.moveTo(sx-15, sy-16); g.lineTo(sx, sy-27); g.lineTo(sx+15, sy-16); g.closePath(); g.fill();  // 屋根
   g.fillStyle = '#2a1c10'; g.fillRect(sx-4, sy-10, 8, 10);                      // 入口
+  // 灯籠（左右）。石の 柱＋火袋
+  for (const s of [-1, 1]) {
+    const lx = cx + s*(tw/2 + 14);
+    g.fillStyle = '#7c7f86'; g.fillRect(lx-4, gy-18, 8, 18);                    // 柱
+    g.fillStyle = '#8f9298'; g.fillRect(lx-7, gy-28, 14, 11);                   // 火袋
+    g.fillStyle = isNight() ? '#ffd27a' : '#3a2a12'; g.fillRect(lx-4, gy-25, 8, 6);  // 火（夜は ともる）
+    g.fillStyle = '#6c6f76'; g.beginPath(); g.moveTo(lx-9, gy-28); g.lineTo(lx, gy-34); g.lineTo(lx+9, gy-28); g.closePath(); g.fill();  // 笠
+  }
   g.restore();
 }
 // 飛び石（水の上の 石）
