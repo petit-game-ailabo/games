@@ -446,6 +446,7 @@ function fishW(i) {                                   // 天気で 釣果が か
   if (wt === 'rain') { if (n === 'ナマズ') w *= 3; if (n === 'なぞの さかな') w *= 1.6; }
   else if (wt === 'hot') { if (n === 'メダカ') w *= 1.8; if (n === 'ナマズ' || n === 'コイ') w *= 0.5; }
   if ((flags.helped||0) >= 3 && n === 'なぞの さかな') w *= 2.2;   // おねがい実利：レア魚の 居場所を 教わった
+  if (lastSummer && (lastSummer.year||0) >= 1 && n === 'なぞの さかな') w *= 1.4;   // 周回ボーナス：常連は ぬしに 会いやすい
   return w;
 }
 function pickFish() {
@@ -728,7 +729,11 @@ function loop(now) {
   }
 
   // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
-  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (typeof setBgm === 'function') setBgm(opt.bgm); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
+  if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (typeof setBgm === 'function') setBgm(opt.bgm); if (!flags.introDone) { flags.introDone = true;
+      const ctrl = touchMode ? ['cirno', '（左はんぶん＝うごく・右タップ＝はなす/きめる・下のボタン＝ねる/ずかん）']
+                             : ['cirno', '（スペース＝はなす/しらべる、Z＝ねる、N＝えにっき）'];
+      const l0 = lastSummer ? ['cirno', `ことしも なつやすみ！（${(lastSummer.year||0)+1}回目の なつ）`] : INTRO.lines[0];
+      talkNpc = INTRO; talkIdx = 0; talkLines = [l0, INTRO.lines[1], INTRO.lines[2], ctrl]; sayT = 0; save(); } act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', onUnload); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
   let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearStall = false, nearBug = null, nearBugD = 1e9, nearHikari = false, pc = 0, pr = 0;
