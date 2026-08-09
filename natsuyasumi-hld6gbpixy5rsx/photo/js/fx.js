@@ -15,14 +15,21 @@ let dust = null;                    // 塵のつぶ
 
 function fxToggle() { fxOn = !fxOn; return fxOn; }
 
-// --- 場所ごとの 味つけ。out=そと（強い日ざし）／in=なか（やわらかい）
+// --- 場所ごとの 味つけ。ray.xs は **光が 入ってくる 窓/木あいだの 位置**（絵に合わせて 置く）。
+// 位置を 絵と そろえないと「貼りもの」に 見えるので、等間隔では ならべない。
 const FX_TUNE = {
-  zashiki: { blur: 3.0, farY: 300, bloom: 0.22, warm: 0.06, ray: { a: -0.62, n: 2, w: 90,  x: 150, s: 0.055 } },
-  doma:    { blur: 3.2, farY: 300, bloom: 0.26, warm: 0.08, ray: { a: -0.60, n: 2, w: 84,  x: 90,  s: 0.075 } },
-  rouka:   { blur: 3.0, farY: 250, bloom: 0.22, warm: 0.06, ray: { a: -0.70, n: 3, w: 76,  x: 150, s: 0.06 } },
-  iemae:   { blur: 3.6, farY: 330, bloom: 0.20, warm: 0.04, ray: { a: -0.55, n: 2, w: 110, x: 330, s: 0.045 } },
-  aze:     { blur: 3.6, farY: 330, bloom: 0.18, warm: 0.03, ray: { a: -0.52, n: 2, w: 120, x: 300, s: 0.04 } },
-  mori:    { blur: 3.4, farY: 300, bloom: 0.24, warm: 0.05, ray: { a: -0.66, n: 4, w: 70,  x: 170, s: 0.085 } },
+  // ざしき：左の 大きな 窓と、中央右の あけた 障子から 斜めに 差しこむ
+  zashiki: { blur: 3.0, farY: 300, bloom: 0.22, warm: 0.06, ray: { a: -0.52, w: 130, s: 0.15, xs: [70, 250, 600, 760] } },
+  // どま：左の 格子窓から。板の間に 帯が おちる
+  doma:    { blur: 3.2, farY: 300, bloom: 0.26, warm: 0.08, ray: { a: -0.50, w: 120, s: 0.17, xs: [60, 210, 420] } },
+  // ろうか：ガラス戸ぞいに 何本も。柱の あいだから こまかく
+  rouka:   { blur: 3.0, farY: 250, bloom: 0.22, warm: 0.06, ray: { a: -0.62, w: 90,  s: 0.15, xs: [120, 260, 400, 540, 680] } },
+  // いえのまえ：そとは 上からの 日ざし。木の あいだから ひろく
+  iemae:   { blur: 3.6, farY: 330, bloom: 0.20, warm: 0.04, ray: { a: -0.44, w: 190, s: 0.10, xs: [180, 520, 860] } },
+  // あぜみち：並木の あいだから。道の うえに 帯が かかる
+  aze:     { blur: 3.6, farY: 330, bloom: 0.18, warm: 0.03, ray: { a: -0.42, w: 175, s: 0.11, xs: [240, 560, 880] } },
+  // もり：木もれ日。細いのを たくさん
+  mori:    { blur: 3.4, farY: 300, bloom: 0.24, warm: 0.05, ray: { a: -0.58, w: 80,  s: 0.16, xs: [150, 300, 430, 560, 700, 840] } },
 };
 function fxTune(key) { return FX_TUNE[key] || FX_TUNE.aze; }
 
@@ -108,18 +115,24 @@ function fxRays(key, night) {
   if (k <= 0.01) return;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < ry.n; i++) {
-    const x = ry.x + i * (ry.w * 1.6);
-    const a = k * (0.5 + 0.5 * Math.sin(elapsed * 0.5 + i * 1.7));
+  const xs = ry.xs || [ry.x || W/2];
+  for (let i = 0; i < xs.length; i++) {
+    // 本ごとに 太さと ゆらぎを 変える。そろえると 貼りものに 見える
+    const w = ry.w * (0.7 + 0.5 * ((i * 37) % 10) / 10);
+    const a = k * (0.55 + 0.45 * Math.sin(elapsed * 0.45 + i * 1.7));
     ctx.save();
-    ctx.translate(x, -60);
+    ctx.translate(xs[i], -70);
     ctx.rotate(ry.a);
-    const g = ctx.createLinearGradient(0, 0, 0, H * 1.6);
-    g.addColorStop(0, 'rgba(255,244,214,' + (a * 0.85).toFixed(3) + ')');
-    g.addColorStop(0.55, 'rgba(255,240,206,' + (a * 0.35).toFixed(3) + ')');
+    const g = ctx.createLinearGradient(0, 0, 0, H * 1.7);
+    g.addColorStop(0, 'rgba(255,246,220,' + (a * 0.95).toFixed(3) + ')');
+    g.addColorStop(0.45, 'rgba(255,242,210,' + (a * 0.45).toFixed(3) + ')');
     g.addColorStop(1, 'rgba(255,236,200,0)');
     ctx.fillStyle = g;
-    ctx.fillRect(-ry.w / 2, 0, ry.w, H * 1.6);
+    // 帯は 先ほど ひろがる（台形）。平行だと 板に 見える
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.35, 0); ctx.lineTo(w * 0.35, 0);
+    ctx.lineTo(w * 0.75, H * 1.7); ctx.lineTo(-w * 0.75, H * 1.7);
+    ctx.closePath(); ctx.fill();
     ctx.restore();
   }
   ctx.restore();
