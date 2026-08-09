@@ -308,7 +308,8 @@ function recordDiary() {
   if (today.watered) p.push('はたけに みずを あげた');
   if (today.bloomed) p.push('ひまわりが さいた！');
   if (!p.length) p.push('のんびり すごした');
-  diary.push({ d: day, text: p.join('。') + '。' });
+  diary.push({ d: day, text: p.join('。') + '。', photo: pendingPhoto });
+  pendingPhoto = null;
   if (diary.length > 40) diary.shift();
 }
 // ラジオ体操（あさ 5〜9時に 広場で）→ スタンプ
@@ -415,7 +416,12 @@ function spawnCritter() {
 }
 // --- ねむる（Zキー）。まっくらに とけて つぎの朝へ
 let sleepPhase = 0;              // 0=起きてる。2.0→0 へ。1.0で 朝に とぶ
-function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
+let pendingPhoto = null;        // 「きょうの一枚」（ねる前の 画面を 縮小スナップ＝絵日記の 魂）
+function snapshot() {
+  try { const o = document.createElement('canvas'); o.width = 176; o.height = 99;
+    o.getContext('2d').drawImage(cv, 0, 0, 176, 99); return o.toDataURL('image/jpeg', 0.5); } catch (e) { return null; }
+}
+function startSleep() { if (sleepPhase <= 0 && !talkNpc) { pendingPhoto = snapshot(); sleepPhase = 2.0; } }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
@@ -637,7 +643,7 @@ function loop(now) {
       save();
     }
     // 夏の おわり（さいごの日を こえたら）
-    if (day > SUMMER_DAYS) { mode = 'ending'; endT = 0; }
+    if (day > SUMMER_DAYS) { mode = 'ending'; endT = 0; buildAlbum(); }
   }
 
   // カメラ：いつも プレイヤーを 中央に（タイトルでも 主人公が 見える）
@@ -1132,6 +1138,11 @@ function drawTitle(now) {
   g.fillText('東方Project 二次創作 ・ タイル: CC0 Top Down Adventure Assets', VW/2, VH - 16);
   g.textAlign = 'left'; g.restore();
 }
+// 夏の アルバム（えにっきの 写真を Imageに）。エンディングで 見せる
+let albumImgs = [];
+function buildAlbum() {
+  albumImgs = diary.filter(e => e.photo).slice(-5).map(e => { const im = new Image(); im.src = e.photo; return { im, d: e.d }; });
+}
 // 夏の おわり（しずかに 暗くして、その夏の きろくを 見せる）
 function drawEnding(now) {
   const a = Math.min(1, endT/2.0);
@@ -1142,16 +1153,28 @@ function drawEnding(now) {
   g.fillText('なつやすみが おわった', VW/2, 140);
   g.fillStyle = 'rgba(255,236,190,0.92)'; g.font = '600 18px system-ui';
   g.fillText(`${SUMMER_DAYS}日の なつを すごした`, VW/2, 184);
-  g.fillStyle = '#eef3ff'; g.font = '17px system-ui';
-  g.fillText(`つかまえた ほたる：${caughtHotaru} ひき`, VW/2, 244);
-  g.fillText(`さかせた ひまわり：${bloomTotal} りん`, VW/2, 276);
-  g.fillText(`ラジオたいそう：${taisoStamps} かい`, VW/2, 308);
-  if (flags.kenkyuDone) { g.fillStyle = '#ffe23a'; g.font = '700 18px system-ui'; g.fillText('★ しょうごう：なつやすみ はかせ', VW/2, 344); }
+  g.fillStyle = '#eef3ff'; g.font = '16px system-ui';
+  g.fillText(`ほたる ${caughtHotaru}・ひまわり ${bloomTotal}・たいそう ${taisoStamps}・ずかん 魚${dexCount(fishDex)}/${FISH.length} 虫${dexCount(bugDex)}/${BUGS.length}`, VW/2, 214);
+  if (flags.kenkyuDone) { g.fillStyle = '#ffe23a'; g.font = '700 18px system-ui'; g.fillText('★ しょうごう：なつやすみ はかせ', VW/2, 244); }
+  // 夏の アルバム（きょうの一枚たち）
+  if (albumImgs.length) {
+    g.fillStyle = 'rgba(255,236,190,0.85)'; g.font = '600 15px system-ui'; g.fillText('なつの アルバム', VW/2, 286);
+    const tw = 92, th = 52, gap = 8, n = albumImgs.length, x0 = VW/2 - (n*(tw+gap)-gap)/2;
+    for (let i = 0; i < n; i++) {
+      const a2 = albumImgs[i], px = x0 + i*(tw+gap), py = 300;
+      g.save();
+      g.fillStyle = '#fbf7ec'; g.fillRect(px-3, py-3, tw+6, th+12);          // ポラロイド枠
+      if (a2.im.complete && a2.im.naturalWidth) g.drawImage(a2.im, px, py, tw, th);
+      else { g.fillStyle = '#c9d0c0'; g.fillRect(px, py, tw, th); }
+      g.fillStyle = '#5a4a2e'; g.font = '9px system-ui'; g.fillText(`${a2.d}日目`, px+tw/2, py+th+8);
+      g.restore();
+    }
+  }
   g.fillStyle = 'rgba(230,238,250,0.85)'; g.font = '16px system-ui';
-  g.fillText('また、らいねんの なつに。', VW/2, 372);
+  g.fillText('また、らいねんの なつに。', VW/2, 404);
   if (endT > 1.2) {
     g.fillStyle = `rgba(255,255,255,${0.4 + 0.4*Math.sin(now/400)})`; g.font = '600 16px system-ui';
-    g.fillText('スペースで もう いちど', VW/2, 424);
+    g.fillText('スペースで もう いちど', VW/2, 446);
   }
   g.textAlign = 'left'; g.restore();
 }
