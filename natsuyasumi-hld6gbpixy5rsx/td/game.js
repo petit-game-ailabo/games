@@ -565,13 +565,27 @@ function loadMemory() { try { lastSummer = JSON.parse(localStorage.getItem('nats
 function saveMemory() {
   try {
     const prev = JSON.parse(localStorage.getItem('natsuyasumi_td_memory') || 'null');
+    // 生涯図鑑：年を またいで 累積（集める 楽しみを のこす）
+    const lifeFish = Object.assign({}, (prev && prev.lifeFish) || {});
+    const lifeBug = Object.assign({}, (prev && prev.lifeBug) || {});
+    const lifeFishMax = Object.assign({}, (prev && prev.lifeFishMax) || {});
+    for (const k in fishDex) lifeFish[k] = (lifeFish[k] || 0) + fishDex[k];
+    for (const k in bugDex) lifeBug[k] = (lifeBug[k] || 0) + bugDex[k];
+    for (const k in fishMax) lifeFishMax[k] = Math.max(lifeFishMax[k] || 0, fishMax[k]);
+    const lifeKingyo = ((prev && prev.lifeKingyo) || 0) + (flags.kingyo || 0);
     localStorage.setItem('natsuyasumi_td_memory', JSON.stringify({
       year: ((prev && prev.year) || 0) + 1,
       hotaru: caughtHotaru, bloom: bloomTotal, taiso: taisoStamps,
       fish: dexCount(fishDex), bug: dexCount(bugDex), hakase: flags.kenkyuDone,
+      lifeFish, lifeBug, lifeFishMax, lifeKingyo,
     }));
   } catch (e) {}
 }
+// 生涯（去年まで）＋今年 の 合算（図鑑表示用）
+function lifeFishCount(i) { return (fishDex[i] || 0) + ((lastSummer && lastSummer.lifeFish && lastSummer.lifeFish[i]) || 0); }
+function lifeBugCount(i) { return (bugDex[i] || 0) + ((lastSummer && lastSummer.lifeBug && lastSummer.lifeBug[i]) || 0); }
+function lifeFishBest(i) { return Math.max(fishMax[i] || 0, (lastSummer && lastSummer.lifeFishMax && lastSummer.lifeFishMax[i]) || 0); }
+function lifeDexCount(fn, n) { let c = 0; for (let i = 0; i < n; i++) if (fn(i) > 0) c++; return c; }
 // はたけの成長：まえの日に みずを あげた 苗が ひと段階 のびる（0種→1芽→2葉→3つぼみ→4さいた）
 function growGarden() {
   for (const p of garden) {
@@ -1566,29 +1580,31 @@ function drawDex() {
   g.arcTo(bx,by+bh,bx,by,r); g.arcTo(bx,by,bx+bw,by,r); g.fill();
   g.strokeStyle = 'rgba(90,110,70,0.4)'; g.lineWidth = 2; g.stroke();
   g.fillStyle = '#3f5230'; g.font = '700 24px system-ui';
-  const full = dexCount(fishDex) === FISH.length && dexCount(bugDex) === BUGS.length;
-  g.fillText(`いきもの ずかん   さかな ${dexCount(fishDex)}/${FISH.length}・むし ${dexCount(bugDex)}/${BUGS.length}${(flags.kingyo||0)>0?'・きんぎょ '+flags.kingyo:''}${full ? '   ★コンプリート！' : ''}`, bx+28, by+40);
-  // さかな
+  const fN = lifeDexCount(lifeFishCount, FISH.length), bN = lifeDexCount(lifeBugCount, BUGS.length);
+  const kg = (flags.kingyo||0) + ((lastSummer && lastSummer.lifeKingyo) || 0);
+  const full = fN === FISH.length && bN === BUGS.length;
+  g.fillText(`いきもの ずかん（せいがい）  さかな ${fN}/${FISH.length}・むし ${bN}/${BUGS.length}${kg>0?'・きんぎょ '+kg:''}${full ? '  ★コンプ！' : ''}`, bx+28, by+40);
+  // さかな（生涯 累積）
   g.fillStyle = '#4a6038'; g.font = '600 17px system-ui'; g.fillText('さかな', bx+28, by+78);
   FISH.forEach((f, i) => {
-    const cw = (bw-56)/6, cx = bx+28 + cw*i + cw/2, cy = by+118, got = (fishDex[i]||0) > 0;
+    const cw = (bw-56)/6, cx = bx+28 + cw*i + cw/2, cy = by+118, cnt = lifeFishCount(i), best = lifeFishBest(i);
     g.fillStyle = 'rgba(120,140,90,0.14)'; g.fillRect(cx-cw/2+4, by+92, cw-8, 78);
-    if (got) {
+    if (cnt > 0) {
       drawFishSprite(i, cx, cy, 1.4);
       g.fillStyle = '#3f5230'; g.font = '13px system-ui'; g.textAlign = 'center';
-      g.fillText(f.n, cx, by+156); g.fillStyle='#7a8a5c'; g.fillText(`×${fishDex[i]}${fishMax[i]?' ・'+fishMax[i]+'cm':''}`, cx, by+172);
+      g.fillText(f.n, cx, by+156); g.fillStyle='#7a8a5c'; g.fillText(`×${cnt}${best?' ・'+best+'cm':''}`, cx, by+172);
     } else { g.fillStyle = '#b7bfa6'; g.font = '700 22px system-ui'; g.textAlign = 'center'; g.fillText('？', cx, cy+6); }
     g.textAlign = 'left';
   });
-  // むし
+  // むし（生涯 累積）
   g.fillStyle = '#4a6038'; g.font = '600 17px system-ui'; g.fillText('むし', bx+28, by+206);
   BUGS.forEach((bug, i) => {
-    const cw = (bw-56)/6, cx = bx+28 + cw*i + cw/2, cy = by+250, got = (bugDex[i]||0) > 0;
+    const cw = (bw-56)/6, cx = bx+28 + cw*i + cw/2, cy = by+250, cnt = lifeBugCount(i);
     g.fillStyle = 'rgba(120,140,90,0.14)'; g.fillRect(cx-cw/2+4, by+220, cw-8, 78);
-    if (got) {
+    if (cnt > 0) {
       drawBugSprite(i, cx, cy, 2.4);
       g.fillStyle = '#3f5230'; g.font = '13px system-ui'; g.textAlign = 'center';
-      g.fillText(bug.n, cx, by+284); g.fillStyle='#7a8a5c'; g.fillText(`×${bugDex[i]}`, cx, by+300);
+      g.fillText(bug.n, cx, by+284); g.fillStyle='#7a8a5c'; g.fillText(`×${cnt}`, cx, by+300);
     } else { g.fillStyle = '#b7bfa6'; g.font = '700 22px system-ui'; g.textAlign = 'center'; g.fillText('？', cx, cy+6); }
     g.textAlign = 'left';
   });
