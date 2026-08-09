@@ -484,6 +484,50 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
 
+// --- タッチUI（スマホ）。仮想スティック＋ボタンを 既存の keys/act に 橋わたし
+let touchMode = false, stickId = null, stickKX = 0, stickKY = 0;
+const STICK = { x: 96, y: VH - 96, r: 60 };
+const BTN = {
+  act:   { x: VW - 74,  y: VH - 82,  r: 42, label: '▶' },
+  sleep: { x: VW - 156, y: VH - 60,  r: 28, label: 'Z' },
+  diary: { x: VW - 66,  y: VH - 178, r: 27, label: 'N' },
+  dex:   { x: VW - 142, y: VH - 158, r: 27, label: 'C' },
+};
+function canvasXY(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * (VW / r.width), (e.clientY - r.top) * (VH / r.height)]; }
+function clearArrows() { keys['arrowleft'] = keys['arrowright'] = keys['arrowup'] = keys['arrowdown'] = false; }
+function setStick(x, y) {
+  const dx = x - STICK.x, dy = y - STICK.y, dead = 12;
+  keys['arrowleft'] = dx < -dead; keys['arrowright'] = dx > dead; keys['arrowup'] = dy < -dead; keys['arrowdown'] = dy > dead;
+  const m = Math.max(1, Math.hypot(dx, dy)), cl = Math.min(1, STICK.r / m);
+  stickKX = dx * cl; stickKY = dy * cl;
+}
+cv.addEventListener('pointerdown', e => {
+  touchMode = true; initAudio(); const [x, y] = canvasXY(e);
+  if (mode !== 'play') { act = true; e.preventDefault(); return; }        // タイトル/エンディングは タップで
+  for (const k in BTN) { const bd = BTN[k]; if (Math.hypot(x - bd.x, y - bd.y) < bd.r + 8) {
+    if (k === 'act') act = true; else if (k === 'sleep') startSleep(); else if (k === 'diary') diaryOpen = !diaryOpen; else if (k === 'dex') dexOpen = !dexOpen;
+    e.preventDefault(); return; } }
+  if (x < VW * 0.5) { stickId = e.pointerId; setStick(x, y); }             // 左半分＝スティック
+  else act = true;                                                          // 右半分タップ＝決定／会話送り
+  e.preventDefault();
+});
+cv.addEventListener('pointermove', e => { if (e.pointerId === stickId) { const [x, y] = canvasXY(e); setStick(x, y); e.preventDefault(); } });
+function endStick(e) { if (e.pointerId === stickId) { stickId = null; stickKX = stickKY = 0; clearArrows(); } }
+cv.addEventListener('pointerup', endStick); cv.addEventListener('pointercancel', endStick);
+function drawTouchControls() {
+  g.save();
+  // スティック
+  g.fillStyle = 'rgba(20,26,36,0.28)'; g.beginPath(); g.arc(STICK.x, STICK.y, STICK.r, 0, 6.283); g.fill();
+  g.fillStyle = 'rgba(236,242,250,0.4)'; g.beginPath(); g.arc(STICK.x + stickKX, STICK.y + stickKY, 22, 0, 6.283); g.fill();
+  // ボタン
+  for (const k in BTN) { const bd = BTN[k];
+    g.fillStyle = k === 'act' ? 'rgba(120,180,120,0.34)' : 'rgba(20,26,36,0.30)';
+    g.beginPath(); g.arc(bd.x, bd.y, bd.r, 0, 6.283); g.fill();
+    g.fillStyle = 'rgba(246,250,242,0.85)'; g.font = `600 ${bd.r>30?22:16}px system-ui`; g.textAlign = 'center';
+    g.fillText(bd.label, bd.x, bd.y + (bd.r>30?7:5)); }
+  g.textAlign = 'left'; g.restore();
+}
+
 function drawTile(idx, dx, dy) {
   const sx = (idx % COLS) * T, sy = Math.floor(idx / COLS) * T;
   g.drawImage(tiles, sx, sy, T, T, dx, dy, TS, TS);
@@ -921,6 +965,7 @@ function loop(now) {
   else if (mode === 'title') drawTitle(now);
   else if (mode === 'ending') drawEnding(now);
 
+  if (touchMode && mode === 'play') drawTouchControls();   // スマホの 操作UI（上に のせる）
   act = false;                         // 1フレームで つかいきる
   requestAnimationFrame(loop);
 }
