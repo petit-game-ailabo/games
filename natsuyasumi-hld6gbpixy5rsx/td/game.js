@@ -160,10 +160,17 @@ const REQS = [
   { ci: 1, who: 'marisa',  ask: 'さかなを つって みせてよ',         check: () => today.fish,        ok: 'おっ やるな！ ごちそうさま' },
   { ci: 5, who: 'wriggle', ask: 'むしを つかまえて みせて',         check: () => today.mushi,       ok: 'いい むしだ！ ありがとな' },
   { ci: 3, who: 'dai',     ask: 'いっしょに ラジオたいそう しよ',   check: () => today.taiso,       ok: 'いっしょに できて うれしい' },
-  { ci: 1, who: 'marisa',  ask: 'ひまわりに みずを あげてきて',     check: () => today.watered,     ok: 'えらい！ おおきく なるね' },
+  { ci: 1, who: 'marisa',  ask: 'ひまわりに みずを あげてきて',     check: () => today.watered >= 1, ok: 'えらい！ おおきく なるね' },
+  { ci: 5, who: 'wriggle', ask: 'むしと さかな、りょうほう みせて', check: () => today.fish && today.mushi, ok: 'たいした もんだ！ かんぺきだ' },
+  { ci: 3, who: 'dai',     ask: 'たねを 2つ うえて みて',          check: () => today.planted >= 2, ok: 'なにが さくか たのしみ！' },
+  { ci: 1, who: 'marisa',  ask: 'じんじゃに おまいり してきて',     check: () => today.omairi,      ok: 'ねがいごと、かなうと いいな' },
+  { ci: 5, who: 'wriggle', ask: 'むしずもうで かって みせろ',        check: () => today.sumo,        ok: 'つよい！ まいったよ' },
+  { ci: 3, who: 'dai',     ask: 'ほたるを 5ひき つかまえて',        check: () => today.hotaru >= 5, ok: 'こんなに！ ほんとうに ありがとう！' },
+  { ci: 1, who: 'marisa',  ask: 'みずやりを 2かい してきて',        check: () => today.watered >= 2, ok: 'まめだねえ。えらいぞ' },
 ];
 let request = null, reqDone = false;
-function makeRequest() { request = REQS[day % REQS.length]; reqDone = false; }
+// 日ごとに 1つ。2周目以降は 年で ずらして、常連にも 新鮮な おねがいが 回るように。
+function makeRequest() { const off = (lastSummer && lastSummer.year) ? lastSummer.year * 3 : 0; request = REQS[(day + off) % REQS.length]; reqDone = false; }
 // 自由研究（やること）が ぜんぶ 済んだか＝ご褒美の 条件
 function kenkyuDone() { return bloomTotal>0 && caughtHotaru>0 && flags.sawHanabi && taisoStamps>0 && flags.everFish && flags.everMushi && flags.everSumo && flags.everOmairi; }
 function pickLines(npc) {
@@ -298,7 +305,7 @@ let sparrowTimer = 0;            // 道ばたの スズメ（昼・とびたつ�
 const sparrows = [];             // {x,y,vx,vy,life}
 // --- 自由研究の きろく（えにっき＋ずかん）。テキストだけ＝絵が いらない
 let diary = [];                  // [{d, text}]  その日の しめくくり
-let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false };  // 今日 やったこと
+let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false, omairi: false, sumo: false };  // 今日 やったこと
 let bloomTotal = 0;             // これまで さかせた ひまわり
 let diaryOpen = false;          // Nキーで えにっきを ひらく
 let dexOpen = false;            // Cキーで いきもの図鑑
@@ -373,7 +380,7 @@ function passTime(h) {
 function newDay() {
   recordDiary();                 // その日の しめくくりを えにっきへ
   day++;
-  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false };
+  today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false, omairi: false, sumo: false };
   taisoToday = false; mukaeShown = false; sumoToday = false;   // あたらしい日：体操・お迎え・相撲も リセット
   makeRequest();                                                // きょうの おねがいを えらぶ
   growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
@@ -425,7 +432,7 @@ function doRest() {
 // 神社で おまいり
 const OMIKUJI = ['大きち！ ことしの なつは さいこう', 'ちゅうきち。むしとりが うまくいく かも', 'すえきち。あわてず のんびり いこう', 'きち。あたらしい ことに いい 日'];
 function doOmairi() {
-  flags.everOmairi = true;
+  flags.everOmairi = true; today.omairi = true;
   dayMsg = 'おまいり した'; daySub = OMIKUJI[(rnd()*OMIKUJI.length)|0]; dayMsgT = 3.0;
   passTime(0.5); save();
 }
@@ -522,7 +529,7 @@ function tickSumo(dt, pressed) {
     s.pos -= bugPower(s.op) * (opt.nonbiri ? 0.09 : 0.13) * dt;   // 相手が おしてくる（のんびりは 弱め）
     if (pressed) s.pos += bugPower(s.my) * 0.05; // 連打で おし返す
     s.pos = clamp(s.pos, -1.1, 1.1);
-    if (s.pos >= 1) { s.phase='result'; s.result='win'; s.t=0; sumoWins++; flags.everSumo=true; save(); }
+    if (s.pos >= 1) { s.phase='result'; s.result='win'; s.t=0; sumoWins++; flags.everSumo=true; today.sumo=true; save(); }
     else if (s.pos <= -1) { s.phase='result'; s.result='lose'; s.t=0; }
   } else if (pressed || s.t > 2.8) {
     const w = s.result; sumo = null; if (w === 'win') passTime(1.0);
