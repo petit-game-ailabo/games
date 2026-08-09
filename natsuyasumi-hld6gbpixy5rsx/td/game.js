@@ -623,6 +623,24 @@ const opt = { nonbiri: false, textSpeed: 1, bgm: false };   // のんびり／�
 function cps() { return [16, 34, 72][opt.textSpeed] != null ? [16, 34, 72][opt.textSpeed] : 34; }   // 文字/秒
 try { const o = JSON.parse(localStorage.getItem('natsuyasumi_td_opt') || 'null'); if (o) Object.assign(opt, o); } catch (e) {}
 function saveOpt() { try { localStorage.setItem('natsuyasumi_td_opt', JSON.stringify(opt)); } catch (e) {} }
+// データの かきだし／よみこみ（localStorage消去でも 図鑑を まもる 保険）
+function exportData() {
+  try {
+    const d = JSON.stringify({ s: localStorage.getItem('natsuyasumi_td'), m: localStorage.getItem('natsuyasumi_td_memory'), o: localStorage.getItem('natsuyasumi_td_opt') });
+    if (navigator.clipboard) navigator.clipboard.writeText(d).catch(() => {});
+    dayMsg = 'データを コピーした'; daySub = 'メモ帳などに はって 保管してね'; dayMsgT = 2.8;
+  } catch (e) {}
+}
+function importData() {
+  try {
+    const t = prompt('データを はりつけてね'); if (!t) return;
+    const d = JSON.parse(t);
+    if (d.s) localStorage.setItem('natsuyasumi_td', d.s);
+    if (d.m) localStorage.setItem('natsuyasumi_td_memory', d.m);
+    if (d.o) localStorage.setItem('natsuyasumi_td_opt', d.o);
+    removeEventListener('beforeunload', onUnload); location.reload();
+  } catch (e) { dayMsg = 'よみこめなかった…'; daySub = ''; dayMsgT = 2; }
+}
 let endT = 0;                     // エンディングの 経過（フェード用）
 addEventListener('keydown', e => {
   initAudio();                    // 最初の キーで 夏の音を 起こす（自動再生ポリシー対策）
@@ -630,6 +648,8 @@ addEventListener('keydown', e => {
   if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; if (!pauseOpen) resetArm = false; uiTap(); return; }
   if (!e.repeat && (e.key==='m'||e.key==='M')) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.2; }
   if (!e.repeat && (e.key==='b'||e.key==='B')) { opt.bgm = !opt.bgm; saveOpt(); if (typeof setBgm==='function') setBgm(opt.bgm); uiTap(); }
+  if (pauseOpen && !e.repeat && (e.key==='e'||e.key==='E')) { exportData(); return; }   // 設定中：データ かきだし
+  if (pauseOpen && !e.repeat && (e.key==='i'||e.key==='I')) { importData(); return; }   // 設定中：データ よみこみ
   if (pauseOpen) return;          // ポーズ中は ほかの キーは 無効
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
   if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
@@ -1785,7 +1805,8 @@ function drawPause() {
   btn(R, 404, 'BGM：' + (opt.bgm ? 'ON' : 'OFF'), opt.bgm);
   btn(L, 440, 'のんびり：' + (opt.nonbiri ? 'ON' : 'OFF'), opt.nonbiri);
   btn(R, 440, resetArm ? 'ほんとうに？' : 'はじめから', false);
-  g.fillStyle = 'rgba(90,96,72,0.7)'; g.font = '13px system-ui'; g.textAlign = 'center';
+  g.fillStyle = 'rgba(90,96,72,0.7)'; g.font = '12px system-ui'; g.textAlign = 'center';
+  g.fillText('データは この端末に ほぞん（E かきだす／I よみこむ）', VW/2, by+bh-22);
   g.fillText('おと：左タップ ／ Pか Escで とじる', VW/2, by+bh-6);
   g.textAlign = 'left'; g.restore();
 }
