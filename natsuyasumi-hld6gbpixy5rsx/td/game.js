@@ -307,10 +307,13 @@ let fishing = null;            // 釣りの さいちゅう {phase,t,biteAt,win,
 const critters = [];          // 世界を とぶ 虫（cutebugs）{x,y,bi,vx,vy,ph,life}
 const flutters = [];          // 昼の蝶（原っぱの 花に あつまる・見るだけ）{x,y,ph,vx,vy,hue,life}
 function spawnFlutter() {
+  const wantTonbo = rnd() < 0.5;                     // 蝶（花）／トンボ（水辺）
   for (let tr = 0; tr < 10; tr++) {
     const c = Math.floor(player.x/TS) + ((rnd()*16|0)-8), r = Math.floor(player.y/TS) + ((rnd()*10|0)-5);
     if (c<1||r<1||c>=MW-1||r>=MH-1) continue;
-    if (map[r][c] === FLOWER) { flutters.push({ x:c*TS+TS/2, y:r*TS+TS/2, ph:rnd()*6.28, vx:0, vy:0, hue:[45,320,190,10][(rnd()*4|0)], life:0 }); return; }
+    const t = map[r][c];
+    if (wantTonbo && t === WATER) { flutters.push({ x:c*TS+TS/2, y:r*TS+TS/2, ph:rnd()*6.28, vx:(rnd()-0.5)*70, vy:(rnd()-0.5)*40, hue:190, life:0, tonbo:true }); return; }
+    if (!wantTonbo && t === FLOWER) { flutters.push({ x:c*TS+TS/2, y:r*TS+TS/2, ph:rnd()*6.28, vx:0, vy:0, hue:[45,320,190,10][(rnd()*4|0)], life:0 }); return; }
   }
 }
 let sumo = null, sumoWins = 0, sumoToday = false; // 虫相撲 {pos,my,op,phase,result,t}／その日 挑んだか
@@ -546,12 +549,14 @@ function startSleep() { if (sleepPhase <= 0 && !talkNpc) { pendingPhoto = snapsh
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
-    JSON.stringify({ day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, fishMax, sumoWins, sumoToday, reqDone, px: player.x, py: player.y })); } catch (e) {}
+    JSON.stringify({ ver: 1, day, tod, caughtHotaru, garden, diary, today, bloomTotal, taisoStamps, taisoToday, flags, fishDex, bugDex, fishMax, sumoWins, sumoToday, reqDone, px: player.x, py: player.y })); } catch (e) {}
 }
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem('natsuyasumi_td') || 'null');
     if (!s) return;
+    // s.ver で 将来 マイグレーション（今は 項目ごとに ガードして 前方互換）
+    if (s.ver && s.ver > 1) return;   // 未来の 新形式は 読まない（壊さない）
     day = s.day || 1; tod = s.tod == null ? 8 : s.tod; caughtHotaru = s.caughtHotaru || 0;
     if (Array.isArray(s.garden)) garden = s.garden;
     if (Array.isArray(s.diary)) diary = s.diary;
@@ -580,6 +585,7 @@ function saveMemory() {
     for (const k in fishMax) lifeFishMax[k] = Math.max(lifeFishMax[k] || 0, fishMax[k]);
     const lifeKingyo = ((prev && prev.lifeKingyo) || 0) + (flags.kingyo || 0);
     localStorage.setItem('natsuyasumi_td_memory', JSON.stringify({
+      ver: 1,
       year: ((prev && prev.year) || 0) + 1,
       hotaru: caughtHotaru, bloom: bloomTotal, taiso: taisoStamps,
       fish: dexCount(fishDex), bug: dexCount(bugDex), hakase: flags.kenkyuDone,
@@ -1009,12 +1015,19 @@ function loop(now) {
   for (const fl of flutters) {
     const fx = fl.x - cam.x, fy = fl.y - cam.y - Math.abs(Math.sin(fl.ph))*3;
     if (fx < -20 || fy < -20 || fx > VW+20 || fy > VH+20) continue;
-    const w = 2 + Math.abs(Math.sin(fl.ph*2))*3;
     g.save(); g.globalAlpha = fl.life;
-    g.fillStyle = `hsl(${fl.hue},80%,62%)`;
-    g.beginPath(); g.ellipse(fx-3, fy, w, 4, 0.5, 0, 6.283); g.fill();
-    g.beginPath(); g.ellipse(fx+3, fy, w, 4, -0.5, 0, 6.283); g.fill();
-    g.fillStyle = '#3a2a1a'; g.fillRect(fx-0.5, fy-3, 1, 6);   // からだ
+    if (fl.tonbo) {                                   // トンボ：細い胴＋すきとおる 4枚羽
+      g.strokeStyle = 'rgba(210,235,245,0.7)'; g.lineWidth = 1;
+      const ww = 6 + Math.abs(Math.sin(fl.ph*4))*2;
+      g.beginPath(); g.moveTo(fx-ww, fy-2); g.lineTo(fx+ww, fy-2); g.moveTo(fx-ww, fy+2); g.lineTo(fx+ww, fy+2); g.stroke();
+      g.strokeStyle = '#5a9ab0'; g.lineWidth = 2; g.beginPath(); g.moveTo(fx-1, fy); g.lineTo(fx+7, fy); g.stroke();
+    } else {                                          // 蝶：色つき 2枚羽
+      const w = 2 + Math.abs(Math.sin(fl.ph*2))*3;
+      g.fillStyle = `hsl(${fl.hue},80%,62%)`;
+      g.beginPath(); g.ellipse(fx-3, fy, w, 4, 0.5, 0, 6.283); g.fill();
+      g.beginPath(); g.ellipse(fx+3, fy, w, 4, -0.5, 0, 6.283); g.fill();
+      g.fillStyle = '#3a2a1a'; g.fillRect(fx-0.5, fy-3, 1, 6);
+    }
     g.restore();
   }
   // 世界を とぶ 虫（cutebugs）。ふわっと 出て 消える
