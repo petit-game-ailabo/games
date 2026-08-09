@@ -34,8 +34,10 @@ rect(6, 6, 5, 4, WATER);
 // 道（十字＋まわり道）
 rect(3, 16, MW-6, 2, PATH);
 rect(20, 3, 2, MH-6, PATH);
-// はたけ（土。将来 ひまわり等を うえる 場所）
-rect(28, 20, 8, 6, PATH);
+// はたけ（土。ひまわりを うえる 場所）
+const FIELD = { c: 28, r: 20, w: 8, h: 6 };
+rect(FIELD.c, FIELD.r, FIELD.w, FIELD.h, PATH);
+function inField(c, r) { return c>=FIELD.c && c<FIELD.c+FIELD.w && r>=FIELD.r && r<FIELD.r+FIELD.h; }
 // 木・花を すこし ちらす（道・水・畑の 上には 置かない）
 for (let i=0;i<120;i++){
   const c = 2 + (rnd()*(MW-4)|0), r = 2 + (rnd()*(MH-4)|0);
@@ -149,7 +151,7 @@ function newDay() {
 }
 // --- ねむる（Zキー）。まっくらに とけて つぎの朝へ
 let sleepPhase = 0;              // 0=起きてる。2.0→0 へ。1.0で 朝に とぶ
-function startSleep() { if (!sleepPhase && !talkNpc) sleepPhase = 2.0; }
+function startSleep() { if (sleepPhase <= 0 && !talkNpc) sleepPhase = 2.0; }
 // --- セーブ／ロード（この夏が つづいてる 感じ）
 function save() {
   try { localStorage.setItem('natsuyasumi_td',
@@ -164,7 +166,14 @@ function load() {
     if (s.px != null) { player.x = s.px; player.y = s.py; }
   } catch (e) {}
 }
-function growGarden() {}          // はたけの成長（後の 章で 中身）
+// はたけの成長：まえの日に みずを あげた 苗が ひと段階 のびる（0種→1芽→2葉→3つぼみ→4さいた）
+function growGarden() {
+  for (const p of garden) {
+    if (p.watered && p.stage < 4) p.stage++;
+    p.watered = false;             // あたらしい日：また みずやりが いる
+  }
+}
+function plotAt(c, r) { return garden.find(p => p.c === c && p.r === r); }
 
 // --- 入力。act は 決定（スペース／エンター）。おしっぱなしでは 進まない（1回ぶん）
 const keys = {};
@@ -202,6 +211,7 @@ function loop(now) {
   if (sleepPhase > 0) {
     const before = sleepPhase; sleepPhase -= dt;
     if (before > 1.0 && sleepPhase <= 1.0) { tod = 7; newDay(); }
+    if (sleepPhase < 0) sleepPhase = 0;         // 0を またがず ぴったり 起きる
   } else {
     const prev = tod;
     tod = (tod + dt * 24 / DAYSEC) % 24;         // 時刻を すすめる（1日＝DAYSEC秒）
@@ -248,10 +258,18 @@ function loop(now) {
   // そばの 仲間（話しかけ用）。いちばん 近いのを ひとり
   let near = null, bestD = TALK_R;
   for (const n of npcs) { const d = Math.hypot(n.x - player.x, n.y - player.y); if (d < bestD) { bestD = d; near = n; } }
-  // キーで 会話／つぎへ／蛍つかまえ（近づいただけでは 始めない・P1）
+  // 足もとの はたけ（うえる／みずやり）
+  const pc = Math.floor(player.x/TS), pr = Math.floor(player.y/TS);
+  const onField = inField(pc, pr);
+  const fieldPlot = onField ? plotAt(pc, pr) : null;
+  // キーで 会話／うえる・みずやり／蛍つかまえ（近づいただけでは 始めない・P1）
   if (act) {
     if (talkNpc) { if (++talkIdx >= talkNpc.lines.length) { talkNpc = null; talkIdx = 0; } }
     else if (near) { talkNpc = near; talkIdx = 0; }
+    else if (onField) {
+      if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); save(); }
+      else if (!fieldPlot.watered) { fieldPlot.watered = true; save(); }
+    }
     else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; nearFly = null; save(); }
     act = false;
   }
@@ -265,12 +283,15 @@ function loop(now) {
       const t = map[r][c], dx = c*TS - cam.x, dy = r*TS - cam.y;
       if (t !== G && t !== G2) drawTile(G, dx, dy);   // 透ける絵は 下に 草
       drawTile(t, dx, dy);
+      if (inField(c, r)) drawFurrow(dx, dy);          // 畑は うねを ひく
     }
   }
-  // y で ならべて 前後（カメラぶん ずらして えがく）
-  const ents = [...npcs, player].sort((a,b) => a.y - b.y);
+  // y で ならべて 前後（キャラ＋ひまわり を 足もとで ソート）
+  const plants = garden.map(p => ({ x: p.c*TS + TS/2, y: p.r*TS + TS, plant: p }));
+  const ents = [...npcs, player, ...plants].sort((a,b) => a.y - b.y);
   for (const e of ents) {
     const ex = e.x - cam.x, ey = e.y - cam.y;
+    if (e.plant) { drawPlant(e.plant.stage, ex, ey, e.plant.watered); continue; }
     drawShadow(ex, ey);
     const off = e === player && player.moving ? Math.abs(Math.sin(player.bob)) * 3 : 0;
     drawChar(e.ci, ex, ey - off, e.face || 1);
@@ -331,12 +352,18 @@ function loop(now) {
     g.fillText(`ほたる ${caughtHotaru}`, VW - 14, 66); g.textAlign = 'left';
   }
 
-  // 会話の まど／「▶ はなす」「▶ つかまえる」の 出し
+  // 会話の まど／足もとの したこと（はなす・うえる・みずやり・つかまえる）
   if (talkNpc) drawSay(talkNpc.lines[talkIdx]);
-  else if (near || nearFly) {
-    g.fillStyle = 'rgba(8,12,9,0.5)'; g.fillRect(0, VH-40, VW, 40);
-    g.fillStyle = 'rgba(246,250,242,0.95)'; g.font = '600 17px system-ui'; g.textAlign = 'center';
-    g.fillText(near ? '▶ はなす' : '▶ つかまえる', VW/2, VH-15); g.textAlign = 'left';
+  else {
+    let lbl = null;
+    if (near) lbl = '▶ はなす';
+    else if (onField) lbl = !fieldPlot ? '▶ うえる' : (!fieldPlot.watered ? '▶ みずやり' : (fieldPlot.stage >= 4 ? 'さいた！' : 'すくすく…'));
+    else if (nearFly) lbl = '▶ つかまえる';
+    if (lbl) {
+      g.fillStyle = 'rgba(8,12,9,0.5)'; g.fillRect(0, VH-40, VW, 40);
+      g.fillStyle = 'rgba(246,250,242,0.95)'; g.font = '600 17px system-ui'; g.textAlign = 'center';
+      g.fillText(lbl, VW/2, VH-15); g.textAlign = 'left';
+    }
   }
   // 「◯日目」の しらせ（すこし 出て 消える）
   if (dayMsgT > 0) {
@@ -370,6 +397,47 @@ function drawSay(line) {
   g.fillStyle = '#eef3ff'; g.font = '20px system-ui'; g.fillText(line[1], bx+24, by+62);
   g.fillStyle = 'rgba(230,238,250,0.5)'; g.font = '13px system-ui';
   g.fillText('スペースで つぎへ', bx+bw-150, by+bh-12);
+  g.restore();
+}
+// 畑の うね（土に ほそい 線）
+function drawFurrow(dx, dy) {
+  g.save(); g.strokeStyle = 'rgba(74,48,26,0.35)'; g.lineWidth = 2;
+  for (let i = 1; i <= 2; i++) { const yy = dy + TS*i/3; g.beginPath(); g.moveTo(dx+4, yy); g.lineTo(dx+TS-4, yy); g.stroke(); }
+  g.restore();
+}
+// ひまわり（コードで えがく＝絵柄が くずれない）。(x,y)＝足もと。0種→1芽→2葉→3つぼみ→4さいた
+function drawPlant(stage, x, y, watered) {
+  g.save();
+  g.fillStyle = 'rgba(10,20,8,0.22)'; g.beginPath(); g.ellipse(x, y-2, 8, 3, 0, 0, 6.283); g.fill();
+  if (stage === 0) {                                  // 種（つち の もり）
+    g.fillStyle = watered ? '#553720' : '#6b4a2a';
+    g.beginPath(); g.ellipse(x, y-3, 6, 4, 0, 0, 6.283); g.fill();
+    g.restore(); return;
+  }
+  const H = [0, 12, 24, 32, 38][stage];
+  g.strokeStyle = '#3f7a2e'; g.lineWidth = 3; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(x, y-2); g.lineTo(x, y-H); g.stroke();
+  if (stage === 1) {                                  // 双葉
+    g.fillStyle = '#6cbf4a';
+    g.beginPath(); g.ellipse(x-3, y-H+2, 4, 2.5, -0.6, 0, 6.283); g.fill();
+    g.beginPath(); g.ellipse(x+3, y-H+2, 4, 2.5,  0.6, 0, 6.283); g.fill();
+  } else if (stage >= 2) {                             // 葉
+    g.fillStyle = '#5aa83e';
+    g.beginPath(); g.ellipse(x-6, y-H*0.5,  7, 3.5, -0.5, 0, 6.283); g.fill();
+    g.beginPath(); g.ellipse(x+6, y-H*0.62, 7, 3.5,  0.5, 0, 6.283); g.fill();
+  }
+  if (stage === 3) {                                  // つぼみ
+    g.fillStyle = '#4f9a37'; g.beginPath(); g.arc(x, y-H, 6, 0, 6.283); g.fill();
+    g.fillStyle = '#f0b429'; g.beginPath(); g.arc(x, y-H, 2.5, 0, 6.283); g.fill();
+  }
+  if (stage === 4) {                                  // ひまわり さいた
+    const cx = x, cy = y-H, R = 11;
+    g.fillStyle = '#f7c948';
+    for (let i = 0; i < 12; i++) { const a = i/12*6.283; g.beginPath(); g.ellipse(cx+Math.cos(a)*R, cy+Math.sin(a)*R, 5, 3, a, 0, 6.283); g.fill(); }
+    g.fillStyle = '#7a4a1e'; g.beginPath(); g.arc(cx, cy, 7, 0, 6.283); g.fill();
+    g.fillStyle = '#5c3413';
+    for (let i = 0; i < 6; i++) { const a = i/6*6.283; g.beginPath(); g.arc(cx+Math.cos(a)*3, cy+Math.sin(a)*3, 1.2, 0, 6.283); g.fill(); }
+  }
   g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
