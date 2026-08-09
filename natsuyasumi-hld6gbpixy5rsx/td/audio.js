@@ -205,6 +205,24 @@ function mizuSfx() {
   og.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
   o.connect(og); og.connect(ambGain); o.start(t); o.stop(t + 0.24);
 }
+// --- 花火：打ち上げ「ヒュー」と 破裂「ドン」
+function fireworkLaunch() {
+  if (!AC) return; const t = AC.currentTime;
+  const o = AC.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(380, t); o.frequency.exponentialRampToValueAtTime(1150, t + 0.5);
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.04, t + 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+  o.connect(g); g.connect(ambGain); o.start(t); o.stop(t + 0.6);
+}
+function fireworkBoom() {
+  if (!AC || !shortNoise) return; const t = AC.currentTime;
+  const s = AC.createBufferSource(); s.buffer = shortNoise;
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 850;
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  s.connect(lp); lp.connect(g); g.connect(ambGain); s.start(t); s.stop(t + 0.6);
+  const o = AC.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.4);
+  const og = AC.createGain(); og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.28, t + 0.02); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+  o.connect(og); og.connect(ambGain); o.start(t); o.stop(t + 0.55);
+}
 // --- いま 何が 鳴く 時間帯か（時計を 見なくても 耳で 夏が わかる）
 function ambKindOf(tod) {
   if (tod >= 19 || tod < 5) return 'yoru';

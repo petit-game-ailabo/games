@@ -272,6 +272,10 @@ function weatherOf(d) {
 }
 function isRainy() { return weatherOf(day) === 'rain'; }
 const WEATHER_NAME = { rain: 'あめ', cloudy: 'くもり', hot: '猛暑', sunny: '晴れ' };
+// にわか雨：晴れの日の 一部で 午後(14〜16時)さっと降る→あがると 虹(16〜17.8時)
+function showerDay() { return weatherOf(day) === 'sunny' && (Math.floor(Math.abs(Math.sin(day*77.7))*997) % 4 === 0); }
+function showerNow() { return showerDay() && tod >= 14 && tod < 16; }
+function rainbowNow() { return showerDay() && tod >= 16 && tod < 17.8; }
 // --- 夏まつりの 花火（5日ごとの 晴れた夜）。花火は 粒子＝コードで きれいに 描ける
 function isFestival() { return day % 5 === 0 && !isRainy(); }
 const fireworks = [];           // {x,y,peakY,state,parts,hue}
@@ -279,6 +283,7 @@ let fwTimer = 0;
 function launchFirework() {
   fireworks.push({ x: VW*(0.2 + rnd()*0.6), y: VH*0.92, peakY: VH*(0.12 + rnd()*0.26),
                    state: 'rise', parts: [], hue: rnd()*360 });
+  if (typeof fireworkLaunch === 'function') fireworkLaunch();
 }
 // 時間を すすめる（行動した ぶんだけ）。よなかを またいだら つぎの日へ。
 // **夜おそく（22時）に なると 慧音が お迎え＝門限**（夜中も ずっとは 遊べない）
@@ -654,7 +659,7 @@ function loop(now) {
       if (fw.state === 'rise') {
         fw.y -= 260 * dt;
         if (fw.y <= fw.peakY) {
-          fw.state = 'burst'; flags.sawHanabi = true;
+          fw.state = 'burst'; flags.sawHanabi = true; if (typeof fireworkBoom === 'function') fireworkBoom();
           const n = 34 + (rnd()*16|0);
           for (let k = 0; k < n; k++) { const a = rnd()*6.283, sp = 40 + rnd()*130;
             fw.parts.push({ x: fw.x, y: fw.y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 1 }); }
@@ -876,8 +881,9 @@ function loop(now) {
     g.restore();
   }
 
-  // 雨：空を くもらせ、ななめの すじを ふらせる（コード描画）。畑には めぐみ
-  if (isRainy()) {
+  // 雨：空を くもらせ、ななめの すじを ふらせる（本降り＋にわか雨）。畑には めぐみ
+  const raining = isRainy() || showerNow();
+  if (raining) {
     g.fillStyle = 'rgba(70,90,120,0.20)'; g.fillRect(0, 0, VW, VH);
     g.save(); g.strokeStyle = 'rgba(185,205,230,0.32)'; g.lineWidth = 1;
     const sp = now * 0.7;
@@ -888,7 +894,14 @@ function loop(now) {
     }
     g.restore();
   }
-  if (typeof setRainLevel === 'function') setRainLevel(isRainy() && mode === 'play' ? 0.05 : 0);
+  // 虹（にわか雨の あと）。空に 円弧グラデ 1本
+  if (rainbowNow()) {
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const rc = ['rgba(255,80,80,0.16)','rgba(255,160,60,0.16)','rgba(240,220,70,0.16)','rgba(90,200,110,0.16)','rgba(80,150,230,0.16)','rgba(150,100,220,0.16)'];
+    for (let i = 0; i < rc.length; i++) { g.strokeStyle = rc[i]; g.lineWidth = 7; g.beginPath(); g.arc(VW*0.5, VH*1.15, 380 - i*7, Math.PI*1.15, Math.PI*1.85); g.stroke(); }
+    g.restore();
+  }
+  if (typeof setRainLevel === 'function') setRainLevel(raining && mode === 'play' ? 0.05 : 0);
   // 川の せせらぎ：まわり(5x5)の 水に 近いほど 大きく
   if (typeof setBrookLevel === 'function') {
     let wd = 99;
