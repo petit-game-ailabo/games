@@ -131,7 +131,8 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0, hikaricho: false, kingyo: 0, hints: {} };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false, kenkyuDone: false, helped: 0, harvested: 0, hikaricho: false, kingyo: 0, hints: {}, bond: {}, lastNight: false };
+function bestBondCi() { let b = 3, mx = -1; for (const k in flags.bond) { if (flags.bond[k] > mx) { mx = flags.bond[k]; b = +k; } } return b; }
 function hint(key, text) { if (flags.hints && !flags.hints[key]) { flags.hints[key] = true; dayMsg = text; daySub = ''; dayMsgT = 2.6; save(); } }
 // 自由研究の チェックリスト（drawDiaryと 終盤ナッジで 共用）
 function kenkyuList() {
@@ -161,6 +162,12 @@ function makeRequest() { request = REQS[day % REQS.length]; reqDone = false; }
 // 自由研究（やること）が ぜんぶ 済んだか＝ご褒美の 条件
 function kenkyuDone() { return bloomTotal>0 && caughtHotaru>0 && flags.sawHanabi && taisoStamps>0 && flags.everFish && flags.everMushi && flags.everSumo && flags.everOmairi; }
 function pickLines(npc) {
+  flags.bond[npc.ci] = (flags.bond[npc.ci] || 0) + 1;   // 話すたび 絆が すこし ふかまる
+  // 仲よし（絆が じゅうぶん）なら ときどき 親密な ひとこと
+  if ((flags.bond[npc.ci] || 0) >= 6 && rnd() < 0.3) {
+    const who = npc.ci === 1 ? 'marisa' : (npc.ci === 5 ? 'wriggle' : 'dai');
+    return [[who, 'チルノと いると たのしいな'], ['cirno', 'あたいも！'], [who, 'この なつ、わすれないね']];
+  }
   // 終盤（のこり3日以下）は ときどき さみしい ひとこと（ぼくなつの 情感）
   if (nokori() <= 3 && rnd() < 0.4) {
     const who = npc.ci === 1 ? 'marisa' : (npc.ci === 5 ? 'wriggle' : 'dai');
@@ -168,7 +175,7 @@ function pickLines(npc) {
   }
   // きょうの おねがい（達成してたら お礼／まだなら たのむ）。ふだんの 会話より 優先
   if (request && npc.ci === request.ci && !reqDone) {
-    if (request.check()) { reqDone = true; flags.helped = (flags.helped||0) + 1; save();
+    if (request.check()) { reqDone = true; flags.helped = (flags.helped||0) + 1; flags.bond[npc.ci] = (flags.bond[npc.ci]||0) + 2; save();
       return [[request.who, request.ok], ['cirno', 'えへへ']]; }
     return [[request.who, 'おねがい！ ' + request.ask], ['cirno', 'やってみる！']];
   }
@@ -643,6 +650,13 @@ function loop(now) {
     if (dayMsgT > 0) dayMsgT -= dt;
     if (talkNpc) sayT += dt;        // 文字送り
     ambientTick(dt, tod);           // 夏の音（時間帯で 鳴き分け）
+    // 最終夜：いちばん 仲よくなった 子と ふたりの 場面（絆の 回収）
+    if (day >= SUMMER_DAYS && isNight() && !flags.lastNight && !talkNpc && !sleepPhase && !fishing && !sumo && !matsuri && !mukaeShown) {
+      flags.lastNight = true;
+      const ci = bestBondCi(), who = ci === 1 ? 'marisa' : (ci === 5 ? 'wriggle' : 'dai');
+      talkNpc = { onEnd: 'none', lines: [[who, 'あしたで なつやすみ おわりだね'], ['cirno', 'ずっと なつだと いいのに…'], [who, 'たくさん あそんだね。ありがとう'], ['cirno', 'また らいねんも、ぜったい！']] };
+      talkIdx = 0; talkLines = talkNpc.lines; sayT = 0; save();
+    }
 
     // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。話している あいだは 足を とめる
     let ax = 0, ay = 0;
@@ -1403,6 +1417,8 @@ function drawEnding(now) {
   g.fillStyle = '#eef3ff'; g.font = '16px system-ui';
   g.fillText(`ほたる ${caughtHotaru}・ひまわり ${bloomTotal}・たいそう ${taisoStamps}・ずかん 魚${dexCount(fishDex)}/${FISH.length} 虫${dexCount(bugDex)}/${BUGS.length}`, VW/2, 214);
   if (flags.kenkyuDone) { g.fillStyle = '#ffe23a'; g.font = '700 18px system-ui'; g.fillText('★ しょうごう：なつやすみ はかせ', VW/2, 244); }
+  if (flags.bond && Object.keys(flags.bond).length) { g.fillStyle = 'rgba(255,210,220,0.9)'; g.font = '15px system-ui';
+    g.fillText(`いちばん なかよし：${NAMES[bestBondCi()]}`, VW/2, flags.kenkyuDone ? 268 : 244); }
   // 夏の アルバム（きょうの一枚たち）
   if (albumImgs.length) {
     g.fillStyle = 'rgba(255,236,190,0.85)'; g.font = '600 15px system-ui'; g.fillText('なつの アルバム', VW/2, 286);
