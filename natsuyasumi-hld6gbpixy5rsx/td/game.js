@@ -65,26 +65,32 @@ const WHO = { cirno:'チルノ', dai:'だいようせい', marisa:'まりさ', r
 // --- プレイヤー（足もと＝下中央）と 立ってる 仲間。道の 交点あたりから。
 // 仲間は そばで キーを 押すと 話す（P1と 同じ：近づいただけでは 始めない）。あたたかいトーン
 const player = { x: 21 * TS, y: 17 * TS, ci: 2, face: 1, bob: 0, moving: false };
+// 仲間の 会話は **時間帯で かわる**（asa／hiru／yugata／yoru）。同じ夏でも 一日で 表情が うつる
 const npcs = [
-  { ci: 3, x: 24 * TS, y: 12 * TS, lines: [   // だいようせい
-      ['dai','チルノちゃん、この にわ ひろいね'],
-      ['cirno','ぜんぶ あたいの ばしょ！'],
-      ['dai','じゃあ てつだうよ。なにを する？'],
-      ['cirno','うーん、まだ きめてない。それが たのしい'] ] },
-  { ci: 1, x: 14 * TS, y: 22 * TS, lines: [   // まりさ
-      ['marisa','よお。きょうは いい てんきだ'],
-      ['cirno','おさんぽ びより！'],
-      ['marisa','はたけ、なんか うえるのか？'],
-      ['cirno','ひまわり、うえたいな'] ] },
-  { ci: 5, x: 31 * TS, y: 23 * TS, lines: [   // リグル（はたけの そば）
-      ['wriggle','このあたり、むしが おおいぞ'],
-      ['cirno','つかまえて いい？'],
-      ['wriggle','あみが あればな。よるは かぶとも でる'],
-      ['cirno','よる……ちょっと どきどき する'] ] },
+  { ci: 3, x: 24 * TS, y: 12 * TS, sets: {   // だいようせい
+    asa:    [['dai','おはよう、チルノちゃん'],['cirno','ん、おはよ'],['dai','きょうは なにを する？'],['cirno','うーん、かんがえ中！']],
+    hiru:   [['dai','この にわ、ひろいねえ'],['cirno','ぜんぶ あたいの ばしょ！'],['dai','じゃあ てつだうよ'],['cirno','うん、たのむ！']],
+    yugata: [['dai','そろそろ ゆうがた だね'],['cirno','もう そんな じかん？'],['dai','よるは はやめに ね'],['cirno','わかってるよ〜']],
+    yoru:   [['dai','まだ おきてたの？'],['cirno','ほたるが きれいで'],['dai','わたしも みたいな'],['cirno','じゃあ いっしょに！']],
+  } },
+  { ci: 1, x: 14 * TS, y: 22 * TS, sets: {   // まりさ
+    asa:    [['marisa','よお、はやいな'],['cirno','ラジオたいそう した？'],['marisa','これから いくとこ'],['cirno','いっしょに いこ！']],
+    hiru:   [['marisa','いい てんきだ'],['cirno','おさんぽ びより！'],['marisa','はたけ、なんか うえたか？'],['cirno','ひまわり うえたいな']],
+    yugata: [['marisa','ゆうやけ、きれいだな'],['cirno','うん、あかいね'],['marisa','なつって かんじだ'],['cirno','ずっと つづけば いいのに']],
+    yoru:   [['marisa','よるは しずかだな'],['cirno','むしの こえが する'],['marisa','こわく ないか？'],['cirno','へ、へいきだもん！']],
+  } },
+  { ci: 5, x: 31 * TS, y: 23 * TS, sets: {   // リグル（はたけの そば）
+    asa:    [['wriggle','あさは むしが げんきだ'],['cirno','ほんと？'],['wriggle','くさむらを のぞいて みな'],['cirno','うん、みてみる']],
+    hiru:   [['wriggle','このあたり、むしが おおいぞ'],['cirno','つかまえて いい？'],['wriggle','あみが あればな'],['cirno','あみ、ほしいなあ']],
+    yugata: [['wriggle','ゆうがたは ひぐらしが なく'],['cirno','かなかな…って やつ？'],['wriggle','そう、それ'],['cirno','なんだか せつない ね']],
+    yoru:   [['wriggle','よるは かぶとむしの じかん'],['cirno','え、ほんと！？'],['wriggle','でも もう おそいぞ'],['cirno','うう、また こんど…']],
+  } },
 ];
+function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
+function pickLines(npc) { const s = npc.sets; return s[timeKey(tod)] || s.hiru || s.asa; }
 const cam = { x: 0, y: 0 };
 const TALK_R = TS * 1.4;                 // これより 近ければ 話しかけられる
-let talkNpc = null, talkIdx = 0;         // いま 話している 相手と 何行目か
+let talkNpc = null, talkIdx = 0, talkLines = null;   // 相手・何行目・いま 表示中の 台本
 
 // --- 昼夜（ほの暮しの庭：昼は ほっこり／夜は すこし 不安）。時間で 空気の色が かわる
 // tod = 時刻(0〜24)。**時間は 勝手に 流れない**。行動した ぶんだけ passTime() で すすむ。朝8時から
@@ -164,7 +170,7 @@ function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
 function passTime(h) {
   tod += h;
   while (tod >= 24) { tod -= 24; newDay(); }
-  if (tod >= 22 && !mukaeShown && !sleepPhase && !talkNpc) { mukaeShown = true; talkNpc = MUKAE; talkIdx = 0; }
+  if (tod >= 22 && !mukaeShown && !sleepPhase && !talkNpc) { mukaeShown = true; talkNpc = MUKAE; talkIdx = 0; talkLines = MUKAE.lines; }
 }
 function newDay() {
   recordDiary();                 // その日の しめくくりを えにっきへ
@@ -345,13 +351,13 @@ function loop(now) {
     if (act && diaryOpen) { diaryOpen = false; act = false; }
     if (act) {
       if (talkNpc) {
-        if (++talkIdx >= talkNpc.lines.length) {
-          const end = talkNpc.onEnd; talkNpc = null; talkIdx = 0;
+        if (++talkIdx >= talkLines.length) {
+          const end = talkNpc.onEnd; talkNpc = null; talkIdx = 0; talkLines = null;
           if (end === 'sleep') startSleep();
           else passTime(1.0);
         }
       }
-      else if (near) { talkNpc = near; talkIdx = 0; }
+      else if (near) { talkNpc = near; talkIdx = 0; talkLines = pickLines(near); }
       else if (nearRadio && canTaiso()) { doTaiso(); }
       else if (onField) {
         if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
@@ -472,7 +478,7 @@ function loop(now) {
 
   if (mode === 'play') {
     // 会話の まど／足もとの したこと（はなす・たいそう・うえる・みずやり・つかまえる）
-    if (talkNpc) drawSay(talkNpc.lines[talkIdx]);
+    if (talkNpc) drawSay(talkLines[talkIdx]);
     else {
       let lbl = null;
       if (near) lbl = '▶ はなす';
