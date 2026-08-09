@@ -132,6 +132,11 @@ function makeRequest() { request = REQS[day % REQS.length]; reqDone = false; }
 // 自由研究（やること）が ぜんぶ 済んだか＝ご褒美の 条件
 function kenkyuDone() { return bloomTotal>0 && caughtHotaru>0 && flags.sawHanabi && taisoStamps>0 && flags.everFish && flags.everMushi && flags.everSumo && flags.everOmairi; }
 function pickLines(npc) {
+  // 終盤（のこり3日以下）は ときどき さみしい ひとこと（ぼくなつの 情感）
+  if (nokori() <= 3 && rnd() < 0.4) {
+    const who = npc.ci === 1 ? 'marisa' : (npc.ci === 5 ? 'wriggle' : 'dai');
+    return [[who, 'なつやすみも もうすぐ おわりだね'], ['cirno', 'え、もう…？'], [who, 'さいごまで たのしもう']];
+  }
   // きょうの おねがい（達成してたら お礼／まだなら たのむ）。ふだんの 会話より 優先
   if (request && npc.ci === request.ci && !reqDone) {
     if (request.check()) { reqDone = true; flags.helped = (flags.helped||0) + 1; save();
@@ -283,7 +288,9 @@ function newDay() {
   const morning = tod >= 5 && tod < 10;
   dayMsg = `${day}日目`;
   const wt = weatherOf(day);
-  daySub = isFestival() ? 'きょうは なつまつり！ よるに はなびが あがる'
+  daySub = day >= SUMMER_DAYS ? 'なつやすみ さいごの日…'
+         : nokori() <= 3 ? `なつやすみも あと ${nokori()}日`
+         : isFestival() ? 'きょうは なつまつり！ よるに はなびが あがる'
          : wt === 'rain' ? 'あめ ふり。はたけには めぐみの あめ'
          : wt === 'hot' ? 'きょうは 猛暑。みずあそびが きもちいい'
          : wt === 'cloudy' ? 'くもりぞら。すずしくて すごしやすい'
@@ -738,6 +745,10 @@ function loop(now) {
   if (weatherOf(day) !== 'rain' && tod >= 5 && tod < 8) {
     const fog = (1 - Math.abs(tod - 6.2) / 1.8) * 0.33;
     if (fog > 0) { g.fillStyle = `rgba(232,238,240,${fog})`; g.fillRect(0, 0, VW, VH); }
+  }
+  // 終盤（のこり3日）の 夕方は 郷愁の 金色（長く 名残おしい 夕焼け）
+  if (nokori() <= 3 && tod >= 15.5 && tod < 19) {
+    g.fillStyle = 'rgba(255,168,86,0.12)'; g.fillRect(0, 0, VW, VH);
   }
   // くもり：うっすら 灰色。猛暑：まひるに あつい 陽射し＋陽炎
   const wx = weatherOf(day);
