@@ -733,6 +733,14 @@ function loop(now) {
     g.restore();
   }
   if (typeof setRainLevel === 'function') setRainLevel(isRainy() && mode === 'play' ? 0.05 : 0);
+  // 川の せせらぎ：まわり(5x5)の 水に 近いほど 大きく
+  if (typeof setBrookLevel === 'function') {
+    let wd = 99;
+    if (mode === 'play') { const pcc = Math.floor(player.x/TS), prr = Math.floor(player.y/TS);
+      for (let dr=-3;dr<=3;dr++) for (let dc=-3;dc<=3;dc++) { const c=pcc+dc, r=prr+dr;
+        if (r>=0&&r<MH&&c>=0&&c<MW && map[r][c]===WATER) { const d=Math.hypot(dc,dr); if (d<wd) wd=d; } } }
+    setBrookLevel(wd < 3.5 ? 0.05 * (1 - wd/3.5) : 0);
+  }
 
   // --- HUD（ひかりの上。いつも 読める）。**showHud=false で ぜんぶ 消える**（Hキーで 切替・最後は 既定オフに）
   if (showHud && mode === 'play') {

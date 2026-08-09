@@ -5,6 +5,7 @@
 let AC = null, ambGain = null, shortNoise = null, longNoise = null;
 let ambTimer = 0, muted = false;
 let rainGain = null;            // 雨の 常時音（ゲインで 出し入れ）
+let brookGain = null;           // 川の せせらぎ（水に 近いほど 大きく）
 
 function noiseBuf(sec) {
   const len = Math.ceil(AC.sampleRate * sec);
@@ -30,6 +31,18 @@ function initAudio() {
 // 雨の 音量（0=やむ）。game.js から 毎フレーム
 function setRainLevel(v) {
   if (AC && rainGain) rainGain.gain.setTargetAtTime(muted ? 0 : v, AC.currentTime, 0.4);
+}
+// 川の せせらぎ（水に 近いほど 大きく）
+function setBrookLevel(v) {
+  if (!AC) return;
+  if (!brookGain) {
+    const s = AC.createBufferSource(); s.buffer = longNoise; s.loop = true; s.playbackRate.value = 1.4;
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.5;
+    const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500;
+    brookGain = AC.createGain(); brookGain.gain.value = 0;
+    s.connect(bp); bp.connect(hp); hp.connect(brookGain); brookGain.connect(AC.destination); s.start();
+  }
+  brookGain.gain.setTargetAtTime(muted ? 0 : v, AC.currentTime, 0.3);
 }
 function toggleMute() {
   muted = !muted;
