@@ -146,6 +146,7 @@ function kenkyuList() {
     ['むしずもうで かった', flags.everSumo],
     ['じんじゃに おまいり', flags.everOmairi],
     ['ひかりちょうを みつけた', flags.hikaricho],
+    ['きんぎょすくいを した', (flags.kingyo||0) > 0],
   ];
 }
 let hikari = null;              // 隠しスポットの 光る蝶（夜・未捕獲のときだけ）
@@ -1450,7 +1451,7 @@ function drawEnding(now) {
   g.fillStyle = 'rgba(255,236,190,0.92)'; g.font = '600 18px system-ui';
   g.fillText(`${SUMMER_DAYS}日の なつを すごした`, VW/2, 184);
   g.fillStyle = '#eef3ff'; g.font = '16px system-ui';
-  g.fillText(`ほたる ${caughtHotaru}・ひまわり ${bloomTotal}・たいそう ${taisoStamps}・ずかん 魚${dexCount(fishDex)}/${FISH.length} 虫${dexCount(bugDex)}/${BUGS.length}`, VW/2, 214);
+  g.fillText(`ほたる ${caughtHotaru}・ひまわり ${bloomTotal}・たいそう ${taisoStamps}・ずかん 魚${dexCount(fishDex)}/${FISH.length} 虫${dexCount(bugDex)}/${BUGS.length}${(flags.kingyo||0)>0?'・きんぎょ '+flags.kingyo:''}`, VW/2, 214);
   if (flags.kenkyuDone) { g.fillStyle = '#ffe23a'; g.font = '700 18px system-ui'; g.fillText('★ しょうごう：なつやすみ はかせ', VW/2, 244); }
   if (flags.bond && Object.keys(flags.bond).length) { g.fillStyle = 'rgba(255,210,220,0.9)'; g.font = '15px system-ui';
     g.fillText(`いちばん なかよし：${NAMES[bestBondCi()]}`, VW/2, flags.kenkyuDone ? 268 : 244); }
@@ -1516,7 +1517,7 @@ function drawDex() {
   g.strokeStyle = 'rgba(90,110,70,0.4)'; g.lineWidth = 2; g.stroke();
   g.fillStyle = '#3f5230'; g.font = '700 24px system-ui';
   const full = dexCount(fishDex) === FISH.length && dexCount(bugDex) === BUGS.length;
-  g.fillText(`いきもの ずかん   さかな ${dexCount(fishDex)}/${FISH.length}・むし ${dexCount(bugDex)}/${BUGS.length}${full ? '   ★コンプリート！' : ''}`, bx+28, by+40);
+  g.fillText(`いきもの ずかん   さかな ${dexCount(fishDex)}/${FISH.length}・むし ${dexCount(bugDex)}/${BUGS.length}${(flags.kingyo||0)>0?'・きんぎょ '+flags.kingyo:''}${full ? '   ★コンプリート！' : ''}`, bx+28, by+40);
   // さかな
   g.fillStyle = '#4a6038'; g.font = '600 17px system-ui'; g.fillText('さかな', bx+28, by+78);
   FISH.forEach((f, i) => {
