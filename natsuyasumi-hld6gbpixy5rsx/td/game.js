@@ -263,6 +263,7 @@ let day = 1;                       // なつやすみ 何日目
 const SUMMER_DAYS = 31;
 let garden = [];                  // はたけ（{c,r,stage,watered}）
 let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
+let calT = 0;                     // 朝の こよみめくり 演出タイマー
 // --- 自由研究の きろく（えにっき＋ずかん）。テキストだけ＝絵が いらない
 let diary = [];                  // [{d, text}]  その日の しめくくり
 let today = { hotaru: 0, planted: 0, watered: 0, bloomed: 0, taiso: false, fish: false, mushi: false, harvest: false };  // 今日 やったこと
@@ -330,6 +331,7 @@ function newDay() {
   growGarden();                  // 朝、みずやりした 苗が のびる（さいたら 今日の えにっきに のる）
   if (isRainy()) for (const p of garden) p.watered = true;   // 雨の日は 畑に みずが やれる
   const morning = tod >= 5 && tod < 10;
+  if (morning) calT = 2.4;                      // 朝は こよみめくり
   dayMsg = `${day}日目`;
   const wt = weatherOf(day);
   daySub = day >= SUMMER_DAYS ? 'なつやすみ さいごの日…'
@@ -648,6 +650,7 @@ function loop(now) {
       if (sleepPhase < 0) sleepPhase = 0;
     }
     if (dayMsgT > 0) dayMsgT -= dt;
+    if (calT > 0) calT -= dt;       // こよみめくり
     if (talkNpc) sayT += dt;        // 文字送り
     ambientTick(dt, tod);           // 夏の音（時間帯で 鳴き分け）
     // 最終夜：いちばん 仲よくなった 子と ふたりの 場面（絆の 回収）
@@ -1127,8 +1130,10 @@ function loop(now) {
     }
     if (dexOpen) drawDex();
     if (diaryOpen) drawDiary();        // えにっき／ずかん（Nで ひらく）
-    // 「◯日目」の しらせ（すこし 出て 消える）
-    if (dayMsgT > 0) {
+    // 朝の こよみめくり（ぼくなつ感）
+    if (calT > 0) drawCalendar();
+    // 「◯日目」の しらせ（すこし 出て 消える）。こよみめくり中は 出さない
+    if (dayMsgT > 0 && calT <= 0) {
       const a = Math.min(1, dayMsgT) * Math.min(1, (3.4 - dayMsgT) * 3);
       g.save(); g.globalAlpha = Math.max(0, a);
       g.fillStyle = 'rgba(8,10,20,0.7)'; g.fillRect(0, VH/2 - 40, VW, 80);
@@ -1557,6 +1562,20 @@ function drawSumo(s) {
   } else {
     g.fillStyle = '#fff'; g.font = '600 16px system-ui'; g.fillText('スペース れんだ！', VW/2, VH/2+92);
   }
+  g.textAlign = 'left'; g.restore();
+}
+// 朝の こよみめくり（1枚 すべり込む）
+function drawCalendar() {
+  const p = 2.4 - calT, slide = Math.min(1, p/0.35), alpha = calT < 0.5 ? Math.max(0, calT/0.5) : 1;
+  const w = 200, h = 148, cx = VW/2, y = -h + (h + 84) * slide;
+  g.save(); g.globalAlpha = alpha;
+  g.fillStyle = '#fbf7ec'; g.fillRect(cx-w/2, y, w, h);
+  g.strokeStyle = 'rgba(120,95,60,0.4)'; g.lineWidth = 2; g.strokeRect(cx-w/2, y, w, h);
+  g.fillStyle = '#c0392b'; g.fillRect(cx-w/2, y, w, 30);
+  g.fillStyle = '#fff'; g.font = '600 15px system-ui'; g.textAlign = 'center'; g.fillText('なつやすみ', cx, y+20);
+  g.fillStyle = '#3a2a1a'; g.font = '700 46px system-ui'; g.fillText(`${day}`, cx, y+94);
+  g.fillStyle = '#8a6a3a'; g.font = '14px system-ui'; g.fillText(`日目 ・ のこり ${nokori()}日`, cx, y+122);
+  g.fillStyle = 'rgba(0,0,0,0.18)'; g.beginPath(); g.arc(cx-42, y+9, 3, 0, 6.28); g.arc(cx+42, y+9, 3, 0, 6.28); g.fill();
   g.textAlign = 'left'; g.restore();
 }
 // ポーズ／せってい（音量・あそびかた・クレジット）
