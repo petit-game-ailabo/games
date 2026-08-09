@@ -210,6 +210,7 @@ let bloomTotal = 0;             // これまで さかせた ひまわり
 let diaryOpen = false;          // Nキーで えにっきを ひらく
 let dexOpen = false;            // Cキーで いきもの図鑑
 let fishDex = {}, bugDex = {};  // つった魚・とった虫 の かず（index→数）
+let lastSummer = null;          // きょねんの なつの 思い出（別キー・年を またいで のこる）
 let fishing = null;            // 釣りの さいちゅう {phase,t,biteAt,win,fish,x,y}
 const critters = [];          // 世界を とぶ 虫（cutebugs）{x,y,bi,vx,vy,ph,life}
 let sumo = null, sumoWins = 0, sumoToday = false; // 虫相撲 {pos,my,op,phase,result,t}／その日 挑んだか
@@ -284,8 +285,13 @@ function doTaiso() {
   passTime(0.5); save();
 }
 function canTaiso() { return tod >= 5 && tod < 9 && !taisoToday; }
-// 縁台で ひとやすみ（時間を すこし すすめる＝ゆうがた・よるへ 行ける 手だて）
-function doRest() { passTime(2.0); dayMsg = 'ひとやすみ…'; daySub = 'なつの においが する'; dayMsgT = 2.0; save(); }
+// 縁台で ひとやすみ→つぎの 時間帯へ（昼→夕方→夜 と 一気に すすむ＝夜演出への 近道）
+function doRest() {
+  const marks = [12, 17, 19.5, 21.5];
+  let target = marks.find(m => m > tod + 0.1);
+  passTime(target != null ? target - tod : 2.0);   // 夜おそくは +2h
+  dayMsg = 'ひとやすみ…'; daySub = 'なつの においが する'; dayMsgT = 2.0; save();
+}
 // 神社で おまいり
 const OMIKUJI = ['大きち！ ことしの なつは さいこう', 'ちゅうきち。むしとりが うまくいく かも', 'すえきち。あわてず のんびり いこう', 'きち。あたらしい ことに いい 日'];
 function doOmairi() {
@@ -394,6 +400,18 @@ function load() {
     if (solidAt(player.x, player.y)) { player.x = 20 * TS; player.y = 9 * TS; }  // 旧マップの 位置が 壁なら 家へ
   } catch (e) {}
 }
+function loadMemory() { try { lastSummer = JSON.parse(localStorage.getItem('natsuyasumi_td_memory') || 'null'); } catch (e) { lastSummer = null; } }
+// 夏の おわりに「去年の なつ」として のこす（年を またいで つみ重なる）
+function saveMemory() {
+  try {
+    const prev = JSON.parse(localStorage.getItem('natsuyasumi_td_memory') || 'null');
+    localStorage.setItem('natsuyasumi_td_memory', JSON.stringify({
+      year: ((prev && prev.year) || 0) + 1,
+      hotaru: caughtHotaru, bloom: bloomTotal, taiso: taisoStamps,
+      fish: dexCount(fishDex), bug: dexCount(bugDex), hakase: flags.kenkyuDone,
+    }));
+  } catch (e) {}
+}
 // はたけの成長：まえの日に みずを あげた 苗が ひと段階 のびる（0種→1芽→2葉→3つぼみ→4さいた）
 function growGarden() {
   for (const p of garden) {
@@ -445,7 +463,7 @@ function loop(now) {
 
   // タイトル／エンディングでは 世界を うしろに 見せる だけ（更新しない）
   if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; sayT = 0; save(); } act = false; } }
-  if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
+  if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { saveMemory(); removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
   let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearBug = null, nearBugD = 1e9, pc = 0, pr = 0;
   if (mode === 'play') {
@@ -502,9 +520,9 @@ function loop(now) {
       const d = Math.hypot(cr.x - player.x, cr.y - player.y);
       if (d < BUG_R && (!nearBug || d < nearBugD)) { nearBug = cr; nearBugD = d; }
     }
-    // そばの 仲間（話しかけ用）。いちばん 近いのを ひとり
+    // そばの 仲間（話しかけ用）。夜は みんな 家に かえる（門限と 同じ）＝昼だけ
     let bestD = TALK_R;
-    for (const n of npcs) { const d = Math.hypot(n.x - player.x, n.y - player.y); if (d < bestD) { bestD = d; near = n; } }
+    if (!isNight()) for (const n of npcs) { const d = Math.hypot(n.x - player.x, n.y - player.y); if (d < bestD) { bestD = d; near = n; } }
     // 足もとの はたけ／体操の 広場
     pc = Math.floor(player.x/TS); pr = Math.floor(player.y/TS);
     onField = inField(pc, pr);
@@ -650,7 +668,7 @@ function loop(now) {
   }
   // y で ならべて 前後（キャラ＋ひまわり を 足もとで ソート）
   const plants = garden.map(p => ({ x: p.c*TS + TS/2, y: p.r*TS + TS, plant: p }));
-  const ents = [...npcs, player, ...plants].sort((a,b) => a.y - b.y);
+  const ents = [...(isNight() ? [] : npcs), player, ...plants].sort((a,b) => a.y - b.y);  // 夜は NPC 帰宅
   for (const e of ents) {
     const ex = e.x - cam.x, ey = e.y - cam.y;
     if (e.plant) { drawPlant(e.plant.stage, ex, ey, e.plant.watered); continue; }
@@ -1004,6 +1022,10 @@ function drawTitle(now) {
   const bl = 0.5 + 0.5*Math.sin(now/400);
   g.fillStyle = `rgba(255,255,255,${0.35 + 0.55*bl})`; g.font = '600 20px system-ui';
   g.fillText('スペースで はじめる', VW/2, VH/2 + 64);
+  if (lastSummer) {                    // 去年の なつの 思い出（つみ重なる）
+    g.fillStyle = 'rgba(255,236,190,0.8)'; g.font = '13px system-ui';
+    g.fillText(`きょねん(${lastSummer.year}年目)：ほたる${lastSummer.hotaru}・ひまわり${lastSummer.bloom}・ずかん 魚${lastSummer.fish}/${FISH.length} 虫${lastSummer.bug}/${BUGS.length}${lastSummer.hakase ? ' ★はかせ' : ''}`, VW/2, VH/2 + 92);
+  }
   g.fillStyle = 'rgba(230,238,220,0.4)'; g.font = '12px system-ui';
   g.fillText('東方Project 二次創作 ・ タイル: CC0 Top Down Adventure Assets', VW/2, VH - 16);
   g.textAlign = 'left'; g.restore();
@@ -1124,5 +1146,6 @@ function drawSumo(s) {
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
 load();                               // つづきの 夏から
+loadMemory();                         // 去年の なつの 思い出（タイトルに 出す）
 addEventListener('beforeunload', save);
 requestAnimationFrame(loop);
