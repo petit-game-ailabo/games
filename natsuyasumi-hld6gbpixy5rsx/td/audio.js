@@ -3,7 +3,16 @@
 // 「ほんものの夏の外は、小さい音のあつまり」——鳴りっぱなしにせず、来ては去る。
 'use strict';
 let AC = null, ambGain = null, shortNoise = null, longNoise = null;
-let ambTimer = 0, muted = false;
+let ambTimer = 0, muted = false, masterVol = 0.9;
+function applyMaster() { if (AC && ambGain) ambGain.gain.setTargetAtTime(muted ? 0 : masterVol, AC.currentTime, 0.15); }
+// 音量を 4段階で まわす（大/中/小/消）。ラベルを かえす
+function cycleVolume() {
+  const steps = [0.9, 0.5, 0.2, 0];
+  let i = steps.indexOf(masterVol); i = (i + 1) % steps.length; masterVol = steps[i];
+  muted = masterVol === 0; applyMaster();
+  return ['大', '中', '小', '消'][i];
+}
+function volLabel() { return ['消', '小', '小', '中', '中', '大', '大', '大', '大', '大'][Math.round(masterVol * 9)] || '大'; }
 let rainGain = null;            // 雨の 常時音（ゲインで 出し入れ）
 let brookGain = null;           // 川の せせらぎ（水に 近いほど 大きく）
 
@@ -20,17 +29,17 @@ function initAudio() {
   try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
   ambGain = AC.createGain(); ambGain.gain.value = 0.0; ambGain.connect(AC.destination);
   shortNoise = noiseBuf(0.3); longNoise = noiseBuf(3);
-  ambGain.gain.linearRampToValueAtTime(muted ? 0 : 0.9, AC.currentTime + 1.6);
-  // 雨の 常時音：ノイズを こもらせた「ざあ」。ふだんは ゲイン0
+  ambGain.gain.linearRampToValueAtTime(muted ? 0 : masterVol, AC.currentTime + 1.6);
+  // 雨の 常時音：ノイズを こもらせた「ざあ」。ふだんは ゲイン0。masterは ambGain 経由
   const rs = AC.createBufferSource(); rs.buffer = longNoise; rs.loop = true;
   const rlp = AC.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 1400;
   const rhp = AC.createBiquadFilter(); rhp.type = 'highpass'; rhp.frequency.value = 300;
   rainGain = AC.createGain(); rainGain.gain.value = 0;
-  rs.connect(rlp); rlp.connect(rhp); rhp.connect(rainGain); rainGain.connect(AC.destination); rs.start();
+  rs.connect(rlp); rlp.connect(rhp); rhp.connect(rainGain); rainGain.connect(ambGain); rs.start();
 }
 // 雨の 音量（0=やむ）。game.js から 毎フレーム
 function setRainLevel(v) {
-  if (AC && rainGain) rainGain.gain.setTargetAtTime(muted ? 0 : v, AC.currentTime, 0.4);
+  if (AC && rainGain) rainGain.gain.setTargetAtTime(v, AC.currentTime, 0.4);
 }
 // 川の せせらぎ（水に 近いほど 大きく）
 function setBrookLevel(v) {
@@ -40,9 +49,9 @@ function setBrookLevel(v) {
     const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.5;
     const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500;
     brookGain = AC.createGain(); brookGain.gain.value = 0;
-    s.connect(bp); bp.connect(hp); hp.connect(brookGain); brookGain.connect(AC.destination); s.start();
+    s.connect(bp); bp.connect(hp); hp.connect(brookGain); brookGain.connect(ambGain); s.start();
   }
-  brookGain.gain.setTargetAtTime(muted ? 0 : v, AC.currentTime, 0.3);
+  brookGain.gain.setTargetAtTime(v, AC.currentTime, 0.3);
 }
 function toggleMute() {
   muted = !muted;

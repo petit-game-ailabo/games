@@ -470,16 +470,19 @@ const keys = {};
 let act = false;
 let showHud = true;               // 時計・こよみの 表示。**最後に false にすれば 消える**（Hキーで 切替）
 let mode = 'title';               // 'title'（はじめる前）| 'play'（あそぶ）| 'ending'（夏の おわり）
+let pauseOpen = false;            // ポーズ／せってい（音量・あそびかた・クレジット）
 let endT = 0;                     // エンディングの 経過（フェード用）
 addEventListener('keydown', e => {
   initAudio();                    // 最初の キーで 夏の音を 起こす（自動再生ポリシー対策）
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
+  if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; return; }
+  if (!e.repeat && (e.key==='m'||e.key==='M')) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.2; }
+  if (pauseOpen) return;          // ポーズ中は ほかの キーは 無効
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
   if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
   if (!e.repeat && (e.key==='h'||e.key==='H')) showHud = !showHud;
   if (!e.repeat && (e.key==='n'||e.key==='N')) diaryOpen = !diaryOpen;
   if (!e.repeat && (e.key==='c'||e.key==='C')) dexOpen = !dexOpen;
-  if (!e.repeat && (e.key==='m'||e.key==='M')) toggleMute();
   keys[e.key.toLowerCase()] = true;
 });
 addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
@@ -503,6 +506,11 @@ function setStick(x, y) {
 }
 cv.addEventListener('pointerdown', e => {
   touchMode = true; initAudio(); const [x, y] = canvasXY(e);
+  if (mode === 'play' && pauseOpen) {                     // ポーズ中：左タップ=音量 / 右タップ=とじる
+    if (x < VW*0.5) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.0; } else pauseOpen = false;
+    e.preventDefault(); return;
+  }
+  if (mode === 'play' && Math.hypot(x - (VW-28), y - 24) < 22) { pauseOpen = true; e.preventDefault(); return; }  // ⚙
   if (mode !== 'play') { act = true; e.preventDefault(); return; }        // タイトル/エンディングは タップで
   for (const k in BTN) { const bd = BTN[k]; if (Math.hypot(x - bd.x, y - bd.y) < bd.r + 8) {
     if (k === 'act') act = true; else if (k === 'sleep') startSleep(); else if (k === 'diary') diaryOpen = !diaryOpen; else if (k === 'dex') dexOpen = !dexOpen;
@@ -567,7 +575,7 @@ function loop(now) {
 
     // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。話している あいだは 足を とめる
     let ax = 0, ay = 0;
-    if (!talkNpc && !sleepPhase && !diaryOpen && !dexOpen && !fishing && !sumo) {
+    if (!talkNpc && !sleepPhase && !diaryOpen && !dexOpen && !fishing && !sumo && !pauseOpen) {
       if (keys['arrowleft']||keys['a']) ax -= 1;
       if (keys['arrowright']||keys['d']) ax += 1;
       if (keys['arrowup']||keys['w']) ay -= 1;
@@ -650,7 +658,7 @@ function loop(now) {
     // キーで 会話／体操／うえる・みずやり／水あそび／蛍つかまえ（近づいただけでは 始めない・P1）
     if (fishing) { tickFishing(dt, act); act = false; }     // 釣り中は スペースを 釣りへ
     else if (sumo) { tickSumo(dt, act); act = false; }      // 虫相撲中は スペースを 相撲へ
-    else {
+    else if (!pauseOpen) {
       if (act && diaryOpen) { diaryOpen = false; act = false; }
       if (act && dexOpen) { dexOpen = false; act = false; }
       if (act) {
@@ -966,6 +974,11 @@ function loop(now) {
   else if (mode === 'ending') drawEnding(now);
 
   if (touchMode && mode === 'play') drawTouchControls();   // スマホの 操作UI（上に のせる）
+  if (mode === 'play') {                                    // ⚙ ボタン（右上）
+    g.fillStyle = 'rgba(20,26,36,0.35)'; g.beginPath(); g.arc(VW-28, 24, 14, 0, 6.283); g.fill();
+    g.fillStyle = 'rgba(246,250,242,0.8)'; g.font = '16px system-ui'; g.textAlign = 'center'; g.fillText('⚙', VW-28, 30); g.textAlign = 'left';
+  }
+  if (pauseOpen) drawPause();
   act = false;                         // 1フレームで つかいきる
   requestAnimationFrame(loop);
 }
@@ -1312,6 +1325,34 @@ function drawSumo(s) {
   } else {
     g.fillStyle = '#fff'; g.font = '600 16px system-ui'; g.fillText('スペース れんだ！', VW/2, VH/2+92);
   }
+  g.textAlign = 'left'; g.restore();
+}
+// ポーズ／せってい（音量・あそびかた・クレジット）
+function drawPause() {
+  g.save();
+  g.fillStyle = 'rgba(6,8,14,0.72)'; g.fillRect(0, 0, VW, VH);
+  const bx = 160, by = 70, bw = VW-320, bh = VH-140, r = 16;
+  g.fillStyle = '#f2eedf'; g.beginPath();
+  g.moveTo(bx+r,by); g.arcTo(bx+bw,by,bx+bw,by+bh,r); g.arcTo(bx+bw,by+bh,bx,by+bh,r); g.arcTo(bx,by+bh,bx,by,r); g.arcTo(bx,by,bx+bw,by,r); g.fill();
+  g.fillStyle = '#3f4a30'; g.font = '700 24px system-ui'; g.textAlign = 'center';
+  g.fillText('せってい', VW/2, by+42);
+  g.fillStyle = '#4a5238'; g.font = '17px system-ui';
+  g.fillText(`おと：${volLabel()}    （Mキー／左タップで きりかえ）`, VW/2, by+86);
+  g.font = '15px system-ui'; g.fillStyle = '#5a6048';
+  const lines = [
+    '― あそびかた ―',
+    '　うごく：やじるし／WASD／左スティック',
+    '　きめる・はなす・つる・とる：スペース／右タップ',
+    '　ねる：Z　えにっき：N　ずかん：C',
+    '',
+    '― クレジット ―',
+    '　東方Project 二次創作（キャラ絵は 非商用・差し替え前提）',
+    '　タイル ansimuz(CC0) / 魚 CraftPix(OGA-BY) / 虫 madameberry(CC0)',
+    '　音：手続き生成（自作）',
+  ];
+  let yy = by+120; for (const s of lines) { g.fillText(s, VW/2, yy); yy += 24; }
+  g.fillStyle = 'rgba(90,96,72,0.7)'; g.font = '14px system-ui';
+  g.fillText('Pか Escか 右タップで とじる', VW/2, by+bh-16);
   g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
