@@ -566,7 +566,8 @@ let showHud = true;               // 時計・こよみの 表示。**最後に 
 let mode = 'title';               // 'title'（はじめる前）| 'play'（あそぶ）| 'ending'（夏の おわり）
 let pauseOpen = false;            // ポーズ／せってい（音量・あそびかた・クレジット）
 let resetArm = false;             // 「はじめから」の 二度押し 確認
-const opt = { nonbiri: false };   // のんびりモード（門限オフ）。セーブとは 別キーで のこす
+const opt = { nonbiri: false, textSpeed: 1 };   // のんびりモード／文字送り速さ(0遅1普2速)。別キーで のこす
+function cps() { return [16, 34, 72][opt.textSpeed] != null ? [16, 34, 72][opt.textSpeed] : 34; }   // 文字/秒
 try { const o = JSON.parse(localStorage.getItem('natsuyasumi_td_opt') || 'null'); if (o) Object.assign(opt, o); } catch (e) {}
 function saveOpt() { try { localStorage.setItem('natsuyasumi_td_opt', JSON.stringify(opt)); } catch (e) {} }
 let endT = 0;                     // エンディングの 経過（フェード用）
@@ -605,8 +606,9 @@ function setStick(x, y) {
 cv.addEventListener('pointerdown', e => {
   touchMode = true; initAudio(); const [x, y] = canvasXY(e);
   if (mode === 'play' && pauseOpen) {                     // ポーズ中：ボタン→なければ 左=音量/右=とじる
-    if (Math.abs(y - 414) < 16 && Math.abs(x - VW/2) < 130) { opt.nonbiri = !opt.nonbiri; saveOpt(); e.preventDefault(); return; }  // のんびり
-    if (Math.abs(y - 444) < 16 && Math.abs(x - VW/2) < 130) {  // はじめから（二度押し）
+    if (Math.abs(y - 396) < 15 && Math.abs(x - VW/2) < 130) { opt.textSpeed = (opt.textSpeed+1) % 3; saveOpt(); e.preventDefault(); return; }  // 文字速さ
+    if (Math.abs(y - 424) < 15 && Math.abs(x - VW/2) < 130) { opt.nonbiri = !opt.nonbiri; saveOpt(); e.preventDefault(); return; }  // のんびり
+    if (Math.abs(y - 452) < 15 && Math.abs(x - VW/2) < 130) {  // はじめから（二度押し）
       if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; }
       e.preventDefault(); return;
     }
@@ -814,7 +816,7 @@ function loop(now) {
       if (act) {
         if (talkNpc) {
           const full = talkLines[talkIdx][1].length;
-          if (sayT * 34 < full) { sayT = 99; }        // まだ 出しきってない→ いちど 全部だす
+          if (sayT * cps() < full) { sayT = 99; }      // まだ 出しきってない→ いちど 全部だす
           else if (++talkIdx >= talkLines.length) {
             const end = talkNpc.onEnd, then = talkThen; talkNpc = null; talkIdx = 0; talkLines = null; talkThen = null;
             if (end === 'sleep') startSleep();
@@ -1226,7 +1228,7 @@ function drawSay(line) {
   g.fillStyle = '#ffe6a8'; g.font = '600 18px system-ui'; g.fillText(WHO[line[0]] || line[0], bx+24, by+30);
   // 文字送り＋折返し（枠に おさめる）
   g.font = '20px system-ui'; g.fillStyle = '#eef3ff';
-  const shown = line[1].slice(0, Math.max(0, Math.floor(sayT * 34)));
+  const shown = line[1].slice(0, Math.max(0, Math.floor(sayT * cps())));
   const maxw = bw - 48; let lineStr = '', yy = by + 60; const lines = [];
   for (const ch of shown) { if (g.measureText(lineStr + ch).width > maxw) { lines.push(lineStr); lineStr = ch; } else lineStr += ch; }
   lines.push(lineStr);
@@ -1659,10 +1661,11 @@ function drawPause() {
     g.strokeStyle = 'rgba(90,80,60,0.4)'; g.lineWidth = 1; g.strokeRect(VW/2-130, cy-14, 260, 28);
     g.fillStyle = '#3f4a30'; g.font = '600 15px system-ui'; g.textAlign = 'center'; g.fillText(label, VW/2, cy+5);
   };
-  btn(414, 'のんびりモード：' + (opt.nonbiri ? 'ON（門限なし）' : 'OFF'), opt.nonbiri);
-  btn(444, resetArm ? 'ほんとうに？ もう一度で はじめから' : 'はじめから', false);
+  btn(396, 'もじの はやさ：' + ['ゆっくり', 'ふつう', 'はやい'][opt.textSpeed], false);
+  btn(424, 'のんびりモード：' + (opt.nonbiri ? 'ON（門限なし）' : 'OFF'), opt.nonbiri);
+  btn(452, resetArm ? 'ほんとうに？ もう一度で はじめから' : 'はじめから', false);
   g.fillStyle = 'rgba(90,96,72,0.7)'; g.font = '13px system-ui'; g.textAlign = 'center';
-  g.fillText('Pか Escで とじる', VW/2, by+bh-10);
+  g.fillText('Pか Escで とじる', VW/2, by+bh-6);
   g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
