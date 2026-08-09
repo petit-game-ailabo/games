@@ -329,7 +329,7 @@ function launchFirework() {
 function passTime(h) {
   tod += h;
   while (tod >= 24) { tod -= 24; newDay(); }
-  if (tod >= 22 && !mukaeShown && !sleepPhase && !talkNpc) { mukaeShown = true; talkNpc = MUKAE; talkIdx = 0; talkLines = MUKAE.lines; sayT = 0; }
+  if (tod >= 22 && !mukaeShown && !sleepPhase && !talkNpc && !opt.nonbiri) { mukaeShown = true; talkNpc = MUKAE; talkIdx = 0; talkLines = MUKAE.lines; sayT = 0; }
 }
 function newDay() {
   recordDiary();                 // その日の しめくくりを えにっきへ
@@ -560,11 +560,15 @@ let act = false;
 let showHud = true;               // 時計・こよみの 表示。**最後に false にすれば 消える**（Hキーで 切替）
 let mode = 'title';               // 'title'（はじめる前）| 'play'（あそぶ）| 'ending'（夏の おわり）
 let pauseOpen = false;            // ポーズ／せってい（音量・あそびかた・クレジット）
+let resetArm = false;             // 「はじめから」の 二度押し 確認
+const opt = { nonbiri: false };   // のんびりモード（門限オフ）。セーブとは 別キーで のこす
+try { const o = JSON.parse(localStorage.getItem('natsuyasumi_td_opt') || 'null'); if (o) Object.assign(opt, o); } catch (e) {}
+function saveOpt() { try { localStorage.setItem('natsuyasumi_td_opt', JSON.stringify(opt)); } catch (e) {} }
 let endT = 0;                     // エンディングの 経過（フェード用）
 addEventListener('keydown', e => {
   initAudio();                    // 最初の キーで 夏の音を 起こす（自動再生ポリシー対策）
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
-  if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; return; }
+  if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; if (!pauseOpen) resetArm = false; return; }
   if (!e.repeat && (e.key==='m'||e.key==='M')) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.2; }
   if (pauseOpen) return;          // ポーズ中は ほかの キーは 無効
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
@@ -595,8 +599,13 @@ function setStick(x, y) {
 }
 cv.addEventListener('pointerdown', e => {
   touchMode = true; initAudio(); const [x, y] = canvasXY(e);
-  if (mode === 'play' && pauseOpen) {                     // ポーズ中：左タップ=音量 / 右タップ=とじる
-    if (x < VW*0.5) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.0; } else pauseOpen = false;
+  if (mode === 'play' && pauseOpen) {                     // ポーズ中：ボタン→なければ 左=音量/右=とじる
+    if (Math.abs(y - 414) < 16 && Math.abs(x - VW/2) < 130) { opt.nonbiri = !opt.nonbiri; saveOpt(); e.preventDefault(); return; }  // のんびり
+    if (Math.abs(y - 444) < 16 && Math.abs(x - VW/2) < 130) {  // はじめから（二度押し）
+      if (!resetArm) { resetArm = true; } else { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e2) {} location.reload(); return; }
+      e.preventDefault(); return;
+    }
+    if (x < VW*0.5) { const l = cycleVolume(); dayMsg = 'おと：' + l; daySub = ''; dayMsgT = 1.0; } else { pauseOpen = false; resetArm = false; }
     e.preventDefault(); return;
   }
   if (mode === 'play' && Math.hypot(x - (VW-28), y - 24) < 22) { pauseOpen = true; e.preventDefault(); return; }  // ⚙
@@ -1633,8 +1642,16 @@ function drawPause() {
     '　音：手続き生成（自作）',
   ];
   let yy = by+120; for (const s of lines) { g.fillText(s, VW/2, yy); yy += 24; }
-  g.fillStyle = 'rgba(90,96,72,0.7)'; g.font = '14px system-ui';
-  g.fillText('Pか Escか 右タップで とじる', VW/2, by+bh-16);
+  // ボタン：のんびりモード / はじめから
+  const btn = (cy, label, on) => {
+    g.fillStyle = on ? 'rgba(120,170,110,0.45)' : 'rgba(120,120,110,0.22)'; g.fillRect(VW/2-130, cy-14, 260, 28);
+    g.strokeStyle = 'rgba(90,80,60,0.4)'; g.lineWidth = 1; g.strokeRect(VW/2-130, cy-14, 260, 28);
+    g.fillStyle = '#3f4a30'; g.font = '600 15px system-ui'; g.textAlign = 'center'; g.fillText(label, VW/2, cy+5);
+  };
+  btn(414, 'のんびりモード：' + (opt.nonbiri ? 'ON（門限なし）' : 'OFF'), opt.nonbiri);
+  btn(444, resetArm ? 'ほんとうに？ もう一度で はじめから' : 'はじめから', false);
+  g.fillStyle = 'rgba(90,96,72,0.7)'; g.font = '13px system-ui'; g.textAlign = 'center';
+  g.fillText('Pか Escで とじる', VW/2, by+bh-10);
   g.textAlign = 'left'; g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
