@@ -1521,6 +1521,10 @@ function drawEnding(now) {
     g.fillStyle = `rgba(255,255,255,${0.4 + 0.4*Math.sin(now/400)})`; g.font = '600 16px system-ui';
     g.fillText('スペースで もう いちど', VW/2, 446);
   }
+  // クレジット（帰属の 二重露出・商用の 体裁）
+  g.fillStyle = 'rgba(210,220,235,0.5)'; g.font = '11px system-ui';
+  g.fillText('キャラ:Majstek ・ タイル:ansimuz ・ 魚:CraftPix.net 2D Game Assets ・ 虫:madameberry', VW/2, VH-26);
+  g.fillText('『ぼくのなつやすみ』へのオマージュ ・ 東方Project 二次創作', VW/2, VH-12);
   g.textAlign = 'left'; g.restore();
 }
 // 魚・虫の スプライトを 中央に えがく
