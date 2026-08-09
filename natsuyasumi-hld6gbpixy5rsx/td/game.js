@@ -49,6 +49,7 @@ rect(38, 51, 6, 5, WATER);      // 川むこうの 小さな池（釣り）
 const FIELD = { c: 30, r: 6, w: 7, h: 5 };
 rect(FIELD.c, FIELD.r, FIELD.w, FIELD.h, PATH);
 function inField(c, r) { return c>=FIELD.c && c<FIELD.c+FIELD.w && r>=FIELD.r && r<FIELD.r+FIELD.h; }
+const CROPS = ['himawari', 'asagao', 'tomato'];   // ひまわり／朝顔／トマト（畑の セルごとに 種類）
 // 木・花・やぶを ちらす（草の上だけ）
 for (let i=0;i<300;i++){
   const c = 2 + (rnd()*(MW-4)|0), r = 2 + (rnd()*(MH-4)|0);
@@ -691,7 +692,7 @@ function loop(now) {
         else if (near) { talkNpc = near; talkIdx = 0; talkThen = null; talkLines = pickLines(near); sayT = 0; }
         else if (nearRadio && canTaiso()) { doTaiso(); }
         else if (onField) {
-          if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
+          if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false, crop: CROPS[(pc+pr)%3] }); today.planted++; passTime(1.0); save(); }
           else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
         }
         else if (nearShrine) { doOmairi(); }
@@ -795,7 +796,7 @@ function loop(now) {
   const ents = [...(isNight() ? [] : npcs), player, ...plants].sort((a,b) => a.y - b.y);  // 夜は NPC 帰宅
   for (const e of ents) {
     const ex = e.x - cam.x, ey = e.y - cam.y;
-    if (e.plant) { drawPlant(e.plant.stage, ex, ey, e.plant.watered); continue; }
+    if (e.plant) { drawPlant(e.plant.stage, ex, ey, e.plant.watered, e.plant.crop); continue; }
     drawShadow(ex, ey);
     const off = e === player && player.moving ? Math.abs(Math.sin(player.bob)) * 3 : 0;
     drawChar(e.ci, ex, ey - off, e.face || 1);
@@ -1122,8 +1123,10 @@ function drawFurrow(dx, dy) {
   for (let i = 1; i <= 2; i++) { const yy = dy + TS*i/3; g.beginPath(); g.moveTo(dx+4, yy); g.lineTo(dx+TS-4, yy); g.stroke(); }
   g.restore();
 }
-// ひまわり（コードで えがく＝絵柄が くずれない）。(x,y)＝足もと。0種→1芽→2葉→3つぼみ→4さいた
-function drawPlant(stage, x, y, watered) {
+// 作物（コードで えがく＝絵柄が くずれない）。(x,y)＝足もと。0種→1芽→2葉→3つぼみ→4みのり
+// crop: himawari(ひまわり) / asagao(朝顔) / tomato(トマト)
+function drawPlant(stage, x, y, watered, crop) {
+  crop = crop || 'himawari';
   g.save();
   g.fillStyle = 'rgba(10,20,8,0.22)'; g.beginPath(); g.ellipse(x, y-2, 8, 3, 0, 0, 6.283); g.fill();
   if (stage === 0) {                                  // 種（つち の もり）
@@ -1131,8 +1134,9 @@ function drawPlant(stage, x, y, watered) {
     g.beginPath(); g.ellipse(x, y-3, 6, 4, 0, 0, 6.283); g.fill();
     g.restore(); return;
   }
-  const H = [0, 12, 24, 32, 38][stage];
-  g.strokeStyle = '#3f7a2e'; g.lineWidth = 3; g.lineCap = 'round';
+  const topH = crop === 'tomato' ? 30 : (crop === 'asagao' ? 42 : 38);
+  const H = [0, 12, 24, topH - 6, topH][stage];
+  g.strokeStyle = '#3f7a2e'; g.lineWidth = crop === 'asagao' ? 2 : 3; g.lineCap = 'round';
   g.beginPath(); g.moveTo(x, y-2); g.lineTo(x, y-H); g.stroke();
   if (stage === 1) {                                  // 双葉
     g.fillStyle = '#6cbf4a';
@@ -1142,18 +1146,28 @@ function drawPlant(stage, x, y, watered) {
     g.fillStyle = '#5aa83e';
     g.beginPath(); g.ellipse(x-6, y-H*0.5,  7, 3.5, -0.5, 0, 6.283); g.fill();
     g.beginPath(); g.ellipse(x+6, y-H*0.62, 7, 3.5,  0.5, 0, 6.283); g.fill();
+    if (crop === 'tomato') { g.beginPath(); g.ellipse(x-6, y-H*0.85, 6, 3, -0.5, 0, 6.283); g.fill(); g.beginPath(); g.ellipse(x+6, y-H*0.95, 6, 3, 0.5, 0, 6.283); g.fill(); }
   }
-  if (stage === 3) {                                  // つぼみ
+  if (stage === 3) {                                  // つぼみ／実の まえ
+    const bc = crop === 'asagao' ? '#8a6fd0' : (crop === 'tomato' ? '#6fae4a' : '#f0b429');
     g.fillStyle = '#4f9a37'; g.beginPath(); g.arc(x, y-H, 6, 0, 6.283); g.fill();
-    g.fillStyle = '#f0b429'; g.beginPath(); g.arc(x, y-H, 2.5, 0, 6.283); g.fill();
+    g.fillStyle = bc; g.beginPath(); g.arc(x, y-H, 2.6, 0, 6.283); g.fill();
   }
-  if (stage === 4) {                                  // ひまわり さいた
-    const cx = x, cy = y-H, R = 11;
-    g.fillStyle = '#f7c948';
-    for (let i = 0; i < 12; i++) { const a = i/12*6.283; g.beginPath(); g.ellipse(cx+Math.cos(a)*R, cy+Math.sin(a)*R, 5, 3, a, 0, 6.283); g.fill(); }
-    g.fillStyle = '#7a4a1e'; g.beginPath(); g.arc(cx, cy, 7, 0, 6.283); g.fill();
-    g.fillStyle = '#5c3413';
-    for (let i = 0; i < 6; i++) { const a = i/6*6.283; g.beginPath(); g.arc(cx+Math.cos(a)*3, cy+Math.sin(a)*3, 1.2, 0, 6.283); g.fill(); }
+  if (stage === 4) {
+    if (crop === 'himawari') {
+      const cx = x, cy = y-H, R = 11; g.fillStyle = '#f7c948';
+      for (let i = 0; i < 12; i++) { const a = i/12*6.283; g.beginPath(); g.ellipse(cx+Math.cos(a)*R, cy+Math.sin(a)*R, 5, 3, a, 0, 6.283); g.fill(); }
+      g.fillStyle = '#7a4a1e'; g.beginPath(); g.arc(cx, cy, 7, 0, 6.283); g.fill();
+      g.fillStyle = '#5c3413'; for (let i = 0; i < 6; i++) { const a = i/6*6.283; g.beginPath(); g.arc(cx+Math.cos(a)*3, cy+Math.sin(a)*3, 1.2, 0, 6.283); g.fill(); }
+    } else if (crop === 'asagao') {                    // 朝顔：あおむらさきの ラッパ花 3つ
+      const spots = [[0, -H], [-7, -H*0.7], [7, -H*0.55]];
+      for (const [dx, dy] of spots) { g.fillStyle = '#7a5fd0'; g.beginPath(); g.arc(x+dx, y+dy, 5, 0, 6.283); g.fill();
+        g.fillStyle = '#c9b8f0'; g.beginPath(); g.arc(x+dx, y+dy, 2, 0, 6.283); g.fill(); }
+    } else {                                           // トマト：あかい 実 4つ
+      const spots = [[-5, -H*0.55], [6, -H*0.7], [-3, -H*0.9], [5, -H*0.95]];
+      for (const [dx, dy] of spots) { g.fillStyle = '#d83b2a'; g.beginPath(); g.arc(x+dx, y+dy, 3.4, 0, 6.283); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(x+dx-1, y+dy-2, 1, 1); }
+    }
   }
   g.restore();
 }
