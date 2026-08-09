@@ -65,6 +65,8 @@ rect(14, 3, 12, 9, G);                      // うちの 広場を きれいに
 const HOME_OBJS = [[17,4,37],[19,4,48],[16,4,28],[20,4,33]];  // 壺・木桶・木箱・たる
 for (const [c,r,t] of HOME_OBJS) set(c,r,t);
 [28,33,37,48].forEach(t => SOLID.add(t));   // 置いた ものは とおれない
+const SHRINE = { c: 12, r: 55 };            // 神社（原っぱの おく）。鳥居＋祠、おまいり できる
+rect(SHRINE.c-2, SHRINE.r-2, 6, 5, G);      // 神社の 庭を きれいに
 SOLID.add(PADDY);                           // 水田は 入れない（あぜ道を あるく）
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
@@ -113,7 +115,7 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everFish: false, everMushi: false, sawHanabi: false, everSumo: false, everOmairi: false };
 function pickLines(npc) {
   // だいようせい：はじめて ひまわりが さいた あとに 気づいて よろこぶ
   if (npc.ci === 3 && bloomTotal > 0 && !flags.daiThanked) {
@@ -282,6 +284,13 @@ function doTaiso() {
 function canTaiso() { return tod >= 5 && tod < 9 && !taisoToday; }
 // 縁台で ひとやすみ（時間を すこし すすめる＝ゆうがた・よるへ 行ける 手だて）
 function doRest() { passTime(2.0); dayMsg = 'ひとやすみ…'; daySub = 'なつの においが する'; dayMsgT = 2.0; save(); }
+// 神社で おまいり
+const OMIKUJI = ['大きち！ ことしの なつは さいこう', 'ちゅうきち。むしとりが うまくいく かも', 'すえきち。あわてず のんびり いこう', 'きち。あたらしい ことに いい 日'];
+function doOmairi() {
+  flags.everOmairi = true;
+  dayMsg = 'おまいり した'; daySub = OMIKUJI[(rnd()*OMIKUJI.length)|0]; dayMsgT = 3.0;
+  passTime(0.5); save();
+}
 // --- 釣り（池のふちで）。うき＝コードの さざ波、魚＝本物スプライト。あたりで スペース
 const ripples = [];             // {x,y,t}  ひろがって 消える 輪
 function waterNextTo(pc, pr) {
@@ -435,7 +444,7 @@ function loop(now) {
   if (mode === 'title') { if (act) { mode = 'play'; initAudio(); if (!flags.introDone) { flags.introDone = true; talkNpc = INTRO; talkIdx = 0; talkLines = INTRO.lines; save(); } act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
-  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearBug = null, nearBugD = 1e9, pc = 0, pr = 0;
+  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, nearShrine = false, nearBug = null, nearBugD = 1e9, pc = 0, pr = 0;
   if (mode === 'play') {
     // 時間は **勝手には 進まない**（急かさない）。ねむり中だけ つぎの朝へ とぶ
     if (sleepPhase > 0) {
@@ -498,6 +507,7 @@ function loop(now) {
     fieldPlot = onField ? plotAt(pc, pr) : null;
     nearRadio = Math.hypot((RADIO.c+0.5)*TS - player.x, (RADIO.r+0.5)*TS - player.y) < TS*1.3;
     nearRest = Math.hypot((REST.c+0.5)*TS - player.x, (REST.r+0.5)*TS - player.y) < TS*1.3;
+    nearShrine = Math.hypot((SHRINE.c+0.5)*TS - player.x, (SHRINE.r+0.5)*TS - player.y) < TS*1.5;
     waterSpot = waterNextTo(pc, pr);          // 池の ふちに いるか
     // さざ波を すすめる（ひろがって 消える）
     for (let i = ripples.length - 1; i >= 0; i--) { ripples[i].t += dt; if (ripples[i].t > 1.1) ripples.splice(i, 1); }
@@ -541,6 +551,7 @@ function loop(now) {
           if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false }); today.planted++; passTime(1.0); save(); }
           else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
         }
+        else if (nearShrine) { doOmairi(); }
         else if (waterSpot) { startFishing(waterSpot); }
         else if (nearBug) { catchBug(nearBug); }
         else if (nearRest) { doRest(); }
@@ -614,6 +625,7 @@ function loop(now) {
     g.fillStyle = '#5c3d22'; g.fillRect(bx - TS*0.42, by + 2, 4, 9); g.fillRect(bx + TS*0.42 - 4, by + 2, 4, 9);
     g.restore();
   }
+  drawShrine();                          // 神社（鳥居＋祠）
   // 世界を とぶ 虫（cutebugs）。ふわっと 出て 消える
   for (const cr of critters) {
     const cx = cr.x - cam.x, cy = cr.y - cam.y;
@@ -738,6 +750,7 @@ function loop(now) {
     else {
       let lbl = null;
       if (near) lbl = '▶ はなす';
+      else if (nearShrine) lbl = '▶ おまいり';
       else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
       else if (onField) lbl = !fieldPlot ? '▶ うえる' : (!fieldPlot.watered ? '▶ みずやり' : (fieldPlot.stage >= 4 ? 'さいた！' : 'すくすく…'));
       else if (waterSpot) lbl = '▶ つる';
@@ -802,6 +815,26 @@ function drawPaddy(dx, dy, c, r) {
     const x = dx + TS*0.3 + rx*TS*0.4 + seed, y = dy + TS*0.34 + ry*TS*0.36;
     g.fillRect(x, y, 2, 7); g.fillRect(x-3, y+1, 2, 6); g.fillRect(x+3, y+1, 2, 6);
   }
+}
+// 神社（鳥居＋祠）。コードで えがく
+function drawShrine() {
+  const cx = (SHRINE.c+0.5)*TS - cam.x, gy = (SHRINE.r+1)*TS - cam.y;   // gy＝地面
+  if (cx < -80 || cx > VW+80 || gy < -80 || gy > VH+120) return;
+  g.save();
+  // 鳥居（あかい）
+  const tw = TS*1.7, th = TS*1.7, px = 5;
+  g.fillStyle = '#c0392b';
+  g.fillRect(cx-tw/2, gy-th, px, th); g.fillRect(cx+tw/2-px, gy-th, px, th);   // 柱
+  g.fillStyle = '#a83224';
+  g.fillRect(cx-tw/2-6, gy-th-8, tw+12, 7);                                     // 笠木
+  g.fillStyle = '#c0392b';
+  g.fillRect(cx-tw/2-2, gy-th+8, tw+4, 5);                                      // 貫
+  // 祠（おくの 小さな お社）
+  const sx = cx, sy = gy-6;
+  g.fillStyle = '#6b4a2a'; g.fillRect(sx-11, sy-16, 22, 16);                    // 本体
+  g.fillStyle = '#4a3320'; g.beginPath(); g.moveTo(sx-15, sy-16); g.lineTo(sx, sy-27); g.lineTo(sx+15, sy-16); g.closePath(); g.fill();  // 屋根
+  g.fillStyle = '#2a1c10'; g.fillRect(sx-4, sy-10, 8, 10);                      // 入口
+  g.restore();
 }
 // 飛び石（水の上の 石）
 function drawStone(dx, dy) {
@@ -878,6 +911,7 @@ function drawDiary() {
     ['さかなを つった', flags.everFish],
     ['むしを つかまえた', flags.everMushi],
     ['むしずもうで かった', flags.everSumo],
+    ['じんじゃに おまいり', flags.everOmairi],
   ];
   const cx2 = bx + bw*0.52;
   g.font = '600 15px system-ui'; g.fillStyle = '#6b5836';
