@@ -18,6 +18,7 @@ const SOLID = new Set([WATER, TREE, BUSH]);
 //   道と ひらけた場所だけを 切り開く。うち→田んぼ道→川(飛び石)→分岐、と 出かける
 const MW = 56, MH = 64;
 const STONE = 990;              // 飛び石（水の上・歩ける）。タイルには 無い＝コードで えがく
+const PADDY = 991;              // 水田（水＋稲）。コードで えがく＝田んぼらしく。入れない
 let seed = 20260809;
 function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
 const map = [];
@@ -28,7 +29,7 @@ function clearing(c0, r0, w, h) { for (let r=r0;r<r0+h;r++) for (let c=c0;c<c0+w
 function vpath(c, r0, r1, w) { for (let r=r0;r<=r1;r++) for (let k=0;k<w;k++) set(c+k,r,PATH); }
 function hpath(r, c0, c1, w) { for (let c=c0;c<=c1;c++) for (let k=0;k<w;k++) set(c,r+k,PATH); }
 // 田んぼ（あぜ道で 区切られた 水田）。あぜ＝歩ける・水＝入れない
-function paddy(c0, r0, w, h) { for (let r=r0;r<r0+h;r++) for (let c=c0;c<c0+w;c++) set(c,r, (((c-c0)%5===0)||((r-r0)%4===0)) ? PATH : WATER); }
+function paddy(c0, r0, w, h) { for (let r=r0;r<r0+h;r++) for (let c=c0;c<c0+w;c++) set(c,r, (((c-c0)%5===0)||((r-r0)%4===0)) ? PATH : PADDY); }
 
 clearing(13, 2, 30, 13);        // ① うち（スタート地点の 庭）
 clearing(5, 15, 46, 17);        // ② 田んぼ ゾーン
@@ -64,6 +65,7 @@ rect(14, 3, 12, 9, G);                      // うちの 広場を きれいに
 const HOME_OBJS = [[17,4,37],[19,4,48],[16,4,28],[20,4,33]];  // 壺・木桶・木箱・たる
 for (const [c,r,t] of HOME_OBJS) set(c,r,t);
 [28,33,37,48].forEach(t => SOLID.add(t));   // 置いた ものは とおれない
+SOLID.add(PADDY);                           // 水田は 入れない（あぜ道を あるく）
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
 
@@ -562,6 +564,7 @@ function loop(now) {
       if (r < 0 || c < 0) continue;
       const t = map[r][c], dx = c*TS - cam.x, dy = r*TS - cam.y;
       if (t === STONE) { drawTile(WATER, dx, dy); drawStone(dx, dy); }   // 飛び石＝水の上に 石
+      else if (t === PADDY) { drawPaddy(dx, dy, c, r); }                 // 水田＝水＋稲
       else {
         if (t !== G && t !== G2) drawTile(G, dx, dy); // 透ける絵は 下に 草
         drawTile(t, dx, dy);
@@ -788,6 +791,17 @@ function drawSay(line) {
   g.fillStyle = 'rgba(230,238,250,0.5)'; g.font = '13px system-ui';
   g.fillText('スペースで つぎへ', bx+bw-150, by+bh-12);
   g.restore();
+}
+// 水田（おだやかな 水＋稲の 束）。コードで えがく＝田んぼらしく くずれない
+function drawPaddy(dx, dy, c, r) {
+  g.fillStyle = '#6a9fae'; g.fillRect(dx, dy, TS, TS);                 // 水
+  g.fillStyle = 'rgba(255,255,255,0.07)'; g.fillRect(dx, dy + TS*0.28, TS, 2);  // 反射
+  g.fillStyle = '#4f9440';                                             // 稲の 束（2x2）
+  const seed = ((c*73 + r*131) % 5) - 2;
+  for (let ry = 0; ry < 2; ry++) for (let rx = 0; rx < 2; rx++) {
+    const x = dx + TS*0.3 + rx*TS*0.4 + seed, y = dy + TS*0.34 + ry*TS*0.36;
+    g.fillRect(x, y, 2, 7); g.fillRect(x-3, y+1, 2, 6); g.fillRect(x+3, y+1, 2, 6);
+  }
 }
 // 飛び石（水の上の 石）
 function drawStone(dx, dy) {
