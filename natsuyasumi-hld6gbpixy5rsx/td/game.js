@@ -649,6 +649,7 @@ function ensureDataUI() {
   const close = () => { wrap.style.display = 'none'; };
   cancelBtn.onclick = close;
   wrap.addEventListener('pointerdown', e => { if (e.target === wrap) close(); });   // 外側タップで とじる
+  wrap.addEventListener('keydown', e => { if (e.key === 'Escape') { close(); e.stopPropagation(); } });   // Escで とじる（ゲームには 漏らさない）
   dataUI = { wrap, title, note, ta, okBtn, cancelBtn, close };
   return dataUI;
 }
@@ -687,6 +688,10 @@ function openImportUI() {
 }
 let endT = 0;                     // エンディングの 経過（フェード用）
 addEventListener('keydown', e => {
+  // データUI（textarea）表示中は ゲームのキー処理を 完全に殺す。
+  // でないと Space/矢印が preventDefault されて 入力できず、Esc/P/M/B/E/I が 裏に 漏れる。
+  if (dataUI && dataUI.wrap.style.display !== 'none') return;
+  const t = e.target; if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
   initAudio();                    // 最初の キーで 夏の音を 起こす（自動再生ポリシー対策）
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
   if (!e.repeat && (e.key==='p'||e.key==='P'||e.key==='Escape')) { pauseOpen = !pauseOpen; if (!pauseOpen) resetArm = false; uiTap(); return; }
