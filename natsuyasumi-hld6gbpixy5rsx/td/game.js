@@ -95,7 +95,7 @@ const npcs = [
 ];
 function timeKey(t) { if (t < 5) return 'yoru'; if (t < 11) return 'asa'; if (t < 16) return 'hiru'; if (t < 19) return 'yugata'; return 'yoru'; }
 // 会話の えらび：まず **その時の できごと**（ひまわり・体操…）を 見て、なければ 時間帯
-const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false };
+const flags = { daiThanked: false, marisaStamp: false, wriggleHotaru: false, introDone: false, everMizu: false, sawHanabi: false };
 function pickLines(npc) {
   // だいようせい：はじめて ひまわりが さいた あとに 気づいて よろこぶ
   if (npc.ci === 3 && bloomTotal > 0 && !flags.daiThanked) {
@@ -256,7 +256,7 @@ function doRest() { passTime(2.0); dayMsg = 'ひとやすみ…'; daySub = 'な�
 const ripples = [];             // {x,y,t}  ひろがって 消える 輪
 function doMizu(wx, wy) {
   for (let i = 0; i < 3; i++) ripples.push({ x: wx + (rnd()-0.5)*14, y: wy + (rnd()-0.5)*10, t: -i*0.18 });
-  today.mizu = true;
+  today.mizu = true; flags.everMizu = true;
   if (typeof mizuSfx === 'function') mizuSfx();
   dayMsg = 'つめたくて きもちいい！'; daySub = ''; dayMsgT = 2.0;
   passTime(0.5); save();
@@ -404,7 +404,7 @@ function loop(now) {
       if (fw.state === 'rise') {
         fw.y -= 260 * dt;
         if (fw.y <= fw.peakY) {
-          fw.state = 'burst';
+          fw.state = 'burst'; flags.sawHanabi = true;
           const n = 34 + (rnd()*16|0);
           for (let k = 0; k < n; k++) { const a = rnd()*6.283, sp = 40 + rnd()*130;
             fw.parts.push({ x: fw.x, y: fw.y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 1 }); }
@@ -702,11 +702,27 @@ function drawDiary() {
   g.fillText(`なつやすみ ${day}日目 ・ のこり ${nokori()}日`, cx, by + 78);
   g.fillText(`つかまえた ほたる：${caughtHotaru} ひき`, cx, by + 104);
   g.fillText(`さかせた ひまわり：${bloomTotal} りん`, cx, by + 130);
+  // じゆうけんきゅう チェックリスト（やったこと）。右がわに ならべる
+  const chk = [
+    ['ひまわりを さかせた', bloomTotal > 0],
+    ['ほたるを つかまえた', caughtHotaru > 0],
+    ['はなびを みた', flags.sawHanabi],
+    ['ラジオたいそう', taisoStamps > 0],
+    ['みずあそび', flags.everMizu],
+  ];
+  const cx2 = bx + bw*0.52;
+  g.font = '600 15px system-ui'; g.fillStyle = '#6b5836';
+  g.fillText('じゆうけんきゅう', cx2, by + 78);
+  g.font = '15px system-ui';
+  chk.forEach((it, i) => {
+    g.fillStyle = it[1] ? '#3f7a2e' : '#b3a888';
+    g.fillText(`${it[1] ? '☑' : '☐'} ${it[0]}`, cx2, by + 104 + i*24);
+  });
   g.strokeStyle = 'rgba(120,95,60,0.3)'; g.lineWidth = 1;
   g.beginPath(); g.moveTo(cx, by + 148); g.lineTo(bx + bw - 34, by + 148); g.stroke();
   // えにっき（あたらしい順に 数日ぶん）
   g.font = '15px system-ui'; g.fillStyle = '#4a3d24';
-  const recent = diary.slice(-8).reverse();
+  const recent = diary.slice(-6).reverse();
   let yy = by + 178;
   if (!recent.length) { g.fillStyle = '#8a7a58'; g.fillText('（まだ なにも かいてない。ねると その日の ことが のる）', cx, yy); }
   for (const e of recent) {
