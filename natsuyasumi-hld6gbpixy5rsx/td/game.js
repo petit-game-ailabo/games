@@ -49,6 +49,13 @@ for (let i=0;i<120;i++){
 // ラジオ体操の 広場（あさ ここで 体操→スタンプ）。まわりを 草に して 木を どける
 const RADIO = { c: 24, r: 14 };
 rect(RADIO.c-1, RADIO.r-1, 3, 3, G);
+// うちの まわり（拠点の 気配）。きれいな 単体タイルだけ 置く＝絵が くずれない
+// 37=壺 47=木桶 28=木箱 33=たる。まわりを 草に して きれいに 置く
+rect(16, 13, 6, 4, G);
+const HOME_OBJS = [[17,14,37],[19,14,48],[16,14,28],[20,14,33]];  // 壺・木桶・木箱・たる
+for (const [c,r,t] of HOME_OBJS) set(c,r,t);
+[28,33,37,48].forEach(t => SOLID.add(t));   // 置いた ものは とおれない
+const REST = { c: 18, r: 15 };              // 縁台（ひとやすみ→時間が すすむ）
 function solidAtCell(c, r) { if (c<0||r<0||c>=MW||r>=MH) return true; return SOLID.has(map[r][c]); }
 function solidAt(px, py) { return solidAtCell(Math.floor(px/TS), Math.floor(py/TS)); }
 
@@ -237,6 +244,8 @@ function doTaiso() {
   passTime(0.5); save();
 }
 function canTaiso() { return tod >= 5 && tod < 9 && !taisoToday; }
+// 縁台で ひとやすみ（時間を すこし すすめる＝ゆうがた・よるへ 行ける 手だて）
+function doRest() { passTime(2.0); dayMsg = 'ひとやすみ…'; daySub = 'なつの においが する'; dayMsgT = 2.0; save(); }
 // --- 水あそび（池のふちで）。さざ波は コードで えがく＝絵が くずれない
 const ripples = [];             // {x,y,t}  ひろがって 消える 輪
 function doMizu(wx, wy) {
@@ -328,7 +337,7 @@ function loop(now) {
   if (mode === 'title') { if (act) { mode = 'play'; initAudio(); act = false; } }
   if (mode === 'ending') { endT += dt; if (act && endT > 1.2) { removeEventListener('beforeunload', save); try { localStorage.removeItem('natsuyasumi_td'); } catch (e) {} location.reload(); return; } }
 
-  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, pc = 0, pr = 0;
+  let near = null, nearFly = null, onField = false, fieldPlot = null, nearRadio = false, waterSpot = null, nearRest = false, pc = 0, pr = 0;
   if (mode === 'play') {
     // 時間は **勝手には 進まない**（急かさない）。ねむり中だけ つぎの朝へ とぶ
     if (sleepPhase > 0) {
@@ -378,6 +387,7 @@ function loop(now) {
     onField = inField(pc, pr);
     fieldPlot = onField ? plotAt(pc, pr) : null;
     nearRadio = Math.hypot((RADIO.c+0.5)*TS - player.x, (RADIO.r+0.5)*TS - player.y) < TS*1.3;
+    nearRest = Math.hypot((REST.c+0.5)*TS - player.x, (REST.r+0.5)*TS - player.y) < TS*1.3;
     waterSpot = waterNextTo(pc, pr);          // 池の ふちに いるか
     // さざ波を すすめる（ひろがって 消える）
     for (let i = ripples.length - 1; i >= 0; i--) { ripples[i].t += dt; if (ripples[i].t > 1.1) ripples.splice(i, 1); }
@@ -416,6 +426,7 @@ function loop(now) {
         else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
       }
       else if (waterSpot) { doMizu(waterSpot.x, waterSpot.y); }
+      else if (nearRest) { doRest(); }
       else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; today.hotaru++; nearFly = null; passTime(0.5); save(); }
       act = false;
     }
@@ -459,6 +470,15 @@ function loop(now) {
     const rx = rp.x - cam.x, ry = rp.y - cam.y, rad = 4 + rp.t*22, a = (1 - rp.t/1.1) * 0.5;
     g.save(); g.strokeStyle = `rgba(220,240,255,${a})`; g.lineWidth = 2;
     g.beginPath(); g.ellipse(rx, ry, rad, rad*0.6, 0, 0, 6.283); g.stroke(); g.restore();
+  }
+  // 縁台（木の ベンチ）。ひとやすみの 場所
+  {
+    const bx = (REST.c+0.5)*TS - cam.x, by = (REST.r+0.6)*TS - cam.y;
+    g.save();
+    g.fillStyle = 'rgba(10,20,8,0.22)'; g.beginPath(); g.ellipse(bx, by+9, TS*0.5, TS*0.15, 0, 0, 6.283); g.fill();
+    g.fillStyle = '#7a5230'; g.fillRect(bx - TS*0.5, by - 6, TS, 8);
+    g.fillStyle = '#5c3d22'; g.fillRect(bx - TS*0.42, by + 2, 4, 9); g.fillRect(bx + TS*0.42 - 4, by + 2, 4, 9);
+    g.restore();
   }
   // y で ならべて 前後（キャラ＋ひまわり を 足もとで ソート）
   const plants = garden.map(p => ({ x: p.c*TS + TS/2, y: p.r*TS + TS, plant: p }));
@@ -568,6 +588,7 @@ function loop(now) {
       else if (nearRadio && canTaiso()) lbl = '▶ たいそうする';
       else if (onField) lbl = !fieldPlot ? '▶ うえる' : (!fieldPlot.watered ? '▶ みずやり' : (fieldPlot.stage >= 4 ? 'さいた！' : 'すくすく…'));
       else if (waterSpot) lbl = '▶ みずあそび';
+      else if (nearRest) lbl = '▶ ひとやすみ';
       else if (nearFly) lbl = '▶ つかまえる';
       if (lbl) {
         g.fillStyle = 'rgba(8,12,9,0.5)'; g.fillRect(0, VH-40, VW, 40);
