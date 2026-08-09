@@ -325,7 +325,7 @@ function loop(now) {
   hudTick(dt);                   // 移動キーで ちらっと 出る HUD（P8）
 
   // --- えがく
-  ctx.drawImage(sc.img, 0, 0, W, H);
+  fxDrawBG(sc, cur);            // 背景（遠景ぼかし・にじみ・色あわせを 焼いた もの。Fで 素の絵）
   if (sc.nedoko && sc.nedoko.quad) drawFuton(sc.nedoko);
   for (const o of itemsAt(cur)) drawItem(o);   // 置かれた物は 地めんの上。キャラより さき
   drawSpots('ground');                         // すいか・賽銭箱 など 地めんの物（P5）。キャラより 後ろ
@@ -379,6 +379,7 @@ function loop(now) {
     drawChar(ciOf(a.k), a.x, a.y - off, h, a.face < 0, hazeOf(a.y));
   }
   drawSpots('hang');   // 風鈴・日めくり など ぶらさがる物（P5）。キャラより 前
+  fxOver(dt, cur, nightT);   // 光のすじ・塵・四すみ落とし。キャラの 前に のせて 空気を 作る
   drawHotaru();        // 夜の ほたる（D8）。場面中も 出す（よるの あぜみちの 情景）
   // 蝶と あみは キャラより 前（とんでいるので）。場面の あいだは 出さない
   if (!inScene && !fadeTo) { drawBugs(); drawNet(); drawFishing(); }

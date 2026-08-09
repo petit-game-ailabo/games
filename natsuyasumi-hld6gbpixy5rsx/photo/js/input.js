@@ -19,6 +19,10 @@ window.addEventListener('keydown', e => {
   else if (!e.repeat && (e.code === 'Space' || e.code === 'Enter')) advance = true;
   // 移動キーを 押したら HUD を ちらっと 出す（P8）
   if (state === 'play' && (e.code in MOVE)) hudPeek();
+  // F で 奥行きの演出を 切りかえ（前と後ろを 見くらべる ため）
+  if (!e.repeat && e.code === 'KeyF' && typeof fxToggle === 'function') {
+    toast('おくゆき演出：' + (fxToggle() ? 'ON' : 'OFF'));
+  }
   // 数字キーで 道具を 持ちかえ（1=あみ 2=さお…）。HUD も 出す
   if (state === 'play' && !e.repeat && /^Digit[1-9]$/.test(e.code)) {
     const tools = toolsHeld(), n = +e.code.slice(5);
