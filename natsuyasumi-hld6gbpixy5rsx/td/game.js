@@ -168,6 +168,14 @@ function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
 // --- 天気（その日で 決まる・晴れ／雨）。雨は 空気を かえ、**畑に みずを やる**
 function weatherOf(d) { const x = Math.sin(d * 127.1) * 43758.5453; return (x - Math.floor(x)) < 0.28; }
 function isRainy() { return weatherOf(day); }
+// --- 夏まつりの 花火（5日ごとの 晴れた夜）。花火は 粒子＝コードで きれいに 描ける
+function isFestival() { return day % 5 === 0 && !isRainy(); }
+const fireworks = [];           // {x,y,peakY,state,parts,hue}
+let fwTimer = 0;
+function launchFirework() {
+  fireworks.push({ x: VW*(0.2 + rnd()*0.6), y: VH*0.92, peakY: VH*(0.12 + rnd()*0.26),
+                   state: 'rise', parts: [], hue: rnd()*360 });
+}
 // 時間を すすめる（行動した ぶんだけ）。よなかを またいだら つぎの日へ。
 // **夜おそく（22時）に なると 慧音が お迎え＝門限**（夜中も ずっとは 遊べない）
 function passTime(h) {
@@ -184,7 +192,8 @@ function newDay() {
   if (isRainy()) for (const p of garden) p.watered = true;   // 雨の日は 畑に みずが やれる
   const morning = tod >= 5 && tod < 10;
   dayMsg = `${day}日目`;
-  daySub = isRainy() ? 'あめ ふり。はたけには めぐみの あめ'
+  daySub = isFestival() ? 'きょうは なつまつり！ よるに はなびが あがる'
+         : isRainy() ? 'あめ ふり。はたけには めぐみの あめ'
          : (morning ? 'あさごはんを たべた ・ そとへ でよう' : `なつやすみ のこり ${nokori()}日`);
   dayMsgT = 3.4;
   save();
@@ -352,6 +361,24 @@ function loop(now) {
     waterSpot = waterNextTo(pc, pr);          // 池の ふちに いるか
     // さざ波を すすめる（ひろがって 消える）
     for (let i = ripples.length - 1; i >= 0; i--) { ripples[i].t += dt; if (ripples[i].t > 1.1) ripples.splice(i, 1); }
+    // 夏まつりの 花火（晴れた 祭りの夜）。あがっては ひらいて 消える
+    if (isFestival() && isNight()) { fwTimer -= dt; if (fwTimer <= 0) { launchFirework(); fwTimer = 1.3 + rnd()*1.7; } }
+    for (let i = fireworks.length - 1; i >= 0; i--) {
+      const fw = fireworks[i];
+      if (fw.state === 'rise') {
+        fw.y -= 260 * dt;
+        if (fw.y <= fw.peakY) {
+          fw.state = 'burst';
+          const n = 34 + (rnd()*16|0);
+          for (let k = 0; k < n; k++) { const a = rnd()*6.283, sp = 40 + rnd()*130;
+            fw.parts.push({ x: fw.x, y: fw.y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 1 }); }
+        }
+      } else {
+        let alive = 0;
+        for (const p of fw.parts) { p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 60*dt; p.vx *= 0.985; p.life -= dt*0.7; if (p.life > 0) alive++; }
+        if (!alive) fireworks.splice(i, 1);
+      }
+    }
     // キーで 会話／体操／うえる・みずやり／水あそび／蛍つかまえ（近づいただけでは 始めない・P1）
     if (act && diaryOpen) { diaryOpen = false; act = false; }
     if (act) {
@@ -452,6 +479,23 @@ function loop(now) {
       gr.addColorStop(1, 'rgba(120,200,70,0)');
       g.fillStyle = gr; g.beginPath(); g.arc(fx, fy, rad, 0, 6.284); g.fill();
       g.fillStyle = `rgba(245,255,210,${a})`; g.beginPath(); g.arc(fx, fy, 1.6, 0, 6.284); g.fill();
+    }
+    g.restore();
+  }
+  // 花火（空に・加算で 光る）
+  if (fireworks.length) {
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (const fw of fireworks) {
+      if (fw.state === 'rise') {
+        g.fillStyle = 'rgba(255,240,200,0.9)';
+        g.beginPath(); g.arc(fw.x, fw.y, 2.2, 0, 6.283); g.fill();
+      } else {
+        for (const p of fw.parts) {
+          if (p.life <= 0) continue;
+          g.fillStyle = `hsla(${fw.hue},90%,65%,${Math.max(0,p.life)})`;
+          g.beginPath(); g.arc(p.x, p.y, 2.4, 0, 6.283); g.fill();
+        }
+      }
     }
     g.restore();
   }
