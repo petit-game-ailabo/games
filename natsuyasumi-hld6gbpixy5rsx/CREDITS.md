@@ -17,6 +17,19 @@
 - 無料サンプル版から必要なタイルだけを切り出し、独自アトラスに再構成して使用
 - 素材そのものの再配布は不可のため、ゲームの一部としてのみ同梱
 
+## 生き物スプライト（`td/` 2D版：魚・虫）
+
+**Fishing Game Assets Pixel Art** — 作者: **CraftPix.net**
+- 配布元: https://opengameart.org/content/fishing-game-assets-pixel-art
+- ライセンス: **OGA-BY 3.0**（商用可・再配布可・**帰属必須**）
+- クレジット表記: **「CraftPix.net 2D Game Assets」**
+- 本作では Catch（釣果）の魚フレームだけを抽出し、川魚を選んで `td/assets/fish.png` に再構成
+
+**Ambient Pixel Art Insects（cutebugs）** — 作者: **MadameBerry**
+- 配布元: https://opengameart.org/content/ambient-pixel-art-insects
+- ライセンス: **CC0 1.0**（パブリックドメイン・商用可・クレジット任意・再配布可）
+- カブト/トンボ/ホタル/ハチ/ガ を抽出し `td/assets/bugs.png` に再構成
+
 ## 背景写真（`photo/` 版）
 
 実写の背景は Wikimedia Commons から、**CC0 / パブリックドメイン / CC BY** のものだけを選んでいます。

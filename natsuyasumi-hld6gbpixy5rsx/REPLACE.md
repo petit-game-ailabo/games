@@ -18,6 +18,8 @@
 | ラジオ体操のメロディ | `photo/js/audio.js` | **自作。** 原曲（服部正・1951）は著作権が生きているので使っていない |
 | 環境音（セミ・風・ひぐらし） | `photo/js/audio.js` | **Web Audio の手続き生成。** 素材を使っていない |
 | **見下ろしタイルセット**（Top Down Adventure Assets） | `td/assets/tileset-world.png` | **CC0（パブリックドメイン）。商用OK・クレジット任意・改変/再配布可。** 出所：OpenGameArt。ライセンス文 `td/assets/LICENSE-topdown-adventure.txt` 同梱。2D試作の 世界タイル。より綺麗な素材に 差し替える 可能性あり（本人が「まず無料で試作→後で判断」） |
+| **魚スプライト**（釣り用） | `td/assets/fish.png` | **OGA-BY 3.0。商用OK・再配布OK・帰属必須。** 出所：OpenGameArt「Fishing Game Assets Pixel Art」by CraftPix.net。クレジット「CraftPix.net 2D Game Assets」を `CREDITS.md`／タイトルに 残す。ライセンス文 `td/assets/LICENSE-fish-craftpix.txt` 同梱。Catch部分のみ 抽出・川魚を 選別 |
+| **虫スプライト**（虫取り用） | `td/assets/bugs.png` | **CC0（パブリックドメイン）。商用OK・クレジット任意・再配布可。** 出所：OpenGameArt「Ambient Pixel Art Insects」by MadameBerry。カブト/トンボ/ホタル/ハチ/ガ を 抽出。ライセンス文 `td/assets/LICENSE-cutebugs.txt` 同梱 |
 
 ## 足すときの決まり
 
