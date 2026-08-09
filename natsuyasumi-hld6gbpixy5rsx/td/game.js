@@ -135,12 +135,44 @@ function spawnFly() {
   }
 }
 
+// --- こよみ（ぼくなつの 魂：夏休みは すぎてゆく）
+let day = 1;                       // なつやすみ 何日目
+const SUMMER_DAYS = 31;
+let garden = [];                  // はたけ（後の 章で うめる）
+let dayMsg = '', dayMsgT = 0;     // 「◯日目」の 短い しらせ
+function nokori() { return Math.max(0, SUMMER_DAYS - day + 1); }
+function newDay() {
+  day++;
+  growGarden();
+  dayMsg = `${day}日目  —  なつやすみ のこり ${nokori()}日`; dayMsgT = 3.4;
+  save();
+}
+// --- ねむる（Zキー）。まっくらに とけて つぎの朝へ
+let sleepPhase = 0;              // 0=起きてる。2.0→0 へ。1.0で 朝に とぶ
+function startSleep() { if (!sleepPhase && !talkNpc) sleepPhase = 2.0; }
+// --- セーブ／ロード（この夏が つづいてる 感じ）
+function save() {
+  try { localStorage.setItem('natsuyasumi_td',
+    JSON.stringify({ day, tod, caughtHotaru, garden, px: player.x, py: player.y })); } catch (e) {}
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem('natsuyasumi_td') || 'null');
+    if (!s) return;
+    day = s.day || 1; tod = s.tod == null ? 8 : s.tod; caughtHotaru = s.caughtHotaru || 0;
+    if (Array.isArray(s.garden)) garden = s.garden;
+    if (s.px != null) { player.x = s.px; player.y = s.py; }
+  } catch (e) {}
+}
+function growGarden() {}          // はたけの成長（後の 章で 中身）
+
 // --- 入力。act は 決定（スペース／エンター）。おしっぱなしでは 進まない（1回ぶん）
 const keys = {};
 let act = false;
 addEventListener('keydown', e => {
   if (e.key.startsWith('Arrow')||e.key===' ') e.preventDefault();
   if (!e.repeat && (e.key===' '||e.key==='Enter')) act = true;
+  if (!e.repeat && (e.key==='z'||e.key==='Z')) startSleep();
   keys[e.key.toLowerCase()] = true;
 });
 addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
@@ -166,11 +198,20 @@ function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (ready < 2) { g.fillStyle = '#0d120b'; g.fillRect(0,0,VW,VH); requestAnimationFrame(loop); return; }
 
-  tod = (tod + dt * 24 / DAYSEC) % 24;          // 時刻を すすめる（1日＝DAYSEC秒）
+  // ねむり中：時間は 止め、まっくらの まん中で つぎの朝へ とぶ
+  if (sleepPhase > 0) {
+    const before = sleepPhase; sleepPhase -= dt;
+    if (before > 1.0 && sleepPhase <= 1.0) { tod = 7; newDay(); }
+  } else {
+    const prev = tod;
+    tod = (tod + dt * 24 / DAYSEC) % 24;         // 時刻を すすめる（1日＝DAYSEC秒）
+    if (tod < prev) newDay();                     // よなかを またいだ＝つぎの日
+  }
+  if (dayMsgT > 0) dayMsgT -= dt;
 
   // うごく（8方向）。足もとで あたり判定、軸ごとに 止める。**話している あいだは 足を とめる**
   let ax = 0, ay = 0;
-  if (!talkNpc) {
+  if (!talkNpc && !sleepPhase) {
     if (keys['arrowleft']||keys['a']) ax -= 1;
     if (keys['arrowright']||keys['d']) ax += 1;
     if (keys['arrowup']||keys['w']) ay -= 1;
@@ -211,7 +252,7 @@ function loop(now) {
   if (act) {
     if (talkNpc) { if (++talkIdx >= talkNpc.lines.length) { talkNpc = null; talkIdx = 0; } }
     else if (near) { talkNpc = near; talkIdx = 0; }
-    else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; nearFly = null; }
+    else if (nearFly) { flies.splice(flies.indexOf(nearFly), 1); caughtHotaru++; nearFly = null; save(); }
     act = false;
   }
 
@@ -270,6 +311,8 @@ function loop(now) {
   // --- HUD（ひかりの上。いつも 読める）
   g.fillStyle = 'rgba(230,238,220,0.9)'; g.font = '600 15px system-ui';
   g.fillText('うらの にわ', 14, 26);
+  g.fillStyle = 'rgba(230,238,220,0.5)'; g.font = '12px system-ui';
+  g.fillText('Zで ねる', 14, 44);
   // とけい（右上）：時刻と じかんたい
   const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60);
   const clk = `${hh}:${String(mm).padStart(2,'0')}  ${todName(tod)}`;
@@ -277,11 +320,15 @@ function loop(now) {
   g.fillStyle = 'rgba(8,12,9,0.45)';
   const cw = g.measureText(clk).width; g.fillRect(VW - cw - 26, 10, cw + 16, 24);
   g.fillStyle = 'rgba(246,250,242,0.95)'; g.fillText(clk, VW - 14, 27); g.textAlign = 'left';
+  // こよみ：なつやすみ のこり N日（時計の下）
+  g.font = '600 13px system-ui'; g.textAlign = 'right';
+  g.fillStyle = 'rgba(255,236,190,0.92)';
+  g.fillText(`${day}日目 ・ のこり ${nokori()}日`, VW - 14, 47); g.textAlign = 'left';
   // つかまえた 蛍の かず（夜／持っていれば）
   if (caughtHotaru > 0 || isNight()) {
-    g.font = '600 14px system-ui'; g.textAlign = 'right';
+    g.font = '600 13px system-ui'; g.textAlign = 'right';
     g.fillStyle = 'rgba(220,255,150,0.9)';
-    g.fillText(`ほたる ${caughtHotaru}`, VW - 14, 50); g.textAlign = 'left';
+    g.fillText(`ほたる ${caughtHotaru}`, VW - 14, 66); g.textAlign = 'left';
   }
 
   // 会話の まど／「▶ はなす」「▶ つかまえる」の 出し
@@ -290,6 +337,24 @@ function loop(now) {
     g.fillStyle = 'rgba(8,12,9,0.5)'; g.fillRect(0, VH-40, VW, 40);
     g.fillStyle = 'rgba(246,250,242,0.95)'; g.font = '600 17px system-ui'; g.textAlign = 'center';
     g.fillText(near ? '▶ はなす' : '▶ つかまえる', VW/2, VH-15); g.textAlign = 'left';
+  }
+  // 「◯日目」の しらせ（すこし 出て 消える）
+  if (dayMsgT > 0) {
+    const a = Math.min(1, dayMsgT) * Math.min(1, (3.4 - dayMsgT) * 3);
+    g.save(); g.globalAlpha = Math.max(0, a);
+    g.fillStyle = 'rgba(8,10,20,0.7)'; g.fillRect(0, VH/2 - 34, VW, 68);
+    g.fillStyle = '#ffe6a8'; g.font = '600 26px system-ui'; g.textAlign = 'center';
+    g.fillText(dayMsg, VW/2, VH/2 + 9); g.textAlign = 'left'; g.restore();
+  }
+  // ねむり：まっくらに とけて つぎの朝へ
+  if (sleepPhase > 0) {
+    const a = 1 - Math.abs(sleepPhase - 1.0);   // 1.0で まっくら
+    g.fillStyle = `rgba(0,0,0,${a})`; g.fillRect(0, 0, VW, VH);
+    if (a > 0.6) {
+      g.fillStyle = `rgba(230,238,250,${(a-0.6)/0.4*0.8})`;
+      g.font = '600 20px system-ui'; g.textAlign = 'center';
+      g.fillText('…zzz', VW/2, VH/2); g.textAlign = 'left';
+    }
   }
   act = false;                         // 1フレームで つかいきる
   requestAnimationFrame(loop);
@@ -308,4 +373,6 @@ function drawSay(line) {
   g.restore();
 }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+load();                               // つづきの 夏から
+addEventListener('beforeunload', save);
 requestAnimationFrame(loop);
