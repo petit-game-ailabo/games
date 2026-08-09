@@ -394,6 +394,8 @@ function doOmairi() {
 }
 // --- 釣り（池のふちで）。うき＝コードの さざ波、魚＝本物スプライト。あたりで スペース
 const ripples = [];             // {x,y,t}  ひろがって 消える 輪
+const puffs = [];               // 小粒子（土・水しぶき・葉）{x,y,vx,vy,life,col}
+function spawnPuff(x, y, col, n) { for (let i = 0; i < n; i++) puffs.push({ x, y, vx: (rnd()-0.5)*46, vy: -rnd()*46-8, life: 1, col }); }
 function waterNextTo(pc, pr) {
   for (const [dc, dr] of [[1,0],[-1,0],[0,1],[0,-1]]) {
     const c = pc+dc, r = pr+dr;
@@ -772,6 +774,8 @@ function loop(now) {
     }
     // さざ波を すすめる（ひろがって 消える）
     for (let i = ripples.length - 1; i >= 0; i--) { ripples[i].t += dt; if (ripples[i].t > 1.1) ripples.splice(i, 1); }
+    // 小粒子（土・水・葉）
+    for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 96*dt; p.life -= dt*1.6; if (p.life <= 0) puffs.splice(i, 1); }
     // 夏まつりの 花火（晴れた 祭りの夜）。あがっては ひらいて 消える
     if (isFestival() && isNight()) { fwTimer -= dt; if (fwTimer <= 0) { launchFirework(); fwTimer = 1.3 + rnd()*1.7; } }
     for (let i = fireworks.length - 1; i >= 0; i--) {
@@ -822,15 +826,17 @@ function loop(now) {
         else if (near) { talkNpc = near; talkIdx = 0; talkThen = null; talkLines = pickLines(near); sayT = 0; }
         else if (nearRadio && canTaiso()) { doTaiso(); }
         else if (onField) {
-          if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false, crop: CROPS[(pc+pr)%3] }); today.planted++; passTime(1.0); save(); }
+          const fcx = pc*TS+TS/2, fcy = pr*TS+TS/2;
+          if (!fieldPlot) { garden.push({ c: pc, r: pr, stage: 0, watered: false, crop: CROPS[(pc+pr)%3] }); today.planted++; spawnPuff(fcx, fcy, '#8a6a3a', 6); if (typeof soilSfx==='function') soilSfx(); passTime(1.0); save(); }
           else if (fieldPlot.stage >= 4) {           // 収穫（そだて切りで 終わらせない）
             const nm = fieldPlot.crop === 'tomato' ? 'トマト' : (fieldPlot.crop === 'asagao' ? 'あさがおの たね' : 'ひまわりの たね');
             flags.harvested = (flags.harvested||0) + 1; today.harvest = true;
             garden.splice(garden.indexOf(fieldPlot), 1);
+            spawnPuff(fcx, fcy-10, '#6fae4a', 9); if (typeof popSfx==='function') popSfx();
             dayMsg = 'しゅうかく！ ' + nm; daySub = 'また うえられる'; dayMsgT = 2.2;
             passTime(0.5); save();
           }
-          else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; passTime(1.0); save(); }
+          else if (!fieldPlot.watered) { fieldPlot.watered = true; today.watered++; spawnPuff(fcx, fcy-6, '#7fb0e0', 6); if (typeof mizuSfx==='function') mizuSfx(); passTime(1.0); save(); }
         }
         else if (nearStall) { startMatsuri(); }
         else if (nearHikari) { flags.hikaricho = true; hikari = null; dayMsg = '★ ひかりちょうを つかまえた！'; daySub = 'よるの もりの ひみつ'; dayMsgT = 3.2; passTime(0.5); save(); }
@@ -910,6 +916,8 @@ function loop(now) {
     }
     g.restore();
   }
+  // 小粒子（土・水しぶき・葉）
+  for (const p of puffs) { g.save(); g.globalAlpha = Math.max(0, p.life); g.fillStyle = p.col; g.fillRect(Math.round(p.x - cam.x)-1, Math.round(p.y - cam.y)-1, 3, 3); g.restore(); }
   // 縁台（木の ベンチ）。ひとやすみの 場所
   {
     const bx = (REST.c+0.5)*TS - cam.x, by = (REST.r+0.6)*TS - cam.y;

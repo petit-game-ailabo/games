@@ -205,6 +205,20 @@ function mizuSfx() {
   og.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
   o.connect(og); og.connect(ambGain); o.start(t); o.stop(t + 0.24);
 }
+// --- 畑：土をかける「ザッ」／収穫の「ポン」
+function soilSfx() {
+  if (!AC || !shortNoise) return; const t = AC.currentTime;
+  const s = AC.createBufferSource(); s.buffer = shortNoise;
+  const bp = AC.createBiquadFilter(); bp.type = 'lowpass'; bp.frequency.value = 620;
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.13, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+  s.connect(bp); bp.connect(g); g.connect(ambGain); s.start(t); s.stop(t + 0.18);
+}
+function popSfx() {
+  if (!AC) return; const t = AC.currentTime;
+  const o = AC.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(440, t); o.frequency.exponentialRampToValueAtTime(880, t + 0.08);
+  const g = AC.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.13, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+  o.connect(g); g.connect(ambGain); o.start(t); o.stop(t + 0.2);
+}
 // --- 花火：打ち上げ「ヒュー」と 破裂「ドン」
 function fireworkLaunch() {
   if (!AC) return; const t = AC.currentTime;
