@@ -100,6 +100,16 @@ public static class BuildZashiki {
         sun.shadows = LightShadows.Soft; sun.shadowStrength = 0.66f;
         sunGO.transform.rotation = Quaternion.Euler(34f, 66f, 0f);   // 左（障子）の 上から 差しこむ
 
+        // おき光（フィル）。奥の 壁が 真っ黒に 沈まないよう、手前がわから 弱く あてる。
+        // 影は おとさない＝形を こわさない
+        var fillGO = new GameObject("Fill");
+        var fill = fillGO.AddComponent<Light>();
+        fill.type = LightType.Directional;
+        fill.color = new Color(0.80f, 0.84f, 0.95f);   // 空からの まわりこみ＝やや つめたい
+        fill.intensity = 0.55f;
+        fill.shadows = LightShadows.None;
+        fillGO.transform.rotation = Quaternion.Euler(22f, 200f, 0f);
+
         // 室内の 空気は あたたかい 側に。青いと 朝の さむさに なってしまう
         RenderSettings.ambientMode = AmbientMode.Trilight;
         RenderSettings.ambientSkyColor    = new Color(0.58f, 0.58f, 0.54f);
@@ -124,10 +134,13 @@ public static class BuildZashiki {
         var cam = camGO.AddComponent<Camera>();
         cam.fieldOfView = 34f;                 // 望遠ぎみ＝ミニチュア感が 出る
         cam.nearClipPlane = 0.1f; cam.farClipPlane = 60f;
-        cam.backgroundColor = new Color(0.05f, 0.06f, 0.07f);
+        // まっ黒だと 抜けて 見える。あたたかい 暗さに して 箱庭らしく
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.055f, 0.045f, 0.040f);
         var camData = camGO.AddComponent<UniversalAdditionalCameraData>();
         camData.renderPostProcessing = true;
         camData.antialiasing = AntialiasingMode.None;   // ドット絵を にじませない
+        camData.volumeLayerMask = ~0;                   // どの層の Volume も 拾う
         // カメラの 位置は CamOrbit が 決める（実行中に さわれるように）。
         // yaw=180 ＝ 部屋の 手前がわから 見おろす
         var orbit = camGO.AddComponent<CamOrbit>();
@@ -141,31 +154,31 @@ public static class BuildZashiki {
         var prof = ScriptableObject.CreateInstance<VolumeProfile>();
         AssetDatabase.CreateAsset(prof, MatDir + "PostFX.asset");
 
-        var dof = prof.Add<DepthOfField>(true);
+        var dof = AddFX<DepthOfField>(prof);
         dof.mode.overrideState = true; dof.mode.value = DepthOfFieldMode.Bokeh;
         dof.focusDistance.overrideState = true; dof.focusDistance.value = 7.0f;
         dof.aperture.overrideState = true; dof.aperture.value = 12f;
         dof.focalLength.overrideState = true; dof.focalLength.value = 48f;
 
-        var bloom = prof.Add<Bloom>(true);
+        var bloom = AddFX<Bloom>(prof);
         bloom.threshold.overrideState = true; bloom.threshold.value = 1.05f;
         bloom.intensity.overrideState = true; bloom.intensity.value = 1.15f;
         bloom.scatter.overrideState = true;   bloom.scatter.value = 0.72f;
         bloom.tint.overrideState = true;      bloom.tint.value = new Color(1f, 0.96f, 0.86f);
 
-        var grade = prof.Add<ColorAdjustments>(true);
+        var grade = AddFX<ColorAdjustments>(prof);
         grade.postExposure.overrideState = true; grade.postExposure.value = 0.15f;
         grade.contrast.overrideState = true;     grade.contrast.value = 12f;
         grade.saturation.overrideState = true;   grade.saturation.value = 8f;
 
-        var wb = prof.Add<WhiteBalance>(true);
+        var wb = AddFX<WhiteBalance>(prof);
         wb.temperature.overrideState = true; wb.temperature.value = 12f;   // あたたかく
 
-        var vig = prof.Add<Vignette>(true);
+        var vig = AddFX<Vignette>(prof);
         vig.intensity.overrideState = true; vig.intensity.value = 0.34f;
         vig.smoothness.overrideState = true; vig.smoothness.value = 0.5f;
 
-        var tone = prof.Add<Tonemapping>(true);
+        var tone = AddFX<Tonemapping>(prof);
         tone.mode.overrideState = true; tone.mode.value = TonemappingMode.Neutral;
 
         vol.sharedProfile = prof;
@@ -210,8 +223,8 @@ public static class BuildZashiki {
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Sprite";
         quad.transform.SetParent(go.transform, false);
-        quad.transform.localPosition = new Vector3(0, 0.55f, 0);
-        quad.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
+        quad.transform.localPosition = new Vector3(0, 0.72f, 0);
+        quad.transform.localScale = new Vector3(1.45f, 1.45f, 1f);   // 小さいと 主役に 見えない
         Object.DestroyImmediate(quad.GetComponent<Collider>());
 
         // ドット絵用：切りぬき＋点フィルタ（にじませない）
@@ -270,6 +283,16 @@ public static class BuildZashiki {
         r.sharedMaterial = pm;
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         Debug.Log("[BuildZashiki] dust shader = " + (dustSh != null ? dustSh.name : "NULL"));
+    }
+
+
+    // Volumeの 効果は **サブアセットとして 保存**しないと、ビルドで 消えてしまう
+    // （被写界深度も ヴィネットも 効かなかった 原因）
+    static T AddFX<T>(VolumeProfile prof) where T : VolumeComponent {
+        var c = prof.Add<T>(true);
+        c.hideFlags = HideFlags.HideInHierarchy;
+        AssetDatabase.AddObjectToAsset(c, prof);
+        return c;
     }
 
     // ---- 小道具

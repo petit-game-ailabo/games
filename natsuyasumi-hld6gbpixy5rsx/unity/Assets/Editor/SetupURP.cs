@@ -16,6 +16,19 @@ public static class SetupURP {
         PlayerSettings.colorSpace = ColorSpace.Linear;
 
         var rendererData = ScriptableObject.CreateInstance<UniversalRendererData>();
+        // **これが 無いと ポストFXは まるごと 効かない。**
+        // コードで 作った Rendererは 後処理用の シェーダ束(PostProcessData)が 空のままに なる。
+        // 版によって 取りかたが ちがうので、決め打ちの みち → 検索 の順で さがす
+        var ppd = AssetDatabase.LoadAssetAtPath<PostProcessData>(
+            "Packages/com.unity.render-pipelines.universal/Runtime/Data/PostProcessData.asset");
+        if (ppd == null) {
+            foreach (var g in AssetDatabase.FindAssets("t:PostProcessData")) {
+                ppd = AssetDatabase.LoadAssetAtPath<PostProcessData>(AssetDatabase.GUIDToAssetPath(g));
+                if (ppd != null) break;
+            }
+        }
+        rendererData.postProcessData = ppd;
+        Debug.Log("[SetupURP] postProcessData = " + (ppd != null ? AssetDatabase.GetAssetPath(ppd) : "NULL"));
         AssetDatabase.CreateAsset(rendererData, Dir + "URP_Renderer.asset");
 
         var urp = UniversalRenderPipelineAsset.Create(rendererData);
@@ -42,6 +55,7 @@ public static class SetupURP {
             var path = AssetDatabase.GUIDToAssetPath(guid);
             var ti = AssetImporter.GetAtPath(path) as TextureImporter;
             if (ti == null) continue;
+            if (!ti.mipmapEnabled && !ti.streamingMipmaps) continue;   // すでに 済みなら 触らない（毎回 やると 遅い）
             ti.mipmapEnabled = false;
             ti.streamingMipmaps = false;
             ti.SaveAndReimport();
