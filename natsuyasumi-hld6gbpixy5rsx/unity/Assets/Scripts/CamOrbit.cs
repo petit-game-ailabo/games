@@ -5,6 +5,10 @@ using UnityEngine;
 public class CamOrbit : MonoBehaviour {
     [Header("見る 中心")]
     public Vector3 target = new Vector3(0f, 0.9f, 0.4f);
+    [Tooltip("これを 入れると その人を 追いかける")]
+    public Transform follow;
+    public Vector3 followOffset = new Vector3(0f, 0.7f, 0f);
+    public float followLag = 6f;        // 大きいほど きびきび ついていく
     [Header("角度（度）")]
     [Range(8f, 70f)]  public float pitch = 28f;    // 見おろす 角度。30度前後が それらしい
     // yaw=180 で「部屋の 手前がわ（+Z）から 見る」。0 だと 裏に まわりこむ
@@ -29,6 +33,12 @@ public class CamOrbit : MonoBehaviour {
     }
 
     void Apply() {
+        if (follow != null) {
+            var want = follow.position + followOffset;
+            target = Application.isPlaying
+                ? Vector3.Lerp(target, want, 1f - Mathf.Exp(-followLag * Time.deltaTime))
+                : want;
+        }
         var rot = Quaternion.Euler(pitch, yaw, 0f);
         transform.position = target - (rot * Vector3.forward) * distance;
         transform.rotation = rot;

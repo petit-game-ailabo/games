@@ -24,6 +24,23 @@ public class AutoShot : MonoBehaviour {
         if (string.IsNullOrEmpty(path)) yield break;
         int frames = int.Parse(Arg("-shotframes", "90"));
 
+        // -walk "x,y" が あれば、その むきに しばらく あるかせてから 撮る（当たりの たしかめ）
+        string walk = Arg("-walk", null);
+        if (!string.IsNullOrEmpty(walk)) {
+            var pm = FindFirstObjectByType<PlayerMove>();
+            if (pm != null) {
+                var pp = walk.Split(',');
+                pm.useAutoInput = true;
+                pm.autoInput = new Vector2(float.Parse(pp[0]), float.Parse(pp[1]));
+                var start = pm.transform.position;
+                float t = float.Parse(Arg("-walksec", "2.0"));
+                for (float e = 0f; e < t; e += Time.deltaTime) yield return null;
+                pm.useAutoInput = false; pm.autoInput = Vector2.zero;
+                var moved = pm.transform.position - start;
+                Debug.Log($"[AutoShot] walked {moved.magnitude:F2}m  from {start} to {pm.transform.position}");
+            } else Debug.LogWarning("[AutoShot] PlayerMove が 見つからない");
+        }
+
         // 光・影・ポストFXが おちつくまで 待つ
         for (int i = 0; i < frames; i++) yield return null;
 

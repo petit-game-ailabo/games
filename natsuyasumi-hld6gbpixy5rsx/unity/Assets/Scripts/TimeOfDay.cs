@@ -107,8 +107,14 @@ public class TimeOfDay : MonoBehaviour {
             var c = (tod == Tod.Yugata) ? new Color(1.00f, 0.78f, 0.55f) : new Color(1.00f, 0.94f, 0.80f);
             shojiPaper.sharedMaterial.SetColor("_EmissionColor", c * g);
         }
-        if (cam != null)
-            cam.backgroundColor = (tod == Tod.Yoru) ? new Color(0.020f, 0.024f, 0.038f)
-                                                    : new Color(0.055f, 0.045f, 0.040f);
+        // 背景の 色。**屋内は「屋根を はずした 切りぬき」**なので、まわりは 暗いのが 正しい。
+        // 明るい 空に すると 部屋が 宙に 浮いて 見えた
+        if (cam != null) {
+            switch (tod) {
+                case Tod.Yugata: cam.backgroundColor = new Color(0.075f, 0.050f, 0.045f); break;
+                case Tod.Yoru:   cam.backgroundColor = new Color(0.022f, 0.026f, 0.040f); break;
+                default:         cam.backgroundColor = new Color(0.055f, 0.048f, 0.044f); break;
+            }
+        }
     }
 }

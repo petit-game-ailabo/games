@@ -44,11 +44,7 @@ public static class BuildZashiki {
         var floor = Box("Tatami_Floor", root, new Vector3(0, -0.05f, 0), new Vector3(RoomW, 0.1f, RoomD), mTatami);
         Box("Engawa", root, new Vector3(0, -0.04f, RoomD * 0.5f + 0.45f), new Vector3(RoomW, 0.12f, 0.9f), mFloorW);
 
-        // --- 梁（はり）だけ。天井の 板は 置かない（手前から 見おろすので、部屋が 見えなくなる）。
-        // 梁の 影が 畳に すじを つくるのが 気もちいい
-        for (int i = -2; i <= 2; i++)
-            Box("Beam" + i, root, new Vector3(i * 1.6f, WallH - 0.18f, 0.3f), new Vector3(0.16f, 0.24f, RoomD + 1.2f), mWood);
-        Box("Beam_Cross", root, new Vector3(0, WallH - 0.18f, -RoomD * 0.5f + 0.4f), new Vector3(RoomW, 0.22f, 0.18f), mWood);
+        // --- 天井の 梁は 置かない（本人の 判断。視界の じゃまに なる）
 
         // --- 奥の 壁（土壁）と 左右の 壁
         Box("Wall_Back",  root, new Vector3(0, WallH * 0.5f, -RoomD * 0.5f), new Vector3(RoomW, WallH, 0.12f), mPlaster);
@@ -63,18 +59,8 @@ public static class BuildZashiki {
         Box("Post_Open", root, new Vector3(-RoomW * 0.5f, WallH * 0.5f, -RoomD * 0.5f + shojiW),
             new Vector3(0.13f, WallH, 0.13f), mWood);
 
-        // --- 窓の そとの 庭（奥の 書割）。DoFで ぼけるので これで 十分 奥に 見える
-        var garden = Quad("Garden_Backdrop", root,
-            new Vector3(-RoomW * 0.5f - 3.2f, 1.6f, 0), Quaternion.Euler(0, 90, 0), new Vector3(7.5f, 5.0f, 1));
-        var mGarden = Mat("Garden", ArtTex + "garden_backdrop.jpg", Vector2.one, 0f, 1f);
-        mGarden.EnableKeyword("_EMISSION");
-        mGarden.SetColor("_EmissionColor", Color.white * 0.55f);   // そとは 明るい
-        var gr = garden.GetComponent<Renderer>();
-        gr.sharedMaterial = mGarden;
-        // **書割は 影を おとさない。** 太陽の 手前に 立っているので、影を おとすと
-        // 部屋ぜんたいが 日かげに なってしまう（実際 まっ暗に なった）
-        gr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
+        // --- 庭の 書割は やめた。実際に 庭へ 出られる ように なったので、
+        // 横から 見ると ただの 板に 見えて じゃまだった
         // --- あんどん（行灯）。あたたかい 点光源
         var andon = Box("Andon", root, new Vector3(RoomW * 0.5f - 0.9f, 0.55f, -RoomD * 0.5f + 0.9f),
                         new Vector3(0.34f, 1.1f, 0.34f), mPaper);
@@ -126,8 +112,14 @@ public static class BuildZashiki {
 
         // --- キャラ（2Dの 板）。ドット絵を そのまま 立てる
         var chars = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/chars.png");
-        MakeChar("Cirno",  chars, 2, new Vector3(0.5f, 0, 1.5f), root);   // ci=2 チルノ
-        MakeChar("Daiyou", chars, 3, new Vector3(-1.6f, 0, 0.4f), root);  // ci=3 だいようせい
+        var player = MakeChar("Cirno",  chars, 2, new Vector3(0.6f, 0, 1.4f), root);   // ci=2 チルノ
+        MakeChar("Daiyou", chars, 3, new Vector3(-1.8f, 0, -0.2f), root);              // ci=3 だいようせい
+        // あるけるように する。当たりは カプセル、壁や 卓は 箱の あたりで 止まる
+        var ccc = player.AddComponent<CharacterController>();
+        ccc.height = 1.0f; ccc.radius = 0.26f; ccc.center = new Vector3(0f, 0.52f, 0f);
+        ccc.slopeLimit = 50f; ccc.stepOffset = 0.35f;
+        var pm = player.AddComponent<PlayerMove>();
+        pm.sprite = player.transform.GetChild(0);
 
         // --- カメラ。ななめ 上から 見おろす（真横だと 2Dに 見える）
         var camGO = new GameObject("Main Camera");
@@ -135,7 +127,7 @@ public static class BuildZashiki {
         var cam = camGO.AddComponent<Camera>();
         // 調べた ところ、この 見た目は **見おろし 約30度・画角 約60度** が 目安。
         // 画角を ひろく とると 視点が 平たく なり、それでいて 奥ゆきは のこる
-        cam.fieldOfView = 58f;
+        cam.fieldOfView = 46f;
         cam.nearClipPlane = 0.1f; cam.farClipPlane = 60f;
         // まっ黒だと 抜けて 見える。あたたかい 暗さに して 箱庭らしく
         cam.clearFlags = CameraClearFlags.SolidColor;
@@ -147,8 +139,10 @@ public static class BuildZashiki {
         // カメラの 位置は CamOrbit が 決める（実行中に さわれるように）。
         // yaw=180 ＝ 部屋の 手前がわから 見おろす
         var orbit = camGO.AddComponent<CamOrbit>();
-        orbit.target = new Vector3(0f, 0.95f, -0.1f);
-        orbit.pitch = 30f; orbit.yaw = 180f; orbit.distance = 7.2f;   // 画面いっぱいに 部屋が 入る ところ
+        orbit.target = new Vector3(0f, 0.85f, 0.2f);
+        orbit.pitch = 34f; orbit.yaw = 180f; orbit.distance = 8.6f;   // 部屋が ちょうど 収まる ところ
+        orbit.follow = player.transform;                 // あるくと ついてくる
+        orbit.followOffset = new Vector3(0f, 0.75f, 0f);
 
         // --- ポストFX（被写界深度・ブルーム・カラグレ・四すみ落とし）
         var volGO = new GameObject("PostFX");
@@ -161,8 +155,8 @@ public static class BuildZashiki {
         dof.mode.overrideState = true; dof.mode.value = DepthOfFieldMode.Bokeh;
         // ミニチュア（ティルトシフト）ふうに：キャラに ピントを おき、奥と 手前を ぼかす。
         // 見おろしの 画では 遠さ＝画面の 上下に なるので、これで 帯状に ぼける
-        dof.focusDistance.overrideState = true; dof.focusDistance.value = 7.1f;   // キャラの あたり
-        dof.aperture.overrideState = true; dof.aperture.value = 5.6f;    // 小さいほど よく ぼける
+        dof.focusDistance.overrideState = true; dof.focusDistance.value = 8.4f;   // キャラの あたり
+        dof.aperture.overrideState = true; dof.aperture.value = 3.6f;    // 小さいほど よく ぼける
         dof.focalLength.overrideState = true; dof.focalLength.value = 60f;
 
         var bloom = AddFX<Bloom>(prof);
@@ -188,6 +182,15 @@ public static class BuildZashiki {
 
         vol.sharedProfile = prof;
 
+        // --- 見えない かべ。**歩いて 落ちない ように** 部屋と 庭を かこむ。
+        // （たしかめで 前に あるいたら 縁側から 落ちつづけた）
+        float wz0 = -RoomD * 0.5f - 0.6f, wz1 = RoomD * 0.5f + 1.1f;
+        float wx0 = -RoomW * 0.5f - 6.6f, wx1 = RoomW * 0.5f + 0.4f;
+        Invisible("Bound_Front", root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz1), new Vector3(wx1 - wx0, 3f, 0.3f));
+        Invisible("Bound_Back",  root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz0), new Vector3(wx1 - wx0, 3f, 0.3f));
+        Invisible("Bound_Left",  root, new Vector3(wx0, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
+        Invisible("Bound_Right", root, new Vector3(wx1, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
+
         // --- 時間帯の 光（あさ/ひる/ゆうがた/よる）。ここで まとめて 切りかえる
         var todGO = new GameObject("TimeOfDay");
         var todc = todGO.AddComponent<TimeOfDay>();
@@ -203,8 +206,19 @@ public static class BuildZashiki {
         var props = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/props.png");
         // そとの 地めん（縁の したは 庭）。これが ないと 草が 宙に 浮く
         var mGrass = Mat("GroundGrass", ArtTex + "grass_ground.png", new Vector2(8, 10), 0f, 1f);
-        Box("Garden_Ground", root, new Vector3(-RoomW * 0.5f - 2.6f, -0.62f, 0.8f),
-            new Vector3(5.6f, 0.2f, 9.0f), mGrass);
+        // 屋内は「屋根を はずした 切りぬき」。まわりは 暗い ままで よい（実物も そう）。
+        // 庭は あけはなちから 見える ぶんだけ
+        Box("Garden_Ground", root, new Vector3(-RoomW * 0.5f - 3.2f, -0.62f, 0.9f),
+            new Vector3(7.4f, 0.2f, 12.0f), mGrass);
+        // 垣根（低い 板塀）
+        for (int i = -5; i <= 5; i++)
+            Box("Fence" + i, root, new Vector3(-RoomW * 0.5f - 8.4f, -0.15f, i * 1.2f + 1.0f),
+                new Vector3(0.10f, 0.95f, 1.10f), mWood);
+        // 垣根の むこうの 木立ち（庭がわだけ）。奥ゆきの ふた
+        for (int i = 0; i < 7; i++)
+            Prop("Ki" + i, props, PROP_SHIGE,
+                 new Vector3(-RoomW * 0.5f - 7.4f - (i % 2) * 0.9f, -0.52f, -3.4f + i * 1.7f),
+                 2.6f + (i % 3) * 0.6f, root, PropKind.Crossed);
         // 草むらと しげみ＝十字に 組んだ 板（どの 向きからでも 立体に 見える）。
         // あけはなちの すぐ そとに 寄せて、部屋から 見えるように する
         float gx = -RoomW * 0.5f;
@@ -306,7 +320,7 @@ public static class BuildZashiki {
     }
 
     // --- ドット絵を 板に して 立てる（ビルボード）。足もとに 影を おとす
-    static void MakeChar(string name, Texture2D sheet, int index, Vector3 pos, Transform root) {
+    static GameObject MakeChar(string name, Texture2D sheet, int index, Vector3 pos, Transform root) {
         var go = new GameObject(name);
         go.transform.SetParent(root, false);
         go.transform.position = pos;
@@ -314,8 +328,8 @@ public static class BuildZashiki {
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Sprite";
         quad.transform.SetParent(go.transform, false);
-        quad.transform.localPosition = new Vector3(0, 0.72f, 0);
-        quad.transform.localScale = new Vector3(1.45f, 1.45f, 1f);   // 小さいと 主役に 見えない
+        quad.transform.localPosition = new Vector3(0, 0.525f, 0);
+        quad.transform.localScale = new Vector3(1.05f, 1.05f, 1f);   // 実物に あわせる（子どもの 背たけ）
         Object.DestroyImmediate(quad.GetComponent<Collider>());
 
         // ドット絵用：切りぬき＋点フィルタ（にじませない）
@@ -337,6 +351,7 @@ public static class BuildZashiki {
         var mr = quad.GetComponent<Renderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;   // 板でも 影は 出す
         go.AddComponent<Billboard>();
+        return go;
     }
 
     // --- 舞う 塵
@@ -403,6 +418,14 @@ public static class BuildZashiki {
         m.SetFloat("_Smoothness", 1f - rough);
         AssetDatabase.CreateAsset(m, MatDir + name + ".mat");
         return m;
+    }
+
+    // 見えない かべ（当たりだけ ある 箱）
+    static void Invisible(string name, Transform parent, Vector3 pos, Vector3 size) {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name; go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos; go.transform.localScale = size;
+        Object.DestroyImmediate(go.GetComponent<MeshRenderer>());   // 絵は 出さない。当たりだけ のこす
     }
 
     static GameObject Box(string name, Transform parent, Vector3 pos, Vector3 size, Material m) {
