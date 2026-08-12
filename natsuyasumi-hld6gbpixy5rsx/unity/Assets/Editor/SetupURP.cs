@@ -48,6 +48,7 @@ public static class SetupURP {
         QualitySettings.globalTextureMipmapLimit = 0;
 
         FixPixelArt("Assets/Art/Sprites/chars.png");
+        FixPixelArt("Assets/Art/Sprites/props.png");
 
         // 世界の テクスチャは ミップを 切る。遠くの 面が 黒く なる 症状の 切りわけ用でもあり、
         // ドット絵に よせる うえでも ぼけない ほうが よい

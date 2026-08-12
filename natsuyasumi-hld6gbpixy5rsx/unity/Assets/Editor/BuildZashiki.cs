@@ -57,7 +57,7 @@ public static class BuildZashiki {
         // --- 左は 障子（紙＋格子）。ここから 光が 入る。手前がわは 壁を 置かない（抜き）
         // 奥がわ 6割だけ 障子に して、手前は **あけはなち**。そこから 庭が 見える
         float shojiW = RoomD * 0.6f;
-        ShojiWall(root, new Vector3(-RoomW * 0.5f, 0, -RoomD * 0.5f + shojiW * 0.5f), Quaternion.Euler(0, 90, 0),
+        var shojiPaperRenderer = ShojiWall(root, new Vector3(-RoomW * 0.5f, 0, -RoomD * 0.5f + shojiW * 0.5f), Quaternion.Euler(0, 90, 0),
                   shojiW, WallH, mPaper, mWood);
         // あけはなちの ふちに 柱を 1本（境目が ぼやけない ように）
         Box("Post_Open", root, new Vector3(-RoomW * 0.5f, WallH * 0.5f, -RoomD * 0.5f + shojiW),
@@ -188,16 +188,101 @@ public static class BuildZashiki {
 
         vol.sharedProfile = prof;
 
+        // --- 時間帯の 光（あさ/ひる/ゆうがた/よる）。ここで まとめて 切りかえる
+        var todGO = new GameObject("TimeOfDay");
+        var todc = todGO.AddComponent<TimeOfDay>();
+        todc.sun = sun; todc.fill = fill; todc.andon = lamp; todc.cam = cam;
+        todc.shojiPaper = shojiPaperRenderer;
+        todc.tod = TimeOfDay.Tod.Asa;
+        todc.Apply();
+
         // --- 塵（ほこり）。光の なかで きらきら 舞う
         Dust(root);
+
+        // --- 2Dドット絵の 小物（調べた とおり、草木や 小物は 板の ドット絵で 置くのが 作法）
+        var props = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/props.png");
+        // そとの 地めん（縁の したは 庭）。これが ないと 草が 宙に 浮く
+        var mGrass = Mat("GroundGrass", ArtTex + "grass_ground.png", new Vector2(8, 10), 0f, 1f);
+        Box("Garden_Ground", root, new Vector3(-RoomW * 0.5f - 2.6f, -0.62f, 0.8f),
+            new Vector3(5.6f, 0.2f, 9.0f), mGrass);
+        // 草むらと しげみ＝十字に 組んだ 板（どの 向きからでも 立体に 見える）。
+        // あけはなちの すぐ そとに 寄せて、部屋から 見えるように する
+        float gx = -RoomW * 0.5f;
+        Prop("Kusa1",  props, PROP_KUSA,  new Vector3(gx - 0.55f, -0.52f, 1.30f), 1.05f, root, PropKind.Crossed);
+        Prop("Kusa2",  props, PROP_KUSA,  new Vector3(gx - 1.35f, -0.52f, 2.20f), 0.90f, root, PropKind.Crossed);
+        Prop("Kusa3",  props, PROP_KUSA,  new Vector3(gx - 0.75f, -0.52f, 3.10f), 1.00f, root, PropKind.Crossed);
+        Prop("Kusa4",  props, PROP_KUSA,  new Vector3(gx - 2.10f, -0.52f, 1.05f), 0.85f, root, PropKind.Crossed);
+        Prop("Shige1", props, PROP_SHIGE, new Vector3(gx - 1.60f, -0.52f, 0.35f), 1.60f, root, PropKind.Crossed);
+        Prop("Shige2", props, PROP_SHIGE, new Vector3(gx - 2.40f, -0.52f, 2.90f), 1.35f, root, PropKind.Crossed);
+        // 部屋の なかの 小物
+        Prop("Zabuton1", props, PROP_ZABU, new Vector3(-1.45f, 0.012f, 0.55f), 0.85f, root, PropKind.Flat);
+        Prop("Zabuton2", props, PROP_ZABU, new Vector3( 0.35f, 0.012f, 1.55f), 0.85f, root, PropKind.Flat);
+        Prop("Uchiwa",   props, PROP_UCHI, new Vector3( 1.55f, 0.014f, 1.15f), 0.55f, root, PropKind.Flat);
+        Prop("Senko",    props, PROP_SENKO,new Vector3( 1.95f, 0.0f,   2.10f), 0.40f, root, PropKind.Billboard);
+        Prop("Kabin",    props, PROP_KABIN,new Vector3(-2.45f, 0.0f,  -1.85f), 0.80f, root, PropKind.Billboard);
 
         EditorSceneManager.SaveScene(scene, ScnDir + "Zashiki.unity");
         AssetDatabase.SaveAssets();
         Debug.Log("[BuildZashiki] done: " + ScnDir + "Zashiki.unity");
     }
 
+    // 小物の 絵の ならび（props.png は 32px を 6こ 横に）
+    const int PROP_KUSA = 0, PROP_SHIGE = 1, PROP_ZABU = 2, PROP_KABIN = 3, PROP_SENKO = 4, PROP_UCHI = 5;
+    enum PropKind { Billboard, Crossed, Flat }
+
+    // --- 2Dドット絵の 小物を 置く。
+    // Crossed＝十字に 2枚。草木は これで どの 向きからも 立体に 見え、影も それらしく 出る
+    // Flat＝ゆかに 寝かせる（ざぶとん・うちわ）。Billboard＝いつも こちらを 向く
+    static void Prop(string name, Texture2D atlas, int index, Vector3 pos, float height,
+                     Transform root, PropKind kind) {
+        if (atlas == null) return;
+        var go = new GameObject(name);
+        go.transform.SetParent(root, false);
+        go.transform.position = pos;
+
+        var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        m.SetFloat("_Surface", 0);
+        m.SetFloat("_AlphaClip", 1);
+        m.SetFloat("_Cutoff", 0.5f);
+        m.EnableKeyword("_ALPHATEST_ON");
+        m.SetFloat("_Smoothness", 0f);
+        // **両面に えがく。** 板は 片面しか えがかれないので、裏を 向くと
+        // 影だけ 出て 本体が 消える（実際 草木が 影だけに なった）。草木は 両面が ふつう
+        m.SetFloat("_Cull", 0f);
+        m.doubleSidedGI = true;
+        m.SetTexture("_BaseMap", atlas);
+        m.SetTextureScale("_BaseMap", new Vector2(1f / 6f, 1f));
+        m.SetTextureOffset("_BaseMap", new Vector2(index / 6f, 0f));
+        m.mainTexture = atlas;
+        m.mainTextureScale = new Vector2(1f / 6f, 1f);
+        m.mainTextureOffset = new Vector2(index / 6f, 0f);
+        AssetDatabase.CreateAsset(m, MatDir + "Prop_" + name + ".mat");
+
+        int sheets = kind == PropKind.Crossed ? 2 : 1;
+        for (int i = 0; i < sheets; i++) {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = "Sheet" + i;
+            q.transform.SetParent(go.transform, false);
+            Object.DestroyImmediate(q.GetComponent<Collider>());
+            if (kind == PropKind.Flat) {
+                q.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // ゆかに 寝かせる
+                q.transform.localPosition = Vector3.zero;
+            } else {
+                q.transform.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
+                q.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
+            }
+            q.transform.localScale = new Vector3(height, height, 1f);
+            var r = q.GetComponent<Renderer>();
+            r.sharedMaterial = m;
+            r.shadowCastingMode = kind == PropKind.Flat
+                ? UnityEngine.Rendering.ShadowCastingMode.Off      // 寝かせた 板は 影を おとさない
+                : UnityEngine.Rendering.ShadowCastingMode.On;
+        }
+        if (kind == PropKind.Billboard) go.AddComponent<Billboard>();
+    }
+
     // --- 障子の 壁。紙の 面＋格子（細い 角材）。格子が 影を おとす
-    static void ShojiWall(Transform root, Vector3 pos, Quaternion rot, float width, float height, Material paper, Material wood) {
+    static Renderer ShojiWall(Transform root, Vector3 pos, Quaternion rot, float width, float height, Material paper, Material wood) {
         var go = new GameObject("Shoji");
         go.transform.SetParent(root, false);
         go.transform.SetPositionAndRotation(pos, rot);
@@ -217,6 +302,7 @@ public static class BuildZashiki {
         Box("Frame_L", go.transform, new Vector3(-width * 0.5f, height * 0.5f, 0.03f), new Vector3(0.10f, height, 0.09f), wood);
         Box("Frame_R", go.transform, new Vector3( width * 0.5f, height * 0.5f, 0.03f), new Vector3(0.10f, height, 0.09f), wood);
         Box("Frame_T", go.transform, new Vector3(0, height, 0.03f), new Vector3(width, 0.12f, 0.09f), wood);
+        return pr;
     }
 
     // --- ドット絵を 板に して 立てる（ビルボード）。足もとに 影を おとす
