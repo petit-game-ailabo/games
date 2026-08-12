@@ -111,9 +111,9 @@ public static class BuildZashiki {
         DynamicGI.UpdateEnvironment();
 
         // --- キャラ（2Dの 板）。ドット絵を そのまま 立てる
-        var chars = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/chars.png");
-        var player = MakeChar("Cirno",  chars, 2, new Vector3(0.6f, 0, 1.4f), root);   // ci=2 チルノ
-        MakeChar("Daiyou", chars, 3, new Vector3(-1.8f, 0, -0.2f), root);              // ci=3 だいようせい
+        var chars = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/chars_tall.png");
+        var player = MakeChar("Cirno",  chars, CI_CIRNO, new Vector3(0.6f, 0, 1.4f), root);
+        MakeChar("Daiyou", chars, CI_DAIYOU, new Vector3(-1.8f, 0, -0.2f), root);
         // あるけるように する。当たりは カプセル、壁や 卓は 箱の あたりで 止まる
         var ccc = player.AddComponent<CharacterController>();
         ccc.height = 1.0f; ccc.radius = 0.26f; ccc.center = new Vector3(0f, 0.52f, 0f);
@@ -240,6 +240,14 @@ public static class BuildZashiki {
         Debug.Log("[BuildZashiki] done: " + ScnDir + "Zashiki.unity");
     }
 
+    // キャラの 絵：chars_tall.png は **1コマ 48x64 の 10列 x 3行**（index = 行*10 + 列）。
+    // まえの 16x16 は 等身が ひくかったので、本人が 用意した 背の たかい 絵に 差し替えた
+    const int CharCols = 10, CharRows = 3;
+    const float CharCellW = 48f, CharCellH = 64f;
+    const float CharHeight = 1.35f;     // 世界での 背たけ(m)。畳 1.8m と くらべて 子どもぐらい
+    // ★どのコマが 誰かは 本人に 確認中。いまは 仮の わりあて
+    const int CI_CIRNO = 5, CI_DAIYOU = 11;
+
     // 小物の 絵の ならび（props.png は 32px を 6こ 横に）
     const int PROP_KUSA = 0, PROP_SHIGE = 1, PROP_ZABU = 2, PROP_KABIN = 3, PROP_SENKO = 4, PROP_UCHI = 5;
     enum PropKind { Billboard, Crossed, Flat }
@@ -328,8 +336,10 @@ public static class BuildZashiki {
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Sprite";
         quad.transform.SetParent(go.transform, false);
-        quad.transform.localPosition = new Vector3(0, 0.525f, 0);
-        quad.transform.localScale = new Vector3(1.05f, 1.05f, 1f);   // 実物に あわせる（子どもの 背たけ）
+        // 絵の たてよこ比を くずさない。足もとが ちょうど 地めんに くる ように 半分だけ 上げる
+        float ch = CharHeight, cw = CharHeight * (CharCellW / CharCellH);
+        quad.transform.localPosition = new Vector3(0, ch * 0.5f, 0);
+        quad.transform.localScale = new Vector3(cw, ch, 1f);
         Object.DestroyImmediate(quad.GetComponent<Collider>());
 
         // ドット絵用：切りぬき＋点フィルタ（にじませない）
@@ -342,10 +352,14 @@ public static class BuildZashiki {
         m.mainTexture = sheet;
         // 絵は 8列 x 4行、1こま 16x16。index = 行*8 + 列。
         // 画像は 上が 0行めだが、UVは 下が 0。なので y は ひっくり返して 数える
-        const int Cols = 8, Rows = 4;
-        int col = index % Cols, row = index / Cols;
-        m.mainTextureScale  = new Vector2(1f / Cols, 1f / Rows);
-        m.mainTextureOffset = new Vector2(col / (float)Cols, (Rows - 1 - row) / (float)Rows);
+        int col = index % CharCols, row = index / CharCols;
+        var uvS = new Vector2(1f / CharCols, 1f / CharRows);
+        var uvO = new Vector2(col / (float)CharCols, (CharRows - 1 - row) / (float)CharRows);
+        m.SetTexture("_BaseMap", sheet);
+        m.SetTextureScale("_BaseMap", uvS);
+        m.SetTextureOffset("_BaseMap", uvO);
+        m.mainTextureScale  = uvS;
+        m.mainTextureOffset = uvO;
         AssetDatabase.CreateAsset(m, MatDir + "Char_" + name + ".mat");
         quad.GetComponent<Renderer>().sharedMaterial = m;
         var mr = quad.GetComponent<Renderer>();
