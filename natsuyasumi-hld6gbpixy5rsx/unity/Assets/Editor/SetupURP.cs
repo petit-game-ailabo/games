@@ -55,11 +55,18 @@ public static class SetupURP {
             var path = AssetDatabase.GUIDToAssetPath(guid);
             var ti = AssetImporter.GetAtPath(path) as TextureImporter;
             if (ti == null) continue;
-            if (!ti.mipmapEnabled && !ti.streamingMipmaps) continue;   // すでに 済みなら 触らない（毎回 やると 遅い）
+            // 世界の テクスチャも **点フィルタ**。ドット絵の キャラと 同じ 肌ざわりに そろえる
+            // （調べた ところ、この 見た目の 肝は「3Dの 面に ドット絵の テクスチャ」だった）
+            bool ok = !ti.mipmapEnabled && !ti.streamingMipmaps
+                      && ti.filterMode == FilterMode.Point
+                      && ti.textureCompression == TextureImporterCompression.Uncompressed;
+            if (ok) continue;                                   // 済みなら 触らない（毎回 やると 遅い）
             ti.mipmapEnabled = false;
             ti.streamingMipmaps = false;
+            ti.filterMode = FilterMode.Point;
+            ti.textureCompression = TextureImporterCompression.Uncompressed;
             ti.SaveAndReimport();
-            Debug.Log("[SetupURP] mipmap off: " + path);
+            Debug.Log("[SetupURP] pixel texture: " + path);
         }
 
         AssetDatabase.SaveAssets();

@@ -27,7 +27,8 @@ public static class BuildZashiki {
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
         // --- 素材（マテリアル）
-        var mTatami  = Mat("Tatami",  ArtTex + "tatami.png",        new Vector2(4, 3), 0.02f, 0.92f);
+        // 畳は 1まい 1.8m x 0.9m。床は 7.2 x 5.4 なので (4, 6) で ちょうど 畳割りに なる
+        var mTatami  = Mat("Tatami",  ArtTex + "tatami.png",        new Vector2(4, 6), 0.02f, 0.92f);
         var mWood    = Mat("Wood",    ArtTex + "wood_beam.jpg",     new Vector2(2, 2), 0.05f, 0.72f);
         var mFloorW  = Mat("WoodFloor",ArtTex + "wood_floor.jpg",   new Vector2(3, 2), 0.06f, 0.60f);
         var mPlaster = Mat("Plaster", ArtTex + "plaster_wall.jpg",  new Vector2(3, 2), 0.0f,  0.95f);
@@ -41,7 +42,7 @@ public static class BuildZashiki {
 
         // --- 床（畳）と 縁がわの 板の間
         var floor = Box("Tatami_Floor", root, new Vector3(0, -0.05f, 0), new Vector3(RoomW, 0.1f, RoomD), mTatami);
-        Box("Engawa", root, new Vector3(0, -0.04f, RoomD * 0.5f + 0.6f), new Vector3(RoomW, 0.12f, 1.2f), mFloorW);
+        Box("Engawa", root, new Vector3(0, -0.04f, RoomD * 0.5f + 0.45f), new Vector3(RoomW, 0.12f, 0.9f), mFloorW);
 
         // --- 梁（はり）だけ。天井の 板は 置かない（手前から 見おろすので、部屋が 見えなくなる）。
         // 梁の 影が 畳に すじを つくるのが 気もちいい
@@ -132,7 +133,9 @@ public static class BuildZashiki {
         var camGO = new GameObject("Main Camera");
         camGO.tag = "MainCamera";
         var cam = camGO.AddComponent<Camera>();
-        cam.fieldOfView = 34f;                 // 望遠ぎみ＝ミニチュア感が 出る
+        // 調べた ところ、この 見た目は **見おろし 約30度・画角 約60度** が 目安。
+        // 画角を ひろく とると 視点が 平たく なり、それでいて 奥ゆきは のこる
+        cam.fieldOfView = 58f;
         cam.nearClipPlane = 0.1f; cam.farClipPlane = 60f;
         // まっ黒だと 抜けて 見える。あたたかい 暗さに して 箱庭らしく
         cam.clearFlags = CameraClearFlags.SolidColor;
@@ -144,8 +147,8 @@ public static class BuildZashiki {
         // カメラの 位置は CamOrbit が 決める（実行中に さわれるように）。
         // yaw=180 ＝ 部屋の 手前がわから 見おろす
         var orbit = camGO.AddComponent<CamOrbit>();
-        orbit.target = new Vector3(0f, 0.9f, 0.2f);
-        orbit.pitch = 28f; orbit.yaw = 180f; orbit.distance = 8.2f;
+        orbit.target = new Vector3(0f, 0.95f, -0.1f);
+        orbit.pitch = 30f; orbit.yaw = 180f; orbit.distance = 7.2f;   // 画面いっぱいに 部屋が 入る ところ
 
         // --- ポストFX（被写界深度・ブルーム・カラグレ・四すみ落とし）
         var volGO = new GameObject("PostFX");
@@ -156,9 +159,11 @@ public static class BuildZashiki {
 
         var dof = AddFX<DepthOfField>(prof);
         dof.mode.overrideState = true; dof.mode.value = DepthOfFieldMode.Bokeh;
-        dof.focusDistance.overrideState = true; dof.focusDistance.value = 7.0f;
-        dof.aperture.overrideState = true; dof.aperture.value = 12f;
-        dof.focalLength.overrideState = true; dof.focalLength.value = 48f;
+        // ミニチュア（ティルトシフト）ふうに：キャラに ピントを おき、奥と 手前を ぼかす。
+        // 見おろしの 画では 遠さ＝画面の 上下に なるので、これで 帯状に ぼける
+        dof.focusDistance.overrideState = true; dof.focusDistance.value = 7.1f;   // キャラの あたり
+        dof.aperture.overrideState = true; dof.aperture.value = 5.6f;    // 小さいほど よく ぼける
+        dof.focalLength.overrideState = true; dof.focalLength.value = 60f;
 
         var bloom = AddFX<Bloom>(prof);
         bloom.threshold.overrideState = true; bloom.threshold.value = 1.05f;
