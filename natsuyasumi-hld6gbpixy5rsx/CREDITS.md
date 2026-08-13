@@ -16,6 +16,30 @@
 `unity/Assets/Art/Sprites/chars_tall.png` に 組み直している（足もとを コマの 下端に そろえて 接地させる）。
 **Majstek の 素材は 使っていない。**
 
+## 草木（`unity/` 奥行き版）― 2026-08-14 自作をやめて 差し替え
+
+**Trees & Bushes** — 作者: **Luis Zuno (@ansimuz)**
+- 配布元: https://opengameart.org/content/trees-bushes
+- ライセンス: **CC0 1.0**（商用可・改変可・**再配布可**・クレジット任意）。ライセンス文 `unity/Assets/Art/Sprites/LICENSE-trees-and-bushes-ansimuz.txt` 同梱
+- 配布物の PSD から **vegetation レイヤーだけ**を 抜いて（草地と 影は 使わない）8体に 切りわけ、
+  **32px＝1m** の 尺で 144px の コマに 詰めなおして `unity/Assets/Art/Sprites/nature.png`（576x288・4列2行）に した。
+  影は Unity に 落とさせるので、**元の 絵に 焼かれていた 影は 捨てている**
+- ※ `td/` の 世界タイルと 同じ 作者なので 絵の 肌ざわりが そろう
+
+## つぶ（雨・もや）（`unity/` 奥行き版）― 2026-08-14
+
+**Particle Pack** — 作者: **Kenney (kenney.nl)**
+- 配布元: https://kenney.nl/assets/particle-pack
+- ライセンス: **CC0 1.0**（商用可・改変可・再配布可・クレジット任意）
+- `circle_05`（雨つぶ）／`smoke_09`（もや）ほかを `unity/Assets/Art/Particles/` に そのまま 置いている
+
+## UI（`unity/` 奥行き版）― 2026-08-14 素材だけ 用意
+
+**UI Pack - Pixel Adventure** — 作者: **Kenney (kenney.nl)**
+- 配布元: https://kenney.nl/assets/ui-pack-pixel-adventure
+- ライセンス: **CC0 1.0**（商用可・改変可・再配布可・クレジット任意）。ライセンス文 `unity/Assets/Art/UI/LICENSE-kenney-ui-pack.txt` 同梱
+- タイルシートを `unity/Assets/Art/UI/` に 置いた。**まだ 画面には つないでいない**（→ `REPLACE.md` の 宿題）
+
 ## キャラクタースプライト（`photo/` ・ `td/` 版）
 
 **Touhou 16x16 Mini Pack** — 作者: **Majstek** (@majstek3)

@@ -18,6 +18,7 @@ public class TimeOfDay : MonoBehaviour {
     public Light andon;
     public Renderer shojiPaper;    // 障子紙。よるは 光らせない
     public Camera cam;
+    public Weather weather;        // 天気は この 上に かぶせる（順番を 固定するため ここから 呼ぶ）
 
     void OnEnable()   { AutoWire(); ApplyFromArgs(); Apply(); }
     void OnValidate() { AutoWire(); Apply(); }
@@ -27,6 +28,7 @@ public class TimeOfDay : MonoBehaviour {
         if (fill == null)  { var g = GameObject.Find("Fill");  if (g) fill = g.GetComponent<Light>(); }
         if (andon == null) { var g = GameObject.Find("Andon_Light"); if (g) andon = g.GetComponent<Light>(); }
         if (cam == null)   cam = Camera.main;
+        if (weather == null) weather = FindFirstObjectByType<Weather>();
     }
 
     void ApplyFromArgs() {
@@ -44,6 +46,9 @@ public class TimeOfDay : MonoBehaviour {
 
     public void Apply() {
         // 太陽：むき（x=高さ, y=方角）／色／強さ
+        // ★方角(y)は **90〜180 に そろえる**。こうすると 光は「手前・左」から 差し、
+        //   影が **奥へ** 落ちる。横から あてると 板の 草木が「立てた 板」だと ばれる。
+        //   90〜180 の あいだなら 左の 障子ごしにも 光が 入る（格子の 影が 畳に のびる）
         Vector3 sunRot; Color sunCol; float sunI;
         Color sky, equator, ground, fogCol;
         float fogD, andonI, fillI;
@@ -51,7 +56,7 @@ public class TimeOfDay : MonoBehaviour {
 
         switch (tod) {
             case Tod.Hiru:      // ひる：高く、白っぽく、影は みじかい
-                sunRot = new Vector3(62f, 52f, 0f);
+                sunRot = new Vector3(62f, 168f, 0f);
                 sunCol = new Color(1.00f, 0.97f, 0.90f); sunI = 3.0f;
                 sky = new Color(0.62f, 0.63f, 0.60f); equator = new Color(0.50f, 0.47f, 0.40f);
                 ground = new Color(0.26f, 0.23f, 0.19f);
@@ -59,7 +64,7 @@ public class TimeOfDay : MonoBehaviour {
                 andonI = 0f; fillCol = new Color(0.82f, 0.87f, 1.00f); fillI = 0.55f;
                 break;
             case Tod.Yugata:    // ゆうがた：低く、だいだい色。影が ながく のびる
-                sunRot = new Vector3(12f, 78f, 0f);
+                sunRot = new Vector3(14f, 138f, 0f);
                 sunCol = new Color(1.00f, 0.68f, 0.42f); sunI = 2.6f;
                 sky = new Color(0.55f, 0.44f, 0.40f); equator = new Color(0.52f, 0.36f, 0.28f);
                 ground = new Color(0.24f, 0.17f, 0.14f);
@@ -67,7 +72,7 @@ public class TimeOfDay : MonoBehaviour {
                 andonI = 2.2f; fillCol = new Color(0.60f, 0.62f, 0.85f); fillI = 0.35f;
                 break;
             case Tod.Yoru:      // よる：日は 落ちきって、行灯だけが たより
-                sunRot = new Vector3(-8f, 200f, 0f);
+                sunRot = new Vector3(16f, 160f, 0f);
                 sunCol = new Color(0.55f, 0.62f, 0.90f); sunI = 0.18f;   // 月あかり ぶん
                 sky = new Color(0.16f, 0.19f, 0.28f); equator = new Color(0.12f, 0.13f, 0.20f);
                 ground = new Color(0.06f, 0.07f, 0.10f);
@@ -75,7 +80,7 @@ public class TimeOfDay : MonoBehaviour {
                 andonI = 4.6f; fillCol = new Color(0.45f, 0.55f, 0.90f); fillI = 0.16f;
                 break;
             default:            // あさ：ひくい 光が 障子ごしに ながく さしこむ
-                sunRot = new Vector3(34f, 66f, 0f);
+                sunRot = new Vector3(38f, 150f, 0f);
                 sunCol = new Color(1.00f, 0.95f, 0.83f); sunI = 2.6f;
                 sky = new Color(0.58f, 0.58f, 0.54f); equator = new Color(0.46f, 0.42f, 0.35f);
                 ground = new Color(0.24f, 0.21f, 0.17f);
@@ -116,5 +121,9 @@ public class TimeOfDay : MonoBehaviour {
                 default:         cam.backgroundColor = new Color(0.055f, 0.048f, 0.044f); break;
             }
         }
+
+        // **天気は いちばん 最後に かぶせる。** ここまでで 時間帯の 値が そろっているので、
+        // 天気は それに かけ算する だけで すむ（朝の 雨・夕方の 雨が それぞれ 正しく なる）
+        if (weather != null) weather.ApplyOn(sun, fill, cam);
     }
 }

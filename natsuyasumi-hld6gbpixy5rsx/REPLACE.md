@@ -21,18 +21,48 @@
 |---|---|---|---|---|
 | R-001 | **ドット絵スプライト**（Majstek） | `photo/js/chars.js`／`td/chars.js` | **非商用ライセンス。** クレジット表記も必須 | 自作／購入素材へ。**※`unity/`（奥行き版）は 2026-08-13 に 本人が 用意した 絵へ 差し替え済み**（下表）。残るのは `photo/` と `td/` の 2版 |
 
+## ★ Unity アセットストアの「無料」素材について（2026-08-14 調べ）
+
+本人から候補として Cainos「Pixel Art Platformer - Village Props」「Pixel Art Top Down - Basic」、
+Unity 公式「Happy Harvest - 2D Sample Project」が挙がった。**3つとも 無料**で、ライセンスは
+いずれも **Standard Unity Asset Store EULA（Extension Asset）**。ここで 効いてくる 条件は 2つ：
+
+- ✅ **ゲームに 組みこんで 売るのは OK**（商用利用可）。ビルド成果物に 埋まった 状態なら 問題ない
+- ❌ **素材そのものを 取り出せる かたちで 配るのは NG**（"standalone basis" での 再配布 禁止）。
+  → **この リポジトリは 公開なので、生の PNG を `unity/Assets/` に コミットすると 規約違反に なる**
+
+つまり 使うなら「**手もとにだけ 置き、リポジトリには 入れない**（`.gitignore`）」しかない。
+再現性（別マシンで ビルドできるか）と 引きかえに なるので、**採用するかは オーナー判断**。
+なお **こちらでは ダウンロードできない**（アセットストアは Unity アカウントの ログインが 要る）。
+
+→ そのため 今回は **CC0 の 素材で そろえた**（下表）。CC0 なら 公開リポジトリに 置けて、
+　商用も 再配布も 自由なので、この プロジェクトの 制約に そのまま はまる。
+
 ## そのまま使えるもの（記録として）
 
 | もの | 場所 | 状態 |
 |---|---|---|
 | **東方のキャラクター**（チルノ・大妖精・ルーミア・リグル・ミスティア・慧音・霊夢・魔理沙） | 全編 | **本人が権利まわりを対応する。こちらでは扱わない。** キャラクターは使える前提で作る。差し替えが要るのは絵（R-001）だけ |
 | **キャラ絵（奥行き版）** | `unity/Assets/Art/Sprites/chars_tall.png`（元：`unity/ArtSource/chars_source_10x3.png`）| **2026-08-13、本人が用意した絵に差し替え**（30体・1コマ48x64の10列3行）。こちらで 背景の 黒を ぬいて 透過に し、足もとを 下端に そろえて 組み直した。**Majstek（非商用）は もう 使っていない**＝奥行き版の R-001 は 解消 |
+| **草木（奥行き版）** | `unity/Assets/Art/Sprites/nature.png` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：OpenGameArt「Trees & Bushes」by Luis Zuno (ansimuz)。2026-08-14、**自分で 描いた 32px の 草木を やめて 差し替えた**（木が ただの 緑の かたまりに 見えていた）。PSD の vegetation レイヤーだけを 抜き、32px＝1m で 144px の コマ 8つに 詰めなおし。焼かれた 影は 捨て、影は Unity に 落とさせる。ライセンス文 同梱 |
+| **つぶ（雨・もや）** | `unity/Assets/Art/Particles/*.png` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：Kenney「Particle Pack」。`circle_05`＝雨つぶ、`smoke_09`＝もや |
+| **UI 素材** | `unity/Assets/Art/UI/*.png` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：Kenney「UI Pack - Pixel Adventure」。ライセンス文 同梱。**⚠️ まだ 画面に つないでいない**（下の 宿題を 参照） |
 | 背景6枚（HD-2D）| `photo/bg/*.jpg` | **2026-08-10：実写→HD-2Dに差し替え**（人間試遊の結論）。**元のCC BY実写(Wikimedia)を本人がAI変換した2次的著作物。** CC BYは改変・商用OKだが撮影者名の表示＋改変明示が条件→タイトル画面/`CREDITS.md`に対応済。HD原本=`photo/bg/_hd_src/`。⚠️販売前に「元写真の表現がどれだけ残るか＝2次的著作物か独自著作物か」をオーナー確認（安全側で表示は維持）|
 | ラジオ体操のメロディ | `photo/js/audio.js` | **自作。** 原曲（服部正・1951）は著作権が生きているので使っていない |
 | 環境音（セミ・風・ひぐらし） | `photo/js/audio.js` | **Web Audio の手続き生成。** 素材を使っていない |
 | **見下ろしタイルセット**（Top Down Adventure Assets） | `td/assets/tileset-world.png` | **CC0（パブリックドメイン）。商用OK・クレジット任意・改変/再配布可。** 出所：OpenGameArt。ライセンス文 `td/assets/LICENSE-topdown-adventure.txt` 同梱。2D試作の 世界タイル。より綺麗な素材に 差し替える 可能性あり（本人が「まず無料で試作→後で判断」） |
 | **魚スプライト**（釣り用） | `td/assets/fish.png` | **OGA-BY 3.0。商用OK・再配布OK・帰属必須。** 出所：OpenGameArt「Fishing Game Assets Pixel Art」by CraftPix.net。クレジット「CraftPix.net 2D Game Assets」を `CREDITS.md`／タイトルに 残す。ライセンス文 `td/assets/LICENSE-fish-craftpix.txt` 同梱。Catch部分のみ 抽出・川魚を 選別 |
 | **虫スプライト**（虫取り用） | `td/assets/bugs.png` | **CC0（パブリックドメイン）。商用OK・クレジット任意・再配布可。** 出所：OpenGameArt「Ambient Pixel Art Insects」by MadameBerry。カブト/トンボ/ホタル/ハチ/ガ を 抽出。ライセンス文 `td/assets/LICENSE-cutebugs.txt` 同梱 |
+
+## 宿題（つぎに やること）
+
+- [ ] **UI を 画面に つなぐ。** 素材（Kenney・CC0）は `unity/Assets/Art/UI/` に 置いた が、
+      Canvas も HUD も まだ ない。**日本語を 出すには フォントの 手当てが 先**：
+      TextMeshPro に 日本語の 字が 入っていないので、**OFL の 和文フォント**
+      （Noto Sans JP / M PLUS など。いずれも 商用可・同梱可）を 入れて フォントアセットを 作る 必要が ある。
+      どの 書体に するかは 見た目の 話なので **オーナー判断**（ドット絵に 合わせるなら ビットマップ寄りの 書体も 候補）
+- [ ] **部屋の 中の 小物**（ざぶとん・うちわ・線香・花瓶＝`props.png`）は まだ 自作の 32px。
+      草木と 同じ 質に 上げるなら ここも 差し替えたい
 
 ## 足すときの決まり
 

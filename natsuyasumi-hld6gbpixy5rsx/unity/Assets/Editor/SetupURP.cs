@@ -47,44 +47,44 @@ public static class SetupURP {
         QualitySettings.streamingMipmapsActive = false;
         QualitySettings.globalTextureMipmapLimit = 0;
 
-        FixPixelArt("Assets/Art/Sprites/chars.png");
-        FixPixelArt("Assets/Art/Sprites/props.png");
-
-        // 世界の テクスチャは ミップを 切る。遠くの 面が 黒く なる 症状の 切りわけ用でもあり、
-        // ドット絵に よせる うえでも ぼけない ほうが よい
-        foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/Art/Textures" })) {
-            var path = AssetDatabase.GUIDToAssetPath(guid);
-            var ti = AssetImporter.GetAtPath(path) as TextureImporter;
-            if (ti == null) continue;
-            // 世界の テクスチャも **点フィルタ**。ドット絵の キャラと 同じ 肌ざわりに そろえる
-            // （調べた ところ、この 見た目の 肝は「3Dの 面に ドット絵の テクスチャ」だった）
-            bool ok = !ti.mipmapEnabled && !ti.streamingMipmaps
-                      && ti.filterMode == FilterMode.Point
-                      && ti.textureCompression == TextureImporterCompression.Uncompressed;
-            if (ok) continue;                                   // 済みなら 触らない（毎回 やると 遅い）
-            ti.mipmapEnabled = false;
-            ti.streamingMipmaps = false;
-            ti.filterMode = FilterMode.Point;
-            ti.textureCompression = TextureImporterCompression.Uncompressed;
-            ti.SaveAndReimport();
-            Debug.Log("[SetupURP] pixel texture: " + path);
-        }
+        FixPixelArt();
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         Debug.Log("[SetupURP] done. colorSpace=" + PlayerSettings.colorSpace);
     }
 
-    // ドット絵は **点フィルタ・圧縮なし**。ぼかすと ドットの 良さが 消える
-    static void FixPixelArt(string path) {
-        var ti = AssetImporter.GetAtPath(path) as TextureImporter;
-        if (ti == null) { Debug.LogWarning("[SetupURP] not found: " + path); return; }
-        ti.textureType = TextureImporterType.Default;
-        ti.filterMode = FilterMode.Point;
-        ti.mipmapEnabled = false;
-        ti.alphaIsTransparency = true;
-        ti.wrapMode = TextureWrapMode.Clamp;
-        ti.textureCompression = TextureImporterCompression.Uncompressed;
-        ti.SaveAndReimport();
+    // ドット絵は **点フィルタ・圧縮なし・ミップなし**。ぼかすと ドットの 良さが 消える。
+    // 素材を 足すたびに 手で 直すのは 必ず 漏れるので、**フォルダごと まとめて** そろえる。
+    // Unity -batchmode -quit -executeMethod SetupURP.FixPixelArt でも 単体で 呼べる
+    [MenuItem("なつやすみ/ドット絵の 取りこみを そろえる")]
+    public static void FixPixelArt() {
+        // スプライト（板の 絵）は 端を くり返さない＝Clamp。
+        // 世界の テクスチャは **敷きつめる**ので Repeat のまま さわらない（畳や 草地が 1枚に なってしまう）
+        Sweep("Assets/Art/Sprites",  TextureWrapMode.Clamp);
+        Sweep("Assets/Art/Textures", null);
+    }
+
+    static void Sweep(string dir, TextureWrapMode? wrap) {
+        foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { dir })) {
+            var path = AssetDatabase.GUIDToAssetPath(guid);
+            var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (ti == null) continue;
+            bool ok = !ti.mipmapEnabled && !ti.streamingMipmaps
+                      && ti.filterMode == FilterMode.Point
+                      && ti.alphaIsTransparency
+                      && (wrap == null || ti.wrapMode == wrap.Value)
+                      && ti.textureCompression == TextureImporterCompression.Uncompressed;
+            if (ok) continue;                                   // 済みなら 触らない（毎回 やると 遅い）
+            ti.textureType = TextureImporterType.Default;
+            ti.mipmapEnabled = false;
+            ti.streamingMipmaps = false;
+            ti.filterMode = FilterMode.Point;
+            ti.alphaIsTransparency = true;
+            if (wrap != null) ti.wrapMode = wrap.Value;
+            ti.textureCompression = TextureImporterCompression.Uncompressed;
+            ti.SaveAndReimport();
+            Debug.Log("[SetupURP] pixel texture: " + path);
+        }
     }
 }

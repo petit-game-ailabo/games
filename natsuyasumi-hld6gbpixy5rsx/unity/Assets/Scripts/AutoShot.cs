@@ -24,6 +24,23 @@ public class AutoShot : MonoBehaviour {
         if (string.IsNullOrEmpty(path)) yield break;
         int frames = int.Parse(Arg("-shotframes", "90"));
 
+        // **絵を 書きだす あいだは カメラを 手で 動かせなく する。**
+        // 窓もちの まま 走らせると ホイールや 右ドラッグが まぎれこんで 寄りが 変わり、
+        // 撮るたびに 画角が ちがって しまう（実際 見くらべが できなく なった）
+        var orbit = FindFirstObjectByType<CamOrbit>();
+        if (orbit != null) {
+            orbit.allowMouse = false;
+            // -cam "distance,pitch,yaw" で 画角を 決めうちに できる（庭まで 入れて 見たい ときなど）
+            string cam = Arg("-cam", null);
+            if (!string.IsNullOrEmpty(cam)) {
+                var c = cam.Split(',');
+                if (c.Length > 0) orbit.distance = float.Parse(c[0]);
+                if (c.Length > 1) orbit.pitch = float.Parse(c[1]);
+                if (c.Length > 2) orbit.yaw = float.Parse(c[2]);
+                Debug.Log($"[AutoShot] cam distance={orbit.distance} pitch={orbit.pitch} yaw={orbit.yaw}");
+            }
+        }
+
         // -walk "x,y" が あれば、その むきに しばらく あるかせてから 撮る（当たりの たしかめ）
         string walk = Arg("-walk", null);
         if (!string.IsNullOrEmpty(walk)) {
@@ -44,10 +61,22 @@ public class AutoShot : MonoBehaviour {
         // 光・影・ポストFXが おちつくまで 待つ
         for (int i = 0; i < frames; i++) yield return null;
 
-        ScreenCapture.CaptureScreenshot(path);
-        Debug.Log("[AutoShot] captured -> " + path);
-        // 書きこみが 終わるまで すこし 待ってから おわる
-        for (int i = 0; i < 20; i++) yield return new WaitForEndOfFrame();
+        // -shots N をつけると N枚を -shotgap 秒おきに 撮る。
+        // **息づかいのような 動く 効きめは 1枚では たしかめられない**ので、
+        // 時間を ずらして 撮って 見くらべる（out_0.png, out_1.png ...）
+        int shots = int.Parse(Arg("-shots", "1"));
+        float gap = float.Parse(Arg("-shotgap", "1.0"));
+        for (int s = 0; s < shots; s++) {
+            string p = shots == 1
+                ? path
+                : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path),
+                      System.IO.Path.GetFileNameWithoutExtension(path) + "_" + s +
+                      System.IO.Path.GetExtension(path));
+            ScreenCapture.CaptureScreenshot(p);
+            Debug.Log("[AutoShot] captured -> " + p);
+            for (int i = 0; i < 20; i++) yield return new WaitForEndOfFrame();
+            if (s < shots - 1) yield return new WaitForSeconds(gap);
+        }
         yield return new WaitForSeconds(1.0f);
         Application.Quit();
     }

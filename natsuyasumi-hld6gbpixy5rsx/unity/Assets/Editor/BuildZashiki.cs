@@ -78,14 +78,18 @@ public static class BuildZashiki {
                 new Vector3(0.07f, 0.34f, 0.07f), mWood);
         }
 
-        // --- 太陽。障子ごしの あさの 光（斜めから）
+        // --- 太陽。**手前がわ(カメラ寄り)の 上から** 差しこむ。
+        // 前は 真横(yaw=66)から あてていたので 影が 横に のびて、板の 草木が
+        // 「立てた 板」だと ばれていた。手前から あてると 影は **奥へ** 落ちる＝
+        // 見おろしの 画では 影が 物の 下に 隠れる ように のびて、板でも 立体に 見える。
+        // yaw を 90〜180 に とると 「手前・左」から に なり、障子(左の 壁)も まだ 光を とおす
         var sunGO = new GameObject("Sun");
         var sun = sunGO.AddComponent<Light>();
         sun.type = LightType.Directional;
         sun.color = new Color(1f, 0.95f, 0.83f);
         sun.intensity = 2.6f;
         sun.shadows = LightShadows.Soft; sun.shadowStrength = 0.66f;
-        sunGO.transform.rotation = Quaternion.Euler(34f, 66f, 0f);   // 左（障子）の 上から 差しこむ
+        sunGO.transform.rotation = Quaternion.Euler(38f, 150f, 0f);
 
         // おき光（フィル）。奥の 壁が 真っ黒に 沈まないよう、手前がわから 弱く あてる。
         // 影は おとさない＝形を こわさない
@@ -191,11 +195,24 @@ public static class BuildZashiki {
         Invisible("Bound_Left",  root, new Vector3(wx0, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
         Invisible("Bound_Right", root, new Vector3(wx1, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
 
+        // --- 天気（はれ/くもり/あめ/ゆうだち）。雨は **庭の うえだけ** に 降らせる。
+        // 屋根を はずした 切りぬきなので、部屋の 中まで 降らせると 雨もりに 見える
+        var wxGO = new GameObject("Weather");
+        var wx = wxGO.AddComponent<Weather>();
+        // 庭の 上だけ。部屋（左の 壁は x=-RoomW/2）に かからない ように 少し 離す
+        float rainCx = -RoomW * 0.5f - 6.0f, rainW = 10.4f;
+        wx.rain = Rain(root, new Vector3(rainCx, 6.5f, 0.9f), new Vector3(rainW, 0.5f, 13.5f));
+        // ※ もやの つぶは **やめた。** 板が 大きいので、どんな 重ねかたに しても
+        //   四角い ふちが 見えて 湯気の かたまりに なった。もやは RenderSettings の 霧で 足りる
+        wx.mist = null;
+
         // --- 時間帯の 光（あさ/ひる/ゆうがた/よる）。ここで まとめて 切りかえる
         var todGO = new GameObject("TimeOfDay");
         var todc = todGO.AddComponent<TimeOfDay>();
         todc.sun = sun; todc.fill = fill; todc.andon = lamp; todc.cam = cam;
         todc.shojiPaper = shojiPaperRenderer;
+        todc.weather = wx;                    // 時間帯を おいた **あと**に 天気を かぶせる
+        wx.timeOfDay = todc;
         todc.tod = TimeOfDay.Tod.Asa;
         todc.Apply();
 
@@ -207,33 +224,46 @@ public static class BuildZashiki {
         // そとの 地めん（縁の したは 庭）。これが ないと 草が 宙に 浮く
         var mGrass = Mat("GroundGrass", ArtTex + "grass_ground.png", new Vector2(8, 10), 0f, 1f);
         // 屋内は「屋根を はずした 切りぬき」。まわりは 暗い ままで よい（実物も そう）。
-        // 庭は あけはなちから 見える ぶんだけ
-        Box("Garden_Ground", root, new Vector3(-RoomW * 0.5f - 3.2f, -0.62f, 0.9f),
-            new Vector3(7.4f, 0.2f, 12.0f), mGrass);
-        // 垣根（低い 板塀）
+        // 庭は あけはなちから 見える ぶんだけ。
+        // ※ 前は 地めんが せますぎて、**垣根も 木立ちも 地めんの そとに 立っていた**（宙に 浮いて 見えた）。
+        //   木立ちまで きちんと 乗るように 広げた
+        const float GardenX = -RoomW * 0.5f - 5.6f;      // 庭の まんなか
+        const float GardenW = 12.4f;                     // [-15.4, -3.0] ぐらい
+        Box("Garden_Ground", root, new Vector3(GardenX, -0.62f, 0.9f),
+            new Vector3(GardenW, 0.2f, 13.5f), mGrass);
+        // 垣根（低い 板塀）。庭の 奥がわ
+        float fenceX = GardenX - GardenW * 0.5f + 3.6f;
         for (int i = -5; i <= 5; i++)
-            Box("Fence" + i, root, new Vector3(-RoomW * 0.5f - 8.4f, -0.15f, i * 1.2f + 1.0f),
+            Box("Fence" + i, root, new Vector3(fenceX, -0.15f, i * 1.2f + 1.0f),
                 new Vector3(0.10f, 0.95f, 1.10f), mWood);
-        // 垣根の むこうの 木立ち（庭がわだけ）。奥ゆきの ふた
-        for (int i = 0; i < 7; i++)
-            Prop("Ki" + i, props, PROP_SHIGE,
-                 new Vector3(-RoomW * 0.5f - 7.4f - (i % 2) * 0.9f, -0.52f, -3.4f + i * 1.7f),
-                 2.6f + (i % 3) * 0.6f, root, PropKind.Crossed);
-        // 草むらと しげみ＝十字に 組んだ 板（どの 向きからでも 立体に 見える）。
-        // あけはなちの すぐ そとに 寄せて、部屋から 見えるように する
+        // 草木は **自分で 描くのを やめて**、ansimuz(CC0)の「Trees & Bushes」に 差し替えた。
+        // 32px＝1m で 詰めなおして あるので、コマの 大きさ(4.5m)を そのまま わたせば 尺が 合う
+        // （大きい 木＝4.1m、しげみ＝1.2m、小草＝0.5m ぐらいに なる）
+        var nature = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/nature.png");
+        if (nature == null) Debug.LogError("[BuildZashiki] nature.png が 見つからない");
+
+        // 垣根の むこうの 木立ち（庭がわだけ）。奥ゆきの ふた。
+        // 一直線に ならべると 書割に 見えるので、奥ゆきを 少しずつ ずらす
+        float[] kiZ = { -4.2f, -2.1f, -0.4f, 1.5f, 3.2f, 4.6f, 6.1f };
+        float[] kiD = { 0.0f, 1.3f, 0.4f, 1.7f, 0.2f, 1.1f, 0.6f };
+        for (int i = 0; i < kiZ.Length; i++)
+            Nature("Ki" + i, nature, (i % 2 == 0) ? NA_KI_L : NA_KI_R,
+                   new Vector3(fenceX - 1.2f - kiD[i], -0.52f, kiZ[i]), root);
+        // 草むらと しげみ＝**1枚の 板**。あけはなちの すぐ そとに 寄せて、部屋から 見えるように する
         float gx = -RoomW * 0.5f;
-        Prop("Kusa1",  props, PROP_KUSA,  new Vector3(gx - 0.55f, -0.52f, 1.30f), 1.05f, root, PropKind.Crossed);
-        Prop("Kusa2",  props, PROP_KUSA,  new Vector3(gx - 1.35f, -0.52f, 2.20f), 0.90f, root, PropKind.Crossed);
-        Prop("Kusa3",  props, PROP_KUSA,  new Vector3(gx - 0.75f, -0.52f, 3.10f), 1.00f, root, PropKind.Crossed);
-        Prop("Kusa4",  props, PROP_KUSA,  new Vector3(gx - 2.10f, -0.52f, 1.05f), 0.85f, root, PropKind.Crossed);
-        Prop("Shige1", props, PROP_SHIGE, new Vector3(gx - 1.60f, -0.52f, 0.35f), 1.60f, root, PropKind.Crossed);
-        Prop("Shige2", props, PROP_SHIGE, new Vector3(gx - 2.40f, -0.52f, 2.90f), 1.35f, root, PropKind.Crossed);
+        Nature("Kusa1",  nature, NA_KUSA_A, new Vector3(gx - 0.55f, -0.52f, 1.30f), root);
+        Nature("Kusa2",  nature, NA_KUSA_B, new Vector3(gx - 1.35f, -0.52f, 2.20f), root);
+        Nature("Kusa3",  nature, NA_KUSA_C, new Vector3(gx - 0.75f, -0.52f, 3.10f), root);
+        Nature("Kusa4",  nature, NA_KUSA_A, new Vector3(gx - 2.10f, -0.52f, 1.05f), root);
+        Nature("Shige1", nature, NA_SHIGE_A,new Vector3(gx - 1.60f, -0.52f, 0.35f), root);
+        Nature("Shige2", nature, NA_SHIGE_B,new Vector3(gx - 2.40f, -0.52f, 2.90f), root);
+        Nature("Shige3", nature, NA_MATSU,  new Vector3(gx - 3.30f, -0.52f, 4.10f), root);
         // 部屋の なかの 小物
         Prop("Zabuton1", props, PROP_ZABU, new Vector3(-1.45f, 0.012f, 0.55f), 0.85f, root, PropKind.Flat);
         Prop("Zabuton2", props, PROP_ZABU, new Vector3( 0.35f, 0.012f, 1.55f), 0.85f, root, PropKind.Flat);
         Prop("Uchiwa",   props, PROP_UCHI, new Vector3( 1.55f, 0.014f, 1.15f), 0.55f, root, PropKind.Flat);
-        Prop("Senko",    props, PROP_SENKO,new Vector3( 1.95f, 0.0f,   2.10f), 0.40f, root, PropKind.Billboard);
-        Prop("Kabin",    props, PROP_KABIN,new Vector3(-2.45f, 0.0f,  -1.85f), 0.80f, root, PropKind.Billboard);
+        Prop("Senko",    props, PROP_SENKO,new Vector3( 1.95f, 0.0f,   2.10f), 0.40f, root, PropKind.Still);
+        Prop("Kabin",    props, PROP_KABIN,new Vector3(-2.45f, 0.0f,  -1.85f), 0.80f, root, PropKind.Still);
 
         EditorSceneManager.SaveScene(scene, ScnDir + "Zashiki.unity");
         AssetDatabase.SaveAssets();
@@ -250,57 +280,118 @@ public static class BuildZashiki {
 
     // 小物の 絵の ならび（props.png は 32px を 6こ 横に）
     const int PROP_KUSA = 0, PROP_SHIGE = 1, PROP_ZABU = 2, PROP_KABIN = 3, PROP_SENKO = 4, PROP_UCHI = 5;
-    enum PropKind { Billboard, Crossed, Flat }
 
-    // --- 2Dドット絵の 小物を 置く。
-    // Crossed＝十字に 2枚。草木は これで どの 向きからも 立体に 見え、影も それらしく 出る
-    // Flat＝ゆかに 寝かせる（ざぶとん・うちわ）。Billboard＝いつも こちらを 向く
+    // 草木の 絵（nature.png：144pxの コマを 4列 x 2行）。
+    // もとは ansimuz「Trees & Bushes」(CC0)。**32px＝1m** に そろえて 詰めなおして ある
+    const int NatureCols = 4, NatureRows = 2;
+    const float NatureCell = 4.5f;   // 144px ÷ 32px/m
+    const int NA_KI_L = 0, NA_KI_R = 1, NA_SHIGE_A = 2, NA_SHIGE_B = 3,
+              NA_MATSU = 4, NA_KUSA_A = 5, NA_KUSA_B = 6, NA_KUSA_C = 7;
+
+    // 草木を 置く。大きさは 絵が もっている ので、コマの 大きさを そのまま わたす
+    static void Nature(string name, Texture2D atlas, int index, Vector3 pos, Transform root) {
+        Prop(name, atlas, index, NatureCols, NatureRows, pos, NatureCell, root, PropKind.Billboard);
+    }
+
+    // Billboard＝**1枚の 板**。いつも こちらを 向く。草木も 木も これ。
+    // Flat＝ゆかに 寝かせる（ざぶとん・うちわ）
+    //
+    // ※ 前は 草木を「十字に 組んだ 2枚」に していたが、よその ゲームの 画を 見ると
+    //   草木は **1枚絵**で 置くのが ふつうだった。十字だと 交差の 線が 見え、
+    //   影も ×印に なって かえって 板だと ばれる。1枚に して、そのぶん
+    //   **太陽を 手前がわに 回して 影を 奥へ 落とす**ことで 立体に 見せる（上の Sun を 参照）
+    // Still＝板だが 揺れない（屋内の 線香や 花瓶。かぜは 入ってこない）
+    enum PropKind { Billboard, Flat, Still }
+
+    // --- 2Dドット絵の 小物を 置く（props.png は 6列 x 1行）
     static void Prop(string name, Texture2D atlas, int index, Vector3 pos, float height,
                      Transform root, PropKind kind) {
+        Prop(name, atlas, index, 6, 1, pos, height, root, kind);
+    }
+
+    static void Prop(string name, Texture2D atlas, int index, int cols, int rows,
+                     Vector3 pos, float height, Transform root, PropKind kind) {
         if (atlas == null) return;
         var go = new GameObject(name);
         go.transform.SetParent(root, false);
         go.transform.position = pos;
 
-        var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-        m.SetFloat("_Surface", 0);
-        m.SetFloat("_AlphaClip", 1);
-        m.SetFloat("_Cutoff", 0.5f);
-        m.EnableKeyword("_ALPHATEST_ON");
-        m.SetFloat("_Smoothness", 0f);
-        // **両面に えがく。** 板は 片面しか えがかれないので、裏を 向くと
-        // 影だけ 出て 本体が 消える（実際 草木が 影だけに なった）。草木は 両面が ふつう
-        m.SetFloat("_Cull", 0f);
-        m.doubleSidedGI = true;
-        m.SetTexture("_BaseMap", atlas);
-        m.SetTextureScale("_BaseMap", new Vector2(1f / 6f, 1f));
-        m.SetTextureOffset("_BaseMap", new Vector2(index / 6f, 0f));
-        m.mainTexture = atlas;
-        m.mainTextureScale = new Vector2(1f / 6f, 1f);
-        m.mainTextureOffset = new Vector2(index / 6f, 0f);
-        AssetDatabase.CreateAsset(m, MatDir + "Prop_" + name + ".mat");
+        // コマの ばしょ。画像は 上が 0行めだが UVは 下が 0 なので y は ひっくり返す
+        int col = index % cols, row = index / cols;
+        var uvS = new Vector2(1f / cols, 1f / rows);
+        var uvO = new Vector2(col / (float)cols, (rows - 1 - row) / (float)rows);
 
-        int sheets = kind == PropKind.Crossed ? 2 : 1;
-        for (int i = 0; i < sheets; i++) {
-            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            q.name = "Sheet" + i;
-            q.transform.SetParent(go.transform, false);
-            Object.DestroyImmediate(q.GetComponent<Collider>());
-            if (kind == PropKind.Flat) {
-                q.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // ゆかに 寝かせる
-                q.transform.localPosition = Vector3.zero;
-            } else {
-                q.transform.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
-                q.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
-            }
-            q.transform.localScale = new Vector3(height, height, 1f);
-            var r = q.GetComponent<Renderer>();
-            r.sharedMaterial = m;
-            r.shadowCastingMode = kind == PropKind.Flat
-                ? UnityEngine.Rendering.ShadowCastingMode.Off      // 寝かせた 板は 影を おとさない
-                : UnityEngine.Rendering.ShadowCastingMode.On;
+        // 草木は かぜに ゆれる。寝かせた 小物は 動かさない
+        bool sways = kind == PropKind.Billboard;
+        var m = SpriteMat(MatDir + "Prop_" + name + ".mat", atlas, uvS, uvO,
+                          sways ? 0.020f : 0f,   // たての のびちぢみ
+                          sways ? 0.9f  : 0f,    // はやさ
+                          sways ? 0.022f : 0f,   // よこ揺れ
+                          sways ? 0.5f  : 0f,
+                          PhaseOf(pos));
+
+        var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        q.name = "Sheet";
+        q.transform.SetParent(go.transform, false);
+        Object.DestroyImmediate(q.GetComponent<Collider>());
+        if (kind == PropKind.Flat) {
+            q.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);   // ゆかに 寝かせる
+            q.transform.localPosition = Vector3.zero;
+        } else {
+            q.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
         }
-        if (kind == PropKind.Billboard) go.AddComponent<Billboard>();
+        q.transform.localScale = new Vector3(height, height, 1f);
+        var r = q.GetComponent<Renderer>();
+        r.sharedMaterial = m;
+        r.shadowCastingMode = kind == PropKind.Flat
+            ? UnityEngine.Rendering.ShadowCastingMode.Off      // 寝かせた 板は 影を おとさない
+            : UnityEngine.Rendering.ShadowCastingMode.On;
+
+        if (kind != PropKind.Flat) go.AddComponent<Billboard>();
+    }
+
+    // 置いた ところで 揺れの ずれを 決める。ならべても そろって 動かない ように
+    static float PhaseOf(Vector3 pos) {
+        return Mathf.Repeat(pos.x * 3.1f + pos.z * 1.7f, 6.2831853f);
+    }
+
+    // ドット絵の 板ようの 素材。**息づかい／ゆれの シェーダ**を つける。
+    // 見つからない ときだけ URP/Lit に 落とす（ビルドが 止まらない ように）
+    static Material SpriteMat(string path, Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
+                              float breatheAmp, float breatheSpeed,
+                              float swayAmp, float swaySpeed, float phase) {
+        var sh = Shader.Find("Natsuyasumi/PixelSprite");
+        bool custom = sh != null;
+        if (!custom) {
+            Debug.LogWarning("[BuildZashiki] Natsuyasumi/PixelSprite が 見つからない。URP/Lit で 代用する");
+            sh = Shader.Find("Universal Render Pipeline/Lit");
+        }
+        var m = new Material(sh);
+        if (custom) {
+            m.SetFloat("_Cutoff", 0.5f);
+            m.SetFloat("_BreatheAmp", breatheAmp);
+            m.SetFloat("_BreatheSpeed", breatheSpeed);
+            m.SetFloat("_SwayAmp", swayAmp);
+            m.SetFloat("_SwaySpeed", swaySpeed);
+            m.SetFloat("_Phase", phase);
+            m.SetFloat("_Wrap", 0.55f);
+        } else {
+            m.SetFloat("_Surface", 0);
+            m.SetFloat("_AlphaClip", 1);
+            m.SetFloat("_Cutoff", 0.5f);
+            m.EnableKeyword("_ALPHATEST_ON");
+            m.SetFloat("_Smoothness", 0f);
+            m.SetFloat("_Cull", 0f);
+        }
+        m.doubleSidedGI = true;
+        m.SetTexture("_BaseMap", tex);
+        m.SetTextureScale("_BaseMap", uvScale);
+        m.SetTextureOffset("_BaseMap", uvOffset);
+        m.mainTexture = tex;
+        m.mainTextureScale = uvScale;
+        m.mainTextureOffset = uvOffset;
+        AssetDatabase.CreateAsset(m, path);
+        return m;
     }
 
     // --- 障子の 壁。紙の 面＋格子（細い 角材）。格子が 影を おとす
@@ -342,30 +433,74 @@ public static class BuildZashiki {
         quad.transform.localScale = new Vector3(cw, ch, 1f);
         Object.DestroyImmediate(quad.GetComponent<Collider>());
 
-        // ドット絵用：切りぬき＋点フィルタ（にじませない）
-        var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-        m.SetFloat("_Surface", 0);
-        m.SetFloat("_AlphaClip", 1);
-        m.SetFloat("_Cutoff", 0.5f);
-        m.EnableKeyword("_ALPHATEST_ON");
-        m.SetFloat("_Smoothness", 0f);
-        m.mainTexture = sheet;
-        // 絵は 8列 x 4行、1こま 16x16。index = 行*8 + 列。
+        // ドット絵用：切りぬき＋点フィルタ（にじませない）＋**息づかい**。
         // 画像は 上が 0行めだが、UVは 下が 0。なので y は ひっくり返して 数える
         int col = index % CharCols, row = index / CharCols;
         var uvS = new Vector2(1f / CharCols, 1f / CharRows);
         var uvO = new Vector2(col / (float)CharCols, (CharRows - 1 - row) / (float)CharRows);
-        m.SetTexture("_BaseMap", sheet);
-        m.SetTextureScale("_BaseMap", uvS);
-        m.SetTextureOffset("_BaseMap", uvO);
-        m.mainTextureScale  = uvS;
-        m.mainTextureOffset = uvO;
-        AssetDatabase.CreateAsset(m, MatDir + "Char_" + name + ".mat");
+        // 呼吸は 背たけの 3.5%ぶん。周期は 2π/1.45 ≒ 4.3秒＝落ちついた いき。
+        // ずれ(_Phase)を 置き場所から 決めるので、ふたりが 同じ 拍で 動かない
+        var m = SpriteMat(MatDir + "Char_" + name + ".mat", sheet, uvS, uvO,
+                          0.035f, 1.45f, 0.006f, 0.6f, PhaseOf(pos));
         quad.GetComponent<Renderer>().sharedMaterial = m;
         var mr = quad.GetComponent<Renderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;   // 板でも 影は 出す
         go.AddComponent<Billboard>();
         return go;
+    }
+
+    // --- 雨。つぶは Kenney「Particle Pack」(CC0)の まるい 絵を たてに のばして 使う。
+    // 出す/止めるは Weather が やる。ここでは **形だけ** 作る
+    static ParticleSystem Rain(Transform root, Vector3 pos, Vector3 box) {
+        var go = new GameObject("Rain");
+        go.transform.SetParent(root, false);
+        go.transform.position = pos;
+        var ps = go.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.startLifetime = 1.6f; main.startSpeed = 9f; main.startSize = 0.05f;
+        main.maxParticles = 2500;
+        main.startColor = new Color(0.80f, 0.86f, 0.94f, 0.42f);
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.gravityModifier = 0.9f;
+        main.startRotation = 0f;
+        var em = ps.emission; em.rateOverTime = 0f;              // はじめは 降っていない
+        var sh = ps.shape;
+        sh.shapeType = ParticleSystemShapeType.Box; sh.scale = box;
+        sh.rotation = new Vector3(90f, 0f, 0f);                  // 下むきに 出す
+        var r = go.GetComponent<ParticleSystemRenderer>();
+        // **たてに のばした 板**＝雨すじ。丸のままだと 雪に 見える
+        r.renderMode = ParticleSystemRenderMode.Stretch;
+        r.velocityScale = 0.10f; r.lengthScale = 1.2f;
+        r.material = ParticleMat("Rain", "Assets/Art/Particles/circle_05.png",
+                                 new Color(0.82f, 0.88f, 0.96f, 1f));
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        return ps;
+    }
+
+    // つぶ用の 素材。シェーダ名は 版で かわるので 順に さがす（見つからないと まっピンクに なる）
+    static Material ParticleMat(string name, string texPath, Color tint) {
+        var sh = Shader.Find("Universal Render Pipeline/Particles/Unlit")
+              ?? Shader.Find("Universal Render Pipeline/Unlit")
+              ?? Shader.Find("Sprites/Default");
+        var m = new Material(sh);
+        m.SetFloat("_Surface", 1);                    // 透ける
+        m.SetFloat("_Blend", 0f);
+        // **重ねかたは 数値で 直に 入れる。** _Blend だけだと 画面用の 設定で、
+        // コードから 作った 素材には 反映されない ことが ある
+        m.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        m.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        m.SetFloat("_ZWrite", 0f);
+        m.SetFloat("_AlphaClip", 0f);
+        m.DisableKeyword("_ALPHATEST_ON");
+        m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        m.SetColor("_BaseColor", tint);
+        var t = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
+        if (t == null) Debug.LogError("[BuildZashiki] つぶの 絵が 見つからない: " + texPath);
+        else { m.SetTexture("_BaseMap", t); m.mainTexture = t; }
+        AssetDatabase.CreateAsset(m, MatDir + name + ".mat");
+        return m;
     }
 
     // --- 舞う 塵
@@ -374,13 +509,16 @@ public static class BuildZashiki {
         go.transform.SetParent(root, false);
         go.transform.position = new Vector3(0, 1.4f, 0.5f);
         var ps = go.AddComponent<ParticleSystem>();
+        // **量も 大きさも 抑える。** 前は 220こ・0.022m で「屋内に 雪が 降っている」ように 見えた。
+        // 光の すじの なかで たまに きらっと する ぐらいが ちょうどよい
         var main = ps.main;
-        main.startLifetime = 14f; main.startSpeed = 0.045f;
-        main.startSize = 0.022f; main.maxParticles = 220;
-        main.startColor = new Color(1f, 0.97f, 0.86f, 0.55f);
+        main.startLifetime = 16f; main.startSpeed = 0.035f;
+        main.startSize = 0.009f;                       // 0.022 → 0.009（見た目 半分以下）
+        main.maxParticles = 55;                        // 220 → 55
+        main.startColor = new Color(1f, 0.97f, 0.86f, 0.36f);   // うすく
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.gravityModifier = -0.004f;
-        var em = ps.emission; em.rateOverTime = 16f;
+        main.gravityModifier = -0.003f;
+        var em = ps.emission; em.rateOverTime = 3.4f;  // 16 → 3.4
         var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Box;
         sh.scale = new Vector3(RoomW, 2.2f, RoomD);
         var noise = ps.noise; noise.enabled = true; noise.strength = 0.09f; noise.frequency = 0.28f;
