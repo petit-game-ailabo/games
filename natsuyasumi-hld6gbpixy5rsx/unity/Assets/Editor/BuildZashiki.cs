@@ -375,11 +375,14 @@ public static class BuildZashiki {
 
         // 部屋の なかの 小物（家を 出す ときだけ）
         if (ShowRoom) {
-            Prop("Zabuton1", props, PROP_ZABU, new Vector3(-1.45f, 0.012f, 0.55f), 0.85f, root, PropKind.Flat);
-            Prop("Zabuton2", props, PROP_ZABU, new Vector3( 0.35f, 0.012f, 1.55f), 0.85f, root, PropKind.Flat);
-            Prop("Uchiwa",   props, PROP_UCHI, new Vector3( 1.55f, 0.014f, 1.15f), 0.55f, root, PropKind.Flat);
-            Prop("Senko",    props, PROP_SENKO,new Vector3( 1.95f, 0.0f,   2.10f), 0.40f, root, PropKind.Still);
-            Prop("Kabin",    props, PROP_KABIN,new Vector3(-2.45f, 0.0f,  -1.85f), 0.80f, root, PropKind.Still);
+            Prop("Zabuton1", props, PROP_ZABU,  new Vector3(-1.45f, 0.012f, 0.55f), 0.85f, root, PropKind.Flat);
+            Prop("Zabuton2", props, PROP_ZABU,  new Vector3( 0.35f, 0.012f, 1.55f), 0.85f, root, PropKind.Flat);
+            Prop("Uchiwa",   props, PROP_UCHI,  new Vector3( 1.55f, 0.014f, 1.15f), 0.55f, root, PropKind.Flat);
+            Prop("Boushi",   props, PROP_BOUSHI,new Vector3(-2.55f, 0.016f, 1.75f), 0.60f, root, PropKind.Flat);
+            Prop("Senko",    props, PROP_SENKO, new Vector3( 1.95f, 0.0f,   2.10f), 0.40f, root, PropKind.Still);
+            Prop("Kabin",    props, PROP_KABIN, new Vector3(-2.45f, 0.0f,  -1.85f), 0.80f, root, PropKind.Still);
+            // ちゃぶ台の 上の すいか（台の 天板は y=0.34、厚み 0.07）
+            Prop("Suika",    props, PROP_SUIKA, new Vector3(-0.60f, 0.385f, 0.50f), 0.42f, root, PropKind.Still);
         }
 
         // --- むしとり。虫を 湧かせる 係。
@@ -414,8 +417,9 @@ public static class BuildZashiki {
     // ★どのコマが 誰かは 本人に 確認中。いまは 仮の わりあて
     const int CI_CIRNO = 5, CI_DAIYOU = 11;
 
-    // 小物の 絵の ならび（props.png は 32px を 6こ 横に）
-    const int PROP_KUSA = 0, PROP_SHIGE = 1, PROP_ZABU = 2, PROP_KABIN = 3, PROP_SENKO = 4, PROP_UCHI = 5;
+    // 部屋の 小物（props.png は 1コマ 32px を 6こ 横に）。
+    // 2026-08-14、木立ちの 20色で 描き直した（ここだけ 前の 絵で 浮いていた）
+    const int PROP_BOUSHI = 0, PROP_SUIKA = 1, PROP_ZABU = 2, PROP_KABIN = 3, PROP_SENKO = 4, PROP_UCHI = 5;
 
     // 草木の 絵（nature.png：144pxの コマを 4列 x 2行）。
     // もとは ansimuz「Trees & Bushes」(CC0)。**32px＝1m** に そろえて 詰めなおして ある
@@ -606,24 +610,27 @@ public static class BuildZashiki {
         go.transform.SetParent(root, false);
         go.transform.position = at;
 
-        const float W = 0.42f, H = 0.46f;   // かごの 大きさ（40cm ほど）
-        // たての ひご
-        for (int i = 0; i < 8; i++) {
-            float a = i * Mathf.PI * 2f / 8f;
-            var p = new Vector3(Mathf.Cos(a) * W * 0.5f, H * 0.5f, Mathf.Sin(a) * W * 0.5f);
-            var b = Box("Bar" + i, go.transform, p, new Vector3(0.022f, H, 0.022f), wood);
+        const float W = 0.44f, H = 0.48f;   // かごの 大きさ（40cm ほど）
+        // ※ はじめは 細い 棒を 8本 立てて 輪を まわしただけで、遠目には
+        //   ただの 小枝の 束に 見えた。**上下を 円板で しめる**と かごに 見える
+        Cyl("Base", go.transform, new Vector3(0, 0.025f, 0), new Vector3(W, 0.05f, W), wood);
+        Cyl("Lid",  go.transform, new Vector3(0, H, 0),       new Vector3(W, 0.05f, W), wood);
+        // たての ひご。数を へらして 太くする（細かいと 遠くで 消える）
+        for (int i = 0; i < 6; i++) {
+            float a = i * Mathf.PI * 2f / 6f;
+            var p = new Vector3(Mathf.Cos(a) * W * 0.46f, H * 0.5f, Mathf.Sin(a) * W * 0.46f);
+            var b = Box("Bar" + i, go.transform, p, new Vector3(0.034f, H, 0.034f), wood);
             Object.DestroyImmediate(b.GetComponent<Collider>());
         }
-        // 上と 下の わ
-        foreach (var y in new[] { 0.02f, H }) {
-            for (int i = 0; i < 8; i++) {
-                float a = (i + 0.5f) * Mathf.PI * 2f / 8f;
-                var p = new Vector3(Mathf.Cos(a) * W * 0.5f, y, Mathf.Sin(a) * W * 0.5f);
-                var b = Box("Ring" + y + "_" + i, go.transform, p, new Vector3(0.17f, 0.026f, 0.026f), wood);
-                b.transform.localRotation = Quaternion.Euler(0f, -a * Mathf.Rad2Deg, 0f);
-                Object.DestroyImmediate(b.GetComponent<Collider>());
-            }
+        // 手さげの わ（2本の 柱＋わたし）
+        for (int i = -1; i <= 1; i += 2) {
+            var b = Box("Grip" + i, go.transform, new Vector3(i * W * 0.30f, H + 0.09f, 0f),
+                        new Vector3(0.026f, 0.18f, 0.026f), wood);
+            Object.DestroyImmediate(b.GetComponent<Collider>());
         }
+        var top = Box("GripTop", go.transform, new Vector3(0f, H + 0.18f, 0f),
+                      new Vector3(W * 0.66f, 0.026f, 0.026f), wood);
+        Object.DestroyImmediate(top.GetComponent<Collider>());
         var cage = go.AddComponent<BugCage>();
         cage.atlas = bugAtlas;
     }
@@ -759,6 +766,17 @@ public static class BuildZashiki {
         go.name = name; go.transform.SetParent(parent, false);
         go.transform.localPosition = pos; go.transform.localScale = size;
         Object.DestroyImmediate(go.GetComponent<MeshRenderer>());   // 絵は 出さない。当たりだけ のこす
+    }
+
+    // 円い もの（かごの ふた・そこ）。Cylinder は 高さ 1 が 縦 2 ぶんなので 半分に する
+    static GameObject Cyl(string name, Transform parent, Vector3 pos, Vector3 size, Material m) {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        go.name = name; go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        go.transform.localScale = new Vector3(size.x, size.y * 0.5f, size.z);
+        go.GetComponent<Renderer>().sharedMaterial = m;
+        Object.DestroyImmediate(go.GetComponent<Collider>());
+        return go;
     }
 
     static GameObject Box(string name, Transform parent, Vector3 pos, Vector3 size, Material m) {

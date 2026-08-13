@@ -17,10 +17,17 @@ public class BugCage : MonoBehaviour {
 
     void Start() {
         var book = FindFirstObjectByType<BugBook>();
-        if (book != null) book.OnCaught += (id, n, first) => Put(id);
+        if (book == null) return;
+        // **前に 入れた ぶんを 出しなおす。** これが 無いと、ずかんは 覚えて いるのに
+        // かごだけ 空に なって 見えた
+        foreach (var id in book.Recent) Put(id, false);
+        Debug.Log("[BugCage] 前のぶんを もどした: " + inside.Count + " ひき");
+        book.OnCaught += (id, n, first) => Put(id, true);
     }
 
-    public void Put(BugId id) {
+    public void Put(BugId id) { Put(id, true); }
+
+    public void Put(BugId id, bool fresh) {
         if (atlas == null) return;
         // いっぱいなら いちばん 古いのを 逃がす（見た目の 話。記録は 減らない）
         if (inside.Count >= shown) {
