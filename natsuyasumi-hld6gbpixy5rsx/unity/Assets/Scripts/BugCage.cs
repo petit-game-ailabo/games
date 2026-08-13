@@ -22,7 +22,7 @@ public class BugCage : MonoBehaviour {
         // かごだけ 空に なって 見えた
         foreach (var id in book.Recent) Put(id, false);
         Debug.Log("[BugCage] 前のぶんを もどした: " + inside.Count + " ひき");
-        book.OnCaught += (id, n, first) => Put(id, true);
+        book.OnCaught += c => Put(c.id, true);
     }
 
     public void Put(BugId id) { Put(id, true); }

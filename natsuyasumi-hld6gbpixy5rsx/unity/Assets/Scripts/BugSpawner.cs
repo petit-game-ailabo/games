@@ -148,13 +148,15 @@ public class BugSpawner : MonoBehaviour {
         quad.name = "Sprite";
         quad.transform.SetParent(go.transform, false);
         Destroy(quad.GetComponent<Collider>());
-        quad.transform.localScale = new Vector3(kind.height, kind.height, 1f);
+        int mm = BugBook.RollSize(kind);
+        float h0 = kind.height * Mathf.Clamp(mm / (float)kind.sizeMm, 0.7f, 1.45f);
+        quad.transform.localScale = new Vector3(h0, h0, 1f);
         quad.GetComponent<Renderer>().sharedMaterial = BugMaterial(kind);
         quad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
         go.AddComponent<Billboard>();
         var bug = go.AddComponent<Bug>();
-        bug.Init(kind, at, quad.transform);
+        bug.Init(kind, at, quad.transform, mm);
 
         // ホタルは 自分で 光る。夜の 目じるしに なる
         if (kind.glows) {

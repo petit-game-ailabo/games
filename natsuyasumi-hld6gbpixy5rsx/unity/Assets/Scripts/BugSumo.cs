@@ -37,6 +37,9 @@ public class BugSumo : MonoBehaviour {
     RectTransform myRT, opRT;
 
     BugKind mine, opp;
+    // 出す 1ぴきの 大きさ。**大きい 個体ほど 強い**＝大物を さがす 理由に なる
+    int myMm, oppMm;
+    float myPow, oppPow;
     float pos;                 // -1 まけ 〜 +1 かち
     int phase;                 // 0=やっていない 1=とりくみ 2=けっか
     float resultT, pushCool;
@@ -73,11 +76,18 @@ public class BugSumo : MonoBehaviour {
 
     public bool Begin() {
         if (!CanStart()) return false;
-        // かごの 中で いちばん 強い 1ぴき
-        mine = null;
+        // かごの 中で いちばん 強い 1ぴき。**大きさも 効く**ので、
+        // 「その 種類で 自分が 出した さいだい きろく」を その虫の 力と する
+        // ※ **見せる mm と 強さの もとの mm は 同じ 数に する。**
+        //   はじめ 表示だけ「ふつうの 大きさ」で 底上げして いたので、
+        //   48mm と 出ているのに 強さは 43mm ぶん、という ずれが 出た
+        mine = null; myPow = 0f; myMm = 0;
         foreach (var id in book.Recent) {
             var k = BugKind.Of(id);
-            if (mine == null || k.power > mine.power) mine = k;
+            int mm = book.MaxMm(id);
+            if (mm <= 0) mm = k.sizeMm;              // 記録が 無い＝ふつうの 大きさ と みなす
+            float p = PowerOf(k, mm);
+            if (mine == null || p > myPow) { mine = k; myPow = p; myMm = mm; }
         }
         // 相手は こちらと 釣りあう ぐらいを 選ぶ（毎回 かぶとむしだと つまらない）。
         // **同じ 虫どうしは さける**（同種の 取りくみは 絵が つまらない）
@@ -88,6 +98,9 @@ public class BugSumo : MonoBehaviour {
             if (ok) break;
             opp = pool[Random.Range(0, pool.Length)];
         }
+
+        oppMm = Mathf.RoundToInt(opp.sizeMm * Random.Range(0.85f, 1.25f));
+        oppPow = PowerOf(opp, oppMm);
 
         pos = 0f; phase = 1; resultT = 0f;
         Apply();
@@ -101,7 +114,9 @@ public class BugSumo : MonoBehaviour {
     public string DebugState {
         get {
             return string.Format("phase={0} pos={1:F2} mine={2} opp={3} wins={4}",
-                                 phase, pos, mine != null ? mine.name : "-", opp != null ? opp.name : "-", wins);
+                                 phase, pos,
+                                 mine != null ? mine.name + myMm + "mm/" + myPow.ToString("F1") : "-",
+                                 opp != null ? opp.name + oppMm + "mm/" + oppPow.ToString("F1") : "-", wins);
         }
     }
 
@@ -113,8 +128,8 @@ public class BugSumo : MonoBehaviour {
 
         if (phase == 1) {
             pushCool -= Time.deltaTime;
-            pos -= opp.power * opponentPush * Time.deltaTime;
-            if (pressed && pushCool <= 0f) { pos += mine.power * pushBack; pushCool = pushInterval; }
+            pos -= oppPow * opponentPush * Time.deltaTime;
+            if (pressed && pushCool <= 0f) { pos += myPow * pushBack; pushCool = pushInterval; }
             pos = Mathf.Clamp(pos, -1.15f, 1.15f);
             if (pos >= 1f) { phase = 2; resultT = 0f; wins++; PlayerPrefs.SetInt(WinKey, wins); PlayerPrefs.Save(); }
             else if (pos <= -1f) { phase = 2; resultT = 0f; }
@@ -135,7 +150,7 @@ public class BugSumo : MonoBehaviour {
         gaugeFill.rectTransform.sizeDelta = new Vector2(Mathf.Clamp01(pos * 0.5f + 0.5f) * 240f, 10f);
 
         if (phase == 1) {
-            title.text = "むしずもう！　" + mine.name + " vs " + opp.name;
+            title.text = string.Format("{0} {1}mm  vs  {2} {3}mm", mine.name, myMm, opp.name, oppMm);
             hint.text = "スペース れんだ！";
         } else {
             bool win = pos >= 1f;
@@ -143,6 +158,12 @@ public class BugSumo : MonoBehaviour {
             hint.text = win ? ("つうさん " + wins + " しょう　　スペースで つづける")
                             : "スペースで つづける";
         }
+    }
+
+    // 種類の 強さに 大きさを かける。1.0 が ふつうの 大きさ
+    static float PowerOf(BugKind k, int mm) {
+        float f = mm <= 0 ? 1f : Mathf.Clamp(mm / (float)k.sizeMm, 0.8f, 1.35f);
+        return k.power * f;
     }
 
     Sprite SpriteOf(BugKind k) {

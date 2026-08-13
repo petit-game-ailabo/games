@@ -8,6 +8,10 @@ public class Bug : MonoBehaviour {
     public BugKind kind;
     public Vector3 home;             // もとの 居場所
     public float roam = 1.2f;        // どれくらい ふらつくか
+    // この 1ぴきの 大きさ(mm)。**絵の 大きさにも 効かせる**ので、
+    // 見て「あ、こいつ 大きい」と 分かる＝さがす 楽しみに なる
+    [HideInInspector] public int sizeMm;
+    [HideInInspector] public float sizeScale = 1f;
 
     [HideInInspector] public bool caught;
 
@@ -17,8 +21,10 @@ public class Bug : MonoBehaviour {
     float phase, fleeLeft, restLeft;
     float sinkT = -1f;               // つかまえられた あとの 演出
 
-    public void Init(BugKind k, Vector3 at, Transform spriteChild) {
+    public void Init(BugKind k, Vector3 at, Transform spriteChild, int mm) {
         kind = k; home = at; sprite = spriteChild;
+        sizeMm = mm;
+        sizeScale = Mathf.Clamp(mm / (float)k.sizeMm, 0.7f, 1.45f);
         phase = Random.value * 10f;
         transform.position = at;
         restLeft = Random.Range(0.5f, 3f);
@@ -106,8 +112,8 @@ public class Bug : MonoBehaviour {
         if (sprite != null) {
             bool flying = kind.perch == BugPerch.Air || kind.perch == BugPerch.Bush || fleeLeft > 0f;
             float s = flying ? 1f + Mathf.Sin(t * 26f) * 0.10f : 1f;
-            var sc = sprite.localScale;
-            sprite.localScale = new Vector3(kind.height * Mathf.Abs(s), kind.height, 1f);
+            float h = kind.height * sizeScale;
+            sprite.localScale = new Vector3(h * Mathf.Abs(s), h, 1f);
         }
     }
 
@@ -127,8 +133,8 @@ public class Bug : MonoBehaviour {
         sinkT += Time.deltaTime;
         transform.position += Vector3.up * 1.6f * Time.deltaTime;
         if (sprite != null) {
-            float k = Mathf.Clamp01(1f - sinkT / 0.45f);
-            sprite.localScale = new Vector3(kind.height * k, kind.height * k, 1f);
+            float k = Mathf.Clamp01(1f - sinkT / 0.45f) * kind.height * sizeScale;
+            sprite.localScale = new Vector3(k, k, 1f);
         }
         if (sinkT > 0.45f) Destroy(gameObject);
     }

@@ -30,27 +30,30 @@ public class BugKind {
     // むしずもうの 強さ。**取りにくい 虫が 強い**とは かぎらない ように する。
     // カブト・クワガタは 取りやすいが いちばん 強い＝「朝はやく 起きた ごほうび」に なる
     public int power = 3;
+    // ふつうの 大きさ(mm)。1ぴきごとに この 0.7〜1.3倍で ばらつく。
+    // **大きい 個体は 見た目も 大きく、ずもうでも 強い**＝さがす 理由が 1本に つながる
+    public int sizeMm = 50;
 
     // 1コマ 16x16 の 4列 x 2行。index が そのまま コマの ばんごう
     public const int Cols = 4, Rows = 2;
 
     // ★虫を 足すなら ここに 1行。あとは ぜんぶ ついてくる
     public static readonly BugKind[] All = {
-        new BugKind { id = BugId.Semi,     name = "あぶらぜみ",   perch = BugPerch.Trunk, height = 0.30f,
+        new BugKind { id = BugId.Semi, sizeMm = 60,     name = "あぶらぜみ",   perch = BugPerch.Trunk, height = 0.30f,
                       wary = 0.55f, catchRate = 0.70f, weight = 30, power = 3, tod = new[] { true,  true,  true,  false } },
-        new BugKind { id = BugId.Kabuto,   name = "かぶとむし",   perch = BugPerch.Trunk, height = 0.34f,
+        new BugKind { id = BugId.Kabuto, sizeMm = 78,   name = "かぶとむし",   perch = BugPerch.Trunk, height = 0.34f,
                       wary = 0.10f, catchRate = 0.90f, weight = 10, power = 6, tod = new[] { true,  false, false, true  } },
-        new BugKind { id = BugId.Kuwagata, name = "くわがた",     perch = BugPerch.Trunk, height = 0.32f,
+        new BugKind { id = BugId.Kuwagata, sizeMm = 66, name = "くわがた",     perch = BugPerch.Trunk, height = 0.32f,
                       wary = 0.15f, catchRate = 0.85f, weight = 10, power = 5, tod = new[] { true,  false, false, true  } },
-        new BugKind { id = BugId.Tonbo,    name = "しおからとんぼ", perch = BugPerch.Air,  height = 0.30f,
+        new BugKind { id = BugId.Tonbo, sizeMm = 52,    name = "しおからとんぼ", perch = BugPerch.Air,  height = 0.30f,
                       wary = 0.70f, catchRate = 0.55f, weight = 28, power = 3, tod = new[] { true,  true,  true,  false } },
-        new BugKind { id = BugId.Oniyanma, name = "おにやんま",   perch = BugPerch.Air,   height = 0.40f,
+        new BugKind { id = BugId.Oniyanma, sizeMm = 98, name = "おにやんま",   perch = BugPerch.Air,   height = 0.40f,
                       wary = 0.90f, catchRate = 0.30f, weight = 6,  power = 5, tod = new[] { false, true,  true,  false } },
-        new BugKind { id = BugId.Chou,     name = "あげはちょう", perch = BugPerch.Air,   height = 0.28f,
+        new BugKind { id = BugId.Chou, sizeMm = 105,     name = "あげはちょう", perch = BugPerch.Air,   height = 0.28f,
                       wary = 0.45f, catchRate = 0.75f, weight = 24, power = 1, tod = new[] { true,  true,  false, false } },
-        new BugKind { id = BugId.Batta,    name = "しょうりょうばった", perch = BugPerch.Grass, height = 0.26f,
+        new BugKind { id = BugId.Batta, sizeMm = 48,    name = "しょうりょうばった", perch = BugPerch.Grass, height = 0.26f,
                       wary = 0.60f, catchRate = 0.65f, weight = 22, power = 4, tod = new[] { true,  true,  true,  false } },
-        new BugKind { id = BugId.Hotaru,   name = "ほたる",       perch = BugPerch.Bush,  height = 0.22f,
+        new BugKind { id = BugId.Hotaru, sizeMm = 14,   name = "ほたる",       perch = BugPerch.Bush,  height = 0.22f,
                       wary = 0.20f, catchRate = 0.80f, weight = 18, power = 1, glows = true,
                       tod = new[] { false, false, false, true  } },
     };

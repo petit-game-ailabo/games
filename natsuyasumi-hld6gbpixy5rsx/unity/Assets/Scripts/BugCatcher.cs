@@ -114,7 +114,7 @@ public class BugCatcher : MonoBehaviour {
         // まん中で とらえるほど 取りやすい
         float aim = 1f - Mathf.Clamp01(bestD / radius) * 0.45f;
         if (Random.value < best.kind.catchRate * aim) {
-            book.Add(best.kind.id);
+            book.Add(best.kind.id, best.sizeMm);
             Pop(best.transform.position, true);
             best.Catch();
         } else {

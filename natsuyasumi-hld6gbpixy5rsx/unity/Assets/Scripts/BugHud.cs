@@ -51,9 +51,12 @@ public class BugHud : MonoBehaviour {
         }
     }
 
-    void OnCaught(BugId id, int n, bool first) {
-        var k = BugKind.Of(id);
-        Say(first ? k.name + " を つかまえた！　はじめて！" : k.name + " を つかまえた！");
+    void OnCaught(BugCatch c) {
+        var k = BugKind.Of(c.id);
+        string s = string.Format("{0}　{1}mm　を つかまえた！", k.name, c.sizeMm);
+        if (c.firstOfKind) s += "　はじめて！";
+        else if (c.record) s += "　★さいだい きろく！";
+        Say(s);
         Refresh();
         if (bookOpen) RefreshBook();
     }
@@ -93,7 +96,7 @@ public class BugHud : MonoBehaviour {
         sb.AppendLine();
         foreach (var k in BugKind.All) {
             int n = book.Count(k.id);
-            sb.AppendLine(n > 0 ? string.Format("{0}　　{1} ひき", k.name, n)
+            sb.AppendLine(n > 0 ? string.Format("{0}　{1}ひき　さいだい {2}mm", k.name, n, book.MaxMm(k.id))
                                 : "？？？？？");
         }
         sb.AppendLine();
