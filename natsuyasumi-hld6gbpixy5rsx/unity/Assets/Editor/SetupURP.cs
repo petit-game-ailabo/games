@@ -63,6 +63,49 @@ public static class SetupURP {
         // 世界の テクスチャは **敷きつめる**ので Repeat のまま さわらない（畳や 草地が 1枚に なってしまう）
         Sweep("Assets/Art/Sprites",  TextureWrapMode.Clamp);
         Sweep("Assets/Art/Textures", null);
+        FixUI();
+    }
+
+    // 画面まわり：枠は 9スライス（かどを のこして まん中だけ のばす）、字は 点で 出す
+    [MenuItem("なつやすみ/画面まわりの 取りこみを そろえる")]
+    public static void FixUI() {
+        Slice("Assets/Art/UI/panel.png", 6);
+        Slice("Assets/Art/UI/panel_light.png", 6);
+        Slice("Assets/Art/UI/icon_net.png", 0);
+
+        // 書体。**にじませない。** ふつうに 取りこむと きれいに ぼかされて、
+        // せっかくの 点で 描かれた 書体が だいなしに なる
+        var fi = AssetImporter.GetAtPath("Assets/Art/Fonts/PixelMplus12-Regular.ttf") as TrueTypeFontImporter;
+        if (fi == null) { Debug.LogWarning("[SetupURP] 書体が 見つからない"); return; }
+        if (fi.fontRenderingMode != FontRenderingMode.HintedRaster || fi.fontSize != 12) {
+            fi.fontRenderingMode = FontRenderingMode.HintedRaster;   // 点の まま 出す
+            fi.fontSize = 12;                                        // もとの 絵と 同じ 大きさ
+            fi.includeFontData = true;                               // ビルドに 同梱（M+の 許諾内）
+            fi.SaveAndReimport();
+            Debug.Log("[SetupURP] font: HintedRaster 12px");
+        }
+    }
+
+    static void Slice(string path, int border) {
+        var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (ti == null) { Debug.LogWarning("[SetupURP] not found: " + path); return; }
+        var want = new Vector4(border, border, border, border);
+        bool ok = ti.textureType == TextureImporterType.Sprite
+                  && ti.filterMode == FilterMode.Point
+                  && !ti.mipmapEnabled
+                  && ti.spriteBorder == want
+                  && ti.textureCompression == TextureImporterCompression.Uncompressed;
+        if (ok) return;
+        ti.textureType = TextureImporterType.Sprite;
+        ti.spriteImportMode = SpriteImportMode.Single;
+        ti.spritePixelsPerUnit = 16;
+        ti.spriteBorder = want;
+        ti.filterMode = FilterMode.Point;
+        ti.mipmapEnabled = false;
+        ti.alphaIsTransparency = true;
+        ti.textureCompression = TextureImporterCompression.Uncompressed;
+        ti.SaveAndReimport();
+        Debug.Log("[SetupURP] ui sprite: " + path + " border=" + border);
     }
 
     static void Sweep(string dir, TextureWrapMode? wrap) {

@@ -26,6 +26,28 @@
   影は Unity に 落とさせるので、**元の 絵に 焼かれていた 影は 捨てている**
 - ※ `td/` の 世界タイルと 同じ 作者なので 絵の 肌ざわりが そろう
 
+## 家の テクスチャ・虫の 絵・画面の 枠（`unity/` 奥行き版）― 2026-08-14 自作
+
+**すべて こちらで 描き起こした**（外部素材なし）。生成する 手順ごと 残してある：
+- `unity/ArtSource/make_textures.py` … 畳・板・柱・土壁・障子紙・かわら・草地
+- `unity/ArtSource/make_bugs.py` … 虫 8しゅるい（1コマ 16x16）
+- `unity/ArtSource/make_ui.py` … 画面の 枠（9スライス）・あみの 記号
+
+**色は 木立ち(ansimuz・CC0)の 絵から 実際に 使われている 20色を 吸いだして、その 系統だけで 描いた。**
+前は 写真から 起こした テクスチャを 貼っていて、ドット絵の 草木と ならぶと 材質が ちぐはぐ だった。
+※ 直しかたは「3Dを やめる」ことでは ない。本家も 建物は 3D で、2Dなのは キャラと 小物だけ。
+　直すべきは **貼る 絵を そろえる** ことだった。
+
+## 書体（`unity/` 奥行き版）― 2026-08-14
+
+**PixelMplus12 Regular** — 作者: **itouhiro**（M+ BITMAP FONTS を もとに した ドット書体）
+- 配布元: https://itouhiro.hatenablog.com/entry/20130602/font
+- ライセンス: **M+ FONT LICENSE**。原文どおり
+  "Unlimited permission is granted to use, copy, and distribute them, with or without modification,
+  either commercially or noncommercially."
+  ＝**商用可・改変可・再配布可・ゲームへの 同梱可**。ライセンス文 `unity/Assets/Art/Fonts/LICENSE-PixelMplus-*.txt` 同梱
+- JIS第1・第2水準の 漢字を ふくむ。点で 描かれた 書体なので 12px の 整数倍で 出せば ドット絵と 目が そろう
+
 ## つぶ（雨・もや）（`unity/` 奥行き版）― 2026-08-14
 
 **Particle Pack** — 作者: **Kenney (kenney.nl)**
@@ -38,7 +60,10 @@
 **UI Pack - Pixel Adventure** — 作者: **Kenney (kenney.nl)**
 - 配布元: https://kenney.nl/assets/ui-pack-pixel-adventure
 - ライセンス: **CC0 1.0**（商用可・改変可・再配布可・クレジット任意）。ライセンス文 `unity/Assets/Art/UI/LICENSE-kenney-ui-pack.txt` 同梱
-- タイルシートを `unity/Assets/Art/UI/` に 置いた。**まだ 画面には つないでいない**（→ `REPLACE.md` の 宿題）
+- タイルシートを `unity/Assets/Art/UI/` に 置いた。
+- ※ **画面の 枠は これを 使っていない。** Kenney の UI は 西洋の 木わくで、いまの
+  木立ち・家の 色みと そろわなかった ため、枠だけ `make_ui.py` で 描き起こした。
+  Kenney の ぶんは 丸・矢印などの 記号として 残して ある
 
 ## キャラクタースプライト（`photo/` ・ `td/` 版）
 

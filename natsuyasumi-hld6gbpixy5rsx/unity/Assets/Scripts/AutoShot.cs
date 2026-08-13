@@ -58,6 +58,50 @@ public class AutoShot : MonoBehaviour {
             } else Debug.LogWarning("[AutoShot] PlayerMove が 見つからない");
         }
 
+        // -bugs N を つけると、いちばん 近い 虫の そばへ 移って あみを ふる。
+        // **つかまえられる ことを 人手なしで たしかめる** ための 自動運転
+        int bugTries = int.Parse(Arg("-bugs", "0"));
+        if (bugTries > 0) {
+            var catcher = FindFirstObjectByType<BugCatcher>();
+            var book = FindFirstObjectByType<BugBook>();
+            var cc = catcher != null ? catcher.GetComponent<CharacterController>() : null;
+            var cam = Camera.main;
+            // **毎回 まっさらから 数える。** 前の たしかめの 記録が 残っていると
+            // 「取れた のか 前のぶん なのか」が 読めない
+            if (book != null) book.Clear();
+            for (int i = 0; i < bugTries && catcher != null; i++) {
+                // 虫が 湧くのを 待つ
+                Bug target = null;
+                for (int w = 0; w < 240 && target == null; w++) { target = catcher.Nearest(); yield return null; }
+                if (target == null) { Debug.Log("[AutoShot] 虫が いない"); break; }
+
+                // 虫の 手前(あみの とどく ところ)へ 立つ
+                Vector3 fwd = cam != null ? cam.transform.forward : Vector3.forward;
+                fwd.y = 0f; fwd.Normalize();
+                var stand = target.transform.position - fwd * catcher.reach;
+                stand.y = catcher.transform.position.y;
+                if (cc != null) cc.enabled = false;
+                catcher.transform.position = stand;
+                if (cc != null) cc.enabled = true;
+
+                int before = book != null ? book.Total : 0;
+                catcher.TrySwing();
+                // ふり切るまでに 虫は 動く。人が 遊ぶ ときも 同じ なので、
+                // **止めては いけない**（止めると 当たり判定だけを 見て 手ざわりを 見のがす）
+                for (int w = 0; w < 60; w++) yield return null;
+                int after = book != null ? book.Total : 0;
+                Debug.Log(string.Format("[AutoShot] ふった {0}: {1} → 取った={2} (しゅるい {3})",
+                          i, target.kind.name, after > before, book != null ? book.Kinds : -1));
+            }
+            if (book != null) Debug.Log("[AutoShot] むし ごうけい=" + book.Total + " しゅるい=" + book.Kinds);
+        }
+
+        // -book を つけると ずかんを ひらいた ところを 撮る
+        if (Arg("-book", null) != null) {
+            var hud = FindFirstObjectByType<BugHud>();
+            if (hud != null) hud.OpenBook();
+        }
+
         // 光・影・ポストFXが おちつくまで 待つ
         for (int i = 0; i < frames; i++) yield return null;
 
