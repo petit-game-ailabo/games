@@ -14,10 +14,22 @@ public static class BuildZashiki {
     const string MatDir = "Assets/Art/Materials/";
     const string ScnDir = "Assets/Scenes/";
 
+    // ★2026-08-14：**家の 中は いったん 出さない。**
+    // 3Dの 箱に 写真ふうの テクスチャを 貼った 部屋と、ドット絵の 草木が ちぐはぐ だった。
+    // 絵の 出どころを そろえてから 建てなおす。組み立てる ところは 消していないので、
+    // ここを true に もどせば そのまま 復活する
+    const bool ShowRoom = false;
+
     // 部屋の 寸法（m）。畳＝おおよそ 1.8 x 0.9
     const float RoomW = 7.2f;    // 横
     const float RoomD = 5.4f;    // 奥ゆき
     const float WallH = 2.6f;    // 天井の 高さ
+
+    // 庭（家の 左がわ）。地めんの 高さは -0.52m
+    const float GardenX = -RoomW * 0.5f - 5.6f;   // まんなか
+    const float GardenW = 12.4f;                  // 横 [-15.4, -3.0] ぐらい
+    const float GardenZ = 0.9f, GardenD = 13.5f;  // 奥ゆき
+    const float GroundY = -0.52f;                 // 草木を 置く 高さ
 
     [MenuItem("なつやすみ/ざしきを 組み立てる")]
     public static void Build() {
@@ -40,42 +52,45 @@ public static class BuildZashiki {
 
         var root = new GameObject("Zashiki").transform;
 
-        // --- 床（畳）と 縁がわの 板の間
-        var floor = Box("Tatami_Floor", root, new Vector3(0, -0.05f, 0), new Vector3(RoomW, 0.1f, RoomD), mTatami);
-        Box("Engawa", root, new Vector3(0, -0.04f, RoomD * 0.5f + 0.45f), new Vector3(RoomW, 0.12f, 0.9f), mFloorW);
+        Renderer shojiPaperRenderer = null;
+        Light lamp = null;
 
-        // --- 天井の 梁は 置かない（本人の 判断。視界の じゃまに なる）
+        if (ShowRoom) {
+            // --- 床（畳）と 縁がわの 板の間
+            Box("Tatami_Floor", root, new Vector3(0, -0.05f, 0), new Vector3(RoomW, 0.1f, RoomD), mTatami);
+            Box("Engawa", root, new Vector3(0, -0.04f, RoomD * 0.5f + 0.45f), new Vector3(RoomW, 0.12f, 0.9f), mFloorW);
 
-        // --- 奥の 壁（土壁）と 左右の 壁
-        Box("Wall_Back",  root, new Vector3(0, WallH * 0.5f, -RoomD * 0.5f), new Vector3(RoomW, WallH, 0.12f), mPlaster);
-        Box("Wall_Right", root, new Vector3(RoomW * 0.5f, WallH * 0.5f, 0),  new Vector3(0.12f, WallH, RoomD), mPlaster);
+            // --- 天井の 梁は 置かない（本人の 判断。視界の じゃまに なる）
 
-        // --- 左は 障子（紙＋格子）。ここから 光が 入る。手前がわは 壁を 置かない（抜き）
-        // 奥がわ 6割だけ 障子に して、手前は **あけはなち**。そこから 庭が 見える
-        float shojiW = RoomD * 0.6f;
-        var shojiPaperRenderer = ShojiWall(root, new Vector3(-RoomW * 0.5f, 0, -RoomD * 0.5f + shojiW * 0.5f), Quaternion.Euler(0, 90, 0),
-                  shojiW, WallH, mPaper, mWood);
-        // あけはなちの ふちに 柱を 1本（境目が ぼやけない ように）
-        Box("Post_Open", root, new Vector3(-RoomW * 0.5f, WallH * 0.5f, -RoomD * 0.5f + shojiW),
-            new Vector3(0.13f, WallH, 0.13f), mWood);
+            // --- 奥の 壁（土壁）と 左右の 壁
+            Box("Wall_Back",  root, new Vector3(0, WallH * 0.5f, -RoomD * 0.5f), new Vector3(RoomW, WallH, 0.12f), mPlaster);
+            Box("Wall_Right", root, new Vector3(RoomW * 0.5f, WallH * 0.5f, 0),  new Vector3(0.12f, WallH, RoomD), mPlaster);
 
-        // --- 庭の 書割は やめた。実際に 庭へ 出られる ように なったので、
-        // 横から 見ると ただの 板に 見えて じゃまだった
-        // --- あんどん（行灯）。あたたかい 点光源
-        var andon = Box("Andon", root, new Vector3(RoomW * 0.5f - 0.9f, 0.55f, -RoomD * 0.5f + 0.9f),
-                        new Vector3(0.34f, 1.1f, 0.34f), mPaper);
-        var lampGO = new GameObject("Andon_Light");
-        lampGO.transform.SetParent(andon.transform, false);
-        var lamp = lampGO.AddComponent<Light>();
-        lamp.type = LightType.Point; lamp.color = new Color(1f, 0.82f, 0.55f);
-        lamp.intensity = 3.2f; lamp.range = 6f; lamp.shadows = LightShadows.Soft;
+            // --- 左は 障子（紙＋格子）。ここから 光が 入る。手前がわは 壁を 置かない（抜き）
+            // 奥がわ 6割だけ 障子に して、手前は **あけはなち**。そこから 庭が 見える
+            float shojiW = RoomD * 0.6f;
+            shojiPaperRenderer = ShojiWall(root, new Vector3(-RoomW * 0.5f, 0, -RoomD * 0.5f + shojiW * 0.5f), Quaternion.Euler(0, 90, 0),
+                      shojiW, WallH, mPaper, mWood);
+            // あけはなちの ふちに 柱を 1本（境目が ぼやけない ように）
+            Box("Post_Open", root, new Vector3(-RoomW * 0.5f, WallH * 0.5f, -RoomD * 0.5f + shojiW),
+                new Vector3(0.13f, WallH, 0.13f), mWood);
 
-        // --- ちゃぶ台（小物）。接地影が 出ると 立体に 見える
-        Box("Table_Top", root, new Vector3(-0.6f, 0.34f, 0.5f), new Vector3(1.3f, 0.07f, 0.9f), mFloorW);
-        for (int i = 0; i < 4; i++) {
-            float sx = (i % 2 == 0) ? -1 : 1, sz = (i < 2) ? -1 : 1;
-            Box("Table_Leg" + i, root, new Vector3(-0.6f + sx * 0.55f, 0.17f, 0.5f + sz * 0.36f),
-                new Vector3(0.07f, 0.34f, 0.07f), mWood);
+            // --- あんどん（行灯）。あたたかい 点光源
+            var andon = Box("Andon", root, new Vector3(RoomW * 0.5f - 0.9f, 0.55f, -RoomD * 0.5f + 0.9f),
+                            new Vector3(0.34f, 1.1f, 0.34f), mPaper);
+            var lampGO = new GameObject("Andon_Light");
+            lampGO.transform.SetParent(andon.transform, false);
+            lamp = lampGO.AddComponent<Light>();
+            lamp.type = LightType.Point; lamp.color = new Color(1f, 0.82f, 0.55f);
+            lamp.intensity = 3.2f; lamp.range = 6f; lamp.shadows = LightShadows.Soft;
+
+            // --- ちゃぶ台（小物）。接地影が 出ると 立体に 見える
+            Box("Table_Top", root, new Vector3(-0.6f, 0.34f, 0.5f), new Vector3(1.3f, 0.07f, 0.9f), mFloorW);
+            for (int i = 0; i < 4; i++) {
+                float sx = (i % 2 == 0) ? -1 : 1, sz = (i < 2) ? -1 : 1;
+                Box("Table_Leg" + i, root, new Vector3(-0.6f + sx * 0.55f, 0.17f, 0.5f + sz * 0.36f),
+                    new Vector3(0.07f, 0.34f, 0.07f), mWood);
+            }
         }
 
         // --- 太陽。**手前がわ(カメラ寄り)の 上から** 差しこむ。
@@ -114,10 +129,13 @@ public static class BuildZashiki {
         RenderSettings.skybox = null;
         DynamicGI.UpdateEnvironment();
 
-        // --- キャラ（2Dの 板）。ドット絵を そのまま 立てる
+        // --- キャラ（2Dの 板）。ドット絵を そのまま 立てる。
+        // 家を 出さない ときは 庭に 立たせる（畳の 上に 置くと 宙に 浮く）
         var chars = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/chars_tall.png");
-        var player = MakeChar("Cirno",  chars, CI_CIRNO, new Vector3(0.6f, 0, 1.4f), root);
-        MakeChar("Daiyou", chars, CI_DAIYOU, new Vector3(-1.8f, 0, -0.2f), root);
+        Vector3 p1 = ShowRoom ? new Vector3(0.6f, 0f, 1.4f)  : new Vector3(GardenX + 1.6f, -0.5f, 1.4f);
+        Vector3 p2 = ShowRoom ? new Vector3(-1.8f, 0f, -0.2f) : new Vector3(GardenX - 0.6f, -0.5f, -0.4f);
+        var player = MakeChar("Cirno",  chars, CI_CIRNO, p1, root);
+        MakeChar("Daiyou", chars, CI_DAIYOU, p2, root);
         // あるけるように する。当たりは カプセル、壁や 卓は 箱の あたりで 止まる
         var ccc = player.AddComponent<CharacterController>();
         ccc.height = 1.0f; ccc.radius = 0.26f; ccc.center = new Vector3(0f, 0.52f, 0f);
@@ -141,12 +159,18 @@ public static class BuildZashiki {
         camData.antialiasing = AntialiasingMode.None;   // ドット絵を にじませない
         camData.volumeLayerMask = ~0;                   // どの層の Volume も 拾う
         // カメラの 位置は CamOrbit が 決める（実行中に さわれるように）。
-        // yaw=180 ＝ 部屋の 手前がわから 見おろす
+        //
+        // ★2026-08-14：**真正面(yaw=180)を やめて ななめから 見る。**
+        //   板の キャラは いつも カメラを 向くので、真正面だと ずっと 目が 合って
+        //   「見られている」感じに なる。ななめから 覗く 位置に すると、
+        //   その場に 居あわせた ように 見える。
+        // ★見おろしも 浅くした（34度 → 24度）。**キャラの 目の 高さに 近いほど 入りこめる。**
+        //   ただし 一人称に は しない＝地面の 広がりが 見える ぶんは 残す
         var orbit = camGO.AddComponent<CamOrbit>();
         orbit.target = new Vector3(0f, 0.85f, 0.2f);
-        orbit.pitch = 34f; orbit.yaw = 180f; orbit.distance = 8.6f;   // 部屋が ちょうど 収まる ところ
+        orbit.pitch = 24f; orbit.yaw = 212f; orbit.distance = 8.0f;
         orbit.follow = player.transform;                 // あるくと ついてくる
-        orbit.followOffset = new Vector3(0f, 0.75f, 0f);
+        orbit.followOffset = new Vector3(0f, 0.70f, 0f);
 
         // --- ポストFX（被写界深度・ブルーム・カラグレ・四すみ落とし）
         var volGO = new GameObject("PostFX");
@@ -186,10 +210,19 @@ public static class BuildZashiki {
 
         vol.sharedProfile = prof;
 
-        // --- 見えない かべ。**歩いて 落ちない ように** 部屋と 庭を かこむ。
+        // --- 見えない かべ。**歩いて 落ちない ように** かこむ。
         // （たしかめで 前に あるいたら 縁側から 落ちつづけた）
-        float wz0 = -RoomD * 0.5f - 0.6f, wz1 = RoomD * 0.5f + 1.1f;
-        float wx0 = -RoomW * 0.5f - 6.6f, wx1 = RoomW * 0.5f + 0.4f;
+        // 家を 出さない ときは 庭の へりで 止める
+        float wz0, wz1, wx0, wx1;
+        if (ShowRoom) {
+            wz0 = -RoomD * 0.5f - 0.6f; wz1 = RoomD * 0.5f + 1.1f;
+            wx0 = -RoomW * 0.5f - 6.6f; wx1 = RoomW * 0.5f + 0.4f;
+        } else {
+            // まわりの 木立ちの 内がわ まで あるける
+            const float Play = 11.5f;
+            wz0 = GardenZ - Play; wz1 = GardenZ + Play;
+            wx0 = GardenX - Play; wx1 = GardenX + Play;
+        }
         Invisible("Bound_Front", root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz1), new Vector3(wx1 - wx0, 3f, 0.3f));
         Invisible("Bound_Back",  root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz0), new Vector3(wx1 - wx0, 3f, 0.3f));
         Invisible("Bound_Left",  root, new Vector3(wx0, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
@@ -199,9 +232,13 @@ public static class BuildZashiki {
         // 屋根を はずした 切りぬきなので、部屋の 中まで 降らせると 雨もりに 見える
         var wxGO = new GameObject("Weather");
         var wx = wxGO.AddComponent<Weather>();
-        // 庭の 上だけ。部屋（左の 壁は x=-RoomW/2）に かからない ように 少し 離す
-        float rainCx = -RoomW * 0.5f - 6.0f, rainW = 10.4f;
-        wx.rain = Rain(root, new Vector3(rainCx, 6.5f, 0.9f), new Vector3(rainW, 0.5f, 13.5f));
+        // 降らせる 範囲。家を 出す ときは 庭の 上だけ（屋根の ない 切りぬきなので
+        // 部屋に 降ると 雨もりに 見える）。そとの 場面では あるける ところを ぜんぶ おおう
+        Vector3 rainAt  = ShowRoom ? new Vector3(-RoomW * 0.5f - 6.0f, 6.5f, 0.9f)
+                                   : new Vector3(GardenX, 7.0f, GardenZ);
+        Vector3 rainBox = ShowRoom ? new Vector3(10.4f, 0.5f, 13.5f)
+                                   : new Vector3(20f, 0.5f, 20f);
+        wx.rain = Rain(root, rainAt, rainBox);
         // ※ もやの つぶは **やめた。** 板が 大きいので、どんな 重ねかたに しても
         //   四角い ふちが 見えて 湯気の かたまりに なった。もやは RenderSettings の 霧で 足りる
         wx.mist = null;
@@ -211,31 +248,34 @@ public static class BuildZashiki {
         var todc = todGO.AddComponent<TimeOfDay>();
         todc.sun = sun; todc.fill = fill; todc.andon = lamp; todc.cam = cam;
         todc.shojiPaper = shojiPaperRenderer;
+        todc.outdoor = !ShowRoom;             // 家が ない＝そと。空の 色を 出す
         todc.weather = wx;                    // 時間帯を おいた **あと**に 天気を かぶせる
         wx.timeOfDay = todc;
         todc.tod = TimeOfDay.Tod.Asa;
         todc.Apply();
 
-        // --- 塵（ほこり）。光の なかで きらきら 舞う
-        Dust(root);
+        // --- 塵（ほこり）。障子ごしの 光の すじの なかで きらきら 舞う＝屋内の 見どころ。
+        // 外では 意味が ないので 家を 出す ときだけ
+        if (ShowRoom) Dust(root);
 
         // --- 2Dドット絵の 小物（調べた とおり、草木や 小物は 板の ドット絵で 置くのが 作法）
         var props = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/props.png");
         // そとの 地めん（縁の したは 庭）。これが ないと 草が 宙に 浮く
         var mGrass = Mat("GroundGrass", ArtTex + "grass_ground.png", new Vector2(8, 10), 0f, 1f);
-        // 屋内は「屋根を はずした 切りぬき」。まわりは 暗い ままで よい（実物も そう）。
-        // 庭は あけはなちから 見える ぶんだけ。
-        // ※ 前は 地めんが せますぎて、**垣根も 木立ちも 地めんの そとに 立っていた**（宙に 浮いて 見えた）。
-        //   木立ちまで きちんと 乗るように 広げた
-        const float GardenX = -RoomW * 0.5f - 5.6f;      // 庭の まんなか
-        const float GardenW = 12.4f;                     // [-15.4, -3.0] ぐらい
-        Box("Garden_Ground", root, new Vector3(GardenX, -0.62f, 0.9f),
-            new Vector3(GardenW, 0.2f, 13.5f), mGrass);
-        // 垣根（低い 板塀）。庭の 奥がわ
-        float fenceX = GardenX - GardenW * 0.5f + 3.6f;
-        for (int i = -5; i <= 5; i++)
-            Box("Fence" + i, root, new Vector3(fenceX, -0.15f, i * 1.2f + 1.0f),
-                new Vector3(0.10f, 0.95f, 1.10f), mWood);
+        // 地めん。**画面の そとまで 広げる。**
+        // 前は 庭のぶんしか なくて、カメラを 低くしたら 板の 切れめと 側面が 見えて
+        // 「浮いている 板」に なった。遠くは 霧で 空に とけるので、広げれば ふちは 見えない
+        const float FieldW = 64f, FieldD = 64f;
+        // 草の 絵は だいたい 1.55m ぶんで 1まい。広げても 目が 詰まらない ように 数を そろえる
+        var tileGrass = new Vector2(FieldW / 1.55f, FieldD / 1.55f);
+        mGrass.SetTextureScale("_BaseMap", tileGrass);
+        mGrass.mainTextureScale = tileGrass;
+        Box("Ground", root, new Vector3(GardenX, GroundY - 0.10f, GardenZ),
+            new Vector3(FieldW, 0.2f, FieldD), mGrass);
+        // ※ 垣根（木の 板塀）は **やめた。** 3Dの 箱に 木目の テクスチャを 貼った ものなので、
+        //   ドット絵の 木立ちと ならぶと 材質が ちぐはぐ だった。
+        //   仕切りが 要るなら、木と 同じ 出どころの ドット絵で 置きなおす
+        float fenceX = GardenX - GardenW * 0.5f + 3.6f;   // 木立ちの ならぶ 線（垣根の あった ところ）
         // 草木は **自分で 描くのを やめて**、ansimuz(CC0)の「Trees & Bushes」に 差し替えた。
         // 32px＝1m で 詰めなおして あるので、コマの 大きさ(4.5m)を そのまま わたせば 尺が 合う
         // （大きい 木＝4.1m、しげみ＝1.2m、小草＝0.5m ぐらいに なる）
@@ -248,22 +288,35 @@ public static class BuildZashiki {
         float[] kiD = { 0.0f, 1.3f, 0.4f, 1.7f, 0.2f, 1.1f, 0.6f };
         for (int i = 0; i < kiZ.Length; i++)
             Nature("Ki" + i, nature, (i % 2 == 0) ? NA_KI_L : NA_KI_R,
-                   new Vector3(fenceX - 1.2f - kiD[i], -0.52f, kiZ[i]), root);
-        // 草むらと しげみ＝**1枚の 板**。あけはなちの すぐ そとに 寄せて、部屋から 見えるように する
+                   new Vector3(fenceX - 1.2f - kiD[i], GroundY, kiZ[i]), root);
+        // 草むらと しげみ＝**1枚の 板**。家の あった あたりから 庭に かけて 散らす
         float gx = -RoomW * 0.5f;
-        Nature("Kusa1",  nature, NA_KUSA_A, new Vector3(gx - 0.55f, -0.52f, 1.30f), root);
-        Nature("Kusa2",  nature, NA_KUSA_B, new Vector3(gx - 1.35f, -0.52f, 2.20f), root);
-        Nature("Kusa3",  nature, NA_KUSA_C, new Vector3(gx - 0.75f, -0.52f, 3.10f), root);
-        Nature("Kusa4",  nature, NA_KUSA_A, new Vector3(gx - 2.10f, -0.52f, 1.05f), root);
-        Nature("Shige1", nature, NA_SHIGE_A,new Vector3(gx - 1.60f, -0.52f, 0.35f), root);
-        Nature("Shige2", nature, NA_SHIGE_B,new Vector3(gx - 2.40f, -0.52f, 2.90f), root);
-        Nature("Shige3", nature, NA_MATSU,  new Vector3(gx - 3.30f, -0.52f, 4.10f), root);
-        // 部屋の なかの 小物
-        Prop("Zabuton1", props, PROP_ZABU, new Vector3(-1.45f, 0.012f, 0.55f), 0.85f, root, PropKind.Flat);
-        Prop("Zabuton2", props, PROP_ZABU, new Vector3( 0.35f, 0.012f, 1.55f), 0.85f, root, PropKind.Flat);
-        Prop("Uchiwa",   props, PROP_UCHI, new Vector3( 1.55f, 0.014f, 1.15f), 0.55f, root, PropKind.Flat);
-        Prop("Senko",    props, PROP_SENKO,new Vector3( 1.95f, 0.0f,   2.10f), 0.40f, root, PropKind.Still);
-        Prop("Kabin",    props, PROP_KABIN,new Vector3(-2.45f, 0.0f,  -1.85f), 0.80f, root, PropKind.Still);
+        Nature("Kusa1",  nature, NA_KUSA_A, new Vector3(gx - 0.55f, GroundY, 1.30f), root);
+        Nature("Kusa2",  nature, NA_KUSA_B, new Vector3(gx - 1.35f, GroundY, 2.20f), root);
+        Nature("Kusa3",  nature, NA_KUSA_C, new Vector3(gx - 0.75f, GroundY, 3.10f), root);
+        Nature("Kusa4",  nature, NA_KUSA_A, new Vector3(gx - 2.10f, GroundY, 1.05f), root);
+        Nature("Kusa5",  nature, NA_KUSA_B, new Vector3(gx - 4.30f, GroundY, -2.60f), root);
+        Nature("Kusa6",  nature, NA_KUSA_C, new Vector3(gx - 6.10f, GroundY, 4.90f), root);
+        Nature("Shige1", nature, NA_SHIGE_A,new Vector3(gx - 1.60f, GroundY, 0.35f), root);
+        Nature("Shige2", nature, NA_SHIGE_B,new Vector3(gx - 2.40f, GroundY, 2.90f), root);
+        Nature("Shige3", nature, NA_MATSU,  new Vector3(gx - 3.30f, GroundY, 4.10f), root);
+        Nature("Shige4", nature, NA_SHIGE_B,new Vector3(gx - 5.20f, GroundY, -1.20f), root);
+        Nature("Shige5", nature, NA_SHIGE_A,new Vector3(gx - 7.00f, GroundY, 2.10f), root);
+
+        // --- まわりの 木立ち。**地平線を 木で ふさぐ。**
+        // 地めんを 広げただけだと 遠くが のっぺりした 緑の 板に なるので、
+        // 遊べる ところの まわりに 帯状に 木を 置いて 囲む。
+        // 置き場所は 決めうちの 式で ばらす（毎回 同じ 絵に なるように）
+        Woods(root, nature);
+
+        // 部屋の なかの 小物（家を 出す ときだけ）
+        if (ShowRoom) {
+            Prop("Zabuton1", props, PROP_ZABU, new Vector3(-1.45f, 0.012f, 0.55f), 0.85f, root, PropKind.Flat);
+            Prop("Zabuton2", props, PROP_ZABU, new Vector3( 0.35f, 0.012f, 1.55f), 0.85f, root, PropKind.Flat);
+            Prop("Uchiwa",   props, PROP_UCHI, new Vector3( 1.55f, 0.014f, 1.15f), 0.55f, root, PropKind.Flat);
+            Prop("Senko",    props, PROP_SENKO,new Vector3( 1.95f, 0.0f,   2.10f), 0.40f, root, PropKind.Still);
+            Prop("Kabin",    props, PROP_KABIN,new Vector3(-2.45f, 0.0f,  -1.85f), 0.80f, root, PropKind.Still);
+        }
 
         EditorSceneManager.SaveScene(scene, ScnDir + "Zashiki.unity");
         AssetDatabase.SaveAssets();
@@ -291,6 +344,21 @@ public static class BuildZashiki {
     // 草木を 置く。大きさは 絵が もっている ので、コマの 大きさを そのまま わたす
     static void Nature(string name, Texture2D atlas, int index, Vector3 pos, Transform root) {
         Prop(name, atlas, index, NatureCols, NatureRows, pos, NatureCell, root, PropKind.Billboard);
+    }
+
+    // まわりを かこむ 木立ち。遊べる ところ(内がわの 半径)から 外へ 帯状に 置く
+    static void Woods(Transform root, Texture2D nature) {
+        if (nature == null) return;
+        const int Count = 64;
+        const float RIn = 13.5f, ROut = 27f;     // この あいだに ばらまく
+        for (int i = 0; i < Count; i++) {
+            // 黄金角で まわすと かたよらずに ばらける。半径は 平方根で とると 面で 均一に なる
+            float a = i * 2.39996f;
+            float t = (i * 0.6180339f) % 1f;
+            float r = Mathf.Lerp(RIn, ROut, Mathf.Sqrt(t));
+            var pos = new Vector3(GardenX + Mathf.Cos(a) * r, GroundY, GardenZ + Mathf.Sin(a) * r);
+            Nature("Wood" + i, nature, (i % 2 == 0) ? NA_KI_L : NA_KI_R, pos, root);
+        }
     }
 
     // Billboard＝**1枚の 板**。いつも こちらを 向く。草木も 木も これ。
@@ -457,8 +525,10 @@ public static class BuildZashiki {
         go.transform.position = pos;
         var ps = go.AddComponent<ParticleSystem>();
         var main = ps.main;
-        main.startLifetime = 1.6f; main.startSpeed = 9f; main.startSize = 0.05f;
-        main.maxParticles = 2500;
+        // 落ちきる 手前で 消えれば よい（7mを 9〜16m/秒＋重力＝1秒たらず）。
+        // ながく もたせると 生きている つぶが 増えるだけで、絵は 変わらない
+        main.startLifetime = 1.2f; main.startSpeed = 9f; main.startSize = 0.05f;
+        main.maxParticles = 5000;
         main.startColor = new Color(0.80f, 0.86f, 0.94f, 0.42f);
         main.simulationSpace = ParticleSystemSimulationSpace.World;
         main.gravityModifier = 0.9f;

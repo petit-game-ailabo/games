@@ -20,6 +20,11 @@ public class TimeOfDay : MonoBehaviour {
     public Camera cam;
     public Weather weather;        // 天気は この 上に かぶせる（順番を 固定するため ここから 呼ぶ）
 
+    [Header("そとの 場面か")]
+    // 屋内は「屋根を はずした 切りぬき」なので まわりは 暗いのが 正しい。
+    // そとの 場面で 同じ ことを すると **地平線から さきが まっ黒**に なるので、空の 色を 出す
+    public bool outdoor = false;
+
     void OnEnable()   { AutoWire(); ApplyFromArgs(); Apply(); }
     void OnValidate() { AutoWire(); Apply(); }
 
@@ -115,10 +120,30 @@ public class TimeOfDay : MonoBehaviour {
         // 背景の 色。**屋内は「屋根を はずした 切りぬき」**なので、まわりは 暗いのが 正しい。
         // 明るい 空に すると 部屋が 宙に 浮いて 見えた
         if (cam != null) {
-            switch (tod) {
-                case Tod.Yugata: cam.backgroundColor = new Color(0.075f, 0.050f, 0.045f); break;
-                case Tod.Yoru:   cam.backgroundColor = new Color(0.022f, 0.026f, 0.040f); break;
-                default:         cam.backgroundColor = new Color(0.055f, 0.048f, 0.044f); break;
+            if (outdoor) {
+                // 空の 色。**遠くは この 色に かすんで いく**ように 霧も そろえるので、
+                // 地面の 切れめが 黒い 崖に 見えなく なる
+                Color sky2;
+                switch (tod) {
+                    case Tod.Hiru:   sky2 = new Color(0.55f, 0.74f, 0.93f); break;
+                    case Tod.Yugata: sky2 = new Color(0.85f, 0.56f, 0.38f); break;
+                    case Tod.Yoru:   sky2 = new Color(0.07f, 0.09f, 0.17f); break;
+                    default:         sky2 = new Color(0.69f, 0.81f, 0.93f); break;   // あさ
+                }
+                cam.backgroundColor = sky2;
+                RenderSettings.fogColor = sky2;
+                // そとは **遠くを しっかり かすませる。** そうしないと まわりの 木立ちが
+                // くっきり 立ちならんで、地めんの 切れめが 見えてしまう
+                RenderSettings.fogDensity *= 1.5f;
+                // そとは 空からの まわりこみが 強い。屋内の 値のままだと 沈んで 見える
+                RenderSettings.ambientSkyColor = sky * 1.35f;
+                DynamicGI.UpdateEnvironment();
+            } else {
+                switch (tod) {
+                    case Tod.Yugata: cam.backgroundColor = new Color(0.075f, 0.050f, 0.045f); break;
+                    case Tod.Yoru:   cam.backgroundColor = new Color(0.022f, 0.026f, 0.040f); break;
+                    default:         cam.backgroundColor = new Color(0.055f, 0.048f, 0.044f); break;
+                }
             }
         }
 

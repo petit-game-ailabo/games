@@ -58,12 +58,12 @@ public class Weather : MonoBehaviour {
             case Mode.Ame:      // あめ：しとしと。影は ほぼ 出ない
                 sunScale = 0.34f; fillScale = 1.35f; fogScale = 1.55f;
                 fogTint = new Color(0.62f, 0.67f, 0.72f); tintAmount = 0.5f;
-                rainRate = 320f; mistRate = 4f;
+                rainRate = 900f; mistRate = 4f;
                 break;
             case Mode.Yudachi: // ゆうだち：夏の 夕立。暗く、つぶが 太くて 多い
                 sunScale = 0.22f; fillScale = 1.20f; fogScale = 1.9f;
                 fogTint = new Color(0.46f, 0.50f, 0.58f); tintAmount = 0.65f;
-                rainRate = 800f; mistRate = 7f;
+                rainRate = 2300f; mistRate = 7f;
                 break;
             default:            // はれ：さわらない
                 sunScale = 1f; fillScale = 1f; fogScale = 1f;
