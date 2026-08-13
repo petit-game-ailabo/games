@@ -23,6 +23,8 @@ public class BugCatcher : MonoBehaviour {
     public Transform net;            // 見た目（無ければ 作る）
 
     BugBook book;
+    BugSumo sumo;
+    BugHud hud;
     float swing = -1f, coolLeft;
     bool resolved;
     Vector3 netHome;
@@ -30,6 +32,8 @@ public class BugCatcher : MonoBehaviour {
     void Start() {
         book = FindFirstObjectByType<BugBook>();
         if (book == null) book = gameObject.AddComponent<BugBook>();
+        sumo = FindFirstObjectByType<BugSumo>();
+        hud = FindFirstObjectByType<BugHud>();
         if (net == null) net = MakeNet();
         netHome = net.localPosition;
     }
@@ -37,8 +41,18 @@ public class BugCatcher : MonoBehaviour {
     void Update() {
         if (coolLeft > 0f) coolLeft -= Time.deltaTime;
 
-        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return) ||
-            Input.GetKeyDown(KeyCode.J) || Input.GetMouseButtonDown(0)) TrySwing();
+        // ずもうの さいちゅうは あみを ふらない（同じ キーを 使うので）
+        if (sumo != null && sumo.Busy) { Pose(-1f); return; }
+
+        // 相手の そばでは あみでは なく「いどむ」に なる＝ボタンは 1つの まま
+        if (hud != null && sumo != null) hud.SetPrompt(sumo.PromptFor(transform));
+
+        bool pressed = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)
+                    || Input.GetKeyDown(KeyCode.J) || Input.GetMouseButtonDown(0);
+        if (pressed) {
+            if (sumo != null && sumo.PlayerNear(transform)) { sumo.Begin(); return; }
+            TrySwing();
+        }
 
         if (swing >= 0f) {
             swing += Time.deltaTime;

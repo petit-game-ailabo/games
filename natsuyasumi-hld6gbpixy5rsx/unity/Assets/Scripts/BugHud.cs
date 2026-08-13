@@ -14,17 +14,24 @@ public class BugHud : MonoBehaviour {
     public Sprite panel;
     public BugBook book;
 
-    Text counter, toast, bookText;
+    /// <summary>ほかの 画面（むしずもうなど）も この 下に ぶらさげる</summary>
+    public Transform CanvasRoot { get; private set; }
+
+    Text counter, toast, bookText, prompt;
+    RectTransform promptPanel;
     RectTransform toastPanel, bookPanel;
     float toastLeft;
     bool bookOpen;
 
     const int FontSize = 12;
 
+    // **画面は Awake で 組む。** ほかの 画面（むしずもう）が Start で この 下に
+    // ぶらさがりに くるので、そのときには もう できて いないと いけない
+    void Awake() { Build(); }
+
     void Start() {
         if (book == null) book = FindFirstObjectByType<BugBook>();
         if (book != null) book.OnCaught += OnCaught;
-        Build();
         Refresh();
     }
 
@@ -56,6 +63,14 @@ public class BugHud : MonoBehaviour {
         bookOpen = true;
         if (bookPanel != null) bookPanel.gameObject.SetActive(true);
         RefreshBook();
+    }
+
+    /// <summary>足もとの ひとこと（null で 消す）。毎フレーム 呼ばれる 前提</summary>
+    public void SetPrompt(string s) {
+        if (promptPanel == null) return;
+        bool on = !string.IsNullOrEmpty(s);
+        if (on && prompt.text != s) prompt.text = s;
+        if (promptPanel.gameObject.activeSelf != on) promptPanel.gameObject.SetActive(on);
     }
 
     public void Say(string s) {
@@ -98,6 +113,7 @@ public class BugHud : MonoBehaviour {
         scaler.referenceResolution = new Vector2(640, 360);
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
         scaler.matchWidthOrHeight = 1f;
+        CanvasRoot = canvasGO.transform;
 
         // ひだり上の 数え
         var cPanel = Panel(canvasGO.transform, new Vector2(0f, 1f), new Vector2(8f, -8f), new Vector2(240f, 26f));
@@ -110,6 +126,14 @@ public class BugHud : MonoBehaviour {
         toastPanel.anchoredPosition = new Vector2(0f, 26f);
         toast = Label(toastPanel, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(-16f, 0f));
         toastPanel.gameObject.SetActive(false);
+
+        // 近づいた ときの ひとこと（ひとことの すぐ 上）
+        promptPanel = Panel(canvasGO.transform, new Vector2(0.5f, 0f), new Vector2(0f, 60f), new Vector2(300f, 26f));
+        promptPanel.pivot = new Vector2(0.5f, 0f);
+        promptPanel.anchorMin = promptPanel.anchorMax = new Vector2(0.5f, 0f);
+        promptPanel.anchoredPosition = new Vector2(0f, 60f);
+        prompt = Label(promptPanel, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(-16f, 0f));
+        promptPanel.gameObject.SetActive(false);
 
         // ずかん
         bookPanel = Panel(canvasGO.transform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 220f));

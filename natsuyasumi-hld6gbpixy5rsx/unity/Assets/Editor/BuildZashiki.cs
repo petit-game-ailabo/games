@@ -188,7 +188,7 @@ public static class BuildZashiki {
         Vector3 p1 = ShowRoom ? new Vector3(0.6f, 0f, 1.4f)  : new Vector3(GardenX + 1.6f, -0.5f, 1.4f);
         Vector3 p2 = ShowRoom ? new Vector3(-1.8f, 0f, -0.2f) : new Vector3(GardenX - 0.6f, -0.5f, -0.4f);
         var player = MakeChar("Cirno",  chars, CI_CIRNO, p1, root);
-        MakeChar("Daiyou", chars, CI_DAIYOU, p2, root);
+        var partner = MakeChar("Daiyou", chars, CI_DAIYOU, p2, root);
         // あるけるように する。当たりは カプセル、壁や 卓は 箱の あたりで 止まる
         var ccc = player.AddComponent<CharacterController>();
         ccc.height = 1.0f; ccc.radius = 0.26f; ccc.center = new Vector3(0f, 0.52f, 0f);
@@ -403,6 +403,12 @@ public static class BuildZashiki {
         hud.panel = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/UI/panel.png");
         if (hud.font == null) Debug.LogError("[BuildZashiki] 書体が 見つからない");
         if (hud.panel == null) Debug.LogError("[BuildZashiki] panel.png が 見つからない");
+
+        // --- むしずもう。大ようせいの そばで スペース＝いどむ（あみを ふるのと 同じ ボタン）
+        var sumoGO = new GameObject("BugSumo");
+        var sumo = sumoGO.AddComponent<BugSumo>();
+        sumo.atlas = bugAtlas; sumo.font = hud.font; sumo.panel = hud.panel;
+        sumo.partner = partner.transform;
 
         EditorSceneManager.SaveScene(scene, ScnDir + "Zashiki.unity");
         AssetDatabase.SaveAssets();

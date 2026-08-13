@@ -96,6 +96,23 @@ public class AutoShot : MonoBehaviour {
             if (book != null) Debug.Log("[AutoShot] むし ごうけい=" + book.Total + " しゅるい=" + book.Kinds);
         }
 
+        // -sumo N を つけると むしずもうを N回 おして みる（勝ち負けが 動くか の たしかめ）
+        int sumoPress = int.Parse(Arg("-sumo", "0"));
+        if (sumoPress > 0) {
+            var sumo = FindFirstObjectByType<BugSumo>();
+            if (sumo == null) Debug.Log("[AutoShot] むしずもうが 無い");
+            else if (!sumo.CanStart()) Debug.Log("[AutoShot] かごが 空で いどめない");
+            else {
+                Debug.Log("[AutoShot] むしずもう はじめ=" + sumo.Begin());
+                for (int i = 0; i < sumoPress && sumo.Busy; i++) {
+                    sumo.DebugPush();
+                    for (int w = 0; w < 3; w++) yield return null;
+                }
+                Debug.Log("[AutoShot] むしずもう けっか=" + sumo.DebugState);
+                for (int w = 0; w < 30; w++) yield return null;
+            }
+        }
+
         // -book を つけると ずかんを ひらいた ところを 撮る
         if (Arg("-book", null) != null) {
             var hud = FindFirstObjectByType<BugHud>();
