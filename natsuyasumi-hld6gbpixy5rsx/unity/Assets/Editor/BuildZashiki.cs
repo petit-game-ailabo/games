@@ -482,14 +482,18 @@ public static class BuildZashiki {
         var uvS = new Vector2(1f / cols, 1f / rows);
         var uvO = new Vector2(col / (float)cols, (rows - 1 - row) / (float)rows);
 
-        // 草木は かぜに ゆれる。寝かせた 小物は 動かさない
+        // 草木は かぜに ゆれる。**たてには のびちぢみさせない**
+        //（木が 息を している ように 見えて おかしかった。ゆれるのは 葉＝よこだけ）。
+        // 寝かせた 小物・屋内の 物は 動かさない。
+        // ★素材は コマごとに 1つだけ 作って 使いまわす。ずらしは シェーダが
+        //   置き場所から 決める ので、木が 増えても 素材は 増えない
         bool sways = kind == PropKind.Billboard;
-        var m = SpriteMat(MatDir + "Prop_" + name + ".mat", atlas, uvS, uvO,
-                          sways ? 0.020f : 0f,   // たての のびちぢみ
-                          sways ? 0.9f  : 0f,    // はやさ
-                          sways ? 0.022f : 0f,   // よこ揺れ
-                          sways ? 0.5f  : 0f,
-                          PhaseOf(pos));
+        var m = SpriteMat(atlas, uvS, uvO,
+                          0f,                    // たての のびちぢみ＝なし
+                          0f,
+                          sways ? 0.030f : 0f,   // よこ揺れ（葉の ぶん）
+                          sways ? 0.55f : 0f,
+                          0f);
 
         var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
         q.name = "Sheet";
@@ -516,11 +520,29 @@ public static class BuildZashiki {
         return Mathf.Repeat(pos.x * 3.1f + pos.z * 1.7f, 6.2831853f);
     }
 
-    // ドット絵の 板ようの 素材。**息づかい／ゆれの シェーダ**を つける。
-    // 見つからない ときだけ URP/Lit に 落とす（ビルドが 止まらない ように）
-    static Material SpriteMat(string path, Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
+    // 同じ 見た目の 素材は 1つだけ 作って 使いまわす。
+    // 1つずつ 作ると 木の 数だけ 描きなおしが 増えて、たくさん 置けなくなる
+    static readonly System.Collections.Generic.Dictionary<string, Material> matCache
+        = new System.Collections.Generic.Dictionary<string, Material>();
+
+    static Material SpriteMat(Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
                               float breatheAmp, float breatheSpeed,
                               float swayAmp, float swaySpeed, float phase) {
+        string key = string.Format("{0}_{1:F3}_{2:F3}_{3:F3}_{4:F3}_{5:F3}_{6:F3}_{7:F3}",
+                                   tex != null ? tex.name : "none", uvScale.x, uvOffset.x, uvOffset.y,
+                                   breatheAmp, swayAmp, swaySpeed, phase);
+        Material cached;
+        if (matCache.TryGetValue(key, out cached) && cached != null) return cached;
+        var path = MatDir + "Sprite_" + key.Replace('.', '_') + ".mat";
+        return matCache[key] = SpriteMatNew(path, tex, uvScale, uvOffset,
+                                            breatheAmp, breatheSpeed, swayAmp, swaySpeed, phase);
+    }
+
+    // ドット絵の 板ようの 素材。**息づかい／ゆれの シェーダ**を つける。
+    // 見つからない ときだけ URP/Lit に 落とす（ビルドが 止まらない ように）
+    static Material SpriteMatNew(string path, Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
+                                 float breatheAmp, float breatheSpeed,
+                                 float swayAmp, float swaySpeed, float phase) {
         var sh = Shader.Find("Natsuyasumi/PixelSprite");
         bool custom = sh != null;
         if (!custom) {
@@ -601,8 +623,8 @@ public static class BuildZashiki {
         var uvO = new Vector2(col / (float)CharCols, (CharRows - 1 - row) / (float)CharRows);
         // 呼吸は 背たけの 3.5%ぶん。周期は 2π/1.45 ≒ 4.3秒＝落ちついた いき。
         // ずれ(_Phase)を 置き場所から 決めるので、ふたりが 同じ 拍で 動かない
-        var m = SpriteMat(MatDir + "Char_" + name + ".mat", sheet, uvS, uvO,
-                          0.035f, 1.45f, 0.006f, 0.6f, PhaseOf(pos));
+        var m = SpriteMatNew(MatDir + "Char_" + name + ".mat", sheet, uvS, uvO,
+                             0.035f, 1.45f, 0.006f, 0.6f, PhaseOf(pos));
         quad.GetComponent<Renderer>().sharedMaterial = m;
         var mr = quad.GetComponent<Renderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;   // 板でも 影は 出す
@@ -772,6 +794,11 @@ public static class BuildZashiki {
         go.name = name; go.transform.SetParent(parent, false);
         go.transform.localPosition = pos; go.transform.localScale = size;
         Object.DestroyImmediate(go.GetComponent<MeshRenderer>());   // 絵は 出さない。当たりだけ のこす
+        // **レイの じゃまに しない（層 2 = Ignore Raycast）。**
+        // 地めんの 高さを 真下への レイで 測って いるので、高さ 3m の この 壁に
+        // 当たると そこを 地めんと 思いこみ、**ばったが 宙に 湧いた**。
+        // 歩く 当たり（CharacterController）は 層に かかわらず 効くので これで よい
+        go.layer = 2;
     }
 
     // 円い もの（かごの ふた・そこ）。Cylinder は 高さ 1 が 縦 2 ぶんなので 半分に する

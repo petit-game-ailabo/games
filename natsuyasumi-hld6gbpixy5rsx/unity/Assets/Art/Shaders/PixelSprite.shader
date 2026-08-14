@@ -57,15 +57,23 @@ Shader "Natsuyasumi/PixelSprite"
         TEXTURE2D(_BaseMap);
         SAMPLER(sampler_BaseMap);
 
-        // 息づかい。Quad の ローカル y は -0.5..0.5 なので、+0.5 で 0(足もと)..1(頭) の 重みに なる。
-        // 重みを かけるので **下端は まったく 動かない＝浮かない**。
-        // よこ揺れは 重みの 2乗。頭だけが すこし ふらつく＝呼吸に つられた 感じ
+        // 息づかい／かぜの ゆれ。
+        // Quad の ローカル y は -0.5..0.5 なので、+0.5 で 0(足もと)..1(頭) の 重みに なる。
+        // 重みを かけるので **下端は まったく 動かない＝浮かない**（木なら みきが 動かない）。
+        // よこ揺れは 重みの 2乗＝上の 葉ほど 大きく ゆれる。
+        //
+        // ★ずらし(位相)と はやさは **置いてある 場所から 決める**。
+        //   1本ごとに 素材を 分けなくても ばらばらに 揺れるので、
+        //   木が 何百本に なっても 素材は 1つ＝まとめて 描ける
         float3 Breathe(float3 positionOS)
         {
             float w = saturate(positionOS.y + 0.5);
-            float t = _Time.y * _BreatheSpeed + _Phase;
+            float3 org = mul(UNITY_MATRIX_M, float4(0, 0, 0, 1)).xyz;
+            float ph  = _Phase + org.x * 2.7 + org.z * 1.3;
+            float spd = 0.75 + frac(org.x * 0.37 + org.z * 0.61 + 0.13) * 0.6;
+            float t = _Time.y * _BreatheSpeed * spd + ph;
             positionOS.y += sin(t) * _BreatheAmp * w;
-            positionOS.x += sin(_Time.y * _SwaySpeed + _Phase * 1.7) * _SwayAmp * w * w;
+            positionOS.x += sin(_Time.y * _SwaySpeed * spd + ph * 1.7) * _SwayAmp * w * w;
             return positionOS;
         }
         ENDHLSL

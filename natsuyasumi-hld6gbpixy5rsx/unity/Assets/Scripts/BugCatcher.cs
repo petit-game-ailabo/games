@@ -25,17 +25,17 @@ public class BugCatcher : MonoBehaviour {
     BugBook book;
     BugSumo sumo;
     BugHud hud;
+    PlayerMove move;
     float swing = -1f, coolLeft;
     bool resolved;
-    Vector3 netHome;
 
     void Start() {
         book = FindFirstObjectByType<BugBook>();
         if (book == null) book = gameObject.AddComponent<BugBook>();
         sumo = FindFirstObjectByType<BugSumo>();
         hud = FindFirstObjectByType<BugHud>();
+        move = GetComponent<PlayerMove>();
         if (net == null) net = MakeNet();
-        netHome = net.localPosition;
     }
 
     void Update() {
@@ -60,7 +60,9 @@ public class BugCatcher : MonoBehaviour {
             Pose(k);
             // **ふり切る すこし 手前で 判定する。** 当たり判定が 絵より 遅れると
             // 「当たったのに 取れない」と 感じる
-            if (!resolved && k >= 0.45f) { resolved = true; Resolve(); }
+            // **判定は あみが 正面を 通る ころ。** 早すぎても 遅すぎても
+            // 「当たったのに 取れない」に なる（ふり幅 -80〜+55度の まん中あたり）
+            if (!resolved && k >= 0.58f) { resolved = true; Resolve(); }
             if (k >= 1f) { swing = -1f; coolLeft = cool; Pose(-1f); }
         }
     }
@@ -83,14 +85,30 @@ public class BugCatcher : MonoBehaviour {
         return best;
     }
 
-    // あみの ふり。0→1 で 上から 前へ 払う
+    // あみの ふり。**向いている ほうへ 払う。**
+    // →を おした あとは 右を 向いて いるので、あみも 右へ 振りおろす。
+    // 板の キャラは いつも カメラを 向くので、「前」も「右」も カメラ基準で とる
     void Pose(float k) {
         if (net == null) return;
-        if (k < 0f) { net.localPosition = netHome; net.localRotation = Quaternion.identity; net.gameObject.SetActive(false); return; }
+        if (k < 0f) { net.gameObject.SetActive(false); return; }
         net.gameObject.SetActive(true);
-        float a = Mathf.SmoothStep(-70f, 60f, Mathf.Clamp01(k));
-        net.localRotation = Quaternion.Euler(a, 0f, 0f);
-        net.localPosition = netHome + new Vector3(0f, 0.10f * Mathf.Sin(Mathf.Clamp01(k) * Mathf.PI), 0f);
+
+        var cam = Camera.main;
+        Vector3 fwd = cam != null ? cam.transform.forward : Vector3.forward;
+        fwd.y = 0f;
+        if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
+        fwd.Normalize();
+        Vector3 right = new Vector3(fwd.z, 0f, -fwd.x);   // 画面の 右
+        int face = move != null ? move.Face : 1;
+
+        float t = Mathf.Clamp01(k);
+        // うしろ(-100度)から 前(+30度)へ、向いている ほうを 通って 払う
+        float yaw = Mathf.SmoothStep(-80f, 55f, t) * face;
+        float pitch = Mathf.Lerp(-32f, 26f, t);           // すこし 上から 下へ
+        net.rotation = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(pitch, yaw, 0f);
+        net.position = transform.position
+                     + Vector3.up * (0.74f + 0.10f * Mathf.Sin(t * Mathf.PI))
+                     + right * (face * 0.16f);
     }
 
     void Resolve() {
@@ -98,7 +116,12 @@ public class BugCatcher : MonoBehaviour {
         // 前＝カメラの 向き（歩きも カメラ基準なので そろえる）
         Vector3 fwd = cam != null ? cam.transform.forward : transform.forward;
         fwd.y = 0f; fwd.Normalize();
-        Vector3 at = transform.position + Vector3.up * 0.85f + fwd * reach;
+        // あみが 通る ところ＝前＋向いている がわ。絵と 判定が ずれると
+        // 「当たったのに 取れない」と 感じる
+        Vector3 right = new Vector3(fwd.z, 0f, -fwd.x);
+        int face = move != null ? move.Face : 1;
+        Vector3 at = transform.position + Vector3.up * 0.85f
+                   + fwd * (reach * 0.88f) + right * (face * reach * 0.30f);
 
         Bug best = null; float bestD = float.MaxValue;
         foreach (var b in FindObjectsByType<Bug>(FindObjectsSortMode.None)) {

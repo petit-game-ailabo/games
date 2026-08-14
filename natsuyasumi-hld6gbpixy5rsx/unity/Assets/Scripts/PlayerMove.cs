@@ -20,6 +20,8 @@ public class PlayerMove : MonoBehaviour {
     float bob, vy;
     Vector3 startPos;
     int face = 1;                       // 1=右 -1=左
+    /// <summary>いま 向いている 左右（1=右 -1=左）。あみを ふる 向きに 使う</summary>
+    public int Face { get { return face; } }
     Vector2 baseScale, baseOffset;
 
     void Awake() {
