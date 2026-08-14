@@ -243,7 +243,42 @@ def grass_ground():
     return "grass_ground.png", im.size
 
 
+# ---------------------------------------------------------------- けもの道・踏み分け道の 土
+# 人が とおる ところは 草が はげて 土が 出る。草地と 同じ 48px＝1.5m
+def dirt_path():
+    w = h = 48
+    base = mix(BR_DK, OLIVE, 0.42)
+    im = newimg(w, h, base)
+    px = im.load()
+    for y in range(h):
+        for x in range(w):
+            r = rng.random()
+            if r < 0.14:
+                px[x, y] = mix(base, BR_LT, 0.30)
+            elif r < 0.24:
+                px[x, y] = mix(base, DARK, 0.28)
+    # 小石
+    for _ in range(26):
+        cx, cy = rng.randrange(w), rng.randrange(h)
+        c = mix(GREY, (255, 255, 255), 0.22)
+        px[cx, cy] = c
+        if rng.random() < 0.5:
+            px[(cx + 1) % w, cy] = mix(GREY, DARK, 0.3)
+    # わだち（踏まれて へこんだ すじ）
+    for _ in range(8):
+        y0 = rng.randrange(h)
+        c = mix(base, DARK, 0.20)
+        for x in range(w):
+            px[x, (y0 + (x // 9)) % h] = c
+    # はしに のこった 草
+    for _ in range(30):
+        x, y = rng.randrange(w), rng.randrange(h)
+        px[x, y] = mix(G_MD, base, 0.35)
+    im.save(os.path.join(OUT, "dirt_path.png"))
+    return "dirt_path.png", im.size
+
+
 if __name__ == "__main__":
-    for f in (tatami, wood_floor, wood_beam, plaster_wall, shoji_paper, roof_tile, grass_ground):
+    for f in (tatami, wood_floor, wood_beam, plaster_wall, shoji_paper, roof_tile, grass_ground, dirt_path):
         name, size = f()
         print("%-18s %s" % (name, size))

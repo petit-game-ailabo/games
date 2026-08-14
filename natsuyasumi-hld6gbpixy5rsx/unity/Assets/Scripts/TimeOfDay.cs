@@ -132,9 +132,10 @@ public class TimeOfDay : MonoBehaviour {
                 }
                 cam.backgroundColor = sky2;
                 RenderSettings.fogColor = sky2;
-                // そとは **遠くを しっかり かすませる。** そうしないと まわりの 木立ちが
-                // くっきり 立ちならんで、地めんの 切れめが 見えてしまう
-                RenderSettings.fogDensity *= 1.5f;
+                // そとは 遠くを かすませる。ただし **かけすぎると 山が 消える**。
+                // 木立ちだけで 地平線を ふさいで いた ころは 1.5倍に して いたが、
+                // それだと 40m先で 半分 白く なり、山が あるのに 平地に 見えた
+                RenderSettings.fogDensity *= 0.85f;
                 // そとは 空からの まわりこみが 強い。屋内の 値のままだと 沈んで 見える
                 RenderSettings.ambientSkyColor = sky * 1.35f;
                 DynamicGI.UpdateEnvironment();

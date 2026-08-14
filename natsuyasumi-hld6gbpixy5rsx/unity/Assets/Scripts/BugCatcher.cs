@@ -54,6 +54,8 @@ public class BugCatcher : MonoBehaviour {
             TrySwing();
         }
 
+        if (move != null) move.locked = swing >= 0f;
+
         if (swing >= 0f) {
             swing += Time.deltaTime;
             float k = swing / swingTime;
@@ -134,21 +136,18 @@ public class BugCatcher : MonoBehaviour {
         }
         if (best == null) return;
 
-        // まん中で とらえるほど 取りやすい
-        float aim = 1f - Mathf.Clamp01(bestD / radius) * 0.45f;
-        if (Random.value < best.kind.catchRate * aim) {
-            book.Add(best.kind.id, best.sizeMm);
-            Pop(best.transform.position, true);
-            best.Catch();
-        } else {
-            // はずした。虫は おどろいて 逃げる＝連打では 取れない
-            Pop(best.transform.position, false);
-            best.Startle(1.4f);
-        }
+        // **あみが 当たったら 取れる。さいころは ふらない。**
+        // 見た目では 当たって いるのに 取れない のは、遊ぶ 側から すると ただの 故障に 見える。
+        // むずかしさは 「近づけるか・追いつけるか」＝場所の 話で 出す
+        book.Add(best.kind.id, best.sizeMm);
+        Pop(best.transform.position);
+        best.Catch();
     }
 
-    // 取れた／逃げられた を つぶで 見せる
-    void Pop(Vector3 at, bool ok) {
+    // 取れた ことを つぶで 見せる。
+    // ※ はずした ときの 白い つぶは やめた。**あみが 当たっても ふつう 何も 出ない。**
+    //   出ると「当てたのに 取れなかった」と 誤って 伝わる
+    void Pop(Vector3 at) {
         var go = new GameObject("Pop");
         go.transform.position = at;
         var ps = go.AddComponent<ParticleSystem>();
@@ -156,9 +155,9 @@ public class BugCatcher : MonoBehaviour {
         main.startLifetime = 0.55f; main.startSpeed = 2.2f; main.startSize = 0.10f;
         main.maxParticles = 24; main.simulationSpace = ParticleSystemSimulationSpace.World;
         main.gravityModifier = 1.2f;
-        main.startColor = ok ? new Color(1f, 0.95f, 0.55f, 1f) : new Color(0.85f, 0.85f, 0.85f, 0.8f);
+        main.startColor = new Color(1f, 0.95f, 0.55f, 1f);
         var em = ps.emission; em.enabled = true; em.rateOverTime = 0f;
-        em.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)(ok ? 16 : 7)) });
+        em.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)16) });
         var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Sphere; sh.radius = 0.12f;
         var r = go.GetComponent<ParticleSystemRenderer>();
         r.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")

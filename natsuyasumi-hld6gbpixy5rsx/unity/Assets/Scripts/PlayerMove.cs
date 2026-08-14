@@ -14,10 +14,15 @@ public class PlayerMove : MonoBehaviour {
     public float bobHeight = 0.055f;    // あるくと すこし はずむ
     public float bobSpeed = 9.5f;
 
+    /// <summary>true の あいだは 入力を うけつけない（あみを ふって いる あいだ など）</summary>
+    public bool locked;
+
     CharacterController cc;
     Renderer spriteRen;
     MaterialPropertyBlock mpb;
     float bob, vy;
+    float breatheAmp;                   // 立ち止まって いる ときの 息づかいの 大きさ
+    float pixel = 0.02f;                // 絵の 1ドットぶんの 高さ(m)
     Vector3 startPos;
     int face = 1;                       // 1=右 -1=左
     /// <summary>いま 向いている 左右（1=右 -1=左）。あみを ふる 向きに 使う</summary>
@@ -33,8 +38,11 @@ public class PlayerMove : MonoBehaviour {
             var m = spriteRen.sharedMaterial;
             baseScale  = m.GetTextureScale("_BaseMap");
             baseOffset = m.GetTextureOffset("_BaseMap");
+            breatheAmp = m.HasProperty("_BreatheAmp") ? m.GetFloat("_BreatheAmp") : 0f;
             mpb = new MaterialPropertyBlock();
         }
+        // 絵は たて 64ドットで 背たけぶん。1ドット＝この 高さ
+        if (sprite != null) pixel = Mathf.Max(0.004f, sprite.localScale.y / 64f);
     }
 
     [Header("たしかめ用（自動で あるかせる）")]
@@ -43,7 +51,11 @@ public class PlayerMove : MonoBehaviour {
 
     void Update() {
         var cam = Camera.main;
-        float h = Input.GetAxisRaw("Horizontal"), v = Input.GetAxisRaw("Vertical");
+        float h = 0f, v = 0f;
+        // **あみを ふって いる あいだは 動かない。**
+        // ふりながら 右を 向いたり 左を 向いたり できると、振りの 向きが 途中で
+        // 入れかわって 何を して いるか 分からなく なる
+        if (!locked) { h = Input.GetAxisRaw("Horizontal"); v = Input.GetAxisRaw("Vertical"); }
         if (useAutoInput) { h = autoInput.x; v = autoInput.y; }
         Vector3 wish = Vector3.zero;
         if (cam != null) {
@@ -75,11 +87,14 @@ public class PlayerMove : MonoBehaviour {
             if (Mathf.Abs(screenX) > 0.15f) face = screenX > 0f ? 1 : -1;
         }
 
-        // あるく はずみ
+        // あるく はずみ。
+        // ★**ドット の きざみに そろえる。** なめらかに 上下させると、点で 拡大して
+        //   いる 絵の 行が すべって がくがく 見える。1ドット単位で 跳ねさせると 落ちつく
         bob = moving ? bob + Time.deltaTime * bobSpeed : 0f;
         if (sprite != null) {
+            float raw = moving ? Mathf.Abs(Mathf.Sin(bob)) * bobHeight : 0f;
             var p = sprite.localPosition;
-            p.y = sprite.localScale.y * 0.5f + (moving ? Mathf.Abs(Mathf.Sin(bob)) * bobHeight : 0f);
+            p.y = sprite.localScale.y * 0.5f + Mathf.Round(raw / pixel) * pixel;
             sprite.localPosition = p;
         }
 
@@ -89,6 +104,10 @@ public class PlayerMove : MonoBehaviour {
             var s = baseScale; var o = baseOffset;
             if (face < 0) { s.x = -baseScale.x; o.x = baseOffset.x + baseScale.x; }
             mpb.SetVector("_BaseMap_ST", new Vector4(s.x, s.y, o.x, o.y));
+            // **歩いて いる あいだは 息づかいを 止める。**
+            // 歩きの はずみと 息の のびちぢみが 重なって、絵が がくがくして いた。
+            // そもそも 走りながら 肩で 息を する 絵は 要らない
+            mpb.SetFloat("_BreatheAmp", moving ? 0f : breatheAmp);
             spriteRen.SetPropertyBlock(mpb);
         }
     }

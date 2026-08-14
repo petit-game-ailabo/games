@@ -39,16 +39,10 @@ public class Bug : MonoBehaviour {
         if (sinkT >= 0f) { Caught(); return; }
         float t = Time.time + phase;
 
-        // 近づかれたら 逃げる。用心ぶかい ほど 早く 気づく。
-        // ※ **気づく 距離も 逃げる 見こみも、はじめは 強すぎた。**
-        //   14回 ふって 2匹＝外している のでは なく、近づいた 時点で もう 逃げていた。
-        //   「そっと 寄れば ひと振りは できる」ぐらいに 落とす
-        if (player != null) {
-            var d = player.position - transform.position; d.y = 0f;
-            float notice = Mathf.Lerp(0.9f, 2.6f, kind.wary);
-            if (d.sqrMagnitude < notice * notice && fleeLeft <= 0f && Random.value < kind.wary * Time.deltaTime * 1.1f)
-                fleeLeft = Random.Range(0.7f, 1.6f);
-        }
+        // ★**近づいただけでは 逃げない。**
+        //   そばを 走っただけで 飛んで いかれると、追いかける ことが できず
+        //   ただ 意地わるに 感じる。むずかしさは 虫の 動きかたで 出す
+        //  （とんぼは 速く ただよう、ばったは はねる、など）
 
         switch (kind.perch) {
             case BugPerch.Trunk:

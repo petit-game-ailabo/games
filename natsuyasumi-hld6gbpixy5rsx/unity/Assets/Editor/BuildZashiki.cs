@@ -206,7 +206,7 @@ public static class BuildZashiki {
         // 調べた ところ、この 見た目は **見おろし 約30度・画角 約60度** が 目安。
         // 画角を ひろく とると 視点が 平たく なり、それでいて 奥ゆきは のこる
         cam.fieldOfView = 46f;
-        cam.nearClipPlane = 0.1f; cam.farClipPlane = 60f;
+        cam.nearClipPlane = 0.1f; cam.farClipPlane = 260f;   // 山の むこうまで 見える ように
         // まっ黒だと 抜けて 見える。あたたかい 暗さに して 箱庭らしく
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.055f, 0.045f, 0.040f);
@@ -285,8 +285,8 @@ public static class BuildZashiki {
         // --- 見えない かべ。**歩いて 落ちない ように** かこむ。
         // （たしかめで 前に あるいたら 縁側から 落ちつづけた）
         // 家を 出さない ときは 庭の へりで 止める
-        // まわりの 木立ちの 内がわ まで あるける
-        const float Play = 11.5f;
+        // 山の ほうまで あるける。地めんの 端の すこし 内がわで 止める
+        const float Play = 50f;
         float wz0 = GardenZ - Play, wz1 = GardenZ + Play;
         float wx0 = GardenX - Play, wx1 = GardenX + Play;
         Invisible("Bound_Front", root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz1), new Vector3(wx1 - wx0, 3f, 0.3f));
@@ -301,7 +301,7 @@ public static class BuildZashiki {
         // 降らせる 範囲。**部屋の 上には かけない。**
         // 屋根を 切りとった 見せかたなので、部屋に 降らせると 雨もりに 見える。
         // カメラは 右手前から 覗くので、見えているのは 家の むこうの 庭がわ＝そこに 降らせれば 足りる
-        wx.rain = Rain(root, new Vector3(GardenX - 1.5f, 7.0f, GardenZ), new Vector3(14f, 0.5f, 20f));
+        wx.rain = Rain(root, new Vector3(GardenX - 1.5f, 7.5f, GardenZ), new Vector3(22f, 0.5f, 24f));
         // ※ もやの つぶは **やめた。** 板が 大きいので、どんな 重ねかたに しても
         //   四角い ふちが 見えて 湯気の かたまりに なった。もやは RenderSettings の 霧で 足りる
         wx.mist = null;
@@ -325,53 +325,50 @@ public static class BuildZashiki {
         // --- 2Dドット絵の 小物（調べた とおり、草木や 小物は 板の ドット絵で 置くのが 作法）
         var props = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/props.png");
         // そとの 地めん（縁の したは 庭）。これが ないと 草が 宙に 浮く
-        var mGrass = Mat("GroundGrass", ArtTex + "grass_ground.png", new Vector2(8, 10), 0f, 1f);
-        // 地めん。**画面の そとまで 広げる。**
-        // 前は 庭のぶんしか なくて、カメラを 低くしたら 板の 切れめと 側面が 見えて
-        // 「浮いている 板」に なった。遠くは 霧で 空に とけるので、広げれば ふちは 見えない
-        const float FieldW = 64f, FieldD = 64f;
-        // 草の 絵は 48px＝1.5m ぶんで 1まい。広げても 目が 詰まらない ように 数を そろえる
-        var tileGrass = new Vector2(FieldW / 1.5f, FieldD / 1.5f);
-        mGrass.SetTextureScale("_BaseMap", tileGrass);
-        mGrass.mainTextureScale = tileGrass;
-        Box("Ground", root, new Vector3(GardenX, GroundY - 0.10f, GardenZ),
-            new Vector3(FieldW, 0.2f, FieldD), mGrass);
-        // ※ 垣根（木の 板塀）は **やめた。** 3Dの 箱に 木目の テクスチャを 貼った ものなので、
-        //   ドット絵の 木立ちと ならぶと 材質が ちぐはぐ だった。
-        //   仕切りが 要るなら、木と 同じ 出どころの ドット絵で 置きなおす
-        float fenceX = GardenX - GardenW * 0.5f + 3.6f;   // 木立ちの ならぶ 線（垣根の あった ところ）
+        // --- 地めん。**平らな 板を やめて 山ぎわに した。**
+        // 家の まわりだけ 平ら、そこから 山へ 上がる 斜面。
+        // 人の 通る ところは 草が はげて 土が 出る（踏み分け道）＝TerrainGen が 作る
+        var mGround = new Material(Shader.Find("Natsuyasumi/Ground")
+                                   ?? Shader.Find("Universal Render Pipeline/Lit"));
+        var texGrass = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtTex + "grass_ground.png");
+        var texDirt  = AssetDatabase.LoadAssetAtPath<Texture2D>(ArtTex + "dirt_path.png");
+        if (texGrass == null || texDirt == null) Debug.LogError("[BuildZashiki] 地めんの 絵が 見つからない");
+        mGround.SetTexture("_GrassMap", texGrass);
+        mGround.SetTexture("_DirtMap", texDirt);
+        mGround.SetFloat("_TileGrass", 1.5f);      // 48px = 1.5m
+        mGround.SetFloat("_TileDirt", 1.5f);
+        mGround.SetFloat("_Wrap", 0.25f);
+        AssetDatabase.CreateAsset(mGround, MatDir + "Ground.mat");
+        TerrainGen.Build(root, mGround);
+
         // 草木は **自分で 描くのを やめて**、ansimuz(CC0)の「Trees & Bushes」に 差し替えた。
         // 32px＝1m で 詰めなおして あるので、コマの 大きさ(4.5m)を そのまま わたせば 尺が 合う
         // （大きい 木＝4.1m、しげみ＝1.2m、小草＝0.5m ぐらいに なる）
         var nature = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/nature.png");
         if (nature == null) Debug.LogError("[BuildZashiki] nature.png が 見つからない");
 
-        // 垣根の むこうの 木立ち（庭がわだけ）。奥ゆきの ふた。
-        // 一直線に ならべると 書割に 見えるので、奥ゆきを 少しずつ ずらす
-        float[] kiZ = { -4.2f, -2.1f, -0.4f, 1.5f, 3.2f, 4.6f, 6.1f };
-        float[] kiD = { 0.0f, 1.3f, 0.4f, 1.7f, 0.2f, 1.1f, 0.6f };
-        for (int i = 0; i < kiZ.Length; i++)
-            Nature("Ki" + i, nature, (i % 2 == 0) ? NA_KI_L : NA_KI_R,
-                   new Vector3(fenceX - 1.2f - kiD[i], GroundY, kiZ[i]), root);
-        // 草むらと しげみ＝**1枚の 板**。家の あった あたりから 庭に かけて 散らす
-        float gx = -RoomW * 0.5f;
-        Nature("Kusa1",  nature, NA_KUSA_A, new Vector3(gx - 0.55f, GroundY, 1.30f), root);
-        Nature("Kusa2",  nature, NA_KUSA_B, new Vector3(gx - 1.35f, GroundY, 2.20f), root);
-        Nature("Kusa3",  nature, NA_KUSA_C, new Vector3(gx - 0.75f, GroundY, 3.10f), root);
-        Nature("Kusa4",  nature, NA_KUSA_A, new Vector3(gx - 2.10f, GroundY, 1.05f), root);
-        Nature("Kusa5",  nature, NA_KUSA_B, new Vector3(gx - 4.30f, GroundY, -2.60f), root);
-        Nature("Kusa6",  nature, NA_KUSA_C, new Vector3(gx - 6.10f, GroundY, 4.90f), root);
-        Nature("Shige1", nature, NA_SHIGE_A,new Vector3(gx - 1.60f, GroundY, 0.35f), root);
-        Nature("Shige2", nature, NA_SHIGE_B,new Vector3(gx - 2.40f, GroundY, 2.90f), root);
-        Nature("Shige3", nature, NA_MATSU,  new Vector3(gx - 3.30f, GroundY, 4.10f), root);
-        Nature("Shige4", nature, NA_SHIGE_B,new Vector3(gx - 5.20f, GroundY, -1.20f), root);
-        Nature("Shige5", nature, NA_SHIGE_A,new Vector3(gx - 7.00f, GroundY, 2.10f), root);
+        // --- 木立ち。**地形に そって ばらまく。**
+        // 道の 上には 生えない／崖には 生えない／家の まわりは あける。
+        // 置き場所は 決めうちの たねから 出すので、毎回 同じ 森に なる
+        var rng = new System.Random(20260815);
+        var spots = TerrainGen.ScatterTrees(420, 11f, 54f, rng);
+        for (int i = 0; i < spots.Count; i++) {
+            // 山の 上ほど 細い 木に する（遠くに 行くほど やせて 見える）
+            int cell = (i % 5 == 0) ? NA_MATSU : ((i % 2 == 0) ? NA_KI_L : NA_KI_R);
+            Nature("Ki" + i, nature, cell, spots[i], root);
+        }
 
-        // --- まわりの 木立ち。**地平線を 木で ふさぐ。**
-        // 地めんを 広げただけだと 遠くが のっぺりした 緑の 板に なるので、
-        // 遊べる ところの まわりに 帯状に 木を 置いて 囲む。
-        // 置き場所は 決めうちの 式で ばらす（毎回 同じ 絵に なるように）
-        Woods(root, nature);
+        // --- 下草。木の あいだと 道ばたに 散らす
+        var bushSpots = TerrainGen.ScatterTrees(170, 8f, 48f, new System.Random(7788));
+        for (int i = 0; i < bushSpots.Count; i++) {
+            int cell = (i % 3 == 0) ? NA_SHIGE_A : (i % 3 == 1 ? NA_SHIGE_B : NA_KUSA_A);
+            Nature("Shige" + i, nature, cell, bushSpots[i], root);
+        }
+        var weedSpots = TerrainGen.ScatterTrees(200, 5f, 44f, new System.Random(4242));
+        for (int i = 0; i < weedSpots.Count; i++) {
+            int cell = (i % 3 == 0) ? NA_KUSA_A : (i % 3 == 1 ? NA_KUSA_B : NA_KUSA_C);
+            Nature("Kusa" + i, nature, cell, weedSpots[i], root);
+        }
 
         // 部屋の なかの 小物（家を 出す ときだけ）
         if (ShowRoom) {
@@ -437,21 +434,6 @@ public static class BuildZashiki {
     // 草木を 置く。大きさは 絵が もっている ので、コマの 大きさを そのまま わたす
     static void Nature(string name, Texture2D atlas, int index, Vector3 pos, Transform root) {
         Prop(name, atlas, index, NatureCols, NatureRows, pos, NatureCell, root, PropKind.Billboard);
-    }
-
-    // まわりを かこむ 木立ち。遊べる ところ(内がわの 半径)から 外へ 帯状に 置く
-    static void Woods(Transform root, Texture2D nature) {
-        if (nature == null) return;
-        const int Count = 64;
-        const float RIn = 13.5f, ROut = 27f;     // この あいだに ばらまく
-        for (int i = 0; i < Count; i++) {
-            // 黄金角で まわすと かたよらずに ばらける。半径は 平方根で とると 面で 均一に なる
-            float a = i * 2.39996f;
-            float t = (i * 0.6180339f) % 1f;
-            float r = Mathf.Lerp(RIn, ROut, Mathf.Sqrt(t));
-            var pos = new Vector3(GardenX + Mathf.Cos(a) * r, GroundY, GardenZ + Mathf.Sin(a) * r);
-            Nature("Wood" + i, nature, (i % 2 == 0) ? NA_KI_L : NA_KI_R, pos, root);
-        }
     }
 
     // Billboard＝**1枚の 板**。いつも こちらを 向く。草木も 木も これ。
