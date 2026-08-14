@@ -90,8 +90,11 @@ Shader "Natsuyasumi/Sky"
                     sky = lerp(sky, ridgeCol, m);
                 }
 
-                // --- 地平線より 下は 山の 色に 落として おく（地めんの そとが 抜けない ように）
-                sky = lerp(sky, _Ridge.rgb * 0.6, smoothstep(0.0, -0.09, el));
+                // --- 地平線より 下。**暗く 落とさない。**
+                // 山の 色に 落として いたら、地形の 切れめの むこうが 黒くなり
+                // 崖のように 見えた。遠くの 地めんは かすんで 地平線の 色に なる のが 本当
+                sky = lerp(sky, lerp(_Horizon.rgb, _Ridge.rgb, 0.35),
+                           smoothstep(0.0, -0.16, el));
                 return half4(sky, 1);
             }
             ENDHLSL

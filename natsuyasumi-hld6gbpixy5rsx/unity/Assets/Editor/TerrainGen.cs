@@ -15,8 +15,9 @@ using System.Collections.Generic;
 using UnityEngine;
 
 public static class TerrainGen {
-    public const float Size = 148f;
-    public const int Cells = 148;                                  // 1マス 1m
+    // 端が 見えない ように 広く とる。遠くは 霧で 消える
+    public const float Size = 196f;
+    public const int Cells = 196;                                  // 1マス 1m
     public static readonly Vector2 Center = new Vector2(-14f, 2f);
 
     public const float Flat = -0.52f;          // 家の まわりの 高さ
@@ -48,6 +49,37 @@ public static class TerrainGen {
             new Vector2( 1.5f, 4.6f), new Vector2( 8f, 6f), new Vector2(14f, 9f), new Vector2(19f, 14f),
         },
     };
+    // ---- 沢（小川）と 川。**地形に みぞを 掘り、そこへ 水を 流す。**
+    // 水は 高い ほうから 低い ほうへ しか 流れないので、道と 同じく
+    // 上流から 下流へ 高さを ならして 決める
+    public struct Stream {
+        public Vector2[] line;
+        public float half;      // みぞの 半分の 幅
+        public float depth;     // 掘る 深さ
+    }
+    public static readonly Stream[] Streams = {
+        // 小川：山から 家の わきを 通って 下流へ。笹船を ながす ところ
+        new Stream {
+            half = 1.15f, depth = 0.85f,
+            line = new[] {
+                new Vector2(-30f, -18f), new Vector2(-26f, -11f), new Vector2(-21f, -5f),
+                new Vector2(-16f,  0f),  new Vector2(-12f,  4f),  new Vector2(-8.5f, 8.5f),
+                new Vector2(-6f,  14f),  new Vector2(-4f,  20f),  new Vector2(-3f,  27f),
+            },
+        },
+        // 大きめの 川：手前を よこぎる。水きり・釣り
+        new Stream {
+            half = 4.6f, depth = 1.9f,
+            line = new[] {
+                new Vector2(-46f, 34f), new Vector2(-32f, 31f), new Vector2(-18f, 30f),
+                new Vector2( -3f, 29f), new Vector2( 12f, 31f), new Vector2( 26f, 35f),
+                new Vector2( 40f, 41f),
+            },
+        },
+    };
+    static float[][] streamProf;
+    const float StreamGrade = 0.055f;      // 川は ほとんど 平ら（水は 急には 落ちない）
+
     const float PathHalf = 0.75f;
     const float PathFade = 1.55f;
     const float MaxGrade = 0.26f;      // 道の 勾配の うわぎり（＝約15度）
@@ -58,6 +90,7 @@ public static class TerrainGen {
 
     static void EnsureProfiles() {
         if (profiles != null) return;
+        EnsureStreams();
         profiles = new float[Paths.Length][];
         cumLen = new float[Paths.Length][];
         for (int p = 0; p < Paths.Length; p++) {
@@ -83,18 +116,71 @@ public static class TerrainGen {
         }
     }
 
-    /// <summary>道を 考えない 素の 地形</summary>
-    public static float RawHeight(float x, float z) {
+    // 川の 水面の 高さ。上流から 下流へ ゆるやかに 下げる
+    static void EnsureStreams() {
+        if (streamProf != null) return;
+        streamProf = new float[Streams.Length][];
+        for (int si = 0; si < Streams.Length; si++) {
+            var line = Streams[si].line;
+            var h = new float[line.Length];
+            h[0] = BareHeight(line[0].x, line[0].y);
+            for (int i = 1; i < line.Length; i++) {
+                float seg = Vector2.Distance(line[i - 1], line[i]);
+                float want = BareHeight(line[i].x, line[i].y);
+                // **下る ばかり。** のぼる 川は ない
+                h[i] = Mathf.Min(want, h[i - 1] - 0.02f);
+                h[i] = Mathf.Max(h[i], h[i - 1] - StreamGrade * seg);
+            }
+            streamProf[si] = h;
+        }
+    }
+
+    /// <summary>川も 道も 考えない、いちばん 素の 地形</summary>
+    static float BareHeight(float x, float z) {
         float h = Flat;
         h += Bump(x, z, MountA, MountAR, MountAH);
         h += Bump(x, z, MountB, MountBR, MountBH);
-        // 尾根と 沢。式だけで 作る（毎回 同じ 地形に なる）
         h += Mathf.Sin(x * 0.071f + 1.3f) * Mathf.Cos(z * 0.089f - 0.7f) * 2.3f
            + Mathf.Sin(x * 0.213f) * Mathf.Cos(z * 0.171f) * 0.7f
            + Mathf.Sin((x + z) * 0.041f) * 1.6f;
         float d = Vector2.Distance(new Vector2(x, z), new Vector2(0f, 0.45f));
         float flatT = SmoothBand(FlatRadius, FlatRadius + FlatBlend, d);
         return Mathf.Lerp(Flat, h, flatT);
+    }
+
+    /// <summary>いちばん 近い 川。みぞの ふかさと 水面の 高さ</summary>
+    public static void NearestStream(float x, float z, out int index, out float across, out float waterY) {
+        EnsureStreams();
+        index = -1; across = float.MaxValue; waterY = 0f;
+        var p = new Vector2(x, z);
+        for (int si = 0; si < Streams.Length; si++) {
+            var line = Streams[si].line;
+            for (int i = 0; i < line.Length - 1; i++) {
+                float t;
+                float d = DistToSegment(p, line[i], line[i + 1], out t);
+                if (d >= across) continue;
+                across = d; index = si;
+                waterY = Mathf.Lerp(streamProf[si][i], streamProf[si][i + 1], t);
+            }
+        }
+    }
+
+    /// <summary>道を 考えない 素の 地形（川の みぞは 掘って ある）</summary>
+    public static float RawHeight(float x, float z) {
+        float h = BareHeight(x, z);
+        // 川の みぞを 掘る。岸から まん中へ なだらかに 下げる
+        int si; float across, waterY;
+        NearestStream(x, z, out si, out across, out waterY);
+        if (si >= 0) {
+            var st = Streams[si];
+            float bank = st.half * 2.2f;                       // ここから 岸が 下がりはじめる
+            float t = 1f - SmoothBand(st.half * 0.55f, bank, across);
+            if (t > 0f) {
+                float bed = waterY - st.depth;                 // 川底
+                h = Mathf.Lerp(h, Mathf.Min(h, bed), t);
+            }
+        }
+        return h;
     }
 
     /// <summary>その 場所の 地めんの 高さ（道を 削った あと）</summary>
@@ -223,6 +309,65 @@ public static class TerrainGen {
         return go;
     }
 
+    /// <summary>水面の 帯を 作る。川ごとに 1枚の 細長い 面</summary>
+    public static GameObject BuildWater(Transform parent, Material mat) {
+        EnsureProfiles();
+        var root = new GameObject("Water");
+        root.transform.SetParent(parent, false);
+
+        for (int si = 0; si < Streams.Length; si++) {
+            var st = Streams[si];
+            var line = st.line;
+            const int Sub = 6;                                  // 1区間を いくつに 割るか
+            int steps = (line.Length - 1) * Sub + 1;
+            var verts = new Vector3[steps * 3];                 // 左岸・まん中・右岸
+            var cols = new Color32[steps * 3];
+            var uvs = new Vector2[steps * 3];
+            var tris = new int[(steps - 1) * 4 * 3];
+
+            float run = 0f;
+            for (int k = 0; k < steps; k++) {
+                int seg = Mathf.Min(k / Sub, line.Length - 2);
+                float t = (k - seg * Sub) / (float)Sub;
+                Vector2 c = Vector2.Lerp(line[seg], line[seg + 1], t);
+                Vector2 dir = (line[seg + 1] - line[seg]).normalized;
+                Vector2 nrm = new Vector2(-dir.y, dir.x);
+                float y = Mathf.Lerp(streamProf[si][seg], streamProf[si][seg + 1], t);
+                if (k > 0) run += Vector2.Distance(c, new Vector2(verts[(k - 1) * 3 + 1].x, verts[(k - 1) * 3 + 1].z));
+
+                for (int e = 0; e < 3; e++) {
+                    float off = (e - 1) * st.half;
+                    var p = c + nrm * off;
+                    // 岸は 水面と 同じ 高さ、まん中は ほんの すこし 下げて 面を 作る
+                    verts[k * 3 + e] = new Vector3(p.x, y - (e == 1 ? 0.02f : 0f), p.y);
+                    cols[k * 3 + e] = new Color32((byte)(e == 1 ? 255 : 40), 0, 0, 255);
+                    uvs[k * 3 + e] = new Vector2(off, run);
+                }
+            }
+            int ti = 0;
+            for (int k = 0; k < steps - 1; k++) {
+                for (int e = 0; e < 2; e++) {
+                    int a = k * 3 + e, b = a + 1, c2 = a + 3, d = c2 + 1;
+                    tris[ti++] = a; tris[ti++] = c2; tris[ti++] = b;
+                    tris[ti++] = b; tris[ti++] = c2; tris[ti++] = d;
+                }
+            }
+
+            var mesh = new Mesh { name = "Water" + si };
+            mesh.vertices = verts; mesh.colors32 = cols; mesh.uv = uvs; mesh.triangles = tris;
+            mesh.RecalculateNormals(); mesh.RecalculateBounds();
+
+            var go = new GameObject(si == 0 ? "Ogawa" : "Kawa");
+            go.transform.SetParent(root.transform, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            UnityEditor.AssetDatabase.CreateAsset(mesh, "Assets/Art/Materials/WaterMesh" + si + ".asset");
+        }
+        return root;
+    }
+
     /// <summary>木を 生やす 場所ひとつぶん</summary>
     public struct Spot {
         public Vector3 pos;
@@ -251,6 +396,9 @@ public static class TerrainGen {
             float x = Center.x + Mathf.Cos(a) * r, z = Center.y + Mathf.Sin(a) * r;
 
             if (PathWeight(x, z) > 0.10f) continue;                 // 道の 上には 生えない
+            int si2; float across2, wy2;
+            NearestStream(x, z, out si2, out across2, out wy2);
+            if (si2 >= 0 && across2 < Streams[si2].half * 2.0f) continue;   // 川の 中には 生えない
             float sl = Slope(x, z);
             if (sl > 0.85f) continue;                               // 岩はだには 生えない
             if (slopeOnly) {

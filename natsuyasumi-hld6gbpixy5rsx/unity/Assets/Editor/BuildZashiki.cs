@@ -344,12 +344,35 @@ public static class BuildZashiki {
         AssetDatabase.CreateAsset(mGround, MatDir + "Ground.mat");
         TerrainGen.Build(root, mGround);
 
+        // --- 水。小川（笹船を ながす）と 大きめの 川（水きり・釣り）
+        var mWater = new Material(Shader.Find("Natsuyasumi/Water")
+                                  ?? Shader.Find("Universal Render Pipeline/Lit"));
+        AssetDatabase.CreateAsset(mWater, MatDir + "Water.mat");
+        TerrainGen.BuildWater(root, mWater);
+
         // 草木は **自分で 描くのを やめて**、ansimuz(CC0)の「Trees & Bushes」に 差し替えた。
         // 32px＝1m で 詰めなおして あるので、コマの 大きさ(4.5m)を そのまま わたせば 尺が 合う
         // （大きい 木＝4.1m、しげみ＝1.2m、小草＝0.5m ぐらいに なる）
         var nature = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/nature.png");
         var nature2 = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/nature2.png");
         if (nature == null || nature2 == null) Debug.LogError("[BuildZashiki] 草木の 絵が 見つからない");
+
+        // --- 谷そこ の 作りこみ。納屋・畑・農具小屋・井戸・祠
+        // （それぞれの 中身と 出どころは BuildVillage.cs の 頭に 書いた）
+        // 畑の うねは **土の 色**。石の 灰色だと 骨組みに 見えた
+        var mSoil = Mat("Soil", ArtTex + "dirt_path.png", new Vector2(1.2f, 0.6f), 0f, 1f);
+        // 納屋の 板は 母屋より 明るく（母屋の 柱と 同じ 暗さだと かたまりに 見える）
+        var mNaya = Mat("NayaWood", ArtTex + "wood_floor.png", new Vector2(2.4f, 1.4f), 0f, 0.76f);
+        var vmat = new BuildVillage.Materials {
+            wood = mNaya, floor = mFloorW, plaster = mPlaster,
+            roof = mRoof, stone = mStone, paper = mPaper, soil = mSoil, post = mWood,
+        };
+        BuildVillage.Build(root, vmat,
+            (nm, par, pos, size, mat) => Box(nm, par, pos, size, mat),
+            (nm, pos, kind, h) => {
+                int cell = kind == 0 ? NA_KUSA_A : (kind == 1 ? NA_KUSA_B : NA_KUSA_C);
+                Prop(nm, nature, cell, NatureCols, NatureRows, pos, h, root, PropKind.Billboard);
+            });
 
         // --- 山の 木。**斜面は ほとんど 木で おおわれて いる**ので、こませて 生やす。
         // 針葉樹（人工林）と 広葉樹（天然林）を **かたまりごとに 分ける**＝遠くから 見ると まだらに なる。
