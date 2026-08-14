@@ -20,6 +20,10 @@ public class TimeOfDay : MonoBehaviour {
     public Camera cam;
     public Weather weather;        // 天気は この 上に かぶせる（順番を 固定するため ここから 呼ぶ）
 
+    [Header("空")]
+    // 手続きで 描く 空（Natsuyasumi/Sky）。時間帯ごとに 色を 入れかえる
+    public Material skybox;
+
     [Header("そとの 場面か")]
     // 屋内は「屋根を はずした 切りぬき」なので まわりは 暗いのが 正しい。
     // そとの 場面で 同じ ことを すると **地平線から さきが まっ黒**に なるので、空の 色を 出す
@@ -132,6 +136,41 @@ public class TimeOfDay : MonoBehaviour {
                 }
                 cam.backgroundColor = sky2;
                 RenderSettings.fogColor = sky2;
+
+                // **空を 手続きで 描く。** 単色だと 地平線から さきが「何も ない ところ」に
+                // 見えて、山ぎわの 場面が 宙に 浮いた。遠くの 山なみも ここで 出す
+                if (skybox != null) {
+                    Color zen, hor, ridge, cloud; float cloudAmt, haze;
+                    switch (tod) {
+                        case Tod.Hiru:
+                            zen = new Color(0.26f, 0.52f, 0.88f); hor = new Color(0.78f, 0.88f, 0.96f);
+                            ridge = new Color(0.34f, 0.44f, 0.40f); cloud = Color.white;
+                            cloudAmt = 0.34f; haze = 0.68f; break;
+                        case Tod.Yugata:
+                            zen = new Color(0.36f, 0.32f, 0.52f); hor = new Color(0.98f, 0.62f, 0.34f);
+                            ridge = new Color(0.30f, 0.24f, 0.28f); cloud = new Color(1f, 0.78f, 0.55f);
+                            cloudAmt = 0.46f; haze = 0.74f; break;
+                        case Tod.Yoru:
+                            zen = new Color(0.04f, 0.06f, 0.14f); hor = new Color(0.12f, 0.16f, 0.28f);
+                            ridge = new Color(0.06f, 0.08f, 0.13f); cloud = new Color(0.22f, 0.26f, 0.36f);
+                            cloudAmt = 0.22f; haze = 0.55f; break;
+                        default:   // あさ
+                            zen = new Color(0.34f, 0.56f, 0.84f); hor = new Color(0.94f, 0.86f, 0.74f);
+                            ridge = new Color(0.32f, 0.40f, 0.40f); cloud = new Color(1f, 0.94f, 0.86f);
+                            cloudAmt = 0.40f; haze = 0.72f; break;
+                    }
+                    skybox.SetColor("_Zenith", zen);
+                    skybox.SetColor("_Horizon", hor);
+                    skybox.SetColor("_Ridge", ridge);
+                    skybox.SetColor("_CloudColor", cloud);
+                    skybox.SetFloat("_CloudAmount", cloudAmt);
+                    skybox.SetFloat("_Haze", haze);
+                    skybox.SetFloat("_RidgeHeight", 0.115f);
+                    RenderSettings.skybox = skybox;
+                    cam.clearFlags = CameraClearFlags.Skybox;
+                    // 遠くは 地平線の 色に かすませる＝空と 地めんが つながる
+                    RenderSettings.fogColor = hor;
+                }
                 // そとは 遠くを かすませる。ただし **かけすぎると 山が 消える**。
                 // 木立ちだけで 地平線を ふさいで いた ころは 1.5倍に して いたが、
                 // それだと 40m先で 半分 白く なり、山が あるのに 平地に 見えた

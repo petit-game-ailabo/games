@@ -61,6 +61,7 @@ public static class BuildZashiki {
         mPaper.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 
         var root = new GameObject("Zashiki").transform;
+        billboards.Clear();
 
         Renderer shojiPaperRenderer = null;
         Light lamp = null;
@@ -178,8 +179,6 @@ public static class BuildZashiki {
         RenderSettings.fogMode = FogMode.ExponentialSquared;
         RenderSettings.fogColor = new Color(0.72f, 0.70f, 0.62f);
         RenderSettings.fogDensity = 0.022f;   // 奥ほど かすむ＝空気感
-        // 既定の 青い 空から 環境光を 拾わないように する。**更新を 明示しないと 反映されない**
-        RenderSettings.skybox = null;
         DynamicGI.UpdateEnvironment();
 
         // --- キャラ（2Dの 板）。ドット絵を そのまま 立てる。
@@ -313,6 +312,10 @@ public static class BuildZashiki {
         todc.shojiPaper = shojiPaperRenderer;
         // 家は あるが 場面は **野原の まんなか**。空の 色を 出さないと 地平線から さきが まっ黒に なる
         todc.outdoor = true;
+        // 空。手続きで 描く（絵は 置かない）
+        var skyMat = new Material(Shader.Find("Natsuyasumi/Sky"));
+        AssetDatabase.CreateAsset(skyMat, MatDir + "Sky.mat");
+        todc.skybox = skyMat;
         todc.weather = wx;                    // 時間帯を おいた **あと**に 天気を かぶせる
         wx.timeOfDay = todc;
         todc.tod = TimeOfDay.Tod.Asa;
@@ -345,30 +348,50 @@ public static class BuildZashiki {
         // 32px＝1m で 詰めなおして あるので、コマの 大きさ(4.5m)を そのまま わたせば 尺が 合う
         // （大きい 木＝4.1m、しげみ＝1.2m、小草＝0.5m ぐらいに なる）
         var nature = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/nature.png");
-        if (nature == null) Debug.LogError("[BuildZashiki] nature.png が 見つからない");
+        var nature2 = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/nature2.png");
+        if (nature == null || nature2 == null) Debug.LogError("[BuildZashiki] 草木の 絵が 見つからない");
 
-        // --- 木立ち。**地形に そって ばらまく。**
-        // 道の 上には 生えない／崖には 生えない／家の まわりは あける。
+        // --- 山の 木。**斜面は ほとんど 木で おおわれて いる**ので、こませて 生やす。
+        // 針葉樹（人工林）と 広葉樹（天然林）を **かたまりごとに 分ける**＝遠くから 見ると まだらに なる。
         // 置き場所は 決めうちの たねから 出すので、毎回 同じ 森に なる
-        var rng = new System.Random(20260815);
-        var spots = TerrainGen.ScatterTrees(420, 11f, 54f, rng);
+        var rngTree = new System.Random(20260815);
+        var spots = TerrainGen.Scatter(9000, 14f, 68f, rngTree, 3.3f, true, true);
+        int nConifer = 0;
         for (int i = 0; i < spots.Count; i++) {
-            // 山の 上ほど 細い 木に する（遠くに 行くほど やせて 見える）
-            int cell = (i % 5 == 0) ? NA_MATSU : ((i % 2 == 0) ? NA_KI_L : NA_KI_R);
-            Nature("Ki" + i, nature, cell, spots[i], root);
+            var sp = spots[i];
+            if (sp.cover == TerrainGen.Cover.Conifer) {
+                // スギ・ヒノキ。高く 細い。3つの 絵を まわす
+                int cell = i % 7 == 0 ? N2_HINOKI : (i % 2 == 0 ? N2_SUGI_A : N2_SUGI_B);
+                float h = (cell == N2_HINOKI ? 5.8f : 7.4f) * sp.size;
+                Prop("Ki" + i, nature2, cell, NatureCols, NatureRows, sp.pos, h, root, PropKind.Billboard);
+                nConifer++;
+            } else {
+                int cell = (i % 2 == 0) ? NA_KI_L : NA_KI_R;
+                Nature2("Ki" + i, nature, cell, sp.pos, NatureCell * sp.size, root);
+            }
         }
+        // 枯れ木を すこし（山には かならず ある）
+        var deadSpots = TerrainGen.Scatter(400, 18f, 64f, new System.Random(555), 9f, true, true);
+        for (int i = 0; i < deadSpots.Count; i++)
+            Prop("Kare" + i, nature2, N2_KARE, NatureCols, NatureRows, deadSpots[i].pos, 5.2f, root, PropKind.Billboard);
 
-        // --- 下草。木の あいだと 道ばたに 散らす
-        var bushSpots = TerrainGen.ScatterTrees(170, 8f, 48f, new System.Random(7788));
-        for (int i = 0; i < bushSpots.Count; i++) {
-            int cell = (i % 3 == 0) ? NA_SHIGE_A : (i % 3 == 1 ? NA_SHIGE_B : NA_KUSA_A);
-            Nature("Shige" + i, nature, cell, bushSpots[i], root);
+        // --- 下ばえ。ささやぶ・しだ・岩・倒木
+        var underSpots = TerrainGen.Scatter(4000, 12f, 64f, new System.Random(7788), 4.6f, true, true);
+        for (int i = 0; i < underSpots.Count; i++) {
+            var sp = underSpots[i];
+            int cell = i % 9 == 0 ? N2_IWA : (i % 11 == 0 ? N2_TAOKI
+                     : (sp.cover == TerrainGen.Cover.Conifer ? N2_SHIDA : N2_SASA));
+            float h = (cell == N2_IWA ? 2.1f : (cell == N2_TAOKI ? 2.4f : 2.9f)) * sp.size;
+            Prop("Shita" + i, nature2, cell, NatureCols, NatureRows, sp.pos, h, root, PropKind.Billboard);
         }
-        var weedSpots = TerrainGen.ScatterTrees(200, 5f, 44f, new System.Random(4242));
+        // 家の まわりの 草むら（明るい 原っぱ）
+        var weedSpots = TerrainGen.Scatter(1200, 5f, 26f, new System.Random(4242), 3.0f, false);
         for (int i = 0; i < weedSpots.Count; i++) {
             int cell = (i % 3 == 0) ? NA_KUSA_A : (i % 3 == 1 ? NA_KUSA_B : NA_KUSA_C);
-            Nature("Kusa" + i, nature, cell, weedSpots[i], root);
+            Nature2("Kusa" + i, nature, cell, weedSpots[i].pos, NatureCell * weedSpots[i].size, root);
         }
+        Debug.Log(string.Format("[BuildZashiki] 木={0}(針葉樹 {1}) 枯れ木={2} 下ばえ={3} 草={4}",
+                  spots.Count, nConifer, deadSpots.Count, underSpots.Count, weedSpots.Count));
 
         // 部屋の なかの 小物（家を 出す ときだけ）
         if (ShowRoom) {
@@ -407,6 +430,14 @@ public static class BuildZashiki {
         sumo.atlas = bugAtlas; sumo.font = hud.font; sumo.panel = hud.panel;
         sumo.partner = partner.transform;
 
+        // --- 草木の 向きを まとめる 係
+        var fieldGO = new GameObject("BillboardField");
+        fieldGO.transform.SetParent(root, false);
+        var field = fieldGO.AddComponent<BillboardField>();
+        field.items = billboards.ToArray();
+        field.follow = player.transform;
+        Debug.Log("[BuildZashiki] 板の 草木 = " + billboards.Count + " まい");
+
         EditorSceneManager.SaveScene(scene, ScnDir + "Zashiki.unity");
         AssetDatabase.SaveAssets();
         Debug.Log("[BuildZashiki] done: " + ScnDir + "Zashiki.unity");
@@ -430,10 +461,19 @@ public static class BuildZashiki {
     const float NatureCell = 4.5f;   // 144px ÷ 32px/m
     const int NA_KI_L = 0, NA_KI_R = 1, NA_SHIGE_A = 2, NA_SHIGE_B = 3,
               NA_MATSU = 4, NA_KUSA_A = 5, NA_KUSA_B = 6, NA_KUSA_C = 7;
+    // nature2.png（山の 木。こちらで 描いた）。0,1=スギ 2=ヒノキふう 3=枯れ木
+    // 4=ささやぶ 5=しだ 6=岩 7=倒木
+    const int N2_SUGI_A = 0, N2_SUGI_B = 1, N2_HINOKI = 2, N2_KARE = 3,
+              N2_SASA = 4, N2_SHIDA = 5, N2_IWA = 6, N2_TAOKI = 7;
 
     // 草木を 置く。大きさは 絵が もっている ので、コマの 大きさを そのまま わたす
     static void Nature(string name, Texture2D atlas, int index, Vector3 pos, Transform root) {
         Prop(name, atlas, index, NatureCols, NatureRows, pos, NatureCell, root, PropKind.Billboard);
+    }
+
+    // 大きさを 指定する ばあい（同じ 種類でも 大小が ある ように）
+    static void Nature2(string name, Texture2D atlas, int index, Vector3 pos, float height, Transform root) {
+        Prop(name, atlas, index, NatureCols, NatureRows, pos, height, root, PropKind.Billboard);
     }
 
     // Billboard＝**1枚の 板**。いつも こちらを 向く。草木も 木も これ。
@@ -494,8 +534,15 @@ public static class BuildZashiki {
             ? UnityEngine.Rendering.ShadowCastingMode.Off      // 寝かせた 板は 影を おとさない
             : UnityEngine.Rendering.ShadowCastingMode.On;
 
-        if (kind != PropKind.Flat) go.AddComponent<Billboard>();
+        // **1本ずつ Billboard を つけない。** 木が 数千本に なると
+        // 毎フレーム 数千回の 呼び出しに なる。まとめ役(BillboardField)に 登録して、
+        // カメラの 向きが 変わった ときだけ まとめて 回す
+        if (kind != PropKind.Flat) billboards.Add(go.transform);
     }
+
+    // 板の 草木。あとで まとめて カメラの ほうへ 向ける
+    static readonly System.Collections.Generic.List<Transform> billboards
+        = new System.Collections.Generic.List<Transform>();
 
     // 置いた ところで 揺れの ずれを 決める。ならべても そろって 動かない ように
     static float PhaseOf(Vector3 pos) {
