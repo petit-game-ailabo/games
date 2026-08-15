@@ -201,11 +201,19 @@ public class BugCatcher : MonoBehaviour {
         em.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)16) });
         var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Sphere; sh.radius = 0.12f;
         var r = go.GetComponent<ParticleSystemRenderer>();
-        r.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                                  ?? Shader.Find("Sprites/Default"));
-        r.material.SetFloat("_Surface", 1);
+        r.sharedMaterial = PopMat();
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         Destroy(go, 1.2f);
+    }
+
+    // つぶの 材質は **1つ 作って 使いまわす**。取る たびに 作ると たまる 一方
+    static Material popMat;
+    static Material PopMat() {
+        if (popMat != null) return popMat;
+        popMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                              ?? Shader.Find("Sprites/Default"));
+        popMat.SetFloat("_Surface", 1);
+        return popMat;
     }
 
     // 見た目の あみ。柄と 口わを 細い 箱で 組む（絵を 用意しなくても 成り立つ ように）

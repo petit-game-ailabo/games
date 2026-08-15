@@ -428,11 +428,19 @@ public class PlayHost : MonoBehaviour {
         em.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)Mathf.RoundToInt(10 * scale + 4)) });
         var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Circle; sh.radius = 0.08f;
         var r = go.GetComponent<ParticleSystemRenderer>();
-        r.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")
-                                  ?? Shader.Find("Sprites/Default"));
-        r.material.SetFloat("_Surface", 1);
+        r.sharedMaterial = SplashMat();
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         Destroy(go, 1.4f);
+    }
+
+    // 水しぶきの 材質も 使いまわす（水きりは 1回で 何度も はねる）
+    static Material splashMat;
+    static Material SplashMat() {
+        if (splashMat != null) return splashMat;
+        splashMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                                 ?? Shader.Find("Sprites/Default"));
+        splashMat.SetFloat("_Surface", 1);
+        return splashMat;
     }
 
     void Line(string s) { if (hud != null) hud.Say(s); if (uiLine != null) uiLine.text = s; }

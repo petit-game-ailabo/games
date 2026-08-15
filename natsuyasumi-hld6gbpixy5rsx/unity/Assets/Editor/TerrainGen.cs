@@ -94,7 +94,23 @@ public static class TerrainGen {
 
     const float PathHalf = 0.75f;
     const float PathFade = 1.55f;
-    const float MaxGrade = 0.26f;      // 道の 勾配の うわぎり（＝約15度）
+
+    // ★2026-08-15：**勾配の うわぎりは 道ごと。**
+    //   谷そこの 道は 人が 荷を かついで 歩く ところ なので ほぼ 平ら。
+    //   きつい 角度が 許されるのは 山道だけ。本人の 言うとおり
+    //   「歩く 道に 極たんな 角度は ない」
+    static readonly float[] PathGrade = {
+        0.10f,   // 0 本道（車が 通る）
+        0.10f,   // 1 玄関へ
+        0.12f,   // 2 畑・井戸へ
+        0.12f,   // 3
+        0.12f,   // 4 納屋・祠へ
+        0.12f,   // 5
+        0.12f,   // 6 川べりへ
+        0.26f,   // 7 山への 登り（ここだけ 急でよい＝約15度）
+    };
+    const float DenseStep = 1.0f;      // 道を 1mごとに 刻んで 高さを 決める
+    const float JoinR = 1.6f;          // これだけ 近い 点は **同じ 辻**と みなす
 
     // ★2026-08-15：**削る はばは 道ごとに 変える。**
     //   地面を せまく しか 削らないと、山道では 両がわの 斜面が そのまま 残って
@@ -102,7 +118,18 @@ public static class TerrainGen {
     //   外が まったく 見えず ただの 通路に なって いた。
     //   本物の 山道も 斜面を 広く 削って 棚に する。だから 山道だけ 大きく とる。
     //   ※土の 色が つく はばは PathFade の まま＝道すじは 細い 一本道に 見える
-    static readonly float[] PathCut = { 1.55f, 1.55f, 1.55f, 1.55f, 1.55f, 1.55f, 1.55f, 12f };
+    //   ※測って みたら、削り幅 1.55m のままだと **道の 1.5m よこが 最大 4.7m も 高い**＝
+    //     道が 溝の そこに なって いた。路肩を なだらかに 削る はばを とる
+    static readonly float[] PathCut = {
+        9f,    // 0 本道（車道。路肩を 広く とる）
+        5f,    // 1 玄関へ
+        5f,    // 2 畑・井戸へ
+        5f,    // 3
+        5f,    // 4 納屋・祠へ
+        5f,    // 5
+        5f,    // 6 川べりへ
+        12f,   // 7 山道
+    };
 
     // ★土の 色が つく はば（半分）。**本道だけ 車道の 幅に する。**
     //   田舎の 車道は 舗装されて いない ことが 多く、**車 1台ぶん**しか ない。
@@ -112,35 +139,80 @@ public static class TerrainGen {
     //     さらに 広がる**（+0.8m）ので、見た目の 幅は これの 倍＋1.6m ある
     static readonly float[] PathHalfPer = { 1.10f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f };
 
-    // ---- 道の 高さの すじ道（勾配を ならした もの）
-    static float[][] profiles;
-    static float[][] cumLen;
+    // ---- 道の 高さの すじ道。
+    //
+    // ★2026-08-15 作りなおし。前は **道ごとに ばらばらに** 高さを 決めて いた。
+    //   枝道の 起点は「本道の 削った 高さ」では なく **素の 地形の 高さ**から
+    //   はじまって いたので、辻で 両者が 食いちがい、そこに 崖が できて いた。
+    //   実さい 測ったら 玄関へ 曲がる ところが **72度**、川べりへ 曲がる ところが 69度で、
+    //   まったく 登れなかった（本人の「歩けない道がある」）。
+    //
+    //   直しかた：道ぜんたいを **1つの 網として いっしょに 解く。**
+    //     1) 1mごとに 刻む
+    //     2) 近い 点どうし（＝辻）の 高さを そろえる
+    //     3) なめらかに する
+    //     4) 勾配の うわぎりを かける
+    //   これを 何回か くりかえすと、辻で つながった まま 全体が なだらかに なる。
+    static Vector2[][] dense;      // 道ごとの こまかい 点
+    static float[][] denseH;       // その 高さ
+    static float[][] denseCum;     // 起点からの 長さ
 
     static void EnsureProfiles() {
-        if (profiles != null) return;
+        if (dense != null) return;
         EnsureStreams();
-        profiles = new float[Paths.Length][];
-        cumLen = new float[Paths.Length][];
-        for (int p = 0; p < Paths.Length; p++) {
+        int n = Paths.Length;
+        dense = new Vector2[n][]; denseH = new float[n][]; denseCum = new float[n][];
+
+        for (int p = 0; p < n; p++) {
             var line = Paths[p];
-            var h = new float[line.Length];
-            var c = new float[line.Length];
-            h[0] = RawHeight(line[0].x, line[0].y);
-            c[0] = 0f;
-            for (int i = 1; i < line.Length; i++) {
-                float seg = Vector2.Distance(line[i - 1], line[i]);
-                c[i] = c[i - 1] + seg;
-                float want = RawHeight(line[i].x, line[i].y);
-                // **のぼりも 下りも 勾配を 抑える。** 人が 歩いて ならした 道は
-                // 急に 角度が 変わらない（本人の 指摘どおり）
-                float maxD = MaxGrade * seg;
-                h[i] = Mathf.Clamp(want, h[i - 1] - maxD, h[i - 1] + maxD);
+            var pts = new List<Vector2>();
+            var cum = new List<float>();
+            float run = 0f;
+            pts.Add(line[0]); cum.Add(0f);
+            for (int i = 0; i < line.Length - 1; i++) {
+                float seg = Vector2.Distance(line[i], line[i + 1]);
+                int k = Mathf.Max(1, Mathf.CeilToInt(seg / DenseStep));
+                for (int j = 1; j <= k; j++) {
+                    pts.Add(Vector2.Lerp(line[i], line[i + 1], j / (float)k));
+                    run += seg / k;
+                    cum.Add(run);
+                }
             }
-            // 行きと 帰りで ならして、折り返しの 段差を 消す
-            for (int pass = 0; pass < 3; pass++)
-                for (int i = 1; i < line.Length - 1; i++)
+            dense[p] = pts.ToArray(); denseCum[p] = cum.ToArray();
+            var h = new float[pts.Count];
+            for (int i = 0; i < pts.Count; i++) h[i] = RawHeight(pts[i].x, pts[i].y);
+            denseH[p] = h;
+        }
+
+        for (int pass = 0; pass < 60; pass++) {
+            // 1) 辻を そろえる。**ここが 抜けて いたのが 崖の 正体**
+            for (int a = 0; a < n; a++)
+                for (int b = a + 1; b < n; b++)
+                    for (int i = 0; i < dense[a].Length; i++)
+                        for (int j = 0; j < dense[b].Length; j++) {
+                            if ((dense[a][i] - dense[b][j]).sqrMagnitude > JoinR * JoinR) continue;
+                            float m = (denseH[a][i] + denseH[b][j]) * 0.5f;
+                            denseH[a][i] = m; denseH[b][j] = m;
+                        }
+            // 2) なめらかに する
+            for (int p = 0; p < n; p++) {
+                var h = denseH[p];
+                for (int i = 1; i < h.Length - 1; i++)
                     h[i] = (h[i - 1] + h[i] * 2f + h[i + 1]) * 0.25f;
-            profiles[p] = h; cumLen[p] = c;
+            }
+            // 3) 勾配の うわぎり。行きと 帰りの 両方から かける
+            for (int p = 0; p < n; p++) {
+                var h = denseH[p]; var c = denseCum[p];
+                float g = PathGrade[Mathf.Min(p, PathGrade.Length - 1)];
+                for (int i = 1; i < h.Length; i++) {
+                    float d = Mathf.Max(c[i] - c[i - 1], 1e-4f);
+                    h[i] = Mathf.Clamp(h[i], h[i - 1] - g * d, h[i - 1] + g * d);
+                }
+                for (int i = h.Length - 2; i >= 0; i--) {
+                    float d = Mathf.Max(c[i + 1] - c[i], 1e-4f);
+                    h[i] = Mathf.Clamp(h[i], h[i + 1] - g * d, h[i + 1] + g * d);
+                }
+            }
         }
     }
 
@@ -219,11 +291,16 @@ public static class TerrainGen {
         // **削る はばは 道ごと。** 山道は 広い 棚に 削る（せまいと 溝に なる）
         float cut = pi >= 0 ? PathCut[pi] : PathFade;
         float w = 1f - SmoothBand(PathHalf, cut, dist);
+        // **道の まん中は ほぼ そのまま 道の 高さに する。**
+        // 8割しか 寄せないと 地形の でこぼこが 2割 のこり、歩く 面が ざらつく。
+        // ふちは w が 落ちるので、まわりへは なだらかに つながる
         float h = w <= 0f ? RawHeight(x, z)
-                          // まるごと 道の 高さに すると 溝に なる。8割ほど 寄せて「削った 道」に する
-                          : Mathf.Lerp(RawHeight(x, z), ph, w * 0.82f);
-        // 高台は 平らに ならす。**道の 幅だけでは 立って 見わたせない**
-        float lt = LookoutFlat(x, z);
+                          : Mathf.Lerp(RawHeight(x, z), ph, w * 0.96f);
+        // 高台は 平らに ならす。**道の 幅だけでは 立って 見わたせない**。
+        // ただし **道の 上では 道の 高さを 優先する。**
+        // 棚の ふちが 道を 横ぎる ところで 地面を 引き上げて しまい、
+        // そこだけ 32度の 坂に なって いた（棚の 高さと 道の 高さが 引っぱりあう）
+        float lt = LookoutFlat(x, z) * (1f - w * 0.92f);
         if (lt > 0f) h = Mathf.Lerp(h, LookoutY, lt);
         return h;
     }
@@ -234,8 +311,8 @@ public static class TerrainGen {
         get {
             if (!lookoutReady) {
                 EnsureProfiles();
-                float w, ph;
-                NearestPath(Lookout.x, Lookout.y, out w, out ph);
+                int pi; float d, ph;
+                NearestPathEx(Lookout.x, Lookout.y, out pi, out d, out ph);
                 lookoutY = ph; lookoutReady = true;
             }
             return lookoutY;
@@ -283,14 +360,14 @@ public static class TerrainGen {
     static void NearestPathEx(float x, float z, out int index, out float dist, out float height) {
         var p = new Vector2(x, z);
         dist = float.MaxValue; height = Flat; index = -1;
-        for (int li = 0; li < Paths.Length; li++) {
-            var line = Paths[li];
-            for (int i = 0; i < line.Length - 1; i++) {
+        for (int li = 0; li < dense.Length; li++) {
+            var pts = dense[li]; var hs = denseH[li];
+            for (int i = 0; i < pts.Length - 1; i++) {
                 float t;
-                float d = DistToSegment(p, line[i], line[i + 1], out t);
+                float d = DistToSegment(p, pts[i], pts[i + 1], out t);
                 if (d >= dist) continue;
                 dist = d; index = li;
-                height = Mathf.Lerp(profiles[li][i], profiles[li][i + 1], t);
+                height = Mathf.Lerp(hs[i], hs[i + 1], t);
             }
         }
     }

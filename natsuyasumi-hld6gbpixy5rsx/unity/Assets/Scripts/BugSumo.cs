@@ -301,12 +301,22 @@ public class BugSumo : MonoBehaviour {
         return k.power * f;
     }
 
+    // ★**1回 作ったら 使いまわす。**
+    //   Apply() は とりくみの あいだ 毎フレーム 走るので、ここで 作り直して いた ころは
+    //   1秒に 120個の Sprite を 生んで いた。ブラウザ版は 使える メモリが 512MB しか ない
+    readonly System.Collections.Generic.Dictionary<BugId, Sprite> sprites
+        = new System.Collections.Generic.Dictionary<BugId, Sprite>();
+
     Sprite SpriteOf(BugKind k) {
         if (atlas == null || k == null) return null;
+        Sprite s;
+        if (sprites.TryGetValue(k.id, out s) && s != null) return s;
         int cw = atlas.width / BugKind.Cols, ch = atlas.height / BugKind.Rows;
         int col = k.Index % BugKind.Cols, row = k.Index / BugKind.Cols;
         var r = new Rect(col * cw, (BugKind.Rows - 1 - row) * ch, cw, ch);
-        return Sprite.Create(atlas, r, new Vector2(0.5f, 0.5f), 16f, 0, SpriteMeshType.FullRect);
+        s = Sprite.Create(atlas, r, new Vector2(0.5f, 0.5f), 16f, 0, SpriteMeshType.FullRect);
+        sprites[k.id] = s;
+        return s;
     }
 
     // ---- 組み立て
