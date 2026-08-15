@@ -69,12 +69,36 @@ Shader "Natsuyasumi/Water"
                 return OUT;
             }
 
-            // 段を つけた うねり。なめらかに すると 写真ふうに なるので しきいで 刻む
+            float Hash21(float2 p)
+            {
+                p = frac(p * float2(123.34, 456.21));
+                p += dot(p, p + 45.32);
+                return frac(p.x * p.y);
+            }
+
+            // かどの とれた ゆらぎ（値の noise）
+            float Noise2(float2 p)
+            {
+                float2 i = floor(p), f = frac(p);
+                f = f * f * (3.0 - 2.0 * f);
+                float a = Hash21(i);
+                float b = Hash21(i + float2(1, 0));
+                float c = Hash21(i + float2(0, 1));
+                float d = Hash21(i + float2(1, 1));
+                return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+            }
+
+            // 段を つけた うねり。なめらかに すると 写真ふうに なるので しきいで 刻む。
+            // ★**すじが そろうと 川では なく エスカレーターに 見える。**
+            //   波を 2枚 かさねるだけだと きれいな 格子が 出て、高台から 見おろした とき
+            //   白い 矢じるしが ならんだ ベルトコンベアに 見えた。ゆらぎを まぜて 崩す
             float Ripple(float2 uv, float t)
             {
-                float a = sin((uv.y * 3.1 + uv.x * 1.7) * _Scale - t * 2.1);
-                float b = sin((uv.y * 5.7 - uv.x * 2.9) * _Scale * 0.7 + t * 1.3);
-                return a * 0.6 + b * 0.4;
+                float2 q = uv * _Scale;
+                float n = Noise2(q * 1.7 + float2(0.0, -t * 0.8)) * 2.0 - 1.0;
+                float a = sin((q.y * 3.1 + q.x * 1.7) - t * 2.1 + n * 1.6);
+                float b = sin((q.y * 5.7 - q.x * 2.9) * 0.7 + t * 1.3 + n * 1.1);
+                return a * 0.5 + b * 0.3 + n * 0.4;
             }
 
             half4 frag(Varyings IN) : SV_Target
@@ -87,16 +111,22 @@ Shader "Natsuyasumi/Water"
                 half3 col = lerp(_Shallow.rgb, _Deep.rgb, saturate(IN.depth));
                 col = lerp(col, col * 1.14, step3);
 
-                // 岸ぎわの 白い すじ（あわ）
-                half edge = 1.0 - saturate(IN.depth * 2.2);
-                half foam = saturate(edge * (0.45 + 0.55 * step3));
-                col = lerp(col, _Foam.rgb, foam * 0.55);
+                // 岸ぎわの 白い すじ（あわ）。
+                // **岸から 2.2 ぶんも 白く すると 川幅の 半分が あわに なる。**
+                // 実さい 水面が ほとんど 白っぽく 見えて いた。ふちの 細い すじに とどめる
+                half edge = 1.0 - saturate(IN.depth * 4.2);
+                half foam = saturate(edge * (0.40 + 0.60 * step3));
+                col = lerp(col, _Foam.rgb, foam * 0.45);
 
-                // きらきら。太陽の むきに 合わせて 点で 出す
+                // きらきら。太陽の むきに 合わせて **点で ちらす**。
+                // うねりの しきいだけで 出すと、うねりの すじに そって 一列に ならぶ
                 Light mainLight = GetMainLight();
                 half sun = saturate(dot(half3(0, 1, 0), mainLight.direction));
-                half sp = step(0.86, saturate(r * 0.5 + 0.5)) * _Sparkle * sun;
-                col += sp * mainLight.color * 0.8;
+                // **しきいを ゆるく すると 水面が 雪に なる。**
+                // 面の 1割も 白く すると 一面の 粒に なった。細かく・まばらに 出す
+                half gate = step(0.955, Noise2(IN.uv * _Scale * 11.0 + float2(0.0, -t * 1.4)));
+                half sp = gate * step(0.70, saturate(r * 0.5 + 0.5)) * _Sparkle * sun;
+                col += sp * mainLight.color * 0.6;
 
                 half a = lerp(_Shallow.a, _Deep.a, saturate(IN.depth));
                 col = MixFog(col, IN.fogFactor);

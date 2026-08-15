@@ -257,7 +257,8 @@ public class PlayHost : MonoBehaviour {
     // 早おしは 空ぶり＝連打では 取れない
     IEnumerator Tsuri(PlaySpot s) {
         Line("いとを たらした…");
-        var uki = MakeIcon(IconFloat, 0.30f);
+        // **4m 先の 水面に 置くので 小さいと ただの 点。** あたりが 読めない
+        var uki = MakeIcon(IconFloat, 0.46f);
         uki.transform.position = s.water + Vector3.up * 0.12f;
 
         float wait = Random.Range(2.2f, 6.5f);

@@ -266,6 +266,20 @@ public static class BuildZashiki {
         // --- 高台に のぼると カメラが 裏へ まわりこむ。
         // ふだんは 正面 固定の まま＝ここだけの 見せ場に する
         orbit.zones = new[] {
+            // ★川べり。**正面 固定の ままだと 川が カメラの うしろに なる。**
+            //   大きい 川は 手前(+Z)を よこに 貫いて いるので、yaw180 の ままだと
+            //   釣りや 水きりを する 当人には 水面が まったく 見えない
+            //  （実さい 撮ったら 画に 入って いたのは 畑と 小屋だった）。
+            //   岸に 立ったら 川の ほうへ 向きなおる
+            new CamOrbit.Zone {
+                name = "かわべり",
+                area = new Bounds(new Vector3(0f, TerrainGen.Flat + 3f, 25.6f),
+                                  new Vector3(54f, 10f, 5.2f)),
+                yaw = 2f, pitch = 32f, distance = 11.5f,
+                lookOffset = new Vector3(0f, 0.4f, 4.2f),     // 水面を 画の まん中へ
+                fogScale = 0.7f,
+                blend = 1.0f,
+            },
             new CamOrbit.Zone {
                 name = "みはらし",
                 area = new Bounds(new Vector3(lk.x, TerrainGen.LookoutY + 2f, lk.y),
