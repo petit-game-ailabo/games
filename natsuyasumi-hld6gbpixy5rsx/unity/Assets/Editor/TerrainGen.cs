@@ -28,6 +28,15 @@ public static class TerrainGen {
     public const float PlayMinX = -26f, PlayMaxX = 26f;
     public const float PlayMinZ = -10f, PlayMaxZ = 27f;
 
+    // ★2026-08-15：**高台（みはらし台）。**
+    // ここだけは 四角の そとへ 出られる。山の 肩まで 登ると カメラが 裏へ まわりこみ、
+    // それまで 背中がわで 見えなかった 谷ぜんたいが 見える＝のぼる ごほうび。
+    // 通り道は 細い 一本道に して、他の 死角へは 行けない ままに する
+    public static readonly Vector2 Lookout = new Vector2(-20f, -18f);
+    public const float LookoutHalfX = 5.0f, LookoutHalfZ = 4.2f;
+    public const float TrailX = -20f;          // 登り道の 中心
+    public const float TrailHalf = 2.0f;       // 通れる はば の 半分
+
     public const float Flat = -0.52f;          // 家の まわりの 高さ
     const float FlatRadius = 11f;
     const float FlatBlend = 8f;
@@ -50,7 +59,9 @@ public static class TerrainGen {
         new[] { new Vector2(12f, 7f),  new Vector2(12f, -6f) },       // 右：納屋・祠へ
         new[] { new Vector2(12f, -6f), new Vector2(18f, -6f) },
         new[] { new Vector2(3f, 7f),   new Vector2(3f, 24f) },        // 川べりへ
-        new[] { new Vector2(-20f, 7f), new Vector2(-20f, -8f) },      // 山への 登り口
+        // 山への 登り口 → 高台。**勾配の うわぎりが かかる ので、この 長さが 要る**
+        new[] { new Vector2(-20f, 7f),  new Vector2(-20f, -4f),
+                new Vector2(-20f, -11f), new Vector2(-20f, -18f) },
     };
     // ---- 沢（小川）と 川。**地形に みぞを 掘り、そこへ 水を 流す。**
     // 水は 高い ほうから 低い ほうへ しか 流れないので、道と 同じく
@@ -84,6 +95,20 @@ public static class TerrainGen {
     const float PathHalf = 0.75f;
     const float PathFade = 1.55f;
     const float MaxGrade = 0.26f;      // 道の 勾配の うわぎり（＝約15度）
+
+    // ★2026-08-15：**削る はばは 道ごとに 変える。**
+    //   地面を せまく しか 削らないと、山道では 両がわの 斜面が そのまま 残って
+    //   **溝の そこを 歩く**ことに なる。実さい 撮ったら 左右が 草の 壁で、
+    //   外が まったく 見えず ただの 通路に なって いた。
+    //   本物の 山道も 斜面を 広く 削って 棚に する。だから 山道だけ 大きく とる。
+    //   ※土の 色が つく はばは PathFade の まま＝道すじは 細い 一本道に 見える
+    static readonly float[] PathCut = { 1.55f, 1.55f, 1.55f, 1.55f, 1.55f, 1.55f, 1.55f, 12f };
+
+    // ★土の 色が つく はば（半分）。**本道だけ 車道の 幅に する。**
+    //   田舎の 車道は 舗装されて いない ことが 多く、**車 1台ぶん**しか ない。
+    //   2台は すれちがえず、対向車が 来たら どちらかが 待避所まで 下がる。
+    //   ＝ 3m ほど。ほかの 道は 人が 踏み分けた だけ なので 細い まま
+    static readonly float[] PathHalfPer = { 1.55f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f };
 
     // ---- 道の 高さの すじ道（勾配を ならした もの）
     static float[][] profiles;
@@ -187,11 +212,54 @@ public static class TerrainGen {
     /// <summary>その 場所の 地めんの 高さ（道を 削った あと）</summary>
     public static float Height(float x, float z) {
         EnsureProfiles();
-        float w, ph;
-        NearestPath(x, z, out w, out ph);
-        if (w <= 0f) return RawHeight(x, z);
-        // まるごと 道の 高さに すると 溝に なる。8割ほど 寄せて「削った 道」に する
-        return Mathf.Lerp(RawHeight(x, z), ph, w * 0.82f);
+        int pi; float dist, ph;
+        NearestPathEx(x, z, out pi, out dist, out ph);
+        // **削る はばは 道ごと。** 山道は 広い 棚に 削る（せまいと 溝に なる）
+        float cut = pi >= 0 ? PathCut[pi] : PathFade;
+        float w = 1f - SmoothBand(PathHalf, cut, dist);
+        float h = w <= 0f ? RawHeight(x, z)
+                          // まるごと 道の 高さに すると 溝に なる。8割ほど 寄せて「削った 道」に する
+                          : Mathf.Lerp(RawHeight(x, z), ph, w * 0.82f);
+        // 高台は 平らに ならす。**道の 幅だけでは 立って 見わたせない**
+        float lt = LookoutFlat(x, z);
+        if (lt > 0f) h = Mathf.Lerp(h, LookoutY, lt);
+        return h;
+    }
+
+    static float lookoutY; static bool lookoutReady;
+    /// <summary>高台の 地めんの 高さ。登り道の すじ道から とる</summary>
+    public static float LookoutY {
+        get {
+            if (!lookoutReady) {
+                EnsureProfiles();
+                float w, ph;
+                NearestPath(Lookout.x, Lookout.y, out w, out ph);
+                lookoutY = ph; lookoutReady = true;
+            }
+            return lookoutY;
+        }
+    }
+
+    /// <summary>高台らしさ 0〜1（1＝まっ平ら）</summary>
+    public static float LookoutFlat(float x, float z) {
+        float dx = Mathf.Abs(x - Lookout.x), dz = Mathf.Abs(z - Lookout.y);
+        // ふちの ぼかしは 広めに とる。**棚は 斜面を 8m ほど 削って 作る**ので、
+        // 急に 切ると 石切り場の ような 崖に なる
+        float tx = 1f - SmoothBand(LookoutHalfX, LookoutHalfX + 5.5f, dx);
+        float tz = 1f - SmoothBand(LookoutHalfZ, LookoutHalfZ + 5.5f, dz);
+        return Mathf.Clamp01(Mathf.Min(tx, tz));
+    }
+
+    /// <summary>人が 立ち入れる ところ（四角＋山への 一本道＋高台）</summary>
+    public static bool Walkable(float x, float z, float margin = 0f) {
+        if (x > PlayMinX - margin && x < PlayMaxX + margin
+         && z > PlayMinZ - margin && z < PlayMaxZ + margin) return true;
+        // 登り道の 帯
+        if (Mathf.Abs(x - TrailX) < TrailHalf + margin
+         && z < PlayMinZ && z > Lookout.y - LookoutHalfZ) return true;
+        // 高台
+        return Mathf.Abs(x - Lookout.x) < LookoutHalfX + margin
+            && Mathf.Abs(z - Lookout.y) < LookoutHalfZ + margin;
     }
 
     /// <summary>道らしさ 0〜1（1＝まるっきり 土）</summary>
@@ -203,19 +271,26 @@ public static class TerrainGen {
     }
 
     static void NearestPath(float x, float z, out float weight, out float height) {
+        int pi; float dist;
+        NearestPathEx(x, z, out pi, out dist, out height);
+        float half = pi >= 0 ? PathHalfPer[pi] : PathHalf;
+        weight = 1f - SmoothBand(half, half + (PathFade - PathHalf), dist);
+    }
+
+    /// <summary>いちばん 近い 道。どの 道か・どれだけ 離れて いるか・その 高さ</summary>
+    static void NearestPathEx(float x, float z, out int index, out float dist, out float height) {
         var p = new Vector2(x, z);
-        float best = float.MaxValue; height = Flat;
+        dist = float.MaxValue; height = Flat; index = -1;
         for (int li = 0; li < Paths.Length; li++) {
             var line = Paths[li];
             for (int i = 0; i < line.Length - 1; i++) {
                 float t;
                 float d = DistToSegment(p, line[i], line[i + 1], out t);
-                if (d >= best) continue;
-                best = d;
+                if (d >= dist) continue;
+                dist = d; index = li;
                 height = Mathf.Lerp(profiles[li][i], profiles[li][i + 1], t);
             }
         }
-        weight = 1f - SmoothBand(PathHalf, PathFade, best);
     }
 
     // ★**Unity の Mathf.SmoothStep は GLSL の smoothstep では ない。**
@@ -406,8 +481,7 @@ public static class TerrainGen {
                 // **遊べる 四角の 中には 木を 生やさない。**
                 // 中に 立てると 見とおしを ふさぎ、2Dで 見せる 意味が なくなる。
                 // 木は そとがわに ならべて「そこから 先は 森」と 見せる 壁に する
-                if (x > PlayMinX - 1.5f && x < PlayMaxX + 1.5f
-                 && z > PlayMinZ - 1.5f && z < PlayMaxZ + 1.5f) continue;
+                if (Walkable(x, z, 1.5f)) continue;
                 float rise = Height(x, z) - Flat;
                 if (sl < 0.16f && rise < 2.2f && z < PlayMaxZ) continue;
             }

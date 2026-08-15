@@ -49,6 +49,19 @@ public class BugHud : MonoBehaviour {
             if (bookPanel != null) bookPanel.gameObject.SetActive(bookOpen);
             if (bookOpen) RefreshBook();
         }
+        // **ずかんを ひらいて いる あいだ だけ**、かごの 虫を 逃がす／標本に する。
+        // 歩きながら 押せると、うっかり 大物を 標本に して しまう
+        if (bookOpen && book != null) {
+            if (Input.GetKeyDown(KeyCode.X)) {
+                var id = book.Release();
+                if (id != null) Say(BugKind.Of(id.Value).name + "を にがした");
+                RefreshBook(); Refresh();
+            } else if (Input.GetKeyDown(KeyCode.C)) {
+                var id = book.MakeSpecimen();
+                if (id != null) Say(BugKind.Of(id.Value).name + "を ひょうほんに した");
+                RefreshBook(); Refresh();
+            }
+        }
     }
 
     void OnCaught(BugCatch c) {
@@ -96,9 +109,33 @@ public class BugHud : MonoBehaviour {
         sb.AppendLine();
         foreach (var k in BugKind.All) {
             int n = book.Count(k.id);
-            sb.AppendLine(n > 0 ? string.Format("{0}　{1}ひき　さいだい {2}mm", k.name, n, book.MaxMm(k.id))
-                                : "？？？？？");
+            if (n <= 0) { sb.AppendLine("？？？？？"); continue; }
+            int sp = book.Specimen(k.id);
+            sb.AppendLine(string.Format("{0}　{1}ひき　さいだい {2}mm{3}",
+                          k.name, n, book.MaxMm(k.id), sp > 0 ? "　ひょうほん" + sp : ""));
         }
+        sb.AppendLine();
+        // ★**かごの 虫は 逃がすか 標本に するか。**
+        //   どちらも かごから 消える。標本は のこるが 二どと 動かない。
+        //   夏の おわりに かごを 空に する ときの、あの 迷いを 出したい
+        sb.AppendLine("― むしかご ―");
+        if (book.Recent.Count == 0) sb.AppendLine("からっぽ");
+        else {
+            // **横に はみ出さない ように 3つまで。** 文字は 折りかえさない 作りなので、
+            // 6ひき ぜんぶ 名を ならべると 枠の 外へ 流れて しまう
+            var line = new StringBuilder();
+            int shown = 0;
+            foreach (var id in book.Recent) {
+                if (shown >= 3) break;
+                if (line.Length > 0) line.Append("　");
+                line.Append(BugKind.Of(id).name);
+                shown++;
+            }
+            if (book.Recent.Count > shown) line.Append("　ほか" + (book.Recent.Count - shown));
+            sb.AppendLine(line.ToString());
+            sb.AppendLine("X：にがす　　C：ひょうほんに する");
+        }
+        sb.AppendLine(string.Format("にがした {0}　ひょうほん {1}", book.Freed, book.SpecimenTotal));
         sb.AppendLine();
         sb.AppendLine("Z で とじる");
         bookText.text = sb.ToString();
@@ -139,7 +176,8 @@ public class BugHud : MonoBehaviour {
         promptPanel.gameObject.SetActive(false);
 
         // ずかん
-        bookPanel = Panel(canvasGO.transform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 220f));
+        // むしかごの ぶんが 増えた ので 縦を のばす（220 では 字が 枠から 出て いた）
+        bookPanel = Panel(canvasGO.transform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(310f, 268f));
         bookPanel.pivot = new Vector2(0.5f, 0.5f);
         bookPanel.anchorMin = bookPanel.anchorMax = new Vector2(0.5f, 0.5f);
         bookPanel.anchoredPosition = Vector2.zero;

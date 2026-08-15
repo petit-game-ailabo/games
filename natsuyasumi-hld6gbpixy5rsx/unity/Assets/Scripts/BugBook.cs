@@ -18,10 +18,16 @@ public class BugBook : MonoBehaviour {
     const string Key = "natsuyasumi.bugbook.v1";
     const string MaxKey = "natsuyasumi.bugmax.v1";
     const string RecentKey = "natsuyasumi.bugcage.v1";
+    const string SpecKey = "natsuyasumi.bugspec.v1";
+    const string FreedKey = "natsuyasumi.bugfreed.v1";
     public const int CageSize = 6;          // かごに 入る 数
 
     int[] counts = new int[BugKind.All.Length];
     int[] maxMm  = new int[BugKind.All.Length];
+    // ★**標本に した ぶん。** かごの 虫は 逃がすか 標本に するか の どちらか。
+    //   標本は のこるが 二どと 動かない。逃がすと 消えるが 数だけ のこる。
+    //   どちらを えらぶかに 迷いが 出る のが この 遊びの ねらい
+    int[] specimens = new int[BugKind.All.Length];
     // かごの 中身（入れた 順）。**数だけ 覚えても かごが 空に なる**ので、
     // 何が 入っているかも 別に 持つ
     readonly List<BugId> recent = new List<BugId>();
@@ -32,6 +38,30 @@ public class BugBook : MonoBehaviour {
 
     public int Count(BugId id) { return counts[(int)id]; }
     public int MaxMm(BugId id) { return maxMm[(int)id]; }
+    public int Specimen(BugId id) { return specimens[(int)id]; }
+    public int SpecimenTotal { get { int s = 0; foreach (var c in specimens) s += c; return s; } }
+    public int SpecimenKinds { get { int s = 0; foreach (var c in specimens) if (c > 0) s++; return s; } }
+    public int Freed { get { return PlayerPrefs.GetInt(FreedKey, 0); } }
+
+    /// <summary>かごの いちばん 古い 1ぴきを 逃がす。逃がした 虫（無ければ null）</summary>
+    public BugId? Release() {
+        if (recent.Count == 0) return null;
+        var id = recent[0];
+        recent.RemoveAt(0);
+        PlayerPrefs.SetInt(FreedKey, Freed + 1);
+        Save();
+        return id;
+    }
+
+    /// <summary>かごの いちばん 古い 1ぴきを 標本に する</summary>
+    public BugId? MakeSpecimen() {
+        if (recent.Count == 0) return null;
+        var id = recent[0];
+        recent.RemoveAt(0);
+        specimens[(int)id]++;
+        Save();
+        return id;
+    }
     public int Total { get { int s = 0; foreach (var c in counts) s += c; return s; } }
     public int Kinds { get { int s = 0; foreach (var c in counts) if (c > 0) s++; return s; } }
     public IList<BugId> Recent { get { return recent; } }
@@ -61,6 +91,7 @@ public class BugBook : MonoBehaviour {
     void Load() {
         ReadInts(Key, counts);
         ReadInts(MaxKey, maxMm);
+        ReadInts(SpecKey, specimens);
         var r = PlayerPrefs.GetString(RecentKey, "");
         if (string.IsNullOrEmpty(r)) return;
         foreach (var t in r.Split(',')) {
@@ -82,14 +113,16 @@ public class BugBook : MonoBehaviour {
     void Save() {
         PlayerPrefs.SetString(Key, string.Join(",", Array.ConvertAll(counts, c => c.ToString())));
         PlayerPrefs.SetString(MaxKey, string.Join(",", Array.ConvertAll(maxMm, c => c.ToString())));
+        PlayerPrefs.SetString(SpecKey, string.Join(",", Array.ConvertAll(specimens, c => c.ToString())));
         PlayerPrefs.SetString(RecentKey, string.Join(",", recent.ConvertAll(id => ((int)id).ToString()).ToArray()));
         PlayerPrefs.Save();
     }
 
     [ContextMenu("記録を まっさらに する")]
     public void Clear() {
-        for (int i = 0; i < counts.Length; i++) { counts[i] = 0; maxMm[i] = 0; }
+        for (int i = 0; i < counts.Length; i++) { counts[i] = 0; maxMm[i] = 0; specimens[i] = 0; }
         recent.Clear();
+        PlayerPrefs.SetInt(FreedKey, 0);
         Save();
     }
 }

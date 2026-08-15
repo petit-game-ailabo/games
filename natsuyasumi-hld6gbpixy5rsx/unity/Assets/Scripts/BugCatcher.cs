@@ -26,6 +26,7 @@ public class BugCatcher : MonoBehaviour {
     BugSumo sumo;
     BugHud hud;
     PlayerMove move;
+    PlayHost play;
     float swing = -1f, coolLeft;
     bool resolved;
 
@@ -35,6 +36,7 @@ public class BugCatcher : MonoBehaviour {
         sumo = FindFirstObjectByType<BugSumo>();
         hud = FindFirstObjectByType<BugHud>();
         move = GetComponent<PlayerMove>();
+        play = GetComponent<PlayHost>();
         if (net == null) net = MakeNet();
     }
 
@@ -42,14 +44,31 @@ public class BugCatcher : MonoBehaviour {
         if (coolLeft > 0f) coolLeft -= Time.deltaTime;
 
         // ずもうの さいちゅうは あみを ふらない（同じ キーを 使うので）
-        if (sumo != null && sumo.Busy) { Pose(-1f); return; }
+        if (sumo != null && sumo.Busy) {
+            // **やじるしは ずもうの 技に つかう。** 同時に 歩けると 落ちついて 見られない
+            if (move != null) move.locked = true;
+            Pose(-1f);
+            return;
+        }
 
-        // 相手の そばでは あみでは なく「いどむ」に なる＝ボタンは 1つの まま
-        if (hud != null && sumo != null) hud.SetPrompt(sumo.PromptFor(transform));
+        // 遊びの さいちゅうも あみは ふらない（同じ ボタンを つかう ので）
+        if (play != null && play.Busy) { Pose(-1f); return; }
+
+        // ★**足もとの ひとことは ここで ひとつに まとめる。**
+        //   前は それぞれが 好きに 書きこんで いて、あとから 書いた 空っぽが
+        //   先の ひとことを 消して いた。近い ものから 順に えらぶ
+        if (hud != null) {
+            string p = null;
+            if (play != null && play.NearSpot != null) p = play.NearSpot.Prompt;
+            if (p == null && sumo != null) p = sumo.PromptFor(transform);
+            hud.SetPrompt(p);
+        }
 
         bool pressed = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)
                     || Input.GetKeyDown(KeyCode.J) || Input.GetMouseButtonDown(0);
         if (pressed) {
+            // **そばに 遊び場が あれば そちらが 勝つ。**川べりで あみを ふっても 何も 起きない
+            if (play != null && play.TryBegin()) return;
             if (sumo != null && sumo.PlayerNear(transform)) { sumo.Begin(); return; }
             TrySwing();
         }

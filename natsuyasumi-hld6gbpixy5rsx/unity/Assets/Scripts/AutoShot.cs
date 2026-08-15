@@ -41,6 +41,32 @@ public class AutoShot : MonoBehaviour {
             }
         }
 
+        // -at "x,z" で 主人公を そこへ 移す。**遠くの 見せ場を 撮る ための 近道。**
+        // 高台まで 歩かせると 何十秒も かかり、たしかめが 回らない
+        string at = Arg("-at", null);
+        if (!string.IsNullOrEmpty(at)) {
+            var pm = FindFirstObjectByType<PlayerMove>();
+            if (pm != null) {
+                var q = at.Split(',');
+                float ax = float.Parse(q[0]), az = float.Parse(q[1]);
+                // 空から 落として 地めんに のせる（地形の 高さを ここでは 知らない）
+                var cc0 = pm.GetComponent<CharacterController>();
+                if (cc0 != null) cc0.enabled = false;
+                pm.transform.position = new Vector3(ax, 60f, az);
+                if (cc0 != null) cc0.enabled = true;
+                RaycastHit gh;
+                if (Physics.Raycast(new Vector3(ax, 80f, az), Vector3.down, out gh, 200f, ~0,
+                                    QueryTriggerInteraction.Ignore)) {
+                    if (cc0 != null) cc0.enabled = false;
+                    pm.transform.position = gh.point + Vector3.up * 0.1f;
+                    if (cc0 != null) cc0.enabled = true;
+                }
+                // カメラが 寄せきるまで 待つ（見せ場の 切りかえは ゆっくり 効く）
+                for (int w = 0; w < 180; w++) yield return null;
+                Debug.Log("[AutoShot] 移した -> " + pm.transform.position);
+            }
+        }
+
         // -walk "x,y" が あれば、その むきに しばらく あるかせてから 撮る（当たりの たしかめ）
         string walk = Arg("-walk", null);
         if (!string.IsNullOrEmpty(walk)) {
@@ -104,12 +130,44 @@ public class AutoShot : MonoBehaviour {
             else if (!sumo.CanStart()) Debug.Log("[AutoShot] かごが 空で いどめない");
             else {
                 Debug.Log("[AutoShot] むしずもう はじめ=" + sumo.Begin());
+                // やじるしで つつく（0=まえ 1=うしろ 2=ひだり 3=みぎ）と 声えんを まぜる
                 for (int i = 0; i < sumoPress && sumo.Busy; i++) {
-                    sumo.DebugPush();
-                    for (int w = 0; w < 3; w++) yield return null;
+                    if (i % 3 == 0) sumo.DebugCheer();
+                    else sumo.DebugPoke(i % 4);
+                    for (int w = 0; w < 22; w++) yield return null;   // つつく 間かくを あける
                 }
                 Debug.Log("[AutoShot] むしずもう けっか=" + sumo.DebugState);
                 for (int w = 0; w < 30; w++) yield return null;
+            }
+        }
+
+        // -play sasabune|mizukiri|tsuri|hana|irozu|oshibana|himitsu で 遊びを ためす。
+        // **押す 間かくを あけて 通す。** 水きりは 2回、つりは あたりを 待って 1回
+        string playName = Arg("-play", null);
+        if (!string.IsNullOrEmpty(playName)) {
+            var ph = FindFirstObjectByType<PlayHost>();
+            if (ph == null) Debug.Log("[AutoShot] PlayHost が ない");
+            else {
+                PlayKind pk;
+                switch (playName.ToLower()) {
+                    case "sasabune": pk = PlayKind.Sasabune; break;
+                    case "mizukiri": pk = PlayKind.Mizukiri; break;
+                    case "tsuri":    pk = PlayKind.Tsuri;    break;
+                    case "hana":     pk = PlayKind.Hanatsumi;break;
+                    case "irozu":    pk = PlayKind.Irozu;    break;
+                    case "oshibana": pk = PlayKind.Oshibana; break;
+                    default:         pk = PlayKind.Himitsu;  break;
+                }
+                // **自動運転は ねらい所で 押す。** 一定間かくで 押させて いた ころは
+                // 水きりが いつも 0段、つりは いつも 逃げられ、うまく いった ときの
+                // 画が 一度も 撮れて いなかった
+                ph.debugAuto = true;
+                Debug.Log("[AutoShot] あそび はじめ=" + ph.DebugBegin(pk));
+                // -playwait 0 に すると 遊びの **さいちゅうを 撮る**（終わるのを 待たない）
+                if (Arg("-playwait", "1") != "0") {
+                    for (int w = 0; w < 1200 && ph.Busy; w++) yield return null;
+                    Debug.Log("[AutoShot] あそび けっか=" + ph.DebugState);
+                }
             }
         }
 

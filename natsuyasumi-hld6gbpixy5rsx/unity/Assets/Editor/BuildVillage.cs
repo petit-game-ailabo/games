@@ -23,6 +23,54 @@ public static class BuildVillage {
         Nougu(root, m, box);
         Ido(root, m, box);
         Hokora(root, m, box);
+        Kuruma(root, m, box);
+    }
+
+    // ---------------------------------------------------------------- 車道ばた
+    // 道はば じたいは TerrainGen が 車 1台ぶんに 削って いる。
+    // ここでは **そこが 車の 通る 道だと 分かる もの**を 立てる。
+    //  - 電柱：田舎の 道ぞいに かならず 立って いて、これが あると 生活が 見える
+    //  - カーブミラー：見とおしの わるい 辻に 立つ
+    //  - 待避所の 目じるし：すれちがえない 道には 車を よける ふくらみが ある
+    static void Kuruma(Transform root, Materials m,
+                       System.Action<string, Transform, Vector3, Vector3, Material> box) {
+        // 本道は z=7 を よこに 走る。すこし 北がわの 路肩に ならべる
+        const float RoadZ = 7f, Shoulder = 2.9f;
+        // ★**家の 正面には 立てない。** 等間かくに ならべたら ちょうど 玄関の まえに
+        //   1本 立ち、家が 見えなく なった。母屋の 幅（±5.4m）は あける
+        float[] poleX = { -24f, -14f, 9f, 19f };
+        for (int i = 0; i < poleX.Length; i++) {
+            float x = poleX[i];
+            float z = RoadZ - Shoulder;
+            float y = TerrainGen.Height(x, z);
+            // 電柱。上に 腕木を 2本
+            box("Denchu" + i, root, new Vector3(x, y + 3.1f, z), new Vector3(0.16f, 6.2f, 0.16f), m.post);
+            box("Denchu_Ude" + i, root, new Vector3(x, y + 5.6f, z), new Vector3(1.3f, 0.09f, 0.09f), m.post);
+            box("Denchu_Ude2" + i, root, new Vector3(x, y + 5.15f, z), new Vector3(1.0f, 0.08f, 0.08f), m.post);
+            // 電線。となりの 柱まで 1本 わたす（たるみは 出さない＝細い 箱 1つで 足りる）。
+            // **家の 上は またがない**ので、間が あきすぎる ところは とばす
+            if (i < poleX.Length - 1) {
+                float nx = poleX[i + 1];
+                if (nx - x <= 12f) {
+                    float ny = TerrainGen.Height(nx, z);
+                    var mid = new Vector3((x + nx) * 0.5f, (y + ny) * 0.5f + 5.45f, z);
+                    box("Densen" + i, root, mid, new Vector3(nx - x, 0.05f, 0.05f), m.post);
+                }
+            }
+        }
+        // カーブミラー（家へ 曲がる 辻。玄関の 正面は 避けて 右わきに）
+        {
+            float x = 2.6f, z = RoadZ + 1.5f;
+            float y = TerrainGen.Height(x, z);
+            box("Mirror_Hashira", root, new Vector3(x, y + 1.3f, z), new Vector3(0.10f, 2.6f, 0.10f), m.post);
+            box("Mirror_Kagami",  root, new Vector3(x, y + 2.5f, z), new Vector3(0.72f, 0.72f, 0.07f), m.plaster);
+        }
+        // 待避所。**すれちがえない 道には かならず ある。**
+        // 石を ならべて 路肩が ふくらんで いる ことを 見せる
+        for (int i = -2; i <= 2; i++) {
+            float x = -8f + i * 0.9f, z = RoadZ + 2.2f;
+            box("Taihi" + i, root, On(x, z, 0.12f), new Vector3(0.5f, 0.26f, 0.42f), m.stone);
+        }
     }
 
     /// <summary>組み立てに つかう 素材ひとまとめ</summary>

@@ -239,9 +239,49 @@ public static class BuildZashiki {
         float wx0 = TerrainGen.PlayMinX, wx1 = TerrainGen.PlayMaxX;
         float wz0 = TerrainGen.PlayMinZ, wz1 = TerrainGen.PlayMaxZ;
         Invisible("Bound_Front", root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz1), new Vector3(wx1 - wx0, 3f, 0.3f));
-        Invisible("Bound_Back",  root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz0), new Vector3(wx1 - wx0, 3f, 0.3f));
         Invisible("Bound_Left",  root, new Vector3(wx0, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
         Invisible("Bound_Right", root, new Vector3(wx1, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
+        // おくの かべは **山への 登り口ぶんだけ 開けて おく**。
+        // ここが 高台への 一本道に なる
+        float tx = TerrainGen.TrailX, th = TerrainGen.TrailHalf;
+        Invisible("Bound_Back_L", root, new Vector3((wx0 + (tx - th)) * 0.5f, 1.2f, wz0),
+                  new Vector3((tx - th) - wx0, 3f, 0.3f));
+        Invisible("Bound_Back_R", root, new Vector3(((tx + th) + wx1) * 0.5f, 1.2f, wz0),
+                  new Vector3(wx1 - (tx + th), 3f, 0.3f));
+
+        // --- 山への 一本道と 高台の かこい。
+        // **のぼり坂なので 高さは 地めんに あわせて 置く。**
+        // まっすぐな 箱を 1つ 置くと、坂の 上では 埋まって しまい 素通りできた
+        var lk = TerrainGen.Lookout;
+        float lhx = TerrainGen.LookoutHalfX, lhz = TerrainGen.LookoutHalfZ;
+        WallRun(root, "Trail_L", new Vector2(tx - th, wz0), new Vector2(tx - th, lk.y + lhz));
+        WallRun(root, "Trail_R", new Vector2(tx + th, wz0), new Vector2(tx + th, lk.y + lhz));
+        WallRun(root, "Look_L",  new Vector2(lk.x - lhx, lk.y + lhz), new Vector2(lk.x - lhx, lk.y - lhz));
+        WallRun(root, "Look_R",  new Vector2(lk.x + lhx, lk.y + lhz), new Vector2(lk.x + lhx, lk.y - lhz));
+        WallRun(root, "Look_B",  new Vector2(lk.x - lhx, lk.y - lhz), new Vector2(lk.x + lhx, lk.y - lhz));
+        // 高台の 手前がわ（一本道の 出口の 両わき）
+        WallRun(root, "Look_F1", new Vector2(lk.x - lhx, lk.y + lhz), new Vector2(tx - th, lk.y + lhz));
+        WallRun(root, "Look_F2", new Vector2(tx + th, lk.y + lhz), new Vector2(lk.x + lhx, lk.y + lhz));
+
+        // --- 高台に のぼると カメラが 裏へ まわりこむ。
+        // ふだんは 正面 固定の まま＝ここだけの 見せ場に する
+        orbit.zones = new[] {
+            new CamOrbit.Zone {
+                name = "みはらし",
+                area = new Bounds(new Vector3(lk.x, TerrainGen.LookoutY + 2f, lk.y),
+                                  new Vector3(lhx * 2f + 1f, 12f, lhz * 2f + 1f)),
+                // yaw 180→8 で ちょうど 裏。
+                // **見おろしを 深く しすぎない。** 44度で 撮ったら 空が 一切 入らず
+                // ただの 見おろし図に なった。34度なら 谷の むこうの 空も 入る。
+                // 中心の ずらしも 控えめに する（10m 送ったら 主人公が 画から 消えた）
+                yaw = 8f, pitch = 34f, distance = 17f,
+                lookOffset = new Vector3(2f, 0.6f, 3.5f),
+                // **もやを 薄く する。** ふだんの こさだと 谷ぜんたいが 灰みどりに 溶けて、
+                // せっかく 登っても 見わたせた 感じが しなかった
+                fogScale = 0.33f,
+                blend = 0.8f,
+            },
+        };
 
         // --- 天気（はれ/くもり/あめ/ゆうだち）。雨は **庭の うえだけ** に 降らせる。
         // 屋根を はずした 切りぬきなので、部屋の 中まで 降らせると 雨もりに 見える
@@ -269,6 +309,11 @@ public static class BuildZashiki {
         todc.weather = wx;                    // 時間帯を おいた **あと**に 天気を かぶせる
         wx.timeOfDay = todc;
         todc.tod = TimeOfDay.Tod.Asa;
+        // **時間は 遊んで いる あいだ 進む。** 夏休みの 一日を 遊びきれる 長さに して、
+        // あさに 起きて よるに なる ところまで ひと続きで 見えるように する
+        todc.runClock = true;
+        todc.hour = 6.5f;                     // 起きたて。朝の 低い 光から はじまる
+        todc.realMinutesPerDay = 42f;
         todc.Apply();
 
         // --- 塵（ほこり）。障子ごしの 光の すじの なかで きらきら 舞う＝屋内の 見どころ。
@@ -417,6 +462,13 @@ public static class BuildZashiki {
         var sumo = sumoGO.AddComponent<BugSumo>();
         sumo.atlas = bugAtlas; sumo.font = hud.font; sumo.panel = hud.panel;
         sumo.partner = partner.transform;
+
+        // --- 田舎の 遊び（ささぶね／水きり／つり／花つみ／色水／おし花／ひみつきち）
+        var playAtlas = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/play.png");
+        if (playAtlas == null) Debug.LogError("[BuildZashiki] play.png が 見つからない");
+        var play = player.AddComponent<PlayHost>();
+        play.atlas = playAtlas; play.font = hud.font; play.panel = hud.panel;
+        PlaySpots(root);
 
         // --- 屋内の 切りぬき。**中に 入ったら 手前の 壁と 屋根を 消す**
         if (cutPieces != null) {
@@ -855,6 +907,71 @@ public static class BuildZashiki {
         // 当たると そこを 地めんと 思いこみ、**ばったが 宙に 湧いた**。
         // 歩く 当たり（CharacterController）は 層に かかわらず 効くので これで よい
         go.layer = 2;
+    }
+
+    // --- 田舎の 遊びが できる ところ を 置く。
+    // **その 場所でしか できない こと**に する のが 肝。
+    // どこでも できると 場所を おぼえる 意味が なくなり、地図が ただの 通路に なる
+    static void PlaySpots(Transform root) {
+        var host = new GameObject("PlaySpots");
+        host.transform.SetParent(root, false);
+
+        // 小川ばた：ささぶねを ながす。水は 山から 下って くる＝+Z へ 流れる
+        Water(host, PlayKind.Sasabune, -20.3f, 13f, -22f, 13f, Vector3.forward, 2f);
+        // 大きい 川：水きりと つり。岸は 遊べる 四角の 手前の へり
+        Water(host, PlayKind.Mizukiri, 9f, 25.4f, 9f, 29.5f, Vector3.right, 9f);
+        Water(host, PlayKind.Tsuri,   -1f, 25.4f, -1f, 29.5f, Vector3.right, 9f);
+        // 野はら：花を つむ
+        Spot(host, PlayKind.Hanatsumi, -9f, 13f, 2.4f);
+        // 井戸ばた：つんだ 花を もんで 色水に する
+        Spot(host, PlayKind.Irozu, -2.5f, 13.4f, 2.0f);
+        // 縁がわ：本に はさんで おし花に する
+        Spot(host, PlayKind.Oshibana, 2.0f, BuildHouse.EngawaZ - 0.5f, 1.6f);
+        // やぶの 中：ひみつきち
+        Spot(host, PlayKind.Himitsu, 19f, 15f, 2.4f);
+    }
+
+    static PlaySpot Spot(GameObject parent, PlayKind kind, float x, float z, float range) {
+        var go = new GameObject("Play_" + kind);
+        go.transform.SetParent(parent.transform, false);
+        go.transform.position = new Vector3(x, TerrainGen.Height(x, z), z);
+        var s = go.AddComponent<PlaySpot>();
+        s.kind = kind; s.range = range;
+        return s;
+    }
+
+    static void Water(GameObject parent, PlayKind kind, float x, float z,
+                      float wx, float wz, Vector3 flow, float span) {
+        var s = Spot(parent, kind, x, z, 2.6f);
+        // **水面の 高さは 場面を 組む ときに 入れて おく。**
+        // 走って いる あいだに さがそうにも、川の 面には 当たりが ない
+        int si; float across, waterY;
+        TerrainGen.NearestStream(wx, wz, out si, out across, out waterY);
+        s.water = new Vector3(wx, waterY, wz);
+        s.flow = flow; s.span = span;
+    }
+
+    // 坂に そった 見えない かべ。**まっすぐな 箱 1つでは 坂を ふさげない。**
+    // 坂の 下では 宙に 浮き、坂の 上では 地めんに 埋まって 素通りできる。
+    // 短い 箱を つないで、それぞれ その場の 地めんの 高さに 置く
+    static void WallRun(Transform parent, string name, Vector2 a, Vector2 b) {
+        float len = Vector2.Distance(a, b);
+        int n = Mathf.Max(1, Mathf.CeilToInt(len / 2f));
+        for (int i = 0; i < n; i++) {
+            var p0 = Vector2.Lerp(a, b, i / (float)n);
+            var p1 = Vector2.Lerp(a, b, (i + 1) / (float)n);
+            var mid = (p0 + p1) * 0.5f;
+            float y = Mathf.Max(TerrainGen.Height(p0.x, p0.y), TerrainGen.Height(p1.x, p1.y));
+            var d = p1 - p0;
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name + "_" + i;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(mid.x, y + 1.3f, mid.y);
+            go.transform.localRotation = Quaternion.Euler(0f, -Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg, 0f);
+            go.transform.localScale = new Vector3(d.magnitude + 0.4f, 3.2f, 0.3f);
+            Object.DestroyImmediate(go.GetComponent<MeshRenderer>());
+            go.layer = 2;                     // レイの じゃまに しない（Invisible と 同じ 理由）
+        }
     }
 
     // 円い もの（かごの ふた・そこ）。Cylinder は 高さ 1 が 縦 2 ぶんなので 半分に する
