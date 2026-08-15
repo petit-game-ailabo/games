@@ -18,8 +18,14 @@ public class TimeOfDay : MonoBehaviour {
     public Tod tod = Tod.Asa;
 
     [Header("時計")]
-    [Tooltip("時間が 進む。off なら tod の 決めうち")]
+    [Tooltip("時間が 進む")]
     public bool runClock = true;
+    // ★**「時間が 進む」と「時こくで 光を 決める」は 別もの。**
+    //   いっしょに して いた ため、-clock 20 で 撮っても -tod の あさの ままだった
+    //  （時計を 止めた 時点で hour を 見なく なって いた）。
+    //   絵を 見くらべる ときは「時こくは 決めうち、でも その 時こくの 光」が 要る
+    [Tooltip("時こく(hour)で 光を 決める。off なら tod の 決めうち")]
+    public bool useHour = true;
     [Tooltip("いまの 時こく（0〜24）")]
     public float hour = 6.5f;
     [Tooltip("ひと日が 何分で めぐるか。**夏休みの 一日を 遊びきれる 長さ**に する")]
@@ -84,14 +90,17 @@ public class TimeOfDay : MonoBehaviour {
         var a = Environment.GetCommandLineArgs();
         for (int i = 0; i < a.Length - 1; i++) {
             if (a[i] == "-clock") {
-                // 時こくを 決めうちに して 時計を 止める
+                // 時こくを 決めうちに する（時計は 止めるが、光は その 時こくの もの）
                 float h;
-                if (float.TryParse(a[i + 1], out h)) { hour = Mathf.Repeat(h, 24f); runClock = false; }
+                if (float.TryParse(a[i + 1], out h)) {
+                    hour = Mathf.Repeat(h, 24f); runClock = false; useHour = true;
+                }
                 continue;
             }
             if (a[i] != "-tod") continue;
-            // **-tod は 時計を 止める。** 絵を 見くらべる ときに 進んで いては 比べられない
-            runClock = false;
+            // **-tod は 時計を 止めて 決めうちに する。**
+            // 絵を 見くらべる ときに 進んで いては 比べられない
+            runClock = false; useHour = false;
             switch (a[i + 1].ToLower()) {
                 case "asa":    tod = Tod.Asa;    hour = 6.5f;  break;
                 case "hiru":   tod = Tod.Hiru;   hour = 12f;   break;
@@ -208,7 +217,7 @@ public class TimeOfDay : MonoBehaviour {
     }
 
     Preset Current() {
-        if (!runClock) return Of(tod);
+        if (!useHour) return Of(tod);
         float h = Mathf.Repeat(hour, 24f);
         for (int i = 0; i < KeyHour.Length - 1; i++) {
             if (h < KeyHour[i] || h > KeyHour[i + 1]) continue;

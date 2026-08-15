@@ -38,7 +38,8 @@ public static class BuildVillage {
         const float RoadZ = 7f, Shoulder = 2.9f;
         // ★**家の 正面には 立てない。** 等間かくに ならべたら ちょうど 玄関の まえに
         //   1本 立ち、家が 見えなく なった。母屋の 幅（±5.4m）は あける
-        float[] poleX = { -24f, -14f, 9f, 19f };
+        // 母屋(±5.4)も 納屋(6.3〜12.7)も よける。撮ったら 柱が 納屋の 屋根を 貫いて いた
+        float[] poleX = { -24f, -14f, 14f, 23f };
         for (int i = 0; i < poleX.Length; i++) {
             float x = poleX[i];
             float z = RoadZ - Shoulder;
@@ -58,12 +59,13 @@ public static class BuildVillage {
                 }
             }
         }
-        // カーブミラー（家へ 曲がる 辻。玄関の 正面は 避けて 右わきに）
+        // カーブミラー（家へ 曲がる 辻）。
+        // **道の 上には 立てない。**路肩の そとへ 出す（車が ぶつかる ところに 立って いた）
         {
-            float x = 2.6f, z = RoadZ + 1.5f;
+            float x = 3.4f, z = RoadZ + 2.6f;
             float y = TerrainGen.Height(x, z);
-            box("Mirror_Hashira", root, new Vector3(x, y + 1.3f, z), new Vector3(0.10f, 2.6f, 0.10f), m.post);
-            box("Mirror_Kagami",  root, new Vector3(x, y + 2.5f, z), new Vector3(0.72f, 0.72f, 0.07f), m.plaster);
+            box("Mirror_Hashira", root, new Vector3(x, y + 1.3f, z), new Vector3(0.09f, 2.6f, 0.09f), m.post);
+            box("Mirror_Kagami",  root, new Vector3(x, y + 2.5f, z), new Vector3(0.55f, 0.55f, 0.06f), m.plaster);
         }
         // 待避所。**すれちがえない 道には かならず ある。**
         // 石を ならべて 路肩が ふくらんで いる ことを 見せる

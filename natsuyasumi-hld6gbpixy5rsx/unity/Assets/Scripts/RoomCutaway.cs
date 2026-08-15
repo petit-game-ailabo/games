@@ -18,7 +18,11 @@ public class RoomCutaway : MonoBehaviour {
         public Renderer[] parts;
         [Tooltip("主人公が この Z より おくに いたら 消す")]
         public float hideBeyondZ = 99f;
-        [Tooltip("主人公が この 高さより 下に いたら 消す（2階の 床むけ）")]
+        // ★hideBelowY を 入れた ときは **両方 そろって はじめて 消す。**
+        //   「または」に して いた ころは、2階に 上がった とたん その 2階が
+        //   まるごと 消えて 主人公が 宙に 浮いた。
+        //   2階を 消したいのは「1階の おくに いる とき」だけ＝奥ゆき と 高さ の 両方
+        [Tooltip("主人公が この 高さより 下に いたら 消す（2階むけ。奥ゆきの 条件と かつ で 効く）")]
         public float hideBelowY = -99f;
         [HideInInspector] public bool hidden;
     }
@@ -54,7 +58,8 @@ public class RoomCutaway : MonoBehaviour {
         foreach (var pc in pieces) {
             if (pc == null || pc.parts == null) continue;
             // そとに いる ときは ぜんぶ 見せる（家は ふつうに 建って 見える）
-            bool hide = inside && (p.z < pc.hideBeyondZ || p.y < pc.hideBelowY);
+            bool byZ = p.z < pc.hideBeyondZ;
+            bool hide = inside && (pc.hideBelowY > -98f ? (byZ && p.y < pc.hideBelowY) : byZ);
             if (!force && hide == pc.hidden) continue;
             pc.hidden = hide;
             foreach (var r in pc.parts) if (r != null) r.enabled = !hide;

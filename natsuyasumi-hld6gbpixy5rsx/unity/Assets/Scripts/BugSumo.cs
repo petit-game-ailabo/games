@@ -49,7 +49,10 @@ public class BugSumo : MonoBehaviour {
 
     const string WinKey = "natsuyasumi.sumo.wins.v1";
     const float Contact = 0.34f;        // これより 近ければ 組んで いる
-    const float MinGap  = 0.26f;        // **虫は すりぬけない。**からだの ぶんは あく
+    // **虫は すりぬけない。**からだの ぶんは あく。
+    // ※0.26 では 画の 上で 27px しか 離れず、48px の 絵が 重なって
+    //   1ぴきの かたまりに 見えた。絵の 幅に 合わせて 広げて ある
+    const float MinGap  = 0.40f;
 
     public bool Busy { get { return phase != 0; } }
 
@@ -273,8 +276,8 @@ public class BugSumo : MonoBehaviour {
     void Apply() {
         if (root == null) return;
         myImg.sprite = SpriteOf(mine); opImg.sprite = SpriteOf(opp);
-        myRT.anchoredPosition = new Vector2(myX * 105f, 6f);
-        opRT.anchoredPosition = new Vector2(opX * 105f, 6f);
+        myRT.anchoredPosition = new Vector2(myX * 118f, 6f);
+        opRT.anchoredPosition = new Vector2(opX * 118f, 6f);
         float bal = Mathf.Clamp01((myX + opX) * 0.5f * 0.9f + 0.5f);
         gaugeFill.rectTransform.sizeDelta = new Vector2(bal * 240f, 8f);
         cheerFill.rectTransform.sizeDelta = new Vector2(cheer * 240f, 6f);
@@ -399,7 +402,7 @@ public class BugSumo : MonoBehaviour {
         go.transform.SetParent(parent, false);
         rt = go.GetComponent<RectTransform>();
         rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(48f, 48f);
+        rt.sizeDelta = new Vector2(44f, 44f);
         var img = go.GetComponent<Image>();
         img.preserveAspect = true; img.raycastTarget = false;
         return img;

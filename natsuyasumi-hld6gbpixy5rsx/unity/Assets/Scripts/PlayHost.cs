@@ -370,6 +370,10 @@ public class PlayHost : MonoBehaviour {
         }
         Destroy(e);
         PlayerPrefs.SetInt(KeyBase, step + 1); PlayerPrefs.Save();
+        // **建った ぶんが その場に のこる。**数が 増えるだけでは 通う 理由に ならない
+        var hb = s.GetComponentInChildren<HimitsuBase>();
+        if (hb == null) hb = FindFirstObjectByType<HimitsuBase>();
+        if (hb != null) hb.Show(step + 1);
         Line(BaseSteps[step] + "　（" + (step + 1) + "/" + BaseSteps.Length + "）");
         yield return new WaitForSeconds(1.6f);
     }

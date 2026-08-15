@@ -425,6 +425,30 @@ public static class BuildZashiki {
             }
         }
 
+        // --- ひみつきちの やぶ。
+        // **「ひみつ」なのだから 草はらの まん中に 建って いては いけない。**
+        // 遊べる 四角の 中には 木を 生やさない きまりなので、ここだけ 手で しげみを 回す。
+        // 手前(+Z)は あけて おく＝入口。カメラから 中が 見える
+        {
+            // **まばらに 置くと「点々と 草が ある 原っぱ」に しか ならない。**
+            // 半径ぞいに 詰めて 並べて、はじめて 囲まれて 見える。
+            // おく と 左右は 木の 高さ、手前は しげみ（低く して 中が 見える ように）
+            float bx = 19f, bz = 15f;
+            int n = 0;
+            for (float a = 20f; a <= 340f; a += 13f) {
+                float r = 3.9f + ((n % 3) - 1) * 0.35f;
+                float x = bx + Mathf.Sin(a * Mathf.Deg2Rad) * r;
+                float z = bz - Mathf.Cos(a * Mathf.Deg2Rad) * r;
+                if (z > bz + 2.4f) { n++; continue; }          // 手前は 入口ぶん あける
+                bool tall = z < bz + 0.5f;                      // おくがわは 背たかく
+                var p = new Vector3(x, TerrainGen.Height(x, z), z);
+                NatureTinted("Yabu" + n, nature,
+                             tall ? (n % 2 == 0 ? NA_KI_L : NA_KI_R) : (n % 3 == 0 ? NA_MATSU : (n % 2 == 0 ? NA_SHIGE_A : NA_SHIGE_B)),
+                             p, NatureCell * (tall ? 0.80f + (n % 3) * 0.08f : 1.00f + (n % 3) * 0.08f), root,
+                             new Color(0.70f, 0.84f, 0.70f));
+                n++;
+            }
+        }
 
         // 部屋の なかの 小物（家を 出す ときだけ）
         if (ShowRoom) {
@@ -482,6 +506,16 @@ public static class BuildZashiki {
                 new Vector3(0f, 1.6f, (BuildHouse.Z0 + BuildHouse.EngawaZ) * 0.5f),
                 new Vector3(BuildHouse.X1 - BuildHouse.X0 + 0.6f, 7f,
                             BuildHouse.EngawaZ - BuildHouse.Z0 + 0.6f));
+        }
+
+        // --- 部屋の 名。**家具だけでは どこが どの 部屋か 読めない**ので、
+        // 立った ときに ひとこと 出す
+        if (ShowRoom) {
+            var rl = new GameObject("RoomLabel");
+            rl.transform.SetParent(root, false);
+            var lab = rl.AddComponent<RoomLabel>();
+            lab.player = player.transform;
+            lab.rooms = HouseRooms();
         }
 
         // --- 草木の 向きを まとめる 係
@@ -909,6 +943,30 @@ public static class BuildZashiki {
         go.layer = 2;
     }
 
+    // 家の 部屋わけ。BuildHouse の 間取りの 数字から そのまま 作る
+    static RoomLabel.Room[] HouseRooms() {
+        const float H = 2.2f;                       // 部屋の 見はり箱の 高さ
+        float f1 = BuildHouse.F1 + H * 0.5f;
+        float f2 = BuildHouse.F2 + H * 0.5f;
+        System.Func<string, float, float, float, float, float, RoomLabel.Room> mk =
+            (name, x0, x1, z0, z1, y) => new RoomLabel.Room {
+                name = name,
+                area = new Bounds(new Vector3((x0 + x1) * 0.5f, y, (z0 + z1) * 0.5f),
+                                  new Vector3(x1 - x0, H, z1 - z0)),
+            };
+        float X0 = BuildHouse.X0, MidX = BuildHouse.MidX, DomaX = BuildHouse.DomaX;
+        float Z0 = BuildHouse.Z0, MidZ = BuildHouse.MidZ, Z1 = BuildHouse.Z1;
+        return new[] {
+            mk("ちゃのま",                    MidX, DomaX, MidZ, Z1, f1),
+            mk("ざしき",                      X0, MidX, MidZ, Z1, f1),
+            mk("おじさんたちの ねま",          MidX, DomaX, Z0, MidZ, f1),
+            mk("ぶつま",                      X0, MidX, Z0, MidZ, f1),
+            mk("だいどころ（どま）",           DomaX, BuildHouse.X1, Z0, Z1, f1),
+            mk("いとこの へや",               X0, MidX, Z0, Z1, f2),
+            mk("じぶんの へや",               MidX, DomaX, Z0, Z1, f2),
+        };
+    }
+
     // --- 田舎の 遊びが できる ところ を 置く。
     // **その 場所でしか できない こと**に する のが 肝。
     // どこでも できると 場所を おぼえる 意味が なくなり、地図が ただの 通路に なる
@@ -927,8 +985,82 @@ public static class BuildZashiki {
         Spot(host, PlayKind.Irozu, -2.5f, 13.4f, 2.0f);
         // 縁がわ：本に はさんで おし花に する
         Spot(host, PlayKind.Oshibana, 2.0f, BuildHouse.EngawaZ - 0.5f, 1.6f);
-        // やぶの 中：ひみつきち
-        Spot(host, PlayKind.Himitsu, 19f, 15f, 2.4f);
+        // やぶの 中：ひみつきち。**建った ぶんが その場に のこる**ように、
+        // 5段ぶんを 先に 建てて おいて できた ぶんだけ 見せる
+        var him = Spot(host, PlayKind.Himitsu, 19f, 15f, 2.6f);
+        Himitsu(him.transform);
+    }
+
+    // ひみつきちの 5段。えだ→かべ→屋根→つくえ→はた
+    static void Himitsu(Transform at) {
+        var hb = at.gameObject.AddComponent<HimitsuBase>();
+        float bx = at.position.x, bz = at.position.z, by = at.position.y;
+
+        System.Func<string, Vector3, Vector3, Vector3, Color, Renderer> piece =
+            (name, pos, scale, rot, col) => {
+                var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                g.name = name; g.transform.SetParent(at, false);
+                g.transform.position = new Vector3(bx, by, bz) + pos;
+                g.transform.localScale = scale;
+                g.transform.localRotation = Quaternion.Euler(rot);
+                var mm = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                mm.SetColor("_BaseColor", col);
+                mm.SetFloat("_Smoothness", 0.04f);
+                g.GetComponent<Renderer>().sharedMaterial = mm;
+                Object.DestroyImmediate(g.GetComponent<Collider>());   // 通りぬけられる ほうが よい
+                return g.GetComponent<Renderer>();
+            };
+
+        var wood = new Color(0.42f, 0.27f, 0.13f);
+        var wood2 = new Color(0.52f, 0.36f, 0.16f);
+        var leaf = new Color(0.21f, 0.40f, 0.07f);
+        var cloth = new Color(0.72f, 0.30f, 0.22f);
+
+        // 1段め：地ならし（丸太を 2本 ころがした だけ）
+        var s1 = new[] {
+            piece("HB_Maruta1", new Vector3(-1.2f, 0.14f, -0.9f), new Vector3(0.28f, 0.28f, 2.4f), Vector3.zero, wood),
+            piece("HB_Maruta2", new Vector3( 1.2f, 0.14f, -0.9f), new Vector3(0.28f, 0.28f, 2.4f), Vector3.zero, wood),
+        };
+        // 2段め：えだの かべ（3面）。
+        // **すきまを あけると 柵に 見える。**ほとんど 触れるまで 詰めて はじめて「かべ」に なる
+        var s2 = new System.Collections.Generic.List<Renderer>();
+        for (int i = 0; i < 14; i++) {
+            float x = -1.55f + i * 0.24f;
+            s2.Add(piece("HB_Eda" + i, new Vector3(x, 0.75f, -2.0f),
+                         new Vector3(0.19f, 1.5f + (i % 3) * 0.12f, 0.13f),
+                         new Vector3(0f, 0f, (i % 2 == 0 ? 4f : -3f)), i % 3 == 0 ? wood : wood2));
+        }
+        for (int i = 0; i < 9; i++) {
+            float z = -1.95f + i * 0.24f;
+            s2.Add(piece("HB_EdaL" + i, new Vector3(-1.5f, 0.72f, z),
+                         new Vector3(0.13f, 1.42f + (i % 3) * 0.10f, 0.19f), Vector3.zero, i % 2 == 0 ? wood : wood2));
+            s2.Add(piece("HB_EdaR" + i, new Vector3( 1.5f, 0.72f, z),
+                         new Vector3(0.13f, 1.42f + (i % 3) * 0.10f, 0.19f), Vector3.zero, i % 2 == 0 ? wood2 : wood));
+        }
+        // 3段め：板きれの 屋根（葉を のせる）
+        var s3 = new[] {
+            piece("HB_Yane",  new Vector3(0f, 1.55f, -1.1f), new Vector3(3.3f, 0.10f, 2.2f), new Vector3(-9f, 0f, 0f), wood),
+            piece("HB_Ha",    new Vector3(0f, 1.64f, -1.1f), new Vector3(3.0f, 0.08f, 1.9f), new Vector3(-9f, 0f, 0f), leaf),
+        };
+        // 4段め：木の 箱の つくえ と こしかけ
+        var s4 = new[] {
+            piece("HB_Tsukue", new Vector3(0f, 0.44f, -1.6f), new Vector3(1.1f, 0.85f, 0.7f), Vector3.zero, wood2),
+            piece("HB_Isu",    new Vector3(0f, 0.22f, -0.7f), new Vector3(0.5f, 0.42f, 0.5f), Vector3.zero, wood),
+        };
+        // 5段め：はた（ここは おれたちの もの という しるし）
+        var s5 = new[] {
+            piece("HB_Sao",  new Vector3(1.55f, 1.35f, -2.05f), new Vector3(0.07f, 2.7f, 0.07f), Vector3.zero, wood2),
+            piece("HB_Hata", new Vector3(1.95f, 2.35f, -2.05f), new Vector3(0.75f, 0.5f, 0.03f), Vector3.zero, cloth),
+        };
+
+        hb.stages = new[] {
+            new HimitsuBase.Stage { parts = s1 },
+            new HimitsuBase.Stage { parts = s2.ToArray() },
+            new HimitsuBase.Stage { parts = s3 },
+            new HimitsuBase.Stage { parts = s4 },
+            new HimitsuBase.Stage { parts = s5 },
+        };
+        hb.Show(0);
     }
 
     static PlaySpot Spot(GameObject parent, PlayKind kind, float x, float z, float range) {

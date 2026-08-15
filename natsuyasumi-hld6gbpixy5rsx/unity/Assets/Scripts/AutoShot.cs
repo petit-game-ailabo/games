@@ -42,24 +42,33 @@ public class AutoShot : MonoBehaviour {
         }
 
         // -at "x,z" で 主人公を そこへ 移す。**遠くの 見せ場を 撮る ための 近道。**
-        // 高台まで 歩かせると 何十秒も かかり、たしかめが 回らない
+        // 高台まで 歩かせると 何十秒も かかり、たしかめが 回らない。
+        // "x,z,y" と 3つ 書くと 高さも 決めうちに する。
+        // ※これが 無いと **屋内を 撮れない。** 上から レイを 落とすと いちばん 上の
+        //   当たり＝屋根に 乗って しまい、家の 上に 立った 絵に なった
         string at = Arg("-at", null);
         if (!string.IsNullOrEmpty(at)) {
             var pm = FindFirstObjectByType<PlayerMove>();
             if (pm != null) {
                 var q = at.Split(',');
                 float ax = float.Parse(q[0]), az = float.Parse(q[1]);
-                // 空から 落として 地めんに のせる（地形の 高さを ここでは 知らない）
                 var cc0 = pm.GetComponent<CharacterController>();
-                if (cc0 != null) cc0.enabled = false;
-                pm.transform.position = new Vector3(ax, 60f, az);
-                if (cc0 != null) cc0.enabled = true;
-                RaycastHit gh;
-                if (Physics.Raycast(new Vector3(ax, 80f, az), Vector3.down, out gh, 200f, ~0,
-                                    QueryTriggerInteraction.Ignore)) {
+                if (q.Length > 2) {
                     if (cc0 != null) cc0.enabled = false;
-                    pm.transform.position = gh.point + Vector3.up * 0.1f;
+                    pm.transform.position = new Vector3(ax, float.Parse(q[2]), az);
                     if (cc0 != null) cc0.enabled = true;
+                } else {
+                    // 空から 落として 地めんに のせる（地形の 高さを ここでは 知らない）
+                    if (cc0 != null) cc0.enabled = false;
+                    pm.transform.position = new Vector3(ax, 60f, az);
+                    if (cc0 != null) cc0.enabled = true;
+                    RaycastHit gh;
+                    if (Physics.Raycast(new Vector3(ax, 80f, az), Vector3.down, out gh, 200f, ~0,
+                                        QueryTriggerInteraction.Ignore)) {
+                        if (cc0 != null) cc0.enabled = false;
+                        pm.transform.position = gh.point + Vector3.up * 0.1f;
+                        if (cc0 != null) cc0.enabled = true;
+                    }
                 }
                 // カメラが 寄せきるまで 待つ（見せ場の 切りかえは ゆっくり 効く）
                 for (int w = 0; w < 180; w++) yield return null;
