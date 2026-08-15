@@ -15,7 +15,10 @@ public class CamOrbit : MonoBehaviour {
     [Range(0f, 360f)] public float yaw = 180f;
     [Header("よりかた")]
     [Range(3f, 20f)] public float distance = 8.2f;
-    public bool allowMouse = true;
+    // ★2026-08-15：**手で 動かせなく した。**
+    // 見おろしの 絵は「決めた 画角で 見せる」もの。自由に 回せると 構図が くずれ、
+    // 通れる ところ・見える ところの 設計が 意味を 失う
+    public bool allowMouse = false;
 
     void OnEnable()  { Apply(); }
     void OnValidate(){ Apply(); }

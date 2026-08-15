@@ -27,6 +27,12 @@ public class PlayerMove : MonoBehaviour {
     int face = 1;                       // 1=右 -1=左
     /// <summary>いま 向いている 左右（1=右 -1=左）。あみを ふる 向きに 使う</summary>
     public int Face { get { return face; } }
+
+    // **奥/手前を 向いて いる ときは あみを たてに ふる。**
+    // よこ振りでは 空の 高い ところを とぶ 虫に 当たらない
+    bool depthFacing;
+    /// <summary>奥か 手前を 向いて いる（＝あみは たて振り）</summary>
+    public bool DepthFacing { get { return depthFacing; } }
     Vector2 baseScale, baseOffset;
 
     void Awake() {
@@ -81,9 +87,12 @@ public class PlayerMove : MonoBehaviour {
 
         cc.Move((wish * sp + Vector3.up * vy) * Time.deltaTime);
 
-        // むき（画面の 左右で 決める。奥/手前だけの ときは 変えない）
+        // むき。画面の よこ成分と おく成分を くらべて、どちらを 向いて いるか 決める
         if (cam != null && moving) {
             float screenX = Vector3.Dot(wish, cam.transform.right);
+            var camF = cam.transform.forward; camF.y = 0f; camF.Normalize();
+            float screenZ = Vector3.Dot(wish, camF);
+            depthFacing = Mathf.Abs(screenZ) > Mathf.Abs(screenX);
             if (Mathf.Abs(screenX) > 0.15f) face = screenX > 0f ? 1 : -1;
         }
 

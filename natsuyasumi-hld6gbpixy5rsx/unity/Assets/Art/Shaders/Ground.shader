@@ -96,8 +96,15 @@ Shader "Natsuyasumi/Ground"
                 // **道の ふちを 締める。** 頂点の 色は 1m ごとにしか 置けず、
                 // そのまま 混ぜると ふちが 2〜3m も ぼけて、道では なく ただの
                 // 色の うつり変わりに 見えた。ここで しきいを 立てて 縁を はっきりさせる
+                // **道の ふちを ぎざぎざに 見せる。**
+                // 歩ける ところは たてよこに まっすぐの まま（そうしないと
+                // どこを 通れるのか 画面から 読めない）。見た目だけ ここで 崩す
+                float2 wp = IN.positionWS.xz;
+                float wob = sin(wp.x * 1.9 + wp.y * 0.7) * 0.5
+                          + sin(wp.y * 2.7 - wp.x * 1.1) * 0.32
+                          + sin((wp.x + wp.y) * 4.3) * 0.18;
                 half e = saturate(_EdgeSharp);
-                half t = smoothstep(0.5h - e, 0.5h + e, IN.dirt);
+                half t = smoothstep(0.5h - e, 0.5h + e, IN.dirt + wob * 0.14h);
                 half3 albedo = lerp(grass, dirt, t) * _BaseColor.rgb;
 
                 float3 N = normalize(IN.normalWS);

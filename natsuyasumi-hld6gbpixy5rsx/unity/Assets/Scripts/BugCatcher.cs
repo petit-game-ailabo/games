@@ -104,13 +104,24 @@ public class BugCatcher : MonoBehaviour {
         int face = move != null ? move.Face : 1;
 
         float t = Mathf.Clamp01(k);
-        // うしろ(-100度)から 前(+30度)へ、向いている ほうを 通って 払う
-        float yaw = Mathf.SmoothStep(-80f, 55f, t) * face;
-        float pitch = Mathf.Lerp(-32f, 26f, t);           // すこし 上から 下へ
-        net.rotation = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(pitch, yaw, 0f);
-        net.position = transform.position
-                     + Vector3.up * (0.74f + 0.10f * Mathf.Sin(t * Mathf.PI))
-                     + right * (face * 0.16f);
+        bool up = move != null && move.DepthFacing;
+        if (up) {
+            // **たて振り。** 奥/手前を 向いて いる ときは、頭の 上へ 大きく 振り上げる。
+            // 空の 高い ところを とぶ 虫は よこ振りでは 当たらない
+            float pitch = Mathf.SmoothStep(35f, -78f, t);   // 下から 上へ 振り上げる
+            net.rotation = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(pitch, 0f, 0f);
+            net.position = transform.position
+                         + Vector3.up * (0.72f + 0.34f * Mathf.Sin(t * Mathf.PI))
+                         + right * (face * 0.10f);
+        } else {
+            // うしろ(-80度)から 前(+55度)へ、向いている ほうを 通って 払う
+            float yaw = Mathf.SmoothStep(-80f, 55f, t) * face;
+            float pitch = Mathf.Lerp(-32f, 26f, t);
+            net.rotation = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(pitch, yaw, 0f);
+            net.position = transform.position
+                         + Vector3.up * (0.74f + 0.10f * Mathf.Sin(t * Mathf.PI))
+                         + right * (face * 0.16f);
+        }
     }
 
     void Resolve() {
@@ -122,8 +133,14 @@ public class BugCatcher : MonoBehaviour {
         // 「当たったのに 取れない」と 感じる
         Vector3 right = new Vector3(fwd.z, 0f, -fwd.x);
         int face = move != null ? move.Face : 1;
-        Vector3 at = transform.position + Vector3.up * 0.85f
-                   + fwd * (reach * 0.88f) + right * (face * reach * 0.30f);
+        Vector3 at;
+        if (move != null && move.DepthFacing) {
+            // たて振り。**頭の 上を さらう**ので、判定も 高く とる
+            at = transform.position + Vector3.up * 1.65f + fwd * (reach * 0.55f);
+        } else {
+            at = transform.position + Vector3.up * 0.85f
+               + fwd * (reach * 0.88f) + right * (face * reach * 0.30f);
+        }
 
         Bug best = null; float bestD = float.MaxValue;
         foreach (var b in FindObjectsByType<Bug>(FindObjectsSortMode.None)) {
@@ -131,7 +148,9 @@ public class BugCatcher : MonoBehaviour {
             var d = b.transform.position - at;
             float horiz = new Vector2(d.x, d.z).magnitude;
             if (horiz >= radius) continue;
-            if (d.y > reachUp || d.y < -reachDown) continue;
+            float up1 = (move != null && move.DepthFacing) ? reachUp * 1.5f : reachUp;
+            float dn1 = (move != null && move.DepthFacing) ? reachDown * 1.6f : reachDown;
+            if (d.y > up1 || d.y < -dn1) continue;
             if (horiz < bestD) { best = b; bestD = horiz; }
         }
         if (best == null) return;

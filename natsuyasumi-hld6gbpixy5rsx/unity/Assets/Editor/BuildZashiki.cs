@@ -66,83 +66,30 @@ public static class BuildZashiki {
         Renderer shojiPaperRenderer = null;
         Light lamp = null;
 
+        RoomCutaway.Piece[] cutPieces = null;
         if (ShowRoom) {
-            // --- 床（畳）と 縁がわの 板の間
-            Box("Tatami_Floor", root, new Vector3(0, -0.05f, 0), new Vector3(RoomW, 0.1f, RoomD), mTatami);
-            Box("Engawa", root, new Vector3(0, -0.04f, RoomD * 0.5f + 0.45f), new Vector3(RoomW, 0.12f, 0.9f), mFloorW);
-
-            // --- ゆか下。**家は 地めんより 高い。** これが 無いと 畳が 宙に 浮いて 見える
-            //（野原の 高さは GroundY。そこから 床板の 下(-0.10)まで を 木で ふさぐ）
-            // ※ 上面を 床と ぴったり 同じ 高さに すると 面が かさなって ちらつき、
-            //   畳が 板の間に 化けた。**0.10m 下で 止める**
-            Box("Under_Floor", root, new Vector3(0, (GroundY - 0.10f) * 0.5f, 0),
-                new Vector3(RoomW + 0.14f, -GroundY - 0.10f, RoomD + 0.9f), mWood);
-
-            // --- 沓ぬぎ石。**家は 地めんより 0.5m 高いので、これが 無いと 出たきり もどれない。**
-            // 当たり判定の またげる 高さ(0.35m)を こえない ように 2段に する
-            Box("Fumiishi_Lo", root, new Vector3(1.2f, GroundY + 0.13f, RoomD * 0.5f + 1.35f),
-                new Vector3(1.1f, 0.26f, 0.7f), mStone);
-            Box("Fumiishi_Hi", root, new Vector3(1.2f, GroundY + 0.26f, RoomD * 0.5f + 0.98f),
-                new Vector3(1.1f, 0.52f, 0.5f), mStone);
-
-            // --- 天井の 梁は 置かない（本人の 判断。視界の じゃまに なる）
-
-            // --- 壁。**カメラの がわの 壁は 建てない。**
-            // 見おろしの 屋内は「手前の 壁と 屋根を はずした 切りぬき」で 見せるのが 作法。
-            // カメラは 右手前(yaw 212)から 覗くので、奥(-Z)と 左(-X)だけ 残す
-            Box("Wall_Back",  root, new Vector3(0, WallH * 0.5f, -RoomD * 0.5f), new Vector3(RoomW, WallH, 0.12f), mPlaster);
-
-            // --- 左は 障子（紙＋格子）。ここから 光が 入る。手前がわは 壁を 置かない（抜き）
-            // 奥がわ 6割だけ 障子に して、手前は **あけはなち**。そこから 庭が 見える
-            float shojiW = RoomD * 0.6f;
-            shojiPaperRenderer = ShojiWall(root, new Vector3(-RoomW * 0.5f, 0, -RoomD * 0.5f + shojiW * 0.5f), Quaternion.Euler(0, 90, 0),
-                      shojiW, WallH, mPaper, mWood);
-            // あけはなちの ふちに 柱を 1本（境目が ぼやけない ように）
-            Box("Post_Open", root, new Vector3(-RoomW * 0.5f, WallH * 0.5f, -RoomD * 0.5f + shojiW),
-                new Vector3(0.13f, WallH, 0.13f), mWood);
-
-            // --- あんどん（行灯）。あたたかい 点光源
-            var andon = Box("Andon", root, new Vector3(RoomW * 0.5f - 0.9f, 0.55f, -RoomD * 0.5f + 0.9f),
+            // **田の字型の 農家を 建てる。** 間取りの 出どころは BuildHouse.cs の 頭に 書いた。
+            // 手前の 壁と 屋根は「中に 入ったら 消える」＝RoomCutaway が やる
+            var hm = new BuildHouse.Mats {
+                tatami = mTatami, wood = mWood, floor = mFloorW, plaster = mPlaster,
+                roof = mRoof, paper = mPaper, stone = mStone,
+                soil = Mat("DomaSoil", ArtTex + "dirt_path.png", new Vector2(3f, 2f), 0f, 1f),
+            };
+            cutPieces = BuildHouse.Build(root, hm, (nm, par, pos, size, mat) => Box(nm, par, pos, size, mat));
+            shojiPaperRenderer = null;
+            // 行灯（居間）
+            var andon = Box("Andon", root, new Vector3(-3.4f, 0.55f, -1.6f),
                             new Vector3(0.34f, 1.1f, 0.34f), mPaper);
             var lampGO = new GameObject("Andon_Light");
             lampGO.transform.SetParent(andon.transform, false);
             lamp = lampGO.AddComponent<Light>();
             lamp.type = LightType.Point; lamp.color = new Color(1f, 0.82f, 0.55f);
-            lamp.intensity = 3.2f; lamp.range = 6f; lamp.shadows = LightShadows.Soft;
-
-            // --- 屋根。**奥の 半分だけ 残して 手前は 切りとる。**
-            // これが 無いと ただの 舞台に 見える。手前まで ふくと 中が 見えなく なるので、
-            // 「屋根を 途中で 切って 中を のぞかせている」形に する（見おろしの 屋内の 作法）
-            const float RoofFrontZ = 0.2f;                        // ここから 手前は 切りとり
-            const float RoofBackZ = -RoomD * 0.5f - 1.5f;         // 軒先（壁より 外に 出す）
-            const float RoofTilt = 12f;                           // 軒先へ 下がる 角度
-            float roofLen = RoofFrontZ - RoofBackZ;
-            float roofY = 2.95f;
-            var roofRot = Quaternion.Euler(-RoofTilt, 0f, 0f);
-            var roofAt = new Vector3(0, roofY, (RoofFrontZ + RoofBackZ) * 0.5f);
-
-            // かわら。**厚みを もたせる**。うすいと ただの 板が 浮いて 見える
-            var roof = Box("Roof", root, roofAt, new Vector3(RoomW + 1.6f, 0.34f, roofLen), mRoof);
-            roof.transform.localRotation = roofRot;
-            // 軒裏（したから 見あげる 面）。かわらの 裏が 見えると 妙なので 木で ふさぐ
-            var soffit = Box("Roof_Soffit", root, roofAt + roofRot * new Vector3(0, -0.22f, 0),
-                             new Vector3(RoomW + 1.45f, 0.12f, roofLen - 0.15f), mWood);
-            soffit.transform.localRotation = roofRot;
-            // 切り口の 化粧板（切りとった ところが 断面に 見える ように）
-            var fascia = Box("Roof_Cut", root, roofAt + roofRot * new Vector3(0, 0f, roofLen * 0.5f),
-                             new Vector3(RoomW + 1.6f, 0.40f, 0.10f), mWood);
-            fascia.transform.localRotation = roofRot;
-            // 屋根を ささえる 柱（切り口の 2本）
-            float postY = roofY + roofLen * 0.5f * Mathf.Sin(RoofTilt * Mathf.Deg2Rad);
-            for (int i = -1; i <= 1; i += 2)
-                Box("Roof_Post" + i, root, new Vector3(i * (RoomW * 0.5f - 0.18f), postY * 0.5f, RoofFrontZ),
-                    new Vector3(0.15f, postY, 0.15f), mWood);
-
-            // --- ちゃぶ台（小物）。接地影が 出ると 立体に 見える
-            Box("Table_Top", root, new Vector3(-0.6f, 0.34f, 0.5f), new Vector3(1.3f, 0.07f, 0.9f), mFloorW);
+            lamp.intensity = 3.2f; lamp.range = 7f; lamp.shadows = LightShadows.Soft;
+            // ちゃぶ台（居間）
+            Box("Table_Top", root, new Vector3(-3.4f, 0.34f, 1.4f), new Vector3(1.3f, 0.07f, 0.9f), mFloorW);
             for (int i = 0; i < 4; i++) {
                 float sx = (i % 2 == 0) ? -1 : 1, sz = (i < 2) ? -1 : 1;
-                Box("Table_Leg" + i, root, new Vector3(-0.6f + sx * 0.55f, 0.17f, 0.5f + sz * 0.36f),
+                Box("Table_Leg" + i, root, new Vector3(-3.4f + sx * 0.55f, 0.17f, 1.4f + sz * 0.36f),
                     new Vector3(0.07f, 0.34f, 0.07f), mWood);
             }
         }
@@ -184,8 +131,9 @@ public static class BuildZashiki {
         // --- キャラ（2Dの 板）。ドット絵を そのまま 立てる。
         // 家を 出さない ときは 庭に 立たせる（畳の 上に 置くと 宙に 浮く）
         var chars = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/chars_tall.png");
-        Vector3 p1 = ShowRoom ? new Vector3(0.6f, 0f, 1.4f)  : new Vector3(GardenX + 1.6f, -0.5f, 1.4f);
-        Vector3 p2 = ShowRoom ? new Vector3(-1.8f, 0f, -0.2f) : new Vector3(GardenX - 0.6f, -0.5f, -0.4f);
+        // 玄関の 前から はじめる（家は 扉から 入る）
+        Vector3 p1 = new Vector3(BuildHouse.DoorOpenX, TerrainGen.Height(BuildHouse.DoorOpenX, 6.2f) + 0.1f, 6.2f);
+        Vector3 p2 = new Vector3(-3.4f, 0.05f, 1.2f);
         var player = MakeChar("Cirno",  chars, CI_CIRNO, p1, root);
         var partner = MakeChar("Daiyou", chars, CI_DAIYOU, p2, root);
         // あるけるように する。当たりは カプセル、壁や 卓は 箱の あたりで 止まる
@@ -223,7 +171,9 @@ public static class BuildZashiki {
         //   ただし 一人称に は しない＝地面の 広がりが 見える ぶんは 残す
         var orbit = camGO.AddComponent<CamOrbit>();
         orbit.target = new Vector3(0f, 0.85f, 0.2f);
-        orbit.pitch = 24f; orbit.yaw = 212f; orbit.distance = 8.0f;
+        // **正面から。** 斜めだと 家の うしろが 死角に なり、
+        // どこが 通れて どこが 見えるかが 分からなく なる
+        orbit.pitch = 26f; orbit.yaw = 180f; orbit.distance = 9.0f;
         orbit.follow = player.transform;                 // あるくと ついてくる
         orbit.followOffset = new Vector3(0f, 0.70f, 0f);
 
@@ -284,10 +234,10 @@ public static class BuildZashiki {
         // --- 見えない かべ。**歩いて 落ちない ように** かこむ。
         // （たしかめで 前に あるいたら 縁側から 落ちつづけた）
         // 家を 出さない ときは 庭の へりで 止める
-        // 山の ほうまで あるける。地めんの 端の すこし 内がわで 止める
-        const float Play = 50f;
-        float wz0 = GardenZ - Play, wz1 = GardenZ + Play;
-        float wx0 = GardenX - Play, wx1 = GardenX + Play;
+        // **遊べる ところは 四角。** カメラを 正面に 固定したので、
+        // 死角に 入れると 何も 見えなくなる。TerrainGen が 決めた 四角に そろえる
+        float wx0 = TerrainGen.PlayMinX, wx1 = TerrainGen.PlayMaxX;
+        float wz0 = TerrainGen.PlayMinZ, wz1 = TerrainGen.PlayMaxZ;
         Invisible("Bound_Front", root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz1), new Vector3(wx1 - wx0, 3f, 0.3f));
         Invisible("Bound_Back",  root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz0), new Vector3(wx1 - wx0, 3f, 0.3f));
         Invisible("Bound_Left",  root, new Vector3(wx0, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
@@ -354,8 +304,7 @@ public static class BuildZashiki {
         // 32px＝1m で 詰めなおして あるので、コマの 大きさ(4.5m)を そのまま わたせば 尺が 合う
         // （大きい 木＝4.1m、しげみ＝1.2m、小草＝0.5m ぐらいに なる）
         var nature = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/nature.png");
-        var nature2 = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/nature2.png");
-        if (nature == null || nature2 == null) Debug.LogError("[BuildZashiki] 草木の 絵が 見つからない");
+        if (nature == null) Debug.LogError("[BuildZashiki] 草木の 絵が 見つからない");
 
         // --- 谷そこ の 作りこみ。納屋・畑・農具小屋・井戸・祠
         // （それぞれの 中身と 出どころは BuildVillage.cs の 頭に 書いた）
@@ -374,47 +323,63 @@ public static class BuildZashiki {
                 Prop(nm, nature, cell, NatureCols, NatureRows, pos, h, root, PropKind.Billboard);
             });
 
-        // --- 山の 木。**斜面は ほとんど 木で おおわれて いる**ので、こませて 生やす。
-        // 針葉樹（人工林）と 広葉樹（天然林）を **かたまりごとに 分ける**＝遠くから 見ると まだらに なる。
-        // 置き場所は 決めうちの たねから 出すので、毎回 同じ 森に なる
+        // --- 山の 木。**素材は ansimuz「Trees & Bushes」(CC0) だけ を つかう。**
+        // 針葉樹は こちらで 描いて みたが、素材と ならべると すぐ 見おとりした（本人の 指摘）。
+        // CC0 の 針葉樹は 探した かぎり 見つからなかった（LPC Trees は CC-BY-SA、
+        // Various pixel art trees は 配布停止、CraftPix の 無料版は 再配布 不可）。
+        // → **まだらは 色づけで 出す。** CC0 なので 改変は 自由
         var rngTree = new System.Random(20260815);
-        var spots = TerrainGen.Scatter(9000, 14f, 68f, rngTree, 3.3f, true, true);
-        int nConifer = 0;
+        var spots = TerrainGen.Scatter(9000, 12f, 70f, rngTree, 3.4f, true, true);
         for (int i = 0; i < spots.Count; i++) {
             var sp = spots[i];
-            if (sp.cover == TerrainGen.Cover.Conifer) {
-                // スギ・ヒノキ。高く 細い。3つの 絵を まわす
-                int cell = i % 7 == 0 ? N2_HINOKI : (i % 2 == 0 ? N2_SUGI_A : N2_SUGI_B);
-                float h = (cell == N2_HINOKI ? 5.8f : 7.4f) * sp.size;
-                Prop("Ki" + i, nature2, cell, NatureCols, NatureRows, sp.pos, h, root, PropKind.Billboard);
-                nConifer++;
-            } else {
-                int cell = (i % 2 == 0) ? NA_KI_L : NA_KI_R;
-                Nature2("Ki" + i, nature, cell, sp.pos, NatureCell * sp.size, root);
-            }
+            bool conifer = sp.cover == TerrainGen.Cover.Conifer;
+            int cell = (i % 2 == 0) ? NA_KI_L : NA_KI_R;
+            var tint = conifer ? new Color(0.70f, 0.86f, 0.80f)
+                               : new Color(1.05f, 1.00f, 0.84f);
+            NatureTinted("Ki" + i, nature, cell, sp.pos,
+                         NatureCell * sp.size * (conifer ? 1.15f : 1f), root, tint);
         }
-        // 枯れ木を すこし（山には かならず ある）
-        var deadSpots = TerrainGen.Scatter(400, 18f, 64f, new System.Random(555), 9f, true, true);
-        for (int i = 0; i < deadSpots.Count; i++)
-            Prop("Kare" + i, nature2, N2_KARE, NatureCols, NatureRows, deadSpots[i].pos, 5.2f, root, PropKind.Billboard);
 
-        // --- 下ばえ。ささやぶ・しだ・岩・倒木
-        var underSpots = TerrainGen.Scatter(4000, 12f, 64f, new System.Random(7788), 4.6f, true, true);
+        // --- 下ばえ。しげみ・草。これも 素材の コマだけ
+        var underSpots = TerrainGen.Scatter(4000, 10f, 66f, new System.Random(7788), 4.6f, true, true);
         for (int i = 0; i < underSpots.Count; i++) {
             var sp = underSpots[i];
-            int cell = i % 9 == 0 ? N2_IWA : (i % 11 == 0 ? N2_TAOKI
-                     : (sp.cover == TerrainGen.Cover.Conifer ? N2_SHIDA : N2_SASA));
-            float h = (cell == N2_IWA ? 2.1f : (cell == N2_TAOKI ? 2.4f : 2.9f)) * sp.size;
-            Prop("Shita" + i, nature2, cell, NatureCols, NatureRows, sp.pos, h, root, PropKind.Billboard);
+            int cell = i % 3 == 0 ? NA_SHIGE_A : (i % 3 == 1 ? NA_SHIGE_B : NA_MATSU);
+            NatureTinted("Shige" + i, nature, cell, sp.pos, NatureCell * sp.size, root,
+                         sp.cover == TerrainGen.Cover.Conifer
+                             ? new Color(0.80f, 0.90f, 0.84f) : Color.white);
         }
-        // 家の まわりの 草むら（明るい 原っぱ）
-        var weedSpots = TerrainGen.Scatter(1200, 5f, 26f, new System.Random(4242), 3.0f, false);
+        // 家の まわりの 草むら
+        var weedSpots = TerrainGen.Scatter(1200, 5f, 28f, new System.Random(4242), 3.0f, false);
         for (int i = 0; i < weedSpots.Count; i++) {
             int cell = (i % 3 == 0) ? NA_KUSA_A : (i % 3 == 1 ? NA_KUSA_B : NA_KUSA_C);
-            Nature2("Kusa" + i, nature, cell, weedSpots[i].pos, NatureCell * weedSpots[i].size, root);
+            NatureTinted("Kusa" + i, nature, cell, weedSpots[i].pos,
+                         NatureCell * weedSpots[i].size, root, Color.white);
         }
-        Debug.Log(string.Format("[BuildZashiki] 木={0}(針葉樹 {1}) 枯れ木={2} 下ばえ={3} 草={4}",
-                  spots.Count, nConifer, deadSpots.Count, underSpots.Count, weedSpots.Count));
+        Debug.Log(string.Format("[BuildZashiki] 木={0} 下ばえ={1} 草={2}",
+                  spots.Count, underSpots.Count, weedSpots.Count));
+
+        // --- さかいの 生垣。**見えない かべだけだと「なぜ 進めないか」が 分からない。**
+        // 左右の へりに しげみを ならべて、目にも 行きどまりだと 分かる ように する
+        {
+            float step = 2.3f;
+            for (float z = TerrainGen.PlayMinZ; z <= TerrainGen.PlayMaxZ; z += step) {
+                foreach (float x in new[] { TerrainGen.PlayMinX - 0.7f, TerrainGen.PlayMaxX + 0.7f }) {
+                    var p = new Vector3(x, TerrainGen.Height(x, z), z);
+                    NatureTinted("Ikegaki" + x + "_" + z, nature, NA_SHIGE_A, p,
+                                 NatureCell * 0.95f, root, new Color(0.86f, 0.94f, 0.86f));
+                }
+            }
+            // おくの へり（山の 足もと）。登り口の ぶんだけ あける
+            for (float x = TerrainGen.PlayMinX; x <= TerrainGen.PlayMaxX; x += step) {
+                if (x > -22.5f && x < -17.5f) continue;      // 山への 登り口
+                float z = TerrainGen.PlayMinZ - 0.7f;
+                var p = new Vector3(x, TerrainGen.Height(x, z), z);
+                NatureTinted("IkegakiN" + x, nature, NA_SHIGE_B, p,
+                             NatureCell * 1.05f, root, new Color(0.80f, 0.90f, 0.84f));
+            }
+        }
+
 
         // 部屋の なかの 小物（家を 出す ときだけ）
         if (ShowRoom) {
@@ -453,6 +418,20 @@ public static class BuildZashiki {
         sumo.atlas = bugAtlas; sumo.font = hud.font; sumo.panel = hud.panel;
         sumo.partner = partner.transform;
 
+        // --- 屋内の 切りぬき。**中に 入ったら 手前の 壁と 屋根を 消す**
+        if (cutPieces != null) {
+            var cutGO = new GameObject("RoomCutaway");
+            cutGO.transform.SetParent(root, false);
+            var cut = cutGO.AddComponent<RoomCutaway>();
+            cut.player = player.transform;
+            cut.pieces = cutPieces;
+            cut.doorZ = BuildHouse.Z1;
+            cut.houseArea = new Bounds(
+                new Vector3(0f, 1.6f, (BuildHouse.Z0 + BuildHouse.EngawaZ) * 0.5f),
+                new Vector3(BuildHouse.X1 - BuildHouse.X0 + 0.6f, 7f,
+                            BuildHouse.EngawaZ - BuildHouse.Z0 + 0.6f));
+        }
+
         // --- 草木の 向きを まとめる 係
         var fieldGO = new GameObject("BillboardField");
         fieldGO.transform.SetParent(root, false);
@@ -484,19 +463,16 @@ public static class BuildZashiki {
     const float NatureCell = 4.5f;   // 144px ÷ 32px/m
     const int NA_KI_L = 0, NA_KI_R = 1, NA_SHIGE_A = 2, NA_SHIGE_B = 3,
               NA_MATSU = 4, NA_KUSA_A = 5, NA_KUSA_B = 6, NA_KUSA_C = 7;
-    // nature2.png（山の 木。こちらで 描いた）。0,1=スギ 2=ヒノキふう 3=枯れ木
-    // 4=ささやぶ 5=しだ 6=岩 7=倒木
-    const int N2_SUGI_A = 0, N2_SUGI_B = 1, N2_HINOKI = 2, N2_KARE = 3,
-              N2_SASA = 4, N2_SHIDA = 5, N2_IWA = 6, N2_TAOKI = 7;
 
     // 草木を 置く。大きさは 絵が もっている ので、コマの 大きさを そのまま わたす
     static void Nature(string name, Texture2D atlas, int index, Vector3 pos, Transform root) {
         Prop(name, atlas, index, NatureCols, NatureRows, pos, NatureCell, root, PropKind.Billboard);
     }
 
-    // 大きさを 指定する ばあい（同じ 種類でも 大小が ある ように）
-    static void Nature2(string name, Texture2D atlas, int index, Vector3 pos, float height, Transform root) {
-        Prop(name, atlas, index, NatureCols, NatureRows, pos, height, root, PropKind.Billboard);
+    // 色を つけて 置く。**まだらは これで 出す**（素材は 1つの まま）
+    static void NatureTinted(string name, Texture2D atlas, int index, Vector3 pos, float height,
+                             Transform root, Color tint) {
+        Prop(name, atlas, index, NatureCols, NatureRows, pos, height, root, PropKind.Billboard, tint);
     }
 
     // Billboard＝**1枚の 板**。いつも こちらを 向く。草木も 木も これ。
@@ -509,6 +485,15 @@ public static class BuildZashiki {
     // Still＝板だが 揺れない（屋内の 線香や 花瓶。かぜは 入ってこない）
     enum PropKind { Billboard, Flat, Still }
 
+    // 木は **ぶつかる**。すりぬけると 森が ただの 絵に なる。
+    // みきの ぶんだけ 細い 円柱で 止める（葉の ぶんまで 止めると 歩けない）
+    static void AddTrunkCollider(GameObject go, float height, float trunkRadius) {
+        var col = go.AddComponent<CapsuleCollider>();
+        col.radius = trunkRadius;
+        col.height = Mathf.Max(height * 0.55f, trunkRadius * 2.2f);
+        col.center = new Vector3(0f, col.height * 0.5f, 0f);
+    }
+
     // --- 2Dドット絵の 小物を 置く（props.png は 6列 x 1行）
     static void Prop(string name, Texture2D atlas, int index, Vector3 pos, float height,
                      Transform root, PropKind kind) {
@@ -517,6 +502,11 @@ public static class BuildZashiki {
 
     static void Prop(string name, Texture2D atlas, int index, int cols, int rows,
                      Vector3 pos, float height, Transform root, PropKind kind) {
+        Prop(name, atlas, index, cols, rows, pos, height, root, kind, Color.white);
+    }
+
+    static void Prop(string name, Texture2D atlas, int index, int cols, int rows,
+                     Vector3 pos, float height, Transform root, PropKind kind, Color tint) {
         if (atlas == null) return;
         var go = new GameObject(name);
         go.transform.SetParent(root, false);
@@ -538,7 +528,7 @@ public static class BuildZashiki {
                           0f,
                           sways ? 0.030f : 0f,   // よこ揺れ（葉の ぶん）
                           sways ? 0.55f : 0f,
-                          0f);
+                          0f, tint);
 
         var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
         q.name = "Sheet";
@@ -561,6 +551,9 @@ public static class BuildZashiki {
         // 毎フレーム 数千回の 呼び出しに なる。まとめ役(BillboardField)に 登録して、
         // カメラの 向きが 変わった ときだけ まとめて 回す
         if (kind != PropKind.Flat) billboards.Add(go.transform);
+        // 大きい ものだけ ぶつかる（草に ぶつかると 歩けない）
+        if (kind == PropKind.Billboard && height >= 2.2f)
+            AddTrunkCollider(go, height, Mathf.Clamp(height * 0.055f, 0.16f, 0.45f));
     }
 
     // 板の 草木。あとで まとめて カメラの ほうへ 向ける
@@ -580,14 +573,25 @@ public static class BuildZashiki {
     static Material SpriteMat(Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
                               float breatheAmp, float breatheSpeed,
                               float swayAmp, float swaySpeed, float phase) {
+        return SpriteMat(tex, uvScale, uvOffset, breatheAmp, breatheSpeed,
+                         swayAmp, swaySpeed, phase, Color.white);
+    }
+
+    static Material SpriteMat(Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
+                              float breatheAmp, float breatheSpeed,
+                              float swayAmp, float swaySpeed, float phase, Color tint) {
         string key = string.Format("{0}_{1:F3}_{2:F3}_{3:F3}_{4:F3}_{5:F3}_{6:F3}_{7:F3}",
                                    tex != null ? tex.name : "none", uvScale.x, uvOffset.x, uvOffset.y,
-                                   breatheAmp, swayAmp, swaySpeed, phase);
+                                   breatheAmp, swayAmp, swaySpeed, phase)
+                   + "_" + Mathf.RoundToInt(tint.r * 99) + Mathf.RoundToInt(tint.g * 99)
+                   + Mathf.RoundToInt(tint.b * 99);
         Material cached;
         if (matCache.TryGetValue(key, out cached) && cached != null) return cached;
         var path = MatDir + "Sprite_" + key.Replace('.', '_') + ".mat";
-        return matCache[key] = SpriteMatNew(path, tex, uvScale, uvOffset,
-                                            breatheAmp, breatheSpeed, swayAmp, swaySpeed, phase);
+        var mm = SpriteMatNew(path, tex, uvScale, uvOffset,
+                              breatheAmp, breatheSpeed, swayAmp, swaySpeed, phase);
+        mm.SetColor("_BaseColor", tint);
+        return matCache[key] = mm;
     }
 
     // ドット絵の 板ようの 素材。**息づかい／ゆれの シェーダ**を つける。

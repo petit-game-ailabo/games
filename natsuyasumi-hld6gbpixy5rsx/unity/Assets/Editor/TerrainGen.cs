@@ -20,6 +20,14 @@ public static class TerrainGen {
     public const int Cells = 196;                                  // 1マス 1m
     public static readonly Vector2 Center = new Vector2(-14f, 2f);
 
+    // ★2026-08-15：**遊べる ところを 四角く 決めた。**
+    // カメラを 正面に 固定した ので、家の うしろのような 死角に 入れると
+    // 何も 見えなく なる。通れる ところは 画面に 映る 範囲に とどめ、
+    // まわりは 山・川・生垣で ふさぐ。
+    //   おく(-Z)＝山の 斜面／手前(+Z)＝川／左右(X)＝生垣と 木立ち
+    public const float PlayMinX = -26f, PlayMaxX = 26f;
+    public const float PlayMinZ = -10f, PlayMaxZ = 27f;
+
     public const float Flat = -0.52f;          // 家の まわりの 高さ
     const float FlatRadius = 11f;
     const float FlatBlend = 8f;
@@ -30,24 +38,19 @@ public static class TerrainGen {
     static readonly Vector2 MountB = new Vector2(10f, -38f);
     const float MountBR = 44f, MountBH = 16f;
 
-    // ---- 踏み分け道。**九十九折り**で 斜面を のぼる
+    // ---- 踏み分け道。**たてよこに そろえる。**
+    // 斜めに くねると、どこを 歩けるのかが 画面から 読みとれない。
+    // 道すじは まっすぐ／直角に して、**ふちの ぎざぎざは 絵の がわで 出す**
+    //（Ground シェーダで しきいを ゆらす。歩ける ところは まっすぐの まま）
     public static readonly Vector2[][] Paths = {
-        new[] {   // 家の 前 → 沢ぞい → 九十九折りで 山へ
-            new Vector2(  1.5f,  4.6f), new Vector2( -3.5f,  6.0f), new Vector2( -9.0f,  6.4f),
-            new Vector2(-14.5f,  5.0f), new Vector2(-19.0f,  1.5f),
-            // ここから 九十九折り
-            new Vector2(-24.0f, -1.0f), new Vector2(-30.0f,  1.5f), new Vector2(-34.5f, -2.0f),
-            new Vector2(-30.0f, -7.0f), new Vector2(-24.5f, -6.0f), new Vector2(-22.0f,-11.0f),
-            new Vector2(-27.0f,-15.0f), new Vector2(-33.0f,-14.0f), new Vector2(-36.0f,-19.0f),
-            new Vector2(-31.5f,-23.0f), new Vector2(-26.0f,-24.0f),
-        },
-        new[] {   // 枝道：原っぱ・畑の ほうへ（平ら）
-            new Vector2(-9.0f, 6.4f), new Vector2(-8.0f, 12f), new Vector2(-4.5f, 17f),
-            new Vector2( 1.0f, 20f),  new Vector2( 8.0f, 21f),
-        },
-        new[] {   // 枝道：家の 右てから 林・川へ
-            new Vector2( 1.5f, 4.6f), new Vector2( 8f, 6f), new Vector2(14f, 9f), new Vector2(19f, 14f),
-        },
+        new[] { new Vector2(-25f, 7f), new Vector2(25f, 7f) },        // 本道（画面の よこ）
+        new[] { new Vector2(0f, 7f),   new Vector2(0f, 3.4f) },       // 家の 玄関へ
+        new[] { new Vector2(-13f, 7f), new Vector2(-13f, 20f) },      // 左：畑・井戸へ
+        new[] { new Vector2(-13f, 20f),new Vector2(-4f, 20f) },
+        new[] { new Vector2(12f, 7f),  new Vector2(12f, -6f) },       // 右：納屋・祠へ
+        new[] { new Vector2(12f, -6f), new Vector2(18f, -6f) },
+        new[] { new Vector2(3f, 7f),   new Vector2(3f, 24f) },        // 川べりへ
+        new[] { new Vector2(-20f, 7f), new Vector2(-20f, -8f) },      // 山への 登り口
     };
     // ---- 沢（小川）と 川。**地形に みぞを 掘り、そこへ 水を 流す。**
     // 水は 高い ほうから 低い ほうへ しか 流れないので、道と 同じく
@@ -58,22 +61,20 @@ public static class TerrainGen {
         public float depth;     // 掘る 深さ
     }
     public static readonly Stream[] Streams = {
-        // 小川：山から 家の わきを 通って 下流へ。笹船を ながす ところ
+        // 小川：山から おりて 家の 左を たてに ながれ、川へ そそぐ。笹船を ながす
         new Stream {
-            half = 1.15f, depth = 0.85f,
+            half = 1.1f, depth = 0.8f,
             line = new[] {
-                new Vector2(-30f, -18f), new Vector2(-26f, -11f), new Vector2(-21f, -5f),
-                new Vector2(-16f,  0f),  new Vector2(-12f,  4f),  new Vector2(-8.5f, 8.5f),
-                new Vector2(-6f,  14f),  new Vector2(-4f,  20f),  new Vector2(-3f,  27f),
+                new Vector2(-22f, -9f), new Vector2(-22f, 0f), new Vector2(-22f, 10f),
+                new Vector2(-22f, 20f), new Vector2(-22f, 29f),
             },
         },
-        // 大きめの 川：手前を よこぎる。水きり・釣り
+        // 大きめの 川：手前を よこに 貫く。**ここが 手前の さかい**。水きり・釣り
         new Stream {
-            half = 4.6f, depth = 1.9f,
+            half = 4.4f, depth = 1.8f,
             line = new[] {
-                new Vector2(-46f, 34f), new Vector2(-32f, 31f), new Vector2(-18f, 30f),
-                new Vector2( -3f, 29f), new Vector2( 12f, 31f), new Vector2( 26f, 35f),
-                new Vector2( 40f, 41f),
+                new Vector2(-52f, 31f), new Vector2(-20f, 31f), new Vector2(0f, 31f),
+                new Vector2(20f, 31f),  new Vector2(52f, 31f),
             },
         },
     };
@@ -402,9 +403,13 @@ public static class TerrainGen {
             float sl = Slope(x, z);
             if (sl > 0.85f) continue;                               // 岩はだには 生えない
             if (slopeOnly) {
-                // 平らで 低い ところ＝谷そこ。ここは あけて おく（田畑・庭に なる）
+                // **遊べる 四角の 中には 木を 生やさない。**
+                // 中に 立てると 見とおしを ふさぎ、2Dで 見せる 意味が なくなる。
+                // 木は そとがわに ならべて「そこから 先は 森」と 見せる 壁に する
+                if (x > PlayMinX - 1.5f && x < PlayMaxX + 1.5f
+                 && z > PlayMinZ - 1.5f && z < PlayMaxZ + 1.5f) continue;
                 float rise = Height(x, z) - Flat;
-                if (sl < 0.16f && rise < 2.2f) continue;
+                if (sl < 0.16f && rise < 2.2f && z < PlayMaxZ) continue;
             }
             if (avoidHouse) {
                 var d = new Vector2(x, z) - new Vector2(0f, 0.45f);
