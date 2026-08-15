@@ -252,6 +252,8 @@ public class BugSumo : MonoBehaviour {
     void Win(bool won) {
         phase = 2; resultT = 0f;
         if (won) { wins++; PlayerPrefs.SetInt(WinKey, wins); PlayerPrefs.Save(); }
+        var cs = FindFirstObjectByType<CharSprite>();
+        if (cs != null) cs.ShowMood(won ? CharSprite.Pose.Tanoshii : CharSprite.Pose.Kanashimi, 2.4f);
         if (callout != null) callout.text = "";
         Apply();
     }

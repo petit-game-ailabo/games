@@ -26,20 +26,28 @@ public class PlayerMove : MonoBehaviour {
     Vector3 startPos;
     int face = 1;                       // 1=右 -1=左
     /// <summary>いま 向いている 左右（1=右 -1=左）。あみを ふる 向きに 使う</summary>
-    public int Face { get { return face; } }
+    // **絵の 向きと あみの 向きは 必ず そろえる。**
+    // ばらばらだと「右を 向いて いるのに 左へ 振る」に なる
+    public int Face { get { return chars != null ? (chars.FacingRight ? 1 : -1) : face; } }
 
     // **奥/手前を 向いて いる ときは あみを たてに ふる。**
     // よこ振りでは 空の 高い ところを とぶ 虫に 当たらない
     bool depthFacing;
     /// <summary>奥か 手前を 向いて いる（＝あみは たて振り）</summary>
-    public bool DepthFacing { get { return depthFacing; } }
+    public bool DepthFacing { get { return chars != null ? chars.FacingDepth : depthFacing; } }
     Vector2 baseScale, baseOffset;
+
+    // ★2026-08-15：**8方向の 絵が 来たので UVの 裏がえしは やめた。**
+    //   1枚を 左右 反転して 使って いた ころは 右向きと 左向きしか 無かった。
+    //   いまは 向きごとに 別の 絵が あるので、CharSprite に まかせる
+    CharSprite chars;
 
     void Awake() {
         cc = GetComponent<CharacterController>();
         startPos = transform.position;
         if (sprite == null && transform.childCount > 0) sprite = transform.GetChild(0);
         if (sprite != null) spriteRen = sprite.GetComponent<Renderer>();
+        chars = GetComponent<CharSprite>();
         if (spriteRen != null) {
             var m = spriteRen.sharedMaterial;
             baseScale  = m.GetTextureScale("_BaseMap");
@@ -54,6 +62,8 @@ public class PlayerMove : MonoBehaviour {
     [Header("たしかめ用（自動で あるかせる）")]
     public bool useAutoInput;
     public Vector2 autoInput;
+    [Tooltip("自動運転で 走らせる（Shift を おした ことに する）")]
+    public bool autoRun;
 
     void Update() {
         var cam = Camera.main;
@@ -72,7 +82,7 @@ public class PlayerMove : MonoBehaviour {
         if (wish.sqrMagnitude > 1f) wish.Normalize();
 
         bool moving = wish.sqrMagnitude > 0.001f;
-        float sp = Input.GetKey(KeyCode.LeftShift) ? runSpeed : speed;
+        float sp = (Input.GetKey(KeyCode.LeftShift) || autoRun) ? runSpeed : speed;
 
         // 万一 落ちたら もどす（穴が あっても 詰まない ための 保険）
         if (transform.position.y < -4f) {
@@ -107,12 +117,18 @@ public class PlayerMove : MonoBehaviour {
             sprite.localPosition = p;
         }
 
-        // 左右の 反転は UVで やる（板を 裏返すと 描かれなく なるので）
+        // 向きと あしどりは CharSprite が 絵を えらぶ。
+        // **8方向の 絵が あるので 左右の 反転は もう 要らない**
+        if (chars != null) chars.Drive(wish, sp, locked);
+
         if (spriteRen != null) {
             spriteRen.GetPropertyBlock(mpb);
-            var s = baseScale; var o = baseOffset;
-            if (face < 0) { s.x = -baseScale.x; o.x = baseOffset.x + baseScale.x; }
-            mpb.SetVector("_BaseMap_ST", new Vector4(s.x, s.y, o.x, o.y));
+            if (chars == null) {
+                // 8方向の 絵が 無い 相手（1枚絵の キャラ）は これまでどおり UVで 裏がえす
+                var s = baseScale; var o = baseOffset;
+                if (face < 0) { s.x = -baseScale.x; o.x = baseOffset.x + baseScale.x; }
+                mpb.SetVector("_BaseMap_ST", new Vector4(s.x, s.y, o.x, o.y));
+            }
             // **歩いて いる あいだは 息づかいを 止める。**
             // 歩きの はずみと 息の のびちぢみが 重なって、絵が がくがくして いた。
             // そもそも 走りながら 肩で 息を する 絵は 要らない

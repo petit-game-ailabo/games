@@ -180,6 +180,9 @@ public class BugCatcher : MonoBehaviour {
         book.Add(best.kind.id, best.sizeMm);
         Pop(best.transform.position);
         best.Catch();
+        // 取れたら よろこぶ。**用意して もらった 顔は 使って なんぼ**
+        var cs = GetComponent<CharSprite>();
+        if (cs != null) cs.ShowMood(CharSprite.Pose.Yorokobi, 1.1f);
     }
 
     // 取れた ことを つぶで 見せる。

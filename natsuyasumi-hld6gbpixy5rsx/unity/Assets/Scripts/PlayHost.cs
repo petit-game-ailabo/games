@@ -21,8 +21,11 @@ public class PlayHost : MonoBehaviour {
 
     BugHud hud;
     PlayerMove move;
+    CharSprite chars;
     PlaySpot near;
     Coroutine running;
+
+    void Mood(CharSprite.Pose p, float sec) { if (chars != null) chars.ShowMood(p, sec); }
 
     // ---- 画面（ゲージ 1本と ひとこと。ちいさく すませる）
     RectTransform ui;
@@ -57,6 +60,7 @@ public class PlayHost : MonoBehaviour {
     void Start() {
         hud = FindFirstObjectByType<BugHud>();
         move = GetComponent<PlayerMove>();
+        chars = GetComponent<CharSprite>();
         BuildUI();
     }
 
@@ -245,6 +249,7 @@ public class PlayHost : MonoBehaviour {
             }
             if (skips > BestSkip) {
                 PlayerPrefs.SetInt(KeySkip, skips); PlayerPrefs.Save();
+                Mood(CharSprite.Pose.Yorokobi, 1.8f);
                 Line(skips + " だん！　★じこ さいこう きろく");
             } else Line(skips + " だん　（さいこう " + BestSkip + "）");
         }
@@ -288,7 +293,11 @@ public class PlayHost : MonoBehaviour {
             yield return null;
         }
         Destroy(uki);
-        if (!hooked) { Line("にげられた…"); yield return new WaitForSeconds(1.1f); yield break; }
+        if (!hooked) {
+            Line("にげられた…");
+            Mood(CharSprite.Pose.Kanashimi, 1.6f);
+            yield return new WaitForSeconds(1.1f); yield break;
+        }
 
         // かかった。引きあげる
         var fishName = FishNames[Random.Range(0, FishNames.Length)];
@@ -300,6 +309,7 @@ public class PlayHost : MonoBehaviour {
             yield return null;
         }
         Bump(KeyFish, 1);
+        Mood(CharSprite.Pose.Yorokobi, 1.6f);
         Line(fishName + "　" + mm + "mm　が つれた！　（つうさん " + Fish + " ひき）");
         Destroy(fish, 1.2f);
         yield return new WaitForSeconds(1.3f);

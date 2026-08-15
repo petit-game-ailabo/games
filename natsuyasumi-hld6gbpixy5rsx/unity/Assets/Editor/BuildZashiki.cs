@@ -131,10 +131,15 @@ public static class BuildZashiki {
         // --- キャラ（2Dの 板）。ドット絵を そのまま 立てる。
         // 家を 出さない ときは 庭に 立たせる（畳の 上に 置くと 宙に 浮く）
         var chars = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/chars_tall.png");
+        // ★2026-08-15：**主人公は 8方向 x 8状態の 魔理沙**（本人が 用意）。
+        //   立ち／歩き／走り／喜／怒／哀／楽／目とじ が 向きごとに そろって いる ので、
+        //   これまでの「1枚を 左右 反転」を やめて、向きで 絵を 差しかえる
+        var marisa = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_8x8.png");
+        if (marisa == null) Debug.LogError("[BuildZashiki] marisa_8x8.png が 見つからない");
         // 玄関の 前から はじめる（家は 扉から 入る）
         Vector3 p1 = new Vector3(BuildHouse.DoorOpenX, TerrainGen.Height(BuildHouse.DoorOpenX, 6.2f) + 0.1f, 6.2f);
         Vector3 p2 = new Vector3(-3.4f, 0.05f, 1.2f);
-        var player = MakeChar("Cirno",  chars, CI_CIRNO, p1, root);
+        var player = MakeChar("Marisa", marisa, 0, p1, root, MarisaCols, MarisaRows, MarisaCellW, MarisaCellH);
         var partner = MakeChar("Daiyou", chars, CI_DAIYOU, p2, root);
         // あるけるように する。当たりは カプセル、壁や 卓は 箱の あたりで 止まる
         var ccc = player.AddComponent<CharacterController>();
@@ -142,6 +147,10 @@ public static class BuildZashiki {
         ccc.slopeLimit = 50f; ccc.stepOffset = 0.35f;
         var pm = player.AddComponent<PlayerMove>();
         pm.sprite = player.transform.GetChild(0);
+        // 8方向 x 8状態の 絵から 1コマを えらぶ 係
+        var cs = player.AddComponent<CharSprite>();
+        cs.target = player.transform.GetChild(0).GetComponent<Renderer>();
+        cs.runSpeed = (pm.speed + pm.runSpeed) * 0.5f;   // 歩きと 走りの あいだで 切りかえる
         // むしとり。あみを ふる のは この人
         player.AddComponent<BugBook>();
         player.AddComponent<BugCatcher>();
@@ -549,6 +558,9 @@ public static class BuildZashiki {
     // まえの 16x16 は 等身が ひくかったので、本人が 用意した 背の たかい 絵に 差し替えた
     const int CharCols = 10, CharRows = 3;
     const float CharCellW = 48f, CharCellH = 64f;
+    // 魔理沙の 絵。8方向(列) x 8状態(行)。make_marisa.py が 詰めなおした 大きさ
+    const int MarisaCols = 8, MarisaRows = 8;
+    const float MarisaCellW = 115f, MarisaCellH = 167f;
     const float CharHeight = 1.35f;     // 世界での 背たけ(m)。畳 1.8m と くらべて 子どもぐらい
     // ★どのコマが 誰かは 本人に 確認中。いまは 仮の わりあて
     const int CI_CIRNO = 5, CI_DAIYOU = 11;
@@ -759,6 +771,11 @@ public static class BuildZashiki {
 
     // --- ドット絵を 板に して 立てる（ビルボード）。足もとに 影を おとす
     static GameObject MakeChar(string name, Texture2D sheet, int index, Vector3 pos, Transform root) {
+        return MakeChar(name, sheet, index, pos, root, CharCols, CharRows, CharCellW, CharCellH);
+    }
+
+    static GameObject MakeChar(string name, Texture2D sheet, int index, Vector3 pos, Transform root,
+                               int cols, int rows, float cellW, float cellH) {
         var go = new GameObject(name);
         go.transform.SetParent(root, false);
         go.transform.position = pos;
@@ -767,16 +784,16 @@ public static class BuildZashiki {
         quad.name = "Sprite";
         quad.transform.SetParent(go.transform, false);
         // 絵の たてよこ比を くずさない。足もとが ちょうど 地めんに くる ように 半分だけ 上げる
-        float ch = CharHeight, cw = CharHeight * (CharCellW / CharCellH);
+        float ch = CharHeight, cw = CharHeight * (cellW / cellH);
         quad.transform.localPosition = new Vector3(0, ch * 0.5f, 0);
         quad.transform.localScale = new Vector3(cw, ch, 1f);
         Object.DestroyImmediate(quad.GetComponent<Collider>());
 
         // ドット絵用：切りぬき＋点フィルタ（にじませない）＋**息づかい**。
         // 画像は 上が 0行めだが、UVは 下が 0。なので y は ひっくり返して 数える
-        int col = index % CharCols, row = index / CharCols;
-        var uvS = new Vector2(1f / CharCols, 1f / CharRows);
-        var uvO = new Vector2(col / (float)CharCols, (CharRows - 1 - row) / (float)CharRows);
+        int col = index % cols, row = index / cols;
+        var uvS = new Vector2(1f / cols, 1f / rows);
+        var uvO = new Vector2(col / (float)cols, (rows - 1 - row) / (float)rows);
         // 呼吸は 背たけの 3.5%ぶん。周期は 2π/1.45 ≒ 4.3秒＝落ちついた いき。
         // ずれ(_Phase)を 置き場所から 決めるので、ふたりが 同じ 拍で 動かない
         var m = SpriteMatNew(MatDir + "Char_" + name + ".mat", sheet, uvS, uvO,

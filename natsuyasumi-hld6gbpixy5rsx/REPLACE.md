@@ -43,6 +43,7 @@ Unity 公式「Happy Harvest - 2D Sample Project」が挙がった。**3つと�
 | もの | 場所 | 状態 |
 |---|---|---|
 | **東方のキャラクター**（チルノ・大妖精・ルーミア・リグル・ミスティア・慧音・霊夢・魔理沙） | 全編 | **本人が権利まわりを対応する。こちらでは扱わない。** キャラクターは使える前提で作る。差し替えが要るのは絵（R-001）だけ |
+| **主人公（奥行き版）** | `unity/Assets/Art/Sprites/marisa_8x8.png`（元：`unity/ArtSource/marisa_source_8x8.png`）| **2026-08-15、本人が用意した魔理沙の8方向x8状態に差し替え**（立ち/歩き/走り/喜/怒/哀/楽/目とじ）。もらった画像は透過しておらず市松もようが塗ってあったので、ふちからの塗りつぶしで地だけ抜いた（エプロンの白を残すため）。**Majstek（非商用）は 使っていない** |
 | **キャラ絵（奥行き版）** | `unity/Assets/Art/Sprites/chars_tall.png`（元：`unity/ArtSource/chars_source_10x3.png`）| **2026-08-13、本人が用意した絵に差し替え**（30体・1コマ48x64の10列3行）。こちらで 背景の 黒を ぬいて 透過に し、足もとを 下端に そろえて 組み直した。**Majstek（非商用）は もう 使っていない**＝奥行き版の R-001 は 解消 |
 | **草木（奥行き版）** | `unity/Assets/Art/Sprites/nature.png` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：OpenGameArt「Trees & Bushes」by Luis Zuno (ansimuz)。2026-08-14、**自分で 描いた 32px の 草木を やめて 差し替えた**（木が ただの 緑の かたまりに 見えていた）。PSD の vegetation レイヤーだけを 抜き、32px＝1m で 144px の コマ 8つに 詰めなおし。焼かれた 影は 捨て、影は Unity に 落とさせる。ライセンス文 同梱 |
 | **つぶ（雨・もや）** | `unity/Assets/Art/Particles/*.png` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：Kenney「Particle Pack」。`circle_05`＝雨つぶ、`smoke_09`＝もや |

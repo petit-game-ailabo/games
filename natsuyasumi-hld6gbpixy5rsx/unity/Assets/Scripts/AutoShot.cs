@@ -83,11 +83,14 @@ public class AutoShot : MonoBehaviour {
             if (pm != null) {
                 var pp = walk.Split(',');
                 pm.useAutoInput = true;
+                pm.autoRun = Arg("-run", null) != null;      // 走りの 絵の たしかめ
                 pm.autoInput = new Vector2(float.Parse(pp[0]), float.Parse(pp[1]));
                 var start = pm.transform.position;
                 float t = float.Parse(Arg("-walksec", "2.0"));
                 for (float e = 0f; e < t; e += Time.deltaTime) yield return null;
-                pm.useAutoInput = false; pm.autoInput = Vector2.zero;
+                // -walkhold を つけると **歩いた まま 撮る**。
+                // 歩き・走りの 絵は 止まって しまうと 見られない
+                if (Arg("-walkhold", null) == null) { pm.useAutoInput = false; pm.autoInput = Vector2.zero; }
                 var moved = pm.transform.position - start;
                 Debug.Log($"[AutoShot] walked {moved.magnitude:F2}m  from {start} to {pm.transform.position}");
             } else Debug.LogWarning("[AutoShot] PlayerMove が 見つからない");
@@ -147,6 +150,20 @@ public class AutoShot : MonoBehaviour {
                 }
                 Debug.Log("[AutoShot] むしずもう けっか=" + sumo.DebugState);
                 for (int w = 0; w < 30; w++) yield return null;
+            }
+        }
+
+        // -face N（0〜7）で 向きを 決めうちに して 撮る。**8方向の 絵の たしかめ**。
+        // -pose N（0〜7）で 状態も 決めうち（0立ち 1歩き 2走り 3喜 4怒 5哀 6楽 7目とじ）
+        string faceArg = Arg("-face", null), poseArg = Arg("-pose", null);
+        if (!string.IsNullOrEmpty(faceArg) || !string.IsNullOrEmpty(poseArg)) {
+            var cs = FindFirstObjectByType<CharSprite>();
+            if (cs == null) Debug.Log("[AutoShot] CharSprite が ない");
+            else {
+                cs.debugCell = true;
+                cs.debugDir = string.IsNullOrEmpty(faceArg) ? 0 : int.Parse(faceArg);
+                cs.debugRow = string.IsNullOrEmpty(poseArg) ? 0 : int.Parse(poseArg);
+                Debug.Log("[AutoShot] むき=" + cs.debugDir + " すがた=" + cs.debugRow);
             }
         }
 
