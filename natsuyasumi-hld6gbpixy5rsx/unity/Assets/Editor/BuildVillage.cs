@@ -65,7 +65,8 @@ public static class BuildVillage {
             float x = 3.4f, z = RoadZ + 2.6f;
             float y = TerrainGen.Height(x, z);
             box("Mirror_Hashira", root, new Vector3(x, y + 1.3f, z), new Vector3(0.09f, 2.6f, 0.09f), m.post);
-            box("Mirror_Kagami",  root, new Vector3(x, y + 2.5f, z), new Vector3(0.55f, 0.55f, 0.06f), m.plaster);
+            box("Mirror_Kagami",  root, new Vector3(x, y + 2.5f, z), new Vector3(0.55f, 0.55f, 0.06f),
+                m.seeThrough != null ? m.seeThrough : m.plaster);
         }
         // 待避所。**すれちがえない 道には かならず ある。**
         // 石を ならべて 路肩が ふくらんで いる ことを 見せる
@@ -79,7 +80,8 @@ public static class BuildVillage {
     public struct Materials {
         public Material wood, floor, plaster, roof, stone, paper;
         public Material soil;   // 畑の うね
-        public Material post;   // 柱・鳥居（こい 木）
+        public Material post;   // 柱・鳥居（こい 木）。**主人公の まわりで 穴が あく**
+        public Material seeThrough;   // カーブミラーの 板。これも 穴が あく
     }
 
     static Vector3 On(float x, float z, float lift = 0f) {

@@ -106,6 +106,9 @@ public class CamOrbit : MonoBehaviour {
             // **角度は 近い ほうから 回す。** ふつうの Lerp だと 180→0 で
             // 世界を ぐるっと 一周して しまう
             curYaw = Mathf.LerpAngle(curYaw, wantYaw, k);
+            // **90度きざみに 落ちつかせる。** 指数で 近づくと いつまでも
+            // 半はんな 角度が のこり、操作の むきが きっちり 直角に ならない
+            if (Mathf.Abs(Mathf.DeltaAngle(curYaw, wantYaw)) < 0.4f) curYaw = wantYaw;
             curDist = Mathf.Lerp(curDist, wantDist, k);
             curOff = Vector3.Lerp(curOff, wantOff, k);
             curFog = Mathf.Lerp(curFog, wantFog, k);

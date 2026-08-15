@@ -57,6 +57,33 @@ Shader "Natsuyasumi/PixelSprite"
         TEXTURE2D(_BaseMap);
         SAMPLER(sampler_BaseMap);
 
+        // ★2026-08-15：**主人公の まわりだけ 手前の ものを 抜く。**
+        //   家の 入口ぎわで カーブミラーや 電柱が カメラに かぶって、
+        //   主人公が 見えなく なって いた（本人の 指摘）。
+        //   まるごと 消すと 物が 点滅して 見えるので、**丸く 穴を あける**。
+        //   ふちは ちらして 抜く＝ドット絵に なじむ。
+        //   SeeThrough.cs が 毎フレーム 入れる：xy=画面の 位置 z=半径 w=主人公までの 深さ
+        float4 _HoleParams;
+
+        // 主人公より **手前に ある もの だけ** 抜く。
+        // これが ないと 主人公の 板 じしんや うしろの 景色まで 消える
+        void ClipHole(float4 positionCS, float3 positionWS)
+        {
+            if (_HoleParams.z <= 0.0001) return;
+            float viewZ = -TransformWorldToView(positionWS).z;
+            if (viewZ >= _HoleParams.w - 0.35) return;
+
+            float2 d = GetNormalizedScreenSpaceUV(positionCS) - _HoleParams.xy;
+            d.x *= _ScreenParams.x / max(_ScreenParams.y, 1.0);   // 丸く 抜く
+            float t = saturate(length(d) / _HoleParams.z);        // 0=まん中 1=ふち
+            // まん中は まるごと、ふちは ちらして 抜く。
+            // ★ちらす 帯は **せまく**。広い（0.55〜1.0）と ざらざらが 目だって
+            //   画が よごれて 見えた
+            float2 px = floor(positionCS.xy * 0.5);
+            float dither = frac(sin(dot(px, float2(12.9898, 78.233))) * 43758.5453);
+            clip(t - (0.80 + dither * 0.20));
+        }
+
         // 息づかい／かぜの ゆれ。
         // Quad の ローカル y は -0.5..0.5 なので、+0.5 で 0(足もと)..1(頭) の 重みに なる。
         // 重みを かけるので **下端は まったく 動かない＝浮かない**（木なら みきが 動かない）。
@@ -131,6 +158,7 @@ Shader "Natsuyasumi/PixelSprite"
             {
                 half4 tex = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv) * _BaseColor;
                 clip(tex.a - _Cutoff);
+                ClipHole(IN.positionCS, IN.positionWS);
 
                 // 裏から 見た ときは 法線も ひっくり返す（両面えがきなので）
                 float3 N = normalize(IN.normalWS) * IS_FRONT_VFACE(cullFace, 1.0, -1.0);

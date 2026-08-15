@@ -42,6 +42,10 @@ public class PlayerMove : MonoBehaviour {
     //   いまは 向きごとに 別の 絵が あるので、CharSprite に まかせる
     CharSprite chars;
 
+    // 入力を 読みかえる 向き（押しっぱなしの あいだ 固定する）
+    float basisYaw;
+    bool basisReady;
+
     void Awake() {
         cc = GetComponent<CharacterController>();
         startPos = transform.position;
@@ -73,11 +77,20 @@ public class PlayerMove : MonoBehaviour {
         // 入れかわって 何を して いるか 分からなく なる
         if (!locked) { h = Input.GetAxisRaw("Horizontal"); v = Input.GetAxisRaw("Vertical"); }
         if (useAutoInput) { h = autoInput.x; v = autoInput.y; }
-        Vector3 wish = Vector3.zero;
-        if (cam != null) {
-            var f = cam.transform.forward; f.y = 0f; f.Normalize();
-            var r = cam.transform.right;   r.y = 0f; r.Normalize();
-            wish = f * v + r * h;
+        // ★2026-08-15：**入力を 読みかえる 向きは、キーを 押して いる あいだ 変えない。**
+        //   カメラが 回ると 同じ キーが ちがう 方角に なり、道の とちゅうで
+        //   進む むきが 折れて 操作しづらかった（本人の 指摘）。
+        //   押しっぱなしの あいだは 前の 向きの まま＝**そのまま 進める**。
+        //   手を はなした ときに いまの カメラに そろえる
+        bool anyInput = Mathf.Abs(h) > 0.01f || Mathf.Abs(v) > 0.01f;
+        if (cam != null && (!basisReady || !anyInput)) {
+            basisYaw = cam.transform.eulerAngles.y;
+            basisReady = true;
+        }
+        Vector3 wish;
+        if (basisReady) {
+            var rot = Quaternion.Euler(0f, basisYaw, 0f);
+            wish = (rot * Vector3.forward) * v + (rot * Vector3.right) * h;
         } else wish = new Vector3(h, 0f, v);
         if (wish.sqrMagnitude > 1f) wish.Normalize();
 

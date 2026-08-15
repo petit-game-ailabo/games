@@ -186,6 +186,11 @@ public static class BuildZashiki {
         orbit.follow = player.transform;                 // あるくと ついてくる
         orbit.followOffset = new Vector3(0f, 0.70f, 0f);
 
+        // **主人公の まわりだけ 手前の ものを 抜く。**
+        // 電柱や カーブミラー、手前の 木で 主人公が 隠れなく なる
+        var see = camGO.AddComponent<SeeThrough>();
+        see.target = player.transform;
+
         // --- ポストFX（被写界深度・ブルーム・カラグレ・四すみ落とし）
         var volGO = new GameObject("PostFX");
         var vol = volGO.AddComponent<Volume>();
@@ -284,25 +289,26 @@ public static class BuildZashiki {
                 name = "かわべり",
                 area = new Bounds(new Vector3(0f, TerrainGen.Flat + 3f, 25.6f),
                                   new Vector3(54f, 10f, 5.2f)),
-                yaw = 2f, pitch = 32f, distance = 11.5f,
-                lookOffset = new Vector3(0f, 0.4f, 4.2f),     // 水面を 画の まん中へ
+                // ★**回すのは 90度だけ。** 180度 回すと 押した キーの 行き先が
+                //   まるごと 裏がえり、操作しづらかった（本人の 指摘）。
+                //   90度なら 川に そって 横に 押しっぱなしで そのまま 進める
+                yaw = 90f, pitch = 30f, distance = 11.5f,
+                lookOffset = new Vector3(0f, 0.4f, 3.0f),
                 fogScale = 0.7f,
                 blend = 1.0f,
             },
+            // ※高台の 見せ場は **いったん 止めて ある。**
+            //   谷は 高台から 見て 手前(+Z)に あるので、見わたすには 180度 回すしか なく、
+            //   「回すのは 90度まで」と 食いちがう。90度で 撮ったら 斜面しか 映らず
+            //   主人公も 画から 出た。高台を 谷の 東がわへ 移せば 90度で 成りたつので、
+            //   そのときに 入れなおす
             new CamOrbit.Zone {
-                name = "みはらし",
-                area = new Bounds(new Vector3(lk.x, TerrainGen.LookoutY + 2f, lk.y),
-                                  new Vector3(lhx * 2f + 1f, 12f, lhz * 2f + 1f)),
-                // yaw 180→8 で ちょうど 裏。
-                // **見おろしを 深く しすぎない。** 44度で 撮ったら 空が 一切 入らず
-                // ただの 見おろし図に なった。34度なら 谷の むこうの 空も 入る。
-                // 中心の ずらしも 控えめに する（10m 送ったら 主人公が 画から 消えた）
-                yaw = 8f, pitch = 34f, distance = 17f,
-                lookOffset = new Vector3(2f, 0.6f, 3.5f),
-                // **もやを 薄く する。** ふだんの こさだと 谷ぜんたいが 灰みどりに 溶けて、
-                // せっかく 登っても 見わたせた 感じが しなかった
-                fogScale = 0.33f,
-                blend = 0.8f,
+                name = "みはらし（いまは 止めて ある）",
+                // 手が とどかない ところに 置いて 効かなく して ある。
+                // 高台じたい（登り道・棚・かこい）は そのまま 残す＝あとで 入れなおせる
+                area = new Bounds(new Vector3(0f, -9999f, 0f), Vector3.one),
+                yaw = 180f, pitch = 32f, distance = 17f,
+                fogScale = 0.33f, blend = 0.8f,
             },
         };
 
@@ -380,9 +386,15 @@ public static class BuildZashiki {
         var mSoil = Mat("Soil", ArtTex + "dirt_path.png", new Vector2(1.2f, 0.6f), 0f, 1f);
         // 納屋の 板は 母屋より 明るく（母屋の 柱と 同じ 暗さだと かたまりに 見える）
         var mNaya = Mat("NayaWood", ArtTex + "wood_floor.png", new Vector2(2.4f, 1.4f), 0f, 0.76f);
+        // ★柱（電柱・鳥居・カーブミラーの さお）は **穴の あく シェーダ**に する。
+        //   細くて 背が たかい ものは カメラと 主人公の あいだに 立ちやすい。
+        //   PixelSprite は ClipHole を もって いるので、主人公の まわりだけ 抜ける
+        var mPost = SeeThroughMat("PostST", ArtTex + "wood_beam.png", new Vector2(1f, 2f));
+        var mMirror = SeeThroughMat("MirrorST", ArtTex + "plaster_wall.png", new Vector2(1f, 1f));
         var vmat = new BuildVillage.Materials {
             wood = mNaya, floor = mFloorW, plaster = mPlaster,
-            roof = mRoof, stone = mStone, paper = mPaper, soil = mSoil, post = mWood,
+            roof = mRoof, stone = mStone, paper = mPaper, soil = mSoil,
+            post = mPost, seeThrough = mMirror,
         };
         BuildVillage.Build(root, vmat,
             (nm, par, pos, size, mat) => Box(nm, par, pos, size, mat),
@@ -708,6 +720,16 @@ public static class BuildZashiki {
 
     // ドット絵の 板ようの 素材。**息づかい／ゆれの シェーダ**を つける。
     // 見つからない ときだけ URP/Lit に 落とす（ビルドが 止まらない ように）
+    // 主人公の まわりで **穴の あく** ふつうの 材質（3Dの 柱などに つかう）。
+    // 息づかいも 揺れも 切って、ただの 板ばりに 見せる
+    static Material SeeThroughMat(string name, string texPath, Vector2 tiling) {
+        var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
+        if (tex == null) Debug.LogError("[BuildZashiki] テクスチャが 見つからない: " + texPath);
+        var m = SpriteMatNew(MatDir + name + ".mat", tex, tiling, Vector2.zero, 0f, 0f, 0f, 0f, 0f);
+        m.SetFloat("_Wrap", 0.35f);       // 3Dの 面なので 板ほど 下駄は 要らない
+        return m;
+    }
+
     static Material SpriteMatNew(string path, Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
                                  float breatheAmp, float breatheSpeed,
                                  float swayAmp, float swaySpeed, float phase) {

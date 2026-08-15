@@ -59,6 +59,28 @@ public static class TerrainProbe {
             }
             sb.AppendFormat("  道{0}: {1:F2}m\n", p, worst);
         }
+        // ★家の まわりは 平ら で なければ ならない。
+        //   家の 床は 0m。道が それより 高いと **玄関が 二階の 高さ**に なり、
+        //   入った あと 上がれなく なる（本人の 指摘）
+        sb.AppendLine("[家の まわり] 床=0.00m に たいする 地めんの 高さ");
+        foreach (var q in new[] {
+            new Vector2(0f, 7f), new Vector2(0f, 5f), new Vector2(0f, 4.2f),
+            new Vector2(3.6f, 4.5f), new Vector2(-5f, 4.5f), new Vector2(6f, 4.5f),
+            new Vector2(-8f, 7f), new Vector2(8f, 7f), new Vector2(0f, 10f),
+        }) sb.AppendFormat("  ({0,5:F1},{1,5:F1})  h={2,6:F2}\n", q.x, q.y, TerrainGen.Height(q.x, q.y));
+
+        // 家の まわり 14m 四方の いちばん 急な ところ
+        float wm = 0f; Vector2 wat = Vector2.zero;
+        for (float x = -12f; x <= 12f; x += 0.5f)
+            for (float z = -6f; z <= 12f; z += 0.5f) {
+                float g = Mathf.Abs(TerrainGen.Height(x + 0.5f, z) - TerrainGen.Height(x, z)) / 0.5f;
+                float g2 = Mathf.Abs(TerrainGen.Height(x, z + 0.5f) - TerrainGen.Height(x, z)) / 0.5f;
+                float m = Mathf.Max(g, g2);
+                if (m > wm) { wm = m; wat = new Vector2(x, z); }
+            }
+        sb.AppendFormat("  家まわりの いちばん 急な ところ {0:F2}（{1:F0}度）at ({2:F1},{3:F1})\n",
+                        wm, Mathf.Atan(wm) * Mathf.Rad2Deg, wat.x, wat.y);
+
         Debug.Log(sb.ToString());
     }
 

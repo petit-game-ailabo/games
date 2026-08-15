@@ -37,9 +37,24 @@ public static class TerrainGen {
     public const float TrailX = -20f;          // 登り道の 中心
     public const float TrailHalf = 2.0f;       // 通れる はば の 半分
 
-    public const float Flat = -0.52f;          // 家の まわりの 高さ
-    const float FlatRadius = 11f;
-    const float FlatBlend = 8f;
+    public const float Flat = -0.52f;          // 谷そこ の 高さ
+
+    // ★2026-08-15：**谷そこを 円から 四角に 広げた。**
+    //   半径11mの 円だと 家の 前の 本道(z=7)に 届かず、道が 山ぎわの 高さに
+    //   引っぱられて **家の 前が 3.0m、左手が 3.8m 持ちあがって いた**。
+    //   玄関が 二階の 高さに なり、家に 入ったら 上がれなかった（本人の 指摘）。
+    //   家・道・畑・納屋・井戸が のる ところは まとめて 平ら に する。
+    //   山が 立ちあがるのは その そとがわ
+    static readonly Vector2 FlatCenter = new Vector2(0f, 8f);
+    static readonly Vector2 FlatHalf = new Vector2(20f, 17f);   // この 中は まっ平ら
+    const float FlatBlend = 13f;                                 // ここから 山へ 上がる
+
+    /// <summary>0＝谷そこで まっ平ら、1＝もとの 起伏のまま</summary>
+    static float FlatWeight(float x, float z) {
+        float dx = Mathf.Max(0f, Mathf.Abs(x - FlatCenter.x) - FlatHalf.x);
+        float dz = Mathf.Max(0f, Mathf.Abs(z - FlatCenter.y) - FlatHalf.y);
+        return SmoothBand(0f, FlatBlend, Mathf.Sqrt(dx * dx + dz * dz));
+    }
 
     // 山。すぐ そばに そびえる
     static readonly Vector2 MountA = new Vector2(-34f, -30f);
@@ -110,7 +125,11 @@ public static class TerrainGen {
         0.26f,   // 7 山への 登り（ここだけ 急でよい＝約15度）
     };
     const float DenseStep = 1.0f;      // 道を 1mごとに 刻んで 高さを 決める
-    const float JoinR = 1.6f;          // これだけ 近い 点は **同じ 辻**と みなす
+    // これだけ 近い 点は **同じ 辻**と みなす。
+    // ★広く とりすぎると（1.6m）、辻でも ない 1m となりの 点まで 結ばれて、
+    //   本道が 山道に 引っぱり上げられ、本道の 上に 20度の 段が できた。
+    //   道の 起点は もとから きっちり 重なって いるので せまくて よい
+    const float JoinR = 0.4f;
 
     // ★2026-08-15：**削る はばは 道ごとに 変える。**
     //   地面を せまく しか 削らないと、山道では 両がわの 斜面が そのまま 残って
@@ -184,21 +203,30 @@ public static class TerrainGen {
             denseH[p] = h;
         }
 
-        for (int pass = 0; pass < 60; pass++) {
-            // 1) 辻を そろえる。**ここが 抜けて いたのが 崖の 正体**
-            for (int a = 0; a < n; a++)
-                for (int b = a + 1; b < n; b++)
-                    for (int i = 0; i < dense[a].Length; i++)
-                        for (int j = 0; j < dense[b].Length; j++) {
-                            if ((dense[a][i] - dense[b][j]).sqrMagnitude > JoinR * JoinR) continue;
-                            float m = (denseH[a][i] + denseH[b][j]) * 0.5f;
-                            denseH[a][i] = m; denseH[b][j] = m;
-                        }
-            // 2) なめらかに する
+        // 素の 地形（引きもどす さきに つかう）
+        var raw = new float[n][];
+        for (int p = 0; p < n; p++) {
+            raw[p] = new float[dense[p].Length];
+            for (int i = 0; i < dense[p].Length; i++)
+                raw[p][i] = RawHeight(dense[p][i].x, dense[p][i].y);
+        }
+
+        // ★くりかえしの 順番と 強さが 肝。
+        //   引きもどしを 強く（0.5）すると 辻の そろえと 引っぱりあって 収束せず、
+        //   最後に かけた 処理しだいで 辻に また 崖が 出た（実さい 66度に もどった）。
+        //   弱く 何度も かけ、**辻の そろえを いちばん 最後に する**
+        for (int pass = 0; pass < 200; pass++) {
+            // 1) 素の 地形へ そっと 引きもどす。
+            //    道は 地形に そって 敷く もの。勾配で 無理な ところ だけ 掘る／盛る
+            for (int p = 0; p < n; p++) {
+                var h = denseH[p]; var r0 = raw[p];
+                for (int i = 0; i < h.Length; i++) h[i] = Mathf.Lerp(h[i], r0[i], 0.12f);
+            }
+            // 2) すこしだけ ならす（強く かけると 端の 高さが 全体に 広がる）
             for (int p = 0; p < n; p++) {
                 var h = denseH[p];
                 for (int i = 1; i < h.Length - 1; i++)
-                    h[i] = (h[i - 1] + h[i] * 2f + h[i + 1]) * 0.25f;
+                    h[i] = (h[i - 1] + h[i] * 6f + h[i + 1]) * 0.125f;
             }
             // 3) 勾配の うわぎり。行きと 帰りの 両方から かける
             for (int p = 0; p < n; p++) {
@@ -213,6 +241,40 @@ public static class TerrainGen {
                     h[i] = Mathf.Clamp(h[i], h[i + 1] - g * d, h[i + 1] + g * d);
                 }
             }
+            // 4) 辻を そろえる。**必ず 最後**。ここが 抜けると 辻が 崖に なる
+            for (int a = 0; a < n; a++)
+                for (int b = a + 1; b < n; b++)
+                    for (int i = 0; i < dense[a].Length; i++)
+                        for (int j = 0; j < dense[b].Length; j++) {
+                            if ((dense[a][i] - dense[b][j]).sqrMagnitude > JoinR * JoinR) continue;
+                            float m = (denseH[a][i] + denseH[b][j]) * 0.5f;
+                            denseH[a][i] = m; denseH[b][j] = m;
+                        }
+        }
+
+        // 仕上げ：辻の そろえと 勾配の うわぎりを 交ごに 何度か。
+        // どちらも 差を ちぢめる 向きの 処理なので、交ごに かけると 両方 成りたつ
+        for (int fin = 0; fin < 6; fin++) {
+            for (int p = 0; p < n; p++) {
+                var h = denseH[p]; var c = denseCum[p];
+                float g = PathGrade[Mathf.Min(p, PathGrade.Length - 1)];
+                for (int i = 1; i < h.Length; i++) {
+                    float d = Mathf.Max(c[i] - c[i - 1], 1e-4f);
+                    h[i] = Mathf.Clamp(h[i], h[i - 1] - g * d, h[i - 1] + g * d);
+                }
+                for (int i = h.Length - 2; i >= 0; i--) {
+                    float d = Mathf.Max(c[i + 1] - c[i], 1e-4f);
+                    h[i] = Mathf.Clamp(h[i], h[i + 1] - g * d, h[i + 1] + g * d);
+                }
+            }
+            for (int a = 0; a < n; a++)
+                for (int b = a + 1; b < n; b++)
+                    for (int i = 0; i < dense[a].Length; i++)
+                        for (int j = 0; j < dense[b].Length; j++) {
+                            if ((dense[a][i] - dense[b][j]).sqrMagnitude > JoinR * JoinR) continue;
+                            float m = (denseH[a][i] + denseH[b][j]) * 0.5f;
+                            denseH[a][i] = m; denseH[b][j] = m;
+                        }
         }
     }
 
@@ -243,9 +305,7 @@ public static class TerrainGen {
         h += Mathf.Sin(x * 0.071f + 1.3f) * Mathf.Cos(z * 0.089f - 0.7f) * 2.3f
            + Mathf.Sin(x * 0.213f) * Mathf.Cos(z * 0.171f) * 0.7f
            + Mathf.Sin((x + z) * 0.041f) * 1.6f;
-        float d = Vector2.Distance(new Vector2(x, z), new Vector2(0f, 0.45f));
-        float flatT = SmoothBand(FlatRadius, FlatRadius + FlatBlend, d);
-        return Mathf.Lerp(Flat, h, flatT);
+        return Mathf.Lerp(Flat, h, FlatWeight(x, z));
     }
 
     /// <summary>いちばん 近い 川。みぞの ふかさと 水面の 高さ</summary>
