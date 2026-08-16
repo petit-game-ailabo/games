@@ -89,6 +89,8 @@ public static class BuildVillage {
         public Material soil;   // 畑の うね
         public Material post;   // 柱・鳥居（こい 木）。**主人公の まわりで 穴が あく**
         public Material seeThrough;   // カーブミラーの 板。これも 穴が あく
+        // メッシュで 起こす 屋根むけ（貼りかた 1,1）。HouseRoof.Shed に わたす
+        public Material roofM, woodM;
     }
 
     static Vector3 On(float x, float z, float lift = 0f) {
@@ -198,7 +200,14 @@ public static class BuildVillage {
         // 屋根と 柱、滑車
         for (int i = -1; i <= 1; i += 2)
             box("Ido_Hashira" + i, root, new Vector3(cx + i * 0.8f, y + 1.1f, cz), new Vector3(0.11f, 2.1f, 0.11f), m.post);
-        box("Ido_Yane", root, new Vector3(cx, y + 2.2f, cz), new Vector3(2.1f, 0.14f, 1.6f), m.roof);
+        // ★2026-08-16：**平らな 板 1まいを やめて、切妻に する。**
+        //   母屋を メッシュで 起こしてから、井戸と 祠の 屋根だけ 板の まま だったので
+        //   となりに 並ぶと あきらかに 粗く 見えた。HouseRoof.Shed を 2まい 背中あわせに
+        //   かければ 切妻に なる（厚み・小口・軒天・垂木つき）
+        HouseRoof.Shed(root, "Ido_Yane_N", cx - 1.05f, cx + 1.05f,
+                       cz - 0.02f, cz - 0.95f, y + 2.35f, y + 2.02f, 1.5f, m.roofM, m.woodM);
+        HouseRoof.Shed(root, "Ido_Yane_S", cx - 1.05f, cx + 1.05f,
+                       cz + 0.02f, cz + 0.95f, y + 2.35f, y + 2.02f, 1.5f, m.roofM, m.woodM);
         box("Ido_Kassha", root, new Vector3(cx, y + 2.0f, cz), new Vector3(1.5f, 0.08f, 0.08f), m.wood);
     }
 
@@ -222,14 +231,11 @@ public static class BuildVillage {
         box("Hokora_Dai", root, new Vector3(cx, y + 0.22f, cz), new Vector3(1.5f, 0.44f, 1.3f), m.stone);
         // 小屋（social な 大きさ＝人の こしぐらい）
         box("Hokora_Body", root, new Vector3(cx, y + 0.78f, cz), new Vector3(0.95f, 0.7f, 0.8f), m.wood);
-        for (int i = -1; i <= 1; i += 2) {
-            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cube.name = "Hokora_Yane" + i; cube.transform.SetParent(root, false);
-            cube.transform.localPosition = new Vector3(cx, y + 1.28f, cz + i * 0.24f);
-            cube.transform.localScale = new Vector3(1.35f, 0.12f, 0.62f);
-            cube.transform.localRotation = Quaternion.Euler(i * 30f, 0f, 0f);
-            cube.GetComponent<Renderer>().sharedMaterial = m.roof;
-        }
+        // 祠の 屋根も 切妻に する（傾けた 箱 2まい → 厚みと 軒の ある 屋根）
+        HouseRoof.Shed(root, "Hokora_Yane_N", cx - 0.68f, cx + 0.68f,
+                       cz - 0.01f, cz - 0.56f, y + 1.42f, y + 1.13f, 1.5f, m.roofM, m.woodM);
+        HouseRoof.Shed(root, "Hokora_Yane_S", cx - 0.68f, cx + 0.68f,
+                       cz + 0.01f, cz + 0.56f, y + 1.42f, y + 1.13f, 1.5f, m.roofM, m.woodM);
         // お供えの 石と 灯ろう
         box("Hokora_Sonae", root, new Vector3(cx - 0.9f, y + 0.14f, cz + 0.8f), new Vector3(0.34f, 0.28f, 0.34f), m.stone);
         box("Hokora_Toro",  root, new Vector3(cx + 1.3f, y + 0.5f, cz + 1.0f), new Vector3(0.3f, 1.0f, 0.3f), m.stone);
