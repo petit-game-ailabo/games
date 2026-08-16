@@ -23,6 +23,9 @@ public static class BuildVillage {
         //   風景に 合わなくて いい」。もとの 箱づくりの 納屋は Naya() に 残して ある ので、
         //   もどしたく なったら ここを 1行 入れかえる だけ
         BuildNayaKit.Build(root);
+        // 画面の 左(+X)に つづく 町。**地形も そのぶん 広げた**（TerrainGen の
+        // PlayMaxX と FlatHalf、本道と 枝道）
+        BuildKitTown.Build(root);
         Hatake(root, m, box, prop);
         Nougu(root, m, box);
         Ido(root, m, box);

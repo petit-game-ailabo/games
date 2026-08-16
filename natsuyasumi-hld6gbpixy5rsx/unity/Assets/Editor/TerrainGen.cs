@@ -25,7 +25,11 @@ public static class TerrainGen {
     // 何も 見えなく なる。通れる ところは 画面に 映る 範囲に とどめ、
     // まわりは 山・川・生垣で ふさぐ。
     //   おく(-Z)＝山の 斜面／手前(+Z)＝川／左右(X)＝生垣と 木立ち
-    public const float PlayMinX = -26f, PlayMaxX = 26f;
+    // ★2026-08-16：**左(+X)へ 広げた。** 借りものの アセットで 建てた 町を ならべる ため。
+    //   画面の 左＝+X（カメラは yaw180 で -Z を 見て いるので 右手が -X）。
+    //   26 → 53。見えない かべ も 生垣 も この 数字から 作って いる ので、
+    //   ここを 変えれば 全部 ついて くる
+    public const float PlayMinX = -26f, PlayMaxX = 53f;
     public const float PlayMinZ = -10f, PlayMaxZ = 27f;
 
     // ★2026-08-15：**高台（みはらし台）。**
@@ -50,8 +54,11 @@ public static class TerrainGen {
     //   玄関が 二階の 高さに なり、家に 入ったら 上がれなかった（本人の 指摘）。
     //   家・道・畑・納屋・井戸が のる ところは まとめて 平ら に する。
     //   山が 立ちあがるのは その そとがわ
-    static readonly Vector2 FlatCenter = new Vector2(0f, 8f);
-    static readonly Vector2 FlatHalf = new Vector2(20f, 17f);   // この 中は まっ平ら
+    //   ★2026-08-16：左(+X)へ 町を のばす ぶん、平らな ところも のばす。
+    //     中心を 右へ 12 ずらし、はばを 20→37 に する＝x が -25 から 49 まで 平ら。
+    //     ここを のばさないと、建てた 家が 山の 斜面に 半分 うまる
+    static readonly Vector2 FlatCenter = new Vector2(12f, 8f);
+    static readonly Vector2 FlatHalf = new Vector2(37f, 17f);   // この 中は まっ平ら
     const float FlatBlend = 13f;                                 // ここから 山へ 上がる
 
     /// <summary>0＝谷そこで まっ平ら、1＝もとの 起伏のまま</summary>
@@ -72,7 +79,7 @@ public static class TerrainGen {
     // 道すじは まっすぐ／直角に して、**ふちの ぎざぎざは 絵の がわで 出す**
     //（Ground シェーダで しきいを ゆらす。歩ける ところは まっすぐの まま）
     public static readonly Vector2[][] Paths = {
-        new[] { new Vector2(-25f, 7f), new Vector2(25f, 7f) },        // 本道（画面の よこ）
+        new[] { new Vector2(-25f, 7f), new Vector2(50f, 7f) },        // 本道（画面の よこ）。左の 町まで のばす
         new[] { new Vector2(0f, 7f),   new Vector2(0f, 3.4f) },       // 家の 玄関へ
         new[] { new Vector2(-13f, 7f), new Vector2(-13f, 20f) },      // 左：畑・井戸へ
         new[] { new Vector2(-13f, 20f),new Vector2(-4f, 20f) },
@@ -89,6 +96,15 @@ public static class TerrainGen {
         new[] { new Vector2(-20f, 7f),  new Vector2(-20f, -6f),
                 new Vector2(-30f, -6f),
                 new Vector2(-30f, -17f) },
+        // ★2026-08-16：左(+X)の 町へ 入る 枝道。**道が 無いと 家が 草はらに 置いた
+        //   模型に 見える。** 道ごとの ならび（PathGrade / PathCut / PathHalfPer）は
+        //   **添え字で ひいて いる ので、足すなら 必ず うしろ**。
+        //   はじめ 本道の すぐ 次に 割りこませたら 山道の 添え字が 7→11 に ずれ、
+        //   道ごとの 値が 総取っかえに なって 配列の 外を さした
+        new[] { new Vector2(20f, 7f),  new Vector2(20f, 1.5f) },      // 8  小屋
+        new[] { new Vector2(31f, 7f),  new Vector2(31f, 2.5f) },      // 9  せり出しの 家
+        new[] { new Vector2(41f, 7f),  new Vector2(41f, 2.5f) },      // 10 基壇の 家
+        new[] { new Vector2(47f, 7f),  new Vector2(47f, 1.5f) },      // 11 塔
     };
     // ---- 沢（小川）と 川。**地形に みぞを 掘り、そこへ 水を 流す。**
     // 水は 高い ほうから 低い ほうへ しか 流れないので、道と 同じく
@@ -135,6 +151,10 @@ public static class TerrainGen {
         0.12f,   // 5
         0.12f,   // 6 川べりへ
         0.26f,   // 7 山への 登り（ここだけ 急でよい＝約15度）
+        0.12f,   // 8  左の町：小屋
+        0.12f,   // 9  左の町：せり出しの 家
+        0.12f,   // 10 左の町：基壇の 家
+        0.12f,   // 11 左の町：塔
     };
     const float DenseStep = 1.0f;      // 道を 1mごとに 刻んで 高さを 決める
     // これだけ 近い 点は **同じ 辻**と みなす。
@@ -160,6 +180,10 @@ public static class TerrainGen {
         5f,    // 5
         5f,    // 6 川べりへ
         12f,   // 7 山道
+        5f,    // 8  左の町：小屋
+        5f,    // 9  左の町：せり出しの 家
+        5f,    // 10 左の町：基壇の 家
+        5f,    // 11 左の町：塔
     };
 
     // ★土の 色が つく はば（半分）。**本道だけ 車道の 幅に する。**
@@ -168,7 +192,13 @@ public static class TerrainGen {
     //   ＝ 3m ほど。ほかの 道は 人が 踏み分けた だけ なので 細い まま
     //   ※1.55 まで 広げたら 家の 前が 一面 土に なった。**土の 帯は ふちの ぼかしぶん
     //     さらに 広がる**（+0.8m）ので、見た目の 幅は これの 倍＋1.6m ある
-    static readonly float[] PathHalfPer = { 1.10f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f };
+    //   ★**道ごとの ならびは 3つとも Paths と 同じ 長さに そろえる。**
+    //     PathCut / PathHalfPer は 添え字で 直に ひいて いる ので、
+    //     Paths だけ 足すと その場で 配列の 外を さして 落ちる
+    static readonly float[] PathHalfPer = {
+        1.10f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f, 0.75f,
+        0.75f, 0.75f, 0.75f, 0.75f,   // 8〜11 左の町
+    };
 
     // ---- 道の 高さの すじ道。
     //

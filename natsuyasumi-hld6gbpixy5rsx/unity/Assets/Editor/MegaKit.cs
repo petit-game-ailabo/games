@@ -249,17 +249,43 @@ public static class MegaKit {
     }
 
     // ---------------------------------------------------------------- 組み立ての 道具
-    /// <summary>部品を 1つ 置く。位置は m、向きは Y まわりの 角度</summary>
-    public static GameObject Put(Transform parent, string piece, Vector3 pos, float yaw = 0f,
-                                 Vector3? scale = null) {
+    /// <summary>部品を 1つ 置く。**このキットを 置くときは 必ず これを 通す。**
+    ///
+    /// 2つ しかけが ある。どちらも 抜かすと 事故に なる。
+    ///  1) **X まわりに +90度 まわす。** 部品は ねて いて、高さが -Z・厚みが Y。
+    ///     まわすと 高さが +Y、外がわが -Z に なる（手前を 見せる 面は yaw=180）
+    ///  2) **大きさを 1 に もどす。** prefab の 根っこに 100倍が 入って いて、
+    ///     そのままだと 壁 1まいが 200m x 312m に なる
+    /// </summary>
+    public static GameObject Put(Transform parent, string piece, Vector3 pos, float yaw = 0f) {
         var src = AssetDatabase.LoadAssetAtPath<GameObject>(ModelDir + piece + ".fbx");
         if (src == null) { Debug.LogWarning("[MegaKit] 部品が ない: " + piece); return null; }
         var go = (GameObject)PrefabUtility.InstantiatePrefab(src, parent);
         PrefabUtility.UnpackPrefabInstance(go, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
         go.name = piece;
         go.transform.localPosition = pos;
-        go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
-        if (scale.HasValue) go.transform.localScale = scale.Value;
+        go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f) * Quaternion.Euler(90f, 0f, 0f);
+        go.transform.localScale = Vector3.one;
         return go;
+    }
+
+    /// <summary>壁を ならべる ときの 書きやすい かたち</summary>
+    public static GameObject Put(Transform parent, string piece, float x, float y, float z, float yaw) {
+        return Put(parent, piece, new Vector3(x, y, z), yaw);
+    }
+
+    /// <summary>あたりの 箱。FBX には あたりが 無い ので 手で 置く。
+    /// **まるごと 1個で かこうと 戸口ごと ふさがって 中に 入れなく なる**</summary>
+    public static void Hit(Transform parent, Vector3 pos, Vector3 size) {
+        var go = new GameObject("Kit_Hit");
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        go.layer = 2;                       // 真下への レイの じゃまを しない
+        go.AddComponent<BoxCollider>().size = size;
+    }
+
+    /// <summary>その 場の マテリアルを とる（土台などの 箱に 貼る）</summary>
+    public static Material Mat(string name) {
+        return AssetDatabase.LoadAssetAtPath<Material>(MatDir + name + ".mat");
     }
 }
