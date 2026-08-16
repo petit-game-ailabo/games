@@ -37,15 +37,29 @@ FAMILY = [
 #   PaintedPlaster017（真っ白で のっぺり）と Ground054（平たい 砂）も 同じ 理由で 落選。
 #   漆喰と 道の 土は **手で 描いた ものを 残す**（草の 絵と 色が そろって いる）
 # (zip名, 出す名, 何色に まとめるか, 寄せる ぐあい, 明るさの かけ算 rgb)
+# 色数も 減らす。48px で 14色も あると 1ドットずつ 色が ちがって ざらざらに 見える。
+#
+# ★crop＝もとの 絵の **どれだけを 切りとって** 48px に するか。
+#   1024px を まるごと 48px に 潰すと、瓦の うろこ(12列)が 4ドットずつに なって
+#   ただの 灰色の ざらざらに なった。3分の1 だけ 切りとれば うろこは 4列＝12ドットずつ に なり、
+#   ドット絵の 瓦として 読める。**模様が 大きい ものほど 大きく 切りとる**
+# (zip名, 出す名, 色数, 寄せぐあい, 明るさ, crop)
 JOBS = [
-    ("RoofingTiles001",  "roof_tile",    14, 0.42, (1.00, 1.00, 1.00)),   # 瓦（うろこ状）
+    ("RoofingTiles001",  "roof_tile",     8, 0.42, (1.00, 1.00, 1.00), 3.2),   # 瓦（うろこ状）
     # 板は もとが 白木で 明るすぎた。**古い 農家の 板は 日に 焼けて 茶色い**ので 落とす
-    ("WoodSiding009",    "wood_beam",    14, 0.45, (0.62, 0.50, 0.34)),
-    ("Rock030",          "stone",        12, 0.40, (1.05, 1.05, 1.02)),   # 石
-    ("ThatchedRoof001A", "thatch",       14, 0.45, (1.15, 1.02, 0.72)),   # わら（黄みを 出す）
+    ("WoodSiding009",    "wood_beam",     8, 0.45, (0.62, 0.50, 0.34), 1.6),
+    ("Rock030",          "stone",         7, 0.40, (1.05, 1.05, 1.02), 2.2),   # 石
+    ("ThatchedRoof001A", "thatch",        8, 0.45, (1.15, 1.02, 0.72), 2.6),   # わら
 ]
 
-SIZE = 256
+# ★**大きさが 命。**
+#   この ゲームの ドットの こまかさは **1mあたり 32ドット**（木＝144px を 4.5m に 貼って いる）。
+#   家の 壁は 1まいが 1.5m ぶん（10.8m を 7.2回 くりかえす）なので、
+#   そろえるなら 1.5m x 32 = **48px**。
+#   はじめ 256px で 作ったら 1mあたり 170ドットに なり、木の 5倍 こまかくて
+#   「テクスチャを 貼って いない・絵っぽく ない」と 言われた（本人の 指摘）。
+#   点フィルタに しても、ドットが 小さすぎれば ただの 写真に しか 見えない
+SIZE = 48
 
 
 def color_map(im, keep, pull):
@@ -73,7 +87,7 @@ def pick_color_member(zf):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for zip_name, out_name, keep, pull, mul in JOBS:
+    for zip_name, out_name, keep, pull, mul, crop in JOBS:
         path = os.path.join(SRC, zip_name + ".zip")
         if not os.path.exists(path):
             print("ない:", path)
@@ -85,8 +99,8 @@ def main():
                 continue
             with zf.open(member) as fp:
                 im = Image.open(fp).convert("RGB")
-        # 正方形に 切って 小さく する。**繰りかえして 貼るので 継ぎめが 出ない ように 端は 切らない**
-        s = min(im.size)
+        # 正方形に 切って 小さく する。crop で **模様が 読める 大きさ**まで 寄る
+        s = int(min(im.size) / max(crop, 1.0))
         im = im.crop((0, 0, s, s)).resize((SIZE, SIZE), Image.LANCZOS)
         if mul != (1.0, 1.0, 1.0):
             px = im.load()
