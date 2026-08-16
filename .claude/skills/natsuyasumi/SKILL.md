@@ -122,6 +122,48 @@ powershell -File natsuyasumi-hld6gbpixy5rsx/unity/tools/rebuild.ps1
 → **メッシュで作ったものは UV に m を焼きこむ**ので、貼りかたが `(1,1)` の別マテリアルが要る。
 箱用の `(7.2, 1.6)` をわたすと絵が7倍にのびてただの灰色になる。
 
+## 借りものの 3Dアセットを つかう（megakit）
+
+`unity/ArtSource/ref/` が 手本置き場（Unity の 外・gitignore）。使う ぶんだけ
+`make_megakit.py` で `Assets/Art/Models|Textures/megakit/` へ うつす。
+したくは `MegaKit.Setup`、寸法は `MegaKit.Dump`、でかすぎる ものさがしは `MegaKit.Inspect`。
+
+- **手さぐりで 組まない。地形と 同じで まず 数字を 出す**（`MegaKit.Dump`）。
+  部品の 大きさ・軸の 位置・向きが 分からないと 置いた とたん 半分 めりこむ。
+- **Quaternius のキットは ねている。** 高さが -Z、厚みが Y、外がわが -Z。
+  置くときに `Euler(0,yaw,0) * Euler(90,0,0)`。手前(+Z)を 見せる 面は yaw=180。
+- **prefab の 根っこに 100倍が 入って いる。置くとき `localScale = Vector3.one` に もどす。**
+  忘れると 壁 1まいが 200m x 312m に なって 画面ぜんぶを 覆う。
+  このとき `Dump` は 2.00m と 出て いた——**測るときに scale を 1 に 直して いたから**。
+  **測るときと 置くときで 条件を そろえないと、正しい 数字が 嘘に なる。**
+- **`SetupURP.FixPixelArt` の 対象外に する**（`/megakit/` を はじく）。
+  1024px の 描きこんだ 絵を 点フィルタ＋圧縮なしに すると ざらざら＋ビルドが ふくらむ。
+- 法線は「Normals Godot-Unity」の ほうを つかう（素の ほうは Y が 逆で 凹凸が 裏返る）。
+  `textureType = NormalMap`、あらさ・ORM は `sRGBTexture = false`。
+- FBX は `materialName = BasedOnMaterialName` + `materialSearch = Everywhere`。
+  **こちらで 作る マテリアルの 名まえを FBX の 中の 名まえと 1字も ちがえない**（`MI_Plaster` など）。
+
+## 本番へ 出す（push が 403 に なる）
+
+**このマシンには GitHub の 認証が 2つ ある。**
+
+- `C:/Program Files/Git/etc/gitconfig` … `credential.helper = manager`（Windows 資格情報マネージャー。
+  ここに **takashi-nakaya** が 入って いて、この人は org のリポジトリに **書けない**）
+- `.git/config` … `credential.helper = store` （`~/.git-credentials` に **petit-game-ailabo**）
+
+helper は **上から 順に 全部 聞かれる**ので、先に manager が 答えて しまい
+`Permission to petit-game-ailabo/games.git denied to takashi-nakaya` で 落ちる。
+
+直しかた（**空の値は それまでの helper を 打ち消す**）:
+
+```
+git config --local --replace-all credential.helper ""
+git config --local --add credential.helper store
+```
+
+`deploy.ps1` でも push できるが、**STEP2 で day22 の 動画を YouTube に 上げに いく**ので
+なつやすみの ときは 走らせない。
+
 ## URP 17.5 のくせ
 
 - `_CLUSTER_LIGHT_LOOP`（`_FORWARD_PLUS` ではない）、`LIGHT_LOOP_BEGIN/END`
