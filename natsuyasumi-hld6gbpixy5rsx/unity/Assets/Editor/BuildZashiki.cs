@@ -699,12 +699,18 @@ public static class BuildZashiki {
         // ★素材は コマごとに 1つだけ 作って 使いまわす。ずらしは シェーダが
         //   置き場所から 決める ので、木が 増えても 素材は 増えない
         bool sways = kind == PropKind.Billboard;
+        // ★**みきの ある もの（＝背の 高い もの）は 別あつかい。**（2026-08-16・本人）
+        //   1枚の 板に みきと 葉が いっしょに 描いて ある ので、
+        //    - 根もとから 揺らすと **みきが うねる** → 葉の 付け根から 上だけ 揺らす
+        //    - 板ぜんたいに 色を かけると **茶色い みきが 緑に なる** → 葉だけに かける
+        //   背の たかさで 見わける（当たりを つける しきいと 同じ 2.2m）
+        bool hasTrunk = kind == PropKind.Billboard && height >= 2.2f;
         var m = SpriteMat(atlas, uvS, uvO,
                           0f,                    // たての のびちぢみ＝なし
                           0f,
                           sways ? 0.030f : 0f,   // よこ揺れ（葉の ぶん）
                           sways ? 0.55f : 0f,
-                          0f, tint);
+                          0f, tint, hasTrunk);
 
         var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
         q.name = "Sheet";
@@ -756,17 +762,32 @@ public static class BuildZashiki {
     static Material SpriteMat(Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
                               float breatheAmp, float breatheSpeed,
                               float swayAmp, float swaySpeed, float phase, Color tint) {
+        return SpriteMat(tex, uvScale, uvOffset, breatheAmp, breatheSpeed,
+                         swayAmp, swaySpeed, phase, tint, false);
+    }
+
+    /// <summary>trunk＝みきの ある もの（木）。**下は 揺らさず、色は 葉だけに かける**。
+    /// ★これを **合いことばに 入れないと 事故る。** 素材は 合いことばで 使いまわして いる ので、
+    ///   同じ コマ・同じ 色の 草と 木が **1つの 素材を 分けあい**、
+    ///   あとから 立てた ほうの 設定で 草まで みきあつかいに なる</summary>
+    static Material SpriteMat(Texture2D tex, Vector2 uvScale, Vector2 uvOffset,
+                              float breatheAmp, float breatheSpeed,
+                              float swayAmp, float swaySpeed, float phase, Color tint, bool trunk) {
         string key = string.Format("{0}_{1:F3}_{2:F3}_{3:F3}_{4:F3}_{5:F3}_{6:F3}_{7:F3}",
                                    tex != null ? tex.name : "none", uvScale.x, uvOffset.x, uvOffset.y,
                                    breatheAmp, swayAmp, swaySpeed, phase)
                    + "_" + Mathf.RoundToInt(tint.r * 99) + Mathf.RoundToInt(tint.g * 99)
-                   + Mathf.RoundToInt(tint.b * 99);
+                   + Mathf.RoundToInt(tint.b * 99) + (trunk ? "_t" : "");
         Material cached;
         if (matCache.TryGetValue(key, out cached) && cached != null) return cached;
         var path = MatDir + "Sprite_" + key.Replace('.', '_') + ".mat";
         var mm = SpriteMatNew(path, tex, uvScale, uvOffset,
                               breatheAmp, breatheSpeed, swayAmp, swaySpeed, phase);
         mm.SetColor("_BaseColor", tint);
+        if (trunk) {
+            mm.SetFloat("_SwayFrom", 0.46f);      // 下 46%＝みき は 動かさない
+            mm.SetFloat("_LeafTintOnly", 1f);     // 色は 葉だけ（みきは 茶の まま）
+        }
         return matCache[key] = mm;
     }
 

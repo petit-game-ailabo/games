@@ -23,6 +23,16 @@ Shader "Natsuyasumi/PixelSprite"
         _SwaySpeed("Sway Speed", Range(0,10)) = 0.7
         _Phase("Phase Offset", Float) = 0
 
+        // ★2026-08-16：**みきは 揺らさない。**（本人「幹も揺れてる気がする」）
+        //   1枚の 板に みきと 葉が いっしょに 描いて ある ので、下から 揺らすと
+        //   **木の みきが うねる**。ここから 上だけ 揺らす（0＝根もと、0.45＝葉の 付け根）
+        _SwayFrom("Sway starts at (0..1 of height)", Range(0,0.9)) = 0
+
+        // ★**色を かけるのは 葉だけ。**（本人「幹とか緑色になってて気持ち悪い」）
+        //   針葉樹と 広葉樹を 色で 描きわける ために 板ぜんたいに 色を かけて いたが、
+        //   茶色い みきまで 緑に 寄って いた。1 に すると 緑がかった 画素にだけ かける
+        [Toggle] _LeafTintOnly("Tint leaves only", Float) = 0
+
         _Wrap("Light Wrap", Range(0,1)) = 0.55
 
         // 1 に すると **主人公の まわりの 穴で 消えない**。
@@ -54,6 +64,8 @@ Shader "Natsuyasumi/PixelSprite"
             half   _BreatheSpeed;
             half   _SwayAmp;
             half   _SwaySpeed;
+            half   _SwayFrom;
+            half   _LeafTintOnly;
             float  _Phase;
             half   _Wrap;
             half   _HoleIgnore;
@@ -97,9 +109,21 @@ Shader "Natsuyasumi/PixelSprite"
         // ★ずらし(位相)と はやさは **置いてある 場所から 決める**。
         //   1本ごとに 素材を 分けなくても ばらばらに 揺れるので、
         //   木が 何百本に なっても 素材は 1つ＝まとめて 描ける
+        /// 葉だけに 色を かける。緑が つよい 画素ほど かかる。
+        /// みきの 茶(赤>緑)や 石の 灰(3色 同じ)には ほとんど かからない
+        half3 LeafTint(half3 col, half3 tint)
+        {
+            if (_LeafTintOnly < 0.5h) return col * tint;
+            half leafy = saturate((col.g - max(col.r, col.b)) * 6.0h);
+            return col * lerp(half3(1,1,1), tint, leafy);
+        }
+
         float3 Breathe(float3 positionOS)
         {
-            float w = saturate(positionOS.y + 0.5);
+            // **_SwayFrom より 下は 動かさない。** 木は みきと 葉が 1枚の 板なので、
+            // 根もとから 揺らすと みきが うねって 見える
+            float h01 = saturate(positionOS.y + 0.5);
+            float w = saturate((h01 - _SwayFrom) / max(0.001, 1.0 - _SwayFrom));
             float3 org = mul(UNITY_MATRIX_M, float4(0, 0, 0, 1)).xyz;
             float ph  = _Phase + org.x * 2.7 + org.z * 1.3;
             float spd = 0.75 + frac(org.x * 0.37 + org.z * 0.61 + 0.13) * 0.6;
@@ -161,7 +185,8 @@ Shader "Natsuyasumi/PixelSprite"
 
             half4 frag(Varyings IN, FRONT_FACE_TYPE cullFace : FRONT_FACE_SEMANTIC) : SV_Target
             {
-                half4 tex = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv) * _BaseColor;
+                half4 raw = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv);
+                half4 tex = half4(LeafTint(raw.rgb, _BaseColor.rgb), raw.a * _BaseColor.a);
                 clip(tex.a - _Cutoff);
                 ClipHole(IN.positionCS, IN.positionWS);
 
