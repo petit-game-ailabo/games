@@ -51,6 +51,8 @@ public class CamOrbit : MonoBehaviour {
     public float occludeRadius = 0.34f;
     [Tooltip("どれだけ 近づいても これより 寄らない")]
     public float minDistance = 1.6f;
+    [Tooltip("これより 小さい 物は よけない（電柱などは ディザで 抜ける）")]
+    public float occludeMinSize = 1.6f;
     float occDist = 99f;
 
     // いま 実さいに 使って いる 値（base ＝ 上の pitch/yaw/distance）
@@ -150,9 +152,21 @@ public class CamOrbit : MonoBehaviour {
             float len = dir.magnitude;
             if (len > 0.01f) {
                 dir /= len;
-                RaycastHit oh;
-                if (Physics.SphereCast(from, occludeRadius, dir, out oh, len,
-                                       ~(1 << 2), QueryTriggerInteraction.Ignore)) {
+                // ★**細い ものでは 寄せない。**（2026-08-17）
+                //   電柱や 鳥居の 柱で カメラが ぐいぐい 寄って いた。
+                //   ああいう 細い ものは **ディザで 抜ける**ので よけなくて よい。
+                //   よけるのは 壁や 屋根の ような **大きな 面**だけ。
+                //   いちばん 近い「大きい」当たりを さがす
+                var hits = Physics.SphereCastAll(from, occludeRadius, dir, len,
+                                                 ~(1 << 2), QueryTriggerInteraction.Ignore);
+                bool blocked = false; var oh = new RaycastHit();
+                for (int i = 0; i < hits.Length; i++) {
+                    var b = hits[i].collider.bounds.size;
+                    if (Mathf.Max(b.x, Mathf.Max(b.y, b.z)) < occludeMinSize) continue;
+                    if (hits[i].distance <= 0.001f) continue;      // 中から 始まった ぶん
+                    if (!blocked || hits[i].distance < oh.distance) { oh = hits[i]; blocked = true; }
+                }
+                if (blocked) {
                     // 近づけるのは すぐ、はなれるのは ゆっくり。
                     // 逆に すると 柱の わきを 走る たびに カメラが がくがく 前後する
                     float want = Mathf.Max(minDistance, oh.distance - occludePad);
