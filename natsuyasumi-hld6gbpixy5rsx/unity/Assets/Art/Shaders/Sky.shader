@@ -17,7 +17,7 @@ Shader "Natsuyasumi/Sky"
         _Ridge("Ridge base", Color) = (0.36,0.45,0.42,1)
         _CloudColor("Cloud", Color) = (1,1,1,1)
         _CloudAmount("Cloud amount", Range(0,1)) = 0.35
-        _RidgeHeight("Ridge height", Range(0,0.5)) = 0.13
+        _RidgeHeight("Ridge height", Range(0,0.5)) = 0.17
         _Haze("Haze", Range(0,1)) = 0.7
     }
 
@@ -77,12 +77,19 @@ Shader "Natsuyasumi/Sky"
                 sky = lerp(sky, _CloudColor.rgb, saturate(cloud * 1.4));
 
                 // --- 遠くの 山なみ。3枚。奥ほど 低く・空の 色に 溶ける
+                //
+                // ★**おくから 順に 描く。**（2026-08-17）
+                //   前は 手前(i=0)を さきに 描いて、そのあと **おくの うすい 山で
+                //   上塗り**して いた。おくの 山は 稜線が 低いので、手前の こい 山の
+                //   足もとを ぜんぶ 消して しまい、**地平線ぎわが うすい 帯**に なって
+                //   いた（本人「高い所から見ると上端が灰色の帯」）。
+                //   奥→手前 の 順に すれば、手前の こい 山が ちゃんと 前に 出る
                 [unroll]
                 for (int i = 0; i < 3; i++)
                 {
-                    float depth = 1.0 - i * 0.34;                          // 手前ほど 1
+                    float depth = 1.0 - (2 - i) * 0.34;                    // i=0 が いちばん おく
                     float h = _RidgeHeight * (0.45 + 0.55 * depth)
-                            * (0.62 + 0.38 * Ridgeline(az * (1.0 + i * 0.45), 2.1 + i * 3.7));
+                            * (0.62 + 0.38 * Ridgeline(az * (1.0 + (2 - i) * 0.45), 2.1 + (2 - i) * 3.7));
                     // 稜線より 下なら 山
                     float m = 1.0 - smoothstep(h - 0.006, h + 0.006, el);
                     // 空気遠近：奥の 山ほど 空の 色に 近づく

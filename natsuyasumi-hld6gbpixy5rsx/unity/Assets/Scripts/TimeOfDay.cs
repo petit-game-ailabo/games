@@ -275,7 +275,8 @@ public class TimeOfDay : MonoBehaviour {
                     skybox.SetColor("_CloudColor", p.cloud);
                     skybox.SetFloat("_CloudAmount", p.cloudAmt);
                     skybox.SetFloat("_Haze", p.haze);
-                    skybox.SetFloat("_RidgeHeight", 0.115f);
+                    // ★低いと ただの 帯に 見える。奥から 順に 描く ように 直した ので 高くできる
+                    skybox.SetFloat("_RidgeHeight", 0.165f);
                     RenderSettings.skybox = skybox;
                     cam.clearFlags = CameraClearFlags.Skybox;
                     // 遠くは 地平線の 色に かすませる＝空と 地めんが つながる
