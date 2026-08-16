@@ -49,7 +49,11 @@ public static class BuildNayaKit {
         var pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
         pad.name = "Kit_Base";
         pad.transform.SetParent(root, false);
-        pad.transform.localPosition = new Vector3(0f, -baseH * 0.5f + 0.06f, 0f);
+        // ★土台の 天は **床タイルの 天(0.03)に ぴったり そろえる**。
+        //   前は 0.06 で、床タイル(0.01〜0.03)より 3cm 高く、部屋の 中に
+        //   灰色の 段が 走って 見えた（本人「部屋の中も高さがあってない」）。
+        //   FBX には あたりが 無い ので、**この 土台が そのまま 床の あたり**に なる
+        pad.transform.localPosition = new Vector3(0f, 0.03f - baseH * 0.5f, 0f);
         pad.transform.localScale = new Vector3(NX * G + 0.9f, baseH, NZ * G + 0.9f);
         pad.GetComponent<Renderer>().sharedMaterial =
             AssetDatabase.LoadAssetAtPath<Material>(MegaKit.MatDir + "MI_RockTrim.mat");
@@ -126,10 +130,46 @@ public static class BuildNayaKit {
         Put(root, "Prop_Vine2", new Vector3(HX + 0.02f, y2 + 2.4f, -HZ + G * 3.2f), 270f);
         for (int j = 0; j < 3; j++)
             Put(root, "Prop_WoodenFence_Single", new Vector3(HX + 1.2f, 0.05f, HZ - 0.4f - j * 2.05f), 90f);
-        Put(root, "Stairs_Exterior_Straight", new Vector3(0f, 0f, HZ + 1.05f), 180f);
+        // ★外の 階段は 置かない（2026-08-16・本人）。
+        //   **床は 地めんと ほぼ 同じ 高さ**（土台の 天が 地めん +0.06m）なので、
+        //   2m の 階段を つけると 戸口より 高い ところへ 登って しまい 話が 合わない
 
-        // ---------- あたり。FBX に あたりは 付けて いない ので 箱で かこう
-        Hit(root, new Vector3(0f, 1.6f, 0f), new Vector3(NX * G + 0.5f, 3.4f, NZ * G + 0.5f));
+        // ---------- 中の もの。がらんどうだと 入っても 何も 起きない 部屋に なる
+        Put(root, "Prop_Crate", new Vector3(-HX + 0.9f, 0.05f, -HZ + 1.0f), 8f);
+        Put(root, "Prop_Crate", new Vector3(-HX + 0.9f, 1.10f, -HZ + 1.1f), -14f);
+        Put(root, "Prop_Crate", new Vector3(HX - 0.9f, 0.05f, -HZ + 0.9f), -22f);
+        Put(root, "Prop_Brick1", new Vector3(HX - 1.4f, 0.05f, -HZ + 2.2f), 30f);
+
+        // ---------- 中の あかり。しめきった 石の 箱は 昼でも まっ暗に なる
+        var lampGO = new GameObject("Kit_Light");
+        lampGO.transform.SetParent(root, false);
+        lampGO.transform.localPosition = new Vector3(0f, 2.0f, -0.5f);
+        var lamp = lampGO.AddComponent<Light>();
+        lamp.type = LightType.Point;
+        lamp.color = new Color(1f, 0.84f, 0.58f);
+        lamp.intensity = 4.0f; lamp.range = 9f; lamp.shadows = LightShadows.None;
+
+        // ---------- あたり
+        // ★**1つの 箱で かこうと 中に 入れない。**（2026-08-16・本人「部屋の中に入れない」）
+        //   FBX には あたりが 付いて いない ので 手で 置くしか ないが、
+        //   まるごと 1個の 箱に すると **戸口ごと ふさがる**。壁ごとに 置いて、
+        //   手前の まん中＝戸口の ぶんだけ あける
+        const float T = 0.40f, HH = SH * 2f;      // 壁の 厚み／高さ
+        float cy = HH * 0.5f;
+        float door = 0.62f;                        // 戸口の 半分の はば（わくの 内のり 1.2m ほど）
+        // おく
+        Hit(root, new Vector3(0f, cy, -HZ), new Vector3(NX * G + T, HH, T));
+        // 左右
+        Hit(root, new Vector3(-HX, cy, 0f), new Vector3(T, HH, NZ * G + T));
+        Hit(root, new Vector3( HX, cy, 0f), new Vector3(T, HH, NZ * G + T));
+        // 手前は 戸口の 左右だけ
+        float sideW = HX - door;
+        Hit(root, new Vector3(-(door + sideW * 0.5f), cy, HZ), new Vector3(sideW, HH, T));
+        Hit(root, new Vector3( (door + sideW * 0.5f), cy, HZ), new Vector3(sideW, HH, T));
+        // 2階の 床＝1階の 天井。**無いと 6m の 吹きぬけに なって 部屋に 見えない**
+        for (int i = 0; i < NX; i++)
+            for (int j = 0; j < NZ; j++)
+                Put(root, "Floor_WoodDark", new Vector3(-HX + G * (i + 0.5f), SH, -HZ + G * (j + 0.5f)));
 
         Debug.Log("[NayaKit] 借りものの 家を 建てた: " + root.GetComponentsInChildren<MeshRenderer>().Length + " まとまり");
     }
