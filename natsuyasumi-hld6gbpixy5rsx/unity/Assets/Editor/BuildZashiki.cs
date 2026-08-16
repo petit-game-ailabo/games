@@ -454,6 +454,7 @@ public static class BuildZashiki {
             post = mPost, seeThrough = mMirror,
             roofM = Mat("RoofTileMesh2", ArtTex + "roof_tile.png", Vector2.one, 0f, 0.86f),
             woodM = Mat("WoodMesh2", ArtTex + "wood_beam.png", Vector2.one, 0f, 0.80f),
+            soilM = Mat("SoilMesh", ArtTex + "dirt_path.png", Vector2.one, 0f, 1f),
         };
         BuildVillage.Build(root, vmat,
             (nm, par, pos, size, mat) => Box(nm, par, pos, size, mat),

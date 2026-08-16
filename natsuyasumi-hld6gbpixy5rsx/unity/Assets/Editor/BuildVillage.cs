@@ -10,6 +10,7 @@
 //    どちらかが 待避所で 待つ。舗装されて いない ところも 多い。
 //
 // 建物は 3D の 箱で 組み、絵は 家と 同じ ドット絵の テクスチャを 貼る。
+using System.Collections.Generic;
 using UnityEngine;
 
 public static class BuildVillage {
@@ -89,8 +90,8 @@ public static class BuildVillage {
         public Material soil;   // 畑の うね
         public Material post;   // 柱・鳥居（こい 木）。**主人公の まわりで 穴が あく**
         public Material seeThrough;   // カーブミラーの 板。これも 穴が あく
-        // メッシュで 起こす 屋根むけ（貼りかた 1,1）。HouseRoof.Shed に わたす
-        public Material roofM, woodM;
+        // メッシュで 起こす もの むけ（貼りかた 1,1。UV に m を 焼きこむ）
+        public Material roofM, woodM, soilM;
     }
 
     static Vector3 On(float x, float z, float lift = 0f) {
@@ -140,18 +141,15 @@ public static class BuildVillage {
         const float RowLen = 9.5f, RowGap = 1.15f;
         for (int r = 0; r < Rows; r++) {
             float z = oz + r * RowGap;
-            // うね（土を もった すじ）
-            for (int s = 0; s < 10; s++) {
-                float x = ox + s * (RowLen / 9f);
-                box("Une" + r + "_" + s, root, On(x, z, 0.09f),
-                    new Vector3(RowLen / 9f + 0.05f, 0.18f, 0.74f), m.soil);
-            }
+            // うねは まとめて メッシュで 起こす（下の Une）
             // 作物。うねの 上に ならべる
             for (int s = 0; s < 9; s++) {
                 float x = ox + 0.4f + s * (RowLen / 9f);
                 prop("Sakumotsu" + r + "_" + s, On(x, z, 0.2f), r % 3, 0.85f);
             }
         }
+        Une(root, m, ox, oz, Rows, RowLen, RowGap);
+
         // 畑の ふちの 杭と なわ
         for (int i = 0; i <= 8; i++) {
             float x = ox - 0.6f + i * (RowLen + 1.2f) / 8f;
@@ -182,6 +180,60 @@ public static class BuildVillage {
         // 米の 保冷庫
         box("Reizo", root, new Vector3(cx + 1.2f, y + 0.7f, cz + 0.6f), new Vector3(0.9f, 1.4f, 0.7f), m.stone);
         box("Reizo_Tobira", root, new Vector3(cx + 1.2f, y + 0.7f, cz + 0.96f), new Vector3(0.78f, 1.2f, 0.05f), m.plaster);
+    }
+
+    // ★うねを **メッシュで 起こす。**（2026-08-17・本人「畑のうねが板チョコ」）
+    //   前は 高さ 0.18m の 平たい 箱を 10個 ならべて いた。うえから 見ると
+    //   ただの 板の れつで、土を もった すじには 見えなかった。
+    //   本もの の うねは **かまぼこ形**で、あいだに 溝(みぞ)が ある。
+    //   断面を 3点（谷・山・谷）に して、長さ方向へ 押しだす。
+    //   高さを 場所ごとに ゆらす＝手で 立てた 畑の でこぼこが 出る
+    static void Une(Transform root, Materials m, float ox, float oz,
+                    int rows, float rowLen, float rowGap) {
+        const float H = 0.26f;            // うねの 高さ
+        const float Half = 0.46f;         // うねの 半分の はば（残りが 溝）
+        const float Step = 0.5f;          // 長さ方向の きざみ
+        const float TexM = 1.5f;
+        int n = Mathf.Max(2, Mathf.CeilToInt(rowLen / Step) + 1);
+
+        var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+        for (int r = 0; r < rows; r++) {
+            float z = oz + r * rowGap;
+            int b = v.Count;
+            for (int i = 0; i < n; i++) {
+                float x = ox + rowLen * i / (n - 1f);
+                float g = TerrainGen.Height(x, z);
+                // 高さの ゆらぎ。**そろえすぎると 機械で 作った 畑に 見える**
+                float wob = 1f + Mathf.Sin(x * 1.7f + r * 2.3f) * 0.13f
+                              + Mathf.Sin(x * 4.1f - r * 1.1f) * 0.07f;
+                float hw = Half * (1f + Mathf.Sin(x * 2.3f + r) * 0.08f);
+                v.Add(new Vector3(x, TerrainGen.Height(x, z - hw) - 0.03f, z - hw));
+                v.Add(new Vector3(x, g + H * wob, z));
+                v.Add(new Vector3(x, TerrainGen.Height(x, z + hw) - 0.03f, z + hw));
+                float u = x / TexM;
+                uv.Add(new Vector2(u, 0f));
+                uv.Add(new Vector2(u, Half / TexM));
+                uv.Add(new Vector2(u, Half * 2f / TexM));
+            }
+            for (int i = 0; i < n - 1; i++) {
+                int a = b + i * 3;
+                for (int e = 0; e < 2; e++) {
+                    int p0 = a + e, p1 = p0 + 1, p2 = p0 + 3, p3 = p2 + 1;
+                    tri.Add(p0); tri.Add(p2); tri.Add(p1);
+                    tri.Add(p1); tri.Add(p2); tri.Add(p3);
+                }
+            }
+        }
+        var mesh = new Mesh { name = "Une" };
+        mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tri, 0);
+        mesh.RecalculateNormals(); mesh.RecalculateBounds();
+        var go = new GameObject("Hatake_Une");
+        go.transform.SetParent(root, false);
+        // うねは 0.26m。またげる ので あたりは いらない。真下への レイの じゃまも しない
+        go.layer = 2;
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        go.AddComponent<MeshRenderer>().sharedMaterial = m.soilM;
+        UnityEditor.AssetDatabase.CreateAsset(mesh, "Assets/Art/Materials/UneMesh.asset");
     }
 
     // ---------------------------------------------------------------- 使われなく なった 井戸
