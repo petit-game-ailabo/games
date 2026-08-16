@@ -16,6 +16,8 @@ Shader "Natsuyasumi/Ground"
         _BaseColor("Tint", Color) = (1,1,1,1)
         _EdgeSharp("Path edge", Range(0.02,0.5)) = 0.16
         _Wrap("Light Wrap", Range(0,1)) = 0.25
+        // 絵の 明暗から 起こす 凹凸の つよさ。0 で 平ら
+        _BumpStrength("Ground bump", Range(0,6)) = 2.2
     }
 
     SubShader
@@ -33,6 +35,7 @@ Shader "Natsuyasumi/Ground"
             half4  _BaseColor;
             half   _Wrap;
             half   _EdgeSharp;
+            half   _BumpStrength;
         CBUFFER_END
 
         TEXTURE2D(_GrassMap);  SAMPLER(sampler_GrassMap);
@@ -107,7 +110,23 @@ Shader "Natsuyasumi/Ground"
                 half t = smoothstep(0.5h - e, 0.5h + e, IN.dirt + wob * 0.14h);
                 half3 albedo = lerp(grass, dirt, t) * _BaseColor.rgb;
 
+                // ★**地めんに 凹凸の 陰を つける。**（2026-08-16・本人「地面はのっぺり」）
+                //   法線の 絵は わざわざ 用意しない。**いま 貼って いる 絵の 明暗を
+                //   高さと 見なして**、よこと たての 差から 面の 向きを 作る。
+                //   草の 株ひとつずつに 光の 向きが つき、板 1枚だった 草地が 起伏に 見える。
+                //   ※絵を 足さない ので 容量も ふえない
+                float2 duv = float2(1.0 / 48.0, 0.0);       // 絵は 48px
+                half hL = dot(SAMPLE_TEXTURE2D(_GrassMap, sampler_GrassMap, uvG - duv.xy).rgb, half3(0.3, 0.6, 0.1));
+                half hR = dot(SAMPLE_TEXTURE2D(_GrassMap, sampler_GrassMap, uvG + duv.xy).rgb, half3(0.3, 0.6, 0.1));
+                half hD = dot(SAMPLE_TEXTURE2D(_GrassMap, sampler_GrassMap, uvG - duv.yx).rgb, half3(0.3, 0.6, 0.1));
+                half hU = dot(SAMPLE_TEXTURE2D(_GrassMap, sampler_GrassMap, uvG + duv.yx).rgb, half3(0.3, 0.6, 0.1));
+                // 土の ところは 凹凸を 弱める（ふみ固められた 道なので）
+                half bumpK = _BumpStrength * lerp(1.0h, 0.35h, t);
+                float3 bump = float3((hL - hR) * bumpK, 1.0, (hD - hU) * bumpK);
+
                 float3 N = normalize(IN.normalWS);
+                // 地めんは ほぼ 水平なので、接線を 世界の X/Z に とって よい
+                N = normalize(N + float3(bump.x, 0, bump.z));
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
                 Light mainLight = GetMainLight(shadowCoord);
                 half ndl = saturate(dot(N, mainLight.direction));

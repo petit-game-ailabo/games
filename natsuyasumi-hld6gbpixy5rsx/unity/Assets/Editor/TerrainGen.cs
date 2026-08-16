@@ -382,7 +382,25 @@ public static class TerrainGen {
                 h = Mathf.Lerp(h, Mathf.Min(h, bed), t);
             }
         }
-        return h;
+        return h + Bumps(x, z);
+    }
+
+    // ★**谷そこの 起伏。**（2026-08-16・本人「地面こそ、本来はもっと凸凹があるもんじゃない？」）
+    //
+    //   FlatWeight が 谷そこを 高さ -0.52 に **数学的に まっ平ら**に していたので、
+    //   草地が 定規で ならした 面に なって いた。法線を 貼って「凸凹に 見せる」より、
+    //   **ほんとうに 起伏を 入れる**ほうが 順番として 正しい。
+    //
+    //   ただし **歩けなく しては いけない。** 田んぼの ある 谷そこは もともと 平らな
+    //   ところなので、振れは ±12cm、うねりの 波長は 7〜17m。これで 傾きは
+    //   いちばん 急な ところでも 0.05（3度）ほどに おさまる。
+    //   道は 別に 高さを 解いて そこへ 96% 寄せる ので、**道の 上は 平らな まま**。
+    const float BumpAmp = 0.12f;
+    static float Bumps(float x, float z) {
+        float a = Mathf.Sin(x * 0.37f + 1.3f) * Mathf.Cos(z * 0.29f - 0.7f);          // 波長 17m
+        float b = Mathf.Sin(x * 0.61f - 2.1f + Mathf.Cos(z * 0.23f)) * 0.55f;         // 波長 10m
+        float c = Mathf.Cos(x * 0.83f + z * 0.71f) * 0.30f;                            // 波長 7m
+        return (a + b + c) * BumpAmp * 0.55f;
     }
 
     /// <summary>その 場所の 地めんの 高さ（道を 削った あと）</summary>
