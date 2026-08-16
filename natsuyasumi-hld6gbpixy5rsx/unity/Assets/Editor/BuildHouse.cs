@@ -41,22 +41,42 @@ public static class BuildHouse {
     }
 
     // 間取り（m）。原点は 家の まんなか
-    public const float X0 = -5.4f, X1 = 5.4f;     // 横 10.8m
-    public const float Z0 = -3.9f, Z1 = 3.9f;     // 奥ゆき 7.8m
-    public const float DomaX = 1.8f;              // これより 右が 土間
-    public const float MidZ = 0.0f;               // 田の字の 前後の 仕切り
-    public const float MidX = -1.8f;              // 田の字の 左右の 仕切り
+    //
+    // ★2026-08-17：**大農家の 実寸まで 広げ、中廊下を 通した。**
+    //   本人「母屋は乗数が少ない。仕切りがない状態で1部屋でいい。しかも廊下とかもない。
+    //         田舎の家の広さが分かってないからちゃんと調べてね」
+    //
+    //   調べた ところ（民家園などの 公開されて いる 実寸の 幅）：
+    //    - 中〜大規模の 農家の 母屋は **桁行(間口) 8〜13間＝14.5〜23.6m、
+    //      梁間(奥ゆき) 4〜6.5間＝7.3〜11.8m**。前の 18x9.6m は 中規模の 下のほう
+    //    - **土間は 平面の 3分の1 を しめる ことも ある**（かまど・作業・農具）
+    //    - 座敷は 10〜12畳が ふつうだが、**大農家の 広間(でい)は 20畳を こえる**
+    //    - 明治いこうの 民家には **中廊下**が 通る。外の 縁側と 内の 廊下の 2本立て
+    //
+    //   → 24.0 x 12.0m（桁行 13間・梁間 6.6間）。土間 7.5m ぶん＝90平米。
+    //     床上は 3列 x 2行 の 6部屋で、1部屋 27〜32平米＝**16〜19畳**。
+    //     そのあいだに **中廊下 1.5m** を 東西に 通す。
+    //   ★屋根は 原点を まん中と して 組む ので 左右対称は くずさない
+    public const float X0 = -12.0f, X1 = 12.0f;   // 横 24.0m（桁行 13間）
+    public const float Z0 = -6.0f, Z1 = 6.0f;     // 奥ゆき 12.0m（梁間 6.6間）
+    public const float DomaX = 4.5f;              // これより 右が 土間（7.5m）
+    // **中廊下**。床上を 手前と おくに 分ける（ここが 通り道に なる）
+    public const float RoukaZ0 = -0.6f, RoukaZ1 = 0.9f;
+    public const float MidZ = 0.15f;              // 廊下の まん中（部屋わけの しきい）
+    // たての 仕切り 2本＝床上が 3列
+    public const float MidX = -6.75f;
+    public const float MidX2 = -1.5f;
     public const float F1 = 0f;                   // 1階の 床
     public const float H1 = 2.35f;                // 1階の 高さ
     public const float F2 = H1 + 0.18f;           // 2階の 床
     public const float H2 = 2.05f;                // 2階の 高さ
     public const float WallTop = F2 + H2;         // 軒げたが のる 高さ（4.58）
-    public const float EngawaZ = Z1 + 0.9f;       // 縁側の そと ばし
-    public const float DoorX = 3.6f;              // 玄関の まん中
+    public const float EngawaZ = Z1 + 1.2f;       // 縁側の そと ばし
+    public const float DoorX = 8.25f;             // 玄関の まん中（土間 4.5〜12.0 の まん中）
     // **玄関は 広く とる。** 1.6m で 引き戸を 半分 立てたら、あいた すきまが
     // 体の 幅(0.52m)と ほぼ 同じに なり、戸の はしに 引っかかって 入れなかった
-    public const float DoorW = 2.4f;
-    public const float DoorLeaf = 0.9f;          // 立って いる 戸の 幅
+    public const float DoorW = 3.0f;
+    public const float DoorLeaf = 1.2f;          // 立って いる 戸の 幅
     /// <summary>人が 通れる ところの まん中</summary>
     public static float DoorOpenX { get { return DoorX + (DoorW * 0.5f - (DoorW * 0.5f - DoorLeaf)) * 0.5f; } }
 
@@ -142,8 +162,9 @@ public static class BuildHouse {
 
         // 座敷がわの 手前は 障子（縁側に 面する）。**桟を 組む。**
         // 桟の 無い 障子は 7.2m の まっ白な 板で、家の 顔が のっぺりする いちばんの 原因だった
-        for (int i = 0; i < 4; i++) {
-            float w = (DomaX - X0) / 4f;
+        // 間口が 12.6m に なった ので 障子は 7まい（1まい 1.8m ＝ 1間）
+        for (int i = 0; i < 9; i++) {
+            float w = (DomaX - X0) / 9f;
             float cx = X0 + w * (i + 0.5f);
             Front(box("H_Shoji" + i, t, new Vector3(cx, F1 + 0.95f, Z1),
                       new Vector3(w * 0.96f, 1.9f, 0.06f), m.paper));
@@ -164,17 +185,31 @@ public static class BuildHouse {
 
         // ---------- 中の 仕切り（田の字）
         // まん中の 仕切りは、**おくの 部屋へ 行くと 消える**
-        Mid(box("H_Fusuma_Z", t, new Vector3((X0 + DomaX) * 0.5f, F1 + H1 * 0.5f, MidZ),
+        // ★**中廊下**。手前の 部屋と おくの 部屋の あいだを 1.5m の 廊下が 通る。
+        //   ふすまは 廊下の 両がわに 立つ（おくへ 行くと 消える）
+        Mid(box("H_Fusuma_Z", t, new Vector3((X0 + DomaX) * 0.5f, F1 + H1 * 0.5f, RoukaZ1),
                 new Vector3(DomaX - X0, H1, 0.1f), m.paper));
-        Inner(box("H_Fusuma_X", t, new Vector3(MidX, F1 + H1 * 0.5f, (Z0 + Z1) * 0.5f),
-                  new Vector3(0.1f, H1, Z1 - Z0), m.paper));
+        Mid(box("H_Fusuma_Z2", t, new Vector3((X0 + DomaX) * 0.5f, F1 + H1 * 0.5f, RoukaZ0),
+                new Vector3(DomaX - X0, H1, 0.1f), m.paper));
+        // 廊下の 床は 板（畳では ない）
+        box("H_Rouka", t, new Vector3((X0 + DomaX) * 0.5f, F1 + 0.005f, (RoukaZ0 + RoukaZ1) * 0.5f),
+            new Vector3(DomaX - X0, 0.09f, RoukaZ1 - RoukaZ0), m.floor);
+        // たての 仕切りは **廊下で 切る**（廊下を ふさがない）
+        foreach (float mx in new[] { MidX, MidX2 }) {
+            Inner(box("H_FusumaXF" + (int)(mx * 10), t,
+                      new Vector3(mx, F1 + H1 * 0.5f, (RoukaZ1 + Z1) * 0.5f),
+                      new Vector3(0.1f, H1, Z1 - RoukaZ1), m.paper));
+            Inner(box("H_FusumaXB" + (int)(mx * 10), t,
+                      new Vector3(mx, F1 + H1 * 0.5f, (Z0 + RoukaZ0) * 0.5f),
+                      new Vector3(0.1f, H1, RoukaZ0 - Z0), m.paper));
+        }
         // 土間と 床上の さかいの 柱。**吹きぬけの 天まで 通す（通し柱）**
         for (int i = -1; i <= 1; i += 2)
             box("H_PostDoma" + i, t, new Vector3(DomaX, F1 + WallTop * 0.5f, i * (Z1 - 0.4f)),
                 new Vector3(0.19f, WallTop, 0.19f), m.wood);
         // 土間の 上の 梁（吹きぬけを 横に わたす 太い 木）。**農家の 土間の 顔**
-        for (int i = 0; i < 3; i++) {
-            float z = Z0 + 1.4f + i * 2.4f;
+        for (int i = 0; i < 5; i++) {
+            float z = Z0 + 1.4f + i * 2.5f;
             box("H_Hari" + i, t, new Vector3((DomaX + X1) * 0.5f, F1 + WallTop - 0.55f, z),
                 new Vector3(X1 - DomaX, 0.30f, 0.24f), m.wood);
         }
@@ -200,18 +235,19 @@ public static class BuildHouse {
         // 2階の 仕切り。**床と いっしょに 消す**（残すと 宙に 浮く）。
         // 外がわの 壁は 1階から 軒げたまで 1まいで 通す ように した ので ここには 立てない
         Upper(box("H_W2Mid", t, new Vector3(MidX, F2 + H2 * 0.5f, 0f), new Vector3(0.1f, H2, Z1 - Z0), m.paper));
+        Upper(box("H_W2Mid2", t, new Vector3(MidX2, F2 + H2 * 0.5f, 0f), new Vector3(0.1f, H2, Z1 - Z0), m.paper));
 
         // ---------- 屋根。入母屋を メッシュで 起こす。入ったら 消える
         var opt = new HouseRoof.Opt {
-            ax = X1, az = Z1, eave = 1.15f, yEave = F1 + WallTop + 0.04f,
-            rise = 1.90f, hipRun = 1.50f, tHip = 0.49f, sori = 1.34f,
+            ax = X1, az = Z1, eave = 1.35f, yEave = F1 + WallTop + 0.04f,
+            rise = 2.90f, hipRun = 3.40f, tHip = 0.49f, sori = 1.34f,
             tipLift = 0.17f, thick = 0.20f, texM = 1.5f,
         };
         roofs.AddRange(HouseRoof.Build(t, opt, m.roofM, m.woodM, null));
 
         // 縁側の 下屋（げや）。**母屋の 軒は 4.7m と 高すぎて 縁側に 影が かからない。**
         // 一段 低い 屋根を かけると、縁側が「軒の 下」に なって 日本の 家に 見える
-        roofs.AddRange(HouseRoof.Shed(t, "H_Geya", X0 - 0.15f, DomaX + 0.10f,
+        roofs.AddRange(HouseRoof.Shed(t, "H_Geya", X0 - 0.20f, DomaX + 0.10f,
                                       Z1 - 0.05f, EngawaZ + 0.55f,
                                       F1 + H1 + 0.42f, F1 + H1 - 0.10f, 1.5f, m.roofM, m.woodM));
         // 下屋を ささえる 柱。**縁側の 上に 立てる**（縁側の そとは 地めんが 0.5m 低いので
@@ -221,7 +257,7 @@ public static class BuildHouse {
                 new Vector3(i < 0 ? X0 + 0.30f : DomaX - 0.30f, F1 + 1.13f, EngawaZ - 0.12f),
                 new Vector3(0.15f, 2.36f, 0.15f), m.wood);
         // 玄関の 庇（ひさし）
-        roofs.AddRange(HouseRoof.Shed(t, "H_Hisashi", DoorX - 1.55f, DoorX + 1.55f,
+        roofs.AddRange(HouseRoof.Shed(t, "H_Hisashi", DoorX - 1.9f, DoorX + 1.9f,
                                       Z1 - 0.05f, Z1 + 1.25f,
                                       F1 + H1 + 0.38f, F1 + H1 - 0.02f, 1.5f, m.roofM, m.woodM));
 
@@ -316,8 +352,8 @@ public static class BuildHouse {
         Front(Yoko("H_Nuki_FR", t, frx, rw, ny, 0.16f, Z1, +1f, ND, m.woodFit(rw, 0.16f)));
 
         // --- 2階の 窓（手前）。**明かりとりが 無いと 家に 見えない**
-        for (int i = 0; i < 2; i++) {
-            float x = X0 + 1.7f + i * 3.0f;
+        for (int i = 0; i < 4; i++) {
+            float x = X0 + 2.6f + i * 4.4f;
             Front(NoHit(B("H_Mado2Waku" + i, t, new Vector3(x, F2 + 1.05f, Z1 + 0.10f),
                     new Vector3(1.62f, 1.32f, 0.05f), m.wood)));
             Front(NoHit(B("H_Mado2_" + i, t, new Vector3(x, F2 + 1.05f, Z1 + 0.13f),
@@ -326,8 +362,8 @@ public static class BuildHouse {
                       1.45f, 1.15f, 3, 3, m.wood));
         }
         // おくの 壁の 小さな 窓（虫籠窓ふう）
-        for (int i = 0; i < 3; i++) {
-            float x = X0 + 1.6f + i * 3.4f;
+        for (int i = 0; i < 5; i++) {
+            float x = X0 + 2.4f + i * 4.8f;
             NoHit(B("H_MadoB" + i, t, new Vector3(x, F2 + 1.0f, Face(Z0, -1f, 0.08f)),
                     new Vector3(1.1f, 0.85f, 0.08f), m.wood));
         }
@@ -440,105 +476,112 @@ public static class BuildHouse {
 
     // ---------- 部屋ごとの 中みを 入れる。
     //
-    // 田の字の 4間は、家具を 入れないと **どれも 同じ 畳の 四角**で、
+    // 部屋は 家具を 入れないと **どれも 同じ 畳の 四角**で、
     // 「台所」「ねま」「じぶんの 部屋」と 言われても どこの ことか 分からない。
-    // 何が 置いて あるかで 部屋の 役目を 見せる。
     //
-    // 田の字の 割りかた（本もの の 農家の ならび）
-    //   手前・土間より = 茶の間（家じゅうが 集まる ところ。ちゃぶ台と テレビ）
-    //   手前・おく     = 座敷（庭に 面した よそいき の 部屋。床の間）
-    //   おく・土間より = ねま（おじさん おばさん。たんすと 押入れ）
-    //   おく・おく     = 仏間
-    //   2階 左 = いとこの 部屋／2階 右 = じぶんの 部屋
+    // ★2026-08-17：六間取り（3列 x 2行）に なった ので 割りなおした。
+    //   列の まん中： 左 -6.9 ／ 中 -2.7 ／ 右 1.5
+    //   行の まん中： 手前(+Z) 2.4 ／ おく(-Z) -2.4
+    //   手前左=座敷 手前中=茶の間 手前右=おばあちゃんの へや
+    //   おく左=仏間 おく中=ねま おく右=なんど
+    //   2階 左=いとこの 部屋／中=じぶんの 部屋／右=屋根うら
     static void Rooms(Transform t, Mats m,
                       System.Func<string, Transform, Vector3, Vector3, Material, GameObject> box) {
-        // ===== 茶の間（居間）
-        {
-            float cx = 0f, cz = 2.0f;
-            // ちゃぶ台（丸い 低い つくえ）。脚は 4本
-            box("R_Chabudai", t, new Vector3(cx, F1 + 0.32f, cz), new Vector3(1.5f, 0.08f, 1.5f), m.wood);
-            for (int i = 0; i < 4; i++) {
-                float sx = (i % 2 == 0 ? -1f : 1f) * 0.55f, sz = (i < 2 ? -1f : 1f) * 0.55f;
-                box("R_ChabuAshi" + i, t, new Vector3(cx + sx, F1 + 0.15f, cz + sz),
-                    new Vector3(0.08f, 0.30f, 0.08f), m.wood);
-            }
-            // 座ぶとん
-            box("R_Zabu1", t, new Vector3(cx - 1.1f, F1 + 0.04f, cz), new Vector3(0.62f, 0.08f, 0.62f), m.paper);
-            box("R_Zabu2", t, new Vector3(cx + 1.1f, F1 + 0.04f, cz), new Vector3(0.62f, 0.08f, 0.62f), m.paper);
-            // ブラウン管テレビ（台に のせる）。田舎の 茶の間の 主
-            box("R_TvDai", t, new Vector3(cx + 1.35f, F1 + 0.28f, cz + 1.5f), new Vector3(1.0f, 0.56f, 0.5f), m.wood);
-            box("R_Tv",    t, new Vector3(cx + 1.35f, F1 + 0.83f, cz + 1.5f), new Vector3(0.86f, 0.54f, 0.46f), m.plaster);
-            box("R_TvGamen",t, new Vector3(cx + 1.35f, F1 + 0.83f, cz + 1.26f), new Vector3(0.66f, 0.40f, 0.04f), m.stone);
-        }
+        // 列の まん中：(-12.0,-6.75) (-6.75,-1.5) (-1.5,4.5)
+        const float CL = -9.375f, CM = -4.125f, CR = 1.5f;
+        // 行の まん中：手前(0.9〜6.0) おく(-6.0〜-0.6)
+        const float RF = 3.45f, RB = -3.3f;
 
-        // ===== 座敷（床の間）
-        {
-            float cx = -3.6f;
-            box("R_Tokonoma",  t, new Vector3(cx, F1 + 0.09f, 2.9f), new Vector3(1.9f, 0.18f, 0.8f), m.wood);
-            box("R_Kakejiku",  t, new Vector3(cx, F1 + 1.35f, 3.24f), new Vector3(0.6f, 1.5f, 0.04f), m.paper);
-            box("R_Kabin",     t, new Vector3(cx + 0.62f, F1 + 0.38f, 2.9f), new Vector3(0.22f, 0.42f, 0.22f), m.stone);
-            box("R_TokoBashira",t, new Vector3(cx + 0.98f, F1 + H1 * 0.5f, 2.9f), new Vector3(0.14f, H1, 0.14f), m.wood);
-        }
+        // ===== 手前・左：座敷（床の間）
+        box("R_Tokonoma",   t, new Vector3(CL, F1 + 0.09f, Z1 - 0.5f), new Vector3(2.4f, 0.18f, 0.9f), m.wood);
+        box("R_Kakejiku",   t, new Vector3(CL, F1 + 1.45f, Z1 - 0.12f), new Vector3(0.7f, 1.7f, 0.04f), m.paper);
+        box("R_Kabin",      t, new Vector3(CL + 0.8f, F1 + 0.40f, Z1 - 0.5f), new Vector3(0.24f, 0.44f, 0.24f), m.stone);
+        box("R_TokoBashira",t, new Vector3(CL + 1.25f, F1 + H1 * 0.5f, Z1 - 0.5f), new Vector3(0.15f, H1, 0.15f), m.wood);
+        box("R_Zabu0",      t, new Vector3(CL, F1 + 0.04f, RF - 0.6f), new Vector3(0.62f, 0.08f, 0.62f), m.paper);
 
-        // ===== ねま（おじさん・おばさん）
-        {
-            float cx = 0f, cz = -2.2f;
-            // たんす（引き出しの すじを 入れる）
-            box("R_Tansu", t, new Vector3(cx + 1.1f, F1 + 0.62f, cz - 1.2f), new Vector3(1.5f, 1.25f, 0.55f), m.wood);
-            for (int i = 0; i < 3; i++)
-                box("R_TansuHiki" + i, t, new Vector3(cx + 1.1f, F1 + 0.28f + i * 0.36f, cz - 0.93f),
-                    new Vector3(1.32f, 0.06f, 0.04f), m.floor);
-            // 押入れ。**まっ白な 板 1枚では ただの 空白に 見える。**
-            // 木の わくを 組んで、その中に ふすま 2枚を はめる
-            box("R_OshiireHako", t, new Vector3(cx - 1.3f, F1 + 0.90f, Z0 + 0.35f), new Vector3(1.9f, 1.85f, 0.6f), m.wood);
-            for (int i = -1; i <= 1; i += 2)
-                box("R_OshiireFusuma" + i, t, new Vector3(cx - 1.3f + i * 0.45f, F1 + 0.90f, Z0 + 0.66f),
-                    new Vector3(0.84f, 1.68f, 0.04f), m.paper);
-            box("R_OshiireNaka", t, new Vector3(cx - 1.3f, F1 + 0.92f, Z0 + 0.35f), new Vector3(1.92f, 0.07f, 0.62f), m.wood);
-            box("R_Futon1",   t, new Vector3(cx - 1.3f, F1 + 0.13f, cz + 0.4f), new Vector3(1.4f, 0.22f, 0.9f), m.floor);
-            box("R_Futon2",   t, new Vector3(cx - 1.3f, F1 + 0.33f, cz + 0.4f), new Vector3(1.3f, 0.20f, 0.85f), m.paper);
+        // ===== 手前・中：茶の間
+        box("R_Chabudai", t, new Vector3(CM, F1 + 0.32f, RF), new Vector3(1.6f, 0.08f, 1.6f), m.wood);
+        for (int i = 0; i < 4; i++) {
+            float sx = (i % 2 == 0 ? -1f : 1f) * 0.58f, sz = (i < 2 ? -1f : 1f) * 0.58f;
+            box("R_ChabuAshi" + i, t, new Vector3(CM + sx, F1 + 0.15f, RF + sz),
+                new Vector3(0.08f, 0.30f, 0.08f), m.wood);
         }
+        box("R_Zabu1", t, new Vector3(CM - 1.3f, F1 + 0.04f, RF), new Vector3(0.62f, 0.08f, 0.62f), m.paper);
+        box("R_Zabu2", t, new Vector3(CM + 1.3f, F1 + 0.04f, RF), new Vector3(0.62f, 0.08f, 0.62f), m.paper);
+        // ブラウン管テレビ。田舎の 茶の間の 主
+        box("R_TvDai",  t, new Vector3(CM, F1 + 0.28f, Z1 - 0.6f), new Vector3(1.0f, 0.56f, 0.5f), m.wood);
+        box("R_Tv",     t, new Vector3(CM, F1 + 0.83f, Z1 - 0.6f), new Vector3(0.86f, 0.54f, 0.46f), m.plaster);
+        box("R_TvGamen",t, new Vector3(CM, F1 + 0.83f, Z1 - 0.84f), new Vector3(0.66f, 0.40f, 0.04f), m.stone);
 
-        // ===== 仏間
-        {
-            float cx = -3.6f, cz = -2.6f;
-            box("R_Butsudan",  t, new Vector3(cx, F1 + 0.85f, Z0 + 0.4f), new Vector3(1.1f, 1.7f, 0.55f), m.wood);
-            box("R_ButsuOku",  t, new Vector3(cx, F1 + 1.0f, Z0 + 0.18f), new Vector3(0.86f, 1.1f, 0.06f), m.stone);
-            box("R_Rin",       t, new Vector3(cx + 0.62f, F1 + 0.12f, cz + 0.5f), new Vector3(0.2f, 0.16f, 0.2f), m.stone);
+        // ===== 手前・右：おばあちゃんの へや
+        box("R_Kyodai",      t, new Vector3(CR, F1 + 0.34f, Z1 - 0.6f), new Vector3(1.0f, 0.62f, 0.45f), m.wood);
+        box("R_KyodaiKagami",t, new Vector3(CR, F1 + 1.05f, Z1 - 0.7f), new Vector3(0.5f, 0.72f, 0.05f), m.stone);
+        box("R_Tansu2",      t, new Vector3(CR + 1.5f, F1 + 0.62f, RF + 0.6f), new Vector3(1.3f, 1.25f, 0.55f), m.wood);
+        for (int i = 0; i < 3; i++)
+            box("R_Tansu2H" + i, t, new Vector3(CR + 1.5f, F1 + 0.28f + i * 0.36f, RF + 0.33f),
+                new Vector3(1.14f, 0.06f, 0.04f), m.floor);
+        box("R_Zabu3", t, new Vector3(CR - 0.9f, F1 + 0.04f, RF - 0.4f), new Vector3(0.62f, 0.08f, 0.62f), m.paper);
+
+        // ===== おく・左：仏間
+        box("R_Butsudan", t, new Vector3(CL, F1 + 0.90f, Z0 + 0.45f), new Vector3(1.2f, 1.8f, 0.6f), m.wood);
+        box("R_ButsuOku", t, new Vector3(CL, F1 + 1.05f, Z0 + 0.18f), new Vector3(0.94f, 1.2f, 0.06f), m.stone);
+        box("R_Rin",      t, new Vector3(CL + 0.7f, F1 + 0.12f, RB + 0.6f), new Vector3(0.2f, 0.16f, 0.2f), m.stone);
+        box("R_Zabu4",    t, new Vector3(CL, F1 + 0.04f, RB + 0.3f), new Vector3(0.62f, 0.08f, 0.62f), m.paper);
+
+        // ===== おく・中：ねま
+        // 押入れ。**まっ白な 板 1枚では ただの 空白に 見える。**わくを 組んで ふすまを はめる
+        box("R_OshiireHako", t, new Vector3(CM, F1 + 0.90f, Z0 + 0.35f), new Vector3(2.4f, 1.85f, 0.6f), m.wood);
+        for (int i = -1; i <= 1; i += 2)
+            box("R_OshiireFusuma" + i, t, new Vector3(CM + i * 0.58f, F1 + 0.90f, Z0 + 0.66f),
+                new Vector3(1.08f, 1.68f, 0.04f), m.paper);
+        box("R_OshiireNaka", t, new Vector3(CM, F1 + 0.92f, Z0 + 0.35f), new Vector3(2.42f, 0.07f, 0.62f), m.wood);
+        box("R_Futon1", t, new Vector3(CM, F1 + 0.13f, RB + 0.5f), new Vector3(1.4f, 0.22f, 2.0f), m.floor);
+        box("R_Futon2", t, new Vector3(CM, F1 + 0.33f, RB + 0.7f), new Vector3(1.3f, 0.20f, 1.5f), m.paper);
+        box("R_Makura1",t, new Vector3(CM, F1 + 0.30f, RB - 0.6f), new Vector3(0.7f, 0.16f, 0.34f), m.paper);
+
+        // ===== おく・右：なんど（物置）
+        box("R_Tansu", t, new Vector3(CR + 1.4f, F1 + 0.62f, RB), new Vector3(1.4f, 1.25f, 0.55f), m.wood);
+        for (int i = 0; i < 3; i++)
+            box("R_TansuHiki" + i, t, new Vector3(CR + 1.4f, F1 + 0.28f + i * 0.36f, RB - 0.27f),
+                new Vector3(1.22f, 0.06f, 0.04f), m.floor);
+        for (int i = 0; i < 5; i++) {
+            float x = CR - 1.5f + (i % 3) * 0.62f, y = F1 + 0.24f + (i / 3) * 0.46f;
+            box("R_Tawara" + i, t, new Vector3(x, y, Z0 + 0.7f), new Vector3(0.56f, 0.44f, 0.8f), m.floor);
         }
+        box("R_Kuwa", t, new Vector3(CR - 0.2f, F1 + 0.75f, Z0 + 0.2f), new Vector3(0.08f, 1.5f, 0.08f), m.wood);
 
         // ===== 2階。
         // ★**2階の 中みは 2階の 床と いっしょに 消す（Upper に 入れる）。**
-        //   1階の おくに いると 2階の 床が 消えるので、床だけ 消して 家具を 残すと
-        //   **布団や 窓が 宙に 浮いた 白い 板**に なり、何が 起きて いるのか 分からなく なった
-        //   （実さい それで 屋内が 白い 板だらけに 見えた）
+        //   床だけ 消して 家具を 残すと 布団や 窓が 宙に 浮いた 白い 板に なる
         // ひだり＝いとこの 部屋（机と 本だな）
-        {
-            float cx = -3.6f;
-            Upper(box("R2_Tsukue",   t, new Vector3(cx, F2 + 0.68f, Z0 + 0.6f), new Vector3(1.2f, 0.06f, 0.6f), m.wood));
-            for (int i = -1; i <= 1; i += 2)
-                Upper(box("R2_TsukueAshi" + i, t, new Vector3(cx + i * 0.52f, F2 + 0.35f, Z0 + 0.6f),
-                          new Vector3(0.07f, 0.66f, 0.5f), m.wood));
-            Upper(box("R2_Isu",      t, new Vector3(cx, F2 + 0.22f, Z0 + 1.3f), new Vector3(0.42f, 0.42f, 0.42f), m.wood));
-            Upper(box("R2_Hondana",  t, new Vector3(X0 + 0.4f, F2 + 0.75f, 1.4f), new Vector3(0.4f, 1.5f, 1.4f), m.wood));
-            for (int i = 0; i < 3; i++)
-                Upper(box("R2_Hon" + i, t, new Vector3(X0 + 0.4f, F2 + 0.35f + i * 0.45f, 1.4f),
-                          new Vector3(0.34f, 0.30f, 1.24f), m.paper));
-        }
+        Upper(box("R2_Tsukue", t, new Vector3(CL, F2 + 0.68f, Z0 + 0.7f), new Vector3(1.3f, 0.06f, 0.6f), m.wood));
+        for (int i = -1; i <= 1; i += 2)
+            Upper(box("R2_TsukueAshi" + i, t, new Vector3(CL + i * 0.57f, F2 + 0.35f, Z0 + 0.7f),
+                      new Vector3(0.07f, 0.66f, 0.5f), m.wood));
+        Upper(box("R2_Isu",     t, new Vector3(CL, F2 + 0.22f, Z0 + 1.5f), new Vector3(0.42f, 0.42f, 0.42f), m.wood));
+        Upper(box("R2_Hondana", t, new Vector3(X0 + 0.45f, F2 + 0.75f, RF), new Vector3(0.45f, 1.5f, 1.6f), m.wood));
+        for (int i = 0; i < 3; i++)
+            Upper(box("R2_Hon" + i, t, new Vector3(X0 + 0.45f, F2 + 0.35f + i * 0.45f, RF),
+                      new Vector3(0.38f, 0.30f, 1.44f), m.paper));
 
-        // みぎ＝じぶんの 部屋（しきっぱなしの 布団と 夏休みの しゅくだい）
-        {
-            float cx = 0f;
-            Upper(box("R2_Futon",    t, new Vector3(cx, F2 + 0.24f, -1.6f), new Vector3(1.4f, 0.22f, 2.0f), m.floor));
-            Upper(box("R2_Kakebuton",t, new Vector3(cx, F2 + 0.40f, -1.4f), new Vector3(1.32f, 0.18f, 1.5f), m.paper));
-            Upper(box("R2_Makura",   t, new Vector3(cx, F2 + 0.36f, -2.5f), new Vector3(0.7f, 0.16f, 0.34f), m.paper));
-            Upper(box("R2_Chabu",    t, new Vector3(cx + 0.9f, F2 + 0.36f, 1.9f), new Vector3(1.1f, 0.07f, 0.8f), m.wood));
-            Upper(box("R2_Shukudai", t, new Vector3(cx + 0.9f, F2 + 0.41f, 1.9f), new Vector3(0.42f, 0.03f, 0.3f), m.paper));
-        }
+        // まんなか＝じぶんの 部屋（しきっぱなしの 布団と 夏休みの しゅくだい）
+        Upper(box("R2_Futon",     t, new Vector3(CM, F2 + 0.24f, RB), new Vector3(1.4f, 0.22f, 2.0f), m.floor));
+        Upper(box("R2_Kakebuton", t, new Vector3(CM, F2 + 0.40f, RB + 0.2f), new Vector3(1.32f, 0.18f, 1.5f), m.paper));
+        Upper(box("R2_Makura",    t, new Vector3(CM, F2 + 0.36f, RB - 0.9f), new Vector3(0.7f, 0.16f, 0.34f), m.paper));
+        Upper(box("R2_Chabu",     t, new Vector3(CM + 1.0f, F2 + 0.36f, RF), new Vector3(1.1f, 0.07f, 0.8f), m.wood));
+        Upper(box("R2_Shukudai",  t, new Vector3(CM + 1.0f, F2 + 0.41f, RF), new Vector3(0.42f, 0.03f, 0.3f), m.paper));
+        Upper(box("R2_Mushikago", t, new Vector3(CM - 1.2f, F2 + 0.24f, RF + 0.6f), new Vector3(0.34f, 0.4f, 0.34f), m.wood));
+
+        // みぎ＝屋根うら（つかって いない。行李と むしろ）
+        for (int i = 0; i < 3; i++)
+            Upper(box("R2_Kori" + i, t, new Vector3(CR - 0.6f + i * 0.1f, F2 + 0.22f + i * 0.4f, RB + 0.3f),
+                      new Vector3(1.1f, 0.38f, 0.7f), m.floor));
+        Upper(box("R2_Mushiro", t, new Vector3(CR + 1.2f, F2 + 0.06f, RF), new Vector3(1.2f, 0.08f, 1.8f), m.tatami));
 
         // ===== 台所（土間の 流しの となり）＝食器だな
-        box("R_Shokki", t, new Vector3(X1 - 1.05f, F1 + 0.35f, Z0 + 4.2f), new Vector3(1.2f, 1.5f, 0.5f), m.wood);
+        box("R_Shokki", t, new Vector3(X1 - 1.05f, F1 + 0.35f, Z0 + 5.4f), new Vector3(1.2f, 1.5f, 0.5f), m.wood);
     }
+
 
     static void Front(GameObject g) { Collect(g, front); }
     static void Upper(GameObject g) { Collect(g, upper); }

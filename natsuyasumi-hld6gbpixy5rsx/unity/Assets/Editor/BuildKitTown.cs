@@ -25,11 +25,11 @@ public static class BuildKitTown {
         var root = new GameObject("KitTown").transform;
         root.SetParent(parent, false);
 
-        Koya(root, 20f, 0.5f);
-        Mon(root, 26f, 7f);
-        Jetty(root, 31f, -2.0f);
-        Kidan(root, 41f, -1.5f);
-        Tou(root, 47f, -2.5f);
+        Koya(root, 32f, 1.5f);
+        Mon(root, 38f, 15f);
+        Jetty(root, 44f, -2.5f);
+        Kidan(root, 54f, -2.0f);
+        Tou(root, 61f, -3.0f);
 
         Debug.Log("[KitTown] 左の 町を 建てた: " + root.GetComponentsInChildren<MeshRenderer>().Length + " まとまり");
     }

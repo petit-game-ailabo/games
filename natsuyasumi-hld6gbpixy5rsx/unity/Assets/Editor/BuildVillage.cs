@@ -43,11 +43,11 @@ public static class BuildVillage {
     static void Kuruma(Transform root, Materials m,
                        System.Action<string, Transform, Vector3, Vector3, Material> box) {
         // 本道は z=7 を よこに 走る。すこし 北がわの 路肩に ならべる
-        const float RoadZ = 7f, Shoulder = 2.9f;
+        const float RoadZ = 15f, Shoulder = 3.2f;
         // ★**家の 正面には 立てない。** 等間かくに ならべたら ちょうど 玄関の まえに
         //   1本 立ち、家が 見えなく なった。母屋の 幅（±5.4m）は あける
         // 母屋(±5.4)も 納屋(6.3〜12.7)も よける。撮ったら 柱が 納屋の 屋根を 貫いて いた
-        float[] poleX = { -24f, -14f, 14f, 23f };
+        float[] poleX = { -34f, -24f, 21f, 30f, 48f };
         for (int i = 0; i < poleX.Length; i++) {
             float x = poleX[i];
             float z = RoadZ - Shoulder;
@@ -70,7 +70,7 @@ public static class BuildVillage {
         // カーブミラー（家へ 曲がる 辻）。
         // **道の 上には 立てない。**路肩の そとへ 出す（車が ぶつかる ところに 立って いた）
         {
-            float x = 3.4f, z = RoadZ + 2.6f;
+            float x = 12.0f, z = RoadZ + 2.9f;
             float y = TerrainGen.Height(x, z);
             box("Mirror_Hashira", root, new Vector3(x, y + 1.3f, z), new Vector3(0.09f, 2.6f, 0.09f), m.post);
             box("Mirror_Kagami",  root, new Vector3(x, y + 2.5f, z), new Vector3(0.55f, 0.55f, 0.06f),
@@ -79,7 +79,7 @@ public static class BuildVillage {
         // 待避所。**すれちがえない 道には かならず ある。**
         // 石を ならべて 路肩が ふくらんで いる ことを 見せる
         for (int i = -2; i <= 2; i++) {
-            float x = -8f + i * 0.9f, z = RoadZ + 2.2f;
+            float x = -18f + i * 0.9f, z = RoadZ + 2.4f;
             box("Taihi" + i, root, On(x, z, 0.12f), new Vector3(0.5f, 0.26f, 0.42f), m.stone);
         }
     }
@@ -136,7 +136,7 @@ public static class BuildVillage {
     static void Hatake(Transform root, Materials m,
                        System.Action<string, Transform, Vector3, Vector3, Material> box,
                        System.Action<string, Vector3, int, float> prop) {
-        float ox = -6f, oz = 16.5f;           // 畑の 左手前
+        float ox = -10f, oz = 18.5f;          // 畑の 左手前
         const int Rows = 6;
         const float RowLen = 9.5f, RowGap = 1.15f;
         for (int r = 0; r < Rows; r++) {
@@ -162,7 +162,7 @@ public static class BuildVillage {
     static void Nougu(Transform root, Materials m,
                       System.Action<string, Transform, Vector3, Vector3, Material> box) {
         const float W = 3.6f, D = 2.8f, H = 2.4f;
-        float cx = 5.5f, cz = 18.5f;
+        float cx = 4.0f, cz = 20.5f;
         float y = TerrainGen.Height(cx, cz);
 
         box("Nougu_Floor", root, new Vector3(cx, y + 0.07f, cz), new Vector3(W, 0.14f, D), m.floor);
@@ -239,7 +239,7 @@ public static class BuildVillage {
     // ---------------------------------------------------------------- 使われなく なった 井戸
     static void Ido(Transform root, Materials m,
                     System.Action<string, Transform, Vector3, Vector3, Material> box) {
-        float cx = -2.5f, cz = 11.5f;
+        float cx = -6.0f, cz = 16.0f;
         float y = TerrainGen.Height(cx, cz);
         // 石の わく（8角に ならべる）
         for (int i = 0; i < 8; i++) {
@@ -267,7 +267,7 @@ public static class BuildVillage {
     // 大きな 神社では ない。鳥居 1基と 石の 台に のった 小屋
     static void Hokora(Transform root, Materials m,
                        System.Action<string, Transform, Vector3, Vector3, Material> box) {
-        float cx = 15.5f, cz = -9.5f;
+        float cx = 26.0f, cz = -11.0f;
         float y = TerrainGen.Height(cx, cz);
 
         // 鳥居（手前に 1基）

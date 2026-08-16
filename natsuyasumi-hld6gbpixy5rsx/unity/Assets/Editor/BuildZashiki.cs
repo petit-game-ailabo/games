@@ -27,9 +27,9 @@ public static class BuildZashiki {
     const float WallH = 2.6f;    // 天井の 高さ
 
     // 庭（家の 左がわ）。地めんの 高さは -0.52m
-    const float GardenX = -RoomW * 0.5f - 5.6f;   // まんなか
-    const float GardenW = 12.4f;                  // 横 [-15.4, -3.0] ぐらい
-    const float GardenZ = 0.9f, GardenD = 13.5f;  // 奥ゆき
+    const float GardenX = -6f;   // まんなか
+    const float GardenW = 40f;
+    const float GardenZ = 4f, GardenD = 28f;  // 奥ゆき
     const float GroundY = -0.52f;                 // 草木を 置く 高さ
 
     [MenuItem("なつやすみ/ざしきを 組み立てる")]
@@ -63,6 +63,12 @@ public static class BuildZashiki {
         mPaper.SetColor("_EmissionColor", new Color(1.00f, 0.94f, 0.80f) * 0.85f);   // 裏から 光が すける
         mPaper.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 
+        // 面の 大きさに あわせて 貼りかたを 決める マテリアル工場。**家と 屋敷で 共有する**
+        var hmPlasterFit = FitMat("Plaster", ArtTex + "plaster_wall.png", 0.96f);
+        var hmWoodFit = FitMat("Wood", ArtTex + "wood_beam.png", 0.80f);
+        var hmKoshiFit = FitMat("Koshi", ArtTex + "wood_beam.png", 0.88f,
+                                new Color(0.48f, 0.42f, 0.36f));
+
         var root = new GameObject("Zashiki").transform;
         billboards.Clear();
 
@@ -82,18 +88,17 @@ public static class BuildZashiki {
                 soil = Mat("DomaSoil", ArtTex + "dirt_path.png", new Vector2(3f, 2f), 0f, 1f),
                 roofM = Mat("RoofTileMesh", ArtTex + "roof_tile.png", Vector2.one, 0f, 0.86f),
                 woodM = Mat("WoodMesh", ArtTex + "wood_beam.png", Vector2.one, 0f, 0.80f),
-                plasterFit = FitMat("Plaster", ArtTex + "plaster_wall.png", 0.96f),
-                woodFit = FitMat("Wood", ArtTex + "wood_beam.png", 0.80f),
+                plasterFit = hmPlasterFit,
+                woodFit = hmWoodFit,
                 // 腰の 下見板は **柱より ぐっと 暗く**。本ものの 下見板は 柿渋や すすで
                 // 黒に 近い 焦茶に なる。柱と 同じ 明るさだと 板の すじが 見えて いても
                 // 「暗い かたまり」に しか 読めなかった（絵ではなく 明暗の 差が 足りなかった）
-                koshiFit = FitMat("Koshi", ArtTex + "wood_beam.png", 0.88f,
-                                  new Color(0.48f, 0.42f, 0.36f)),
+                koshiFit = hmKoshiFit,
             };
             cutPieces = BuildHouse.Build(root, hm, (nm, par, pos, size, mat) => Box(nm, par, pos, size, mat));
             shojiPaperRenderer = null;
             // 行灯（居間）
-            var andon = Box("Andon", root, new Vector3(-3.4f, 0.55f, -1.6f),
+            var andon = Box("Andon", root, new Vector3(-4.1f, 0.55f, -3.0f),
                             new Vector3(0.34f, 1.1f, 0.34f), mPaper);
             var lampGO = new GameObject("Andon_Light");
             lampGO.transform.SetParent(andon.transform, false);
@@ -101,10 +106,10 @@ public static class BuildZashiki {
             lamp.type = LightType.Point; lamp.color = new Color(1f, 0.82f, 0.55f);
             lamp.intensity = 3.2f; lamp.range = 7f; lamp.shadows = LightShadows.Soft;
             // ちゃぶ台（居間）
-            Box("Table_Top", root, new Vector3(-3.4f, 0.34f, 1.4f), new Vector3(1.3f, 0.07f, 0.9f), mFloorW);
+            Box("Table_Top", root, new Vector3(-9.4f, 0.34f, 3.6f), new Vector3(1.3f, 0.07f, 0.9f), mFloorW);
             for (int i = 0; i < 4; i++) {
                 float sx = (i % 2 == 0) ? -1 : 1, sz = (i < 2) ? -1 : 1;
-                Box("Table_Leg" + i, root, new Vector3(-3.4f + sx * 0.55f, 0.17f, 1.4f + sz * 0.36f),
+                Box("Table_Leg" + i, root, new Vector3(-9.4f + sx * 0.55f, 0.17f, 3.6f + sz * 0.36f),
                     new Vector3(0.07f, 0.34f, 0.07f), mWood);
             }
         }
@@ -152,8 +157,8 @@ public static class BuildZashiki {
         var marisa = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_8x8.png");
         if (marisa == null) Debug.LogError("[BuildZashiki] marisa_8x8.png が 見つからない");
         // 玄関の 前から はじめる（家は 扉から 入る）
-        Vector3 p1 = new Vector3(BuildHouse.DoorOpenX, TerrainGen.Height(BuildHouse.DoorOpenX, 6.2f) + 0.1f, 6.2f);
-        Vector3 p2 = new Vector3(-3.4f, 0.05f, 1.2f);
+        Vector3 p1 = new Vector3(BuildYashiki.GateX, TerrainGen.Height(BuildYashiki.GateX, 15.6f) + 0.1f, 15.6f);
+        Vector3 p2 = new Vector3(-4.1f, 0.05f, 3.0f);
         var player = MakeChar("Marisa", marisa, 0, p1, root, MarisaCols, MarisaRows, MarisaCellW, MarisaCellH);
         var partner = MakeChar("Daiyou", chars, CI_DAIYOU, p2, root);
         // あるけるように する。当たりは カプセル、壁や 卓は 箱の あたりで 止まる
@@ -373,7 +378,7 @@ public static class BuildZashiki {
         // 降らせる 範囲。**部屋の 上には かけない。**
         // 屋根を 切りとった 見せかたなので、部屋に 降らせると 雨もりに 見える。
         // カメラは 右手前から 覗くので、見えているのは 家の むこうの 庭がわ＝そこに 降らせれば 足りる
-        wx.rain = Rain(root, new Vector3(GardenX - 1.5f, 7.5f, GardenZ), new Vector3(22f, 0.5f, 24f));
+        wx.rain = Rain(root, new Vector3(GardenX, 9.5f, GardenZ), new Vector3(60f, 0.5f, 44f));
         // ※ もやの つぶは **やめた。** 板が 大きいので、どんな 重ねかたに しても
         //   四角い ふちが 見えて 湯気の かたまりに なった。もやは RenderSettings の 霧で 足りる
         wx.mist = null;
@@ -456,6 +461,16 @@ public static class BuildZashiki {
             woodM = Mat("WoodMesh2", ArtTex + "wood_beam.png", Vector2.one, 0f, 0.80f),
             soilM = Mat("SoilMesh", ArtTex + "dirt_path.png", Vector2.one, 0f, 1f),
         };
+        // ★**屋敷ひとそろい**（石垣・門・蔵・離れ・庭・屋敷林）。2026-08-17
+        BuildYashiki.Build(root, new BuildYashiki.Mats {
+            stone = mStone, wood = mNaya, plaster = mPlaster, floor = mFloorW,
+            roof = mThatch, post = mPost, tatami = mTatami,
+            roofM = vmat.roofM, woodM = vmat.woodM,
+            plasterFit = hmPlasterFit, woodFit = hmWoodFit, koshiFit = hmKoshiFit,
+        }, (nm, par, pos, size, mat) => Box(nm, par, pos, size, mat),
+           (nm, pos, kind, h) => NatureTinted(nm, nature, kind == 0 ? NA_KI_L : NA_KI_R,
+                                              pos, h, root, new Color(0.88f, 0.98f, 0.88f)));
+
         BuildVillage.Build(root, vmat,
             (nm, par, pos, size, mat) => Box(nm, par, pos, size, mat),
             (nm, pos, kind, h) => {
@@ -1130,16 +1145,27 @@ public static class BuildZashiki {
                 area = new Bounds(new Vector3((x0 + x1) * 0.5f, y, (z0 + z1) * 0.5f),
                                   new Vector3(x1 - x0, H, z1 - z0)),
             };
-        float X0 = BuildHouse.X0, MidX = BuildHouse.MidX, DomaX = BuildHouse.DomaX;
-        float Z0 = BuildHouse.Z0, MidZ = BuildHouse.MidZ, Z1 = BuildHouse.Z1;
+        float X0 = BuildHouse.X0, MidX = BuildHouse.MidX, MidX2 = BuildHouse.MidX2;
+        float DomaX = BuildHouse.DomaX, X1 = BuildHouse.X1;
+        float Z0 = BuildHouse.Z0, Z1 = BuildHouse.Z1;
+        float RA = BuildHouse.RoukaZ0, RB = BuildHouse.RoukaZ1;
         return new[] {
-            mk("ちゃのま",                    MidX, DomaX, MidZ, Z1, f1),
-            mk("ざしき",                      X0, MidX, MidZ, Z1, f1),
-            mk("おじさんたちの ねま",          MidX, DomaX, Z0, MidZ, f1),
-            mk("ぶつま",                      X0, MidX, Z0, MidZ, f1),
-            mk("だいどころ（どま）",           DomaX, BuildHouse.X1, Z0, Z1, f1),
+            // 手前の 列（縁側がわ）
+            mk("ざしき",                      X0, MidX, RB, Z1, f1),
+            mk("ちゃのま",                    MidX, MidX2, RB, Z1, f1),
+            mk("おばあちゃんの へや",          MidX2, DomaX, RB, Z1, f1),
+            // 中廊下
+            mk("ろうか",                      X0, DomaX, RA, RB, f1),
+            // おくの 列
+            mk("ぶつま",                      X0, MidX, Z0, RA, f1),
+            mk("おじさんたちの ねま",          MidX, MidX2, Z0, RA, f1),
+            mk("なんど",                      MidX2, DomaX, Z0, RA, f1),
+            // 土間
+            mk("だいどころ（どま）",           DomaX, X1, Z0, Z1, f1),
+            // 2階
             mk("いとこの へや",               X0, MidX, Z0, Z1, f2),
-            mk("じぶんの へや",               MidX, DomaX, Z0, Z1, f2),
+            mk("じぶんの へや",               MidX, MidX2, Z0, Z1, f2),
+            mk("やねうら",                    MidX2, DomaX, Z0, Z1, f2),
         };
     }
 

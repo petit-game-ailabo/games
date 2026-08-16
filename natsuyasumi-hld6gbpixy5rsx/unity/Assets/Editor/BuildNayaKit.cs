@@ -26,7 +26,7 @@ public static class BuildNayaKit {
     // 建てる ところ。**母屋の 軒(x=6.55)に かからない ように 右へ よせる。**
     // 前の 納屋は cx=9.5 だったが、キットの 屋根は 8.25m 幅で 軒が 1.1m 出るので
     // そのままだと 母屋の 屋根と 重なる
-    const float CX = 11.0f, CZ = -2.2f;
+    const float CX = 24.0f, CZ = -3.0f;
 
     public static void Build(Transform parent) {
         // ---------- 地めん。**絵では 高さが 読めない。数字を 出してから 決める**
