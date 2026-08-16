@@ -44,17 +44,6 @@ public class CamOrbit : MonoBehaviour {
     [Tooltip("地めんから これだけは 浮かせる。0 で 切る")]
     public float groundClearance = 1.6f;
 
-    // ---- 壁ぬけよけ（カメラを 手前に 引き寄せる）
-    [Tooltip("壁に 当たった とき、その 手前 何m で 止めるか")]
-    public float occludePad = 0.45f;
-    [Tooltip("カメラの 太さ。ニアクリップより 大きく とる")]
-    public float occludeRadius = 0.34f;
-    [Tooltip("どれだけ 近づいても これより 寄らない")]
-    public float minDistance = 1.6f;
-    [Tooltip("これより 小さい 物は よけない（電柱などは ディザで 抜ける）")]
-    public float occludeMinSize = 1.6f;
-    float occDist = 99f;
-
     // いま 実さいに 使って いる 値（base ＝ 上の pitch/yaw/distance）
     float curPitch, curYaw, curDist, curFog = 1f;
     Vector3 curOff;
@@ -134,50 +123,13 @@ public class CamOrbit : MonoBehaviour {
         var rot = Quaternion.Euler(curPitch, curYaw, 0f);
         var pos = target - (rot * Vector3.forward) * curDist;
 
-        // ★**壁の 中に 入らない ように 手前へ 引き寄せる。**（2026-08-16）
-        //
-        //   主人公の まわりを ちらして 抜く しかけ(DitherLit)は、
-        //   **カメラと 主人公の あいだに 壁が ある**ときにしか 効かない。
-        //   カメラ そのものが 壁の 中に 入ると、壁は ニアクリップの 向こうに なって
-        //   そもそも 描かれず、画面が 家の 中の べつの 面で うまる（実さい そうなった）。
-        //   3Dゲームで ふつうに つかわれる 手＝**カメラを 手前に 引き寄せる**
-        //  （Cinemachine の Deoccluder と 同じ こと）。
-        //
-        //   主人公から カメラへ 球を 飛ばして、当たったら その 手前で 止める。
-        //   ※見えない かべ・屋根は 層2(Ignore Raycast)なので 拾わない＝
-        //     見えない ものに カメラが 押されない
-        if (Application.isPlaying && occludePad > 0f) {
-            var from = target;
-            var dir = pos - from;
-            float len = dir.magnitude;
-            if (len > 0.01f) {
-                dir /= len;
-                // ★**細い ものでは 寄せない。**（2026-08-17）
-                //   電柱や 鳥居の 柱で カメラが ぐいぐい 寄って いた。
-                //   ああいう 細い ものは **ディザで 抜ける**ので よけなくて よい。
-                //   よけるのは 壁や 屋根の ような **大きな 面**だけ。
-                //   いちばん 近い「大きい」当たりを さがす
-                var hits = Physics.SphereCastAll(from, occludeRadius, dir, len,
-                                                 ~(1 << 2), QueryTriggerInteraction.Ignore);
-                bool blocked = false; var oh = new RaycastHit();
-                for (int i = 0; i < hits.Length; i++) {
-                    var b = hits[i].collider.bounds.size;
-                    if (Mathf.Max(b.x, Mathf.Max(b.y, b.z)) < occludeMinSize) continue;
-                    if (hits[i].distance <= 0.001f) continue;      // 中から 始まった ぶん
-                    if (!blocked || hits[i].distance < oh.distance) { oh = hits[i]; blocked = true; }
-                }
-                if (blocked) {
-                    // 近づけるのは すぐ、はなれるのは ゆっくり。
-                    // 逆に すると 柱の わきを 走る たびに カメラが がくがく 前後する
-                    float want = Mathf.Max(minDistance, oh.distance - occludePad);
-                    occDist = want < occDist ? want
-                            : Mathf.Lerp(occDist, want, 1f - Mathf.Exp(-3.5f * Time.deltaTime));
-                } else {
-                    occDist = Mathf.Lerp(occDist, len, 1f - Mathf.Exp(-3.5f * Time.deltaTime));
-                }
-                pos = from + dir * Mathf.Min(occDist, len);
-            }
-        }
+        // ★**カメラの 引き寄せは やめた。**（2026-08-17・本人
+        //   「キャラクターの手前に邪魔なものがあったときにカメラが動くやつ、やめよう。
+        //     建物の中でカメラが動き飛んでいく」）
+        //   壁に 当たるたびに 距離が 変わるので、**建物の 中では 壁が 四方に あって
+        //   カメラが あちこちへ 飛ぶ**。落ちついて 遊べない。
+        //   かわりに **建物は 扉を あけて 入り、入ったら 手前を 消す**（RoomCutaway）。
+        //   細い ものは これまでどおり ディザで 抜く（PixelSprite / DitherLit）
 
         // ★**地めんに もぐらせない。**
         //   高台は 山の 中ほどに 削った 棚なので、そこで カメラを 裏へ まわすと

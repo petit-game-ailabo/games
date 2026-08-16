@@ -468,8 +468,16 @@ public static class BuildZashiki {
         // CC0 の 針葉樹は 探した かぎり 見つからなかった（LPC Trees は CC-BY-SA、
         // Various pixel art trees は 配布停止、CraftPix の 無料版は 再配布 不可）。
         // → **まだらは 色づけで 出す。** CC0 なので 改変は 自由
+        // ★**山は 木で うまって いる。**（2026-08-17・本人
+        //   「裏山とか今の5倍ぐらい木が生えてないと。山って歩けない場所は木が大量で
+        //     地面なんてほぼ見えないはずだよね」）
+        //   まったく そのとおりで、実さいの 斜面は 岩肌と 沢すじ 以外 ほぼ 木に おおわれる。
+        //   これまでは 519本＝すきまだらけで「草の 山に 木が ぽつぽつ」だった。
+        //   **まく 回数を 増やし、木どうしの 間かくを つめる**（3.4m → 1.5m）。
+        //   板 1まいずつ なので 数は 増えるが、向きは BillboardField が
+        //   カメラの 向きが 変わった ときだけ まとめて 回すので 毎フレームの 手間は 増えない
         var rngTree = new System.Random(20260815);
-        var spots = TerrainGen.Scatter(9000, 12f, 70f, rngTree, 3.4f, true, true);
+        var spots = TerrainGen.Scatter(60000, 11f, 74f, rngTree, 1.5f, true, true);
         for (int i = 0; i < spots.Count; i++) {
             var sp = spots[i];
             bool conifer = sp.cover == TerrainGen.Cover.Conifer;
@@ -900,10 +908,13 @@ public static class BuildZashiki {
         int col = index % cols, row = index / cols;
         var uvS = new Vector2(1f / cols, 1f / rows);
         var uvO = new Vector2(col / (float)cols, (rows - 1 - row) / (float)rows);
-        // 呼吸は 背たけの 3.5%ぶん。周期は 2π/1.45 ≒ 4.3秒＝落ちついた いき。
-        // ずれ(_Phase)を 置き場所から 決めるので、ふたりが 同じ 拍で 動かない
+        // ★**上下の のびちぢみは やめた。**（2026-08-17・本人
+        //   「キャラクターの上下をやめて、瞬きにしよう。停止してる時でも瞬きで動きを表現する」）
+        //   ドット絵を たてに 引きのばすと **1ドットの 大きさが 変わって にじむ**。
+        //   止まって いる ときの「生きて いる 感じ」は **まばたき**（CharSprite の
+        //   Pose.Meturi）で 出す。絵を こわさずに 動きが 出る
         var m = SpriteMatNew(MatDir + "Char_" + name + ".mat", sheet, uvS, uvO,
-                             0.035f, 1.45f, 0.006f, 0.6f, PhaseOf(pos));
+                             0f, 0f, 0f, 0f, PhaseOf(pos));
         quad.GetComponent<Renderer>().sharedMaterial = m;
         var mr = quad.GetComponent<Renderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;   // 板でも 影は 出す
