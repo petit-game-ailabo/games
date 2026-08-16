@@ -141,6 +141,7 @@ public static class MegaKit {
                    && mi.materialSearch == ModelImporterMaterialSearch.Everywhere
                    && mi.useFileScale == false && mi.globalScale == 1f
                    && mi.bakeAxisConversion
+                   && mi.addCollider
                    && mi.importCameras == false;
             if (ok) continue;
             // ★**縮尺と 軸を そろえる。** そのまま 入れると 壁 1まいが
@@ -156,7 +157,15 @@ public static class MegaKit {
             mi.importCameras = false;
             mi.importLights = false;
             mi.importAnimation = false;
-            mi.addCollider = false;
+            // ★**あたりは 部品の 側に つける。**（2026-08-16・本人の 指摘
+            //   「先に 物に 当たり判定を 設定して おいて、それを 配置するんじゃない？
+            //     全部 同じ 当たり判定 1から って 実装も テストも 無理だよ」）
+            //   Unity の FBX 取りこみには **addCollider** が あって、
+            //   これを 立てると 部品ごとに **MeshCollider が 自動で つく**。
+            //   これまでは false の まま 手で 箱を ならべて いたので、
+            //   戸口を ふさいだり、八角の 塔に 四角い 箱を 8まい あてたり して いた。
+            //   形の とおりに 当たる ように なる＝**置くときは 何も 考えなくて よい**
+            mi.addCollider = true;
             EditorUtility.SetDirty(mi);
             mi.SaveAndReimport();
             n++;
@@ -268,6 +277,17 @@ public static class MegaKit {
         go.transform.localPosition = pos;
         go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f) * Quaternion.Euler(90f, 0f, 0f);
         go.transform.localScale = Vector3.one;
+
+        // ★**層の 分けかた。** あたりは ぜんぶ つくが、用途で 分ける。
+        //   層2(Ignore Raycast) は **レイに 出てこない**が、歩く あたりは そのまま 効く。
+        //    - 屋根・せり出し・ツタ … 層2。真下への レイが これを 地めんと 見なすと
+        //      **虫が 空中に わく**。カメラも 屋根に 押されると 画が はねる
+        //    - 壁・床・柱・小物 … 既定の 層。**カメラは これに 押されて 手前に 寄る**
+        bool overhead = piece.StartsWith("Roof_") || piece.StartsWith("Overhang_")
+                     || piece.StartsWith("Prop_Vine") || piece.StartsWith("Balcony_");
+        int layer = overhead ? 2 : 0;
+        go.layer = layer;
+        foreach (var t in go.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
         return go;
     }
 

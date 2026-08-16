@@ -57,11 +57,8 @@ public static class BuildKitTown {
         MegaKit.Put(t, "Prop_Crate", new Vector3(-1.2f, 0.05f, -1.2f), 14f);
         MegaKit.Put(t, "Prop_Crate", new Vector3(-1.2f, 1.10f, -1.1f), -8f);
         MegaKit.Put(t, "Prop_Wagon", new Vector3(1.1f, 0.05f, 0.2f), 96f);
-        // あたりは 柱と おくの 壁だけ（中は 通りぬけ できる）
-        MegaKit.Hit(t, new Vector3(0f, 1.6f, -hz), new Vector3(hx * 2f + 0.4f, 3.2f, 0.4f));
-        for (int sx = -1; sx <= 1; sx += 2)
-            for (int sz = -1; sz <= 1; sz += 2)
-                MegaKit.Hit(t, new Vector3(sx * hx, 1.6f, sz * hz), new Vector3(0.35f, 3.2f, 0.35f));
+        // あたりは 部品に ついて いる（addCollider）ので ここでは 置かない。
+        // 柱と おくの 壁にだけ 当たり、まん中は 通りぬけ できる＝形の とおり
     }
 
     // ---------------------------------------------------------------- 門
@@ -72,7 +69,6 @@ public static class BuildKitTown {
         for (int s = -1; s <= 1; s += 2) {
             MegaKit.Put(t, "Corner_Exterior_Brick", new Vector3(s * half, 0f, -0.25f), s > 0 ? 270f : 90f);
             MegaKit.Put(t, "Corner_Exterior_Brick", new Vector3(s * half, 0f, 0.25f), s > 0 ? 180f : 0f);
-            MegaKit.Hit(t, new Vector3(s * half, 1.6f, 0f), new Vector3(0.7f, 3.2f, 1.0f));
         }
         // アーチの かざり（うすい 板なので 両がわに 貼る）
         for (int i = -1; i <= 1; i += 2)
@@ -224,8 +220,7 @@ public static class BuildKitTown {
         Lamp(t, new Vector3(0f, lift + 1.9f, 0f));
 
         Walls(t, hx, hz, SH, 0.62f, lift);
-        // 基壇 そのものの あたり（台の 上に 乗れる ように）
-        MegaKit.Hit(t, new Vector3(0f, lift * 0.5f, 0f), new Vector3(NX * G, lift, NZ * G));
+        // 基壇は Stairs_Exterior_Platform 自身の あたりで 乗れる
     }
 
     // ---------------------------------------------------------------- 塔
@@ -249,9 +244,9 @@ public static class BuildKitTown {
                     MegaKit.Put(t, "DoorFrame_Round_WoodDark", p, 180f + th);
                     MegaKit.Put(t, "Door_2_Round", p + new Vector3(-0.55f, 0f, -0.06f), 180f + th);
                 }
-                // あたり（戸口の ぶんは あける）
-                if (!(floor == 0 && i == 0))
-                    MegaKit.Hit(t, new Vector3(p.x, SH, p.z), new Vector3(2.1f, SH * 2f, 0.4f));
+                // ★八角の 塔も **壁の 形の とおりに 当たる**。
+                //   四角い 箱を 8まい あてて いた ころは、角が すきまだらけで
+                //   すりぬけたり 見えない ところで 引っかかったり して いた
             }
         }
         MegaKit.Put(t, "Roof_Tower_RoundTiles", new Vector3(0f, SH * 2f, 0f));
@@ -285,17 +280,12 @@ public static class BuildKitTown {
         pad.GetComponent<Renderer>().sharedMaterial = MegaKit.Mat("MI_RockTrim");
     }
 
-    /// <summary>四方の 壁の あたり。**手前の まん中＝戸口の ぶんだけ あける**</summary>
-    static void Walls(Transform t, float hx, float hz, float h, float door, float lift = 0f) {
-        const float T = 0.40f;
-        float cy = lift + h * 0.5f;
-        MegaKit.Hit(t, new Vector3(0f, cy, -hz), new Vector3(hx * 2f + T, h, T));
-        MegaKit.Hit(t, new Vector3(-hx, cy, 0f), new Vector3(T, h, hz * 2f + T));
-        MegaKit.Hit(t, new Vector3( hx, cy, 0f), new Vector3(T, h, hz * 2f + T));
-        float sideW = hx - door;
-        MegaKit.Hit(t, new Vector3(-(door + sideW * 0.5f), cy, hz), new Vector3(sideW, h, T));
-        MegaKit.Hit(t, new Vector3( (door + sideW * 0.5f), cy, hz), new Vector3(sideW, h, T));
-    }
+    /// <summary>★もう **何も しない**。（2026-08-16）
+    /// FBX の 取りこみで addCollider を 立てた ので、**部品ごとに MeshCollider が
+    /// 自動で つく**。手で 箱を ならべる 必要が なくなった。
+    /// 手で 置いて いた ころは 戸口を ふさいだり、八角の 塔に 四角い 箱を
+    /// 8まい あてたり して いた（本人「外の階段とか8角形の塔とかも当たり判定がむちゃくちゃ」）</summary>
+    static void Walls(Transform t, float hx, float hz, float h, float door, float lift = 0f) { }
 
     /// <summary>隅の 柱の 向き。部品は (-X,-Z) の かどむけ</summary>
     static float Corner(int sx, int sz) {
