@@ -19,6 +19,9 @@ public class BugHud : MonoBehaviour {
 
     Text counter, toast, bookText, prompt;
     RectTransform promptPanel;
+    // ★**足もとに ひとことが 出て いる ときは 右下の 説明を 消す。**
+    //   （遊ぶ 人：「スペースが 同時に 2か所 出て いて、どっちが 起きるか 分からない」）
+    RectTransform hintPanel;
     RectTransform toastPanel, bookPanel;
     float toastLeft;
     bool bookOpen;
@@ -87,6 +90,9 @@ public class BugHud : MonoBehaviour {
         bool on = !string.IsNullOrEmpty(s);
         if (on && prompt.text != s) prompt.text = s;
         if (promptPanel.gameObject.activeSelf != on) promptPanel.gameObject.SetActive(on);
+        // 足もとに 出て いる あいだは 右下を ひっこめる
+        if (hintPanel != null && hintPanel.gameObject.activeSelf == on)
+            hintPanel.gameObject.SetActive(!on);
     }
 
     public void Say(string s) {
@@ -189,6 +195,7 @@ public class BugHud : MonoBehaviour {
         hPanel.pivot = new Vector2(1f, 0f);
         var hint = Label(hPanel, TextAnchor.MiddleCenter, Vector2.zero, new Vector2(-14f, 0f));
         hint.text = "スペース：あみを ふる　　Z：ずかん";
+        hintPanel = hPanel;
     }
 
     RectTransform Panel(Transform parent, Vector2 anchor, Vector2 pos, Vector2 size) {

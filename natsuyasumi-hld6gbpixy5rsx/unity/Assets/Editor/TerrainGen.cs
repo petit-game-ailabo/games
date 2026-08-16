@@ -29,7 +29,7 @@ public static class TerrainGen {
     //   画面の 左＝+X（カメラは yaw180 で -Z を 見て いるので 右手が -X）。
     //   26 → 53。見えない かべ も 生垣 も この 数字から 作って いる ので、
     //   ここを 変えれば 全部 ついて くる
-    public const float PlayMinX = -38f, PlayMaxX = 66f;
+    public const float PlayMinX = -38f, PlayMaxX = 75f;
     public const float PlayMinZ = -17f, PlayMaxZ = 27f;
 
     // ★2026-08-15：**高台（みはらし台）。**
@@ -58,8 +58,8 @@ public static class TerrainGen {
     //     中心を 右へ 12 ずらし、はばを 20→37 に する＝x が -25 から 49 まで 平ら。
     //     ここを のばさないと、建てた 家が 山の 斜面に 半分 うまる
     // 屋敷(x -32〜18・z -13〜13)と 左の 町(x 30〜61)が のる ように 広くとる
-    static readonly Vector2 FlatCenter = new Vector2(14f, 5f);
-    static readonly Vector2 FlatHalf = new Vector2(53f, 23f);   // この 中は まっ平ら
+    static readonly Vector2 FlatCenter = new Vector2(18f, 5f);
+    static readonly Vector2 FlatHalf = new Vector2(58f, 23f);   // この 中は まっ平ら
     const float FlatBlend = 13f;                                 // ここから 山へ 上がる
 
     /// <summary>0＝谷そこで まっ平ら、1＝もとの 起伏のまま</summary>
@@ -80,7 +80,7 @@ public static class TerrainGen {
     // 道すじは まっすぐ／直角に して、**ふちの ぎざぎざは 絵の がわで 出す**
     //（Ground シェーダで しきいを ゆらす。歩ける ところは まっすぐの まま）
     public static readonly Vector2[][] Paths = {
-        new[] { new Vector2(-36f, 15f), new Vector2(64f, 15f) },        // 本道（画面の よこ）。左の 町まで のばす
+        new[] { new Vector2(-36f, 15f), new Vector2(73f, 15f) },        // 本道（画面の よこ）。左の 町まで のばす
         new[] { new Vector2(8.25f, 15f), new Vector2(8.25f, 12.6f) },  // 屋敷の 門へ
         new[] { new Vector2(-13f, 15f), new Vector2(-13f, 22f) },     // 左：畑・井戸へ
         new[] { new Vector2(-13f, 22f),new Vector2(-4f, 22f) },
@@ -102,10 +102,10 @@ public static class TerrainGen {
         //   **添え字で ひいて いる ので、足すなら 必ず うしろ**。
         //   はじめ 本道の すぐ 次に 割りこませたら 山道の 添え字が 7→11 に ずれ、
         //   道ごとの 値が 総取っかえに なって 配列の 外を さした
-        new[] { new Vector2(32f, 15f), new Vector2(32f, 3.0f) },      // 8  小屋
-        new[] { new Vector2(44f, 15f), new Vector2(44f, 3.0f) },      // 9  せり出しの 家
-        new[] { new Vector2(54f, 15f), new Vector2(54f, 3.0f) },      // 10 基壇の 家
-        new[] { new Vector2(61f, 15f), new Vector2(61f, 2.0f) },      // 11 塔
+        new[] { new Vector2(46f, 15f), new Vector2(46f, 3.5f) },      // 8  小屋
+        new[] { new Vector2(57f, 15f), new Vector2(57f, 2.5f) },      // 9  せり出しの 家
+        new[] { new Vector2(63f, 15f), new Vector2(63f, 3.0f) },      // 10 基壇の 家
+        new[] { new Vector2(69f, 15f), new Vector2(69f, 1.5f) },      // 11 塔
     };
     // ---- 沢（小川）と 川。**地形に みぞを 掘り、そこへ 水を 流す。**
     // 水は 高い ほうから 低い ほうへ しか 流れないので、道と 同じく

@@ -25,11 +25,17 @@ public static class BuildKitTown {
         var root = new GameObject("KitTown").transform;
         root.SetParent(parent, false);
 
-        Koya(root, 32f, 1.5f);
-        Mon(root, 38f, 15f);
-        Jetty(root, 44f, -2.5f);
-        Kidan(root, 54f, -2.0f);
-        Tou(root, 61f, -3.0f);
+        // ★2026-08-17：**屋敷から 見えない ところへ 移した。**
+        //   遊ぶ 人からの 言：「母屋の 縁側から 10m の 距離に 赤瓦・石積み・
+        //   ハーフティンバーの 家が 建って いる。絵として 完全に 破綻して いる。
+        //   日本の 田舎ゲームの 画面には 見えない」
+        //   → 谷の いちばん おく(+X の はし)へ さげ、あいだを 木立ちで 埋める。
+        //     **わざわざ 歩いて 行かないと 見えない**位置に する
+        Koya(root, 46f, 2.0f);
+        Mon(root, 52f, 15f);
+        Jetty(root, 57f, -3.0f);
+        Kidan(root, 63f, -2.0f);
+        Tou(root, 69f, -4.0f);
 
         Debug.Log("[KitTown] 左の 町を 建てた: " + root.GetComponentsInChildren<MeshRenderer>().Length + " まとまり");
     }

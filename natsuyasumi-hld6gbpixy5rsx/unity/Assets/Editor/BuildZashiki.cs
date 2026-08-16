@@ -662,11 +662,17 @@ public static class BuildZashiki {
         dayHost.nikki = nikki;
         dayHost.tod = todc;
         dayHost.hud = hud;
+        dayHost.book = book;
         dayHost.font = hud.font;
         dayHost.panel = hud.panel;
         // ふとん＝2階の まんなかの 部屋（じぶんの へや）
         dayHost.futon = new Vector3(-4.125f, BuildHouse.F2 + 0.3f, -3.3f);
         play.dayHost = dayHost;
+        // ★魔理沙の 口。「〜だぜ」で しゃべる（喜怒哀楽の ポーズも 出す）
+        var voice = player.AddComponent<MarisaVoice>();
+        voice.hud = hud; voice.book = book; voice.sprite = cs; voice.nikki = nikki;
+        voice.player = player.transform;
+        catcher.voice = voice;
         catcher.dayHost = dayHost;
         catcher.nikki = nikki;
         play.nikki = nikki;

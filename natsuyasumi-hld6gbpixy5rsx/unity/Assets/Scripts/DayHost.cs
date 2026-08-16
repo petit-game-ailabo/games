@@ -20,6 +20,7 @@ public class DayHost : MonoBehaviour {
     public Nikki nikki;
     public TimeOfDay tod;
     public BugHud hud;
+    public BugBook book;
     public Font font;
     public Sprite panel;
 
@@ -31,10 +32,10 @@ public class DayHost : MonoBehaviour {
 
     // 画面
     Image fade;
-    Text diaryText, dayText;
+    Text diaryText, dayText, bigDay;
     RectTransform diaryPanel;
 
-    enum St { Asobu, Kurayami, Nikki, Akeru }
+    enum St { Asobu, Kurayami, Nikki, Akeru, Owari }
     St st = St.Asobu;
     float t;
     Npc[] npcs;
@@ -103,15 +104,40 @@ public class DayHost : MonoBehaviour {
                 t += Time.deltaTime;
                 // すぐ 押しても 飛ばない ように 少し 待つ
                 if (t > 0.6f && (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))) {
+                    // ★**なつやすみが 終わったら まとめを 出す。**
+                    //   31日で クランプして いた ころは、翌朝また 31日が 来て いた
+                    if (nikki != null && nikki.Owatta) {
+                        if (diaryText != null) diaryText.text = nikki.Owari(book);
+                        st = St.Owari; t = 0f;
+                        break;
+                    }
                     if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
                     // 朝に する
                     if (tod != null) { tod.hour = 6.5f; tod.runClock = true; tod.useHour = true; }
                     st = St.Akeru; t = 0f;
                 }
                 break;
+            case St.Owari:
+                t += Time.deltaTime;
+                if (t > 1.2f && (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))) {
+                    if (nikki != null) nikki.Reset0();
+                    if (book != null) book.Clear();
+                    if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
+                    if (tod != null) { tod.hour = 6.5f; tod.runClock = true; tod.useHour = true; }
+                    Refresh();
+                    st = St.Akeru; t = 0f;
+                }
+                break;
             case St.Akeru:
                 t += Time.deltaTime;
                 SetFade(1f - Mathf.Clamp01(t / 1.3f));
+                // ★**朝の 一拍。**（遊ぶ 人：「日記を 閉じて、すっと 明るく なって
+                //   『8月3日』が どんと 出る 一拍が ほしい。いまは 前の 日と 地つづき すぎる」）
+                if (bigDay != null) {
+                    bigDay.gameObject.SetActive(t < 1.6f);
+                    if (nikki != null) bigDay.text = "8月 " + nikki.day + "日";
+                    var c = bigDay.color; c.a = Mathf.Clamp01(1.6f - t) * 0.95f; bigDay.color = c;
+                }
                 if (t >= 1.3f) {
                     SetFade(0f);
                     st = St.Asobu;
@@ -124,8 +150,31 @@ public class DayHost : MonoBehaviour {
         }
     }
 
+    float nagged;
+
     void Asobu() {
         if (player == null || nikki == null) return;
+
+        // ★**夜ふかしは できない。**（遊ぶ 人：「布団に 行かなければ 深夜3時の 8月1日を
+        //   延々と 遊べる。時計と 暦が つながって いない」）
+        //   23時を すぎたら せかし、深夜2時で 力ずくで 寝かせる
+        if (tod != null && tod.runClock) {
+            float h = tod.hour;
+            bool fukashi = h >= 23f || h < 4.5f;
+            if (h >= 2f && h < 4.5f) {                 // 深夜2時：ここまで
+                if (hud != null) hud.Say("もう 目を あけて いられない…");
+                if (tod != null) tod.runClock = false;
+                st = St.Kurayami; t = 0f;
+                return;
+            }
+            if (fukashi) {
+                nagged -= Time.deltaTime;
+                if (nagged <= 0f) {
+                    nagged = 22f;
+                    if (hud != null) hud.Say("もう おそい。かえって ねよう");
+                }
+            }
+        }
 
         // **人が いたら まず そちら。** ねる より 話す ほうが 手前に ある
         var npc = NearNpc();
@@ -196,6 +245,20 @@ public class DayHost : MonoBehaviour {
         var tr = tip.rectTransform;
         tr.offsetMin = new Vector2(12f, 14f); tr.offsetMax = new Vector2(-12f, -12f);
         diaryPanel.gameObject.SetActive(false);
+
+        // 朝の「8月○日」（大きく まん中）
+        var bigGO = new GameObject("BigDay");
+        bigGO.transform.SetParent(root, false);
+        bigDay = bigGO.AddComponent<Text>();
+        bigDay.font = font; bigDay.fontSize = 48; bigDay.text = "";
+        bigDay.alignment = TextAnchor.MiddleCenter;
+        bigDay.color = new Color(1f, 0.97f, 0.88f, 0f);
+        bigDay.raycastTarget = false;
+        var br = bigDay.rectTransform;
+        br.anchorMin = new Vector2(0.5f, 0.5f); br.anchorMax = new Vector2(0.5f, 0.5f);
+        br.sizeDelta = new Vector2(700f, 120f);
+        br.anchoredPosition = new Vector2(0f, 60f);
+        bigGO.SetActive(false);
 
         // 暗転（いちばん 上に かぶせる）
         var fGO = new GameObject("Fade");

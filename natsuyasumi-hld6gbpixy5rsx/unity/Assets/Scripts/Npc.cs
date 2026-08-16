@@ -41,6 +41,14 @@ public class Npc : MonoBehaviour {
     int step;               // 同じ日に 何回 話したか
     bool wasNear;
 
+    // ★**時間帯で 居る 場所が 変わる。**（遊ぶ 人：「立ち位置固定の 看板の まま。
+    //   夜中の 2時に 畑へ 行けば おじさんが 暗闇に 一人で 突っ立って いる」）
+    //   「行ったら 居なかった」が 起きる だけで 人は 生き物に なる
+    [HideInInspector] public Vector3 posAsa, posHiru, posYoru;
+    [HideInInspector] public bool hasMoves;
+    [HideInInspector] public bool hideOnRain;    // 雨の 日は 消える（大妖精）
+    float moveLeft;
+
     public bool Near {
         get {
             if (player == null) return false;
@@ -53,6 +61,22 @@ public class Npc : MonoBehaviour {
     void Update() {
         bool near = Near;
         if (near != wasNear) { wasNear = near; if (!near) step = 0; }
+
+        moveLeft -= Time.deltaTime;
+        if (moveLeft > 0f) return;
+        moveLeft = 1.0f;
+
+        // 雨なら 消える
+        bool wet = weather != null && (weather.mode == Weather.Mode.Ame || weather.mode == Weather.Mode.Yudachi);
+        var rend = GetComponentInChildren<Renderer>();
+        if (hideOnRain) {
+            bool show = !wet;
+            if (rend != null && rend.enabled != show) rend.enabled = show;
+            if (!show) return;
+        }
+        if (!hasMoves || tod == null) return;
+        var want = tod.hour < 10f ? posAsa : (tod.hour < 17.5f ? posHiru : posYoru);
+        if ((transform.position - want).sqrMagnitude > 0.04f) transform.position = want;
     }
 
     /// <summary>足もとに 出す ひとこと</summary>
@@ -62,7 +86,7 @@ public class Npc : MonoBehaviour {
     public void Talk() {
         string s = Pick();
         if (hud != null) hud.Say(who + "「" + s + "」");
-        if (nikki != null) nikki.Note("talk_" + who, who + "と はなした。");
+        if (nikki != null) nikki.Talked(who);
         step++;
     }
 
@@ -74,7 +98,10 @@ public class Npc : MonoBehaviour {
         if (wet && Has(rain)) return At(rain, d);
         if (tod != null && Has(night) && (tod.hour >= 18.5f || tod.hour < 5f)) return At(night, d);
         if (tod != null && Has(morning) && tod.hour < 10f) return At(morning, d);
-        if (book != null && Has(manyBugs) && book.Total >= 6) return At(manyBugs, d);
+        // ★**きょう とった 数**で 見る。累計(book.Total)だと 2日めから ずっと
+        //   これしか 返らなく なり、せっかくの lines が 一生 出ない（遊ぶ 人の 指摘）
+        if (nikki != null && Has(manyBugs) && nikki.CountOf("bug") >= 5 && (d + step) % 3 == 0)
+            return At(manyBugs, d);
         if (Has(lines)) return At(lines, d + step);
         return "……";
     }

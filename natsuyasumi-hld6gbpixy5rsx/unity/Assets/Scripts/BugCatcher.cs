@@ -12,6 +12,7 @@ public class BugCatcher : MonoBehaviour {
     [HideInInspector] public DayHost dayHost;
     // ★とった ことを 日記に ためる
     [HideInInspector] public Nikki nikki;
+    [HideInInspector] public MarisaVoice voice;
     [Header("あみ")]
     public float reach = 1.30f;      // 手の さきから どこまで とどくか
     public float radius = 0.75f;     // あみの 口の 大きさ（よこ）
@@ -189,7 +190,20 @@ public class BugCatcher : MonoBehaviour {
             if (d.y > up1 || d.y < -dn1) continue;
             if (horiz < bestD) { best = b; bestD = horiz; }
         }
-        if (best == null) return;
+        if (best == null) {
+            // ★**おしかった ときだけ 一言。**ただの 空ぶりでは しゃべらない
+            //（何も いない ところで ふるたびに 悔しがると うるさい）
+            if (voice != null) {
+                foreach (var b in FindObjectsByType<Bug>(FindObjectsSortMode.None)) {
+                    if (b == null || b.caught) continue;
+                    var dd = b.transform.position - at;
+                    if (new Vector2(dd.x, dd.z).sqrMagnitude < (radius + 1.1f) * (radius + 1.1f)) {
+                        voice.Missed_(); break;
+                    }
+                }
+            }
+            return;
+        }
 
         // **あみが 当たったら 取れる。さいころは ふらない。**
         // 見た目では 当たって いるのに 取れない のは、遊ぶ 側から すると ただの 故障に 見える。
@@ -198,7 +212,15 @@ public class BugCatcher : MonoBehaviour {
         // 日記に ためる。**その日 何を したかが 夜に 文章に なる**
         if (nikki != null) {
             nikki.Count("bug");
-            nikki.Note("bug_" + best.kind.id, best.kind.name + "を つかまえた。");
+            // **数字を 入れる。**「かぶとむしを つかまえた」より
+            // 「78mm の かぶとむしを つかまえた。でかいぜ」
+            bool big = best.sizeMm > best.kind.sizeMm * 1.15f;
+            string t = string.Format("{0}mm の {1}を つかまえた。{2}",
+                                     best.sizeMm, best.kind.name, big ? "でかいぜ" : "");
+            // めずらしい 虫（出やすさが 低い）は 重く
+            int omoi = best.kind.weight <= 10 ? 40 : 10;
+            if (big) omoi += 25;
+            nikki.Note("bug_" + best.kind.id, t.TrimEnd(), omoi);
         }
         Pop(best.transform.position);
         best.Catch();

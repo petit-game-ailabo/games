@@ -76,6 +76,44 @@ public class PlayHost : MonoBehaviour {
     // ★あそんだ ことを 日記に ためる
     [HideInInspector] public Nikki nikki;
 
+    /// <summary>あそんだ ことを 日記に。**数字を 入れる**のが 肝。
+    /// 「ばったを つかまえた」より「川で 水きりを した。8だん。じぶんでも おどろいたぜ」</summary>
+    public void NoteAsobi(PlayKind k, int score) {
+        if (nikki == null) return;
+        string key = "asobi_" + k;
+        string t;
+        switch (k) {
+            case PlayKind.Mizukiri:
+                t = score >= 6 ? string.Format("川で 水きりを した。{0}だん。じぶんでも おどろいたぜ", score)
+                               : string.Format("川で 水きりを した。{0}だん。まだまだ だな", score);
+                break;
+            case PlayKind.Tsuri:
+                t = score > 0 ? string.Format("{0}cm の さかなを つった。にがして やったぜ", score)
+                              : "つりを した。ぜんぜん かからなかった";
+                break;
+            case PlayKind.Sasabune:
+                t = "ささぶねを ながした。見えなく なるまで 見て いた";
+                break;
+            case PlayKind.Hanatsumi:
+                t = string.Format("花を {0}本 つんだ。だれに やろうかな", Mathf.Max(1, score));
+                break;
+            case PlayKind.Irozu:
+                t = "花を もんで 色水を 作った。手が むらさきに なった";
+                break;
+            case PlayKind.Oshibana:
+                t = "おし花に した。本に はさんで おいたぜ";
+                break;
+            case PlayKind.Himitsu:
+                t = "やぶの 中に ひみつきちを 作った。だれにも 教えない";
+                break;
+            default: return;
+        }
+        // **はじめて やった 遊びは 重い**（80）。2回めからは 50
+        bool first = !PlayerPrefs.HasKey("asobi1_" + k);
+        if (first) PlayerPrefs.SetInt("asobi1_" + k, 1);
+        nikki.Note(key, t, first ? 80 : 50);
+    }
+
     void Update() {
         if (Busy) return;
         if (dayHost != null && dayHost.BlockPlay) { near = null; if (hud != null) hud.SetPrompt(null); return; }
@@ -169,6 +207,7 @@ public class PlayHost : MonoBehaviour {
 
         Bump(KeyBoat, 1);
         Line("ながれて いった　（つうさん " + Boats + " そう）");
+        NoteAsobi(PlayKind.Sasabune, Boats);
 
         // 下って いく。ゆらぎながら 小さく なって 消える
         float t = 0f;
@@ -258,7 +297,9 @@ public class PlayHost : MonoBehaviour {
                 PlayerPrefs.SetInt(KeySkip, skips); PlayerPrefs.Save();
                 Mood(CharSprite.Pose.Yorokobi, 1.8f);
                 Line(skips + " だん！　★じこ さいこう きろく");
+                NoteAsobi(PlayKind.Mizukiri, skips);
             } else Line(skips + " だん　（さいこう " + BestSkip + "）");
+            NoteAsobi(PlayKind.Mizukiri, skips);
         }
         Destroy(stone, 0.6f);
         yield return new WaitForSeconds(1.1f);
@@ -302,6 +343,7 @@ public class PlayHost : MonoBehaviour {
         Destroy(uki);
         if (!hooked) {
             Line("にげられた…");
+            NoteAsobi(PlayKind.Tsuri, 0);
             Mood(CharSprite.Pose.Kanashimi, 1.6f);
             yield return new WaitForSeconds(1.1f); yield break;
         }
@@ -318,6 +360,7 @@ public class PlayHost : MonoBehaviour {
         Bump(KeyFish, 1);
         Mood(CharSprite.Pose.Yorokobi, 1.6f);
         Line(fishName + "　" + mm + "mm　が つれた！　（つうさん " + Fish + " ひき）");
+        NoteAsobi(PlayKind.Tsuri, Mathf.RoundToInt(mm / 10f));
         Destroy(fish, 1.2f);
         yield return new WaitForSeconds(1.3f);
     }
@@ -337,6 +380,7 @@ public class PlayHost : MonoBehaviour {
         int n = Random.Range(1, 4);
         Bump(KeyFlow, n);
         Line("はなを " + n + "本 つんだ　（もちもの " + Flowers + "本）");
+        NoteAsobi(PlayKind.Hanatsumi, Flowers);
         yield return new WaitForSeconds(1.0f);
     }
 
@@ -349,6 +393,7 @@ public class PlayHost : MonoBehaviour {
         Bump(KeyIrozu, 1);
         var col = IrozuNames[Random.Range(0, IrozuNames.Length)];
         Line(col + "の 色水が できた　（つうさん " + Irozu + " ぱい）");
+        NoteAsobi(PlayKind.Irozu, Irozu);
         yield return new WaitForSeconds(1.4f);
     }
     static readonly string[] IrozuNames = { "むらさき", "うすあか", "あお", "きいろ", "ももいろ" };
@@ -361,6 +406,7 @@ public class PlayHost : MonoBehaviour {
         PlayerPrefs.SetInt(KeyFlow, Flowers - 1);
         Bump(KeyOshi, 1);
         Line("おし花が " + Oshibana + " まいに なった");
+        NoteAsobi(PlayKind.Oshibana, Oshibana);
         yield return new WaitForSeconds(1.2f);
     }
 
@@ -393,6 +439,7 @@ public class PlayHost : MonoBehaviour {
         if (hb == null) hb = FindFirstObjectByType<HimitsuBase>();
         if (hb != null) hb.Show(step + 1);
         Line(BaseSteps[step] + "　（" + (step + 1) + "/" + BaseSteps.Length + "）");
+        if (nikki != null) nikki.Note("himitsu", "やぶの 中の ひみつきちが すすんだ（" + (step + 1) + "/" + BaseSteps.Length + "）。だれにも 教えない", 80);
         yield return new WaitForSeconds(1.6f);
     }
 
