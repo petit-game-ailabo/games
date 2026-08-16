@@ -565,9 +565,24 @@ public static class BuildHouse {
                       new Vector3(0.38f, 0.30f, 1.44f), m.paper));
 
         // まんなか＝じぶんの 部屋（しきっぱなしの 布団と 夏休みの しゅくだい）
-        Upper(box("R2_Futon",     t, new Vector3(CM, F2 + 0.24f, RB), new Vector3(1.4f, 0.22f, 2.0f), m.floor));
-        Upper(box("R2_Kakebuton", t, new Vector3(CM, F2 + 0.40f, RB + 0.2f), new Vector3(1.32f, 0.18f, 1.5f), m.paper));
-        Upper(box("R2_Makura",    t, new Vector3(CM, F2 + 0.36f, RB - 0.9f), new Vector3(0.7f, 0.16f, 0.34f), m.paper));
+        // ★**ここは 1日の しめくくりに 31回 見る 画面。**（遊ぶ 人：「母屋の あの
+        //   作りこみに 対して 寝る 部屋だけ 何も 無い。白い 板が 1枚 あるだけ」）
+        //   敷きぶとん・かけぶとん・まくら・たたんだ 服・蚊とり線香・うちわ を 置く
+        Upper(box("R2_Shikibuton", t, new Vector3(CM, F2 + 0.16f, RB), new Vector3(1.5f, 0.14f, 2.1f), m.floor));
+        Upper(box("R2_Sheet",      t, new Vector3(CM, F2 + 0.24f, RB), new Vector3(1.44f, 0.06f, 2.04f), m.paper));
+        // かけぶとんは **足もとに めくって ある**（すぐ もぐりこめる ように）
+        Upper(box("R2_Kakebuton", t, new Vector3(CM, F2 + 0.34f, RB - 0.55f), new Vector3(1.44f, 0.16f, 0.95f), m.paper));
+        Upper(box("R2_KakeOri",   t, new Vector3(CM, F2 + 0.43f, RB - 1.05f), new Vector3(1.44f, 0.10f, 0.30f), m.floor));
+        Upper(box("R2_Makura",    t, new Vector3(CM, F2 + 0.31f, RB + 0.86f), new Vector3(0.66f, 0.16f, 0.34f), m.paper));
+        // たたんだ 服
+        Upper(box("R2_Fuku",  t, new Vector3(CM + 1.25f, F2 + 0.12f, RB + 0.6f), new Vector3(0.6f, 0.16f, 0.44f), m.paper));
+        Upper(box("R2_Fuku2", t, new Vector3(CM + 1.25f, F2 + 0.22f, RB + 0.6f), new Vector3(0.54f, 0.08f, 0.40f), m.floor));
+        // 蚊とり線香（枕もと）と うちわ
+        Upper(box("R2_Katori",  t, new Vector3(CM - 1.15f, F2 + 0.06f, RB + 0.8f), new Vector3(0.30f, 0.08f, 0.30f), m.stone));
+        Upper(box("R2_Senko",   t, new Vector3(CM - 1.15f, F2 + 0.13f, RB + 0.8f), new Vector3(0.20f, 0.05f, 0.20f), m.wood));
+        Upper(box("R2_Uchiwa",  t, new Vector3(CM - 1.1f, F2 + 0.05f, RB + 0.1f), new Vector3(0.34f, 0.03f, 0.46f), m.paper));
+        // 目ざまし時計 かわりの 小箱
+        Upper(box("R2_Tokei",   t, new Vector3(CM - 1.15f, F2 + 0.16f, RB + 1.25f), new Vector3(0.22f, 0.24f, 0.16f), m.wood));
         Upper(box("R2_Chabu",     t, new Vector3(CM + 1.0f, F2 + 0.36f, RF), new Vector3(1.1f, 0.07f, 0.8f), m.wood));
         Upper(box("R2_Shukudai",  t, new Vector3(CM + 1.0f, F2 + 0.41f, RF), new Vector3(0.42f, 0.03f, 0.3f), m.paper));
         Upper(box("R2_Mushikago", t, new Vector3(CM - 1.2f, F2 + 0.24f, RF + 0.6f), new Vector3(0.34f, 0.4f, 0.34f), m.wood));

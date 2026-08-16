@@ -47,6 +47,12 @@ public class Npc : MonoBehaviour {
     [HideInInspector] public Vector3 posAsa, posHiru, posYoru;
     [HideInInspector] public bool hasMoves;
     [HideInInspector] public bool hideOnRain;    // 雨の 日は 消える（大妖精）
+
+    // ★**村人が カレンダーを 知って いる。**（遊ぶ 人：「8月30日、みんなが
+    //   平常運転で『井戸の 水は つめたい よ』と 言う。魔理沙だけが 朝に つぶやいて 終わり。
+    //   **30日目に 村じゅうの 台詞が 変わる。これが 積み重なったの 正体**」）
+    [HideInInspector] public Nikki.Koto2 koto;
+    public string[] kotoYokoku, kotoMatsuri, kotoToro, kotoTaifu, kotoShukudai, kotoOwakare;
     float moveLeft;
 
     /// <summary>いま 姿が あるか。**消えて いる ときは 話しかけられない。**
@@ -105,6 +111,16 @@ public class Npc : MonoBehaviour {
 
     string Pick() {
         int d = nikki != null ? nikki.day : 1;
+        // **その日の できごとが あれば まっさきに それ。**
+        switch (koto) {
+            case Nikki.Koto2.MatsuriYokoku: if (Has(kotoYokoku))  return At(kotoYokoku, d);  break;
+            case Nikki.Koto2.Matsuri:       if (Has(kotoMatsuri)) return At(kotoMatsuri, d); break;
+            case Nikki.Koto2.Toro:          if (Has(kotoToro))    return At(kotoToro, d);    break;
+            case Nikki.Koto2.Taifu:         if (Has(kotoTaifu))   return At(kotoTaifu, d);   break;
+            case Nikki.Koto2.Shukudai:      if (Has(kotoShukudai))return At(kotoShukudai, d);break;
+            case Nikki.Koto2.Owakare:       if (Has(kotoOwakare)) return At(kotoOwakare, d); break;
+        }
+
         // **その日 その場の 事情が あれば そちらを ゆうせん。**
         // ふだんの 一言だけだと「置き物」に 見える
         bool wet = weather != null && (weather.mode == Weather.Mode.Ame || weather.mode == Weather.Mode.Yudachi);

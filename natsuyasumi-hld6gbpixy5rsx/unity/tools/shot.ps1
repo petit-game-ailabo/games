@@ -20,7 +20,7 @@ param(
   [string]$at = '', [string]$clock = '', [string]$play = '', [string]$playwait = '1',
   [int]$frames = 150, [string]$face = '', [string]$pose = '',
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
-  [string]$OutDir = ''
+  [string]$OutDir = '', [string]$day = ''
 )
 $ErrorActionPreference = 'Stop'
 
@@ -38,6 +38,7 @@ $a = @('-screen-width','1280','-screen-height','720','-screen-fullscreen','0',
        '-shot', $target, '-shotframes', "$frames", '-shots', "$shots", '-shotgap', "$gap",
        '-logFile', (Join-Path $OutDir "$tag.log"))
 if ($cam  -ne '') { $a += @('-cam', $cam) }
+if ($day  -ne '') { $a += @('-day', $day) }
 if ($walk -ne '') { $a += @('-walk', $walk, '-walksec', $walksec) }
 if ($run)         { $a += @('-run','1') }
 if ($walkhold)    { $a += @('-walkhold','1') }

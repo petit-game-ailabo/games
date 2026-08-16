@@ -40,7 +40,15 @@ public class Nikki : MonoBehaviour {
     const string KeyHour = "natsu_hour";
     const string KeyPast = "natsu_nikki";
 
-    void Awake() { Load(); }
+    void Awake() {
+        Load();
+        // 絵を 撮る ための 決めうち。-day 10 で 祭りの 日を 出せる
+        var a = System.Environment.GetCommandLineArgs();
+        for (int i = 0; i < a.Length - 1; i++) {
+            if (a[i] != "-day") continue;
+            int v; if (int.TryParse(a[i + 1], out v)) day = Mathf.Clamp(v, 1, LastDay);
+        }
+    }
 
     /// <summary>きょうの 出来事を ためる。同じ ことは 1日 1回だけ。
     /// ★**omoi（重み）が 大きい ものだけ 日記に 書く。**
@@ -168,6 +176,8 @@ public class Nikki : MonoBehaviour {
     //
     // ★**予告が あることが 肝心。**「あさって 祭りだ」と 聞いた 瞬間に、
     //   プレイヤーは あした 寝る 理由が できる。
+    public const int MatsuriDay = 10;
+
     public enum Koto2 { Nashi, Niji, MatsuriYokoku, Matsuri, Toro, Taifu, Shukudai, Owakare }
 
     /// <summary>その日の できごと</summary>

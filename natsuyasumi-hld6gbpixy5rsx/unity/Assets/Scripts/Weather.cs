@@ -29,10 +29,38 @@ public class Weather : MonoBehaviour {
         if (timeOfDay != null) timeOfDay.Apply();
     }
 
+    /// <summary>引数で 決めうちされたか。**されて いたら 日ごとの 抽選を しない**</summary>
+    [HideInInspector] public bool forced;
+
+    // ★**天気が 一度も 変わって いなかった。**（2026-08-17・遊ぶ 人の 指摘）
+    //   mode を 書きかえて いたのは 起動引数の 解析だけで、ふつうに 遊んで いる あいだは
+    //   永久に「晴れ」だった。その せいで **書いて あるのに 一度も 表に 出ない ものが
+    //   山ほど あった**：NPCの 雨の 台詞・雨の 日の 大妖精・雨の 日は 虫が 出ない・
+    //   夕立の 演出・8月20日の 台風。**書いた ぶんだけ まるごと 損して いた。**
+    //   → 朝、日づけを たねに 1回 引く。**20日だけ 台風で 強制の 雨**
+    public void RollForDay(int day) {
+        if (forced) return;
+        if (day == 20) { mode = Mode.Ame; Refresh(); return; }     // 台風
+        var rnd = new System.Random(20260817 + day * 7919);
+        int r = rnd.Next(100);
+        // 夏の 山あいらしく：晴れ 55／曇り 22／夕立 15／雨 8
+        mode = r < 55 ? Mode.Hare : r < 77 ? Mode.Kumori : r < 92 ? Mode.Yudachi : Mode.Ame;
+        Refresh();
+    }
+
+    void Refresh() {
+        if (timeOfDay == null) timeOfDay = FindFirstObjectByType<TimeOfDay>();
+        if (timeOfDay != null) timeOfDay.Apply();
+    }
+
+    /// <summary>雨が ふって いるか（NPC・虫・遊びが 見る）</summary>
+    public bool IsRain { get { return mode == Mode.Ame || mode == Mode.Yudachi; } }
+
     void ApplyFromArgs() {
         var a = Environment.GetCommandLineArgs();
         for (int i = 0; i < a.Length - 1; i++) {
             if (a[i] != "-weather") continue;
+            forced = true;
             switch (a[i + 1].ToLower()) {
                 case "hare":    mode = Mode.Hare;    break;
                 case "kumori":  mode = Mode.Kumori;  break;

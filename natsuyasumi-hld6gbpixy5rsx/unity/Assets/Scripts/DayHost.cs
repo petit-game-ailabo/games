@@ -21,6 +21,8 @@ public class DayHost : MonoBehaviour {
     public TimeOfDay tod;
     public BugHud hud;
     public BugBook book;
+    public Weather weather;
+    public Gyoji gyoji;
     public Font font;
     public Sprite panel;
 
@@ -50,8 +52,17 @@ public class DayHost : MonoBehaviour {
         // ★**アプリを 落として 開き直しても 1日を やり直せない。**
         //   （遊ぶ 人：「夕方6時まで 遊んで、寝ずに 落として 開き直すと 朝6時半に もどる。
         //     のこり日数の 焦りを 作った そばから、それを 無効に する 裏口が 開いて いる」）
-        if (tod != null && nikki != null && nikki.savedHour > 0.01f) {
+        //   ※ただし **-clock などで 時こくを 決めうちした ときは 上書きしない**
+        //     （決めうちすると TimeOfDay が runClock を 切る。それを 目じるしに する）
+        if (tod != null && nikki != null && nikki.savedHour > 0.01f && tod.runClock) {
             tod.hour = nikki.savedHour; tod.useHour = true;
+        }
+        // はじめの 日の ぶんも 引いて おく
+        if (nikki != null) {
+            if (weather != null) weather.RollForDay(nikki.day);
+            if (gyoji != null) gyoji.Apply(nikki.day);
+            news = nikki.TodayNews();
+            newsLeft = news != null ? 3.4f : 0f;
         }
         // 朝の ひとこと
         if (nikki != null && !nikki.greeted) {
@@ -168,7 +179,11 @@ public class DayHost : MonoBehaviour {
                                             : nikki.Morning());
                         }
                         carried = false;
-                        // ★**きょうの できごとを 知らせる。**予告が あるから 明日が 待ち遠しく なる
+                        // ★きょうの 天気を 引く。**ここが 無い かぎり 永久に 晴れ**だった
+                        if (weather != null) weather.RollForDay(nikki.day);
+                        // ★きょうの できごとを **世界に 出す**（提灯・屋台・人の あつまり）。
+                        //   文だけ 出して 何も 起きないと、ゲームが 約束を やぶる ことに なる
+                        if (gyoji != null) gyoji.Apply(nikki.day);
                         news = nikki.TodayNews();
                         newsLeft = news != null ? 3.4f : 0f;
                     }
@@ -271,7 +286,7 @@ public class DayHost : MonoBehaviour {
             if (newsLeft <= 0f && news != null && hud != null) { hud.Say(news); news = null; }
         }
         // 時こくを おぼえる（アプリを 落として 開き直しても 1日を やり直せない ように）
-        if (nikki != null && tod != null) nikki.savedHour = tod.hour;
+        if (nikki != null && tod != null && tod.runClock) nikki.savedHour = tod.hour;
         if (dayText != null && nikki != null && tod != null) {
             int left = Nikki.LastDay - nikki.day;
             dayText.text = string.Format("8月 {0}日　{1}　のこり {2}日",
