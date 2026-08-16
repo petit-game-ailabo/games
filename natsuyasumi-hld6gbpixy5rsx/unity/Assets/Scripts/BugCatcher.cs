@@ -8,6 +8,10 @@ using UnityEngine;
 //  - ふる → あみの 先の まるい 範囲に 入って いれば 見こみ判定
 //  - はずすと 虫は 逃げる＝連打では 取れない
 public class BugCatcher : MonoBehaviour {
+    // ★人と 話す・ねる ときは あみを ふらない（どちらも スペース）
+    [HideInInspector] public DayHost dayHost;
+    // ★とった ことを 日記に ためる
+    [HideInInspector] public Nikki nikki;
     [Header("あみ")]
     public float reach = 1.30f;      // 手の さきから どこまで とどくか
     public float radius = 0.75f;     // あみの 口の 大きさ（よこ）
@@ -63,6 +67,9 @@ public class BugCatcher : MonoBehaviour {
             if (p == null && sumo != null) p = sumo.PromptFor(transform);
             hud.SetPrompt(p);
         }
+
+        // ★人と 話す・ねる ほうが ゆうせん。**話しかけた とたん あみを ふる**のを 止める
+        if (dayHost != null && dayHost.BlockPlay) { if (move != null) move.locked = swing >= 0f; return; }
 
         bool pressed = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)
                     || Input.GetKeyDown(KeyCode.J) || Input.GetMouseButtonDown(0);
@@ -188,6 +195,11 @@ public class BugCatcher : MonoBehaviour {
         // 見た目では 当たって いるのに 取れない のは、遊ぶ 側から すると ただの 故障に 見える。
         // むずかしさは 「近づけるか・追いつけるか」＝場所の 話で 出す
         book.Add(best.kind.id, best.sizeMm);
+        // 日記に ためる。**その日 何を したかが 夜に 文章に なる**
+        if (nikki != null) {
+            nikki.Count("bug");
+            nikki.Note("bug_" + best.kind.id, best.kind.name + "を つかまえた。");
+        }
         Pop(best.transform.position);
         best.Catch();
         // 取れたら よろこぶ。**用意して もらった 顔は 使って なんぼ**

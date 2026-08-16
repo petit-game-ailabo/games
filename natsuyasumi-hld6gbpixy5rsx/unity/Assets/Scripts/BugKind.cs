@@ -8,6 +8,19 @@ public enum BugId {
     Oniyanma = 4, Chou = 5, Batta = 6, Hotaru = 7,
 }
 
+// ★**どこの 土地に 出るか。**（2026-08-17）
+//   遊ぶ 人からの 言：「屋敷の 前庭で 捕れる 虫と、山の 上で 捕れる 虫と、
+//   川べりで 捕れる 虫が 全部 同じ。これだと 探検する 理由が ない。
+//   ぼくなつで 山の 上まで 登ったのは、そこにしか いない 虫が いたから」
+//   → 土地ごとに 顔ぶれを 変える。**そこでしか 出ない 虫**を 作る
+public enum BugBa {
+    Doko,      // どこでも
+    Kawa,      // 川べり（トンボ・ホタル）
+    Zoki,      // 雑木林・木立ち（カブト・クワガタ・セミ）
+    Nohara,    // 野はら（チョウ・バッタ）
+    Yama,      // 山の 上（**ここでしか 出ない**）
+}
+
 // どこに いるか
 public enum BugPerch {
     Trunk,      // 木の みきに とまる（セミ・カブト・クワガタ）
@@ -33,6 +46,8 @@ public class BugKind {
     // ふつうの 大きさ(mm)。1ぴきごとに この 0.7〜1.3倍で ばらつく。
     // **大きい 個体は 見た目も 大きく、ずもうでも 強い**＝さがす 理由が 1本に つながる
     public int sizeMm = 50;
+    // 出る 土地。Doko なら どこでも
+    public BugBa ba = BugBa.Doko;
 
     // 1コマ 16x16 の 4列 x 2行。index が そのまま コマの ばんごう
     public const int Cols = 4, Rows = 2;
@@ -40,21 +55,21 @@ public class BugKind {
     // ★虫を 足すなら ここに 1行。あとは ぜんぶ ついてくる
     public static readonly BugKind[] All = {
         new BugKind { id = BugId.Semi, sizeMm = 60,     name = "あぶらぜみ",   perch = BugPerch.Trunk, height = 0.30f,
-                      wary = 0.55f, catchRate = 0.70f, weight = 30, power = 3, tod = new[] { true,  true,  true,  false } },
+                      wary = 0.55f, catchRate = 0.70f, weight = 30, power = 3, ba = BugBa.Zoki,   tod = new[] { true,  true,  true,  false } },
         new BugKind { id = BugId.Kabuto, sizeMm = 78,   name = "かぶとむし",   perch = BugPerch.Trunk, height = 0.34f,
-                      wary = 0.10f, catchRate = 0.90f, weight = 10, power = 6, tod = new[] { true,  false, false, true  } },
+                      wary = 0.10f, catchRate = 0.90f, weight = 10, power = 6, ba = BugBa.Zoki,   tod = new[] { true,  false, false, true  } },
         new BugKind { id = BugId.Kuwagata, sizeMm = 66, name = "くわがた",     perch = BugPerch.Trunk, height = 0.32f,
-                      wary = 0.15f, catchRate = 0.85f, weight = 10, power = 5, tod = new[] { true,  false, false, true  } },
+                      wary = 0.15f, catchRate = 0.85f, weight = 10, power = 5, ba = BugBa.Zoki,   tod = new[] { true,  false, false, true  } },
         new BugKind { id = BugId.Tonbo, sizeMm = 52,    name = "しおからとんぼ", perch = BugPerch.Air,  height = 0.30f,
-                      wary = 0.70f, catchRate = 0.55f, weight = 28, power = 3, tod = new[] { true,  true,  true,  false } },
+                      wary = 0.70f, catchRate = 0.55f, weight = 28, power = 3, ba = BugBa.Kawa,   tod = new[] { true,  true,  true,  false } },
         new BugKind { id = BugId.Oniyanma, sizeMm = 98, name = "おにやんま",   perch = BugPerch.Air,   height = 0.40f,
-                      wary = 0.90f, catchRate = 0.30f, weight = 6,  power = 5, tod = new[] { false, true,  true,  false } },
+                      wary = 0.90f, catchRate = 0.30f, weight = 6,  power = 5, ba = BugBa.Yama,   tod = new[] { false, true,  true,  false } },
         new BugKind { id = BugId.Chou, sizeMm = 105,     name = "あげはちょう", perch = BugPerch.Air,   height = 0.28f,
-                      wary = 0.45f, catchRate = 0.75f, weight = 24, power = 1, tod = new[] { true,  true,  false, false } },
+                      wary = 0.45f, catchRate = 0.75f, weight = 24, power = 1, ba = BugBa.Nohara, tod = new[] { true,  true,  false, false } },
         new BugKind { id = BugId.Batta, sizeMm = 48,    name = "しょうりょうばった", perch = BugPerch.Grass, height = 0.26f,
-                      wary = 0.60f, catchRate = 0.65f, weight = 22, power = 4, tod = new[] { true,  true,  true,  false } },
+                      wary = 0.60f, catchRate = 0.65f, weight = 22, power = 4, ba = BugBa.Nohara, tod = new[] { true,  true,  true,  false } },
         new BugKind { id = BugId.Hotaru, sizeMm = 14,   name = "ほたる",       perch = BugPerch.Bush,  height = 0.22f,
-                      wary = 0.20f, catchRate = 0.80f, weight = 18, power = 1, glows = true,
+                      wary = 0.20f, catchRate = 0.80f, weight = 18, power = 1, glows = true, ba = BugBa.Kawa,
                       tod = new[] { false, false, false, true  } },
     };
 

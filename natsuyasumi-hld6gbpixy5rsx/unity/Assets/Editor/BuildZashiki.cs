@@ -158,7 +158,7 @@ public static class BuildZashiki {
         if (marisa == null) Debug.LogError("[BuildZashiki] marisa_8x8.png が 見つからない");
         // 玄関の 前から はじめる（家は 扉から 入る）
         Vector3 p1 = new Vector3(BuildYashiki.GateX, TerrainGen.Height(BuildYashiki.GateX, 15.6f) + 0.1f, 15.6f);
-        Vector3 p2 = new Vector3(-4.1f, 0.05f, 3.0f);
+        Vector3 p2 = new Vector3(-1.6f, TerrainGen.Height(-1.6f, 25.6f) + 0.05f, 25.6f);
         var player = MakeChar("Marisa", marisa, 0, p1, root, MarisaCols, MarisaRows, MarisaCellW, MarisaCellH);
         var partner = MakeChar("Daiyou", chars, CI_DAIYOU, p2, root);
         // あるけるように する。当たりは カプセル、壁や 卓は 箱の あたりで 止まる
@@ -172,8 +172,8 @@ public static class BuildZashiki {
         cs.target = player.transform.GetChild(0).GetComponent<Renderer>();
         cs.runSpeed = (pm.speed + pm.runSpeed) * 0.5f;   // 歩きと 走りの あいだで 切りかえる
         // むしとり。あみを ふる のは この人
-        player.AddComponent<BugBook>();
-        player.AddComponent<BugCatcher>();
+        var book = player.AddComponent<BugBook>();
+        var catcher = player.AddComponent<BugCatcher>();
 
         // --- カメラ。ななめ 上から 見おろす（真横だと 2Dに 見える）
         var camGO = new GameObject("Main Camera");
@@ -647,10 +647,118 @@ public static class BuildZashiki {
         field.follow = player.transform;
         Debug.Log("[BuildZashiki] 板の 草木 = " + billboards.Count + " まい");
 
+        // ================= 1日の わっか（日づけ・ねる・日記・人）=================
+        // ★遊ぶ 人からの 言：「1日が 終わらない＝何も 積み重ならない」「村に 誰も いない」。
+        //   **風景では なく ここが 遊びの 本体。**
+        //   朝 起きる → きょうは 何を しよう → 夜 ねる → 日記 → つぎの 日。
+        var nikkiGO = new GameObject("Nikki");
+        nikkiGO.transform.SetParent(root, false);
+        var nikki = nikkiGO.AddComponent<Nikki>();
+
+        var dayGO = new GameObject("DayHost");
+        dayGO.transform.SetParent(root, false);
+        var dayHost = dayGO.AddComponent<DayHost>();
+        dayHost.player = player.transform;
+        dayHost.nikki = nikki;
+        dayHost.tod = todc;
+        dayHost.hud = hud;
+        dayHost.font = hud.font;
+        dayHost.panel = hud.panel;
+        // ふとん＝2階の まんなかの 部屋（じぶんの へや）
+        dayHost.futon = new Vector3(-4.125f, BuildHouse.F2 + 0.3f, -3.3f);
+        play.dayHost = dayHost;
+        catcher.dayHost = dayHost;
+        catcher.nikki = nikki;
+        play.nikki = nikki;
+
+        // --- 話しかけられる 人。**日がわりで 一言が 変わる**。
+        //   ★絵は 手もちの コマの 使いまわし（おばあちゃん の 絵は まだ 無い）。
+        //     ここは **人が 描かないと 解けない 素材の 課題**として 残る
+        Person(root, hud, nikki, todc, wx, book, chars, 0,
+               "おばあちゃん", new Vector3(-9.4f, 0f, BuildHouse.Z1 + 0.55f),
+               new[] {
+                   "よう きたねえ。すいか きって あるよ",
+                   "きょうは 暑い ねえ。むりを しなさんな",
+                   "むかしは この あたり、もっと 田んぼが 多かった んだよ",
+                   "夕がたに なったら 蚊が 出る からね",
+                   "あんたの おかあさんも 小さい ころ 虫を とって いたよ",
+               },
+               new[] { "おはよう。ごはん、台所に あるからね" },
+               new[] { "もう 遅い よ。はやく おやすみ" },
+               new[] { "雨だねえ。きょうは 家で ゆっくり しなさい" },
+               new[] { "まあ たくさん とったね。かごが いっぱい じゃないか" });
+
+        Person(root, hud, nikki, todc, wx, book, chars, 3,
+               "おじさん", new Vector3(-9.5f, 0f, 19.4f),
+               new[] {
+                   "畑の きゅうり、もいで いって いいぞ",
+                   "きょうは 草とりだ。手つだうか？ ……いや、あそんで きな",
+                   "山の 上まで 行くなら、日が くれる 前に 帰れよ",
+                   "この へんは カブトムシが 多い。雑木林を さがして みろ",
+               },
+               new[] { "おう、はやいな。朝の うちが すずしいぞ" },
+               new[] { "そろそろ しめる ぞ。気を つけて 帰れ" },
+               new[] { "こんな 日は 畑が よろこぶ" }, null);
+
+        Person(root, hud, nikki, todc, wx, book, chars, 7,
+               "おばさん", new Vector3(-6.4f, 0f, 15.6f),
+               new[] {
+                   "井戸の 水は つめたい よ。すいか ひやして あるからね",
+                   "せんたくもの、そこに ほして あるから さわらないでね",
+                   "祠の ほうへ 行くなら お参り して おいで",
+               }, null,
+               new[] { "もう 暗い よ。足もと 気を つけて" }, null, null);
+
+        foreach (var pn in people) if (pn != null) pn.player = player.transform;
+        people.Clear();
+
+        // --- 大妖精。**川べりに いる。**気弱で おっとりして いて、ちょっと 抜けて いる
+        {
+            var dnpc = partner.AddComponent<Npc>();
+            dnpc.who = "だいようせい";
+            dnpc.range = 2.8f;
+            dnpc.player = player.transform; dnpc.hud = hud; dnpc.nikki = nikki;
+            dnpc.tod = todc; dnpc.weather = wx; dnpc.book = book;
+            dnpc.lines = new[] {
+                "あ、まりささん。……きょうも 川、きれいですね",
+                "わたし、およげないんです。ないしょ ですよ？",
+                "さっき おおきな さかなが いました。ほんとうです",
+                "むしずもう、こわいから みてる だけで いいです……",
+                "この 川、ずっと さきは 海に つづいて いるんですって",
+            };
+            dnpc.morning = new[] { "おはようございます。……あ、おきてました？" };
+            dnpc.night = new[] { "くらいと ちょっと こわいです。もう かえります？" };
+            dnpc.rain = new[] { "あめの 日の 川は こわいです。ちかづかないで くださいね" };
+            dnpc.manyBugs = new[] { "そんなに とって……にがして あげて くださいね？" };
+        }
+
         EditorSceneManager.SaveScene(scene, ScnDir + "Zashiki.unity");
         AssetDatabase.SaveAssets();
         Debug.Log("[BuildZashiki] done: " + ScnDir + "Zashiki.unity");
     }
+
+
+    /// <summary>話しかけられる 人を 1人 立てる。**日がわりで 一言が 変わる**</summary>
+    static void Person(Transform root, BugHud hud, Nikki nikki, TimeOfDay tod, Weather wx,
+                       BugBook book, Texture2D sheet, int cell,
+                       string who, Vector3 pos,
+                       string[] lines, string[] morning, string[] night,
+                       string[] rain, string[] manyBugs) {
+        var p = new Vector3(pos.x, TerrainGen.Height(pos.x, pos.z) + 0.02f, pos.z);
+        // 家の 中なら 床の 高さに のせる
+        if (pos.x > BuildHouse.X0 && pos.x < BuildHouse.X1 &&
+            pos.z > BuildHouse.Z0 && pos.z < BuildHouse.EngawaZ) p.y = BuildHouse.F1 + 0.02f;
+        var go = MakeChar(who, sheet, cell, p, root);
+        var n = go.AddComponent<Npc>();
+        n.who = who; n.range = 2.6f;
+        n.player = hud != null ? null : null;
+        n.hud = hud; n.nikki = nikki; n.tod = tod; n.weather = wx; n.book = book;
+        n.lines = lines; n.morning = morning; n.night = night;
+        n.rain = rain; n.manyBugs = manyBugs;
+        people.Add(n);
+    }
+
+    static readonly System.Collections.Generic.List<Npc> people = new System.Collections.Generic.List<Npc>();
 
     // キャラの 絵：chars_tall.png は **1コマ 48x64 の 10列 x 3行**（index = 行*10 + 列）。
     // まえの 16x16 は 等身が ひくかったので、本人が 用意した 背の たかい 絵に 差し替えた

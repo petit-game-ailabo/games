@@ -70,8 +70,15 @@ public class PlayHost : MonoBehaviour {
     float scanLeft;
     PlaySpot[] all;
 
+    // ★人と 話す・ねる ほうが スペースを つかう ときは 遊びを 止める（2026-08-17）。
+    //   どちらも スペースなので、両方 反応すると 話しかけた とたん 水きりが 始まる
+    [HideInInspector] public DayHost dayHost;
+    // ★あそんだ ことを 日記に ためる
+    [HideInInspector] public Nikki nikki;
+
     void Update() {
         if (Busy) return;
+        if (dayHost != null && dayHost.BlockPlay) { near = null; if (hud != null) hud.SetPrompt(null); return; }
         // **場面ぜんぶを 毎フレーム さがさない。** 遊び場は 動かないので 1度 集めて おき、
         // 近さだけを ときどき 見る
         if (all == null) all = FindObjectsByType<PlaySpot>(FindObjectsSortMode.None);

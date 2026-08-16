@@ -65,14 +65,19 @@ public class BugSpawner : MonoBehaviour {
         if (weather != null && (weather.mode == Weather.Mode.Ame || weather.mode == Weather.Mode.Yudachi)) return;
 
         int ti = TodIndex();
+        // ★**いま 立って いる 土地で 顔ぶれが 変わる。**（2026-08-17）
+        //   どこでも 同じ 虫だと 探検する 理由が 無い。
+        //   川べりは トンボと ホタル、雑木林は カブト・クワガタ・セミ、
+        //   野はらは チョウと バッタ、**山の 上には おにやんま**（ここでしか 出ない）
+        BugBa ba = BaHere();
         int total = 0;
-        foreach (var k in BugKind.All) if (k.tod[ti]) total += k.weight;
+        foreach (var k in BugKind.All) if (k.tod[ti] && Fits(k, ba)) total += Weight(k, ba);
         if (total == 0) return;
         int roll = Random.Range(0, total);
         BugKind kind = null;
         foreach (var k in BugKind.All) {
-            if (!k.tod[ti]) continue;
-            roll -= k.weight;
+            if (!k.tod[ti] || !Fits(k, ba)) continue;
+            roll -= Weight(k, ba);
             if (roll < 0) { kind = k; break; }
         }
         if (kind == null) return;
@@ -81,6 +86,25 @@ public class BugSpawner : MonoBehaviour {
         if (!PickSpot(kind, near, out at)) return;
         Make(kind, at);
     }
+
+    /// <summary>主人公が いま どの 土地に いるか</summary>
+    BugBa BaHere() {
+        var p = player != null ? player.position : transform.position;
+        // 山の 上（高台の あたり）。**高さで 見る**のが いちばん たしか
+        if (p.y > 2.5f) return BugBa.Yama;
+        // 川べり（大きい 川 z=31 と 小川 x=-27 の そば）
+        if (p.z > 22f || Mathf.Abs(p.x + 27f) < 5f) return BugBa.Kawa;
+        // 木立ちの そば＝雑木林。近くに みきが あるか で 見る
+        for (int i = 0; i < trunks.Count; i += 7) {
+            var d = trunks[i] - p; d.y = 0f;
+            if (d.sqrMagnitude < 100f) return BugBa.Zoki;
+        }
+        return BugBa.Nohara;
+    }
+
+    static bool Fits(BugKind k, BugBa ba) { return k.ba == BugBa.Doko || k.ba == ba; }
+    /// <summary>その 土地の 虫は うんと 出やすく する</summary>
+    static int Weight(BugKind k, BugBa ba) { return k.ba == ba ? k.weight * 3 : k.weight; }
 
     bool PickSpot(BugKind kind, bool near, out Vector3 at) {
         at = Vector3.zero;
