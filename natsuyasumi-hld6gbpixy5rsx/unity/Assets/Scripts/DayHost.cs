@@ -47,6 +47,12 @@ public class DayHost : MonoBehaviour {
         npcs = FindObjectsByType<Npc>(FindObjectsSortMode.None);
         Build();
         Refresh();
+        // ★**アプリを 落として 開き直しても 1日を やり直せない。**
+        //   （遊ぶ 人：「夕方6時まで 遊んで、寝ずに 落として 開き直すと 朝6時半に もどる。
+        //     のこり日数の 焦りを 作った そばから、それを 無効に する 裏口が 開いて いる」）
+        if (tod != null && nikki != null && nikki.savedHour > 0.01f) {
+            tod.hour = nikki.savedHour; tod.useHour = true;
+        }
         // 朝の ひとこと
         if (nikki != null && !nikki.greeted) {
             nikki.greeted = true;
@@ -63,7 +69,7 @@ public class DayHost : MonoBehaviour {
     }
 
     /// <summary>ほかの 仕組み（PlayHost・BugCatcher）が 入力を 取って いいか</summary>
-    public bool Busy { get { return st != St.Asobu; } }
+    public bool Busy { get { return st != St.Asobu || readBack >= 0; } }
 
     /// <summary>遊び(PlayHost)を 止める か。**人と 話す・ねる ほうが ゆうせん**</summary>
     public bool BlockPlay { get { return Busy || NearNpc() != null || NearFutonNow; } }
@@ -93,6 +99,13 @@ public class DayHost : MonoBehaviour {
                 t += Time.deltaTime;
                 SetFade(Mathf.Clamp01(t / 1.1f));
                 if (t >= 1.1f) {
+                    // 布団まで はこんで もらう
+                    if (player != null) {
+                        var cc = player.GetComponent<CharacterController>();
+                        if (cc != null) cc.enabled = false;
+                        player.position = futon;
+                        if (cc != null) cc.enabled = true;
+                    }
                     string d = nikki != null ? nikki.Sleep() : "";
                     if (diaryText != null) diaryText.text = d;
                     if (diaryPanel != null) diaryPanel.gameObject.SetActive(true);
@@ -119,13 +132,20 @@ public class DayHost : MonoBehaviour {
                 break;
             case St.Owari:
                 t += Time.deltaTime;
-                if (t > 1.2f && (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))) {
-                    if (nikki != null) nikki.Reset0();
-                    if (book != null) book.Clear();
-                    if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
-                    if (tod != null) { tod.hour = 6.5f; tod.runClock = true; tod.useHour = true; }
-                    Refresh();
-                    st = St.Akeru; t = 0f;
+                // ★**まとめは スペース 1回で 消えない。**（遊ぶ 人：「31日 かけて 集めた
+                //   ずかんと 10日ぶんの 日記が スペース 1回で 消える。一番 残したい ものを
+                //   一番 確実に 消す 設計」）→ 3たくに する
+                if (t > 1.2f) {
+                    if (Input.GetKeyDown(KeyCode.X)) { readBack = 0; ShowPast(); }
+                    else if (Input.GetKeyDown(KeyCode.Z)) { if (hud != null) hud.OpenBook(); }
+                    else if (Input.GetKeyDown(KeyCode.Return)) {
+                        if (nikki != null) nikki.Reset0();
+                        if (book != null) book.Clear();
+                        if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
+                        if (tod != null) { tod.hour = 6.5f; tod.runClock = true; tod.useHour = true; }
+                        Refresh();
+                        st = St.Akeru; t = 0f;
+                    }
                 }
                 break;
             case St.Akeru:
@@ -143,7 +163,14 @@ public class DayHost : MonoBehaviour {
                     st = St.Asobu;
                     if (nikki != null) {
                         nikki.greeted = true;
-                        if (hud != null) hud.Say(nikki.Morning());
+                        if (hud != null) {
+                            hud.Say(carried ? "気が ついたら 布団の 中だったぜ。だれが はこんだんだ？"
+                                            : nikki.Morning());
+                        }
+                        carried = false;
+                        // ★**きょうの できごとを 知らせる。**予告が あるから 明日が 待ち遠しく なる
+                        news = nikki.TodayNews();
+                        newsLeft = news != null ? 3.4f : 0f;
                     }
                 }
                 break;
@@ -151,9 +178,38 @@ public class DayHost : MonoBehaviour {
     }
 
     float nagged;
+    bool carried;      // 力ずくで 寝かされた＝だれかが 布団まで はこんだ
+
+    int readBack = -1;
+
+    /// <summary>すぎた 日の 日記を 見せる（X）</summary>
+    void ShowPast() {
+        if (nikki == null || nikki.Past.Count == 0) {
+            if (hud != null) hud.Say("まだ 日記は 1日も 書いて いない");
+            return;
+        }
+        readBack = Mathf.Clamp(readBack, 0, nikki.Past.Count - 1);
+        int i = nikki.Past.Count - 1 - readBack;
+        if (diaryText != null)
+            diaryText.text = nikki.Past[i] + "\n← → で 前後の 日　　X：とじる";
+        if (diaryPanel != null) diaryPanel.gameObject.SetActive(true);
+    }
 
     void Asobu() {
         if (player == null || nikki == null) return;
+
+        // ★**日記は 読み返せる。**（遊ぶ 人：「Past に 10日ぶん ためて いるのに、
+        //   プレイヤーが 読む 手段が ない。31日目に『あの日 こんな ことしたな』と
+        //   遡れる ことが、積み重ねの 実感そのもの」）
+        if (readBack >= 0) {
+            if (Input.GetKeyDown(KeyCode.X)) {
+                readBack = -1;
+                if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
+            } else if (Input.GetKeyDown(KeyCode.RightArrow)) { readBack++; ShowPast(); }
+            else if (Input.GetKeyDown(KeyCode.LeftArrow)) { readBack = Mathf.Max(0, readBack - 1); ShowPast(); }
+            return;
+        }
+        if (Input.GetKeyDown(KeyCode.X)) { readBack = 0; ShowPast(); return; }
 
         // ★**夜ふかしは できない。**（遊ぶ 人：「布団に 行かなければ 深夜3時の 8月1日を
         //   延々と 遊べる。時計と 暦が つながって いない」）
@@ -164,6 +220,9 @@ public class DayHost : MonoBehaviour {
             if (h >= 2f && h < 4.5f) {                 // 深夜2時：ここまで
                 if (hud != null) hud.Say("もう 目を あけて いられない…");
                 if (tod != null) tod.runClock = false;
+                // ★**気を うしなった 場所で 起きない。**（遊ぶ 人：「裏山の 高台で
+                //   2時を むかえると、そこで 暗転し、6時半に 高台で 立ったまま 起きます」）
+                carried = true;
                 st = St.Kurayami; t = 0f;
                 return;
             }
@@ -179,23 +238,24 @@ public class DayHost : MonoBehaviour {
         // **人が いたら まず そちら。** ねる より 話す ほうが 手前に ある
         var npc = NearNpc();
         if (npc != null) {
-            if (hud != null) hud.SetPrompt(npc.Prompt);
+            if (hud != null) hud.Offer(npc.Prompt, 50);
             if (Input.GetKeyDown(KeyCode.Space)) npc.Talk();
             return;
         }
         if (!NearFuton) return;
         bool lateEnough = tod == null || tod.hour >= sleepFrom || tod.hour < 4.5f;
         if (!lateEnough) {
-            if (hud != null) hud.SetPrompt("まだ 明るい。夜に なったら ねよう");
+            if (hud != null) hud.Offer("まだ 明るい。夜に なったら ねよう", 60);
             return;
         }
-        if (hud != null) hud.SetPrompt("スペース：ねる");
+        if (hud != null) hud.Offer("スペース：ねる", 60);
         if (Input.GetKeyDown(KeyCode.Space)) {
-            if (hud != null) hud.SetPrompt(null);
             if (tod != null) tod.runClock = false;
             st = St.Kurayami; t = 0f;
         }
     }
+
+    string news; float newsLeft;
 
     void Refresh() {
         if (dayText == null || nikki == null) return;
@@ -205,6 +265,13 @@ public class DayHost : MonoBehaviour {
 
     /// <summary>時こくの 表示を 毎フレーム 更新（TimeOfDay が 進める）</summary>
     void LateUpdate() {
+        // 朝の 知らせは ひとことの あとで 出す
+        if (newsLeft > 0f) {
+            newsLeft -= Time.deltaTime;
+            if (newsLeft <= 0f && news != null && hud != null) { hud.Say(news); news = null; }
+        }
+        // 時こくを おぼえる（アプリを 落として 開き直しても 1日を やり直せない ように）
+        if (nikki != null && tod != null) nikki.savedHour = tod.hour;
         if (dayText != null && nikki != null && tod != null) {
             int left = Nikki.LastDay - nikki.day;
             dayText.text = string.Format("8月 {0}日　{1}　のこり {2}日",

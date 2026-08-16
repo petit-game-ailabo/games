@@ -12,6 +12,8 @@ using UnityEngine.UI;
 //   → やじるし＝つつく ところ。スペース＝声えん（連打の 意味を 変えた）。
 //     **結果を 送るのは べつの キー**（連打の いきおいで 画面が 飛ばない ように）
 public class BugSumo : MonoBehaviour {
+    // ★**むしずもうは いちばん 日記に 書きたい 出来事。**（遊ぶ 人の 指摘）
+    [HideInInspector] public Nikki nikki;
     public Texture2D atlas;
     public Sprite panel;
     public Font font;
@@ -252,6 +254,13 @@ public class BugSumo : MonoBehaviour {
     void Win(bool won) {
         phase = 2; resultT = 0f;
         if (won) { wins++; PlayerPrefs.SetInt(WinKey, wins); PlayerPrefs.Save(); }
+        // ★日記に。**勝ち負けと 通算を 入れる**
+        if (nikki != null) {
+            string nm = mine != null ? mine.name : "むし";
+            nikki.Note("sumo", won
+                ? string.Format("むしずもうで かった。おれの {0}は つよいぜ（つうさん {1}しょう）", nm, wins)
+                : "むしずもうで まけた。つぎは かつ", won ? 85 : 60);
+        }
         var cs = FindFirstObjectByType<CharSprite>();
         if (cs != null) cs.ShowMood(won ? CharSprite.Pose.Tanoshii : CharSprite.Pose.Kanashimi, 2.4f);
         if (callout != null) callout.text = "";

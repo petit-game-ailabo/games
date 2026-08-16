@@ -116,7 +116,7 @@ public class PlayHost : MonoBehaviour {
 
     void Update() {
         if (Busy) return;
-        if (dayHost != null && dayHost.BlockPlay) { near = null; if (hud != null) hud.SetPrompt(null); return; }
+        if (dayHost != null && dayHost.BlockPlay) { near = null; return; }
         // **場面ぜんぶを 毎フレーム さがさない。** 遊び場は 動かないので 1度 集めて おき、
         // 近さだけを ときどき 見る
         if (all == null) all = FindObjectsByType<PlaySpot>(FindObjectsSortMode.None);

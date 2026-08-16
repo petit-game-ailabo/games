@@ -117,7 +117,7 @@ public class Nikki : MonoBehaviour {
         sb.AppendFormat("書いた 日記　{0} 日ぶん\n\n", Past.Count);
         sb.AppendLine("ひと月、あっという間だったぜ。");
         sb.AppendLine("……また 来年、来るからな。\n");
-        sb.AppendLine("スペース：はじめから");
+        sb.AppendLine("X：日記を 読み返す　　Z：ずかんを 見る　　Enter：はじめから");
         return sb.ToString();
     }
 
@@ -159,6 +159,44 @@ public class Nikki : MonoBehaviour {
         if (!string.IsNullOrEmpty(s))
             foreach (var t in s.Split('␞'))
                 if (!string.IsNullOrEmpty(t)) Past.Add(t);
+    }
+
+    // ================= カレンダー =================
+    // ★遊ぶ 人からの 言：「8月2日と 8月28日で、起きる ことが 何ひとつ 違わない。
+    //   のこり28日は **減って いく だけの 数字**。減った 先に 何も 無い。
+    //   ぼくなつで 8月15日が 特別だったのは、**カレンダーの 上に 事件が 置いて あった**から」
+    //
+    // ★**予告が あることが 肝心。**「あさって 祭りだ」と 聞いた 瞬間に、
+    //   プレイヤーは あした 寝る 理由が できる。
+    public enum Koto2 { Nashi, Niji, MatsuriYokoku, Matsuri, Toro, Taifu, Shukudai, Owakare }
+
+    /// <summary>その日の できごと</summary>
+    public Koto2 Today() { return OnDay(day); }
+    public static Koto2 OnDay(int d) {
+        switch (d) {
+            case 5:  return Koto2.Niji;           // 夕立の あと 虹
+            case 8:  return Koto2.MatsuriYokoku;  // 「あさって 祭りだ」
+            case 10: return Koto2.Matsuri;        // 祠に 提灯。夜だけ 屋台
+            case 15: return Koto2.Toro;           // 川に とうろうを ながす
+            case 20: return Koto2.Taifu;          // 台風。一日じゅう 雨
+            case 25: return Koto2.Shukudai;       // 「宿題は やったのかい」
+            case 30: return Koto2.Owakare;        // みんなが「もう 帰るのかい」
+        }
+        return Koto2.Nashi;
+    }
+
+    /// <summary>朝に 出す できごとの 知らせ</summary>
+    public string TodayNews() {
+        switch (Today()) {
+            case Koto2.Niji:          return "ゆうべの 雨の あとだ。空が やけに きれいだぜ";
+            case Koto2.MatsuriYokoku: return "なんだか 村が そわそわ して いるな";
+            case Koto2.Matsuri:       return "きょうは 祭りだ！ 夜が たのしみだぜ";
+            case Koto2.Toro:          return "きょうは とうろう ながしの 日 らしい";
+            case Koto2.Taifu:         return "うわ、すごい 雨だ。きょうは 外に 出られないな";
+            case Koto2.Shukudai:      return "……そういえば 宿題、まだ 手を つけて ないぜ";
+            case Koto2.Owakare:       return "あしたで さいごか。なんだか さみしいな";
+        }
+        return null;
     }
 
     /// <summary>はじめから やりなおす</summary>

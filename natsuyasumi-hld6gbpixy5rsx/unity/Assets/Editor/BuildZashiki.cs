@@ -675,6 +675,7 @@ public static class BuildZashiki {
         catcher.voice = voice;
         catcher.dayHost = dayHost;
         catcher.nikki = nikki;
+        sumo.nikki = nikki;
         play.nikki = nikki;
 
         // --- 話しかけられる 人。**日がわりで 一言が 変わる**。
@@ -692,7 +693,9 @@ public static class BuildZashiki {
                new[] { "おはよう。ごはん、台所に あるからね" },
                new[] { "もう 遅い よ。はやく おやすみ" },
                new[] { "雨だねえ。きょうは 家で ゆっくり しなさい" },
-               new[] { "まあ たくさん とったね。かごが いっぱい じゃないか" });
+               new[] { "まあ たくさん とったね。かごが いっぱい じゃないか" },
+               // 朝は 台所(土間)、夜は 茶の間
+               new Vector3(6.0f, 0f, 0.0f), new Vector3(-4.125f, 0f, 3.45f));
 
         Person(root, hud, nikki, todc, wx, book, chars, 3,
                "おじさん", new Vector3(-9.5f, 0f, 19.4f),
@@ -704,7 +707,9 @@ public static class BuildZashiki {
                },
                new[] { "おう、はやいな。朝の うちが すずしいぞ" },
                new[] { "そろそろ しめる ぞ。気を つけて 帰れ" },
-               new[] { "こんな 日は 畑が よろこぶ" }, null);
+               new[] { "こんな 日は 畑が よろこぶ" }, null,
+               // 朝は 畑、夕方は 井戸で 道具を あらう、夜は 家の 中（＝畑には 居ない）
+               new Vector3(-9.5f, 0f, 19.4f), new Vector3(-4.125f, 0f, -3.3f));
 
         Person(root, hud, nikki, todc, wx, book, chars, 7,
                "おばさん", new Vector3(-6.4f, 0f, 15.6f),
@@ -713,10 +718,25 @@ public static class BuildZashiki {
                    "せんたくもの、そこに ほして あるから さわらないでね",
                    "祠の ほうへ 行くなら お参り して おいで",
                }, null,
-               new[] { "もう 暗い よ。足もと 気を つけて" }, null, null);
+               new[] { "もう 暗い よ。足もと 気を つけて" }, null, null,
+               // 朝は 裏庭の 物ほし、夜は 台所
+               new Vector3(-13f, 0f, -9.5f), new Vector3(7.0f, 0f, -3.0f));
 
         foreach (var pn in people) if (pn != null) pn.player = player.transform;
         people.Clear();
+
+        // --- にわとり。**動いて いる ものが 1つも 無いのが いちばん 効いて いた**
+        //   絵は 虫の アトラスの コマを 借りる（にわとりの 絵は 無い＝素材の 課題）
+        for (int i = 0; i < 4; i++) {
+            float hx = 3.0f + i * 1.3f, hz = 8.0f + (i % 2) * 1.6f;
+            var t2 = MakeChar("Niwatori" + i, chars, 20 + i, 
+                              new Vector3(hx, TerrainGen.Height(hx, hz) + 0.02f, hz), root);
+            t2.transform.localScale = Vector3.one * 0.55f;   // にわとりの 大きさ
+            var ik = t2.AddComponent<Ikimono>();
+            ik.home = new Vector3(hx, 0f, hz); ik.roam = 4.2f;
+            ik.speed = Random.Range(0.4f, 0.7f);
+            ik.player = player.transform; ik.tod = todc;
+        }
 
         // --- 大妖精。**川べりに いる。**気弱で おっとりして いて、ちょっと 抜けて いる
         {
@@ -736,6 +756,7 @@ public static class BuildZashiki {
             dnpc.night = new[] { "くらいと ちょっと こわいです。もう かえります？" };
             dnpc.rain = new[] { "あめの 日の 川は こわいです。ちかづかないで くださいね" };
             dnpc.manyBugs = new[] { "そんなに とって……にがして あげて くださいね？" };
+            dnpc.hideOnRain = true;   // 本人が「あめの日の川はこわい」と 言って いる ので
         }
 
         EditorSceneManager.SaveScene(scene, ScnDir + "Zashiki.unity");
@@ -749,7 +770,8 @@ public static class BuildZashiki {
                        BugBook book, Texture2D sheet, int cell,
                        string who, Vector3 pos,
                        string[] lines, string[] morning, string[] night,
-                       string[] rain, string[] manyBugs) {
+                       string[] rain, string[] manyBugs,
+                       Vector3? asa = null, Vector3? yoru = null) {
         var p = new Vector3(pos.x, TerrainGen.Height(pos.x, pos.z) + 0.02f, pos.z);
         // 家の 中なら 床の 高さに のせる
         if (pos.x > BuildHouse.X0 && pos.x < BuildHouse.X1 &&
@@ -761,7 +783,23 @@ public static class BuildZashiki {
         n.hud = hud; n.nikki = nikki; n.tod = tod; n.weather = wx; n.book = book;
         n.lines = lines; n.morning = morning; n.night = night;
         n.rain = rain; n.manyBugs = manyBugs;
+        // ★**時間帯で 居る 場所が 変わる。**「行ったら 居なかった」が 起きる だけで
+        //   人は 置き物では なく なる（遊ぶ 人の 指摘）
+        if (asa.HasValue || yoru.HasValue) {
+            n.hasMoves = true;
+            n.posHiru = p;
+            n.posAsa = asa.HasValue ? Ground(asa.Value) : p;
+            n.posYoru = yoru.HasValue ? Ground(yoru.Value) : p;
+        }
         people.Add(n);
+    }
+
+    /// <summary>地めん（家の 中なら 床）に のせる</summary>
+    static Vector3 Ground(Vector3 v) {
+        float y = TerrainGen.Height(v.x, v.z) + 0.02f;
+        if (v.x > BuildHouse.X0 && v.x < BuildHouse.X1 &&
+            v.z > BuildHouse.Z0 && v.z < BuildHouse.EngawaZ) y = BuildHouse.F1 + 0.02f;
+        return new Vector3(v.x, y, v.z);
     }
 
     static readonly System.Collections.Generic.List<Npc> people = new System.Collections.Generic.List<Npc>();

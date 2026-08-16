@@ -66,11 +66,12 @@ public class BugCatcher : MonoBehaviour {
             string p = null;
             if (play != null && play.NearSpot != null) p = play.NearSpot.Prompt;
             if (p == null && sumo != null) p = sumo.PromptFor(transform);
-            hud.SetPrompt(p);
+            hud.Offer(p, 20);
         }
 
         // ★人と 話す・ねる ほうが ゆうせん。**話しかけた とたん あみを ふる**のを 止める
         if (dayHost != null && dayHost.BlockPlay) { if (move != null) move.locked = swing >= 0f; return; }
+        if (dayHost != null && dayHost.Busy) { if (move != null) move.locked = false; return; }
 
         bool pressed = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)
                     || Input.GetKeyDown(KeyCode.J) || Input.GetMouseButtonDown(0);

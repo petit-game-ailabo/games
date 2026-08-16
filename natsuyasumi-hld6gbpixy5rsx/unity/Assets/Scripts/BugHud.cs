@@ -85,14 +85,35 @@ public class BugHud : MonoBehaviour {
     }
 
     /// <summary>足もとの ひとこと（null で 消す）。毎フレーム 呼ばれる 前提</summary>
+    // ★**足もとの ひとことは ここが 決める。**（2026-08-17）
+    //   前は BugCatcher と DayHost が それぞれ 好きに 書きこんで いて、
+    //   あとから 書いた 空っぽが 先の ひとことを 消して いた
+    //  （遊ぶ 人：「スペースが 同時に 2か所 出て いて、どっちが 起きるか 分からない」）。
+    //   毎フレーム **候補と 強さ**を もらい、いちばん 強い ものだけ 出す。
+    string offerText; int offerRank = int.MinValue;
+
+    /// <summary>足もとに 出したい ひとことを 出す。強い ものが 勝つ</summary>
+    public void Offer(string s, int rank) {
+        if (string.IsNullOrEmpty(s)) return;
+        if (rank <= offerRank) return;
+        offerRank = rank; offerText = s;
+    }
+
+    /// <summary>むかしの 呼びかた。いまは 弱い Offer と 同じ</summary>
     public void SetPrompt(string s) {
+        if (string.IsNullOrEmpty(s)) return;
+        Offer(s, 0);
+    }
+
+    void LateUpdate() {
         if (promptPanel == null) return;
-        bool on = !string.IsNullOrEmpty(s);
-        if (on && prompt.text != s) prompt.text = s;
+        bool on = !string.IsNullOrEmpty(offerText);
+        if (on && prompt.text != offerText) prompt.text = offerText;
         if (promptPanel.gameObject.activeSelf != on) promptPanel.gameObject.SetActive(on);
         // 足もとに 出て いる あいだは 右下を ひっこめる
         if (hintPanel != null && hintPanel.gameObject.activeSelf == on)
             hintPanel.gameObject.SetActive(!on);
+        offerText = null; offerRank = int.MinValue;
     }
 
     public void Say(string s) {

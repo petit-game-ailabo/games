@@ -49,8 +49,20 @@ public class Npc : MonoBehaviour {
     [HideInInspector] public bool hideOnRain;    // 雨の 日は 消える（大妖精）
     float moveLeft;
 
+    /// <summary>いま 姿が あるか。**消えて いる ときは 話しかけられない。**
+    /// （遊ぶ 人：「雨の 日、大妖精は 見えないのに 話しかけられる。
+    ///   姿の 無い 相手が『あめの日の川はこわいです』と 喋る」）</summary>
+    public bool Iru {
+        get {
+            if (!hideOnRain) return true;
+            return !(weather != null &&
+                     (weather.mode == Weather.Mode.Ame || weather.mode == Weather.Mode.Yudachi));
+        }
+    }
+
     public bool Near {
         get {
+            if (!Iru) return false;
             if (player == null) return false;
             var d = player.position - transform.position;
             d.y *= 0.5f;
@@ -68,10 +80,11 @@ public class Npc : MonoBehaviour {
 
         // 雨なら 消える
         bool wet = weather != null && (weather.mode == Weather.Mode.Ame || weather.mode == Weather.Mode.Yudachi);
-        var rend = GetComponentInChildren<Renderer>();
         if (hideOnRain) {
             bool show = !wet;
-            if (rend != null && rend.enabled != show) rend.enabled = show;
+            // **子が 複数 ある ので ぜんぶ 消す**（1個だけだと 消え残る）
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+                if (r.enabled != show) r.enabled = show;
             if (!show) return;
         }
         if (!hasMoves || tod == null) return;
