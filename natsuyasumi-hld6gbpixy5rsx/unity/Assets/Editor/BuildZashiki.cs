@@ -253,29 +253,42 @@ public static class BuildZashiki {
         float wx0 = TerrainGen.PlayMinX, wx1 = TerrainGen.PlayMaxX;
         float wz0 = TerrainGen.PlayMinZ, wz1 = TerrainGen.PlayMaxZ;
         Invisible("Bound_Front", root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz1), new Vector3(wx1 - wx0, 3f, 0.3f));
-        Invisible("Bound_Left",  root, new Vector3(wx0, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
         Invisible("Bound_Right", root, new Vector3(wx1, 1.2f, (wz0 + wz1) * 0.5f), new Vector3(0.3f, 3f, wz1 - wz0));
-        // おくの かべは **山への 登り口ぶんだけ 開けて おく**。
-        // ここが 高台への 一本道に なる
+        Invisible("Bound_Back",  root, new Vector3((wx0 + wx1) * 0.5f, 1.2f, wz0), new Vector3(wx1 - wx0, 3f, 0.3f));
+        // ★山道は **左の かべから 出る**（2回 曲げたので、四角の おくでは なく 左を 抜ける）。
+        //   その ぶんだけ 開けて、あとは ふさぐ
         float tx = TerrainGen.TrailX, th = TerrainGen.TrailHalf;
-        Invisible("Bound_Back_L", root, new Vector3((wx0 + (tx - th)) * 0.5f, 1.2f, wz0),
-                  new Vector3((tx - th) - wx0, 3f, 0.3f));
-        Invisible("Bound_Back_R", root, new Vector3(((tx + th) + wx1) * 0.5f, 1.2f, wz0),
-                  new Vector3(wx1 - (tx + th), 3f, 0.3f));
+        float gz = TerrainGen.TrailBendA.y;
+        Invisible("Bound_Left_S", root, new Vector3(wx0, 1.2f, ((gz + th) + wz1) * 0.5f),
+                  new Vector3(0.3f, 3f, wz1 - (gz + th)));
+        Invisible("Bound_Left_N", root, new Vector3(wx0, 1.2f, (wz0 + (gz - th)) * 0.5f),
+                  new Vector3(0.3f, 3f, (gz - th) - wz0));
 
-        // --- 山への 一本道と 高台の かこい。
+        // --- 山への 一本道（2回 直角に 曲がる）と 高台の かこい。
         // **のぼり坂なので 高さは 地めんに あわせて 置く。**
         // まっすぐな 箱を 1つ 置くと、坂の 上では 埋まって しまい 素通りできた
         var lk = TerrainGen.Lookout;
+        var bA = TerrainGen.TrailBendA;   // 奥へ → 左へ
+        var bB = TerrainGen.TrailBendB;   // 左へ → 奥へ
         float lhx = TerrainGen.LookoutHalfX, lhz = TerrainGen.LookoutHalfZ;
-        WallRun(root, "Trail_L", new Vector2(tx - th, wz0), new Vector2(tx - th, lk.y + lhz));
-        WallRun(root, "Trail_R", new Vector2(tx + th, wz0), new Vector2(tx + th, lk.y + lhz));
+        // 1本め（奥へ）の 両がわ
+        WallRun(root, "T1_R", new Vector2(tx + th, wz0), new Vector2(tx + th, bA.y - th));
+        WallRun(root, "T1_L", new Vector2(tx - th, wz0), new Vector2(tx - th, bA.y + th));
+        // 曲がり角の そとがわ（行きどまりの かべ）
+        WallRun(root, "T1_End", new Vector2(tx - th, bA.y - th), new Vector2(tx + th, bA.y - th));
+        // 2本め（左へ）の 上下
+        WallRun(root, "T2_N", new Vector2(tx - th, bA.y - th), new Vector2(bB.x + th, bA.y - th));
+        WallRun(root, "T2_S", new Vector2(tx - th, bA.y + th), new Vector2(bB.x - th, bA.y + th));
+        // 3本め（また 奥へ）の 両がわ
+        WallRun(root, "T3_R", new Vector2(bB.x + th, bA.y - th), new Vector2(bB.x + th, lk.y + lhz));
+        WallRun(root, "T3_L", new Vector2(bB.x - th, bA.y + th), new Vector2(bB.x - th, lk.y + lhz));
+        // 高台の かこい
         WallRun(root, "Look_L",  new Vector2(lk.x - lhx, lk.y + lhz), new Vector2(lk.x - lhx, lk.y - lhz));
         WallRun(root, "Look_R",  new Vector2(lk.x + lhx, lk.y + lhz), new Vector2(lk.x + lhx, lk.y - lhz));
         WallRun(root, "Look_B",  new Vector2(lk.x - lhx, lk.y - lhz), new Vector2(lk.x + lhx, lk.y - lhz));
-        // 高台の 手前がわ（一本道の 出口の 両わき）
-        WallRun(root, "Look_F1", new Vector2(lk.x - lhx, lk.y + lhz), new Vector2(tx - th, lk.y + lhz));
-        WallRun(root, "Look_F2", new Vector2(tx + th, lk.y + lhz), new Vector2(lk.x + lhx, lk.y + lhz));
+        // 高台の 手前がわ（3本めの 出口の 両わき）
+        WallRun(root, "Look_F1", new Vector2(lk.x - lhx, lk.y + lhz), new Vector2(bB.x - th, lk.y + lhz));
+        WallRun(root, "Look_F2", new Vector2(bB.x + th, lk.y + lhz), new Vector2(lk.x + lhx, lk.y + lhz));
 
         // --- 高台に のぼると カメラが 裏へ まわりこむ。
         // ふだんは 正面 固定の まま＝ここだけの 見せ場に する
@@ -297,18 +310,38 @@ public static class BuildZashiki {
                 fogScale = 0.7f,
                 blend = 1.0f,
             },
-            // ※高台の 見せ場は **いったん 止めて ある。**
-            //   谷は 高台から 見て 手前(+Z)に あるので、見わたすには 180度 回すしか なく、
-            //   「回すのは 90度まで」と 食いちがう。90度で 撮ったら 斜面しか 映らず
-            //   主人公も 画から 出た。高台を 谷の 東がわへ 移せば 90度で 成りたつので、
-            //   そのときに 入れなおす
+            // ★山道は **曲がり角ごとに 90度ずつ** 回す。
+            //   180 →(左へ 曲がる) 270 →(また 奥へ) 0。
+            //   90度を 2回 かさねて 180度に する＝どの 1回も 90度で すむ（本人の 案）。
+            //   0度に なった ところが 高台＝谷を 見わたす むき
             new CamOrbit.Zone {
-                name = "みはらし（いまは 止めて ある）",
-                // 手が とどかない ところに 置いて 効かなく して ある。
-                // 高台じたい（登り道・棚・かこい）は そのまま 残す＝あとで 入れなおせる
-                area = new Bounds(new Vector3(0f, -9999f, 0f), Vector3.one),
-                yaw = 180f, pitch = 32f, distance = 17f,
-                fogScale = 0.33f, blend = 0.8f,
+                name = "山道2（左へ）",
+                area = new Bounds(new Vector3((tx + bB.x) * 0.5f, TerrainGen.Height(bB.x, bA.y) + 3f, bA.y),
+                                  new Vector3(Mathf.Abs(tx - bB.x) + th * 2f, 14f, th * 2f + 1f)),
+                yaw = 270f, pitch = 28f, distance = 10f,
+                lookOffset = new Vector3(-2f, 0.4f, 0f),
+                blend = 1.1f,
+            },
+            new CamOrbit.Zone {
+                name = "山道3（また 奥へ）",
+                area = new Bounds(new Vector3(bB.x, TerrainGen.Height(bB.x, (bA.y + lk.y) * 0.5f) + 3f,
+                                              (bA.y + lk.y) * 0.5f),
+                                  new Vector3(th * 2f + 1f, 16f, Mathf.Abs(bA.y - lk.y))),
+                yaw = 0f, pitch = 28f, distance = 10f,
+                lookOffset = new Vector3(0f, 0.4f, -1.5f),
+                blend = 1.1f,
+            },
+            new CamOrbit.Zone {
+                name = "みはらし",
+                area = new Bounds(new Vector3(lk.x, TerrainGen.LookoutY + 2f, lk.y),
+                                  new Vector3(lhx * 2f + 1f, 14f, lhz * 2f + 1f)),
+                // ここまでで すでに 0度。**もう 回さない**で、すこし 引くだけ。
+                // 引きすぎ・見おろしすぎは だめ。18m/30度で 撮ったら カメラが
+                // うしろの 斜面に 押し上げられ、空から 見た 図に なって 主人公が 消えた
+                yaw = 0f, pitch = 24f, distance = 11f,
+                lookOffset = new Vector3(0f, 0.5f, 2f),
+                // もやを 薄く しないと 谷が 灰みどりに 溶けて 見わたせない
+                fogScale = 0.28f, blend = 0.8f,
             },
         };
 
@@ -443,16 +476,19 @@ public static class BuildZashiki {
         // 左右の へりに しげみを ならべて、目にも 行きどまりだと 分かる ように する
         {
             float step = 2.3f;
+            // 左右の へり。**左は 山道の 出口ぶんだけ あける**（道を 2回 曲げたので
+            // 抜けるのは おくでは なく 左）
+            float gapZ = TerrainGen.TrailBendA.y, gapH = TerrainGen.TrailHalf + 0.6f;
             for (float z = TerrainGen.PlayMinZ; z <= TerrainGen.PlayMaxZ; z += step) {
                 foreach (float x in new[] { TerrainGen.PlayMinX - 0.7f, TerrainGen.PlayMaxX + 0.7f }) {
+                    if (x < 0f && Mathf.Abs(z - gapZ) < gapH) continue;   // 山道の 出口
                     var p = new Vector3(x, TerrainGen.Height(x, z), z);
                     NatureTinted("Ikegaki" + x + "_" + z, nature, NA_SHIGE_A, p,
                                  NatureCell * 0.95f, root, new Color(0.86f, 0.94f, 0.86f));
                 }
             }
-            // おくの へり（山の 足もと）。登り口の ぶんだけ あける
+            // おくの へり（山の 足もと）。こちらは ぜんぶ ふさぐ
             for (float x = TerrainGen.PlayMinX; x <= TerrainGen.PlayMaxX; x += step) {
-                if (x > -22.5f && x < -17.5f) continue;      // 山への 登り口
                 float z = TerrainGen.PlayMinZ - 0.7f;
                 var p = new Vector3(x, TerrainGen.Height(x, z), z);
                 NatureTinted("IkegakiN" + x, nature, NA_SHIGE_B, p,

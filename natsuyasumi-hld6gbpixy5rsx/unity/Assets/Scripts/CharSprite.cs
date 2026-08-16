@@ -53,6 +53,8 @@ public class CharSprite : MonoBehaviour {
     public bool FacingRight { get { return dir >= 5 && dir <= 7; } }
     /// <summary>奥か 手前を 向いて いる（＝あみは たて振り）</summary>
     public bool FacingDepth { get { return dir == 0 || dir == 4; } }
+    /// <summary>おく（画面の 奥）を 向いて いる。あみを 手前から 奥へ ふる</summary>
+    public bool FacingAway { get { return dir == 4; } }
 
     /// <summary>喜・怒・哀・楽 を しばらく 出す</summary>
     public void ShowMood(Pose p, float seconds) {

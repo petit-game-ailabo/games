@@ -180,6 +180,9 @@ public class BugSpawner : MonoBehaviour {
         m = new Material(sh);
         m.SetFloat("_Cutoff", 0.5f);
         m.SetFloat("_BreatheAmp", 0f); m.SetFloat("_SwayAmp", 0f);
+        // **虫は 主人公の まわりの 穴で 消さない。**
+        // 消えると そこに 居るのか 分からず、つかまえようが なくなる
+        m.SetFloat("_HoleIgnore", 1f);
         m.SetFloat("_Wrap", 0.8f);           // 小さいので 影で つぶれない ように 明るめ
         int col = kind.Index % BugKind.Cols, row = kind.Index / BugKind.Cols;
         var s = new Vector2(1f / BugKind.Cols, 1f / BugKind.Rows);

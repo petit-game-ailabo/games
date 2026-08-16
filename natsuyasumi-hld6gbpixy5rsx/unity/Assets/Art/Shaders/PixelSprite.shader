@@ -24,6 +24,10 @@ Shader "Natsuyasumi/PixelSprite"
         _Phase("Phase Offset", Float) = 0
 
         _Wrap("Light Wrap", Range(0,1)) = 0.55
+
+        // 1 に すると **主人公の まわりの 穴で 消えない**。
+        // 虫は これを 立てる。見えない 虫は つかまえられない
+        [Toggle] _HoleIgnore("Ignore see-through hole", Float) = 0
     }
 
     SubShader
@@ -52,6 +56,7 @@ Shader "Natsuyasumi/PixelSprite"
             half   _SwaySpeed;
             float  _Phase;
             half   _Wrap;
+            half   _HoleIgnore;
         CBUFFER_END
 
         TEXTURE2D(_BaseMap);
@@ -69,7 +74,7 @@ Shader "Natsuyasumi/PixelSprite"
         // これが ないと 主人公の 板 じしんや うしろの 景色まで 消える
         void ClipHole(float4 positionCS, float3 positionWS)
         {
-            if (_HoleParams.z <= 0.0001) return;
+            if (_HoleParams.z <= 0.0001 || _HoleIgnore > 0.5) return;
             float viewZ = -TransformWorldToView(positionWS).z;
             if (viewZ >= _HoleParams.w - 0.35) return;
 

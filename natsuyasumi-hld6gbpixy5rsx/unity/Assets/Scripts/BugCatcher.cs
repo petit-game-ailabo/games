@@ -125,13 +125,21 @@ public class BugCatcher : MonoBehaviour {
         float t = Mathf.Clamp01(k);
         bool up = move != null && move.DepthFacing;
         if (up) {
-            // **たて振り。** 奥/手前を 向いて いる ときは、頭の 上へ 大きく 振り上げる。
-            // 空の 高い ところを とぶ 虫は よこ振りでは 当たらない
-            float pitch = Mathf.SmoothStep(35f, -78f, t);   // 下から 上へ 振り上げる
-            net.rotation = Quaternion.LookRotation(fwd, Vector3.up) * Quaternion.Euler(pitch, 0f, 0f);
+            // **たて振り。奥/手前の どちらを 向いて いるかで 振る むきを 変える。**
+            //   おく向き　… 手前から 奥へ（自分の 前へ 払いだす）
+            //   手前向き … 奥から 手前へ（自分の ほうへ 引きよせる）
+            // 向きに かかわらず 同じ 振りかたを して いた ころは、
+            // 手前を 向いて いるのに 背中がわへ 振って いた
+            bool away = move != null && move.FacingAway;
+            float s = away ? 1f : -1f;
+            // 奥ゆき方向に 手前(-0.35)から 奥(+0.95)へ 通す。手前向きなら 逆に たどる
+            float depth = Mathf.SmoothStep(-0.35f, 0.95f, t) * s;
+            float pitch = Mathf.SmoothStep(away ? 40f : -70f, away ? -70f : 40f, t);
+            net.rotation = Quaternion.LookRotation(fwd * s, Vector3.up) * Quaternion.Euler(pitch, 0f, 0f);
             net.position = transform.position
-                         + Vector3.up * (0.72f + 0.34f * Mathf.Sin(t * Mathf.PI))
-                         + right * (face * 0.10f);
+                         + Vector3.up * (0.72f + 0.30f * Mathf.Sin(t * Mathf.PI))
+                         + fwd * depth
+                         + right * (face * 0.08f);
         } else {
             // うしろ(-80度)から 前(+55度)へ、向いている ほうを 通って 払う
             float yaw = Mathf.SmoothStep(-80f, 55f, t) * face;
@@ -154,8 +162,10 @@ public class BugCatcher : MonoBehaviour {
         int face = move != null ? move.Face : 1;
         Vector3 at;
         if (move != null && move.DepthFacing) {
-            // たて振り。**頭の 上を さらう**ので、判定も 高く とる
-            at = transform.position + Vector3.up * 1.65f + fwd * (reach * 0.55f);
+            // たて振り。**頭の 上を さらう**ので、判定も 高く とる。
+            // 振る むき（奥/手前）に あわせて 判定も 前後へ ずらす＝絵と 判定を そろえる
+            float s = move.FacingAway ? 1f : -1f;
+            at = transform.position + Vector3.up * 1.65f + fwd * (reach * 0.55f * s);
         } else {
             at = transform.position + Vector3.up * 0.85f
                + fwd * (reach * 0.88f) + right * (face * reach * 0.30f);

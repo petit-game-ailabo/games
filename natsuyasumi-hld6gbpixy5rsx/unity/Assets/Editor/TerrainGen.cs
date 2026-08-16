@@ -32,10 +32,15 @@ public static class TerrainGen {
     // ここだけは 四角の そとへ 出られる。山の 肩まで 登ると カメラが 裏へ まわりこみ、
     // それまで 背中がわで 見えなかった 谷ぜんたいが 見える＝のぼる ごほうび。
     // 通り道は 細い 一本道に して、他の 死角へは 行けない ままに する
-    public static readonly Vector2 Lookout = new Vector2(-20f, -18f);
-    public const float LookoutHalfX = 5.0f, LookoutHalfZ = 4.2f;
-    public const float TrailX = -20f;          // 登り道の 中心
+    public static readonly Vector2 Lookout = new Vector2(-30f, -17f);
+    // おくゆきを 深く とる。**カメラは 主人公の うしろに 立つ**ので、
+    // 棚が みじかいと カメラだけ 斜面に めりこみ、持ちあげられて 空から 見おろす 画に なる
+    public const float LookoutHalfX = 5.0f, LookoutHalfZ = 8.0f;
+    public const float TrailX = -20f;          // 登り口（本道から 分かれる ところ）の 中心
     public const float TrailHalf = 2.0f;       // 通れる はば の 半分
+    // 曲がり角。ここで カメラが 90度ずつ 回る
+    public static readonly Vector2 TrailBendA = new Vector2(-20f, -6f);   // 奥へ → 左へ
+    public static readonly Vector2 TrailBendB = new Vector2(-30f, -6f);   // 左へ → 奥へ
 
     public const float Flat = -0.52f;          // 谷そこ の 高さ
 
@@ -74,9 +79,16 @@ public static class TerrainGen {
         new[] { new Vector2(12f, 7f),  new Vector2(12f, -6f) },       // 右：納屋・祠へ
         new[] { new Vector2(12f, -6f), new Vector2(18f, -6f) },
         new[] { new Vector2(3f, 7f),   new Vector2(3f, 24f) },        // 川べりへ
-        // 山への 登り口 → 高台。**勾配の うわぎりが かかる ので、この 長さが 要る**
-        new[] { new Vector2(-20f, 7f),  new Vector2(-20f, -4f),
-                new Vector2(-20f, -11f), new Vector2(-20f, -18f) },
+        // 山への 登り口 → 高台。
+        // ★2026-08-16：**2回 直角に 曲げた。**
+        //   カメラを 90度ずつしか 回さない ように したので、まっすぐな 道だと
+        //   高台で 谷を 見わたす ための 180度が 作れない。
+        //   直角に 2回 曲げれば、90度 + 90度 = 180度 に なる（本人の 案）。
+        //     まっすぐ 奥へ(カメラ 180) → 左へ(270) → また 奥へ、高台(0＝谷を 見わたす)
+        //   曲げた ぶん 道が のびるので、高台も その ぶん 高く できる
+        new[] { new Vector2(-20f, 7f),  new Vector2(-20f, -6f),
+                new Vector2(-30f, -6f),
+                new Vector2(-30f, -17f) },
     };
     // ---- 沢（小川）と 川。**地形に みぞを 掘り、そこへ 水を 流す。**
     // 水は 高い ほうから 低い ほうへ しか 流れないので、道と 同じく
@@ -389,13 +401,17 @@ public static class TerrainGen {
         return Mathf.Clamp01(Mathf.Min(tx, tz));
     }
 
-    /// <summary>人が 立ち入れる ところ（四角＋山への 一本道＋高台）</summary>
+    /// <summary>人が 立ち入れる ところ（四角＋山への 曲がった 一本道＋高台）</summary>
     public static bool Walkable(float x, float z, float margin = 0f) {
         if (x > PlayMinX - margin && x < PlayMaxX + margin
          && z > PlayMinZ - margin && z < PlayMaxZ + margin) return true;
-        // 登り道の 帯
-        if (Mathf.Abs(x - TrailX) < TrailHalf + margin
-         && z < PlayMinZ && z > Lookout.y - LookoutHalfZ) return true;
+        float h = TrailHalf + margin;
+        // 1本め：奥へ（x=-20 の たて帯）
+        if (Mathf.Abs(x - TrailX) < h && z < PlayMinZ && z > TrailBendA.y - h) return true;
+        // 2本め：左へ（z=-6 の よこ帯）
+        if (Mathf.Abs(z - TrailBendA.y) < h && x < TrailX && x > TrailBendB.x - h) return true;
+        // 3本め：また 奥へ（x=-30 の たて帯）
+        if (Mathf.Abs(x - TrailBendB.x) < h && z < TrailBendA.y && z > Lookout.y - LookoutHalfZ) return true;
         // 高台
         return Mathf.Abs(x - Lookout.x) < LookoutHalfX + margin
             && Mathf.Abs(z - Lookout.y) < LookoutHalfZ + margin;
@@ -550,8 +566,18 @@ public static class TerrainGen {
                 float y = Mathf.Lerp(streamProf[si][seg], streamProf[si][seg + 1], t);
                 if (k > 0) run += Vector2.Distance(c, new Vector2(verts[(k - 1) * 3 + 1].x, verts[(k - 1) * 3 + 1].z));
 
+                // ★2026-08-16：**岸を まっすぐに しない。**
+                //   左右の へりが 定規で 引いた ような 直線だと、川では なく
+                //   帯を 置いた ように 見えた。うねりを 入れて 岸を 出入りさせる。
+                //   左右で ちがう ゆらぎを あてるので、幅も 場所ごとに 変わる
+                float wob = st.half * 0.22f;
+                float wl = Mathf.Sin(run * 0.21f + 1.7f) * wob + Mathf.Sin(run * 0.077f) * wob * 0.7f;
+                float wr = Mathf.Sin(run * 0.185f - 0.6f) * wob + Mathf.Sin(run * 0.091f + 2.2f) * wob * 0.7f;
+
                 for (int e = 0; e < 3; e++) {
                     float off = (e - 1) * st.half;
+                    if (e == 0) off -= wl;          // 左岸
+                    else if (e == 2) off += wr;     // 右岸
                     var p = c + nrm * off;
                     // 岸は 水面と 同じ 高さ、まん中は ほんの すこし 下げて 面を 作る
                     verts[k * 3 + e] = new Vector3(p.x, y - (e == 1 ? 0.02f : 0f), p.y);

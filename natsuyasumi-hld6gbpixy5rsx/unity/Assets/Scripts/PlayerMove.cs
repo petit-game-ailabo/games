@@ -35,6 +35,8 @@ public class PlayerMove : MonoBehaviour {
     bool depthFacing;
     /// <summary>奥か 手前を 向いて いる（＝あみは たて振り）</summary>
     public bool DepthFacing { get { return chars != null ? chars.FacingDepth : depthFacing; } }
+    /// <summary>おくを 向いて いる（手前→奥へ ふる）。手前向きなら false（奥→手前へ ふる）</summary>
+    public bool FacingAway { get { return chars != null && chars.FacingAway; } }
     Vector2 baseScale, baseOffset;
 
     // ★2026-08-15：**8方向の 絵が 来たので UVの 裏がえしは やめた。**
