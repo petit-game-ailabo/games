@@ -57,7 +57,9 @@ public static class BuildZashiki {
         mPaper.SetFloat("_Cull", 0f);
         mPaper.doubleSidedGI = true;
         // 障子紙は 光を すこし とおす（裏から 光が あたると にじむ）
+        // DitherLit は キーワードでは なく _UseEmission で 切りかえる（自前の シェーダなので）
         mPaper.EnableKeyword("_EMISSION");
+        mPaper.SetFloat("_UseEmission", 1f);
         mPaper.SetColor("_EmissionColor", new Color(1.00f, 0.94f, 0.80f) * 0.85f);   // 裏から 光が すける
         mPaper.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 
@@ -285,8 +287,14 @@ public static class BuildZashiki {
         var bB = TerrainGen.TrailBendB;   // 左へ → 奥へ
         float lhx = TerrainGen.LookoutHalfX, lhz = TerrainGen.LookoutHalfZ;
         // 1本め（奥へ）の 両がわ
+        // ★2026-08-16：**T1_L は 曲がり角の 手前で 止める。**
+        //   bA.y + th（-4）まで のばして いたので、**西へ 曲がる 口(z=-8〜-4)を
+        //   まるごと ふさいで いた**＝高台へ 行けない。
+        //   しかも この かべは x=-22 で、**小川が 流れて いる x と 同じ**。
+        //   だから 見た目には「小川で 止められた」ように 見えて いた（本人の 報告）。
+        //   通れない ときは **地形か 物か を まず 切り分ける**（TerrainProbe.What）
         WallRun(root, "T1_R", new Vector2(tx + th, wz0), new Vector2(tx + th, bA.y - th));
-        WallRun(root, "T1_L", new Vector2(tx - th, wz0), new Vector2(tx - th, bA.y + th));
+        WallRun(root, "T1_L", new Vector2(tx - th, wz0), new Vector2(tx - th, bA.y - th));
         // 曲がり角の そとがわ（行きどまりの かべ）
         WallRun(root, "T1_End", new Vector2(tx - th, bA.y - th), new Vector2(tx + th, bA.y - th));
         // 2本め（左へ）の 上下
@@ -1039,7 +1047,12 @@ public static class BuildZashiki {
 
     // ---- 小道具
     static Material Mat(string name, string texPath, Vector2 tiling, float metal, float rough) {
-        var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        // ★**建物は ディザで 抜ける Lit に する**（2026-08-16）。
+        //   板の 草木・電柱は もともと 抜けて いた（PixelSprite）が、家や 塀は
+        //   URP/Lit だった ので 対象外で、家の 裏に まわると 画面が 壁 1色に なって いた。
+        //   Natsuyasumi/DitherLit は 光の あつかいは URP に まかせた まま、
+        //   **主人公より 手前の 画素だけ** ちらして 抜く
+        var m = new Material(Shader.Find("Natsuyasumi/DitherLit"));
         var t = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
         if (t == null) Debug.LogError("[BuildZashiki] テクスチャが 見つからない: " + texPath);
         else {

@@ -71,7 +71,9 @@ public static class MegaKit {
             string path = MatDir + d.name + ".mat";
             var m = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (m == null) {
-                m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                // 建物は **ディザで 抜ける Lit**。カメラが 壁に めりこんだ ときに
+                // 主人公の まわりだけ 穴が あく（Natsuyasumi/DitherLit）
+                m = new Material(Shader.Find("Natsuyasumi/DitherLit"));
                 AssetDatabase.CreateAsset(m, path);
             }
             var bt = Tex(d.baseTex);

@@ -6,6 +6,43 @@ using UnityEditor;
 // 使いかた: Unity.exe -batchmode -executeMethod TerrainProbe.Dump / .Paths
 public static class TerrainProbe {
 
+    /// <summary>**組んだ 場面で「そこに 何が あるか」を 測る。**
+    ///
+    /// 地形の 高さだけ 見ても「歩けない」の 半分しか 分からない。
+    /// 見えない かべ・木の みき・小屋の 柱など **物の あたり**で 止まる ことも 多い。
+    /// 通れない ところが 出たら、まず これで **地形か 物か**を 切り分ける。
+    /// 使いかた: rebuild.ps1 -Only TerrainProbe.What</summary>
+    public static void What() {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
+            "Assets/Scenes/Zashiki.unity", UnityEditor.SceneManagement.OpenSceneMode.Single);
+        var sb = new System.Text.StringBuilder();
+        // 高台への 道（本道から わかれて 山へ）を よこに ずらしながら 見る
+        Line(sb, "高台への道(z=-6)", -18f, -32f, -6f, true);
+        Line(sb, "小川わたり(z=-6)", -19f, -26f, -6f, true);
+        Line(sb, "山道の たて(x=-30)", -6f, -18f, -30f, false);
+        Debug.Log("[Probe]\n" + sb);
+    }
+
+    static void Line(System.Text.StringBuilder sb, string name, float a, float b, float fixedV, bool alongX) {
+        sb.AppendLine("== " + name);
+        int n = Mathf.CeilToInt(Mathf.Abs(b - a)) * 2;
+        for (int i = 0; i <= n; i++) {
+            float v = Mathf.Lerp(a, b, i / (float)n);
+            float x = alongX ? v : fixedV, z = alongX ? fixedV : v;
+            float h = TerrainGen.Height(x, z);
+            // 人の 高さで 立って いる ところに 何か あるか（半径 0.3m は 主人公の 太さ）
+            var hits = Physics.OverlapSphere(new Vector3(x, h + 0.6f, z), 0.30f);
+            string what = "";
+            foreach (var c in hits) {
+                if (c == null) continue;
+                var t = c.transform; string p = t.name;
+                for (var q = t.parent; q != null; q = q.parent) p = q.name + "/" + p;
+                what += " [" + p + "]";
+            }
+            sb.AppendFormat("  {0,6:0.0} h={1,6:0.00}{2}\n", v, h, what);
+        }
+    }
+
     /// <summary>**歩く 道を 1mごとに 測る。** ここが でこぼこだと 歩けない</summary>
     public static void Paths() {
         var sb = new System.Text.StringBuilder();
