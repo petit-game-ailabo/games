@@ -48,7 +48,8 @@ public static class BuildZashiki {
         var mPlaster = Mat("Plaster", ArtTex + "plaster_wall.png",  new Vector2(RoomW, WallH), 0.0f, 0.96f);
         var mRoof    = Mat("RoofTile",ArtTex + "roof_tile.png",     new Vector2(RoomW, 1.6f), 0.0f, 0.86f);
         // 沓ぬぎ石。かわらと 同じ 灰の 絵を 大きめに 敷いて 石はだに 見せる
-        var mStone   = Mat("Stone",   ArtTex + "roof_tile.png",     new Vector2(0.55f, 0.35f), 0.0f, 0.92f);
+        // 石は 屋根の 絵を 流用して いたが、CC0の 岩を 取りこんだので そちらへ
+        var mStone   = Mat("Stone",   ArtTex + "stone.png",         new Vector2(0.55f, 0.35f), 0.0f, 0.92f);
         mStone.SetColor("_BaseColor", new Color(0.82f, 0.80f, 0.76f));
         var mPaper   = Mat("ShojiPaper", ArtTex + "shoji_paper.png",new Vector2(2, 3), 0.0f,  0.90f);
         // 障子紙は **両面に えがく。** 板は 片面しか えがかれないので、
@@ -424,9 +425,12 @@ public static class BuildZashiki {
         //   PixelSprite は ClipHole を もって いるので、主人公の まわりだけ 抜ける
         var mPost = SeeThroughMat("PostST", ArtTex + "wood_beam.png", new Vector2(1f, 2f));
         var mMirror = SeeThroughMat("MirrorST", ArtTex + "plaster_wall.png", new Vector2(1f, 1f));
+        // 納屋は **わらぶき**に する。母屋が 瓦なので、屋根で 建物の 格が 分かれる
+        //（本もの の 農家も 母屋は 瓦、納屋や 小屋は わら や トタン）
+        var mThatch = Mat("Thatch", ArtTex + "thatch.png", new Vector2(2.2f, 1.4f), 0f, 0.98f);
         var vmat = new BuildVillage.Materials {
             wood = mNaya, floor = mFloorW, plaster = mPlaster,
-            roof = mRoof, stone = mStone, paper = mPaper, soil = mSoil,
+            roof = mThatch, stone = mStone, paper = mPaper, soil = mSoil,
             post = mPost, seeThrough = mMirror,
         };
         BuildVillage.Build(root, vmat,

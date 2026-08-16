@@ -9,6 +9,25 @@
 >
 > **✅ `unity/`（奥行き版）は 2026-08-13 に 本人が 用意した キャラ絵へ 差し替え済み**＝この版に Majstek は 入っていない。
 
+## 建物のテクスチャ（`unity/` 奥行き版）― 2026-08-16 追加
+
+**ambientCG**（https://ambientcg.com）の素材。**すべて CC0**
+（パブリックドメイン相当・商用可・クレジット不要・改変可・**再配布可**）。
+アカウント不要で誰でも同じものを取得できる。
+
+| もと素材 | 使い道 | 出力 |
+|---|---|---|
+| `RoofingTiles001` | 母屋の瓦 | `unity/Assets/Art/Textures/roof_tile.png` |
+| `WoodSiding009` | 柱・板壁 | `unity/Assets/Art/Textures/wood_beam.png` |
+| `Rock030` | 石（沓ぬぎ石・井戸・待避所） | `unity/Assets/Art/Textures/stone.png` |
+| `ThatchedRoof001A` | 納屋のわらぶき屋根 | `unity/Assets/Art/Textures/thatch.png` |
+
+こちらでの手あて（`unity/ArtSource/make_house_tex.py`）：写真のままだとドット絵のキャラや
+草木と質感が食いちがうので、**256pxに落として14色前後にまとめ、木立ちの20色へ4割ほど寄せた**。
+※**選びかたが9割。**小さくしても形が残るものしか使えない。平たいスレート屋根や
+のっぺりした漆喰・砂は256pxにするとただのざらざらになって、何の材質か読めなくなった。
+漆喰と道の土は**手で描いたものを残している**（草の絵と色がそろっているため）。
+
 ## 主人公（`unity/` 奥行き版）― 2026-08-15 差し替え
 
 **本人が用意した 魔理沙の 8方向 x 8状態**（元画像 `unity/ArtSource/marisa_source_8x8.png`）。
