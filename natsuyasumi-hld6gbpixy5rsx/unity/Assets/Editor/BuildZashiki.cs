@@ -71,10 +71,22 @@ public static class BuildZashiki {
         if (ShowRoom) {
             // **田の字型の 農家を 建てる。** 間取りの 出どころは BuildHouse.cs の 頭に 書いた。
             // 手前の 壁と 屋根は「中に 入ったら 消える」＝RoomCutaway が やる
+            // ★屋根は **メッシュで 起こす**（HouseRoof.cs）ので、貼りかたが (1,1) の
+            //   マテリアルが 別に 要る。メッシュの UV に「何m ぶんか」を 焼きこんで あるので、
+            //   箱用の (7.2, 1.6) を わたすと 絵が 7倍に のびて ただの 灰色に なる
             var hm = new BuildHouse.Mats {
                 tatami = mTatami, wood = mWood, floor = mFloorW, plaster = mPlaster,
                 roof = mRoof, paper = mPaper, stone = mStone,
                 soil = Mat("DomaSoil", ArtTex + "dirt_path.png", new Vector2(3f, 2f), 0f, 1f),
+                roofM = Mat("RoofTileMesh", ArtTex + "roof_tile.png", Vector2.one, 0f, 0.86f),
+                woodM = Mat("WoodMesh", ArtTex + "wood_beam.png", Vector2.one, 0f, 0.80f),
+                plasterFit = FitMat("Plaster", ArtTex + "plaster_wall.png", 0.96f),
+                woodFit = FitMat("Wood", ArtTex + "wood_beam.png", 0.80f),
+                // 腰の 下見板は **柱より ぐっと 暗く**。本ものの 下見板は 柿渋や すすで
+                // 黒に 近い 焦茶に なる。柱と 同じ 明るさだと 板の すじが 見えて いても
+                // 「暗い かたまり」に しか 読めなかった（絵ではなく 明暗の 差が 足りなかった）
+                koshiFit = FitMat("Koshi", ArtTex + "wood_beam.png", 0.88f,
+                                  new Color(0.48f, 0.42f, 0.36f)),
             };
             cutPieces = BuildHouse.Build(root, hm, (nm, par, pos, size, mat) => Box(nm, par, pos, size, mat));
             shojiPaperRenderer = null;
@@ -1021,6 +1033,29 @@ public static class BuildZashiki {
         m.SetFloat("_Smoothness", 1f - rough);
         AssetDatabase.CreateAsset(m, MatDir + name + ".mat");
         return m;
+    }
+
+    // ---- 面の 大きさに あわせて 貼りかたを 決める マテリアル工場。
+    // 箱の UV は どの 面も 0〜1 なので、貼りかたを 1つに すると
+    // **10.8m の 壁と 0.6m の 壁で 絵の こまかさが 18倍 ちがう**。
+    // 面の 大きさ(m)を もらって **1.5m ＝ 絵 1まい**（48px ÷ 32px/m）に そろえる。
+    // 同じ 大きさは 使いまわす（マテリアルが 際限なく ふえないように）
+    static System.Func<float, float, Material> FitMat(string prefix, string texPath, float rough) {
+        return FitMat(prefix, texPath, rough, Color.white);
+    }
+
+    static System.Func<float, float, Material> FitMat(string prefix, string texPath, float rough, Color tint) {
+        var cache = new System.Collections.Generic.Dictionary<string, Material>();
+        return (w, h) => {
+            int kw = Mathf.Max(1, Mathf.RoundToInt(w * 20)), kh = Mathf.Max(1, Mathf.RoundToInt(h * 20));
+            string k = kw + "_" + kh;
+            Material got;
+            if (cache.TryGetValue(k, out got)) return got;
+            got = Mat(prefix + "_" + k, texPath, new Vector2(w / 1.5f, h / 1.5f), 0f, rough);
+            if (tint != Color.white) got.SetColor("_BaseColor", tint);
+            cache[k] = got;
+            return got;
+        };
     }
 
     // 見えない かべ（当たりだけ ある 箱）
