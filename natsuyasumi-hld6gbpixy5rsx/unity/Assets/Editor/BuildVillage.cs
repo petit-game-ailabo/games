@@ -18,7 +18,11 @@ public static class BuildVillage {
     public static void Build(Transform root, Materials m,
                              System.Action<string, Transform, Vector3, Vector3, Material> box,
                              System.Action<string, Vector3, int, float> prop) {
-        Naya(root, m, box);
+        // ★納屋は **借りものの アセットで 建てなおす 試し**に 差しかえた（2026-08-16）。
+        //   本人：「アセットを つかったら どれだけ 質の 高い ものが できるのか テストしたい。
+        //   風景に 合わなくて いい」。もとの 箱づくりの 納屋は Naya() に 残して ある ので、
+        //   もどしたく なったら ここを 1行 入れかえる だけ
+        BuildNayaKit.Build(root);
         Hatake(root, m, box, prop);
         Nougu(root, m, box);
         Ido(root, m, box);

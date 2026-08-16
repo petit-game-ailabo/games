@@ -111,6 +111,11 @@ public static class SetupURP {
     static void Sweep(string dir, TextureWrapMode? wrap) {
         foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { dir })) {
             var path = AssetDatabase.GUIDToAssetPath(guid);
+            // ★**借りものの アセットは ここの 対象外。**（2026-08-16）
+            //   megakit は 1024px の 描きこんだ 絵で、点フィルタ＋圧縮なしに すると
+            //   ざらざらに なった うえに ビルドが 何十MBも ふくらむ。
+            //   取りこみかたは MegaKit.Setup が べつに 面倒を みる
+            if (path.Contains("/megakit/")) continue;
             var ti = AssetImporter.GetAtPath(path) as TextureImporter;
             if (ti == null) continue;
             bool ok = !ti.mipmapEnabled && !ti.streamingMipmaps
