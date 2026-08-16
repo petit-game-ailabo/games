@@ -113,10 +113,21 @@ public class CharSprite : MonoBehaviour {
         if (cell == lastCell) return;      // 同じ コマなら 触らない
         lastCell = cell;
         target.GetPropertyBlock(mpb);
+
+        // ★**コマの ふちを 半テクセル 内がわへ 寄せる。**（2026-08-16・本人
+        //   「斜め左奥に走ると、別の画像の一部が出てくる」）
+        //   1コマ ＝ 1/8 ちょうど で 切って いたので、はしの 1列で 計算の
+        //   まるめが となりの コマに はみ出し、**べつの 向きの 絵が すじに なって 出て いた**。
+        //   1コマ 115x167px に たいして 半テクセルなので 見た目は 変わらない。
+        //   ★アトラスを 手で 切るなら **どこでも 起きる**。コマを 足す ときは 必ず これ
+        var t = target.sharedMaterial != null ? target.sharedMaterial.mainTexture : null;
+        float w = t != null ? t.width : 1024f, h = t != null ? t.height : 1024f;
+        float insetU = 0.5f / Mathf.Max(w, 1f), insetV = 0.5f / Mathf.Max(h, 1f);
+
         // 画像は 上が 0行め だが UV は 下が 0。y は ひっくり返す
         mpb.SetVector("_BaseMap_ST", new Vector4(
-            1f / Cols, 1f / Rows,
-            col / (float)Cols, (Rows - 1 - row) / (float)Rows));
+            1f / Cols - insetU * 2f, 1f / Rows - insetV * 2f,
+            col / (float)Cols + insetU, (Rows - 1 - row) / (float)Rows + insetV));
         target.SetPropertyBlock(mpb);
     }
 }
