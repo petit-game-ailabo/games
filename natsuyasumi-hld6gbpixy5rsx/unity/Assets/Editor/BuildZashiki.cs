@@ -677,6 +677,8 @@ public static class BuildZashiki {
         dayHost.player = player.transform;
         dayHost.nikki = nikki;
         dayHost.tod = todc;
+        todc.nikki = nikki;                   // 日づけで 日の入りが 早く なる
+        if (spawner != null) spawner.nikki = nikki;   // 日づけで 虫の 顔ぶれが 変わる
         dayHost.hud = hud;
         dayHost.book = book;
         dayHost.font = hud.font;

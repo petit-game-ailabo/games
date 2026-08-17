@@ -42,6 +42,26 @@ public class TimeOfDay : MonoBehaviour {
     //   2階の つくえで 絵日記を 書く のに、部屋が まっ暗だった。
     //   同じ 明るさで つく あかりを ここに ならべる（母屋の 2階・離れ など）
     public Light[] andonHoka;
+
+    // ★**8月の あいだに 日が みじかく なる。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「TimeOfDay の 日の入りを、31日かけて 30分ずつ 早める。
+    //     『8月末は 5時には もう 暗い』——これだけで 終わりが 近い ことが 体で わかります」
+    //   時こく そのものは いじらず、**時こく → 見た目 の あてはめを ずらす**。
+    //   1日で hiZure 分だけ 夕方が 早く 来る＝月末には 40分 早い
+    [Tooltip("ひと月で どれだけ 日の入りが 早く なるか（時間）")]
+    public float mijikaku = 0.67f;
+    [HideInInspector] public Nikki nikki;
+
+    /// <summary>見た目を 決める ときの「みかけの 時こく」。日づけで うしろへ ずれる</summary>
+    public float MikakeHour {
+        get {
+            if (nikki == null) return hour;
+            float t = Mathf.Clamp01((nikki.day - 1) / 30f);
+            // 昼の あいだは ずらさない。**夕方から 先だけ** 早める
+            if (hour < 12f) return hour;
+            return hour + mijikaku * t;
+        }
+    }
     public Renderer shojiPaper;    // 障子紙。よるは 光らせない
     public Camera cam;
     public Weather weather;        // 天気は この 上に かぶせる（順番を 固定するため ここから 呼ぶ）
@@ -222,7 +242,8 @@ public class TimeOfDay : MonoBehaviour {
 
     Preset Current() {
         if (!useHour) return Of(tod);
-        float h = Mathf.Repeat(hour, 24f);
+        // **みかけの 時こく**で 見た目を 決める（月末ほど 夕方が 早く 来る）
+        float h = Mathf.Repeat(MikakeHour, 24f);
         for (int i = 0; i < KeyHour.Length - 1; i++) {
             if (h < KeyHour[i] || h > KeyHour[i + 1]) continue;
             float t = Mathf.Clamp01((h - KeyHour[i]) / Mathf.Max(KeyHour[i + 1] - KeyHour[i], 1e-4f));

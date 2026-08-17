@@ -30,7 +30,10 @@ public class BugBook : MonoBehaviour {
     public bool Mita(string who, BugId id) {
         return (PlayerPrefs.GetInt(MiseKey + who, 0) & (1 << (int)id)) != 0;
     }
+    // 見せた 相手の 名。**はじめから の とき、名を 知らないと 消せない**
+    static readonly List<string> MiseAite = new List<string>();
     public void Miseta(string who, BugId id) {
+        if (!MiseAite.Contains(who)) MiseAite.Add(who);
         int m = PlayerPrefs.GetInt(MiseKey + who, 0);
         PlayerPrefs.SetInt(MiseKey + who, m | (1 << (int)id));
         PlayerPrefs.Save();
@@ -124,6 +127,7 @@ public class BugBook : MonoBehaviour {
         ReadInts(Key, counts);
         ReadInts(MaxKey, maxMm);
         ReadInts(SpecKey, specimens);
+        ReadInts(KyonenKey, kyonen);
         var r = PlayerPrefs.GetString(RecentKey, "");
         if (string.IsNullOrEmpty(r)) return;
         foreach (var t in r.Split(',')) {
@@ -150,11 +154,23 @@ public class BugBook : MonoBehaviour {
         PlayerPrefs.Save();
     }
 
+    // ★**きょ年の さいだい は のこす。**（2026-08-17・遊ぶ 人の 指摘
+    //   「すすみ具合(1周ぶん)は 消す・きろく(さいこう記録)は のこす」）
+    //   2周目に「きょ年は 82mm だった」が 出る ので、ずかんが 目標に なる
+    const string KyonenKey = "natsuyasumi.bugkyonen.v1";
+    int[] kyonen = new int[BugKind.All.Length];
+    public int Kyonen(BugId id) { return kyonen[(int)id]; }
+
     [ContextMenu("記録を まっさらに する")]
     public void Clear() {
         PlayerPrefs.DeleteKey(HintKey);
-        PlayerPrefs.DeleteKey(MiseKey);
-        for (int i = 0; i < counts.Length; i++) { counts[i] = 0; maxMm[i] = 0; specimens[i] = 0; }
+        foreach (var w in MiseAite) PlayerPrefs.DeleteKey(MiseKey + w);
+        // いまの さいだいを 「きょ年」へ 送って から 消す
+        for (int i = 0; i < counts.Length; i++) {
+            if (maxMm[i] > kyonen[i]) kyonen[i] = maxMm[i];
+            counts[i] = 0; maxMm[i] = 0; specimens[i] = 0;
+        }
+        PlayerPrefs.SetString(KyonenKey, string.Join(",", Array.ConvertAll(kyonen, c => c.ToString())));
         recent.Clear();
         PlayerPrefs.SetInt(FreedKey, 0);
         Save();

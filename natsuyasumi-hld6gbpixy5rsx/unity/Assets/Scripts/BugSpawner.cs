@@ -104,7 +104,13 @@ public class BugSpawner : MonoBehaviour {
 
     static bool Fits(BugKind k, BugBa ba) { return k.ba == BugBa.Doko || k.ba == ba; }
     /// <summary>その 土地の 虫は うんと 出やすく する</summary>
-    static int Weight(BugKind k, BugBa ba) { return k.ba == ba ? k.weight * 3 : k.weight; }
+    // ★**日づけで 顔ぶれが 変わる。**土地(ba)と 同じ 型で かける だけ
+    [HideInInspector] public Nikki nikki;
+    int Weight(BugKind k, BugBa ba) {
+        int w = k.ba == ba ? k.weight * 3 : k.weight;
+        int day = nikki != null ? nikki.day : 16;
+        return Mathf.Max(1, Mathf.RoundToInt(w * k.Koro(day)));
+    }
 
     bool PickSpot(BugKind kind, bool near, out Vector3 at) {
         at = Vector3.zero;

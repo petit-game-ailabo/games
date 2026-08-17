@@ -39,6 +39,35 @@ public class Nikki : MonoBehaviour {
     const string KeyDay = "natsu_day";
     const string KeyHour = "natsu_hour";
     const string KeyPast = "natsu_nikki";
+    // ★**絵日記は「まいすう」では ない。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「31まい きっちり 書き上げても、1まいも 書かなくても、
+    //     8月31日の まとめは 一字一句 おなじです」
+    //   「ぼくなつの 絵日記が 良かったのは、めくって 読み返せるから です。
+    //     31まい ためて、さいごに 1まいずつ めくって『ああ、この日は 雨だったな』と やる」
+    //   → 中みを そのまま ためる。まとめにも 効かせる
+    const string KeyEnikki = "natsu_enikki";
+    const string KeyEnikkiDay = "natsu_enikki_day";
+    public const int EnikkiZen = 31;                 // 全ページ数
+    public readonly List<string> Enikki = new List<string>();
+    public int EnikkiMai { get { return Enikki.Count; } }
+    /// <summary>きょうの ぶんは もう 書いたか（1日 1ページ）</summary>
+    public bool EnikkiKyou { get { return PlayerPrefs.GetInt(KeyEnikkiDay, 0) == day; } }
+
+    /// <summary>絵日記を 1ページ 書く。**その日 やった ことが そのまま ページに なる**</summary>
+    public string EnikkiKaku() {
+        string page = Compose();
+        Enikki.Add(page);
+        PlayerPrefs.SetInt(KeyEnikkiDay, day);
+        SaveEnikki();
+        return page;
+    }
+
+    void SaveEnikki() {
+        var sb = new System.Text.StringBuilder();
+        foreach (var t in Enikki) sb.Append(t).Append("\u241e");
+        PlayerPrefs.SetString(KeyEnikki, sb.ToString());
+        PlayerPrefs.Save();
+    }
 
     void Awake() {
         Load();
@@ -122,8 +151,24 @@ public class Nikki : MonoBehaviour {
             sb.AppendFormat("つかまえた むし　{0} しゅるい　{1} ひき\n", book.Kinds, book.Total);
             sb.AppendFormat("ひょうほんに した むし　{0}\n", book.SpecimenTotal);
         }
-        sb.AppendFormat("書いた 日記　{0} 日ぶん\n\n", Past.Count);
+        if (book != null) sb.AppendFormat("にがした むし　{0} ひき\n", book.Freed);
+        sb.AppendFormat("書いた 日記　{0} 日ぶん\n", Past.Count);
+        // ★**焦らせた 先に 何かを 置く。**（遊ぶ 人：「25日の『宿題は やったのかい』も、
+        //   『……◯日ぶん たまって いる』も、結局 なにも 起きません。
+        //   焦らせる 仕掛けを 作って、焦った 先に 何も 置いて いない」）
+        int e = Enikki.Count;
+        sb.AppendFormat("えにっき　{0} / {1} まい\n\n", e, EnikkiZen);
         sb.AppendLine("ひと月、あっという間だったぜ。");
+        if (e >= EnikkiZen)
+            sb.AppendLine("えにっきも ぜんぶ 書ききった。おれ、やれば できるんだぜ。");
+        else if (e >= EnikkiZen * 2 / 3)
+            sb.AppendLine("えにっきは " + e + "まい。……まあ、なんとか なるだろ。");
+        else if (e > 0)
+            sb.AppendLine("……えにっきは " + e + "まいで 止まって いる。");
+        else
+            sb.AppendLine("……えにっきは 1まいも 書いて いない。");
+        if (e < EnikkiZen)
+            sb.AppendLine("8月31日の 夜は、ながい 夜に なりそうだ。");
         sb.AppendLine("……また 来年、来るからな。\n");
         sb.AppendLine("X：日記を 読み返す　　Z：ずかんを 見る　　Enter：はじめから");
         return sb.ToString();
@@ -167,6 +212,13 @@ public class Nikki : MonoBehaviour {
         if (!string.IsNullOrEmpty(s))
             foreach (var t in s.Split('␞'))
                 if (!string.IsNullOrEmpty(t)) Past.Add(t);
+        // 絵日記は **31まい ぜんぶ のこす**（日記は 直近10日だけ だが、
+        // こちらは 8月31日に 1まいずつ めくる ためのもの）
+        Enikki.Clear();
+        string e = PlayerPrefs.GetString(KeyEnikki, "");
+        if (!string.IsNullOrEmpty(e))
+            foreach (var t in e.Split('␞'))
+                if (!string.IsNullOrEmpty(t)) Enikki.Add(t);
     }
 
     // ================= カレンダー =================
@@ -213,8 +265,19 @@ public class Nikki : MonoBehaviour {
     /// <summary>なつやすみは 終わったか</summary>
     public bool Owatta { get { return day > LastDay; } }
 
+    // ★**「はじめから」が ほんとうに はじまる ように する。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「Reset0 と BugBook.Clear が 消して いるのは 2つだけ。PlayHost の 11個の キーは
+    //     1つも 消えて いません。……2周目は 8月1日に『えにっきは ぜんぶ 書きおわって いる』。
+    //     ひみつきちは 完成済み。asobi1_* が のこって いるので、どの 遊びも
+    //     二度と『はじめて』に ならない」
+    //
+    //   前に「エンディングで 全消去するな」と 言われた 反動で、今度は 何も 消えなく なって いた。
+    //   **正解は その 中間。すすみ具合(1周ぶん)は 消す・きろく(さいこう記録)は のこす。**
     public void Reset0() {
         day = 1; Past.Clear(); today.Clear(); todaySeen.Clear(); counts.Clear(); talked.Clear();
+        Enikki.Clear();
+        PlayerPrefs.DeleteKey(KeyEnikki);
+        PlayerPrefs.DeleteKey(KeyEnikkiDay);
         greeted = false; Save();
     }
 }

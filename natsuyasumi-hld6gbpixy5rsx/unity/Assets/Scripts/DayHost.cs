@@ -147,11 +147,31 @@ public class DayHost : MonoBehaviour {
                 //   ずかんと 10日ぶんの 日記が スペース 1回で 消える。一番 残したい ものを
                 //   一番 確実に 消す 設計」）→ 3たくに する
                 if (t > 1.2f) {
-                    if (Input.GetKeyDown(KeyCode.X)) { readBack = 0; ShowPast(); }
+                    // ★**まとめの 上でも 帳面を めくれる。**（2026-08-17）
+                    //   ここで X を 押すと 読み返しに 入るが、めくる 入力は Asobu() の 中に
+                    //   あった ので、まとめの 場面では ←→ が きかず、X も とじられなかった
+                    if (readBack >= 0) {
+                        if (Input.GetKeyDown(KeyCode.X)) {
+                            // まとめへ もどす（とじるのでは なく 書きかえる）
+                            readBack = -1;
+                            if (hud != null) hud.Chomen(false);
+                            if (nikki != null && diaryText != null) diaryText.text = nikki.Owari(book);
+                        } else if (Input.GetKeyDown(KeyCode.RightArrow)) { readBack++; ShowPast(); }
+                        else if (Input.GetKeyDown(KeyCode.LeftArrow)) { readBack = Mathf.Max(0, readBack - 1); ShowPast(); }
+                        else if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.DownArrow)) {
+                            enikkiMode = !enikkiMode; readBack = 0; ShowPast();
+                        }
+                        break;
+                    }
+                    if (Input.GetKeyDown(KeyCode.X)) { readBack = 0; enikkiMode = true; ShowPast(); }
                     else if (Input.GetKeyDown(KeyCode.Z)) { if (hud != null) hud.OpenBook(); }
                     else if (Input.GetKeyDown(KeyCode.Return)) {
                         if (nikki != null) nikki.Reset0();
                         if (book != null) book.Clear();
+                        // ★**すすみ具合(1周ぶん)も 消す。**これが 無いと 2周目の 8月1日に
+                        //   ひみつきちが 完成済みで、どの 遊びも 二度と「はじめて」に ならない
+                        PlayHost.ResetSusumi();
+                        enikkiMode = false;
                         if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
                         if (tod != null) { tod.hour = 6.5f; tod.runClock = true; tod.useHour = true; }
                         Refresh();
@@ -196,18 +216,52 @@ public class DayHost : MonoBehaviour {
     bool carried;      // 力ずくで 寝かされた＝だれかが 布団まで はこんだ
 
     int readBack = -1;
+    Text diaryTip;
+
+    // ★**にっき と えにっき は 別の 帳面。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「Shukudai() は『きょうの ことを 書いた…』と 言いますが、書いた 中みは
+    //     どこにも 保存されて いません。KeyShuku は int 1つ、枚数の カウンタだけ です。
+    //     ぼくなつの 絵日記が 良かったのは、めくって 読み返せるから です」
+    //   → ↑↓ で 帳面を 切りかえる。←→ で ページを めくる
+    bool enikkiMode;
+
+    System.Collections.Generic.List<string> Chomen {
+        get { return enikkiMode ? nikki.Enikki : nikki.Past; }
+    }
+
+    /// <summary>たしかめの 自動運転から 日記帳を ひらく</summary>
+    public void DebugOpenDiary(bool enikki) { enikkiMode = enikki; readBack = 0; ShowPast(); }
 
     /// <summary>すぎた 日の 日記を 見せる（X）</summary>
     void ShowPast() {
-        if (nikki == null || nikki.Past.Count == 0) {
-            if (hud != null) hud.Say("まだ 日記は 1日も 書いて いない");
+        if (nikki == null) return;
+        var ls = Chomen;
+        if (ls.Count == 0) {
+            // 片っぽが 空でも、もう 片っぽが あれば そちらへ 移る
+            var other = enikkiMode ? nikki.Past : nikki.Enikki;
+            if (other.Count > 0) { enikkiMode = !enikkiMode; readBack = 0; ShowPast(); return; }
+            if (hud != null) hud.Say("まだ 何も 書いて いない");
+            Tojiru();
             return;
         }
-        readBack = Mathf.Clamp(readBack, 0, nikki.Past.Count - 1);
-        int i = nikki.Past.Count - 1 - readBack;
+        readBack = Mathf.Clamp(readBack, 0, ls.Count - 1);
+        int i = ls.Count - 1 - readBack;
         if (diaryText != null)
-            diaryText.text = nikki.Past[i] + "\n← → で 前後の 日　　X：とじる";
+            diaryText.text = (enikkiMode
+                    ? string.Format("〔えにっき　{0}/{1} まいめ〕\n", i + 1, Nikki.EnikkiZen)
+                    : "〔にっき〕\n")
+                + ls[i]
+                + "\n← → で 前後の 日　　↑ ↓ で にっき／えにっき　　X：とじる";
         if (diaryPanel != null) diaryPanel.gameObject.SetActive(true);
+        if (diaryTip != null) diaryTip.gameObject.SetActive(false);
+        if (hud != null) hud.Chomen(true);
+    }
+
+    void Tojiru() {
+        readBack = -1;
+        if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
+        if (diaryTip != null) diaryTip.gameObject.SetActive(true);
+        if (hud != null) hud.Chomen(false);
     }
 
     void Asobu() {
@@ -218,10 +272,12 @@ public class DayHost : MonoBehaviour {
         //   遡れる ことが、積み重ねの 実感そのもの」）
         if (readBack >= 0) {
             if (Input.GetKeyDown(KeyCode.X)) {
-                readBack = -1;
-                if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
+                Tojiru();
             } else if (Input.GetKeyDown(KeyCode.RightArrow)) { readBack++; ShowPast(); }
             else if (Input.GetKeyDown(KeyCode.LeftArrow)) { readBack = Mathf.Max(0, readBack - 1); ShowPast(); }
+            else if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.DownArrow)) {
+                enikkiMode = !enikkiMode; readBack = 0; ShowPast();
+            }
             return;
         }
         if (Input.GetKeyDown(KeyCode.X)) { readBack = 0; ShowPast(); return; }
@@ -321,8 +377,9 @@ public class DayHost : MonoBehaviour {
         diaryText.lineSpacing = 1.5f;
         var dr = diaryText.rectTransform;
         dr.offsetMin = new Vector2(28f, 44f); dr.offsetMax = new Vector2(-28f, -24f);
-        // 「スペースで つぎの 日へ」
+        // 「スペースで つぎの 日へ」。**読み返しの ときは 出さない**
         var tip = MakeText(diGO.transform, "スペース：あさに なる");
+        diaryTip = tip;
         tip.alignment = TextAnchor.LowerCenter;
         var tr = tip.rectTransform;
         tr.offsetMin = new Vector2(12f, 14f); tr.offsetMax = new Vector2(-12f, -12f);

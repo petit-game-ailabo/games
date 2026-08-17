@@ -22,6 +22,12 @@ public class BugHud : MonoBehaviour {
     // ★**足もとに ひとことが 出て いる ときは 右下の 説明を 消す。**
     //   （遊ぶ 人：「スペースが 同時に 2か所 出て いて、どっちが 起きるか 分からない」）
     RectTransform hintPanel;
+    RectTransform counterPanel;
+
+    // ★**帳面を ひらいて いる あいだは まわりを 消す。**（2026-08-17）
+    //   絵日記の 上に「むしとり 3/8」と「スペース：あみを ふる」が 重なって いた
+    bool kakusu;
+    public void Chomen(bool hiraita) { kakusu = hiraita; }
     RectTransform toastPanel, bookPanel;
     float toastLeft;
     bool bookOpen;
@@ -107,6 +113,14 @@ public class BugHud : MonoBehaviour {
 
     void LateUpdate() {
         if (promptPanel == null) return;
+        if (kakusu) {
+            offerText = null; offerRank = int.MinValue;
+            if (promptPanel.gameObject.activeSelf) promptPanel.gameObject.SetActive(false);
+            if (hintPanel != null && hintPanel.gameObject.activeSelf) hintPanel.gameObject.SetActive(false);
+            if (counterPanel != null && counterPanel.gameObject.activeSelf) counterPanel.gameObject.SetActive(false);
+            return;
+        }
+        if (counterPanel != null && !counterPanel.gameObject.activeSelf) counterPanel.gameObject.SetActive(true);
         bool on = !string.IsNullOrEmpty(offerText);
         if (on && prompt.text != offerText) prompt.text = offerText;
         if (promptPanel.gameObject.activeSelf != on) promptPanel.gameObject.SetActive(on);
@@ -190,6 +204,7 @@ public class BugHud : MonoBehaviour {
         // ひだり上の 数え
         var cPanel = Panel(canvasGO.transform, new Vector2(0f, 1f), new Vector2(8f, -8f), new Vector2(240f, 26f));
         counter = Label(cPanel, TextAnchor.MiddleLeft, new Vector2(10f, 0f), new Vector2(-20f, 0f));
+        counterPanel = cPanel;
 
         // まん中したの ひとこと
         toastPanel = Panel(canvasGO.transform, new Vector2(0.5f, 0f), new Vector2(0f, 26f), new Vector2(340f, 28f));

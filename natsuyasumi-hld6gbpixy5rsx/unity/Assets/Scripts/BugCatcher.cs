@@ -187,7 +187,12 @@ public class BugCatcher : MonoBehaviour {
             float horiz = new Vector2(d.x, d.z).magnitude;
             if (horiz >= radius) continue;
             float up1 = (move != null && move.DepthFacing) ? reachUp * 1.5f : reachUp;
-            float dn1 = (move != null && move.DepthFacing) ? reachDown * 1.6f : reachDown;
+            // ★**たて振りは 頭の 上から 足もとまで さらう。**（2026-08-17）
+            //   判定の まん中を 頭の 高さ(1.65m)に 置いた ままで 下だけ 1.2m しか
+            //   見て いなかった ので、**草の あいだの ばったに 一生 とどかなかった**
+            //  （たしかめ：野はらで 6回 ふって しょうりょうばったは 0回）。
+            //   ふる 絵は 上から 下への 弧なので、地めんまで 届くのが 正しい
+            float dn1 = (move != null && move.DepthFacing) ? reachDown * 2.4f : reachDown;
             if (d.y > up1 || d.y < -dn1) continue;
             if (horiz < bestD) { best = b; bestD = horiz; }
         }

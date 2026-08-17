@@ -52,6 +52,16 @@ public class PlayHost : MonoBehaviour {
     public int Irozu   { get { return PlayerPrefs.GetInt(KeyIrozu, 0); } }
     public int BaseStep{ get { return PlayerPrefs.GetInt(KeyBase, 0); } }
 
+    // ★**はじめから の ときに 消す キー。**（2026-08-17）
+    //   すすみ具合＝1周ぶんの もの。さいこう記録・つうさん は のこす。
+    //   asobi1_* を 消さないと **どの 遊びも 二度と「はじめて」に ならない**
+    public static void ResetSusumi() {
+        PlayerPrefs.DeleteKey(KeyBase);                       // ひみつきちの できぐあい
+        foreach (PlayKind k in System.Enum.GetValues(typeof(PlayKind)))
+            PlayerPrefs.DeleteKey("asobi1_" + k);             // はじめて やった しるし
+        PlayerPrefs.Save();
+    }
+
     static void Bump(string key, int by) {
         PlayerPrefs.SetInt(key, PlayerPrefs.GetInt(key, 0) + by);
         PlayerPrefs.Save();
@@ -438,40 +448,36 @@ public class PlayHost : MonoBehaviour {
     //
     // **夜、机に むかうと 1ページ 書ける。1日 1ページまで。**
     // ためると 31日目に 地ごくを 見る＝のこり日数が 急に こわく なる
-    const string KeyShuku = "natsuyasumi.play.shukudai.v1";     // 書いた ページ数
-    const string KeyShukuDay = "natsuyasumi.play.shukudai.day"; // さいごに 書いた 日
-    public int ShukudaiPages { get { return PlayerPrefs.GetInt(KeyShuku, 0); } }
+    // ★中みは Nikki が もつ（読み返せる ように する ため）。ここは 遊びの 手つづき だけ
+    public int ShukudaiPages { get { return nikki != null ? nikki.EnikkiMai : 0; } }
 
     IEnumerator Shukudai(PlaySpot s) {
-        int day = nikki != null ? nikki.day : 1;
-        if (PlayerPrefs.GetInt(KeyShukuDay, 0) == day) {
+        if (nikki == null) yield break;
+        if (nikki.EnikkiKyou) {
             Line("きょうの ぶんは もう 書いた");
             yield return new WaitForSeconds(1.3f); yield break;
         }
-        int pages = ShukudaiPages;
-        if (pages >= 31) {
+        if (nikki.EnikkiMai >= Nikki.EnikkiZen) {
             Line("えにっきは ぜんぶ 書きおわって いる。えらいぜ");
             yield return new WaitForSeconds(1.4f); yield break;
         }
         Line("えんぴつを けずって…");
         yield return new WaitForSeconds(1.0f);
         // **その日 やった ことが そのまま 絵日記に なる**（日記と 同じ たね）
+        nikki.EnikkiKaku();
         Line("きょうの ことを 書いた…");
         yield return new WaitForSeconds(1.2f);
-        pages++;
-        PlayerPrefs.SetInt(KeyShuku, pages);
-        PlayerPrefs.SetInt(KeyShukuDay, day);
-        PlayerPrefs.Save();
-        int nokori = 31 - pages;
-        Line(string.Format("えにっき {0}/31 まい　（のこり {1}まい）", pages, nokori));
-        if (nikki != null) {
-            // **ためて いる ほど 重い**（あとに なるほど 書いた ことが 大事に なる）
-            int okure = Mathf.Max(0, day - pages);
-            nikki.Note("shukudai", okure > 5
-                ? string.Format("えにっきを 書いた（{0}/31）。……{1}日ぶん たまって いる。まずいぜ", pages, okure)
-                : string.Format("えにっきを 書いた（{0}/31）。きょうの ぶんは かたづいた", pages),
-                okure > 5 ? 75 : 55);
-        }
+        int pages = nikki.EnikkiMai;
+        int nokori = Nikki.EnikkiZen - pages;
+        Line(string.Format("えにっき {0}/{1} まい　（のこり {2}まい）", pages, Nikki.EnikkiZen, nokori));
+        // **ためて いる ほど 重い**（あとに なるほど 書いた ことが 大事に なる）
+        int okure = Mathf.Max(0, nikki.day - pages);
+        nikki.Note("shukudai", okure > 5
+            ? string.Format("えにっきを 書いた（{0}/{1}）。……{2}日ぶん たまって いる。まずいぜ",
+                            pages, Nikki.EnikkiZen, okure)
+            : string.Format("えにっきを 書いた（{0}/{1}）。きょうの ぶんは かたづいた",
+                            pages, Nikki.EnikkiZen),
+            okure > 5 ? 75 : 55);
         yield return new WaitForSeconds(1.5f);
     }
 

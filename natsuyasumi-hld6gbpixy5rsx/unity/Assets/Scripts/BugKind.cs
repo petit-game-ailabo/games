@@ -48,6 +48,22 @@ public class BugKind {
     public int sizeMm = 50;
     // 出る 土地。Doko なら どこでも
     public BugBa ba = BugBa.Doko;
+
+    // ★**夏は ゆっくり 進む。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「事件が あるのは 7日。残り 24日は、天気が 違うだけで 完全に 同一です。
+    //     8月3日と 8月27日で、できる ことも 出る 虫も 1つも 変わらない。
+    //     ここは『事件を 24個 足す』では なく『夏が ゆっくり 進む』で 埋めるべき」
+    //   → **さかり(mannaka) と はば(haba)** を 持たせ、日づけで 出やすさを 変える。
+    //     上旬は カブト・クワガタ・セミが 濃く、下旬は とんぼ・ばったが 混じって くる。
+    //     8月28日に 網を ふると、8月3日とは ちがう 虫が 入る
+    public int mannaka = 16;      // いちばん 多い 日（8月○日）
+    public int haba = 40;         // ひろがり。大きいほど ひと夏じゅう 出る
+
+    /// <summary>その日の 出やすさ の かかり（0.15〜1.0）</summary>
+    public float Koro(int day) {
+        float d = (day - mannaka) / (float)Mathf.Max(1, haba);
+        return Mathf.Max(0.15f, 1f - d * d);      // 山なりに 減る。0には しない
+    }
     // ★**おじさんが 教えて くれる「どこに いるか」。**（2026-08-17）
     //   遊ぶ 人：「おじさんが『オニヤンマは 山の 上に いる』と 教えて くれても、
     //   その 言葉は 会話が 終われば 消える。**ずかんに 残らない**。
@@ -60,21 +76,21 @@ public class BugKind {
 
     // ★虫を 足すなら ここに 1行。あとは ぜんぶ ついてくる
     public static readonly BugKind[] All = {
-        new BugKind { id = BugId.Semi, hint = "ぞうきばやしの みき。ひるま", sizeMm = 60,     name = "あぶらぜみ",   perch = BugPerch.Trunk, height = 0.30f,
+        new BugKind { id = BugId.Semi, mannaka = 10, haba = 22, hint = "ぞうきばやしの みき。ひるま", sizeMm = 60,     name = "あぶらぜみ",   perch = BugPerch.Trunk, height = 0.30f,
                       wary = 0.55f, catchRate = 0.70f, weight = 30, power = 3, ba = BugBa.Zoki,   tod = new[] { true,  true,  true,  false } },
-        new BugKind { id = BugId.Kabuto, hint = "ぞうきばやしの みき。あさ はやくか 夜", sizeMm = 78,   name = "かぶとむし",   perch = BugPerch.Trunk, height = 0.34f,
+        new BugKind { id = BugId.Kabuto, mannaka = 8, haba = 16, hint = "ぞうきばやしの みき。あさ はやくか 夜", sizeMm = 78,   name = "かぶとむし",   perch = BugPerch.Trunk, height = 0.34f,
                       wary = 0.10f, catchRate = 0.90f, weight = 10, power = 6, ba = BugBa.Zoki,   tod = new[] { true,  false, false, true  } },
-        new BugKind { id = BugId.Kuwagata, hint = "ぞうきばやしの みき。あさ はやくか 夜", sizeMm = 66, name = "くわがた",     perch = BugPerch.Trunk, height = 0.32f,
+        new BugKind { id = BugId.Kuwagata, mannaka = 10, haba = 18, hint = "ぞうきばやしの みき。あさ はやくか 夜", sizeMm = 66, name = "くわがた",     perch = BugPerch.Trunk, height = 0.32f,
                       wary = 0.15f, catchRate = 0.85f, weight = 10, power = 5, ba = BugBa.Zoki,   tod = new[] { true,  false, false, true  } },
-        new BugKind { id = BugId.Tonbo, hint = "かわべりの 上を とんで いる", sizeMm = 52,    name = "しおからとんぼ", perch = BugPerch.Air,  height = 0.30f,
+        new BugKind { id = BugId.Tonbo, mannaka = 22, haba = 20, hint = "かわべりの 上を とんで いる", sizeMm = 52,    name = "しおからとんぼ", perch = BugPerch.Air,  height = 0.30f,
                       wary = 0.70f, catchRate = 0.55f, weight = 28, power = 3, ba = BugBa.Kawa,   tod = new[] { true,  true,  true,  false } },
-        new BugKind { id = BugId.Oniyanma, hint = "やまの 上。ひるまに 谷を 見おろして いる", sizeMm = 98, name = "おにやんま",   perch = BugPerch.Air,   height = 0.40f,
+        new BugKind { id = BugId.Oniyanma, mannaka = 16, haba = 26, hint = "やまの 上。ひるまに 谷を 見おろして いる", sizeMm = 98, name = "おにやんま",   perch = BugPerch.Air,   height = 0.40f,
                       wary = 0.90f, catchRate = 0.30f, weight = 6,  power = 5, ba = BugBa.Yama,   tod = new[] { false, true,  true,  false } },
-        new BugKind { id = BugId.Chou, hint = "のはらの 花の ある ところ", sizeMm = 105,     name = "あげはちょう", perch = BugPerch.Air,   height = 0.28f,
+        new BugKind { id = BugId.Chou, mannaka = 14, haba = 30, hint = "のはらの 花の ある ところ", sizeMm = 105,     name = "あげはちょう", perch = BugPerch.Air,   height = 0.28f,
                       wary = 0.45f, catchRate = 0.75f, weight = 24, power = 1, ba = BugBa.Nohara, tod = new[] { true,  true,  false, false } },
-        new BugKind { id = BugId.Batta, hint = "のはらの 草の あいだ", sizeMm = 48,    name = "しょうりょうばった", perch = BugPerch.Grass, height = 0.26f,
+        new BugKind { id = BugId.Batta, mannaka = 24, haba = 22, hint = "のはらの 草の あいだ", sizeMm = 48,    name = "しょうりょうばった", perch = BugPerch.Grass, height = 0.26f,
                       wary = 0.60f, catchRate = 0.65f, weight = 22, power = 4, ba = BugBa.Nohara, tod = new[] { true,  true,  true,  false } },
-        new BugKind { id = BugId.Hotaru, hint = "かわべりの しげみ。よる だけ", sizeMm = 14,   name = "ほたる",       perch = BugPerch.Bush,  height = 0.22f,
+        new BugKind { id = BugId.Hotaru, mannaka = 6, haba = 12, hint = "かわべりの しげみ。よる だけ", sizeMm = 14,   name = "ほたる",       perch = BugPerch.Bush,  height = 0.22f,
                       wary = 0.20f, catchRate = 0.80f, weight = 18, power = 1, glows = true, ba = BugBa.Kawa,
                       tod = new[] { false, false, false, true  } },
     };

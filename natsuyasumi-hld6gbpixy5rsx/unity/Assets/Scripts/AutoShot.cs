@@ -122,6 +122,24 @@ public class AutoShot : MonoBehaviour {
                 catcher.transform.position = stand;
                 if (cc != null) cc.enabled = true;
 
+                // ★**ふる 前に 虫の ほうを 向く。**（2026-08-17）
+                //   立ち位置だけ 合わせて いた ころは 8回 ふって 0回しか 取れず、
+                //   「虫の 顔ぶれは 変わったが 取れない」と 読めて しまった。
+                //   あみの 判定は **向きで 前後・左右に ずれる**ので、
+                //   向きを 合わせない たしかめは 当たらなくて あたりまえ だった
+                var pm2 = catcher.GetComponent<PlayerMove>();
+                if (pm2 != null) {
+                    var to = target.transform.position - catcher.transform.position; to.y = 0f;
+                    if (to.sqrMagnitude > 1e-4f) {
+                        to.Normalize();
+                        pm2.useAutoInput = true;
+                        pm2.autoInput = new Vector2(Vector3.Dot(to, cam != null ? cam.transform.right : Vector3.right),
+                                                    Vector3.Dot(to, fwd));
+                        for (int w = 0; w < 20; w++) yield return null;
+                        pm2.autoInput = Vector2.zero;
+                        pm2.useAutoInput = false;
+                    }
+                }
                 int before = book != null ? book.Total : 0;
                 catcher.TrySwing();
                 // ふり切るまでに 虫は 動く。人が 遊ぶ ときも 同じ なので、
@@ -203,6 +221,16 @@ public class AutoShot : MonoBehaviour {
                     for (int w = 0; w < 1200 && ph.Busy; w++) yield return null;
                     Debug.Log("[AutoShot] あそび けっか=" + ph.DebugState);
                 }
+            }
+        }
+
+        // -diary を つけると 日記帳を ひらく。-diary enikki で 絵日記の がわ
+        {
+            string dv = Arg("-diary", null);
+            if (dv != null) {
+                var dh = FindFirstObjectByType<DayHost>();
+                if (dh != null) dh.DebugOpenDiary(dv == "enikki");
+                else Debug.LogError("[AutoShot] DayHost が ない");
             }
         }
 
