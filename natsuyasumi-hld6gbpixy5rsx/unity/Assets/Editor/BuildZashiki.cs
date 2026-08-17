@@ -936,6 +936,7 @@ public static class BuildZashiki {
         if (people.Count > 0) {
             var o = people[people.Count - 1];
             o.akeru = 9f; o.shimeru = 18f;          // 夕方に 店じまい
+            o.fromDay = 5;                          // 町の 店を 知るのは 5日目
             o.mushi = new[] {
                 "あらまあ、{0}。よく とれたねえ",
                 "{0}かい。うちの 子も むかし そんなの 持って きたよ",
@@ -1008,6 +1009,7 @@ public static class BuildZashiki {
                 "{0}さん、こわがって ますよ。そっと 見せて くださいね",
                 "{0}……きれいですね。でも、おうちに かえして あげて ください",
             };
+            dnpc.fromDay = 3;         // ★3日目に 川べりで 出会う（それまで いない）
             dnpc.hideOnRain = true;   // 本人が「あめの日の川はこわい」と 言って いる ので
             dnpc.kotoMatsuri = new[] { "おまつり、にぎやかですね。……人が おおくて ちょっと こわいです" };
             dnpc.kotoToro    = new[] { "わたし、とうろう ながすの すきです……きれいだから" };
@@ -1862,17 +1864,28 @@ public static class BuildZashiki {
         var host = new GameObject("PlaySpots");
         host.transform.SetParent(root, false);
 
-        // 小川ばた：ささぶねを ながす。水は 山から 下って くる＝+Z へ 流れる
-        Water(host, PlayKind.Sasabune, -25.3f, 18f, -27f, 18f, Vector3.forward, 2f);
-        // 大きい 川：水きりと つり。岸は 遊べる 四角の 手前の へり
-        Water(host, PlayKind.Mizukiri, 9f, 26.4f, 9f, 30.5f, Vector3.right, 9f);
-        Water(host, PlayKind.Tsuri,   -5f, 26.4f, -5f, 30.5f, Vector3.right, 9f);
+        // ★★**遊びを 31日かけて 配る。**（2026-08-17・自分で 数えて 出た 答え）
+        //   `-tosi` で 31日ぶんを 数えたら、**昼に できる 遊びの 数が
+        //   31日 ぜんぶ「8」で 一度も 変わらなかった**。
+        //   「何も する ことが なかった 日が 19日」より、**「31日 ぜんぶ 同じ 量しか ない」**
+        //   ほうが 正確な 問題だった。
+        //
+        //   直しかたは **足す ことでは なく 配る こと**。空いた 19日に できごとを
+        //   19個 足すのは 作りきれない。いま ある 8つを 日づけで 開いて いけば、
+        //   19日の 空白が「きょう 何か ふえた」に 変わる。
+        //   しかも **少しずつ 開けば、自然と「今日は これ」に なる**＝
+        //   「1日に 競争を 入れる」も 同じ ところで 解ける。
+        //
+        //   しくみは 祭りで 作った fromDay を そのまま 広げる だけ。新しい ものは 要らない
+        Water(host, PlayKind.Sasabune, -25.3f, 18f, -27f, 18f, Vector3.forward, 2f).fromDay = 2;
+        Water(host, PlayKind.Mizukiri, 9f, 26.4f, 9f, 30.5f, Vector3.right, 9f).fromDay = 3;
+        Water(host, PlayKind.Tsuri,   -5f, 26.4f, -5f, 30.5f, Vector3.right, 9f).fromDay = 8;
         // 野はら：花を つむ
-        Spot(host, PlayKind.Hanatsumi, -16f, 19f, 2.6f);
+        Spot(host, PlayKind.Hanatsumi, -16f, 19f, 2.6f).fromDay = 2;
         // 井戸ばた：つんだ 花を もんで 色水に する
-        Spot(host, PlayKind.Irozu, -6f, 17.6f, 2.2f);
+        Spot(host, PlayKind.Irozu, -6f, 17.6f, 2.2f).fromDay = 11;
         // 縁がわ：本に はさんで おし花に する
-        Spot(host, PlayKind.Oshibana, 1.5f, BuildHouse.EngawaZ - 0.5f, 1.8f);
+        Spot(host, PlayKind.Oshibana, 1.5f, BuildHouse.EngawaZ - 0.5f, 1.8f).fromDay = 13;
         // やぶの 中：ひみつきち。**建った ぶんが その場に のこる**ように、
         // 5段ぶんを 先に 建てて おいて できた ぶんだけ 見せる
         // ★2026-08-17 に 足した ぶん
@@ -1885,7 +1898,7 @@ public static class BuildZashiki {
         // **線こう花火**＝夜の 縁側。押しつづけて 玉を 育てる
         var hb = Spot(host, PlayKind.Hanabi, -6f, BuildHouse.EngawaZ - 0.5f, 1.8f);
         hb.transform.position = new Vector3(-6f, BuildHouse.F1, BuildHouse.EngawaZ - 0.5f);
-        hb.onlyNight = true;
+        hb.onlyNight = true; hb.fromDay = 14;   // 駄菓子屋で 買って くる ころ
         // **金魚すくい**＝祭りの 屋台。8月10日の 夜だけ
         // ★祭りは **9日(宵宮)と 10日(本祭り)の 2晩**。取り逃しが 減る
         var kg = Spot(host, PlayKind.Kingyo, 30.6f, -3.2f, 2.0f);
@@ -1905,8 +1918,17 @@ public static class BuildZashiki {
         Dagashiya(host, 46f, 5.6f);
         var dg = Spot(host, PlayKind.Dagashi, 46f, 7.0f, 2.4f);
         dg.akeru = 9f; dg.shimeru = 18f;    // おばちゃんが いない あいだは 買えない
+        dg.fromDay = 5;                     // おじさんが「谷の おくに 店が ある」と 教える
 
         var him = Spot(host, PlayKind.Himitsu, 24f, 20f, 2.6f);
+        him.fromDay = 4;                    // おばさんが「やぶの おくに 何か あるよ」
+
+        // ★**後半にも 開く ものを 置く。**（2度目の 集計で、7日いこう また 8で 平らだった）
+        //   とうろう流し＝15日の 夜だけ。星見＝16日から ずっと（高台に 夜の 用事が できる）
+        var tn = Water(host, PlayKind.Toronagashi, -2f, 26.4f, -2f, 30.5f, Vector3.right, 9f);
+        tn.onlyNight = true; tn.onlyDay = 15;
+        var hs = Spot(host, PlayKind.Hoshi, -30f, -14f, 3.2f);
+        hs.onlyNight = true; hs.fromDay = 16;
         Himitsu(him.transform);
 
         // 時こく・日づけを ぜんぶの 遊び場に わたす（夜だけ／その日だけ の 判定に つかう）
@@ -2030,7 +2052,7 @@ public static class BuildZashiki {
         return s;
     }
 
-    static void Water(GameObject parent, PlayKind kind, float x, float z,
+    static PlaySpot Water(GameObject parent, PlayKind kind, float x, float z,
                       float wx, float wz, Vector3 flow, float span) {
         var s = Spot(parent, kind, x, z, 2.6f);
         // **水面の 高さは 場面を 組む ときに 入れて おく。**
@@ -2039,6 +2061,7 @@ public static class BuildZashiki {
         TerrainGen.NearestStream(wx, wz, out si, out across, out waterY);
         s.water = new Vector3(wx, waterY, wz);
         s.flow = flow; s.span = span;
+        return s;
     }
 
     // 坂に そった 見えない かべ。**まっすぐな 箱 1つでは 坂を ふさげない。**

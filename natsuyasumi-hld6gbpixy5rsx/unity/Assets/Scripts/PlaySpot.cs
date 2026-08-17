@@ -24,6 +24,10 @@ public enum PlayKind {
     Shateki,      // 射的
     Kuji,         // くじ引き
     Bonodori,     // 盆おどりの わに 入る
+    // ★**後半 25日ぶんが まだ 平ら だった。**（2026-08-17・2度目の 集計）
+    //   配っただけでは 1週目しか 埋まらない。**後半にも 開く ものが 要る**
+    Toronagashi,  // とうろうを ながす（15日の 夜・川）
+    Hoshi,        // 星を 見る（16日から・高台の 夜）
 }
 
 public class PlaySpot : MonoBehaviour {
@@ -99,6 +103,8 @@ public class PlaySpot : MonoBehaviour {
                 case PlayKind.Shateki:   return "スペース：射的を する（20円）";
                 case PlayKind.Kuji:      return "スペース：くじを 引く（30円）";
                 case PlayKind.Bonodori:  return "スペース：おどりの わに 入る";
+                case PlayKind.Toronagashi: return "スペース：とうろうを ながす";
+                case PlayKind.Hoshi:     return "スペース：星を 見る";
                 default:                 return "スペース：ひみつきちを 作る";
             }
         }

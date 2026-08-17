@@ -268,6 +268,24 @@ public class Nikki : MonoBehaviour {
         return Koto2.Nashi;
     }
 
+    // ★**「きょう 何か ふえた」を 毎朝 出す。**（2026-08-17）
+    //   遊びを 日づけで 配った ので、開いた 日には その 一言が 要る。
+    //   カレンダーの 大きな できごと（祭り・台風）と 分けて 持つ
+    public static string Hiraku(int d) {
+        switch (d) {
+            case 2:  return "おじさんが 小川の 場所を 教えて くれた。ささぶねと 花つみが できるぜ";
+            case 3:  return "川べりに 見なれない 子が いる。……大ようせい、って いうらしい";
+            case 4:  return "おばさんが「やぶの おくに 何か あるよ」と 言って いた";
+            case 5:  return "谷の おくに 駄がし屋が ある らしい。歩いて 15分 だとさ";
+            case 8:  return "おじさんが つりざおを 貸して くれた。大きいのを ねらうぜ";
+            case 11: return "花が たまって きた。井戸ばたで 色水が 作れそうだ";
+            case 13: return "おばあちゃんが ぶあつい 本を 貸して くれた。おし花に できるぜ";
+            case 14: return "駄がし屋で 線こう花火を 買って きた。今夜、縁側で やろう";
+            case 16: return "きのう 高だいから 見た 星が わすれられない。今夜も 行って みるか";
+        }
+        return null;
+    }
+
     /// <summary>朝に 出す できごとの 知らせ</summary>
     public string TodayNews() {
         switch (Today()) {
@@ -279,6 +297,12 @@ public class Nikki : MonoBehaviour {
             case Koto2.Yokan:         return "のこり 4日。……なんだか 落ちつかないな";
             case Koto2.Omiyage:       return "あさっては もう 8月31日か";
             case Koto2.Saigo:         return "きょうで さいごだ。……夕がた、縁側に 行って みるか";
+            default: {
+                // 大きな できごとが 無い 日でも、**何かが 開いた 日**なら それを 出す
+                var h = Hiraku(day);
+                if (h != null) return h;
+                break;
+            }
             case Koto2.Toro:          return "きょうは とうろう ながしの 日 らしい";
             case Koto2.Taifu:         return "うわ、すごい 雨だ。きょうは 外に 出られないな";
             case Koto2.Shukudai:      return "……そういえば 宿題、まだ 手を つけて ないぜ";

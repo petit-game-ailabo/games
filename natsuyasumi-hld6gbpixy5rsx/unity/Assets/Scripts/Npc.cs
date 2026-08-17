@@ -60,6 +60,8 @@ public class Npc : MonoBehaviour {
     //   「1日の 中では まだ 全部 できて しまいます。……駄菓子屋の 店じまいが、
     //     これの 入口として 一番 自然です」
     //   夕方に 閉まる＝**午後に 行くか、虫を 優先するか**の 天びんが 生まれる
+    [Tooltip("この 日から いる（0で はじめから）。出会いを 作る")]
+    public int fromDay;
     [Tooltip("この 時こくから いる（0で いつでも）")]
     public float akeru;
     [Tooltip("この 時こくで 帰る（0で いつでも）")]
@@ -96,6 +98,10 @@ public class Npc : MonoBehaviour {
     ///   姿の 無い 相手が『あめの日の川はこわいです』と 喋る」）</summary>
     public bool Iru {
         get {
+            // ★**まだ 出会って いない 人は いない。**（2026-08-17）
+            //   1日目に 遊び 8つ・人 5人が いきなり 全部 あると、
+            //   どこへ 行けば いいのかも、何が 芯なのかも 分からない
+            if (fromDay > 0 && (nikki == null || nikki.day < fromDay)) return false;
             // 店じまい。**姿も 消す**（見えないのに 話せる のは これまで 3度 やらかして いる）
             if (shimeru > 0f && tod != null && (tod.hour < akeru || tod.hour >= shimeru)) return false;
             if (!hideOnRain) return true;
@@ -124,7 +130,7 @@ public class Npc : MonoBehaviour {
 
         // 雨／店じまい なら 消える
         bool wet = weather != null && (weather.mode == Weather.Mode.Ame || weather.mode == Weather.Mode.Yudachi);
-        if (hideOnRain || shimeru > 0f) {
+        if (hideOnRain || shimeru > 0f || fromDay > 0) {
             bool show = Iru;
             // **子が 複数 ある ので ぜんぶ 消す**（1個だけだと 消え残る）
             foreach (var r in GetComponentsInChildren<Renderer>(true))

@@ -208,6 +208,8 @@ public class AutoShot : MonoBehaviour {
                     case "shateki": pk = PlayKind.Shateki;  break;
                     case "kuji":    pk = PlayKind.Kuji;     break;
                     case "odori":   pk = PlayKind.Bonodori; break;
+                    case "toro":    pk = PlayKind.Toronagashi; break;
+                    case "hoshi":   pk = PlayKind.Hoshi;    break;
                     // ★**知らない 名は だまって ひみつきちに しない。**（2026-08-17）
                     //   -play hanabi と 打って ひみつきちが 走り、それに 気づかず
                     //   「線こう花火が 動いた」と 思いこむ ところだった

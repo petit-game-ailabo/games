@@ -221,6 +221,8 @@ public class PlayHost : MonoBehaviour {
             case PlayKind.Shateki:   yield return Shateki(s); break;
             case PlayKind.Kuji:      yield return Kuji(s); break;
             case PlayKind.Bonodori:  yield return Bonodori(s); break;
+            case PlayKind.Toronagashi: yield return Toro(s); break;
+            case PlayKind.Hoshi:     yield return Hoshi(s); break;
             default:                 yield return Himitsu(s); break;
         }
         ShowGauge(false);
@@ -867,6 +869,52 @@ public class PlayHost : MonoBehaviour {
                 ? "盆おどりの わに 入った。むりやり 手を 引かれた けど、まあ わるく なかった"
                 : "盆おどりの わに 入った。……足が ぜんぜん あわなかったぜ", 75);
         yield return new WaitForSeconds(1.8f);
+    }
+
+    // ================= とうろう ながし（8月15日の 夜） =================
+    // ★**行事の 日に「見る」だけでは 足りない。**その日にしか できない ことを 1つ 置く
+    IEnumerator Toro(PlaySpot s) {
+        Line("紙の とうろうに ろうそくを 立てた");
+        yield return new WaitForSeconds(1.4f);
+        Line("……なにか 書くか？　スペースで 流す");
+        float t = 0f;
+        while (t < 8f && !Pressed()) { t += Time.deltaTime; yield return null; }
+        var to = Tama(new Color(1f, 0.72f, 0.34f, 1f), 0.16f, 1.4f);
+        to.transform.position = s.water + Vector3.up * 0.06f;
+        var dir = s.flow.sqrMagnitude > 0.01f ? s.flow.normalized : Vector3.forward;
+        var d2 = to.AddComponent<Drifter>();
+        d2.dir = dir; d2.speed = 0.5f; d2.life = 22f;
+        Line("そっと 水に のせた。……ゆっくり 流れて いく");
+        yield return new WaitForSeconds(2.2f);
+        Line("見えなく なるまで 見て いた");
+        if (nikki != null)
+            nikki.Note("toro", "とうろうを ながした。……だれの ために ながすのか、よく 知らない まま 見て いた", 90);
+        yield return new WaitForSeconds(1.8f);
+    }
+
+    // ================= 星を 見る（16日から・高台の 夜） =================
+    // **高台に 夜の 用事が 無かった。**上るのに 手間の かかる 場所ほど、
+    // 夜に 行く 理由が あると 効く
+    static readonly string[] Hoshizora = {
+        "天の川が ま上を とおって いる。……こんなに 濃いのは はじめて 見た",
+        "北の 空に ひしゃくが 見える。あれが 北斗七星 だっけか",
+        "流れ星！　……早すぎて 何も ねがえなかったぜ",
+        "町の あかりが 無いと、星は こんなに 出るんだな",
+        "夏の 大三角。名前だけは 知って いたぜ",
+        "人工えいせいが すーっと よこぎった。……あれは ねがっても だめか",
+    };
+    const string KeyHoshi = "natsuyasumi.play.hoshi.v1";
+    IEnumerator Hoshi(PlaySpot s) {
+        Line("あおむけに ねころんだ");
+        yield return new WaitForSeconds(1.6f);
+        int n = PlayerPrefs.GetInt(KeyHoshi, 0);
+        Line(Hoshizora[n % Hoshizora.Length]);
+        Bump(KeyHoshi, 1);
+        yield return new WaitForSeconds(2.6f);
+        if (nikki != null)
+            nikki.Note("hoshi", "高だいで 星を 見た。" + Hoshizora[n % Hoshizora.Length], 85);
+        Line("……そろそろ 帰るか。ここは 夜 冷えるぜ");
+        yield return new WaitForSeconds(1.6f);
     }
 
     // ================= ひみつきち =================
