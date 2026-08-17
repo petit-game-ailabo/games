@@ -40,6 +40,8 @@ public class Npc : MonoBehaviour {
     public bool mushiHakase;
     [Tooltip("目の 前で 虫を にがした ときの 一言")]
     public string[] nigasu;
+    [Tooltip("祭りの 日に くれる 小づかい（0で なし）")]
+    public int kozukai;
 
     [HideInInspector] public Transform player;
     [HideInInspector] public BugHud hud;
@@ -146,6 +148,19 @@ public class Npc : MonoBehaviour {
                 step++;
                 return;
             }
+        }
+        // ★**「はい、これ 小づかい」と 言ったら、ほんとうに わたす。**（2026-08-17）
+        //   台詞だけ 出して 財布が 増えないなら、それは また 約束を やぶって いる
+        if (kozukai > 0 && nikki != null && koto == Nikki.Koto2.Matsuri
+            && Saifu.Madamorattenai(nikki.day)) {
+            Saifu.Moratta(nikki.day);
+            Saifu.Add(kozukai);
+            if (hud != null)
+                hud.Say(who + "「はい、これ 小づかい。屋台で 何か おあがり」　（+" + kozukai + "円）");
+            nikki.Talked(who);
+            nikki.Note("kozukai", "おばあちゃんに 小づかいを " + kozukai + "円 もらった", 65);
+            step++;
+            return;
         }
         string s = Pick();
         if (hud != null) hud.Say(who + "「" + s + "」");

@@ -204,6 +204,7 @@ public class AutoShot : MonoBehaviour {
                     case "kingyo":   pk = PlayKind.Kingyo;   break;
                     case "hanabi":   pk = PlayKind.Hanabi;   break;
                     case "himitsu":  pk = PlayKind.Himitsu;  break;
+                    case "dagashi": pk = PlayKind.Dagashi;  break;
                     // ★**知らない 名は だまって ひみつきちに しない。**（2026-08-17）
                     //   -play hanabi と 打って ひみつきちが 走り、それに 気づかず
                     //   「線こう花火が 動いた」と 思いこむ ところだった
@@ -247,6 +248,34 @@ public class AutoShot : MonoBehaviour {
                 }
                 if (bk != null) Debug.Log("[AutoShot] ひょうほん しゅるい=" + bk.SpecimenKinds);
                 for (int w = 0; w < 70; w++) yield return null;   // Sodatsu が 見なおすまで 待つ
+            }
+        }
+
+        // ★-neru N で **N日 寝る**。1日の わっか（寝る→日記→朝）を そのまま 通す。
+        //   かごの 虫が 弱って 逃げる ことは、日を またがないと 確かめられない。
+        //   （2026-08-17：BugBook.Asa() を 書いた つもりで どこからも 呼んで おらず、
+        //     出るはずの ない「よわって いる！」を「出ました」と 報告して しまった。
+        //     日を またぐ たしかめが 無かったのが 大もとの 原因）
+        {
+            int neru = int.Parse(Arg("-neru", "0"));
+            if (neru > 0) {
+                var dh = FindFirstObjectByType<DayHost>();
+                var bk = FindFirstObjectByType<BugBook>();
+                var nk = FindFirstObjectByType<Nikki>();
+                if (dh == null) Debug.LogError("[AutoShot] DayHost が ない");
+                else for (int n = 0; n < neru; n++) {
+                    int mae = bk != null ? bk.Recent.Count : 0;
+                    dh.DebugNeru();
+                    for (int w = 0; w < 900 && dh.DebugOkuri; w++) {
+                        // 日記の 画面で スペース待ちに なる ので 押して やる
+                        if (w % 40 == 39) dh.DebugSusumeru();
+                        yield return null;
+                    }
+                    Debug.Log(string.Format("[AutoShot] {0}日め あさ: かご {1} → {2}　にがした={3}",
+                              nk != null ? nk.day : -1, mae,
+                              bk != null ? bk.Recent.Count : -1,
+                              bk != null ? bk.Freed : -1));
+                }
             }
         }
 

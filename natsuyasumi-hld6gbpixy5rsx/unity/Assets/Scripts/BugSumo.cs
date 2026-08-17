@@ -253,7 +253,10 @@ public class BugSumo : MonoBehaviour {
 
     void Win(bool won) {
         phase = 2; resultT = 0f;
-        if (won) { wins++; PlayerPrefs.SetInt(WinKey, wins); PlayerPrefs.Save(); }
+        if (won) {
+            wins++; PlayerPrefs.SetInt(WinKey, wins); PlayerPrefs.Save();
+            Saifu.Add(15);        // 勝つと 見て いた 大人が 小づかいを くれる
+        }
         // ★日記に。**勝ち負けと 通算を 入れる**
         if (nikki != null) {
             string nm = mine != null ? mine.name : "むし";

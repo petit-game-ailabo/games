@@ -127,7 +127,7 @@ public class DayHost : MonoBehaviour {
             case St.Nikki:
                 t += Time.deltaTime;
                 // すぐ 押しても 飛ばない ように 少し 待つ
-                if (t > 0.6f && (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))) {
+                if (t > 0.6f && (Osareta(KeyCode.Space) || Osareta(KeyCode.Return))) {
                     // ★**なつやすみが 終わったら まとめを 出す。**
                     //   31日で クランプして いた ころは、翌朝また 31日が 来て いた
                     if (nikki != null && nikki.Owatta) {
@@ -171,6 +171,7 @@ public class DayHost : MonoBehaviour {
                         // ★**すすみ具合(1周ぶん)も 消す。**これが 無いと 2周目の 8月1日に
                         //   ひみつきちが 完成済みで、どの 遊びも 二度と「はじめて」に ならない
                         PlayHost.ResetSusumi();
+                        Saifu.Reset0();
                         enikkiMode = false;
                         if (diaryPanel != null) diaryPanel.gameObject.SetActive(false);
                         if (tod != null) { tod.hour = 6.5f; tod.runClock = true; tod.useHour = true; }
@@ -204,6 +205,21 @@ public class DayHost : MonoBehaviour {
                         // ★きょうの できごとを **世界に 出す**（提灯・屋台・人の あつまり）。
                         //   文だけ 出して 何も 起きないと、ゲームが 約束を やぶる ことに なる
                         if (gyoji != null) gyoji.Apply(nikki.day);
+                        // ★**朝、かごを のぞく。**3日 かかえた 虫は 弱り、4日で 逃げて いる。
+                        //   （遊ぶ 人：「かごに 上限も ない、虫は 弱りも しない。
+                        //     だから 常に 標本が 正解で、一度も 迷いません」）
+                        //   ※ここを 書いた つもりで **1行も 入って いなかった**（2026-08-17）。
+                        //     BugBook.Asa() は 定義 1件だけの 死にコードで、
+                        //     ずかんの「よわって いる！」は 一度も 出て いなかった
+                        if (book != null) {
+                            var nigeta = book.Asa(nikki.day);
+                            if (nigeta.Count > 0) {
+                                var na = BugKind.Of(nigeta[0]).name;
+                                nikki.Note("nigeta", nigeta.Count == 1
+                                    ? na + "が かごから いなく なって いた。……よわらせて しまった"
+                                    : na + "たち " + nigeta.Count + "ひきが かごから いなく なって いた", 70);
+                            }
+                        }
                         news = nikki.TodayNews();
                         newsLeft = news != null ? 3.4f : 0f;
                     }
@@ -214,6 +230,19 @@ public class DayHost : MonoBehaviour {
 
     float nagged;
     bool carried;      // 力ずくで 寝かされた＝だれかが 布団まで はこんだ
+
+    /// <summary>たしかめの 自動運転から 1日を 送る（寝る→日記→朝）</summary>
+    public void DebugNeru() { if (tod != null) tod.runClock = false; st = St.Kurayami; t = 0f; }
+    /// <summary>たしかめの 自動運転から「スペース」を 1回 送る（日記を とじる など）</summary>
+    public void DebugSusumeru() { debugSpace = true; }
+    bool debugSpace;
+    bool Osareta(KeyCode k) {
+        if (debugSpace && (k == KeyCode.Space || k == KeyCode.Return)) { debugSpace = false; return true; }
+        return Input.GetKeyDown(k);
+    }
+
+    /// <summary>いま 1日の 送りの さいちゅうか</summary>
+    public bool DebugOkuri { get { return st != St.Asobu; } }
 
     int readBack = -1;
     Text diaryTip;

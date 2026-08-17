@@ -216,6 +216,7 @@ public class PlayHost : MonoBehaviour {
             case PlayKind.Shukudai:  yield return Shukudai(s); break;
             case PlayKind.Kingyo:    yield return Kingyo(s); break;
             case PlayKind.Hanabi:    yield return Hanabi(s); break;
+            case PlayKind.Dagashi:   yield return Dagashi(s); break;
             default:                 yield return Himitsu(s); break;
         }
         ShowGauge(false);
@@ -390,6 +391,16 @@ public class PlayHost : MonoBehaviour {
         Mood(CharSprite.Pose.Yorokobi, 1.6f);
         Line(fishName + "　" + mm + "mm　が つれた！　（つうさん " + Fish + " ひき）");
         NoteAsobi(PlayKind.Tsuri, Mathf.RoundToInt(mm / 10f));
+        // ★**大物は お金に なる。**（2026-08-17）
+        //   おじさんに 見せると 小づかいを くれる、という 建てつけ。
+        //   谷の おくの 駄菓子屋まで 歩く 理由は、これと 虫ずもうの 勝ちで つくる
+        // さかなは 70〜240mm。**200mm(20cm)から 大物** あつかい に する
+        if (mm >= 200) {
+            int en = 20 + (mm - 200) / 10 * 5;
+            Saifu.Add(en);
+            Line(string.Format("おじさんが 見て おどろいて いた。……小づかいを {0}円 くれたぜ", en));
+            yield return new WaitForSeconds(1.6f);
+        }
         Destroy(fish, 1.2f);
         yield return new WaitForSeconds(1.3f);
     }
@@ -630,6 +641,65 @@ public class PlayHost : MonoBehaviour {
                        tama, tama > 4f ? "われながら 見ごとだぜ" : "すぐ 落ちて しまった"),
                        tama > 4f ? 80 : 55);
         yield return new WaitForSeconds(1.4f);
+    }
+
+    // ================= 駄菓子屋 =================
+    // ★遊ぶ 人：「歩いて 15分 かかる 店に、300円 持って 行く——あの 遠さが 子どもの 夏」
+    //   **かごが 5ひきで 詰まる 痛みが、ここへ 歩く 理由に なる。**
+    //   だから 一番 高くて 一番 うれしいのが「大きい 虫かご」。
+    // ★**ひとことの わくは 340px しか ない。**長い 説明を 1行に つめると
+    //   枠から はみ出す（実機で 見て わかった）。品名は 短く、説明は 別の 行に する
+    static readonly string[] ShinaNa = { "大きい むしかご", "ラムネ", "アイス" };
+    static readonly string[] ShinaSetsu = { "かごが 2ひき ふえる", "きゅっと 冷たい", "あたま きーん" };
+    static readonly int[] ShinaNe = { 120, 30, 50 };
+
+    IEnumerator Dagashi(PlaySpot s) {
+        var book = GetComponent<BugBook>();
+        int sel = 0;
+        Line(string.Format("いらっしゃい。お金は {0}円 だね", Saifu.Yen));
+        yield return new WaitForSeconds(1.4f);
+        Line("← → えらぶ　スペース：買う　X：やめる");
+        yield return new WaitForSeconds(1.6f);
+        float nokori = 22f;                       // ながく のぞいて いると 帰る
+        while (nokori > 0f) {
+            nokori -= Time.deltaTime;
+            Line(string.Format("▶{0}　{1}円　（{2}）", ShinaNa[sel], ShinaNe[sel], ShinaSetsu[sel]));
+            if (Input.GetKeyDown(KeyCode.RightArrow)) { sel = (sel + 1) % ShinaNa.Length; }
+            else if (Input.GetKeyDown(KeyCode.LeftArrow)) { sel = (sel + ShinaNa.Length - 1) % ShinaNa.Length; }
+            else if (Input.GetKeyDown(KeyCode.X)) break;
+            else if (Pressed()) {
+                if (!Saifu.Tsukau(ShinaNe[sel])) {
+                    Line("……お金が 足りないぜ");
+                    yield return new WaitForSeconds(1.4f);
+                    continue;
+                }
+                switch (sel) {
+                    case 0:
+                        if (book != null) book.CageUp(2);
+                        Line(string.Format("大きい むしかごを 買った！　これで {0}ひき 入る",
+                                           book != null ? book.CageMax : 0));
+                        if (nikki != null) nikki.Note("dagashi",
+                            "町の 駄がし屋で 大きい むしかごを 買った。これで もっと 持って 帰れる", 85);
+                        break;
+                    case 1:
+                        Line("ラムネを 飲んだ。……ビー玉が じゃまだぜ");
+                        if (nikki != null) nikki.Note("dagashi",
+                            "駄がし屋で ラムネを 飲んだ。ビー玉が どうしても 出てこない", 55);
+                        break;
+                    default:
+                        Line("アイスを 食べた。あたまが きーんと する");
+                        if (nikki != null) nikki.Note("dagashi",
+                            "駄がし屋で アイスを 食べた。帰り道で とけて 手が べたべたに なった", 55);
+                        break;
+                }
+                yield return new WaitForSeconds(1.8f);
+                Line(string.Format("のこりは {0}円", Saifu.Yen));
+                yield return new WaitForSeconds(1.2f);
+            }
+            yield return null;
+        }
+        Line("またね");
+        yield return new WaitForSeconds(1.0f);
     }
 
     // ================= ひみつきち =================

@@ -679,7 +679,7 @@ public static class BuildZashiki {
         dayHost.tod = todc;
         todc.nikki = nikki;                   // 日づけで 日の入りが 早く なる
         if (spawner != null) spawner.nikki = nikki;   // 日づけで 虫の 顔ぶれが 変わる
-        book.today = nikki.day;                       // かごの 虫が 弱る までの 数え
+        book.nikki = nikki;                           // かごの 虫が 弱る までの 数え
         book.OnFreed += hud.Nigashita;                // にがすと そばの 人が 反応する
 
         // ★**部屋が 育つ。**ひみつきちと 同じ「先に 建てて おいて できた ぶんだけ 見せる」。
@@ -769,6 +769,7 @@ public static class BuildZashiki {
             g.kotoTaifu   = new[] { "きょうは 出ちゃ いけないよ。風が つよい からね" };
             g.kotoShukudai= new[] { "宿題は やったのかい。……まだ なんだろ、その 顔は" };
             g.kotoOwakare = new[] { "もう 帰るのかい。……また 来年 おいで" };
+            g.kozukai = 200;   // 祭りの 日の 小づかい（大きい むしかごが 120円）
             // かごの 虫に 反応する（はじめて 見せた 虫 だけ）
             g.nigasu = new[] { "そうかい。にがして やったかい。……やさしい 子だね" };
             g.mushi = new[] {
@@ -1682,6 +1683,14 @@ public static class BuildZashiki {
         var kg = Spot(host, PlayKind.Kingyo, 30.6f, -3.2f, 2.0f);
         kg.onlyNight = true; kg.onlyDay = Nikki.MatsuriDay;
 
+        // ★**駄菓子屋。**（2026-08-17・遊ぶ 人の 指摘）
+        //   「谷の おくの 町が 空き家の まま。5棟 建って いて 誰も いない。行く 理由が ゼロ」
+        //   「歩いて 15分 かかる 店に、300円 持って 行く——あの 遠さが 子どもの 夏でした」
+        //   小屋（Kit_Koya, x=46）の 手前に 店さきを 出す。
+        //   **かごが 5ひきで 詰まる 痛みが、ここまで 歩く 理由に なる**
+        Dagashiya(host, 46f, 5.6f);
+        var dg = Spot(host, PlayKind.Dagashi, 46f, 7.0f, 2.4f);
+
         var him = Spot(host, PlayKind.Himitsu, 24f, 20f, 2.6f);
         Himitsu(him.transform);
 
@@ -1759,6 +1768,42 @@ public static class BuildZashiki {
             new HimitsuBase.Stage { parts = s5 },
         };
         hb.Show(0);
+    }
+
+    // --- 駄菓子屋の 店さき。**中に 入らせる 必要は ない。**軒さきの 台と 暖簾と
+    //   ガラスびん が 見えれば、それは もう 駄菓子屋に なる
+    static void Dagashiya(GameObject parent, float cx, float cz) {
+        var t = new GameObject("Dagashiya").transform;
+        t.SetParent(parent.transform, false);
+        float y = TerrainGen.Height(cx, cz);
+        t.position = new Vector3(cx, y, cz);
+
+        // 材は ここで 作る。**Build() の 変数は ここまで 届かない**
+        var wood  = Mat("DagashiWood",  ArtTex + "wood_floor.png",  new Vector2(2.4f, 1.4f), 0f, 0.76f);
+        var paper = Mat("DagashiPaper", ArtTex + "shoji_paper.png", new Vector2(2f, 2f),     0f, 0.90f);
+        var post  = Mat("DagashiPost",  ArtTex + "wood_beam.png",   new Vector2(1f, 2f),     0f, 0.82f);
+        var noren = Iro("DagashiNoren", new Color(0.24f, 0.36f, 0.52f), 0f);   // 藍の のれん
+
+        // 台（2.6m）と ひさし
+        Box("Dg_Dai", t, new Vector3(0f, 0.45f, 0f), new Vector3(2.6f, 0.90f, 0.9f), wood);
+        Box("Dg_Ita", t, new Vector3(0f, 0.93f, 0f), new Vector3(2.7f, 0.06f, 1.0f), wood);
+        for (int k = -1; k <= 1; k += 2)
+            Box("Dg_Hashira" + k, t, new Vector3(k * 1.25f, 1.15f, -0.3f),
+                new Vector3(0.10f, 2.3f, 0.10f), post);
+        var hisashi = Box("Dg_Hisashi", t, new Vector3(0f, 2.32f, 0.1f),
+                          new Vector3(3.0f, 0.10f, 1.7f), wood);
+        hisashi.layer = 2;                    // 屋根は 真下への レイの じゃまを しない
+        // 暖簾（のれん）。3まいに 割って 風で 分かれて いる ように 見せる
+        for (int k = 0; k < 3; k++)
+            Box("Dg_Noren" + k, t, new Vector3(-0.85f + k * 0.85f, 1.95f, 0.85f),
+                new Vector3(0.78f, 0.55f, 0.04f), noren);
+        // ガラスびん（駄菓子）。**台の 上に ならぶ 丸い もの**が 店らしさ の 芯
+        for (int k = 0; k < 5; k++)
+            Cyl("Dg_Bin" + k, t, new Vector3(-1.0f + k * 0.5f, 1.09f, 0.05f),
+                new Vector3(0.26f, 0.32f, 0.26f), paper);
+        // 木箱と 腰かけ
+        Box("Dg_Hako", t, new Vector3(1.55f, 0.22f, 0.5f), new Vector3(0.6f, 0.44f, 0.5f), wood);
+        Box("Dg_Isu",  t, new Vector3(-1.6f, 0.20f, 0.7f), new Vector3(0.8f, 0.40f, 0.4f), wood);
     }
 
     static PlaySpot Spot(GameObject parent, PlayKind kind, float x, float z, float range) {

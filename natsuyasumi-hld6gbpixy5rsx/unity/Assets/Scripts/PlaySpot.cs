@@ -19,6 +19,7 @@ public enum PlayKind {
     Shukudai,     // **絵日記（宿題）**。夜、机で 1ページ。31ページ ある
     Kingyo,       // 金魚すくい（祭りの 屋台。10日だけ）
     Hanabi,       // 線香花火（夜の 縁側）
+    Dagashi,      // 駄菓子屋（谷の おくの 町）。大きい 虫かご・ラムネ・アイス
 }
 
 public class PlaySpot : MonoBehaviour {
@@ -78,6 +79,7 @@ public class PlaySpot : MonoBehaviour {
                 case PlayKind.Shukudai:  return "スペース：えにっきを 書く";
                 case PlayKind.Kingyo:    return "スペース：金魚すくいを する";
                 case PlayKind.Hanabi:    return "スペース：線こう花火を する";
+                case PlayKind.Dagashi:   return "スペース：駄がし屋を のぞく";
                 default:                 return "スペース：ひみつきちを 作る";
             }
         }

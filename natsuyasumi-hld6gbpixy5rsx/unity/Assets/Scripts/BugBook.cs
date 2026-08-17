@@ -42,14 +42,25 @@ public class BugBook : MonoBehaviour {
     // かごに 入れた 日（recent と 同じ ならび）。**弱る までの 数え**
     const string CageDayKey = "natsuyasumi.bugcageday.v1";
     readonly List<int> putDay = new List<int>();
-    /// <summary>いまの 日づけ（Nikki が 入れる）。0なら 弱りを 見ない</summary>
-    [HideInInspector] public int today;
+    // ★**日づけは 自分で 取りに 行く。**（2026-08-17）
+    //   前は Asa() の 中でしか today に 入れて おらず、その Asa() を
+    //   どこからも 呼んで いなかった ので、today は 永久に 0＝
+    //   **あずかり日数も つねに 0、弱りも 逃げも 一度も 起きなかった**。
+    //   人まかせに した 値は、たいてい 誰も 入れない
+    [HideInInspector] public Nikki nikki;
+    public int today {
+        get { return nikki != null ? nikki.day : todaySub; }
+        set { todaySub = value; }
+    }
+    int todaySub;
     public const int YowaruDay = 3;         // これだけ かかえると 弱る
     public const int NigeruDay = 4;         // ここまで 来ると 逃げる
 
     /// <summary>かごの i ばんめは 何日 かかえて いるか</summary>
     public int Azukari(int i) {
-        if (today <= 0 || i < 0 || i >= putDay.Count || putDay[i] <= 0) return 0;
+        if (today <= 0 || i < 0 || i >= putDay.Count) return 0;
+        // 前の セーブは 入れた 日を 持って いない（0）。**きょう 入れた ことに して 救う**
+        if (putDay[i] <= 0) { putDay[i] = today; return 0; }
         return Mathf.Max(0, today - putDay[i]);
     }
     public bool Yowatta(int i) { return Azukari(i) >= YowaruDay; }

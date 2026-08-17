@@ -171,8 +171,13 @@ public class BugHud : MonoBehaviour {
                 continue;
             }
             int sp = book.Specimen(k.id);
-            sb.AppendLine(string.Format("{0}　{1}ひき　さいだい {2}mm{3}",
-                          k.name, n, book.MaxMm(k.id), sp > 0 ? "　ひょうほん" + sp : ""));
+            // ★**きょ年の さいだい**も 出す。2周目の ずかんが 目標に なる
+            //   （これも 作った だけで どこにも 出て いなかった）
+            int ky = book.Kyonen(k.id);
+            sb.AppendLine(string.Format("{0}　{1}ひき　さいだい {2}mm{3}{4}",
+                          k.name, n, book.MaxMm(k.id),
+                          sp > 0 ? "　ひょうほん" + sp : "",
+                          ky > 0 ? "　（きょ年 " + ky + "）" : ""));
         }
         sb.AppendLine();
         // ★**かごの 虫は 逃がすか 標本に するか。**
@@ -194,6 +199,8 @@ public class BugHud : MonoBehaviour {
             sb.AppendLine("▶の 1ぴきに　X：にがす　　C：ひょうほんに する");
         }
         sb.AppendLine(string.Format("にがした {0}　ひょうほん {1}", book.Freed, book.SpecimenTotal));
+        // ★**持ちがねが 見えないと 貯める 気に ならない。**駄菓子屋の 大かごは 120円
+        sb.AppendLine(string.Format("おこづかい　{0} 円", Saifu.Yen));
         sb.AppendLine();
         sb.AppendLine("Z で とじる");
         bookText.text = sb.ToString();
