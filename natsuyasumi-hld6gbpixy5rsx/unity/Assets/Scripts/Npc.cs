@@ -38,6 +38,8 @@ public class Npc : MonoBehaviour {
     public string[] mushi;
     [Tooltip("虫の いる 場所を 教えて くれる 人か（おじさん）")]
     public bool mushiHakase;
+    [Tooltip("目の 前で 虫を にがした ときの 一言")]
+    public string[] nigasu;
 
     [HideInInspector] public Transform player;
     [HideInInspector] public BugHud hud;

@@ -20,7 +20,39 @@ public class BugBook : MonoBehaviour {
     const string RecentKey = "natsuyasumi.bugcage.v1";
     const string SpecKey = "natsuyasumi.bugspec.v1";
     const string FreedKey = "natsuyasumi.bugfreed.v1";
-    public const int CageSize = 6;          // かごに 入る 数
+    // ★**かごに 上限と 寿命を 入れる。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「逃がす＝何も 残らない／標本＝数字が 残る。**一方が 完全に 上位互換**です。
+    //     かごに 上限も ない、虫は 弱りも しない。だから 常に 標本が 正解で、
+    //     プレイヤーは 一度も 迷いません。……いまの 虫とりは
+    //     『振る→捕れる→数字が 増える』で、最初から 最後まで
+    //     **一度も 迷う ところが ありません**」
+    //
+    //   上限を 5に して、6ぴきめで「どれを 手ばなす?」が 始まる。
+    //   3日 かかえると 弱り、4日で 逃げて いく＝**かかえこむ ことに 代金が つく**。
+    public const int CageSize = 5;          // かごに 入る 数（駄菓子屋の 大かごで ふえる）
+    const string CageMoreKey = "natsuyasumi.bugcagemore.v1";
+    public int CageMax { get { return CageSize + PlayerPrefs.GetInt(CageMoreKey, 0); } }
+    public bool CageFull { get { return recent.Count >= CageMax; } }
+    /// <summary>大きい かごを 買った（上限が ふえる）</summary>
+    public void CageUp(int by) {
+        PlayerPrefs.SetInt(CageMoreKey, PlayerPrefs.GetInt(CageMoreKey, 0) + by);
+        PlayerPrefs.Save();
+    }
+
+    // かごに 入れた 日（recent と 同じ ならび）。**弱る までの 数え**
+    const string CageDayKey = "natsuyasumi.bugcageday.v1";
+    readonly List<int> putDay = new List<int>();
+    /// <summary>いまの 日づけ（Nikki が 入れる）。0なら 弱りを 見ない</summary>
+    [HideInInspector] public int today;
+    public const int YowaruDay = 3;         // これだけ かかえると 弱る
+    public const int NigeruDay = 4;         // ここまで 来ると 逃げる
+
+    /// <summary>かごの i ばんめは 何日 かかえて いるか</summary>
+    public int Azukari(int i) {
+        if (today <= 0 || i < 0 || i >= putDay.Count || putDay[i] <= 0) return 0;
+        return Mathf.Max(0, today - putDay[i]);
+    }
+    public bool Yowatta(int i) { return Azukari(i) >= YowaruDay; }
 
     // ★**とった 虫を 人に 見せる。**（2026-08-17）
     //   遊ぶ 人：「オニヤンマを 苦労して 捕っても、村の 誰も 見て くれない。
@@ -50,6 +82,8 @@ public class BugBook : MonoBehaviour {
     readonly List<BugId> recent = new List<BugId>();
 
     public event Action<BugCatch> OnCaught;
+    /// <summary>にがした（そばに いる 人が 反応する）</summary>
+    public event Action<BugId> OnFreed;
 
     void Awake() { Load(); }
 
@@ -79,12 +113,17 @@ public class BugBook : MonoBehaviour {
     }
 
     /// <summary>かごの いちばん 古い 1ぴきを 逃がす。逃がした 虫（無ければ null）</summary>
-    public BugId? Release() {
-        if (recent.Count == 0) return null;
-        var id = recent[0];
-        recent.RemoveAt(0);
+    public BugId? Release() { return Release(0); }
+
+    /// <summary>かごの i ばんめを にがす</summary>
+    public BugId? Release(int i) {
+        if (i < 0 || i >= recent.Count) return null;
+        var id = recent[i];
+        recent.RemoveAt(i);
+        if (i < putDay.Count) putDay.RemoveAt(i);
         PlayerPrefs.SetInt(FreedKey, Freed + 1);
         Save();
+        if (OnFreed != null) OnFreed(id);
         return id;
     }
 
@@ -93,6 +132,7 @@ public class BugBook : MonoBehaviour {
         if (recent.Count == 0) return null;
         var id = recent[0];
         recent.RemoveAt(0);
+        if (putDay.Count > 0) putDay.RemoveAt(0);
         specimens[(int)id]++;
         Save();
         return id;
@@ -110,17 +150,39 @@ public class BugBook : MonoBehaviour {
         return Mathf.Max(1, Mathf.RoundToInt(k.sizeMm * f));
     }
 
-    public void Add(BugId id, int sizeMm) {
+    /// <summary>1ぴき 入れる。**かごが いっぱいなら 入らない**（false）</summary>
+    public bool Add(BugId id, int sizeMm) {
+        // ★前は いっぱいでも だまって いちばん 古いのを 捨てて いた。
+        //   それだと「どれを 手ばなすか」を 人が えらべない
+        if (CageFull) return false;
         int i = (int)id;
         bool first = counts[i] == 0;
         counts[i]++;
         bool rec = sizeMm > maxMm[i];
         if (rec) maxMm[i] = sizeMm;
         recent.Add(id);
-        while (recent.Count > CageSize) recent.RemoveAt(0);
+        putDay.Add(today);
         Save();
         if (OnCaught != null)
             OnCaught(new BugCatch { id = id, count = counts[i], firstOfKind = first, sizeMm = sizeMm, record = rec });
+        return true;
+    }
+
+    // ★**朝に かごを 見る。**3日で 弱り、4日で 逃げる。
+    //   かかえこむ ほど 減る＝「いま 標本に するか、にがすか」を 毎朝 つきつける
+    /// <summary>朝の 手入れ。逃げて いった 虫の 名（無ければ null）</summary>
+    public List<BugId> Asa(int day) {
+        today = day;
+        var nigeta = new List<BugId>();
+        for (int i = recent.Count - 1; i >= 0; i--) {
+            if (Azukari(i) < NigeruDay) continue;
+            nigeta.Add(recent[i]);
+            recent.RemoveAt(i);
+            if (i < putDay.Count) putDay.RemoveAt(i);
+            PlayerPrefs.SetInt(FreedKey, Freed + 1);
+        }
+        if (nigeta.Count > 0) Save();
+        return nigeta;
     }
 
     void Load() {
@@ -134,7 +196,12 @@ public class BugBook : MonoBehaviour {
             int v;
             if (int.TryParse(t, out v) && v >= 0 && v < BugKind.All.Length) recent.Add((BugId)v);
         }
-        while (recent.Count > CageSize) recent.RemoveAt(0);
+        while (recent.Count > CageMax) recent.RemoveAt(0);
+        var dd = PlayerPrefs.GetString(CageDayKey, "");
+        if (!string.IsNullOrEmpty(dd))
+            foreach (var t in dd.Split(',')) { int v; putDay.Add(int.TryParse(t, out v) ? v : 0); }
+        while (putDay.Count < recent.Count) putDay.Add(0);
+        while (putDay.Count > recent.Count) putDay.RemoveAt(putDay.Count - 1);
     }
 
     static void ReadInts(string key, int[] into) {
@@ -151,6 +218,7 @@ public class BugBook : MonoBehaviour {
         PlayerPrefs.SetString(MaxKey, string.Join(",", Array.ConvertAll(maxMm, c => c.ToString())));
         PlayerPrefs.SetString(SpecKey, string.Join(",", Array.ConvertAll(specimens, c => c.ToString())));
         PlayerPrefs.SetString(RecentKey, string.Join(",", recent.ConvertAll(id => ((int)id).ToString()).ToArray()));
+        PlayerPrefs.SetString(CageDayKey, string.Join(",", putDay.ConvertAll(d => d.ToString()).ToArray()));
         PlayerPrefs.Save();
     }
 
@@ -171,7 +239,8 @@ public class BugBook : MonoBehaviour {
             counts[i] = 0; maxMm[i] = 0; specimens[i] = 0;
         }
         PlayerPrefs.SetString(KyonenKey, string.Join(",", Array.ConvertAll(kyonen, c => c.ToString())));
-        recent.Clear();
+        recent.Clear(); putDay.Clear();
+        PlayerPrefs.DeleteKey(CageMoreKey);
         PlayerPrefs.SetInt(FreedKey, 0);
         Save();
     }

@@ -234,6 +234,22 @@ public class AutoShot : MonoBehaviour {
             }
         }
 
+        // -hyohon N で かごの 虫を N ひき 標本に する（部屋が 育つ ことの たしかめ）
+        {
+            int hy = int.Parse(Arg("-hyohon", "0"));
+            if (hy > 0) {
+                var bk = FindFirstObjectByType<BugBook>();
+                // かごに N しゅるい 入れてから 標本に する（Add → MakeSpecimen の 道を そのまま 通す）
+                for (int i = 0; i < hy && bk != null; i++) {
+                    var kk = BugKind.All[i % BugKind.All.Length];
+                    bk.Add(kk.id, BugBook.RollSize(kk));
+                    bk.MakeSpecimen();
+                }
+                if (bk != null) Debug.Log("[AutoShot] ひょうほん しゅるい=" + bk.SpecimenKinds);
+                for (int w = 0; w < 70; w++) yield return null;   // Sodatsu が 見なおすまで 待つ
+            }
+        }
+
         // -book を つけると ずかんを ひらいた ところを 撮る
         if (Arg("-book", null) != null) {
             var hud = FindFirstObjectByType<BugHud>();

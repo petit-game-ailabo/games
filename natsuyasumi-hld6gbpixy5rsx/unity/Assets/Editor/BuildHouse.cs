@@ -58,6 +58,7 @@ public static class BuildHouse {
     //     そのあいだに **中廊下 1.5m** を 東西に 通す。
     //   ★屋根は 原点を まん中と して 組む ので 左右対称は くずさない
     public const float X0 = -12.0f, X1 = 12.0f;   // 横 24.0m（桁行 13間）
+    public const float RoomCL = -9.375f, RoomCM = -4.125f, RoomCR = 1.5f;
     public const float Z0 = -6.0f, Z1 = 6.0f;     // 奥ゆき 12.0m（梁間 6.6間）
     public const float DomaX = 4.5f;              // これより 右が 土間（7.5m）
     // **中廊下**。床上を 手前と おくに 分ける（ここが 通り道に なる）
@@ -488,7 +489,9 @@ public static class BuildHouse {
     static void Rooms(Transform t, Mats m,
                       System.Func<string, Transform, Vector3, Vector3, Material, GameObject> box) {
         // 列の まん中：(-12.0,-6.75) (-6.75,-1.5) (-1.5,4.5)
-        const float CL = -9.375f, CM = -4.125f, CR = 1.5f;
+        // 部屋の まん中（外からも つかう。標本箱を つくえに 置く ため）
+        // const は 中でしか 見えない ので 定数を 外に 出す
+        const float CL = RoomCL, CM = RoomCM, CR = RoomCR;
         // 行の まん中：手前(0.9〜6.0) おく(-6.0〜-0.6)
         const float RF = 3.45f, RB = -3.3f;
 
@@ -564,6 +567,37 @@ public static class BuildHouse {
             Upper(box("R2_Hon" + i, t, new Vector3(X0 + 0.45f, F2 + 0.35f + i * 0.45f, RF),
                       new Vector3(0.38f, 0.30f, 1.44f), m.paper));
 
+        // ★**つくえの 上が 夏の あいだに 埋まって いく。**
+        //   標本箱（しゅるいの 数）・絵日記の 束（4まいで 1だん）・花びんの 花・かべの おし花。
+        //   数の もとは ぜんぶ すでに 数えて ある もの なので、新しい 記録は 要らない
+        SdHyohon.Clear(); SdEnikki.Clear(); SdHana.Clear(); SdOshi.Clear();
+        {
+            // 標本箱（つくえの 奥がわ）。ふたの 枠だけ 先に 置いて、中みが ふえて いく
+            box("R2_HyohonHako", t, new Vector3(CL - 0.35f, F2 + 0.74f, Z0 + 0.62f),
+                new Vector3(0.52f, 0.06f, 0.38f), m.wood);
+            // ★中みは **虫の 絵**を 使う（BuildZashiki が 入れる）。
+            //   木の 小片を ならべた ころは「箱に 何か 入って いる」までしか 読めなかった。
+            //   絵は すでに ある もの（bugs.png）なので、新しく 描く ものは 無い
+            // 絵日記の 束（8だん＝31まい）
+            for (int i = 0; i < 8; i++)
+                Sd(box("R2_Enikki" + i, t, new Vector3(CL + 0.42f, F2 + 0.74f + i * 0.035f, Z0 + 0.70f),
+                       new Vector3(0.30f, 0.032f, 0.40f), m.paper), SdEnikki);
+            // 花びんと 花（まど ぎわ）
+            box("R2_Kabin", t, new Vector3(CL + 0.05f, F2 + 0.82f, Z0 + 0.24f),
+                new Vector3(0.13f, 0.22f, 0.13f), m.stone);
+            for (int i = 0; i < 6; i++) {
+                float a = i * 1.05f;
+                Sd(box("R2_Hana" + i, t,
+                       new Vector3(CL + 0.05f + Mathf.Cos(a) * 0.06f, F2 + 1.00f, Z0 + 0.24f + Mathf.Sin(a) * 0.06f),
+                       new Vector3(0.05f, 0.20f, 0.05f), m.paper), SdHana);
+            }
+            // かべの おし花（本だなの わき）
+            for (int i = 0; i < 6; i++)
+                Sd(box("R2_Oshi" + i, t,
+                       new Vector3(X0 + 0.10f, F2 + 0.95f + (i / 3) * 0.30f, RF - 0.7f + (i % 3) * 0.34f),
+                       new Vector3(0.03f, 0.24f, 0.28f), m.paper), SdOshi);
+        }
+
         // まんなか＝じぶんの 部屋（しきっぱなしの 布団と 夏休みの しゅくだい）
         // ★**ここは 1日の しめくくりに 31回 見る 画面。**（遊ぶ 人：「母屋の あの
         //   作りこみに 対して 寝る 部屋だけ 何も 無い。白い 板が 1枚 あるだけ」）
@@ -600,6 +634,26 @@ public static class BuildHouse {
 
     static void Front(GameObject g) { Collect(g, front); }
     static void Upper(GameObject g) { Collect(g, upper); }
+
+    /// <summary>2階の 中みとして 出し入れさせる（BuildZashiki から 足す ぶん）</summary>
+    public static void AddUpper(GameObject g) { Collect(g, upper); }
+
+    // ★**溜まった ものが 目に 見える。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「8月31日の 部屋が 8月1日と 完全に 同一。8種類 集めても 31枚 書いても
+    //     部屋の 見た目は 1ミリも 変わらない」
+    //   ひみつきち（HimitsuBase）と 同じ で、**先に ぜんぶ 建てて おいて、
+    //   できた ぶんだけ 見せる**。ここでは 作るだけ。出し入れは Sodatsu が やる
+    public static readonly List<Renderer> SdHyohon = new List<Renderer>();
+    public static readonly List<Renderer> SdEnikki = new List<Renderer>();
+    public static readonly List<Renderer> SdHana   = new List<Renderer>();
+    public static readonly List<Renderer> SdOshi   = new List<Renderer>();
+
+    static void Sd(GameObject g, List<Renderer> into) {
+        Upper(g);
+        var r = g.GetComponent<Renderer>();
+        if (r != null) { into.Add(r); g.SetActive(false); }
+        var c = g.GetComponent<Collider>(); if (c != null) Object.DestroyImmediate(c);
+    }
     static void Mid(GameObject g)   { Collect(g, midWall); }
     static void Inner(GameObject g) { Collect(g, inner); }
     static void Collect(GameObject g, List<Renderer> into) {

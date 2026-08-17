@@ -16,7 +16,7 @@
 param(
   [string]$tod = 'asa', [string]$tag = 'a', [int]$shots = 1, [double]$gap = 1.5,
   [string]$weather = 'hare', [string]$cam = '', [string]$walk = '', [int]$bugs = 0,
-  [switch]$book, [int]$sumo = 0, [string]$diary = '',
+  [switch]$book, [int]$sumo = 0, [string]$diary = '', [int]$hyohon = 0,
   [string]$at = '', [string]$clock = '', [string]$play = '', [string]$playwait = '1',
   [int]$frames = 150, [string]$face = '', [string]$pose = '',
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
@@ -45,6 +45,7 @@ if ($walkhold)    { $a += @('-walkhold','1') }
 if ($bugs -gt 0)  { $a += @('-bugs', "$bugs") }
 if ($book)        { $a += @('-book','1') }
 if ($diary -ne '') { $a += @('-diary', $diary) }
+if ($hyohon -gt 0) { $a += @('-hyohon', "$hyohon") }
 if ($sumo -gt 0)  { $a += @('-sumo', "$sumo") }
 if ($at    -ne '') { $a += @('-at', $at) }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.

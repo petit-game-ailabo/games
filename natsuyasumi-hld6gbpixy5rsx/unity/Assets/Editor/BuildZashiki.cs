@@ -679,6 +679,50 @@ public static class BuildZashiki {
         dayHost.tod = todc;
         todc.nikki = nikki;                   // 日づけで 日の入りが 早く なる
         if (spawner != null) spawner.nikki = nikki;   // 日づけで 虫の 顔ぶれが 変わる
+        book.today = nikki.day;                       // かごの 虫が 弱る までの 数え
+        book.OnFreed += hud.Nigashita;                // にがすと そばの 人が 反応する
+
+        // ★**部屋が 育つ。**ひみつきちと 同じ「先に 建てて おいて できた ぶんだけ 見せる」。
+        //   標本箱・絵日記の 束・花びんの 花・かべの おし花 が 夏の あいだに 埋まって いく
+        {
+            var sdGO = new GameObject("Sodatsu");
+            sdGO.transform.SetParent(root, false);
+            var sd = sdGO.AddComponent<Sodatsu>();
+            // 標本箱の 中み＝**虫の 絵を ねかせて 並べる**。ピンで とめた 標本に 見える
+            {
+                var hako = new GameObject("HyohonNakami");
+                hako.transform.SetParent(root, false);
+                for (int i = 0; i < BugKind.All.Length; i++) {
+                    var k = BugKind.All[i];
+                    var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    q.name = "R2_Hyohon_" + k.id;
+                    q.transform.SetParent(hako.transform, false);
+                    Object.DestroyImmediate(q.GetComponent<Collider>());
+                    q.transform.position = new Vector3(
+                        BuildHouse.RoomCL - 0.55f + (i % 4) * 0.135f,
+                        BuildHouse.F2 + 0.775f,
+                        BuildHouse.Z0 + 0.52f + (i / 4) * 0.17f);
+                    q.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // ねかせる
+                    q.transform.localScale = new Vector3(0.115f, 0.115f, 1f);
+                    int col = i % BugKind.Cols, row = i / BugKind.Cols;
+                    var uvS = new Vector2(1f / BugKind.Cols, 1f / BugKind.Rows);
+                    var uvO = new Vector2(col / (float)BugKind.Cols,
+                                          (BugKind.Rows - 1 - row) / (float)BugKind.Rows);
+                    q.GetComponent<Renderer>().sharedMaterial =
+                        SpriteMatNew(MatDir + "Hyohon_" + k.id + ".mat", bugAtlas, uvS, uvO, 0f, 0f, 0f, 0f, 0f);
+                    q.GetComponent<Renderer>().shadowCastingMode =
+                        UnityEngine.Rendering.ShadowCastingMode.Off;
+                    BuildHouse.AddUpper(q);          // 2階の 中みと いっしょに 消す
+                    BuildHouse.SdHyohon.Add(q.GetComponent<Renderer>());
+                    q.SetActive(false);
+                }
+            }
+            sd.hyohon = BuildHouse.SdHyohon.ToArray();
+            sd.enikki = BuildHouse.SdEnikki.ToArray();
+            sd.hana   = BuildHouse.SdHana.ToArray();
+            sd.oshi   = BuildHouse.SdOshi.ToArray();
+            sd.book = book; sd.nikki = nikki; sd.play = play;
+        }
         dayHost.hud = hud;
         dayHost.book = book;
         dayHost.font = hud.font;
@@ -726,6 +770,7 @@ public static class BuildZashiki {
             g.kotoShukudai= new[] { "宿題は やったのかい。……まだ なんだろ、その 顔は" };
             g.kotoOwakare = new[] { "もう 帰るのかい。……また 来年 おいで" };
             // かごの 虫に 反応する（はじめて 見せた 虫 だけ）
+            g.nigasu = new[] { "そうかい。にがして やったかい。……やさしい 子だね" };
             g.mushi = new[] {
                 "おや、{0}かい。よく とれたねえ",
                 "まあ 立派な {0}。じいさんも よく とって きたよ",
@@ -757,6 +802,7 @@ public static class BuildZashiki {
             // ★**教える 人。**まだ 取って いない 虫の いる ところを 1つずつ 教える。
             //   聞いた ことは ずかんに のこる
             g.mushiHakase = true;
+            g.nigasu = new[] { "おう、にがしたか。……また 来年 でかく なって 出てくるさ" };
             g.mushi = new[] {
                 "ほう、{0}か。なかなか いい のを つかまえたな",
                 "{0}だな。おれが 子どもの ころは もっと 大きいのが いた ぞ",
@@ -823,6 +869,11 @@ public static class BuildZashiki {
             dnpc.night = new[] { "くらいと ちょっと こわいです。もう かえります？" };
             dnpc.rain = new[] { "あめの 日の 川は こわいです。ちかづかないで くださいね" };
             dnpc.manyBugs = new[] { "そんなに とって……にがして あげて くださいね？" };
+            dnpc.nigasu = new[] {
+                "……ありがとう ございます。ちょっと、うれしいです",
+                "はい、それが いいです。おうちが ありますもんね",
+                "また 会えますよ。きっと",
+            };
             dnpc.mushi = new[] {
                 "わあ、{0}……はじめて 近くで 見ました",
                 "{0}さん、こわがって ますよ。そっと 見せて くださいね",

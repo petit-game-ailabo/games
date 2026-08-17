@@ -214,7 +214,13 @@ public class BugCatcher : MonoBehaviour {
         // **あみが 当たったら 取れる。さいころは ふらない。**
         // 見た目では 当たって いるのに 取れない のは、遊ぶ 側から すると ただの 故障に 見える。
         // むずかしさは 「近づけるか・追いつけるか」＝場所の 話で 出す
-        book.Add(best.kind.id, best.sizeMm);
+        // ★**かごが いっぱいなら 入らない。**（2026-08-17）
+        //   ここが「どれを 手ばなすか」の 始まり。だまって 古いのを 捨てて いた ころは
+        //   ずっと 標本が 正解で、一度も 迷う ところが なかった
+        if (!book.Add(best.kind.id, best.sizeMm)) {
+            if (hud != null) hud.Say("かごが いっぱいだ。Z：ずかんで にがすか ひょうほんに する");
+            return;
+        }
         // 日記に ためる。**その日 何を したかが 夜に 文章に なる**
         if (nikki != null) {
             nikki.Count("bug");
