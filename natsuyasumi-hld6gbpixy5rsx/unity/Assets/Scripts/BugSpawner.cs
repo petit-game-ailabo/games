@@ -179,14 +179,33 @@ public class BugSpawner : MonoBehaviour {
         quad.transform.SetParent(go.transform, false);
         Destroy(quad.GetComponent<Collider>());
         int mm = BugBook.RollSize(kind);
-        float h0 = kind.height * Mathf.Clamp(mm / (float)kind.sizeMm, 0.7f, 1.45f);
+        // ★**ぬし。**下旬に なるほど 出やすい＝終わりに 近づくほど 山が できる。
+        //   出会いは まれ だが、**見た目が 明らかに 大きい**ので すぐ 分かる
+        int day = nikki != null ? nikki.day : 1;
+        bool nushi = Random.value < 0.006f + Mathf.Clamp01((day - 10) / 21f) * 0.02f;
+        if (nushi) mm = Mathf.RoundToInt(mm * Random.Range(1.5f, 1.75f));
+        // ★**きんいろ。**新しい 絵は 要らない（マテリアルの 色を 変える だけ）
+        bool kin = !nushi && Random.value < 0.006f;
+        float h0 = kind.height * Mathf.Clamp(mm / (float)kind.sizeMm, 0.7f, 1.6f);
         quad.transform.localScale = new Vector3(h0, h0, 1f);
-        quad.GetComponent<Renderer>().sharedMaterial = BugMaterial(kind);
+        var bm = BugMaterial(kind);
+        if (kin) {
+            bm = new Material(bm);
+            bm.SetColor("_BaseColor", new Color(1.35f, 1.12f, 0.42f));
+            if (bm.HasProperty("_EmissionColor")) {
+                bm.EnableKeyword("_EMISSION");
+                bm.SetColor("_EmissionColor", new Color(0.5f, 0.38f, 0.08f));
+            }
+        }
+        quad.GetComponent<Renderer>().sharedMaterial = bm;
         quad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
         go.AddComponent<Billboard>();
         var bug = go.AddComponent<Bug>();
         bug.Init(kind, at, quad.transform, mm);
+        bug.nushi = nushi; bug.kin = kin;
+        // ぬしは 用心ぶかい。**近づくだけで 逃げる**ので、あみが とどく まで が 勝負
+        if (nushi) go.name = "Bug_NUSHI_" + kind.id;
 
         // ホタルは 自分で 光る。夜の 目じるしに なる
         if (kind.glows) {

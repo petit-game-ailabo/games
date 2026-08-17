@@ -219,6 +219,7 @@ public class AutoShot : MonoBehaviour {
                 // 水きりが いつも 0段、つりは いつも 逃げられ、うまく いった ときの
                 // 画が 一度も 撮れて いなかった
                 ph.debugAuto = true;
+                ph.debugShina = int.Parse(Arg("-shina", "0"));
                 Debug.Log("[AutoShot] あそび はじめ=" + ph.DebugBegin(pk));
                 // -playwait 0 に すると 遊びの **さいちゅうを 撮る**（終わるのを 待たない）
                 if (Arg("-playwait", "1") != "0") {
@@ -280,6 +281,58 @@ public class AutoShot : MonoBehaviour {
                               bk != null ? bk.Freed : -1));
                 }
             }
+        }
+
+        // ★-tosi で **31日ぶんの 品しなを 数える。**（2026-08-17）
+        //   遊ぶ 人：「9巡ぶん、検証は すべて『その 機能が 動く 画面を 1枚』でした。
+        //     個々の 部品は 全部 正しい。でも **31日を 頭から 通した 人が、まだ 1人も いません**。
+        //     42分 × 31日 ＝ 約22時間。その 22時間ぶんの 中みが、本当に ありますか」
+        //
+        //   1日ずつ **その日に できる ことを 数えて 出す**。
+        //   「何も する ことが なかった 日」が 何日 あるかは、これで はっきり する
+        if (Arg("-tosi", null) != null) {
+            var nk = FindFirstObjectByType<Nikki>();
+            var wx2 = FindFirstObjectByType<Weather>();
+            // ★**数えるときは 天気を 決めうちに しない。**-weather は 撮影の ための 引数で、
+            //   これが 立った ままだと RollForDay が 素通りして **31日 ぜんぶ 晴れ**に なる
+            //  （最初の 集計は それで 20日の 台風まで 晴れに 見えて いた）
+            if (wx2 != null) wx2.forced = false;
+            var td2 = FindFirstObjectByType<TimeOfDay>();
+            var spots = FindObjectsByType<PlaySpot>(FindObjectsSortMode.None);
+            var npcs2 = FindObjectsByType<Npc>(FindObjectsSortMode.None);
+            Debug.Log("[Tosi] 日 | できごと | 天気 | 昼の遊び | 夜の遊び | 話せる人(昼/夜) | 出る虫");
+            for (int d = 1; d <= Nikki.LastDay; d++) {
+                if (nk != null) nk.day = d;
+                if (wx2 != null) wx2.RollForDay(d);
+                var g2 = FindFirstObjectByType<Gyoji>();
+                if (g2 != null) g2.Apply(d);
+
+                int hiru = 0, yoru = 0;
+                foreach (var sp in spots) {
+                    if (sp == null) continue;
+                    if (td2 != null) td2.hour = 13f;
+                    if (sp.Ima) hiru++;
+                    if (td2 != null) td2.hour = 20f;
+                    if (sp.Ima) yoru++;
+                }
+                int nh = 0, ny = 0;
+                foreach (var n in npcs2) {
+                    if (n == null) continue;
+                    if (td2 != null) td2.hour = 13f;
+                    if (n.Iru) nh++;
+                    if (td2 != null) td2.hour = 20f;
+                    if (n.Iru) ny++;
+                }
+                // その日 出やすい 虫（かかりが 0.4 いじょう）
+                var mushi = new System.Text.StringBuilder();
+                foreach (var k in BugKind.All)
+                    if (k.Koro(d) >= 0.4f) { if (mushi.Length > 0) mushi.Append("/"); mushi.Append(k.name); }
+
+                Debug.Log(string.Format("[Tosi] {0,2} | {1,-13} | {2,-8} | {3,2} | {4,2} | {5}/{6} | {7}",
+                          d, Nikki.OnDay(d), wx2 != null ? wx2.mode.ToString() : "?",
+                          hiru, yoru, nh, ny, mushi));
+            }
+            if (nk != null) nk.day = 1;
         }
 
         // -book を つけると ずかんを ひらいた ところを 撮る

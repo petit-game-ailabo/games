@@ -240,9 +240,24 @@ public class BugBook : MonoBehaviour {
     int[] kyonen = new int[BugKind.All.Length];
     public int Kyonen(BugId id) { return kyonen[(int)id]; }
 
+    // ★**きんいろは 別わく で 数える。**ずかんに「きんいろ」が 出ると、
+    //   図かんが 埋まった あとも さがす 理由が のこる
+    const string KinKey = "natsuyasumi.bugkin.v1";
+    public bool Kin(BugId id) { return (PlayerPrefs.GetInt(KinKey, 0) & (1 << (int)id)) != 0; }
+    public void KinTotta(BugId id) {
+        PlayerPrefs.SetInt(KinKey, PlayerPrefs.GetInt(KinKey, 0) | (1 << (int)id));
+        PlayerPrefs.Save();
+    }
+    public int KinKazu {
+        get { int m = PlayerPrefs.GetInt(KinKey, 0), n = 0;
+              for (int i = 0; i < BugKind.All.Length; i++) if ((m & (1 << i)) != 0) n++;
+              return n; }
+    }
+
     [ContextMenu("記録を まっさらに する")]
     public void Clear() {
         PlayerPrefs.DeleteKey(HintKey);
+        PlayerPrefs.DeleteKey(KinKey);
         foreach (var w in MiseAite) PlayerPrefs.DeleteKey(MiseKey + w);
         // いまの さいだいを 「きょ年」へ 送って から 消す
         for (int i = 0; i < counts.Length; i++) {

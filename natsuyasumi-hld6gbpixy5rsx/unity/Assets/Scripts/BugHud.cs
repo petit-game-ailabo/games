@@ -174,8 +174,9 @@ public class BugHud : MonoBehaviour {
             // ★**きょ年の さいだい**も 出す。2周目の ずかんが 目標に なる
             //   （これも 作った だけで どこにも 出て いなかった）
             int ky = book.Kyonen(k.id);
-            sb.AppendLine(string.Format("{0}　{1}ひき　さいだい {2}mm{3}{4}",
+            sb.AppendLine(string.Format("{0}　{1}ひき　さいだい {2}mm{3}{4}{5}",
                           k.name, n, book.MaxMm(k.id),
+                          book.Kin(k.id) ? "★" : "",          // きんいろを 取った しるし
                           sp > 0 ? "　ひょうほん" + sp : "",
                           ky > 0 ? "　（きょ年 " + ky + "）" : ""));
         }

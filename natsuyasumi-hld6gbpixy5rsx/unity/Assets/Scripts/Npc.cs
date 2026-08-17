@@ -20,8 +20,21 @@ public class Npc : MonoBehaviour {
     public float range = 2.6f;
 
     [Header("なにを 言うか")]
-    [Tooltip("ふだんの 一言。日づけで 順に 変わる")]
+    // ★**5本を 31日で 6周 する。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「8月6日には 初日と 同じ 台詞に 戻ります。8月31日までに、同じ 言葉を 6回 聞きます。
+    //     『きょうは おばさんと 何を 話そう』が 毎日の 動機だった はずが、
+    //     2週目には **読み飛ばす 対象**に なります」
+    //   → **上旬・中旬・下旬で 別の 束を 引く**（虫の Koro(day) と 同じ 型）。
+    //     さらに **日づけでは なく 話した 回数で 順に 消費する**。
+    //     日づけで 飛び飛びに 引くと、序盤に 何本か 聞き逃した まま 2周目に 入る
+    [Tooltip("ふだんの 一言（どの 時期でも）")]
     public string[] lines;
+    [Tooltip("上旬（1〜10日）の 一言")]
+    public string[] linesJo;
+    [Tooltip("中旬（11〜20日）の 一言")]
+    public string[] linesChu;
+    [Tooltip("下旬（21〜31日）の 一言")]
+    public string[] linesGe;
     [Tooltip("あさ だけ の 一言（あれば ゆうせん）")]
     public string[] morning;
     [Tooltip("よる だけ の 一言")]
@@ -208,8 +221,20 @@ public class Npc : MonoBehaviour {
         //   これしか 返らなく なり、せっかくの lines が 一生 出ない（遊ぶ 人の 指摘）
         if (nikki != null && Has(manyBugs) && nikki.CountOf("bug") >= 5 && (d + step) % 3 == 0)
             return At(manyBugs, d);
-        if (Has(lines)) return At(lines, d + step);
+        // **その 時期の 束が あれば そちら。**同じ おばあちゃんでも、8月末は 言う ことが 変わる
+        var ki = d <= 10 ? linesJo : (d <= 20 ? linesChu : linesGe);
+        if (Has(ki)) return Tsugi(ki, "ki" + (d <= 10 ? 0 : (d <= 20 ? 1 : 2)));
+        if (Has(lines)) return Tsugi(lines, "fu");
         return "……";
+    }
+
+    // ★**順に 消費して、使い切ったら また 頭から。**
+    //   数えは 人ごと・束ごとに おぼえる（日づけで 引くと 聞き逃しが 出る）
+    string Tsugi(string[] a, string tag) {
+        string key = "natsu.npcline." + who + "." + tag;
+        int i = PlayerPrefs.GetInt(key, 0);
+        PlayerPrefs.SetInt(key, i + 1);
+        return a[i % a.Length];
     }
 
     static bool Has(string[] a) { return a != null && a.Length > 0; }

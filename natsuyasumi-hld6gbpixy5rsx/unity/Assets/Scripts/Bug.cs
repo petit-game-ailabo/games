@@ -14,6 +14,12 @@ public class Bug : MonoBehaviour {
     [HideInInspector] public float sizeScale = 1f;
 
     [HideInInspector] public bool caught;
+    // ★**同じ 8種で 長く 遊べる ように する。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「虫が 8種。10日ほどで 図鑑が 埋まり、そのあと 20日ぶん 集める ものが ありません」
+    //   種類を ふやすには 新しい ドット絵が 要る＝素材の 課題。
+    //   **大きさと 色は 既存の 絵で 作れる**ので、そこで 終盤の 山を つくる
+    [HideInInspector] public bool nushi;   // ぬし（飛びぬけて 大きい 1ぴき）
+    [HideInInspector] public bool kin;     // きんいろ（色ちがい）
 
     Transform sprite;
     Transform player;

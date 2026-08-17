@@ -40,6 +40,9 @@ public class BugCatcher : MonoBehaviour {
         if (book == null) book = gameObject.AddComponent<BugBook>();
         sumo = FindFirstObjectByType<BugSumo>();
         hud = FindFirstObjectByType<BugHud>();
+        // ★**買った あみは 次の 日も 効く。**（買った その場だけ 広がって
+        //   起動しなおすと もどる のでは、300円 貯めた 意味が ない）
+        radius += 0.22f * PlayHost.AmiLv;
         move = GetComponent<PlayerMove>();
         play = GetComponent<PlayHost>();
         if (net == null) net = MakeNet();
@@ -217,9 +220,19 @@ public class BugCatcher : MonoBehaviour {
         // ★**かごが いっぱいなら 入らない。**（2026-08-17）
         //   ここが「どれを 手ばなすか」の 始まり。だまって 古いのを 捨てて いた ころは
         //   ずっと 標本が 正解で、一度も 迷う ところが なかった
+        // ★**記録の 更新を 主役に する。**（2026-08-17・遊ぶ 人の 指摘）
+        //   「82mm の カブトを 持って いる 人に とって、次の 1ぴきには 意味が あります」
+        int mae = book.MaxMm(best.kind.id);
+        if (best.kin) book.KinTotta(best.kind.id);
         if (!book.Add(best.kind.id, best.sizeMm)) {
             if (hud != null) hud.Say("かごが いっぱいだ。Z：ずかんで にがすか ひょうほんに する");
             return;
+        }
+        if (hud != null) {
+            if (best.nushi)      hud.Say("でかい！　こいつは この あたりの **ぬし**だぜ！".Replace("**", ""));
+            else if (best.kin)   hud.Say("金いろの " + best.kind.name + "だ……こんなの 見た ことが ない");
+            else if (best.sizeMm > mae && mae > 0)
+                hud.Say("きろく こうしん！　" + mae + "mm → " + best.sizeMm + "mm だぜ");
         }
         // 日記に ためる。**その日 何を したかが 夜に 文章に なる**
         if (nikki != null) {
@@ -227,11 +240,18 @@ public class BugCatcher : MonoBehaviour {
             // **数字を 入れる。**「かぶとむしを つかまえた」より
             // 「78mm の かぶとむしを つかまえた。でかいぜ」
             bool big = best.sizeMm > best.kind.sizeMm * 1.15f;
-            string t = string.Format("{0}mm の {1}を つかまえた。{2}",
-                                     best.sizeMm, best.kind.name, big ? "でかいぜ" : "");
+            string t = best.nushi
+                ? string.Format("{0}mm の {1}。……ぬしだ。手が ふるえたぜ", best.sizeMm, best.kind.name)
+                : best.kin
+                ? string.Format("金いろの {0}を つかまえた。{1}mm。だれも 信じない だろうな", best.kind.name, best.sizeMm)
+                : string.Format("{0}mm の {1}を つかまえた。{2}",
+                                best.sizeMm, best.kind.name, big ? "でかいぜ" : "");
             // めずらしい 虫（出やすさが 低い）は 重く
             int omoi = best.kind.weight <= 10 ? 40 : 10;
             if (big) omoi += 25;
+            if (best.sizeMm > mae && mae > 0) omoi += 20;      // きろく こうしん
+            if (best.nushi) omoi = 95;
+            if (best.kin) omoi = 90;
             nikki.Note("bug_" + best.kind.id, t.TrimEnd(), omoi);
         }
         Pop(best.transform.position);

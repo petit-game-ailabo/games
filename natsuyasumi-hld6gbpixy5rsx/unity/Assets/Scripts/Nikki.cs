@@ -151,7 +151,11 @@ public class Nikki : MonoBehaviour {
             sb.AppendFormat("つかまえた むし　{0} しゅるい　{1} ひき\n", book.Kinds, book.Total);
             sb.AppendFormat("ひょうほんに した むし　{0}\n", book.SpecimenTotal);
         }
-        if (book != null) sb.AppendFormat("にがした むし　{0} ひき\n", book.Freed);
+        if (book != null) {
+            sb.AppendFormat("にがした むし　{0} ひき\n", book.Freed);
+            // ★きんいろは **図かんが 埋まった あとの 目標**。まとめにも 出す
+            if (book.KinKazu > 0) sb.AppendFormat("きんいろ　{0} しゅるい\n", book.KinKazu);
+        }
         sb.AppendFormat("書いた 日記　{0} 日ぶん\n", Past.Count);
         // ★**焦らせた 先に 何かを 置く。**（遊ぶ 人：「25日の『宿題は やったのかい』も、
         //   『……◯日ぶん たまって いる』も、結局 なにも 起きません。

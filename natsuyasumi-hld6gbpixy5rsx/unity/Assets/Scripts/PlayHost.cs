@@ -174,6 +174,7 @@ public class PlayHost : MonoBehaviour {
     //   しくみが 壊れて いるのか 区別が つかない。
     //   ねらい所で 押す ようにして、**うまく いった ときの 画**を 確かめる
     [HideInInspector] public bool debugAuto;
+    [HideInInspector] public int debugShina;
     public string DebugState {
         get {
             return string.Format("ふね={0} 水きり最高={1} さかな={2} 花={3} 色水={4} おし花={5} きち={6}"
@@ -652,13 +653,44 @@ public class PlayHost : MonoBehaviour {
     //   だから 一番 高くて 一番 うれしいのが「大きい 虫かご」。
     // ★**ひとことの わくは 340px しか ない。**長い 説明を 1行に つめると
     //   枠から はみ出す（実機で 見て わかった）。品名は 短く、説明は 別の 行に する
-    static readonly string[] ShinaNa = { "大きい むしかご", "ラムネ", "アイス" };
-    static readonly string[] ShinaSetsu = { "かごが 2ひき ふえる", "きゅっと 冷たい", "あたま きーん" };
-    static readonly int[] ShinaNe = { 120, 30, 50 };
+    // ★**お金の 行き先が 3つ しか なかった。**（2026-08-17・遊ぶ 人の 指摘）
+    //   「祭りで 200円 もらい、射的と くじで 溶かして、**そのあと 稼いだ お金は
+    //     使い道が ありません**」
+    //   → 貯めて 買う 大物（いい あみ）を 足し、駄菓子は **日がわり**に する。
+    //     さらに **かごの 虫を 買い取って もらう**＝にがす／標本／売る の 三つ巴
+    static readonly string[] ShinaNa   = { "大きい むしかご", "いい あみ",       "きょうの 駄がし", "かごの 虫を 売る" };
+    static readonly string[] ShinaSetsu= { "かごが 2ひき ふえる", "とどく はんいが ひろがる", "", "1ぴき ずつ" };
+    static readonly int[]    ShinaNe   = { 120, 300, 0, 0 };
+
+    // 日がわりの 駄菓子。**文字だけで 足せる**ので、ここは いくらでも のばせる
+    static readonly string[] DagashiNa = {
+        "ラムネ", "アイス", "きなこ棒", "ソースせんべい", "みかん水", "ふがし",
+        "よっちゃんいか", "あんずボー",
+    };
+    static readonly int[] DagashiNe = { 30, 50, 10, 20, 40, 20, 30, 10 };
+
+    const string KeyAmi = "natsuyasumi.play.ami.v1";
+    public static int AmiLv { get { return PlayerPrefs.GetInt(KeyAmi, 0); } }
+
+    /// <summary>虫の 買い取り 値。**大きいほど 高い**（記録を のばす 理由に なる）</summary>
+    static int Nedan(BugBook book, BugId id) {
+        var k = BugKind.Of(id);
+        int en = 10 + Mathf.Max(0, 20 - k.weight);           // めずらしい ほど 高い
+        return Mathf.Max(10, en);
+    }
+
+    static string UruSetsu(BugBook book) {
+        if (book == null || book.Recent.Count == 0) return "かごが からっぽ";
+        var id = book.Recent[0];
+        return BugKind.Of(id).name + " → " + Nedan(book, id) + "円";
+    }
 
     IEnumerator Dagashi(PlaySpot s) {
         var book = GetComponent<BugBook>();
-        int sel = 0;
+        var catcher = GetComponent<BugCatcher>();
+        // たしかめの 自動運転から 品を えらぶ（画面に 出る 字を 撮る ため）
+        int sel = Mathf.Clamp(debugShina, 0, ShinaNa.Length - 1);
+        int kyo = nikki != null ? nikki.day % DagashiNa.Length : 0;   // 日がわりの 品
         Line(string.Format("いらっしゃい。お金は {0}円 だね", Saifu.Yen));
         yield return new WaitForSeconds(1.4f);
         Line("← → えらぶ　スペース：買う　X：やめる");
@@ -666,12 +698,35 @@ public class PlayHost : MonoBehaviour {
         float nokori = 22f;                       // ながく のぞいて いると 帰る
         while (nokori > 0f) {
             nokori -= Time.deltaTime;
-            Line(string.Format("▶{0}　{1}円　（{2}）", ShinaNa[sel], ShinaNe[sel], ShinaSetsu[sel]));
+            string na  = sel == 2 ? DagashiNa[kyo] : ShinaNa[sel];
+            int    ne   = sel == 2 ? DagashiNe[kyo] : ShinaNe[sel];
+            string setsu= sel == 3 ? UruSetsu(book) : ShinaSetsu[sel];
+            if (sel == 3) Line(string.Format("▶かごの 虫を 売る　（{0}）", setsu));
+            else          Line(string.Format("▶{0}　{1}円{2}", na, ne,
+                                             setsu.Length > 0 ? "　（" + setsu + "）" : ""));
             if (Input.GetKeyDown(KeyCode.RightArrow)) { sel = (sel + 1) % ShinaNa.Length; }
             else if (Input.GetKeyDown(KeyCode.LeftArrow)) { sel = (sel + ShinaNa.Length - 1) % ShinaNa.Length; }
             else if (Input.GetKeyDown(KeyCode.X)) break;
             else if (Pressed()) {
-                if (!Saifu.Tsukau(ShinaNe[sel])) {
+                // ★**売る**は お金を 払わない。かごの いちばん 古い 1ぴきを 買い取って もらう
+                if (sel == 3) {
+                    if (book == null || book.Recent.Count == 0) {
+                        Line("かごが からっぽ だよ");
+                        yield return new WaitForSeconds(1.4f); continue;
+                    }
+                    var id = book.Recent[0];
+                    int en = Nedan(book, id);
+                    book.Release(0);              // 手ばなす のは にがすのと 同じ あつかい
+                    Saifu.Add(en);
+                    Line(string.Format("{0}を {1}円で 買い取って もらった", BugKind.Of(id).name, en));
+                    if (nikki != null) nikki.Note("uru",
+                        BugKind.Of(id).name + "を 駄がし屋に 売った。……ちょっと 気が とがめたぜ", 60);
+                    yield return new WaitForSeconds(1.8f);
+                    Line(string.Format("のこりは {0}円", Saifu.Yen));
+                    yield return new WaitForSeconds(1.2f);
+                    continue;
+                }
+                if (!Saifu.Tsukau(ne)) {
                     Line("……お金が 足りないぜ");
                     yield return new WaitForSeconds(1.4f);
                     continue;
@@ -688,14 +743,16 @@ public class PlayHost : MonoBehaviour {
                             "町の 駄がし屋で 大きい むしかごを 買った。これで もっと 持って 帰れる", 85);
                         break;
                     case 1:
-                        Line("ラムネを 飲んだ。……ビー玉が じゃまだぜ");
-                        if (nikki != null) nikki.Note("dagashi_ramune",
-                            "駄がし屋で ラムネを 飲んだ。ビー玉が どうしても 出てこない", 55);
+                        PlayerPrefs.SetInt(KeyAmi, AmiLv + 1); PlayerPrefs.Save();
+                        if (catcher != null) catcher.radius += 0.22f;
+                        Line("いい あみを 買った！　とどく はんいが ひろがったぜ");
+                        if (nikki != null) nikki.Note("dagashi_ami",
+                            "ずっと 貯めて いた お金で、いい あみを 買った。……ふり心地が ちがう", 90);
                         break;
                     default:
-                        Line("アイスを 食べた。あたまが きーんと する");
-                        if (nikki != null) nikki.Note("dagashi_ice",
-                            "駄がし屋で アイスを 食べた。帰り道で とけて 手が べたべたに なった", 55);
+                        Line(na + "を 食べた。" + (kyo % 2 == 0 ? "うまい" : "……こんな もんか"));
+                        if (nikki != null) nikki.Note("dagashi_kashi",
+                            "駄がし屋で " + na + "を 買った。帰り道で ぜんぶ 食べて しまった", 55);
                         break;
                 }
                 yield return new WaitForSeconds(1.8f);
