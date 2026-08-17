@@ -188,10 +188,13 @@ public static class BuildHouse {
         // まん中の 仕切りは、**おくの 部屋へ 行くと 消える**
         // ★**中廊下**。手前の 部屋と おくの 部屋の あいだを 1.5m の 廊下が 通る。
         //   ふすまは 廊下の 両がわに 立つ（おくへ 行くと 消える）
-        Mid(box("H_Fusuma_Z", t, new Vector3((X0 + DomaX) * 0.5f, F1 + H1 * 0.5f, RoukaZ1),
-                new Vector3(DomaX - X0, H1, 0.1f), m.paper));
-        Mid(box("H_Fusuma_Z2", t, new Vector3((X0 + DomaX) * 0.5f, F1 + H1 * 0.5f, RoukaZ0),
-                new Vector3(DomaX - X0, H1, 0.1f), m.paper));
+        // ★戸口を あける（2026-08-17・Kensa.Aruku が 検出）。まえは 全幅 1まいで 立てて いて、
+        //   たたみの 部屋に 廊下から 入れなかった。**壁は わけて 立てて まん中を あける**
+        //  （戸口の 決まり）。開口は 各部屋の まん中に 1.3m・かもい 1.8m
+        OpenWallX("H_Fusuma_Z", t, X0, DomaX, RoukaZ1, F1, H1,
+                  new[] { RoomCL, RoomCM, RoomCR }, m.paper, Mid);
+        OpenWallX("H_Fusuma_Z2", t, X0, DomaX, RoukaZ0, F1, H1,
+                  new[] { RoomCL, RoomCM, RoomCR }, m.paper, Mid);
         // 廊下の 床は 板（畳では ない）
         box("H_Rouka", t, new Vector3((X0 + DomaX) * 0.5f, F1 + 0.005f, (RoukaZ0 + RoukaZ1) * 0.5f),
             new Vector3(DomaX - X0, 0.09f, RoukaZ1 - RoukaZ0), m.floor);
@@ -220,10 +223,29 @@ public static class BuildHouse {
         box("H_Nagashi", t, new Vector3(X1 - 1.1f, F1 - 0.05f, Z0 + 2.8f), new Vector3(1.4f, 0.7f, 0.8f), m.wood);
 
         // ---------- 二階への 階段（土間の おく）
-        for (int i = 0; i < 9; i++) {
-            float y = F1 + 0.13f + i * (F2 - F1) / 9f;
-            float z = Z0 + 0.5f + i * 0.28f;
-            box("H_Kaidan" + i, t, new Vector3(DomaX + 0.9f, y, z), new Vector3(1.1f, 0.12f, 0.3f), m.floor);
+        // ★向きを 反転した（2026-08-17・Kensa.Aruku が 検出）。
+        //   まえは 下の 段が 奥の 壁ぎわ（z=-5.5）に あり、**下り口が 壁を 向いて いて
+        //   入口が 無かった**（横の マスは 段の 角に 当たって ぜんぶ ふさがり）。
+        //   1段目の 上(0.19)へ 土間(-0.06)から 上がる 段差も 0.44m で stepOffset 0.35 を
+        //   こえ、**実機でも 登れなかった**（2階の 絵は -at の テレポートで 撮って いた）。
+        //   **箱階段の 下り口は 開けた がわへ 向ける**（動線を 先に 引く）。
+        //   いまは 下の 段が 手前（北・土間の 開けた ほう）、上の 段が 奥の 壁がわ
+        //   段は 10（蹴上 25cm）。9段（28cm）だと 検査の 0.5mマスの 位相しだいで
+        //   1マスの 高低差が 0.67m まで 開き、実機でも 急すぎた。
+        //   **踊り場は 置かない。** 下の 段の 頭上に 板を わたすと、段の 上の 頭の すきまが
+        //   0.3m に なって 通れない（実際 やった）。かわりに **上の 2段の 幅を ひろげて
+        //   2階の 床の へり(x=4.5)に かぶせる**。低い 段を ひろげると 1階の 部屋の
+        //   頭上に 箱が 浮く ので、頭より 高い 上の 段だけ
+        //   ★奥の 壁ぎわから 0.6m 手前へ ずらした。通し柱（H_PostDoma-1・z=-5.6）が
+        //   ちょうど 2階への 降り口に 立って いて、最後の 1マスを ふさいで いた。
+        //   柱は 構造として 正しい ので、階段の ほうを 柱から 離す
+        for (int i = 0; i < 10; i++) {
+            float y = F1 + 0.13f + i * (F2 - F1) / 10f;
+            float z = Z0 + 1.1f + (9 - i) * 0.28f;
+            bool wide = i >= 8;
+            box("H_Kaidan" + i, t,
+                new Vector3(wide ? DomaX + 0.45f : DomaX + 0.9f, y, z),
+                new Vector3(wide ? 1.9f : 1.1f, 0.12f, 0.3f), m.floor);
         }
 
         // ---------- 二階
@@ -235,8 +257,11 @@ public static class BuildHouse {
                   new Vector3(DomaX - X0 - 0.2f, 0.06f, Z1 - Z0 - 0.2f), m.tatami));
         // 2階の 仕切り。**床と いっしょに 消す**（残すと 宙に 浮く）。
         // 外がわの 壁は 1階から 軒げたまで 1まいで 通す ように した ので ここには 立てない
-        Upper(box("H_W2Mid", t, new Vector3(MidX, F2 + H2 * 0.5f, 0f), new Vector3(0.1f, H2, Z1 - Z0), m.paper));
-        Upper(box("H_W2Mid2", t, new Vector3(MidX2, F2 + H2 * 0.5f, 0f), new Vector3(0.1f, H2, Z1 - Z0), m.paper));
+        // ★戸口を あける（2026-08-17・Kensa.Aruku が 検出）。全幅 1まいだった ので 2階の
+        //   3部屋が 行き来 できず、階段から つくえ（宿題＝絵日記）へ 一生 届かなかった。
+        //   開口は z=-3.0＝階段の 上がり口と 同じ ならび（動線を 1本に 通す）
+        OpenWallZ("H_W2Mid", t, MidX, Z0, Z1, F2, H2, new[] { -3.0f }, m.paper, Upper);
+        OpenWallZ("H_W2Mid2", t, MidX2, Z0, Z1, F2, H2, new[] { -3.0f }, m.paper, Upper);
 
         // ---------- 屋根。入母屋を メッシュで 起こす。入ったら 消える
         var opt = new HouseRoof.Opt {
@@ -427,6 +452,48 @@ public static class BuildHouse {
 
     /// <summary>あたりを 外す。化粧の 板は 壁より 外に 出るので、当たりを のこすと
     /// 家の まわりが 12cm ずつ ふくらんで 沓ぬぎ石に 乗れなく なる</summary>
+    // ---------- 戸口つきの 壁。**壁は 全幅 1まいで 立てない。**
+    // 1まいに すると 部屋に 入れなく なる（1階の 襖と 2階の 仕切りで 実際に やって いて、
+    // Kensa.Aruku が 2階まるごと 到達不能を 検出した）。開口 1.3m・かもい 1.8m。
+    const float DoorOpenW = 1.3f, KamoiH = 1.8f;
+
+    static void OpenWallX(string name, Transform t, float xa, float xb, float z,
+                          float yBase, float hWall, float[] opens, Material mat,
+                          System.Action<GameObject> reg) {
+        var cuts = new List<float> { xa };
+        foreach (var o in opens) { cuts.Add(o - DoorOpenW * 0.5f); cuts.Add(o + DoorOpenW * 0.5f); }
+        cuts.Add(xb);
+        for (int i = 0; i + 1 < cuts.Count; i += 2) {
+            float a = cuts[i], b = cuts[i + 1];
+            if (b - a < 0.05f) continue;
+            reg(B(name + "_" + i, t, new Vector3((a + b) * 0.5f, yBase + hWall * 0.5f, z),
+                  new Vector3(b - a, hWall, 0.1f), mat));
+        }
+        // かもいの 上は ふさぐ（見た目の ため。頭は 届かない ので あたり無し）
+        foreach (var o in opens)
+            reg(NoHit(B(name + "_ue" + (int)Mathf.Round(o * 10f), t,
+                  new Vector3(o, yBase + (KamoiH + hWall) * 0.5f, z),
+                  new Vector3(DoorOpenW, hWall - KamoiH, 0.1f), mat)));
+    }
+
+    static void OpenWallZ(string name, Transform t, float x, float za, float zb,
+                          float yBase, float hWall, float[] opens, Material mat,
+                          System.Action<GameObject> reg) {
+        var cuts = new List<float> { za };
+        foreach (var o in opens) { cuts.Add(o - DoorOpenW * 0.5f); cuts.Add(o + DoorOpenW * 0.5f); }
+        cuts.Add(zb);
+        for (int i = 0; i + 1 < cuts.Count; i += 2) {
+            float a = cuts[i], b = cuts[i + 1];
+            if (b - a < 0.05f) continue;
+            reg(B(name + "_" + i, t, new Vector3(x, yBase + hWall * 0.5f, (a + b) * 0.5f),
+                  new Vector3(0.1f, hWall, b - a), mat));
+        }
+        foreach (var o in opens)
+            reg(NoHit(B(name + "_ue" + (int)Mathf.Round(o * 10f), t,
+                  new Vector3(x, yBase + (KamoiH + hWall) * 0.5f, o),
+                  new Vector3(0.1f, hWall - KamoiH, DoorOpenW), mat)));
+    }
+
     static GameObject NoHit(GameObject g) {
         if (g == null) return null;
         var c = g.GetComponent<Collider>();

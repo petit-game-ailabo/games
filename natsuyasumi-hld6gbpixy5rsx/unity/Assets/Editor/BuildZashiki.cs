@@ -539,6 +539,11 @@ public static class BuildZashiki {
         // 家の まわりの 草むら
         var weedSpots = TerrainGen.Scatter(1200, 5f, 28f, new System.Random(4242), 3.0f, false);
         for (int i = 0; i < weedSpots.Count; i++) {
+            // ★家の 中には 生やさない（2026-08-17・Kensa）。散布が 母屋の 中に 落ちると
+            //   **階段の 上 高さ2.4m に 草が 浮いて**、あたりごと 通り道を ふさいで いた
+            var wp = weedSpots[i].pos;
+            if (wp.x > BuildHouse.X0 - 0.5f && wp.x < BuildHouse.X1 + 0.5f &&
+                wp.z > BuildHouse.Z0 - 0.5f && wp.z < BuildHouse.Z1 + 0.5f) continue;
             int cell = (i % 3 == 0) ? NA_KUSA_A : (i % 3 == 1 ? NA_KUSA_B : NA_KUSA_C);
             NatureTinted("Kusa" + i, nature, cell, weedSpots[i].pos,
                          NatureCell * weedSpots[i].size, root, Color.white);
