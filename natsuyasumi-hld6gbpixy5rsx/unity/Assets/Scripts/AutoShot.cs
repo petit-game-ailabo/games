@@ -182,7 +182,16 @@ public class AutoShot : MonoBehaviour {
                     case "hana":     pk = PlayKind.Hanatsumi;break;
                     case "irozu":    pk = PlayKind.Irozu;    break;
                     case "oshibana": pk = PlayKind.Oshibana; break;
-                    default:         pk = PlayKind.Himitsu;  break;
+                    case "shukudai": pk = PlayKind.Shukudai; break;
+                    case "kingyo":   pk = PlayKind.Kingyo;   break;
+                    case "hanabi":   pk = PlayKind.Hanabi;   break;
+                    case "himitsu":  pk = PlayKind.Himitsu;  break;
+                    // ★**知らない 名は だまって ひみつきちに しない。**（2026-08-17）
+                    //   -play hanabi と 打って ひみつきちが 走り、それに 気づかず
+                    //   「線こう花火が 動いた」と 思いこむ ところだった
+                    default:
+                        Debug.LogError("[AutoShot] -play の 名が わからない: " + playName);
+                        pk = PlayKind.Himitsu;  break;
                 }
                 // **自動運転は ねらい所で 押す。** 一定間かくで 押させて いた ころは
                 // 水きりが いつも 0段、つりは いつも 逃げられ、うまく いった ときの

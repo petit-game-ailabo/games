@@ -166,9 +166,25 @@ public class PlayHost : MonoBehaviour {
     [HideInInspector] public bool debugAuto;
     public string DebugState {
         get {
-            return string.Format("ふね={0} 水きり最高={1} さかな={2} 花={3} 色水={4} おし花={5} きち={6}",
-                                 Boats, BestSkip, Fish, Flowers, Irozu, Oshibana, BaseStep);
+            return string.Format("ふね={0} 水きり最高={1} さかな={2} 花={3} 色水={4} おし花={5} きち={6}"
+                               + " えにっき={7}/31 金魚={8} 花火さいこう={9}",
+                                 Boats, BestSkip, Fish, Flowers, Irozu, Oshibana, BaseStep,
+                                 ShukudaiPages, KingyoTotal, HanabiBest);
         }
+    }
+
+    // 押しっぱなし。debugAuto の ときは 5びょう だけ 押しつづけた ことに する
+    //（自動で 撮る ときに 線こう花火が 一しゅんで 終わって しまう ため）
+    float heldUntil = -1f;
+    bool Held() {
+        if (debugAuto) {
+            if (heldUntil < 0f) heldUntil = Time.time + 5f;
+            if (Time.time < heldUntil) return true;
+            heldUntil = -1f;
+            return false;
+        }
+        return Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.Return)
+            || Input.GetKey(KeyCode.J) || Input.GetMouseButton(0);
     }
 
     bool Pressed() {
@@ -187,6 +203,9 @@ public class PlayHost : MonoBehaviour {
             case PlayKind.Hanatsumi: yield return Hanatsumi(s); break;
             case PlayKind.Irozu:     yield return Irozu2(s); break;
             case PlayKind.Oshibana:  yield return Oshibana2(s); break;
+            case PlayKind.Shukudai:  yield return Shukudai(s); break;
+            case PlayKind.Kingyo:    yield return Kingyo(s); break;
+            case PlayKind.Hanabi:    yield return Hanabi(s); break;
             default:                 yield return Himitsu(s); break;
         }
         ShowGauge(false);
@@ -410,6 +429,203 @@ public class PlayHost : MonoBehaviour {
         yield return new WaitForSeconds(1.2f);
     }
 
+
+    // ================= 絵日記（宿題） =================
+    // ★遊ぶ 人からの 言：「**毎日 ちょっとずつ 進む ものが 1本も 無い。**
+    //   ぼくなつには 絵日記が あった。毎日 1ページ、31ページ 埋まって いく。
+    //   あれが『積み重ね』の 目に 見える 形。25日の『宿題は やったのかい』が
+    //   ただの 脅し文句で 終わらない ために」
+    //
+    // **夜、机に むかうと 1ページ 書ける。1日 1ページまで。**
+    // ためると 31日目に 地ごくを 見る＝のこり日数が 急に こわく なる
+    const string KeyShuku = "natsuyasumi.play.shukudai.v1";     // 書いた ページ数
+    const string KeyShukuDay = "natsuyasumi.play.shukudai.day"; // さいごに 書いた 日
+    public int ShukudaiPages { get { return PlayerPrefs.GetInt(KeyShuku, 0); } }
+
+    IEnumerator Shukudai(PlaySpot s) {
+        int day = nikki != null ? nikki.day : 1;
+        if (PlayerPrefs.GetInt(KeyShukuDay, 0) == day) {
+            Line("きょうの ぶんは もう 書いた");
+            yield return new WaitForSeconds(1.3f); yield break;
+        }
+        int pages = ShukudaiPages;
+        if (pages >= 31) {
+            Line("えにっきは ぜんぶ 書きおわって いる。えらいぜ");
+            yield return new WaitForSeconds(1.4f); yield break;
+        }
+        Line("えんぴつを けずって…");
+        yield return new WaitForSeconds(1.0f);
+        // **その日 やった ことが そのまま 絵日記に なる**（日記と 同じ たね）
+        Line("きょうの ことを 書いた…");
+        yield return new WaitForSeconds(1.2f);
+        pages++;
+        PlayerPrefs.SetInt(KeyShuku, pages);
+        PlayerPrefs.SetInt(KeyShukuDay, day);
+        PlayerPrefs.Save();
+        int nokori = 31 - pages;
+        Line(string.Format("えにっき {0}/31 まい　（のこり {1}まい）", pages, nokori));
+        if (nikki != null) {
+            // **ためて いる ほど 重い**（あとに なるほど 書いた ことが 大事に なる）
+            int okure = Mathf.Max(0, day - pages);
+            nikki.Note("shukudai", okure > 5
+                ? string.Format("えにっきを 書いた（{0}/31）。……{1}日ぶん たまって いる。まずいぜ", pages, okure)
+                : string.Format("えにっきを 書いた（{0}/31）。きょうの ぶんは かたづいた", pages),
+                okure > 5 ? 75 : 55);
+        }
+        yield return new WaitForSeconds(1.5f);
+    }
+
+    // ================= 金魚すくい（祭りの 屋台） =================
+    // つりと 同じ「間」の 遊び。**紙は すぐ やぶれる**ので、欲ばると 0びき
+    const string KeyKingyo = "natsuyasumi.play.kingyo.v1";
+    public int KingyoTotal { get { return PlayerPrefs.GetInt(KeyKingyo, 0); } }
+
+    IEnumerator Kingyo(PlaySpot s) {
+        Line("かみの ポイを もらった。やぶれるまで すくえるぜ");
+        yield return new WaitForSeconds(1.3f);
+        int got = 0;
+        float yowasa = 0f;                  // 紙の いたみ 0〜1
+        for (int i = 0; i < 8; i++) {
+            Line("金魚が 近づいて きた…　スペースで すくう");
+            float w = 0f; bool did = false;
+            // **来る 間が まちまち。**待てば 待つほど すくいやすいが、紙は 待つと ふやける
+            float best = Random.Range(0.5f, 1.4f);
+            while (w < best + 0.9f) {
+                w += Time.deltaTime;
+                if (Pressed()) { did = true; break; }
+                yield return null;
+            }
+            if (!did) { Line("にげられた"); yield return new WaitForSeconds(0.8f); continue; }
+            float zure = Mathf.Abs(w - best);
+            yowasa += 0.16f + zure * 0.5f;          // 早すぎ・遅すぎ ほど 紙が いたむ
+            if (zure < 0.30f) {
+                got++;
+                Line(string.Format("すくえた！　{0}ひきめ", got));
+            } else {
+                Line("あっ、すりぬけた");
+            }
+            yield return new WaitForSeconds(0.9f);
+            if (yowasa >= 1f) { Line("ポイが やぶれた。おしまい"); break; }
+        }
+        Bump(KeyKingyo, got);
+        Line(got > 0 ? string.Format("金魚を {0}ひき すくった　（つうさん {1}ひき）", got, KingyoTotal)
+                     : "1ぴきも すくえなかった…");
+        if (nikki != null)
+            nikki.Note("kingyo", got > 0
+                ? string.Format("祭りで 金魚を {0}ひき すくった。ポイが やぶれるまで やったぜ", got)
+                : "祭りで 金魚すくいを した。1ぴきも すくえなかった。くやしいぜ", 100);
+        yield return new WaitForSeconds(1.6f);
+    }
+
+    // ================= 線香花火（夜の 縁側） =================
+    // **押しつづけると 玉が 育ち、離すと 落ちる。**欲ばると 落ちる、が 全部
+    const string KeyHanabi = "natsuyasumi.play.hanabi.v1";
+    public int HanabiBest { get { return PlayerPrefs.GetInt(KeyHanabi, 0); } }
+
+    IEnumerator Hanabi(PlaySpot s) {
+        Line("線こう花火に 火を つけた…");
+        // 手もとの 位置（人の むね の 前あたり）
+        // **人に ついて まわる。**その場の 座標に 置くと、立ち位置が すこし ちがう だけで
+        // 玉が 縁側から はみ出して 庭の 草の 上で 光る
+        System.Func<Vector3> Te = () => transform.position
+                   + Vector3.up * 0.70f + Vector3.forward * 0.30f + Vector3.right * 0.30f;
+        Vector3 te = Te();
+        var bo = Tama(new Color(0.75f, 0.62f, 0.42f, 0.9f), 0.05f, 0f);   // こより（軸）
+        bo.transform.position = Te() + Vector3.up * 0.16f;
+        bo.transform.localScale = new Vector3(0.03f, 0.34f, 1f);
+        Destroy(bo.GetComponent<Billboard>());
+        yield return new WaitForSeconds(1.2f);
+        Line("スペースを おしつづける　（はなすと 玉が おちる）");
+
+        // ★**まず「押しはじめる」のを 待つ。**（2026-08-17）
+        //   いきなり 押しっぱなし 判定に 入れると、まだ 手を 出して いない うちに
+        //   「はなした」と みなされ、0.4びょうで 終わって しまう
+        float matsu = 0f;
+        while (!Held() && matsu < 6f) { matsu += Time.deltaTime; yield return null; }
+        if (matsu >= 6f) {
+            Line("……火が きえて しまった");
+            Destroy(bo);
+            yield return new WaitForSeconds(1.4f);
+            yield break;
+        }
+
+        var tamaGO = Tama(new Color(1f, 0.72f, 0.30f, 1f), 0.10f, 0.9f);
+        tamaGO.transform.position = Te();
+        var hibana = new System.Collections.Generic.List<GameObject>();
+        var muki = new System.Collections.Generic.List<Vector3>();
+
+        float tama = 0f;
+        bool fell = false;
+        int saigo = -1;                       // さいごに 出した ぱちぱちの 目もり
+        float tsugi = 0f;                     // つぎに 火花を 散らす 時こく
+        // だんだん 落ちやすく なる。**長く もたせるほど えらい**
+        while (Held()) {
+            tama += Time.deltaTime;
+            // 玉は すこしずつ 育ち、光も 強く なる
+            tamaGO.transform.position = Te();
+            if (bo != null) bo.transform.position = Te() + Vector3.up * 0.16f;
+            float f = Mathf.Min(tama, 6f) / 6f;
+            tamaGO.transform.localScale = Vector3.one * (0.10f + f * 0.10f);
+            var lt0 = tamaGO.GetComponentInChildren<Light>();
+            if (lt0 != null) lt0.intensity = 0.9f + f * 1.1f + Mathf.Sin(tama * 22f) * 0.22f;
+
+            // 火花。**数を しぼって、短い いのちで 散らす**
+            if (tama > 0.5f && Time.time >= tsugi) {
+                tsugi = Time.time + 0.055f;
+                var h = Tama(new Color(1f, 0.84f, 0.50f, 1f), 0.040f, 0f);
+                h.transform.position = tamaGO.transform.position;
+                hibana.Add(h);
+                var v = Random.onUnitSphere; v.y = Mathf.Abs(v.y) * 0.6f + 0.15f;
+                muki.Add(v * Random.Range(0.9f, 2.0f));
+            }
+            for (int i = hibana.Count - 1; i >= 0; i--) {
+                if (hibana[i] == null) { hibana.RemoveAt(i); muki.RemoveAt(i); continue; }
+                var v = muki[i];
+                v.y -= 5.0f * Time.deltaTime;                       // おちて いく
+                muki[i] = v;
+                hibana[i].transform.position += v * Time.deltaTime;
+                var sc = hibana[i].transform.localScale.x - Time.deltaTime * 0.030f;
+                if (sc <= 0.002f || hibana[i].transform.position.y < Te().y - 0.9f) {
+                    Destroy(hibana[i]); hibana.RemoveAt(i); muki.RemoveAt(i);
+                } else hibana[i].transform.localScale = Vector3.one * sc;
+            }
+
+            // 落ちる 見こみは 時間が たつほど 上がる
+            if (tama > 2.0f && Random.value < (tama - 2.0f) * 0.012f) { fell = true; break; }
+            // **毎フレーム 言わない。**1びょう おきに 1回だけ 出す
+            int me = Mathf.FloorToInt(tama);
+            if (me >= 1 && me != saigo) { saigo = me; Line(string.Format("ぱちぱち…　{0}びょう", me)); }
+            yield return null;
+        }
+
+        // 玉が おちる
+        var ochi = tamaGO;
+        float oy = 0f, ot = 0f;
+        while (ot < 1.1f && ochi != null) {
+            ot += Time.deltaTime; oy -= 3.4f * Time.deltaTime;
+            ochi.transform.position += Vector3.up * oy * Time.deltaTime;
+            var l2 = ochi.GetComponentInChildren<Light>();
+            if (l2 != null) l2.intensity = Mathf.Max(0f, 3f * (1f - ot / 1.1f));
+            ochi.transform.localScale = Vector3.one * Mathf.Max(0.005f, 0.18f * (1f - ot / 1.1f));
+            yield return null;
+        }
+        foreach (var h in hibana) if (h != null) Destroy(h);
+        if (tamaGO != null) Destroy(tamaGO);
+        if (bo != null) Destroy(bo);
+
+        int mm = Mathf.RoundToInt(tama * 10f);
+        bool best = mm > HanabiBest;
+        if (fell) Line(string.Format("ぽとり。……{0:F1}びょう だった", tama));
+        else      Line(string.Format("そっと はなした。{0:F1}びょう もったぜ{1}", tama,
+                                     best ? "　（さいこう きろく！）" : ""));
+        if (best) { PlayerPrefs.SetInt(KeyHanabi, mm); PlayerPrefs.Save(); }
+        if (nikki != null)
+            nikki.Note("hanabi", string.Format("縁側で 線こう花火を した。{0:F1}びょう もった。{1}",
+                       tama, tama > 4f ? "われながら 見ごとだぜ" : "すぐ 落ちて しまった"),
+                       tama > 4f ? 80 : 55);
+        yield return new WaitForSeconds(1.4f);
+    }
+
     // ================= ひみつきち =================
     // 一気には できない。**来る たびに すこしずつ 建つ**のが この 遊びの 芯
     static readonly string[] BaseSteps = {
@@ -465,6 +681,34 @@ public class PlayHost : MonoBehaviour {
         if (m.HasProperty("_SwayAmp")) m.SetFloat("_SwayAmp", 0f);
         r.sharedMaterial = m;
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        return go;
+    }
+
+    // ★**「ぱちぱち…3びょう」と 字が 出るだけでは 花火に ならない。**（2026-08-17）
+    //   手もとに **光る 玉**を 出し、玉から 火花を 散らす。玉は 育ち、はなすと 落ちる。
+    //   絵を 用意しなくても、光る 点と 落ちる 点だけで あの 遊びは 成り立つ
+    GameObject Tama(Color c, float size, float hikari) {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = "Hibana";
+        Destroy(go.GetComponent<Collider>());
+        go.transform.localScale = Vector3.one * size;
+        go.AddComponent<Billboard>();
+        var m = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+        m.color = c;
+        m.SetFloat("_Surface", 1f); m.renderQueue = 3100;
+        m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+        m.SetFloat("_ZWrite", 0f);
+        var r = go.GetComponent<Renderer>();
+        r.sharedMaterial = m;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        if (hikari > 0f) {
+            var lg = new GameObject("Hi");
+            lg.transform.SetParent(go.transform, false);
+            var lt = lg.AddComponent<Light>();
+            lt.type = LightType.Point; lt.color = new Color(1f, 0.78f, 0.42f);
+            lt.intensity = hikari; lt.range = 3.2f; lt.shadows = LightShadows.None;
+        }
         return go;
     }
 

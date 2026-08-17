@@ -136,7 +136,12 @@ public class BugHud : MonoBehaviour {
         sb.AppendLine();
         foreach (var k in BugKind.All) {
             int n = book.Count(k.id);
-            if (n <= 0) { sb.AppendLine("？？？？？"); continue; }
+            if (n <= 0) {
+                // 聞いた ヒントが あれば 出す。**聞いた ことが 手もとに のこる**
+                sb.AppendLine(book.HasHint(k.id) && !string.IsNullOrEmpty(k.hint)
+                              ? "？？？？？　" + k.hint : "？？？？？");
+                continue;
+            }
             int sp = book.Specimen(k.id);
             sb.AppendLine(string.Format("{0}　{1}ひき　さいだい {2}mm{3}",
                           k.name, n, book.MaxMm(k.id), sp > 0 ? "　ひょうほん" + sp : ""));

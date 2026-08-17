@@ -15,6 +15,10 @@ public enum PlayKind {
     Irozu,        // 色水を 作る（井戸ばた）
     Oshibana,     // おし花に する（じぶんの 部屋）
     Himitsu,      // ひみつ きち を 作る（やぶの 中）
+    // ★2026-08-17 に 足した ぶん（遊ぶ 人の 指摘）
+    Shukudai,     // **絵日記（宿題）**。夜、机で 1ページ。31ページ ある
+    Kingyo,       // 金魚すくい（祭りの 屋台。10日だけ）
+    Hanabi,       // 線香花火（夜の 縁側）
 }
 
 public class PlaySpot : MonoBehaviour {
@@ -22,13 +26,39 @@ public class PlaySpot : MonoBehaviour {
     [Tooltip("ここまで 近づいたら 遊べる")]
     public float range = 2.4f;
 
+    // ★**いつ でも できる 遊びばかりだと、夜が 空き地に なる。**（遊ぶ 人の 指摘
+    //   「夜に できるのは ホタルと カブトを 捕る ことと、寝る ことだけ。
+    //     18時から 2時まで 8時間ぶんの 遊びが 3つしか ない」）
+    [Tooltip("夜だけ できる")]
+    public bool onlyNight;
+    [Tooltip("この 日だけ できる（0で いつでも）。祭りの 屋台など")]
+    public int onlyDay;
+
     [Header("水べ の とき")]
     public Vector3 water;        // 水面の 点
     public Vector3 flow = Vector3.forward;   // 流れの むき（ささぶねが 下る ほう）
     [Tooltip("岸から 見て 川の むこう岸まで の 長さ。水きりが とぶ 先")]
     public float span = 8f;
 
+    [HideInInspector] public TimeOfDay tod;
+    [HideInInspector] public Nikki nikki;
+
+    /// <summary>いま できる 遊びか（時こく・日づけ）</summary>
+    public bool Ima {
+        get {
+            if (onlyNight) {
+                if (tod == null) return false;
+                if (!(tod.hour >= 18.5f || tod.hour < 4.5f)) return false;
+            }
+            if (onlyDay > 0) {
+                if (nikki == null || nikki.day != onlyDay) return false;
+            }
+            return true;
+        }
+    }
+
     public bool Near(Transform who) {
+        if (!Ima) return false;
         if (who == null) return false;
         var d = who.position - transform.position;
         d.y *= 0.5f;                              // 高さの ちがいは ゆるく 見る
@@ -45,6 +75,9 @@ public class PlaySpot : MonoBehaviour {
                 case PlayKind.Hanatsumi: return "スペース：花を つむ";
                 case PlayKind.Irozu:     return "スペース：色水を 作る";
                 case PlayKind.Oshibana:  return "スペース：おし花に する";
+                case PlayKind.Shukudai:  return "スペース：えにっきを 書く";
+                case PlayKind.Kingyo:    return "スペース：金魚すくいを する";
+                case PlayKind.Hanabi:    return "スペース：線こう花火を する";
                 default:                 return "スペース：ひみつきちを 作る";
             }
         }

@@ -38,6 +38,10 @@ public class TimeOfDay : MonoBehaviour {
     public Light sun;
     public Light fill;
     public Light andon;
+    // ★**あかりは 家に 1つでは 足りない。**（2026-08-17）
+    //   2階の つくえで 絵日記を 書く のに、部屋が まっ暗だった。
+    //   同じ 明るさで つく あかりを ここに ならべる（母屋の 2階・離れ など）
+    public Light[] andonHoka;
     public Renderer shojiPaper;    // 障子紙。よるは 光らせない
     public Camera cam;
     public Weather weather;        // 天気は この 上に かぶせる（順番を 固定するため ここから 呼ぶ）
@@ -242,6 +246,9 @@ public class TimeOfDay : MonoBehaviour {
         }
         if (fill != null) { fill.color = p.fillCol; fill.intensity = p.fillI; }
         if (andon != null) { andon.intensity = p.andonI; andon.enabled = p.andonI > 0.01f; }
+        if (andonHoka != null)
+            foreach (var a in andonHoka)
+                if (a != null) { a.intensity = p.andonI; a.enabled = p.andonI > 0.01f; }
 
         RenderSettings.ambientMode = AmbientMode.Trilight;
         RenderSettings.ambientSkyColor = p.sky;

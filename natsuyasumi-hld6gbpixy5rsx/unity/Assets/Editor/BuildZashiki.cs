@@ -73,7 +73,7 @@ public static class BuildZashiki {
         billboards.Clear();
 
         Renderer shojiPaperRenderer = null;
-        Light lamp = null;
+        Light lamp = null, lamp2 = null;
 
         RoomCutaway.Piece[] cutPieces = null;
         if (ShowRoom) {
@@ -105,6 +105,21 @@ public static class BuildZashiki {
             lamp = lampGO.AddComponent<Light>();
             lamp.type = LightType.Point; lamp.color = new Color(1f, 0.82f, 0.55f);
             lamp.intensity = 3.2f; lamp.range = 7f; lamp.shadows = LightShadows.Soft;
+            // ★**2階の 電球。**（2026-08-17）絵日記は 夜に つくえで 書く のに、
+            //   2階には あかりが 1つも 無く、まっ暗な 中で 書いて いた。
+            //   影を おとす ので、1階へ 光が もれる ことも ない
+            {
+                var kasa = Box("Denkyu_Kasa", root, new Vector3(-9.375f, BuildHouse.F2 + 1.86f, -3.0f),
+                               new Vector3(0.44f, 0.10f, 0.44f), mWood);
+                Box("Denkyu_Himo", root, new Vector3(-9.375f, BuildHouse.F2 + 2.06f, -3.0f),
+                    new Vector3(0.03f, 0.30f, 0.03f), mWood);
+                var g2 = new GameObject("Denkyu_Light");
+                g2.transform.SetParent(kasa.transform, false);
+                g2.transform.localPosition = new Vector3(0f, -0.14f, 0f);
+                lamp2 = g2.AddComponent<Light>();
+                lamp2.type = LightType.Point; lamp2.color = new Color(1f, 0.86f, 0.62f);
+                lamp2.intensity = 1.9f; lamp2.range = 6.0f; lamp2.shadows = LightShadows.Soft;
+            }
             // ちゃぶ台（居間）
             Box("Table_Top", root, new Vector3(-9.4f, 0.34f, 3.6f), new Vector3(1.3f, 0.07f, 0.9f), mFloorW);
             for (int i = 0; i < 4; i++) {
@@ -387,6 +402,7 @@ public static class BuildZashiki {
         var todGO = new GameObject("TimeOfDay");
         var todc = todGO.AddComponent<TimeOfDay>();
         todc.sun = sun; todc.fill = fill; todc.andon = lamp; todc.cam = cam;
+        todc.andonHoka = lamp2 != null ? new[] { lamp2 } : new Light[0];
         todc.shojiPaper = shojiPaperRenderer;
         // 家は あるが 場面は **野原の まんなか**。空の 色を 出さないと 地平線から さきが まっ黒に なる
         todc.outdoor = true;
@@ -613,7 +629,7 @@ public static class BuildZashiki {
         if (playAtlas == null) Debug.LogError("[BuildZashiki] play.png が 見つからない");
         var play = player.AddComponent<PlayHost>();
         play.atlas = playAtlas; play.font = hud.font; play.panel = hud.panel;
-        PlaySpots(root);
+        PlaySpots(root, todc, null);   // nikki は 下の「1日の わっか」で 入れる
 
         // --- 屋内の 切りぬき。**中に 入ったら 手前の 壁と 屋根を 消す**
         if (cutPieces != null) {
@@ -668,6 +684,8 @@ public static class BuildZashiki {
         // ふとん＝2階の まんなかの 部屋（じぶんの へや）
         dayHost.futon = new Vector3(-4.125f, BuildHouse.F2 + 0.3f, -3.3f);
         play.dayHost = dayHost;
+        // 遊び場に 日づけを わたす（祭りの 屋台は 10日の 夜だけ 出る）
+        foreach (var sp in root.GetComponentsInChildren<PlaySpot>(true)) sp.nikki = nikki;
         // ★魔理沙の 口。「〜だぜ」で しゃべる（喜怒哀楽の ポーズも 出す）
         var voice = player.AddComponent<MarisaVoice>();
         voice.hud = hud; voice.book = book; voice.sprite = cs; voice.nikki = nikki;
@@ -705,6 +723,12 @@ public static class BuildZashiki {
             g.kotoTaifu   = new[] { "きょうは 出ちゃ いけないよ。風が つよい からね" };
             g.kotoShukudai= new[] { "宿題は やったのかい。……まだ なんだろ、その 顔は" };
             g.kotoOwakare = new[] { "もう 帰るのかい。……また 来年 おいで" };
+            // かごの 虫に 反応する（はじめて 見せた 虫 だけ）
+            g.mushi = new[] {
+                "おや、{0}かい。よく とれたねえ",
+                "まあ 立派な {0}。じいさんも よく とって きたよ",
+                "{0}かい。……にがして やりなよ、かわいそうだから",
+            };
         }
 
         Person(root, hud, nikki, todc, wx, book, chars, 3,
@@ -728,6 +752,14 @@ public static class BuildZashiki {
             g.kotoMatsuri = new[] { "おう 来たか！ きょうは 飲むぞ。……お前は ラムネな" };
             g.kotoTaifu   = new[] { "畑が やられた。まあ こういう 年も あるさ" };
             g.kotoOwakare = new[] { "もう 帰るのか。ずいぶん 日に やけたな" };
+            // ★**教える 人。**まだ 取って いない 虫の いる ところを 1つずつ 教える。
+            //   聞いた ことは ずかんに のこる
+            g.mushiHakase = true;
+            g.mushi = new[] {
+                "ほう、{0}か。なかなか いい のを つかまえたな",
+                "{0}だな。おれが 子どもの ころは もっと 大きいのが いた ぞ",
+                "{0}……そいつは この へんじゃ めずらしい ほうだ",
+            };
         }
 
         Person(root, hud, nikki, todc, wx, book, chars, 7,
@@ -748,6 +780,10 @@ public static class BuildZashiki {
             g.kotoToro    = new[] { "きょうは とうろうを ながす日。日が くれたら 川へ おいで" };
             g.kotoTaifu   = new[] { "せんたくもの、ぜんぶ 取りこんだよ" };
             g.kotoOwakare = new[] { "さみしく なるねえ。からだに 気を つけて" };
+            g.mushi = new[] {
+                "きゃっ、{0}！ ……こっちに 向けないでよ",
+                "{0}ね。……虫は ちょっと にがてなのよ",
+            };
         }
 
         foreach (var pn in people) if (pn != null) pn.player = player.transform;
@@ -785,6 +821,11 @@ public static class BuildZashiki {
             dnpc.night = new[] { "くらいと ちょっと こわいです。もう かえります？" };
             dnpc.rain = new[] { "あめの 日の 川は こわいです。ちかづかないで くださいね" };
             dnpc.manyBugs = new[] { "そんなに とって……にがして あげて くださいね？" };
+            dnpc.mushi = new[] {
+                "わあ、{0}……はじめて 近くで 見ました",
+                "{0}さん、こわがって ますよ。そっと 見せて くださいね",
+                "{0}……きれいですね。でも、おうちに かえして あげて ください",
+            };
             dnpc.hideOnRain = true;   // 本人が「あめの日の川はこわい」と 言って いる ので
             dnpc.kotoMatsuri = new[] { "おまつり、にぎやかですね。……人が おおくて ちょっと こわいです" };
             dnpc.kotoToro    = new[] { "わたし、とうろう ながすの すきです……きれいだから" };
@@ -807,50 +848,100 @@ public static class BuildZashiki {
             gyoji.matsuriBa = new Vector3(hx, TerrainGen.Height(hx, hz), hz + 3.0f);
 
             // ---- 祭り 本番（提灯・屋台）
+            // ★**白い 箱を ならべても 祭りには 見えない。**（2026-08-17・見なおし）
+            //   提灯は **なわに つるす**。紅白の 縞が あって はじめて 屋台に なる。
+            //   あかりは **物じたいを 光らせて**、地めんを 照らす 灯は 数を しぼる
+            //  （点光源を 20 も 置くと 夜が まっ白に とぶ）
+            var mAka   = Iro("MatsuriAka",   new Color(0.78f, 0.16f, 0.14f), 0f);
+            var mShiro = Iro("MatsuriShiro", new Color(0.94f, 0.92f, 0.86f), 0f);
+            var mHi    = Iro("MatsuriHi",    new Color(1.00f, 0.82f, 0.46f), 2.2f);   // 光る 紙
+            var mNawa  = Iro("MatsuriNawa",  new Color(0.30f, 0.24f, 0.16f), 0f);
+
             var ma = new GameObject("Matsuri");
             ma.transform.SetParent(root, false);
-            // 提灯を 参道に ずらり。**夜だけ 光る**（行灯と 同じ やりかた）
-            for (int i = 0; i < 10; i++) {
-                float t2 = i / 9f;
-                float x = hx - 3.2f + (i % 2) * 6.4f;
-                float z = hz + 1.0f + t2 * 7.0f;
-                float y = TerrainGen.Height(x, z);
-                Box("M_Chochin_Bo" + i, ma.transform, new Vector3(x, y + 1.35f, z),
-                    new Vector3(0.10f, 2.7f, 0.10f), mPost);
-                var ch = Box("M_Chochin" + i, ma.transform, new Vector3(x, y + 2.35f, z),
-                             new Vector3(0.34f, 0.46f, 0.34f), mPaper);
-                var lg = new GameObject("Hi");
-                lg.transform.SetParent(ch.transform, false);
-                var lt = lg.AddComponent<Light>();
-                lt.type = LightType.Point; lt.color = new Color(1f, 0.72f, 0.36f);
-                lt.intensity = 2.6f; lt.range = 5.5f; lt.shadows = LightShadows.None;
+
+            // 参道の 両がわに 竹を 立て、その 間に なわを 張って 提灯を つるす
+            for (int side = -1; side <= 1; side += 2) {
+                float x = hx + side * 3.4f;
+                for (int i = 0; i < 5; i++) {
+                    float z = hz + 0.6f + i * 1.9f;
+                    float y = TerrainGen.Height(x, z);
+                    Box("M_Take" + side + i, ma.transform, new Vector3(x, y + 1.55f, z),
+                        new Vector3(0.09f, 3.1f, 0.09f), mPost);
+                    if (i == 4) continue;
+                    // なわ（つぎの 竹まで）
+                    float z2 = z + 1.9f, y2 = TerrainGen.Height(x, z2);
+                    Box("M_Nawa" + side + i, ma.transform,
+                        new Vector3(x, (y + y2) * 0.5f + 3.02f, z + 0.95f),
+                        new Vector3(0.035f, 0.035f, 1.9f), mNawa);
+                    // 提灯 2つ。**上下に 赤い わっか、まん中は 光る 紙**
+                    for (int k = 0; k < 2; k++) {
+                        float cz = z + 0.55f + k * 0.85f;
+                        float cy = TerrainGen.Height(x, cz) + 2.62f;
+                        Box("M_ChoUe" + side + i + k, ma.transform, new Vector3(x, cy + 0.20f, cz),
+                            new Vector3(0.20f, 0.05f, 0.20f), mAka);
+                        Box("M_Cho"   + side + i + k, ma.transform, new Vector3(x, cy, cz),
+                            new Vector3(0.30f, 0.36f, 0.30f), mHi);
+                        Box("M_ChoSta"+ side + i + k, ma.transform, new Vector3(x, cy - 0.20f, cz),
+                            new Vector3(0.20f, 0.05f, 0.20f), mAka);
+                    }
+                }
+                // 地めんを 照らす 灯は 片がわ 1つずつ で 足りる
+                var gl = new GameObject("Akari" + side);
+                gl.transform.SetParent(ma.transform, false);
+                gl.transform.position = new Vector3(x, TerrainGen.Height(x, hz + 4f) + 2.6f, hz + 4f);
+                var gt = gl.AddComponent<Light>();
+                gt.type = LightType.Point; gt.color = new Color(1f, 0.78f, 0.46f);
+                gt.intensity = 3.2f; gt.range = 12f; gt.shadows = LightShadows.None;
             }
-            // 屋台 2つ（かき氷・金魚すくい）
+
+            // 屋台 2つ（かき氷・金魚すくい）。**紅白の しま**の 屋根
             for (int i = 0; i < 2; i++) {
                 float x = hx + (i == 0 ? -4.6f : 4.6f), z = hz + 5.0f;
                 float y = TerrainGen.Height(x, z);
                 Box("M_Yatai_Dai" + i, ma.transform, new Vector3(x, y + 0.5f, z), new Vector3(3.0f, 1.0f, 1.4f), mNaya);
                 for (int k = -1; k <= 1; k += 2)
-                    Box("M_Yatai_Hashira" + i + k, ma.transform, new Vector3(x + k * 1.4f, y + 1.3f, z),
-                        new Vector3(0.10f, 2.6f, 0.10f), mPost);
-                Box("M_Yatai_Yane" + i, ma.transform, new Vector3(x, y + 2.6f, z), new Vector3(3.4f, 0.14f, 2.0f), mNaya);
-                // 暖簾（のれん）。かき氷は 青、金魚は 赤
-                var nr = Box("M_Yatai_Noren" + i, ma.transform, new Vector3(x, y + 2.15f, z + 0.9f),
-                             new Vector3(3.2f, 0.7f, 0.05f), mPaper);
-                nr.GetComponent<Renderer>().sharedMaterial = mPaper;
-                // あかり
+                    Box("M_Yatai_Hashira" + i + k, ma.transform, new Vector3(x + k * 1.5f, y + 1.35f, z),
+                        new Vector3(0.10f, 2.7f, 0.10f), mPost);
+                // 屋根＝赤白 6本の しま（はば 0.55m ずつ）
+                for (int k = 0; k < 6; k++)
+                    Box("M_Yatai_Yane" + i + "_" + k, ma.transform,
+                        new Vector3(x - 1.65f + 0.275f + k * 0.55f, y + 2.65f, z),
+                        new Vector3(0.55f, 0.12f, 2.0f), (k % 2 == 0) ? mAka : mShiro);
+                // 看板（かんばん）。かき氷＝白地、金魚＝赤地
+                Box("M_Yatai_Kanban" + i, ma.transform, new Vector3(x, y + 2.20f, z + 0.98f),
+                    new Vector3(2.2f, 0.44f, 0.06f), i == 0 ? mShiro : mAka);
+                // 屋台の 中の あかり（1つだけ、弱め）
                 var yl = new GameObject("Hi");
                 yl.transform.SetParent(ma.transform, false);
-                yl.transform.position = new Vector3(x, y + 2.3f, z);
+                yl.transform.position = new Vector3(x, y + 2.25f, z - 0.2f);
                 var yt = yl.AddComponent<Light>();
-                yt.type = LightType.Point; yt.color = new Color(1f, 0.85f, 0.6f);
-                yt.intensity = 4.5f; yt.range = 8f; yt.shadows = LightShadows.None;
+                yt.type = LightType.Point; yt.color = new Color(1f, 0.86f, 0.62f);
+                yt.intensity = 2.4f; yt.range = 6f; yt.shadows = LightShadows.None;
+            }
+            // のぼり（参道の 入り口に 2本）
+            for (int k = -1; k <= 1; k += 2) {
+                float x = hx + k * 5.6f, z = hz + 8.2f, y = TerrainGen.Height(x, z);
+                Box("M_Nobori_Bo" + k, ma.transform, new Vector3(x, y + 1.8f, z),
+                    new Vector3(0.08f, 3.6f, 0.08f), mPost);
+                Box("M_Nobori" + k, ma.transform, new Vector3(x + k * 0.36f, y + 2.5f, z),
+                    new Vector3(0.62f, 2.0f, 0.04f), mShiro);
+                Box("M_NoboriUe" + k, ma.transform, new Vector3(x + k * 0.36f, y + 3.4f, z),
+                    new Vector3(0.62f, 0.26f, 0.05f), mAka);
             }
             // 金魚すくいの たらい（水）
             {
                 float x = hx + 4.6f, z = hz + 6.4f, y = TerrainGen.Height(x, z);
                 Box("M_Tarai", ma.transform, new Vector3(x, y + 0.28f, z), new Vector3(2.2f, 0.56f, 1.6f), mNaya);
-                Box("M_TaraiMizu", ma.transform, new Vector3(x, y + 0.5f, z), new Vector3(2.0f, 0.06f, 1.4f), mWater);
+                // たらいの 水は 川の 流れる 面では ないので、しずかな 青１色で いい
+                var mTarai = Iro("MatsuriTarai", new Color(0.28f, 0.52f, 0.60f), 0f);
+                Box("M_TaraiMizu", ma.transform, new Vector3(x, y + 0.5f, z), new Vector3(2.0f, 0.06f, 1.4f), mTarai);
+                // 金魚（赤い つぶ）。すくう 相手が 見えて いないと 屋台に 見えない
+                var mKingyo = Iro("MatsuriKingyo", new Color(0.86f, 0.26f, 0.14f), 0.5f);
+                for (int k = 0; k < 7; k++)
+                    Box("M_Kingyo" + k, ma.transform,
+                        new Vector3(x - 0.8f + (k % 4) * 0.53f, y + 0.52f, z - 0.4f + (k / 4) * 0.55f),
+                        new Vector3(0.16f, 0.05f, 0.09f), mKingyo);
             }
             ma.SetActive(false);
             gyoji.matsuri = ma;
@@ -858,12 +949,17 @@ public static class BuildZashiki {
             // ---- 前の日の「準備中」＝提灯が 半分だけ
             var jn = new GameObject("MatsuriJunbi");
             jn.transform.SetParent(root, false);
-            for (int i = 0; i < 4; i++) {
-                float x = hx - 3.2f + (i % 2) * 6.4f, z = hz + 1.0f + (i / 2) * 2.4f;
-                float y = TerrainGen.Height(x, z);
-                Box("J_Bo" + i, jn.transform, new Vector3(x, y + 1.35f, z), new Vector3(0.10f, 2.7f, 0.10f), mPost);
-                if (i < 2) Box("J_Chochin" + i, jn.transform, new Vector3(x, y + 2.35f, z),
-                               new Vector3(0.34f, 0.46f, 0.34f), mPaper);
+            // ★**予告は 文では なく 物で 出す。**竹だけ 立って いて、提灯は まだ 2つ
+            for (int side = -1; side <= 1; side += 2)
+                for (int i = 0; i < 5; i++) {
+                    float x = hx + side * 3.4f, z = hz + 0.6f + i * 1.9f;
+                    float y = TerrainGen.Height(x, z);
+                    Box("J_Take" + side + i, jn.transform, new Vector3(x, y + 1.55f, z),
+                        new Vector3(0.09f, 3.1f, 0.09f), mPost);
+                }
+            for (int k = -1; k <= 1; k += 2) {
+                float x = hx + k * 3.4f, z = hz + 1.4f, y = TerrainGen.Height(x, z) + 2.62f;
+                Box("J_Cho" + k, jn.transform, new Vector3(x, y, z), new Vector3(0.30f, 0.36f, 0.30f), mPaper);
             }
             jn.SetActive(false);
             gyoji.junbi = jn;
@@ -1386,6 +1482,23 @@ public static class BuildZashiki {
         return c;
     }
 
+    // ---- 単色の マテリアル。祭りの 紅白など、絵を 使わない ところ で つかう。
+    //   hikari を 入れると **その 色に 光る**（提灯）。点光源を ふやさずに
+    //   「光って いる もの」を 出せる ので、夜が 白く とばない
+    static Material Iro(string name, Color c, float hikari) {
+        var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        m.SetColor("_BaseColor", c);
+        m.SetFloat("_Metallic", 0f);
+        m.SetFloat("_Smoothness", 0.1f);
+        if (hikari > 0f) {
+            m.EnableKeyword("_EMISSION");
+            m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            m.SetColor("_EmissionColor", c * hikari);
+        }
+        AssetDatabase.CreateAsset(m, MatDir + name + ".mat");
+        return m;
+    }
+
     // ---- 小道具
     static Material Mat(string name, string texPath, Vector2 tiling, float metal, float rough) {
         // ★**建物は ディザで 抜ける Lit に する**（2026-08-16）。
@@ -1484,25 +1597,43 @@ public static class BuildZashiki {
     // --- 田舎の 遊びが できる ところ を 置く。
     // **その 場所でしか できない こと**に する のが 肝。
     // どこでも できると 場所を おぼえる 意味が なくなり、地図が ただの 通路に なる
-    static void PlaySpots(Transform root) {
+    static void PlaySpots(Transform root, TimeOfDay tod, Nikki nikki) {
         var host = new GameObject("PlaySpots");
         host.transform.SetParent(root, false);
 
         // 小川ばた：ささぶねを ながす。水は 山から 下って くる＝+Z へ 流れる
-        Water(host, PlayKind.Sasabune, -20.3f, 13f, -22f, 13f, Vector3.forward, 2f);
+        Water(host, PlayKind.Sasabune, -25.3f, 18f, -27f, 18f, Vector3.forward, 2f);
         // 大きい 川：水きりと つり。岸は 遊べる 四角の 手前の へり
-        Water(host, PlayKind.Mizukiri, 9f, 25.4f, 9f, 29.5f, Vector3.right, 9f);
-        Water(host, PlayKind.Tsuri,   -1f, 25.4f, -1f, 29.5f, Vector3.right, 9f);
+        Water(host, PlayKind.Mizukiri, 9f, 26.4f, 9f, 30.5f, Vector3.right, 9f);
+        Water(host, PlayKind.Tsuri,   -5f, 26.4f, -5f, 30.5f, Vector3.right, 9f);
         // 野はら：花を つむ
-        Spot(host, PlayKind.Hanatsumi, -9f, 13f, 2.4f);
+        Spot(host, PlayKind.Hanatsumi, -16f, 19f, 2.6f);
         // 井戸ばた：つんだ 花を もんで 色水に する
-        Spot(host, PlayKind.Irozu, -2.5f, 13.4f, 2.0f);
+        Spot(host, PlayKind.Irozu, -6f, 17.6f, 2.2f);
         // 縁がわ：本に はさんで おし花に する
-        Spot(host, PlayKind.Oshibana, 2.0f, BuildHouse.EngawaZ - 0.5f, 1.6f);
+        Spot(host, PlayKind.Oshibana, 1.5f, BuildHouse.EngawaZ - 0.5f, 1.8f);
         // やぶの 中：ひみつきち。**建った ぶんが その場に のこる**ように、
         // 5段ぶんを 先に 建てて おいて できた ぶんだけ 見せる
-        var him = Spot(host, PlayKind.Himitsu, 19f, 15f, 2.6f);
+        // ★2026-08-17 に 足した ぶん
+        // **絵日記（宿題）**＝2階の じぶんの 部屋の つくえ。毎日 1ページ、31ページ。
+        //   これが「毎日 ちょっとずつ 進む もの」の 軸に なる
+        // 2階の つくえ（R2_Tsukue）の まん前に 置く
+        var shu = Spot(host, PlayKind.Shukudai, -9.375f, -4.8f, 1.7f);
+        shu.transform.position = new Vector3(-9.375f, BuildHouse.F2 + 0.1f, -4.8f);
+        shu.onlyNight = true;
+        // **線こう花火**＝夜の 縁側。押しつづけて 玉を 育てる
+        var hb = Spot(host, PlayKind.Hanabi, -6f, BuildHouse.EngawaZ - 0.5f, 1.8f);
+        hb.transform.position = new Vector3(-6f, BuildHouse.F1, BuildHouse.EngawaZ - 0.5f);
+        hb.onlyNight = true;
+        // **金魚すくい**＝祭りの 屋台。8月10日の 夜だけ
+        var kg = Spot(host, PlayKind.Kingyo, 30.6f, -3.2f, 2.0f);
+        kg.onlyNight = true; kg.onlyDay = Nikki.MatsuriDay;
+
+        var him = Spot(host, PlayKind.Himitsu, 24f, 20f, 2.6f);
         Himitsu(him.transform);
+
+        // 時こく・日づけを ぜんぶの 遊び場に わたす（夜だけ／その日だけ の 判定に つかう）
+        foreach (var sp in host.GetComponentsInChildren<PlaySpot>(true)) { sp.tod = tod; sp.nikki = nikki; }
     }
 
     // ひみつきちの 5段。えだ→かべ→屋根→つくえ→はた

@@ -22,6 +22,20 @@ public class BugBook : MonoBehaviour {
     const string FreedKey = "natsuyasumi.bugfreed.v1";
     public const int CageSize = 6;          // かごに 入る 数
 
+    // ★**とった 虫を 人に 見せる。**（2026-08-17）
+    //   遊ぶ 人：「オニヤンマを 苦労して 捕っても、村の 誰も 見て くれない。
+    //   ぼくなつで いちばん うれしかったのは、虫かごを 見せた ときの あの 反応」
+    //   だれに 何を 見せたかを おぼえて、**同じ 虫で 二度 おどろかせない**
+    const string MiseKey = "natsuyasumi.bugmise.";
+    public bool Mita(string who, BugId id) {
+        return (PlayerPrefs.GetInt(MiseKey + who, 0) & (1 << (int)id)) != 0;
+    }
+    public void Miseta(string who, BugId id) {
+        int m = PlayerPrefs.GetInt(MiseKey + who, 0);
+        PlayerPrefs.SetInt(MiseKey + who, m | (1 << (int)id));
+        PlayerPrefs.Save();
+    }
+
     int[] counts = new int[BugKind.All.Length];
     int[] maxMm  = new int[BugKind.All.Length];
     // ★**標本に した ぶん。** かごの 虫は 逃がすか 標本に するか の どちらか。
@@ -42,6 +56,24 @@ public class BugBook : MonoBehaviour {
     public int SpecimenTotal { get { int s = 0; foreach (var c in specimens) s += c; return s; } }
     public int SpecimenKinds { get { int s = 0; foreach (var c in specimens) if (c > 0) s++; return s; } }
     public int Freed { get { return PlayerPrefs.GetInt(FreedKey, 0); } }
+
+    // ★**教わった ことは 持ち歩ける。**（2026-08-17）
+    //   村の 人から 聞いた「どこに いるか」を 1ビットずつ ためて、ずかんに 出す。
+    //   これが あると **話しかける ことが 攻略に つながる**
+    const string HintKey = "natsuyasumi.bughint.v1";
+    public bool HasHint(BugId id) { return (PlayerPrefs.GetInt(HintKey, 0) & (1 << (int)id)) != 0; }
+    public void AddHint(BugId id) {
+        int m = PlayerPrefs.GetInt(HintKey, 0);
+        if ((m & (1 << (int)id)) != 0) return;
+        PlayerPrefs.SetInt(HintKey, m | (1 << (int)id));
+        PlayerPrefs.Save();
+    }
+    /// <summary>まだ 取って いなくて、まだ 聞いても いない 虫（無ければ null）</summary>
+    public BugId? Shiranai() {
+        foreach (var k in BugKind.All)
+            if (Count(k.id) == 0 && !HasHint(k.id)) return k.id;
+        return null;
+    }
 
     /// <summary>かごの いちばん 古い 1ぴきを 逃がす。逃がした 虫（無ければ null）</summary>
     public BugId? Release() {
@@ -120,6 +152,8 @@ public class BugBook : MonoBehaviour {
 
     [ContextMenu("記録を まっさらに する")]
     public void Clear() {
+        PlayerPrefs.DeleteKey(HintKey);
+        PlayerPrefs.DeleteKey(MiseKey);
         for (int i = 0; i < counts.Length; i++) { counts[i] = 0; maxMm[i] = 0; specimens[i] = 0; }
         recent.Clear();
         PlayerPrefs.SetInt(FreedKey, 0);

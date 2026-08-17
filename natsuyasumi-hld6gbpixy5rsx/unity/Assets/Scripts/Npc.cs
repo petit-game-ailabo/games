@@ -31,6 +31,14 @@ public class Npc : MonoBehaviour {
     [Tooltip("むしを たくさん とった 日 の 一言")]
     public string[] manyBugs;
 
+    // ★**かごの 虫に 反応する。**（2026-08-17）
+    //   {0} に 虫の 名が 入る。**はじめて 見せた 虫 だけ** 反応する ので、
+    //   新しい 虫を とるたび「あの 人に 見せに 行こう」に なる
+    [Tooltip("かごの 虫を はじめて 見せた ときの 一言（{0}＝虫の 名）")]
+    public string[] mushi;
+    [Tooltip("虫の いる 場所を 教えて くれる 人か（おじさん）")]
+    public bool mushiHakase;
+
     [HideInInspector] public Transform player;
     [HideInInspector] public BugHud hud;
     [HideInInspector] public Nikki nikki;
@@ -103,6 +111,40 @@ public class Npc : MonoBehaviour {
 
     /// <summary>話しかけられた</summary>
     public void Talk() {
+        // ★**かごの 中みが さきに 目に 入る。**まだ この 人に 見せて いない 虫が
+        //   1ぴきでも いれば、天気の 話より そちらが 先
+        if (book != null && Has(mushi)) {
+            foreach (var id in book.Recent) {
+                if (book.Mita(who, id)) continue;
+                book.Miseta(who, id);
+                string na = BugKind.Of(id).name;
+                string ln = string.Format(At(mushi, (int)id), na);
+                if (hud != null) hud.Say(who + "「" + ln + "」");
+                if (nikki != null) {
+                    nikki.Talked(who);
+                    nikki.Note("mise", na + "を " + who + "に 見せた。おどろいて いたぜ", 70);
+                }
+                step++;
+                return;
+            }
+        }
+        // ★**教わった ことは ずかんに のこる。**むしはかせは、まだ 取って いない 虫の
+        //   いる ところを 1つずつ 教えて くれる
+        if (mushiHakase && book != null) {
+            var yet = book.Shiranai();
+            if (yet.HasValue) {
+                var k = BugKind.Of(yet.Value);
+                book.AddHint(yet.Value);
+                if (hud != null)
+                    hud.Say(who + "「" + k.name + "なら " + k.hint + "。ずかんに 書いて おきな」");
+                if (nikki != null) {
+                    nikki.Talked(who);
+                    nikki.Note("hint", who + "に " + k.name + "の いる ところを 教わった", 60);
+                }
+                step++;
+                return;
+            }
+        }
         string s = Pick();
         if (hud != null) hud.Say(who + "「" + s + "」");
         if (nikki != null) nikki.Talked(who);
