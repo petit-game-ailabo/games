@@ -185,6 +185,16 @@ public class AutoShot : MonoBehaviour {
             }
         }
 
+        // -aibo で かごの 1ぴきを 相棒に する（大会の たしかめに つかう）
+        if (Arg("-aibo", null) != null) {
+            PlayerPrefs.DeleteKey("natsuyasumi.play.taikai.v1");   // たしかめの ため 大会を やりなおせる ように
+            var bk3 = FindFirstObjectByType<BugBook>();
+            if (bk3 != null && !bk3.AiboIru && bk3.Recent.Count > 0) {
+                bk3.AiboNi(0, "つのすけ");
+                Debug.Log("[AutoShot] あいぼう=" + bk3.AiboNa + " " + BugKind.Of(bk3.AiboId).name);
+            } else Debug.Log("[AutoShot] あいぼうに できなかった（かごが 空か、もう いる）");
+        }
+
         // -play sasabune|mizukiri|tsuri|hana|irozu|oshibana|himitsu で 遊びを ためす。
         // **押す 間かくを あけて 通す。** 水きりは 2回、つりは あたりを 待って 1回
         string playName = Arg("-play", null);
@@ -210,6 +220,8 @@ public class AutoShot : MonoBehaviour {
                     case "odori":   pk = PlayKind.Bonodori; break;
                     case "toro":    pk = PlayKind.Toronagashi; break;
                     case "hoshi":   pk = PlayKind.Hoshi;    break;
+                    case "taikai":  pk = PlayKind.Taikai;   break;
+                    case "wakare":  pk = PlayKind.Wakare;   break;
                     // ★**知らない 名は だまって ひみつきちに しない。**（2026-08-17）
                     //   -play hanabi と 打って ひみつきちが 走り、それに 気づかず
                     //   「線こう花火が 動いた」と 思いこむ ところだった
@@ -330,9 +342,23 @@ public class AutoShot : MonoBehaviour {
                 foreach (var k in BugKind.All)
                     if (k.Koro(d) >= 0.4f) { if (mushi.Length > 0) mushi.Append("/"); mushi.Append(k.name); }
 
+                // ★**「昼8夜10」は もう 見なくて いい 数字。**（遊ぶ 人）
+                //   数える べきは「その日、目標に できる ものが あるか」。
+                //   **この 列が 空の 日が、本当に 空っぽな 日**
+                var bk2 = FindFirstObjectByType<BugBook>();
+                var mt = new System.Text.StringBuilder();
+                if (d >= 12 && d <= 27) mt.Append("大会まで ").Append(27 - d).Append("日／");
+                if (bk2 != null) {
+                    if (bk2.NushiKazu < BugKind.All.Length) mt.Append("ぬし ").Append(bk2.NushiKazu).Append("/8／");
+                    if (bk2.AiboIru) mt.Append("あいぼう ").Append(bk2.AiboWins).Append("しょう／");
+                }
+                var ph2 = FindFirstObjectByType<PlayHost>();
+                if (ph2 != null && ph2.BaseStep < 5) mt.Append("きち ").Append(ph2.BaseStep).Append("/5／");
+                if (d >= 25) mt.Append("えにっき／");
+                if (d >= 28) mt.Append("あいぼうを どうするか／");
                 Debug.Log(string.Format("[Tosi] {0,2} | {1,-13} | {2,-8} | {3,2} | {4,2} | {5}/{6} | {7}",
                           d, Nikki.OnDay(d), wx2 != null ? wx2.mode.ToString() : "?",
-                          hiru, yoru, nh, ny, mushi));
+                          hiru, yoru, nh, ny, mt.Length > 0 ? mt.ToString() : "（なし）"));
             }
             if (nk != null) nk.day = 1;
         }

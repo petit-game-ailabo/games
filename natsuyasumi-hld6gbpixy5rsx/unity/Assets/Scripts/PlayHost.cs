@@ -223,6 +223,8 @@ public class PlayHost : MonoBehaviour {
             case PlayKind.Bonodori:  yield return Bonodori(s); break;
             case PlayKind.Toronagashi: yield return Toro(s); break;
             case PlayKind.Hoshi:     yield return Hoshi(s); break;
+            case PlayKind.Taikai:    yield return Taikai(s); break;
+            case PlayKind.Wakare:    yield return Wakare(s); break;
             default:                 yield return Himitsu(s); break;
         }
         ShowGauge(false);
@@ -915,6 +917,90 @@ public class PlayHost : MonoBehaviour {
             nikki.Note("hoshi", "高だいで 星を 見た。" + Hoshizora[n % Hoshizora.Length], 85);
         Line("……そろそろ 帰るか。ここは 夜 冷えるぜ");
         yield return new WaitForSeconds(1.6f);
+    }
+
+    // ================= 村の 虫ずもう 大会（8月27日） =================
+    // ★**12日に 予告が 出た 瞬間、13日から 26日までの 毎日に 理由が できる。**
+    //   （遊ぶ 人：「今日は 雑木林で もっと 大きい カブトを さがす」
+    //     「かごが 5わく しか ないのに、1わくを 大会用に 空けっぱなしに する」
+    //     「虫の 寿命 3日と、大会までの 15日が 真正面から ぶつかる」）
+    static readonly string[] Teki   = { "となりの 子の カブト", "隣村の チャンピオン", "山から きた ぬし" };
+    static readonly int[]    TekiPow= { 8, 13, 19 };
+    const string KeyTaikai = "natsuyasumi.play.taikai.v1";   // 何回戦まで 勝ったか
+
+    IEnumerator Taikai(PlaySpot s) {
+        var book = GetComponent<BugBook>();
+        if (book == null || !book.AiboIru) {
+            Line("大会は 相棒が いないと 出られない。……ずかんで えらんで こい");
+            yield return new WaitForSeconds(2.2f); yield break;
+        }
+        if (PlayerPrefs.GetInt(KeyTaikai, 0) > 0) {
+            Line("大会は もう 終わった。……いい 夏だったぜ");
+            yield return new WaitForSeconds(1.6f); yield break;
+        }
+        string na = book.AiboNa;
+        var kind = BugKind.Of(book.AiboId);
+        // 強さ＝虫の 力 ＋ 大きさ ＋ **育てた ぶん（勝ち数）**
+        float chikara = kind.power + book.AiboMm / 22f + book.AiboWins * 1.4f;
+        Line(na + "を 土ひょうに のせた。……いくぞ");
+        yield return new WaitForSeconds(1.8f);
+
+        int katta = 0;
+        for (int i = 0; i < Teki.Length; i++) {
+            Line(string.Format("{0}回戦　あいては {1}", i + 1, Teki[i]));
+            yield return new WaitForSeconds(1.8f);
+            // **押す 間あい**で すこし 勝ちを 寄せる（連打では ない）
+            Line("……スペースで こえを かける");
+            float t = 0f; bool koe = false;
+            while (t < 2.2f) { t += Time.deltaTime; if (Pressed()) { koe = true; break; } yield return null; }
+            float boost = koe ? (t > 0.9f && t < 1.7f ? 3.0f : 1.2f) : 0f;
+            float mine2 = chikara + boost + Random.Range(-2f, 2f);
+            bool win = mine2 >= TekiPow[i];
+            Line(win ? na + "が 押しきった！" : na + "、土ひょうを われた……");
+            yield return new WaitForSeconds(2.0f);
+            if (!win) break;
+            katta++;
+        }
+        PlayerPrefs.SetInt(KeyTaikai, Mathf.Max(1, katta + 1));
+        PlayerPrefs.Save();
+        for (int i = 0; i < katta; i++) book.AiboKatta();
+        int shokin = katta * 120;
+        if (shokin > 0) Saifu.Add(shokin);
+        string shime = katta >= 3 ? "**ゆうしょう**だ！ 村じゅうが わいて いる"
+                     : katta == 2 ? "けっしょう まで いった。おしかったぜ"
+                     : katta == 1 ? "1回戦は 勝った。まあ、上出来だろ"
+                                  : "1回戦 まけ。……こいつは よく がんばった";
+        Line(shime.Replace("**", "") + (shokin > 0 ? "　（賞金 " + shokin + "円）" : ""));
+        if (nikki != null)
+            nikki.Note("taikai", string.Format("村の 虫ずもう 大会。{0}は {1}回 勝った。{2}",
+                       na, katta, katta >= 3 ? "ゆうしょうだ。ずっと わすれない だろうな"
+                                             : "……よく やったよ、おまえは"), 100);
+        yield return new WaitForSeconds(2.4f);
+    }
+
+    // ================= 相棒との わかれ（30日から） =================
+    // ★**15日 育てた 虫を、さいごの 日に にがす。その 1行が 日記に のる。**
+    IEnumerator Wakare(PlaySpot s) {
+        var book = GetComponent<BugBook>();
+        if (book == null || !book.AiboIru) {
+            Line("……相棒は もう いない");
+            yield return new WaitForSeconds(1.4f); yield break;
+        }
+        string na = book.AiboNa;
+        var kind = BugKind.Of(book.AiboId);
+        int wins = book.AiboWins;
+        Line("かごの ふたを あけた");
+        yield return new WaitForSeconds(2.0f);
+        Line(na + "は しばらく 動かなかった");
+        yield return new WaitForSeconds(2.2f);
+        book.AiboWakare();
+        Line("……そのうち、木の ほうへ 飛んで いった");
+        yield return new WaitForSeconds(2.4f);
+        if (nikki != null)
+            nikki.Note("wakare", string.Format("{0}を にがして やった。{1}回 いっしょに 勝った {2}だ。……また 会えるかな",
+                       na, wins, kind.name), 100);
+        Line("また 来年、でかく なって 出てこいよ");
+        yield return new WaitForSeconds(2.0f);
     }
 
     // ================= ひみつきち =================

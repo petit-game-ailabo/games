@@ -69,9 +69,36 @@ public class BugHud : MonoBehaviour {
                 var id = book.MakeSpecimen();
                 if (id != null) Say(BugKind.Of(id.Value).name + "を ひょうほんに した");
                 RefreshBook(); Refresh();
+            } else if (Input.GetKeyDown(KeyCode.V) && !book.AiboIru && book.Recent.Count > 0) {
+                // ★**相棒に する。**これ いこう、その 1ぴきは 逃がせない・標本に できない・売れない。
+                //   かごの わくを 1つ ずっと つかう＝**かごの えらびが いちばん 重く なる**
+                var id = book.Recent[0];
+                if (book.AiboNi(0, NaOf(id))) {
+                    Say(book.AiboNa + "と 名を つけた。……27日の 大会まで、こいつと やるぜ");
+                    if (nikki != null) nikki.Note("aibo",
+                        BugKind.Of(id).name + "を 相棒に した。名は " + book.AiboNa + "。大会まで 育てるぜ", 92);
+                }
+                RefreshBook(); Refresh();
             }
         }
     }
+
+    // 相棒の 名。**人が つける ところ だが、文字を 打たせる わけには いかない**ので、
+    // 虫ごとの 呼び名を 用意して おく（あとで 変えられる ように するのは 先の 話）
+    static string NaOf(BugId id) {
+        switch (id) {
+            case BugId.Kabuto:   return "つのすけ";
+            case BugId.Kuwagata: return "はさみ丸";
+            case BugId.Semi:     return "じいじい";
+            case BugId.Oniyanma: return "やんま";
+            case BugId.Tonbo:    return "すいっと";
+            case BugId.Chou:     return "ひらり";
+            case BugId.Batta:    return "とびすけ";
+            default:             return "ちいさん";
+        }
+    }
+
+    [HideInInspector] public Nikki nikki;
 
     void OnCaught(BugCatch c) {
         var k = BugKind.Of(c.id);
@@ -184,7 +211,13 @@ public class BugHud : MonoBehaviour {
         // ★**かごの 虫は 逃がすか 標本に するか。**
         //   どちらも かごから 消える。標本は のこるが 二どと 動かない。
         //   夏の おわりに かごを 空に する ときの、あの 迷いを 出したい
-        sb.AppendFormat("― むしかご　{0}/{1} ―\n", book.Recent.Count, book.CageMax);
+        // ★**長い 目標を 目に 見える ところに 置く。**17日目の 朝の 理由に なる
+        sb.AppendFormat("ぬし　{0} / {1}　きんいろ　{2}\n", book.NushiKazu, BugKind.All.Length, book.KinKazu);
+        if (book.AiboIru)
+            sb.AppendFormat("あいぼう　{0}（{1} {2}mm）　{3}しょう\n",
+                            book.AiboNa, BugKind.Of(book.AiboId).name, book.AiboMm, book.AiboWins);
+        sb.AppendLine();
+        sb.AppendFormat("― むしかご　{0}/{1} ―\n", book.Recent.Count, book.CageTsukaeru);
         if (book.Recent.Count == 0) sb.AppendLine("からっぽ");
         else {
             // ★**1ぴきずつ、あずかった 日数と いっしょに 出す。**（2026-08-17）
@@ -197,7 +230,9 @@ public class BugHud : MonoBehaviour {
                     BugKind.Of(book.Recent[i]).name,
                     book.Yowatta(i) ? "　よわって いる！" : (azu > 0 ? "　" + azu + "日め" : ""));
             }
-            sb.AppendLine("▶の 1ぴきに　X：にがす　　C：ひょうほんに する");
+            sb.AppendLine(book.AiboIru
+                ? "▶の 1ぴきに　X：にがす　　C：ひょうほんに する"
+                : "▶の 1ぴきに　X：にがす　C：ひょうほん　V：あいぼうに する");
         }
         sb.AppendLine(string.Format("にがした {0}　ひょうほん {1}", book.Freed, book.SpecimenTotal));
         // ★**持ちがねが 見えないと 貯める 気に ならない。**駄菓子屋の 大かごは 120円

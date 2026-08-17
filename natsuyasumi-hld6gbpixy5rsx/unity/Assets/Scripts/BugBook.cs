@@ -32,7 +32,7 @@ public class BugBook : MonoBehaviour {
     public const int CageSize = 5;          // かごに 入る 数（駄菓子屋の 大かごで ふえる）
     const string CageMoreKey = "natsuyasumi.bugcagemore.v1";
     public int CageMax { get { return CageSize + PlayerPrefs.GetInt(CageMoreKey, 0); } }
-    public bool CageFull { get { return recent.Count >= CageMax; } }
+    public bool CageFull { get { return recent.Count >= CageTsukaeru; } }
     /// <summary>大きい かごを 買った（上限が ふえる）</summary>
     public void CageUp(int by) {
         PlayerPrefs.SetInt(CageMoreKey, PlayerPrefs.GetInt(CageMoreKey, 0) + by);
@@ -240,6 +240,78 @@ public class BugBook : MonoBehaviour {
     int[] kyonen = new int[BugKind.All.Length];
     public int Kyonen(BugId id) { return kyonen[(int)id]; }
 
+    // ★★**後半 15日を 埋めるのは「数」でも「中みが 変わる」でも なく、長い 目標。**
+    //   （2026-08-17・遊ぶ 人の 答え）
+    //   「数が ふえる＝受け身（試す）／中みが 変わる＝受け身（気づく・気づかない）／
+    //     **長い 目標＝能動（今日は これの ために 動く）**。
+    //     8月17日の 朝に 要るのは『今日は 何が できるか』では なく
+    //     『今日は 何の ために 動くか』。それを 作れるのは 3番目だけ です」
+    //
+    //   「**虫ずもうは、この ゲームで いちばん『育てる』に 向いて いる 機能で、
+    //     いちばん 放置されて います。**部品は 全部 そろって いて、繋がって いない だけ」
+    //
+    //   → かごの 1ぴきを **相棒**に する。名を つけ、勝つ たびに 強く なる。
+    //     **逃がせない／標本に できない／売れない。かごの 1わくを 15日 占有する。**
+    //     8月27日の 大会が その 行き先。
+    const string AiboKey  = "natsuyasumi.aibo.v1";     // "id,mm,wins" ／ 無ければ 空
+    const string AiboNaKey= "natsuyasumi.aibona.v1";
+
+    public bool AiboIru { get { return !string.IsNullOrEmpty(PlayerPrefs.GetString(AiboKey, "")); } }
+    public BugId AiboId  { get { return (BugId)AiboVal(0); } }
+    public int   AiboMm  { get { return AiboVal(1); } }
+    public int   AiboWins{ get { return AiboVal(2); } }
+    public string AiboNa { get { return PlayerPrefs.GetString(AiboNaKey, "むしくん"); } }
+
+    int AiboVal(int i) {
+        var s = PlayerPrefs.GetString(AiboKey, "");
+        if (string.IsNullOrEmpty(s)) return 0;
+        var p = s.Split(',');
+        int v; return i < p.Length && int.TryParse(p[i], out v) ? v : 0;
+    }
+    void AiboSave(int id, int mm, int wins) {
+        PlayerPrefs.SetString(AiboKey, id + "," + mm + "," + wins);
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>かごの i ばんめを 相棒に する。**かごの わくを 1つ ずっと つかう**</summary>
+    public bool AiboNi(int i, string na) {
+        if (AiboIru || i < 0 || i >= recent.Count) return false;
+        var id = recent[i];
+        recent.RemoveAt(i);
+        if (i < putDay.Count) putDay.RemoveAt(i);
+        AiboSave((int)id, Mathf.Max(maxMm[(int)id], 1), 0);
+        PlayerPrefs.SetString(AiboNaKey, na);
+        Save();
+        return true;
+    }
+    public void AiboKatta() { AiboSave((int)AiboId, AiboMm, AiboWins + 1); }
+    /// <summary>相棒を 手ばなす（にがす）。**夏の おわりの 決めどころ**</summary>
+    public BugId? AiboWakare() {
+        if (!AiboIru) return null;
+        var id = AiboId;
+        PlayerPrefs.DeleteKey(AiboKey);
+        PlayerPrefs.SetInt(FreedKey, Freed + 1);
+        PlayerPrefs.Save();
+        if (OnFreed != null) OnFreed(id);
+        return id;
+    }
+    /// <summary>相棒が いる あいだ、かごは 1つ せまい</summary>
+    public int CageTsukaeru { get { return CageMax - (AiboIru ? 1 : 0); } }
+
+    // ★**ぬしは 見せないと 目標に ならない。**下旬ほど 出やすい 係数は もう 入って いるのに、
+    //   プレイヤーには 見えて いなかった
+    const string NushiKey = "natsuyasumi.bugnushi.v1";
+    public bool Nushi(BugId id) { return (PlayerPrefs.GetInt(NushiKey, 0) & (1 << (int)id)) != 0; }
+    public void NushiTotta(BugId id) {
+        PlayerPrefs.SetInt(NushiKey, PlayerPrefs.GetInt(NushiKey, 0) | (1 << (int)id));
+        PlayerPrefs.Save();
+    }
+    public int NushiKazu {
+        get { int m = PlayerPrefs.GetInt(NushiKey, 0), n = 0;
+              for (int i = 0; i < BugKind.All.Length; i++) if ((m & (1 << i)) != 0) n++;
+              return n; }
+    }
+
     // ★**きんいろは 別わく で 数える。**ずかんに「きんいろ」が 出ると、
     //   図かんが 埋まった あとも さがす 理由が のこる
     const string KinKey = "natsuyasumi.bugkin.v1";
@@ -258,6 +330,9 @@ public class BugBook : MonoBehaviour {
     public void Clear() {
         PlayerPrefs.DeleteKey(HintKey);
         PlayerPrefs.DeleteKey(KinKey);
+        PlayerPrefs.DeleteKey(NushiKey);
+        PlayerPrefs.DeleteKey(AiboKey);
+        PlayerPrefs.DeleteKey(AiboNaKey);
         foreach (var w in MiseAite) PlayerPrefs.DeleteKey(MiseKey + w);
         // いまの さいだいを 「きょ年」へ 送って から 消す
         for (int i = 0; i < counts.Length; i++) {

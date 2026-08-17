@@ -28,6 +28,8 @@ public enum PlayKind {
     //   配っただけでは 1週目しか 埋まらない。**後半にも 開く ものが 要る**
     Toronagashi,  // とうろうを ながす（15日の 夜・川）
     Hoshi,        // 星を 見る（16日から・高台の 夜）
+    Taikai,       // **村の 虫ずもう 大会**（8月27日）。育てた 相棒の 行き先
+    Wakare,       // 相棒を にがす（30日から・川べり）
 }
 
 public class PlaySpot : MonoBehaviour {
@@ -105,6 +107,8 @@ public class PlaySpot : MonoBehaviour {
                 case PlayKind.Bonodori:  return "スペース：おどりの わに 入る";
                 case PlayKind.Toronagashi: return "スペース：とうろうを ながす";
                 case PlayKind.Hoshi:     return "スペース：星を 見る";
+                case PlayKind.Taikai:    return "スペース：虫ずもう 大会に 出る";
+                case PlayKind.Wakare:    return "スペース：あいぼうを にがす";
                 default:                 return "スペース：ひみつきちを 作る";
             }
         }

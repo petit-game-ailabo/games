@@ -224,6 +224,7 @@ public class BugCatcher : MonoBehaviour {
         //   「82mm の カブトを 持って いる 人に とって、次の 1ぴきには 意味が あります」
         int mae = book.MaxMm(best.kind.id);
         if (best.kin) book.KinTotta(best.kind.id);
+        if (best.nushi) book.NushiTotta(best.kind.id);
         if (!book.Add(best.kind.id, best.sizeMm)) {
             if (hud != null) hud.Say("かごが いっぱいだ。Z：ずかんで にがすか ひょうほんに する");
             return;

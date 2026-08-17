@@ -281,7 +281,10 @@ public class Nikki : MonoBehaviour {
             case 11: return "花が たまって きた。井戸ばたで 色水が 作れそうだ";
             case 13: return "おばあちゃんが ぶあつい 本を 貸して くれた。おし花に できるぜ";
             case 14: return "駄がし屋で 線こう花火を 買って きた。今夜、縁側で やろう";
+            case 12: return "おじさん「27日に 虫ずもうの 大会が あるぞ。いい 虫を 育てとけ」";
             case 16: return "きのう 高だいから 見た 星が わすれられない。今夜も 行って みるか";
+            case 26: return "あしたは 虫ずもうの 大会だ。……相棒の ぐあいは どうだ";
+            case 27: return "きょうが 大会の 日だ！ 祠の 前に 土ひょうが できて いる";
         }
         return null;
     }

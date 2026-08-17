@@ -681,6 +681,7 @@ public static class BuildZashiki {
         if (spawner != null) spawner.nikki = nikki;   // 日づけで 虫の 顔ぶれが 変わる
         book.nikki = nikki;                           // かごの 虫が 弱る までの 数え
         book.OnFreed += hud.Nigashita;                // にがすと そばの 人が 反応する
+        hud.nikki = nikki;                            // 相棒に した ことを 日記へ
 
         // ★**部屋が 育つ。**ひみつきちと 同じ「先に 建てて おいて できた ぶんだけ 見せる」。
         //   標本箱・絵日記の 束・花びんの 花・かべの おし花 が 夏の あいだに 埋まって いく
@@ -1929,6 +1930,13 @@ public static class BuildZashiki {
         tn.onlyNight = true; tn.onlyDay = 15;
         var hs = Spot(host, PlayKind.Hoshi, -30f, -14f, 3.2f);
         hs.onlyNight = true; hs.fromDay = 16;
+
+        // ★**村の 虫ずもう 大会（8月27日）。**12日の 予告から 15日ぶんの 理由に なる
+        var tk = Spot(host, PlayKind.Taikai, 26f, -6.5f, 3.0f);
+        tk.onlyDay = 27;
+        // ★**相棒との わかれ。**30日から、川べりで
+        var wk = Spot(host, PlayKind.Wakare, -22f, 26.4f, 2.6f);
+        wk.fromDay = 30;
         Himitsu(him.transform);
 
         // 時こく・日づけを ぜんぶの 遊び場に わたす（夜だけ／その日だけ の 判定に つかう）
