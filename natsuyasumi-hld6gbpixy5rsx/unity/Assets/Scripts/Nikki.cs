@@ -230,7 +230,15 @@ public class Nikki : MonoBehaviour {
     //   プレイヤーは あした 寝る 理由が できる。
     public const int MatsuriDay = 10;
 
-    public enum Koto2 { Nashi, Niji, MatsuriYokoku, Matsuri, Toro, Taifu, Shukudai, Owakare }
+    public enum Koto2 {
+        Nashi, Niji, MatsuriYokoku, Matsuri, Toro, Taifu, Shukudai, Owakare,
+        // ★2026-08-17 に 足した ぶん（遊ぶ 人の 指摘）
+        Yoimiya,      // 祭りの 前の 晩（宵宮）。**取り逃しを 減らす**
+        Atokatazuke,  // 祭りの あくる朝。落ちた 提灯＝「あった」証拠
+        Yokan,        // 別れの 予告（28日）
+        Omiyage,      // 「おみやげ、なにが いい?」（29日）
+        Saigo,        // 8月31日。**夕方、縁側に みんなが 集まる**
+    }
 
     /// <summary>その日の できごと</summary>
     public Koto2 Today() { return OnDay(day); }
@@ -243,6 +251,15 @@ public class Nikki : MonoBehaviour {
             case 20: return Koto2.Taifu;          // 台風。一日じゅう 雨
             case 25: return Koto2.Shukudai;       // 「宿題は やったのかい」
             case 30: return Koto2.Owakare;        // みんなが「もう 帰るのかい」
+            // ★**祭りは 2晩。**（遊ぶ 人：「金魚すくいを 丸ごと 1つ 作って、
+            //   稼働率は 31日中 1日。取り逃したら 2周目まで 遊べない」）
+            case 9:  return Koto2.Yoimiya;        // 宵宮。提灯は もう ついて いる
+            case 11: return Koto2.Atokatazuke;    // あくる朝、祠に 提灯が 1つ 落ちて いる
+            // ★**最後の 一週間が いちばん 平坦だった。**山は 10日の 祭り、
+            //   そこから 20日 下がりっぱなし。落ちを ここに 置く
+            case 28: return Koto2.Yokan;          // 大妖精「いつまで いるんですか……?」
+            case 29: return Koto2.Omiyage;        // おばあちゃん「おみやげ、なにが いい?」
+            case 31: return Koto2.Saigo;          // 夕方、縁側に みんなが 集まる
         }
         return Koto2.Nashi;
     }
@@ -253,6 +270,11 @@ public class Nikki : MonoBehaviour {
             case Koto2.Niji:          return "ゆうべの 雨の あとだ。空が やけに きれいだぜ";
             case Koto2.MatsuriYokoku: return "なんだか 村が そわそわ して いるな";
             case Koto2.Matsuri:       return "きょうは 祭りだ！ 夜が たのしみだぜ";
+            case Koto2.Yoimiya:       return "祠に 提灯が ついて いる。……きょうは 宵宮 らしい";
+            case Koto2.Atokatazuke:   return "祭りは 終わったか。……なんだか 静かだぜ";
+            case Koto2.Yokan:         return "のこり 4日。……なんだか 落ちつかないな";
+            case Koto2.Omiyage:       return "あさっては もう 8月31日か";
+            case Koto2.Saigo:         return "きょうで さいごだ。……夕がた、縁側に 行って みるか";
             case Koto2.Toro:          return "きょうは とうろう ながしの 日 らしい";
             case Koto2.Taifu:         return "うわ、すごい 雨だ。きょうは 外に 出られないな";
             case Koto2.Shukudai:      return "……そういえば 宿題、まだ 手を つけて ないぜ";

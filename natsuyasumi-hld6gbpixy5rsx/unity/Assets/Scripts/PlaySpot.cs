@@ -20,6 +20,10 @@ public enum PlayKind {
     Kingyo,       // 金魚すくい（祭りの 屋台。10日だけ）
     Hanabi,       // 線香花火（夜の 縁側）
     Dagashi,      // 駄菓子屋（谷の おくの 町）。大きい 虫かご・ラムネ・アイス
+    // ★祭りの 屋台（2026-08-17）。**もらった 小づかいを その夜の うちに つかい切る**
+    Shateki,      // 射的
+    Kuji,         // くじ引き
+    Bonodori,     // 盆おどりの わに 入る
 }
 
 public class PlaySpot : MonoBehaviour {
@@ -34,6 +38,12 @@ public class PlaySpot : MonoBehaviour {
     public bool onlyNight;
     [Tooltip("この 日だけ できる（0で いつでも）。祭りの 屋台など")]
     public int onlyDay;
+    [Tooltip("あいて いる 時こく（shimeru が 0 なら いつでも）。駄菓子屋の 店じまい")]
+    public float akeru, shimeru;
+    [Tooltip("この 日から できる（0で いつでも）")]
+    public int fromDay;
+    [Tooltip("この 日まで できる（0で いつまでも）")]
+    public int toDay;
 
     [Header("水べ の とき")]
     public Vector3 water;        // 水面の 点
@@ -53,6 +63,12 @@ public class PlaySpot : MonoBehaviour {
             }
             if (onlyDay > 0) {
                 if (nikki == null || nikki.day != onlyDay) return false;
+            }
+            if (fromDay > 0 && (nikki == null || nikki.day < fromDay)) return false;
+            if (toDay > 0 && (nikki == null || nikki.day > toDay)) return false;
+            if (shimeru > 0f) {
+                if (tod == null) return false;
+                if (tod.hour < akeru || tod.hour >= shimeru) return false;
             }
             return true;
         }
@@ -80,6 +96,9 @@ public class PlaySpot : MonoBehaviour {
                 case PlayKind.Kingyo:    return "スペース：金魚すくいを する";
                 case PlayKind.Hanabi:    return "スペース：線こう花火を する";
                 case PlayKind.Dagashi:   return "スペース：駄がし屋を のぞく";
+                case PlayKind.Shateki:   return "スペース：射的を する（20円）";
+                case PlayKind.Kuji:      return "スペース：くじを 引く（30円）";
+                case PlayKind.Bonodori:  return "スペース：おどりの わに 入る";
                 default:                 return "スペース：ひみつきちを 作る";
             }
         }

@@ -59,6 +59,10 @@ public class TimeOfDay : MonoBehaviour {
             float t = Mathf.Clamp01((nikki.day - 1) / 30f);
             // 昼の あいだは ずらさない。**夕方から 先だけ** 早める
             if (hour < 12f) return hour;
+            // ★**さいごの 日だけ、夕焼けを 長く する。**（2026-08-17）
+            //   1日ぶんの 数字を ずらす だけで、31日目の 夕方が 名残おしく なる
+            if (nikki.day >= Nikki.LastDay && hour >= 17f && hour < 20.5f)
+                return 17f + (hour - 17f) * 0.45f;
             return hour + mijikaku * t;
         }
     }

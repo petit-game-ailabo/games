@@ -19,6 +19,10 @@ public class Gyoji : MonoBehaviour {
     public GameObject junbi;          // 前の 日の「準備中」（提灯が 半分）
     public GameObject toro;           // とうろう流し
     public GameObject niji;           // 虹
+    public GameObject ochiba;         // 祭りの あくる朝、落ちて いる 提灯
+
+    [Header("さいごの 夕がた（8月31日）に みんなが 集まる ところ")]
+    public Vector3 engawaBa;
 
     [Header("祭りの 夜に 人が あつまる ところ")]
     public Vector3 matsuriBa;
@@ -37,9 +41,12 @@ public class Gyoji : MonoBehaviour {
     /// <summary>その日の 世界に する。**朝に 1回**</summary>
     public void Apply(int day) {
         var k = Nikki.OnDay(day);
-        Set(matsuri, k == Nikki.Koto2.Matsuri);
+        // ★**祭りは 2晩（宵宮と 本祭り）。**飾りは 同じ ものを 出す
+        Set(matsuri, k == Nikki.Koto2.Matsuri || k == Nikki.Koto2.Yoimiya);
+        // あくる朝の 落とし物＝「祭りは あった」の 証拠
+        Set(ochiba, k == Nikki.Koto2.Atokatazuke);
         // ★**予告は 文では なく 物で 出す。**祭りの 前の日の 夜、提灯が 半分だけ 吊ってある
-        Set(junbi, k == Nikki.Koto2.MatsuriYokoku || day == Nikki.MatsuriDay - 1);
+        Set(junbi, k == Nikki.Koto2.MatsuriYokoku);
         Set(toro, k == Nikki.Koto2.Toro);
         Set(niji, k == Nikki.Koto2.Niji);
 
@@ -47,11 +54,19 @@ public class Gyoji : MonoBehaviour {
         if (people == null || yoruMoto == null) return;
         for (int i = 0; i < people.Length; i++) {
             if (people[i] == null) continue;
-            if (k == Nikki.Koto2.Matsuri) {
+            if (k == Nikki.Koto2.Matsuri || k == Nikki.Koto2.Yoimiya) {
                 var c = new Vector3(Mathf.Cos(i * 1.9f), 0f, Mathf.Sin(i * 1.9f)) * 2.6f;
                 var p = matsuriBa + c;
                 p.y = GroundY(p);
                 people[i].posYoru = p;
+            } else if (k == Nikki.Koto2.Saigo) {
+                // ★**さいごの 夕がた、縁側に みんなが いる。**
+                //   祭りで 作った「人が 集まる」しくみを そのまま つかう
+                var c = new Vector3((i - 2) * 1.6f, 0f, 0f);
+                var p = engawaBa + c;
+                p.y = GroundY(p);
+                people[i].posYoru = p;
+                people[i].posHiru = p;         // 夕がたには もう いて ほしい
             } else {
                 people[i].posYoru = yoruMoto[i];
             }

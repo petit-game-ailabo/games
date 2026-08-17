@@ -770,6 +770,11 @@ public static class BuildZashiki {
             g.kotoShukudai= new[] { "宿題は やったのかい。……まだ なんだろ、その 顔は" };
             g.kotoOwakare = new[] { "もう 帰るのかい。……また 来年 おいで" };
             g.kozukai = 200;   // 祭りの 日の 小づかい（大きい むしかごが 120円）
+            g.kotoYoimiya = new[] { "きょうは 宵宮だよ。あしたが 本番 だけどね" };
+            g.kotoAto     = new[] { "祭りは 終わったねえ。……夏も、もう すぐ おわり だよ" };
+            g.kotoYokan   = new[] { "のこり 4日 かい。はやいもんだねえ" };
+            g.kotoOmiyage = new[] { "おみやげ、なにが いい？ ……考えて おいで" };
+            g.kotoSaigo   = new[] { "きょうで さいごだね。夕がた、縁側に おいで" };
             // かごの 虫に 反応する（はじめて 見せた 虫 だけ）
             g.nigasu = new[] { "そうかい。にがして やったかい。……やさしい 子だね" };
             g.mushi = new[] {
@@ -800,6 +805,10 @@ public static class BuildZashiki {
             g.kotoMatsuri = new[] { "おう 来たか！ きょうは 飲むぞ。……お前は ラムネな" };
             g.kotoTaifu   = new[] { "畑が やられた。まあ こういう 年も あるさ" };
             g.kotoOwakare = new[] { "もう 帰るのか。ずいぶん 日に やけたな" };
+            g.kotoYoimiya = new[] { "提灯 つるすの 手つだって くれ。……いや、いいか。あそんで きな" };
+            g.kotoAto     = new[] { "かたづけが 大しごとだ。祭りは 終わってからが 長いんだよ" };
+            g.kotoYokan   = new[] { "来年も 来るんだろ？ ……そうか。じゃあ 畑、そのままに して おくか" };
+            g.kotoSaigo   = new[] { "きょうで さいごか。……まあ、また 来いよ" };
             // ★**教える 人。**まだ 取って いない 虫の いる ところを 1つずつ 教える。
             //   聞いた ことは ずかんに のこる
             g.mushiHakase = true;
@@ -829,10 +838,46 @@ public static class BuildZashiki {
             g.kotoToro    = new[] { "きょうは とうろうを ながす日。日が くれたら 川へ おいで" };
             g.kotoTaifu   = new[] { "せんたくもの、ぜんぶ 取りこんだよ" };
             g.kotoOwakare = new[] { "さみしく なるねえ。からだに 気を つけて" };
+            g.kotoYoimiya = new[] { "宵宮の ほうが すいてて いいのよ。ないしょ だけど" };
+            g.kotoAto     = new[] { "きのうの 提灯、まだ 落ちて るんじゃ ない？" };
+            g.kotoOmiyage = new[] { "おみやげ、つけもの でも 持って いく？" };
+            g.kotoSaigo   = new[] { "さ、きょうは 早じまいだよ。夕がた、縁側に おいで" };
             g.mushi = new[] {
                 "きゃっ、{0}！ ……こっちに 向けないでよ",
                 "{0}ね。……虫は ちょっと にがてなのよ",
             };
+        }
+
+        // ★**駄菓子屋の 主役は 駄菓子では なく、おばちゃん。**（2026-08-17・遊ぶ 人の 指摘）
+        //   「無人の 台に むかって『いらっしゃい』と 言われ、宙に むかって 金を 払う。
+        //     ……あの 人が いるから、歩いて 15分の 店に 300円 持って いく 価値が あった。
+        //     商品棚だけ 建てても、それは 自動販売機です」
+        //   **9時に あいて 18時に 閉まる。**閉まって いる 店に 着く ことが、
+        //   1日の 中に「どちらを 先に するか」を 生む
+        Person(root, hud, nikki, todc, wx, book, chars, 7,
+               "駄がしやの おばちゃん", new Vector3(47.6f, 0f, 6.0f),
+               new[] {
+                   "いらっしゃい。……あんた、山の 上の 家の 子かい",
+                   "ラムネは よく 冷えてるよ。井戸に つけて あるからね",
+                   "その むしかご、ちいさいねえ。うちに 大きいのが あるよ",
+                   "この へんの 子は みんな ここに 来る。夏だけ だけどね",
+                   "きょうは 暑いから、アイスが よく 出るよ",
+               },
+               new[] { "おはよう。もう 開けてるよ" },
+               null, null,
+               new[] { "まあ、そんなに とったのかい。かごが はちきれそうだよ" },
+               null, null);
+        if (people.Count > 0) {
+            var o = people[people.Count - 1];
+            o.akeru = 9f; o.shimeru = 18f;          // 夕方に 店じまい
+            o.mushi = new[] {
+                "あらまあ、{0}。よく とれたねえ",
+                "{0}かい。うちの 子も むかし そんなの 持って きたよ",
+                "{0}……ちょっと こわいねえ。かごの ままに して おくれ",
+            };
+            o.nigasu = new[] { "にがして やったのかい。えらいねえ" };
+            o.kotoMatsuri = new[] { "きょうは 祭りだ から、はやく しまうよ" };
+            o.kotoOwakare = new[] { "もう 帰るのかい。……はい、これ おまけ" };
         }
 
         foreach (var pn in people) if (pn != null) pn.player = player.transform;
@@ -884,6 +929,10 @@ public static class BuildZashiki {
             dnpc.kotoMatsuri = new[] { "おまつり、にぎやかですね。……人が おおくて ちょっと こわいです" };
             dnpc.kotoToro    = new[] { "わたし、とうろう ながすの すきです……きれいだから" };
             dnpc.kotoOwakare = new[] { "……あした、かえっちゃうんですね。また 来て くださいね" };
+            dnpc.kotoYoimiya = new[] { "きょうは 宵宮 だそうです。人が すこし 少なくて、いいですね" };
+            dnpc.kotoYokan   = new[] { "まりささん……いつまで、いるんですか？" };
+            dnpc.kotoOmiyage = new[] { "おみやげ……わたし、なにも あげられません。ごめんなさい" };
+            dnpc.kotoSaigo   = new[] { "きょうで さいご ですね。……わたし、ここで まってます" };
             people2.Add(dnpc);
         }
 
@@ -997,8 +1046,63 @@ public static class BuildZashiki {
                         new Vector3(x - 0.8f + (k % 4) * 0.53f, y + 0.52f, z - 0.4f + (k / 4) * 0.55f),
                         new Vector3(0.16f, 0.05f, 0.09f), mKingyo);
             }
+            // ★**やぐら。**盆おどりの わの まん中。祭りが 2晩に なったので、
+            //   金魚すくい 1つでは 夜が もたない
+            {
+                float x = hx, z = hz + 7.6f, y0 = TerrainGen.Height(x, z);
+                for (int k = 0; k < 4; k++) {
+                    float a = k * Mathf.PI * 0.5f + 0.78f;
+                    Box("M_Yagura_Hashira" + k, ma.transform,
+                        new Vector3(x + Mathf.Cos(a) * 1.3f, y0 + 1.6f, z + Mathf.Sin(a) * 1.3f),
+                        new Vector3(0.14f, 3.2f, 0.14f), mPost);
+                }
+                Box("M_Yagura_Dai", ma.transform, new Vector3(x, y0 + 2.0f, z),
+                    new Vector3(2.9f, 0.14f, 2.9f), mNaya);
+                Box("M_Yagura_Yane", ma.transform, new Vector3(x, y0 + 3.3f, z),
+                    new Vector3(3.3f, 0.12f, 3.3f), mAka);
+                var yl = new GameObject("Hi");
+                yl.transform.SetParent(ma.transform, false);
+                yl.transform.position = new Vector3(x, y0 + 3.0f, z);
+                var yt = yl.AddComponent<Light>();
+                yt.type = LightType.Point; yt.color = new Color(1f, 0.80f, 0.48f);
+                yt.intensity = 3.6f; yt.range = 11f; yt.shadows = LightShadows.None;
+                // 射的と くじの 台（屋台の 手前に 小さく）
+                for (int k = 0; k < 2; k++) {
+                    float sx = hx + (k == 0 ? -8.2f : 8.2f), sz = hz + 5.0f;
+                    float sy = TerrainGen.Height(sx, sz);
+                    Box("M_Ko_Dai" + k, ma.transform, new Vector3(sx, sy + 0.45f, sz),
+                        new Vector3(2.0f, 0.90f, 1.0f), mNaya);
+                    Box("M_Ko_Kanban" + k, ma.transform, new Vector3(sx, sy + 1.35f, sz - 0.3f),
+                        new Vector3(1.8f, 0.60f, 0.06f), k == 0 ? mShiro : mAka);
+                    for (int j = -1; j <= 1; j += 2)
+                        Box("M_Ko_Bo" + k + j, ma.transform, new Vector3(sx + j * 0.95f, sy + 1.1f, sz),
+                            new Vector3(0.08f, 2.2f, 0.08f), mPost);
+                }
+            }
             ma.SetActive(false);
             gyoji.matsuri = ma;
+
+            // ---- 祭りの あくる朝。**落ちた 提灯 1つ**＝「祭りは あった」の 証拠
+            {
+                var ob = new GameObject("MatsuriAto");
+                ob.transform.SetParent(root, false);
+                float x = hx - 1.4f, z = hz + 6.2f, y0 = TerrainGen.Height(x, z);
+                var ch = Box("A_Ochita_Chochin", ob.transform, new Vector3(x, y0 + 0.16f, z),
+                             new Vector3(0.34f, 0.30f, 0.34f), mPaper);
+                ch.transform.localRotation = Quaternion.Euler(72f, 24f, 0f);   // ころがって いる
+                Box("A_Ochita_Bo", ob.transform, new Vector3(x + 0.4f, y0 + 0.05f, z + 0.2f),
+                    new Vector3(0.9f, 0.06f, 0.06f), mPost);
+                // 踏まれた 紙くず
+                for (int k = 0; k < 3; k++)
+                    Box("A_Kami" + k, ob.transform,
+                        new Vector3(x + 1.2f + k * 0.7f, y0 + 0.03f, z - 0.6f + k * 0.5f),
+                        new Vector3(0.22f, 0.02f, 0.18f), mPaper);
+                ob.SetActive(false);
+                gyoji.ochiba = ob;
+            }
+
+            // さいごの 夕がた、みんなが 集まる 縁側
+            gyoji.engawaBa = new Vector3(-4.0f, BuildHouse.F1, BuildHouse.EngawaZ - 0.4f);
 
             // ---- 前の日の「準備中」＝提灯が 半分だけ
             var jn = new GameObject("MatsuriJunbi");
@@ -1680,8 +1784,15 @@ public static class BuildZashiki {
         hb.transform.position = new Vector3(-6f, BuildHouse.F1, BuildHouse.EngawaZ - 0.5f);
         hb.onlyNight = true;
         // **金魚すくい**＝祭りの 屋台。8月10日の 夜だけ
+        // ★祭りは **9日(宵宮)と 10日(本祭り)の 2晩**。取り逃しが 減る
         var kg = Spot(host, PlayKind.Kingyo, 30.6f, -3.2f, 2.0f);
-        kg.onlyNight = true; kg.onlyDay = Nikki.MatsuriDay;
+        kg.onlyNight = true; kg.fromDay = Nikki.MatsuriDay - 1; kg.toDay = Nikki.MatsuriDay;
+        var st = Spot(host, PlayKind.Shateki, 17.8f, -4.0f, 2.2f);
+        st.onlyNight = true; st.fromDay = Nikki.MatsuriDay - 1; st.toDay = Nikki.MatsuriDay;
+        var kj = Spot(host, PlayKind.Kuji, 34.2f, -4.0f, 2.2f);
+        kj.onlyNight = true; kj.fromDay = Nikki.MatsuriDay - 1; kj.toDay = Nikki.MatsuriDay;
+        var bo = Spot(host, PlayKind.Bonodori, 26.0f, -1.6f, 3.0f);
+        bo.onlyNight = true; bo.fromDay = Nikki.MatsuriDay - 1; bo.toDay = Nikki.MatsuriDay;
 
         // ★**駄菓子屋。**（2026-08-17・遊ぶ 人の 指摘）
         //   「谷の おくの 町が 空き家の まま。5棟 建って いて 誰も いない。行く 理由が ゼロ」
@@ -1690,6 +1801,7 @@ public static class BuildZashiki {
         //   **かごが 5ひきで 詰まる 痛みが、ここまで 歩く 理由に なる**
         Dagashiya(host, 46f, 5.6f);
         var dg = Spot(host, PlayKind.Dagashi, 46f, 7.0f, 2.4f);
+        dg.akeru = 9f; dg.shimeru = 18f;    // おばちゃんが いない あいだは 買えない
 
         var him = Spot(host, PlayKind.Himitsu, 24f, 20f, 2.6f);
         Himitsu(him.transform);

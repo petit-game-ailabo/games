@@ -217,6 +217,9 @@ public class PlayHost : MonoBehaviour {
             case PlayKind.Kingyo:    yield return Kingyo(s); break;
             case PlayKind.Hanabi:    yield return Hanabi(s); break;
             case PlayKind.Dagashi:   yield return Dagashi(s); break;
+            case PlayKind.Shateki:   yield return Shateki(s); break;
+            case PlayKind.Kuji:      yield return Kuji(s); break;
+            case PlayKind.Bonodori:  yield return Bonodori(s); break;
             default:                 yield return Himitsu(s); break;
         }
         ShowGauge(false);
@@ -678,17 +681,20 @@ public class PlayHost : MonoBehaviour {
                         if (book != null) book.CageUp(2);
                         Line(string.Format("大きい むしかごを 買った！　これで {0}ひき 入る",
                                            book != null ? book.CageMax : 0));
-                        if (nikki != null) nikki.Note("dagashi",
+                        // ★**キーを 品ごとに 分ける。**（2026-08-17・遊ぶ 人の 指摘）
+                        //   Note() は 1日 1キー なので、アイス(55)の あとに 虫かご(85)を
+                        //   買うと **虫かごの 行が 捨てられる**＝買う 順で 結果が 変わって いた
+                        if (nikki != null) nikki.Note("dagashi_kago",
                             "町の 駄がし屋で 大きい むしかごを 買った。これで もっと 持って 帰れる", 85);
                         break;
                     case 1:
                         Line("ラムネを 飲んだ。……ビー玉が じゃまだぜ");
-                        if (nikki != null) nikki.Note("dagashi",
+                        if (nikki != null) nikki.Note("dagashi_ramune",
                             "駄がし屋で ラムネを 飲んだ。ビー玉が どうしても 出てこない", 55);
                         break;
                     default:
                         Line("アイスを 食べた。あたまが きーんと する");
-                        if (nikki != null) nikki.Note("dagashi",
+                        if (nikki != null) nikki.Note("dagashi_ice",
                             "駄がし屋で アイスを 食べた。帰り道で とけて 手が べたべたに なった", 55);
                         break;
                 }
@@ -700,6 +706,110 @@ public class PlayHost : MonoBehaviour {
         }
         Line("またね");
         yield return new WaitForSeconds(1.0f);
+    }
+
+    // ================= 祭りの 屋台 =================
+    // ★**もらった 小づかいが、その夜の うちに 消える。**これが 祭り。
+    //   おばあちゃんの 200円が 射的と くじで 溶けて いく のが 正しい 姿
+
+    IEnumerator Shateki(PlaySpot s) {
+        if (!Saifu.Tsukau(20)) {
+            Line("お金が 足りないぜ（20円）");
+            yield return new WaitForSeconds(1.4f); yield break;
+        }
+        Line("コルクを つめた。……ねらいを つけろ");
+        yield return new WaitForSeconds(1.2f);
+        int atari = 0;
+        for (int i = 0; i < 3; i++) {
+            // **的が 左右に 動く。**まん中で 押すと 当たる
+            float t = 0f; bool did = false;
+            while (t < 4.0f) {
+                t += Time.deltaTime;
+                float x = Mathf.Sin(t * 3.4f);
+                if (Mathf.FloorToInt(t * 8f) % 2 == 0)
+                    Line(string.Format("{0}発め　{1}", i + 1, Ya(x)));
+                if (Pressed()) {
+                    did = true;
+                    if (Mathf.Abs(x) < 0.28f) { atari++; Line("当たり！"); }
+                    else Line("……はずれ");
+                    break;
+                }
+                yield return null;
+            }
+            if (!did) Line("時間ぎれだ");
+            yield return new WaitForSeconds(1.0f);
+        }
+        if (atari >= 2) {
+            Saifu.Add(50);
+            Line(string.Format("{0}発 当たった！　景品の かわりに 50円 もらったぜ", atari));
+        } else {
+            Line(string.Format("{0}発 だけか。……むずかしいぜ", atari));
+        }
+        if (nikki != null)
+            nikki.Note("shateki", atari >= 2
+                ? "祭りの 射的で " + atari + "発 当てた。おじさんが くやしがって いたぜ"
+                : "祭りの 射的を やった。コルクは まっすぐ とばない、と 学んだ", 70);
+        yield return new WaitForSeconds(1.6f);
+    }
+
+    static string Ya(float x) {
+        // 的の 位置を 文字で 見せる（絵を 用意しなくても「動いて いる」は 出せる）
+        int n = Mathf.RoundToInt((x + 1f) * 5f);
+        var sb = new System.Text.StringBuilder("[");
+        for (int i = 0; i <= 10; i++) sb.Append(i == n ? "◎" : (i == 5 ? "|" : "・"));
+        sb.Append("]");
+        return sb.ToString();
+    }
+
+    const string KeyKuji = "natsuyasumi.play.kuji.v1";
+    IEnumerator Kuji(PlaySpot s) {
+        if (!Saifu.Tsukau(30)) {
+            Line("お金が 足りないぜ（30円）");
+            yield return new WaitForSeconds(1.4f); yield break;
+        }
+        Line("箱に 手を 入れて……");
+        yield return new WaitForSeconds(1.4f);
+        int r = Random.Range(0, 100);
+        string t;
+        if (r < 4)       { Saifu.Add(200); t = "**1等**！　200円 だ！　こんな こと ある んだな"; }
+        else if (r < 18) { Saifu.Add(60);  t = "2等。60円 ぶんの お菓子だ"; }
+        else if (r < 45) { Saifu.Add(20);  t = "3等。……まあ、もとは 取れて ないな"; }
+        else             { t = "はずれ。……そんな もんだよな"; }
+        Bump(KeyKuji, 1);
+        Line(t.Replace("**", ""));
+        if (nikki != null)
+            nikki.Note("kuji", r < 4 ? "祭りの くじで 1等を 引いた。200円だ。一生ぶんの 運を つかったぜ"
+                     : r < 45 ? "祭りの くじを 引いた。すこしだけ 当たった"
+                              : "祭りの くじを 引いた。はずれ。……くやしいぜ",
+                     r < 4 ? 95 : 60);
+        yield return new WaitForSeconds(1.8f);
+    }
+
+    IEnumerator Bonodori(PlaySpot s) {
+        Line("やぐらの まわりで みんなが 回って いる");
+        yield return new WaitForSeconds(1.4f);
+        Line("スペースで 手を たたく　（拍に あわせろ）");
+        int au = 0;
+        for (int i = 0; i < 8; i++) {
+            // 拍は 0.75びょう おき。その 前後 0.2びょうで 押せたら「あった」
+            float t = 0f; bool did = false;
+            while (t < 0.75f) {
+                t += Time.deltaTime;
+                if (Pressed()) { did = true; break; }
+                yield return null;
+            }
+            if (did && t > 0.55f) { au++; Line("ぽん！　" + au + "／" + (i + 1)); }
+            else if (did) Line("……はやい");
+            else Line("……おそい");
+            yield return null;
+        }
+        Line(au >= 5 ? string.Format("{0}回 あった。……なんだか たのしく なって きたぜ", au)
+                     : string.Format("{0}回 だけか。おどりは むずかしいな", au));
+        if (nikki != null)
+            nikki.Note("bonodori", au >= 5
+                ? "盆おどりの わに 入った。むりやり 手を 引かれた けど、まあ わるく なかった"
+                : "盆おどりの わに 入った。……足が ぜんぜん あわなかったぜ", 75);
+        yield return new WaitForSeconds(1.8f);
     }
 
     // ================= ひみつきち =================
