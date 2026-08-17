@@ -739,6 +739,7 @@ public static class BuildZashiki {
         // ふとん＝2階の まんなかの 部屋（じぶんの へや）
         dayHost.futon = new Vector3(-4.125f, BuildHouse.F2 + 0.3f, -3.3f);
         play.dayHost = dayHost;
+        play.bugAtlas = bugAtlas;     // 別れの 場面で 虫が 飛んで いく
         // 遊び場に 日づけを わたす（祭りの 屋台は 10日の 夜だけ 出る）
         foreach (var sp in root.GetComponentsInChildren<PlaySpot>(true)) sp.nikki = nikki;
         // ★魔理沙の 口。「〜だぜ」で しゃべる（喜怒哀楽の ポーズも 出す）

@@ -13,6 +13,8 @@ using UnityEngine.UI;
 // 遊びの 場所は PlaySpot が もつ。ここは その 中身だけ。
 public class PlayHost : MonoBehaviour {
     public Texture2D atlas;          // play.png（0=ささぶね 1=うき 2=石 3=はな 4=さかな 5=えだ）
+    // ★**別れの 場面で 虫が ほんとうに 飛んで いく**ために、虫の 絵も 持つ（2026-08-17）
+    public Texture2D bugAtlas;       // bugs.png
     public Font font;
     public Sprite panel;
 
@@ -988,21 +990,94 @@ public class PlayHost : MonoBehaviour {
             Line("……相棒は もう いない");
             yield return new WaitForSeconds(1.4f); yield break;
         }
+        // ★★**ここが この ゲームの 終わりです。**（2026-08-17・遊ぶ 人）
+        //   測ったら 8.7びょう しか なかった。31日 かけて 積んだ ものの 終着点が、
+        //   黒い わくの 中の 文字 4行で 終わって いた。
+        //   「**ここだけは 長くて いい**。50〜70びょう」
         string na = book.AiboNa;
         var kind = BugKind.Of(book.AiboId);
-        int wins = book.AiboWins;
-        Line("かごの ふたを あけた");
-        yield return new WaitForSeconds(2.0f);
+        int wins = book.AiboWins, mm = book.AiboMm;
+
+        // 夕方に 寄せる（時計を 止めて 光を 固定する）
+        var tod = FindFirstObjectByType<TimeOfDay>();
+        bool clockWas = false; float hourWas = 0f;
+        if (tod != null) {
+            clockWas = tod.runClock; hourWas = tod.hour;
+            tod.runClock = false;
+            if (tod.hour < 17f || tod.hour > 19f) { tod.hour = 17.8f; tod.Apply(); }
+        }
+        var cs = GetComponent<CharSprite>();
+
+        Line("川べりに しゃがんだ");
+        yield return new WaitForSeconds(3.2f);
+        Line(string.Format("{0}——{1}の {2}。{3}mm。", na, kind.name, wins > 0 ? wins + "しょう" : "むかん", mm));
+        yield return new WaitForSeconds(3.6f);
+        if (wins >= 3)      Line("大会で 3回 勝った。村じゅうが おまえの 名を おぼえた");
+        else if (wins > 0)  Line(string.Format("大会で {0}回 勝った。じゅうぶんだよ", wins));
+        else                Line("大会では 勝てなかった。……おれの せいだ");
+        yield return new WaitForSeconds(4.0f);
+
+        Line("かごの ふたに 手を かけた");
+        yield return new WaitForSeconds(3.4f);
+        Line("……スペースで あける");
+        {
+            float w = 0f;
+            while (w < 12f && !Pressed()) { w += Time.deltaTime; yield return null; }
+        }
+
+        // **虫が ほんとうに 出てくる。**（文字で「飛んで いった」と 書くのでは なく）
+        var te = transform.position + Vector3.up * 0.55f + Vector3.forward * 0.4f;
+        var bug = MakeBug(book.AiboId, 0.34f);
+        bug.transform.position = te;
+        Line("ふたを あけた");
+        yield return new WaitForSeconds(3.0f);
+
         Line(na + "は しばらく 動かなかった");
-        yield return new WaitForSeconds(2.2f);
+        // かごの ふちで じっと して いる（すこし ゆれる だけ）
+        {
+            float w = 0f;
+            while (w < 7f) {
+                w += Time.deltaTime;
+                bug.transform.position = te + new Vector3(Mathf.Sin(w * 2.1f) * 0.02f, Mathf.Sin(w * 3.3f) * 0.015f, 0f);
+                yield return null;
+            }
+        }
+        if (cs != null) cs.ShowMood(CharSprite.Pose.Kanashimi, 3f);
+        Line("……行けよ");
+        yield return new WaitForSeconds(3.0f);
+
+        // **飛び立つ。**ゆっくり 上がって、川の むこうへ 遠ざかる
+        {
+            var dir = (Vector3.forward * 0.7f + Vector3.right * 0.3f).normalized;
+            float w = 0f;
+            while (w < 9f) {
+                float dt = Time.deltaTime; w += dt;
+                float up = Mathf.Min(w * 0.22f, 1.7f);
+                bug.transform.position = te + dir * (w * 0.9f) + Vector3.up * up
+                                       + Vector3.right * Mathf.Sin(w * 2.6f) * 0.18f;
+                float sc = Mathf.Max(0.05f, 0.34f * (1f - w / 10f));
+                bug.transform.localScale = Vector3.one * sc;
+                if (Mathf.Abs(w - 3.0f) < dt) Line("ふわっと 浮いた");
+                if (Mathf.Abs(w - 6.0f) < dt) Line("川の むこうへ 行く");
+                yield return null;
+            }
+            Destroy(bug);
+        }
+        Line("……見えなく なった");
+        yield return new WaitForSeconds(4.5f);
+
         book.AiboWakare();
-        Line("……そのうち、木の ほうへ 飛んで いった");
-        yield return new WaitForSeconds(2.4f);
         if (nikki != null)
             nikki.Note("wakare", string.Format("{0}を にがして やった。{1}回 いっしょに 勝った {2}だ。……また 会えるかな",
                        na, wins, kind.name), 100);
         Line("また 来年、でかく なって 出てこいよ");
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(4.5f);
+        // ふりかえらずに 立ちあがる
+        if (cs != null) cs.ShowMood(CharSprite.Pose.Tanoshii, 2.4f);
+        Line("さて。……帰るか");
+        yield return new WaitForSeconds(3.2f);
+
+        if (tod != null) { tod.hour = hourWas; tod.runClock = clockWas; tod.Apply(); }
     }
 
     // ================= ひみつきち =================
@@ -1036,6 +1111,33 @@ public class PlayHost : MonoBehaviour {
         Line(BaseSteps[step] + "　（" + (step + 1) + "/" + BaseSteps.Length + "）");
         if (nikki != null) nikki.Note("himitsu", "やぶの 中の ひみつきちが すすんだ（" + (step + 1) + "/" + BaseSteps.Length + "）。だれにも 教えない", 80);
         yield return new WaitForSeconds(1.6f);
+    }
+
+    /// <summary>虫 1ぴきの 板を 作る（bugs.png の コマ）</summary>
+    GameObject MakeBug(BugId id, float size) {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = "SayonaraBug";
+        Destroy(go.GetComponent<Collider>());
+        go.transform.localScale = Vector3.one * size;
+        go.AddComponent<Billboard>();
+        var m = new Material(Shader.Find("Natsuyasumi/PixelSprite") ?? Shader.Find("Sprites/Default"));
+        if (bugAtlas != null) {
+            int i = (int)id, col = i % BugKind.Cols, row = i / BugKind.Cols;
+            var st = new Vector4(1f / BugKind.Cols, 1f / BugKind.Rows,
+                                 col / (float)BugKind.Cols,
+                                 (BugKind.Rows - 1 - row) / (float)BugKind.Rows);
+            m.SetTexture("_BaseMap", bugAtlas);
+            m.mainTexture = bugAtlas;
+            m.SetVector("_BaseMap_ST", st);
+            m.SetTextureScale("_BaseMap", new Vector2(st.x, st.y));
+            m.SetTextureOffset("_BaseMap", new Vector2(st.z, st.w));
+        }
+        if (m.HasProperty("_BreatheAmp")) m.SetFloat("_BreatheAmp", 0f);
+        if (m.HasProperty("_SwayAmp")) m.SetFloat("_SwayAmp", 0f);
+        var r = go.GetComponent<Renderer>();
+        r.sharedMaterial = m;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        return go;
     }
 
     // ---- 見た目の 部品
