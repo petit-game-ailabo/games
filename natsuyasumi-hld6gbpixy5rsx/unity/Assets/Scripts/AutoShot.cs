@@ -185,6 +185,40 @@ public class AutoShot : MonoBehaviour {
             }
         }
 
+        // ★-jikan：**遊び 1つに 何びょう かかるかを 実測する。**（2026-08-17）
+        //   遊ぶ 人：「1日 42分 × 31日 ＝ 約22時間。これは 長すぎませんか」
+        //   22時間 遊んで 確かめる ことは できない。かわりに
+        //   **1日ぶんの 中みが 何分 あるか**を 数える。
+        //   遊び 1つの 長さ × その日 できる 数 ＝ その日の 中みの 分量
+        if (Arg("-jikan", null) != null) {
+            var ph3 = FindFirstObjectByType<PlayHost>();
+            if (ph3 == null) Debug.LogError("[Jikan] PlayHost が ない");
+            else {
+                ph3.debugAuto = true;
+                float goukei = 0f;
+                foreach (PlayKind k in System.Enum.GetValues(typeof(PlayKind))) {
+                    // 駄菓子屋は 品えらびの 画面 なので「遊びの 長さ」に は 入れない
+                    if (k == PlayKind.Dagashi) continue;
+                    float t0 = Time.time;
+                    if (!ph3.DebugBegin(k)) { Debug.Log("[Jikan] " + k + " : 場所が ない"); continue; }
+                    // 押しまちで 止まる ものが ある ので、ときどき 押して やる
+                    // ★待ちを 3600コマ(=60びょう)に して いたら、駄菓子屋の 品えらびが
+                    //   ちょうど 60びょう かかって **そこで 打ちきられ、以後 ぜんぶ
+                    //   「場所が ない」に なって いた**。測る 側の 打ちきりを 疑う
+                    for (int w = 0; w < 20000 && ph3.Busy; w++) {
+                        if (w % 30 == 29) ph3.DebugPress();
+                        yield return null;
+                    }
+                    float sec = Time.time - t0;
+                    goukei += sec;
+                    Debug.Log(string.Format("[Jikan] {0,-12} {1,5:F1} びょう", k, sec));
+                }
+                Debug.Log(string.Format("[Jikan] ごうけい {0:F0} びょう ＝ {1:F1} 分（1日は 42分）",
+                          goukei, goukei / 60f));
+                ph3.debugAuto = false;
+            }
+        }
+
         // -aibo で かごの 1ぴきを 相棒に する（大会の たしかめに つかう）
         if (Arg("-aibo", null) != null) {
             PlayerPrefs.DeleteKey("natsuyasumi.play.taikai.v1");   // たしかめの ため 大会を やりなおせる ように

@@ -699,9 +699,11 @@ public class PlayHost : MonoBehaviour {
         yield return new WaitForSeconds(1.4f);
         Line("← → えらぶ　スペース：買う　X：やめる");
         yield return new WaitForSeconds(1.6f);
-        float nokori = 22f;                       // ながく のぞいて いると 帰る
-        while (nokori > 0f) {
-            nokori -= Time.deltaTime;
+        // ★**買う たびに WaitForSeconds で 止まる ので、のこり時間が 減らなかった。**
+        //   連続で 買うと 店から いつまでも 出られない（測ったら 333びょう かかった）。
+        //   時こくで しめきる
+        float shimekiri = Time.time + 40f;
+        while (Time.time < shimekiri) {
             string na  = sel == 2 ? DagashiNa[kyo] : ShinaNa[sel];
             int    ne   = sel == 2 ? DagashiNe[kyo] : ShinaNe[sel];
             string setsu= sel == 3 ? UruSetsu(book) : ShinaSetsu[sel];
