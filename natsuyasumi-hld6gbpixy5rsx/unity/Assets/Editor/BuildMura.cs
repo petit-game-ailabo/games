@@ -203,6 +203,7 @@ public static class BuildMura {
         look.GetComponent<Renderer>().sharedMaterial = mDark;
         Object.DestroyImmediate(look.GetComponent<Collider>());
         var mv = player.AddComponent<MuraMove>();
+        // カメラ基準の 移動に つかう（あとで camGO を 入れる）
 
         // ---- 見せ場の たちば（MURA.md の 10枚。-tour が 順に 撮る）
         var tourNames = new[] { "縁側", "あぜ道", "川べり", "橋の上", "石段した",
@@ -244,6 +245,10 @@ public static class BuildMura {
                 area = new Bounds(new Vector3(-48f, 5f, 32f), new Vector3(44f, 10f, 26f)),
                 yaw = 180f, pitch = 18f, distance = 8.5f, lookOffset = new Vector3(0f, 0.8f, 0f) },
         };
+
+        mv.cam = camGO.transform;
+        var nuki = camGO.AddComponent<MuraKabenuki>();
+        nuki.target = player.transform;
 
         // ---- ひかり
         var sun = new GameObject("Sun").AddComponent<Light>();
