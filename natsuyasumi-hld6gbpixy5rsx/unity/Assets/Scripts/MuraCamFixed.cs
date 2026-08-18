@@ -1,31 +1,34 @@
 using UnityEngine;
 
-// ぼくなつ式の 固定カメラ（S0-2・本人 2026-08-17「一旦カメラ固定を試せないか」）。
-// 手で 置いた カメラ位置の どれかに 立ち、主人公が 領域を 出たら **カットで** 切り替わる。
-// 位置は 固定・向きだけ 主人公を ゆるやかに 追う（見失い＝破綻を 防ぐ。完全固定に したい
-// 見せ場は track=false）。追従や 自動よけは しない＝パッと 動く 気持ちわるさを 消す。
+// ぼくなつ式の 固定カメラ（S0-2 v1.4）。
+// ★**完全固定**：位置も 向きも 動かない（v1.3の「向きだけ 追う」は 気持ちわるい と
+//   本人評価 → 廃止）。構図は「領域の 見どころを 向けて 置く」で 作る。
+// ★**保持**：主人公が どの 領域にも いない あいだは **今の カメラを 保ちつづける**。
+//   v1.3は 領域の すきまで 即「引きの 俯瞰」に 落ちて、走ると カメラが コロコロ
+//   切り替わって いた。超俯瞰は 山頂など 意図した 場面だけに する。
+// 切替の 位置・タイミングの 細かい 調整は 絵と 配置が 決まる フェーズの 課題（台帳に 記録）。
 public class MuraCamFixed : MonoBehaviour {
     [System.Serializable]
     public class Spot {
         public string name;
-        public Bounds area;          // 主人公が ここに いる あいだ この カメラ
+        public Bounds area;          // 主人公が ここに 入ったら この カメラ
         public Vector3 pos;          // カメラの 置き場所（固定）
-        public bool track = true;    // 主人公を 向きで 追うか
-        public Vector3 lookOffset;   // 見る 中心の ずらし（構図の 調整しろ）
+        public Vector3 lookAt;       // 見る さき（固定。構図は これで 決める）
         public float fov = 46f;
         [HideInInspector] public bool wasIn;
     }
     public Spot[] spots;
     public Transform target;
-    public Spot fallback;            // どの 領域にも いない ときの 引きの 絵
+    public Spot fallback;            // まだ どの 領域にも 入って いない 起動直後だけ
 
-    Camera cam; Spot cur; Quaternion wantRot;
+    Camera cam; Spot cur;
 
     void Start() { cam = GetComponent<Camera>(); }
 
-    Spot Pick() {
+    void LateUpdate() {
+        if (target == null) return;
         Spot best = null; float bestV = float.MaxValue;
-        if (spots != null && target != null)
+        if (spots != null)
             foreach (var s in spots) {
                 if (s == null) continue;
                 var a = s.area;
@@ -36,23 +39,12 @@ public class MuraCamFixed : MonoBehaviour {
                 float v = s.area.size.x * s.area.size.z;              // せまい ほうが 勝つ
                 if (v < bestV) { bestV = v; best = s; }
             }
-        return best ?? fallback;
-    }
-
-    void LateUpdate() {
-        if (target == null) return;
-        var s = Pick();
-        if (s == null) return;
-        bool cut = s != cur;
-        cur = s;
-        transform.position = s.pos;                                    // 位置は いつも 固定
-        if (cam != null) cam.fieldOfView = s.fov;
-        var look = target.position + Vector3.up * 0.7f + s.lookOffset - s.pos;
-        if (look.sqrMagnitude < 0.01f) return;
-        var rot = Quaternion.LookRotation(look);
-        if (cut || !s.track) transform.rotation = rot;                 // カットの 瞬間は 一発で
-        else transform.rotation = Quaternion.Slerp(transform.rotation, rot,
-                                        1f - Mathf.Exp(-3.5f * Time.deltaTime));
-        wantRot = rot;
+        // 領域の そとでは 切り替えない（今のを 保つ）
+        if (best == null) { if (cur == null) best = fallback; else return; }
+        if (best == cur || best == null) return;
+        cur = best;
+        transform.position = cur.pos;
+        transform.rotation = Quaternion.LookRotation(cur.lookAt - cur.pos);
+        if (cam != null) cam.fieldOfView = cur.fov;
     }
 }

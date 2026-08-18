@@ -239,12 +239,14 @@ public static class BuildMura {
         //   - 領域は 道なりに 並べ、さかい目は 曲がり角に 置く（動線と カットを そろえる）
         var fix = camGO.AddComponent<MuraCamFixed>();
         fix.target = player.transform;
+        // lookAt は 領域の まん中（高さ ly）。構図の 調整は ここの 数字を 1つ 直すだけ
         MuraCamFixed.Spot S(string name, float ax, float az, float sx, float sz,
-                            float px, float py, float pz, float fov = 46f) {
+                            float px, float py, float pz, float fov = 46f, float ly = 1.0f) {
             return new MuraCamFixed.Spot {
                 name = name,
                 area = new Bounds(new Vector3(ax, 5f, az), new Vector3(sx, 24f, sz)),
-                pos = new Vector3(px, py, pz), fov = fov,
+                pos = new Vector3(px, py, pz),
+                lookAt = new Vector3(ax, ly, az), fov = fov,
             };
         }
         fix.spots = new[] {
@@ -260,12 +262,12 @@ public static class BuildMura {
             S("はし",      -30f, 8f, 16f, 16f,    -16f, 3.5f, 8f),
             // 川べり 北がわ：北から 南の 村を 見おろす（かえりの 絵）
             S("かわ きた",   10f, 14f, 60f, 12f,    10f, 6.0f, 26f),
-            // 石段の した：南の ひくい 位置 から 見上げ（鳥居の ハレの 絵）
-            S("いしだん",  -45f, 16f, 18f, 12f,   -45f, 2.2f, 8f, 40f),
-            // 祠の だいら：南東の 高み から 祠と 杉
-            S("ほこら",    -48f, 38f, 44f, 34f,   -30f, 9.5f, 24f),
+            // 石段の した：南の ひくい 位置 から 見上げ（鳥居の ハレの 絵。lookAtは 鳥居の 高さ）
+            S("いしだん",  -45f, 16f, 18f, 12f,   -45f, 2.2f, 8f, 40f, 4.5f),
+            // 祠の だいら：南東の 高み から 祠と 杉（lookAtは 丘の 上の 高さ）
+            S("ほこら",    -48f, 38f, 44f, 34f,   -30f, 9.5f, 24f, 46f, 5.5f),
             // 高台：西の そと から 谷を 背に（ご褒美の 絵は 谷がわを 見る）
-            S("たかだい",  -62f, -32f, 34f, 30f,  -76f, 11f, -32f, 52f),
+            S("たかだい",  -62f, -32f, 34f, 30f,  -76f, 11f, -32f, 52f, 7f),
             // 高台への 坂
             S("さか",      -41f, -21f, 12f, 26f,  -34f, 4.5f, -8f),
             // 池：西から 池ごしに
@@ -273,11 +275,13 @@ public static class BuildMura {
             // 竹やぶ（余白）：北から しずかに
             S("たけやぶ",   62f, -26f, 20f, 18f,   62f, 3.5f, -14f),
             // 山の 棚（ひみつきち・沢）：南から
-            S("やまのたな",  10f, 52f, 120f, 14f,   0f, 10f, 40f),
+            S("やまのたな",  10f, 52f, 120f, 14f,   0f, 10f, 40f, 46f, 6.5f),
         };
-        // どこにも 入って いない ときの 引きの 絵（南の 空から 村ぜんたい）
+        // 起動直後に どこにも 入って いない ときだけ（南の 空から 村ぜんたい＝山頂級の 俯瞰は
+        // こういう 意図した 場面に だけ 使う）
         fix.fallback = new MuraCamFixed.Spot {
-            name = "ひき", pos = new Vector3(0f, 26f, -78f), fov = 40f,
+            name = "ひき", pos = new Vector3(0f, 26f, -78f),
+            lookAt = new Vector3(0f, 0f, -20f), fov = 40f,
         };
 
         mv.cam = camGO.transform;
