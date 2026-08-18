@@ -11,6 +11,7 @@ public class MuraMove : MonoBehaviour {
     public float walk = 2.6f, run = 4.4f;
     public Transform cam;
     public Transform[] tour;
+    public CharSprite sprite;            // 8方向スプライト（S0-3。空なら 何も しない）
     CharacterController cc; float vy;
     float baseYaw; float prevH, prevV;
 
@@ -31,6 +32,7 @@ public class MuraMove : MonoBehaviour {
         float spd = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ? walk : run;
         vy = cc.isGrounded ? -0.5f : vy - 9.8f * Time.deltaTime;
         cc.Move((dir * spd + Vector3.up * vy) * Time.deltaTime);
+        if (sprite != null) sprite.Drive(dir, dir.magnitude * spd, false);
     }
 
     System.Collections.IEnumerator Tour() {

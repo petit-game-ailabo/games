@@ -190,19 +190,30 @@ public static class BuildMura {
         Box(root, "BLK_W", new Vector3(-91f, 2f, 0f), new Vector3(0.5f, 4f, 124f), null).GetComponent<Renderer>().enabled = false;
         Box(root, "BLK_E", new Vector3(91f, 2f, 0f), new Vector3(0.5f, 4f, 124f), null).GetComponent<Renderer>().enabled = false;
 
-        // ---- 主人公（実物と 同じ 寸法の カプセル）
+        // ---- 主人公（実物と 同じ 寸法。見た目は マリサ 8方向スプライト＝S0-3）
         var player = new GameObject("Player");
         player.transform.position = new Vector3(38f, 0.2f, -34f);   // 母屋の 庭から はじまる
         var cc = player.AddComponent<CharacterController>();
         cc.height = 1.0f; cc.radius = 0.26f; cc.center = new Vector3(0f, 0.52f, 0f);
         cc.slopeLimit = 50f; cc.stepOffset = 0.35f;
-        var look = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-        look.name = "Mi"; look.transform.SetParent(player.transform, false);
-        look.transform.localPosition = new Vector3(0f, 0.52f, 0f);
-        look.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
-        look.GetComponent<Renderer>().sharedMaterial = mDark;
-        Object.DestroyImmediate(look.GetComponent<Collider>());
+        var marisa = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_8x8.png");
+        var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        quad.name = "Mi"; quad.transform.SetParent(player.transform, false);
+        // 1コマ 115x167px。背たけ 1.30m に あわせて 横は 比で
+        quad.transform.localPosition = new Vector3(0f, 0.66f, 0f);
+        quad.transform.localScale = new Vector3(1.30f * 115f / 167f, 1.30f, 1f);
+        Object.DestroyImmediate(quad.GetComponent<Collider>());
+        var sm = Mat("MuraMarisa", Color.white);
+        sm.SetFloat("_AlphaClip", 1f); sm.SetFloat("_Cutoff", 0.5f);
+        sm.EnableKeyword("_ALPHATEST_ON");
+        sm.mainTexture = marisa;
+        quad.GetComponent<Renderer>().sharedMaterial = sm;
+        quad.AddComponent<MuraBillboard>();
+        var cs = player.AddComponent<CharSprite>();
+        cs.target = quad.GetComponent<Renderer>();
+        cs.runSpeed = 3.4f;
         var mv = player.AddComponent<MuraMove>();
+        mv.sprite = cs;
         // カメラ基準の 移動に つかう（あとで camGO を 入れる）
 
         // ---- 見せ場の たちば（MURA.md の 10枚。-tour が 順に 撮る）
@@ -229,7 +240,9 @@ public static class BuildMura {
         cam.fieldOfView = 46f; cam.nearClipPlane = 0.1f; cam.farClipPlane = 400f;
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.70f, 0.80f, 0.88f);
-        camGO.AddComponent<UniversalAdditionalCameraData>();
+        var camData = camGO.AddComponent<UniversalAdditionalCameraData>();
+        camData.renderPostProcessing = true;                 // DoF/Bloom を 効かせる
+        camData.antialiasing = AntialiasingMode.None;        // ドット絵を にじませない
         // ★ぼくなつ式の 固定カメラ（S0-2 v1.3・本人「一旦カメラ固定を試せないか」）。
         //   追従（CamOrbit）は やめた。手で 置いた カメラの あいだを **カットで** 切り替える。
         //   置き場所の 決めごと：
@@ -250,8 +263,9 @@ public static class BuildMura {
             };
         }
         fix.spots = new[] {
-            // 母屋の 庭：家の 北東・高め から 家ごしに（家が 必ず 画面に 入る）
-            S("にわ",       42f, -40f, 40f, 26f,   30f, 6.5f, -20f),
+            // 母屋の 庭：家の 北東・高め から 家ごしに（家が 必ず 画面に 入る）。
+            // 領域は 出発点(38,-34)と 庭の 北がわまで 含める
+            S("にわ",       42f, -38f, 40f, 30f,   30f, 6.5f, -18f),
             // バス停・村の 入り口：北から 南を 見る（バス停と 主人公）
             S("いりぐち",   14f, -54f, 34f, 14f,   12f, 4.0f, -42f),
             // あぜ道・田んぼ：東の 高み から 田んぼ ごしに 西へ
@@ -288,13 +302,57 @@ public static class BuildMura {
         var nuki = camGO.AddComponent<MuraKabenuki>();
         nuki.target = player.transform;
 
-        // ---- ひかり
+        // ---- ひかり（S0-3：舞台照明の 入口。夏の 昼の 基本＋祠の アクセント）
         var sun = new GameObject("Sun").AddComponent<Light>();
-        sun.type = LightType.Directional; sun.intensity = 1.15f;
-        sun.color = new Color(1f, 0.96f, 0.88f);
+        sun.type = LightType.Directional; sun.intensity = 1.25f;
+        sun.color = new Color(1f, 0.95f, 0.84f);
         sun.transform.rotation = Quaternion.Euler(52f, -35f, 0f);
         sun.shadows = LightShadows.Soft;
-        RenderSettings.ambientLight = new Color(0.55f, 0.58f, 0.60f);
+        RenderSettings.ambientLight = new Color(0.52f, 0.56f, 0.60f);
+        // 空気感（奥ほど かすむ）。遠くの 山が 溶けて 遠近が 出る
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.ExponentialSquared;
+        RenderSettings.fogColor = new Color(0.74f, 0.78f, 0.74f);
+        RenderSettings.fogDensity = 0.006f;
+        // 祠の アクセント（舞台照明：見どころに 1灯）
+        var spot = new GameObject("Spot_Hokora").AddComponent<Light>();
+        spot.type = LightType.Spot; spot.intensity = 60f; spot.range = 22f;
+        spot.spotAngle = 55f; spot.color = new Color(1f, 0.88f, 0.65f);
+        spot.transform.position = new Vector3(-40f, 12f, 28f);
+        spot.transform.rotation = Quaternion.LookRotation(
+            new Vector3(-48f, 5f, 36f) - spot.transform.position);
+
+        // ---- ポストFX（S0-3：HD-2Dの 型＝DoF・Bloom・ビネット・粒子・トーン）
+        var volGO = new GameObject("PostFX");
+        var vol = volGO.AddComponent<UnityEngine.Rendering.Volume>();
+        vol.isGlobal = true;
+        var prof = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
+        AssetDatabase.CreateAsset(prof, "Assets/Art/Materials/Mura/MuraPostFX.asset");
+        T AddFX<T>() where T : UnityEngine.Rendering.VolumeComponent {
+            var c = prof.Add<T>(); return c;
+        }
+        var dof = AddFX<DepthOfField>();
+        dof.mode.overrideState = true; dof.mode.value = DepthOfFieldMode.Bokeh;
+        dof.focusDistance.overrideState = true; dof.focusDistance.value = 10f;
+        dof.aperture.overrideState = true; dof.aperture.value = 4.2f;
+        dof.focalLength.overrideState = true; dof.focalLength.value = 50f;
+        var bloom = AddFX<Bloom>();
+        bloom.threshold.overrideState = true; bloom.threshold.value = 1.0f;
+        bloom.intensity.overrideState = true; bloom.intensity.value = 0.9f;
+        bloom.tint.overrideState = true; bloom.tint.value = new Color(1f, 0.96f, 0.86f);
+        var grade = AddFX<ColorAdjustments>();
+        grade.postExposure.overrideState = true; grade.postExposure.value = 0.1f;
+        grade.contrast.overrideState = true; grade.contrast.value = 10f;
+        grade.saturation.overrideState = true; grade.saturation.value = 6f;
+        var vig = AddFX<Vignette>();
+        vig.intensity.overrideState = true; vig.intensity.value = 0.34f;
+        vig.smoothness.overrideState = true; vig.smoothness.value = 0.46f;
+        var tone = AddFX<Tonemapping>();
+        tone.mode.overrideState = true; tone.mode.value = TonemappingMode.Neutral;
+        vol.sharedProfile = prof;
+        // ピントは 主人公に（FocusOnPlayer は 本編の 流用）
+        var focus = volGO.AddComponent<FocusOnPlayer>();
+        focus.volume = vol; focus.target = player.transform;
 
         System.IO.Directory.CreateDirectory("Assets/Scenes");
         UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene, "Assets/Scenes/Mura.unity");
