@@ -14,10 +14,14 @@ public class MuraKabenuki : MonoBehaviour {
         hidden.Clear();
         if (target == null) return;
         var to = target.position + Vector3.up * 0.6f - transform.position;
-        var hits = Physics.RaycastAll(transform.position, to.normalized,
-                                      Mathf.Max(0f, to.magnitude - 0.6f),
-                                      ~0, QueryTriggerInteraction.Ignore);
+        // ★細い レイだと 鳥居の 柱の ように「画面は ふさぐが 線上に ない」物を 取り逃す。
+        //   人の 幅ぶんの 太い たまで 見る
+        var hits = Physics.SphereCastAll(transform.position, 0.6f, to.normalized,
+                                         Mathf.Max(0f, to.magnitude - 0.6f),
+                                         ~0, QueryTriggerInteraction.Ignore);
         foreach (var hit in hits) {
+            // ★主人公じしんは 消さない（太い たまは 主人公にも 当たる。実際 消えて いた）
+            if (hit.collider.transform == target || hit.collider.transform.IsChildOf(target)) continue;
             var n = hit.collider.name;
             if (n.StartsWith("G_") || n.StartsWith("Oka_") || n.StartsWith("BLK_")) continue;
             var r = hit.collider.GetComponent<Renderer>();

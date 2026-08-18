@@ -14,6 +14,10 @@ public class MuraMove : MonoBehaviour {
     public Transform[] tour;
     CharacterController cc; float vy;
     float baseYaw; bool held;
+    // ★移動の 基準を T で 切りかえて くらべられる（システム確認の 箱庭なので）
+    //   true＝毎フレーム カメラ基準（カメラが なめらかに 回れば 入力も ついて いく）
+    //   false＝押しはじめラッチ（押した 瞬間の カメラで 決め、離すまで 維持）
+    public bool everyFrame = true;
 
     void Start() {
         cc = GetComponent<CharacterController>();
@@ -22,15 +26,22 @@ public class MuraMove : MonoBehaviour {
     }
 
     void Update() {
+        if (Input.GetKeyDown(KeyCode.T)) everyFrame = !everyFrame;
         float h = Input.GetAxisRaw("Horizontal"), v = Input.GetAxisRaw("Vertical");
         bool any = Mathf.Abs(h) > 0.01f || Mathf.Abs(v) > 0.01f;
-        if (any && !held && cam != null) baseYaw = cam.eulerAngles.y;   // 押しはじめに 決める
+        if (cam != null && (everyFrame || (any && !held))) baseYaw = cam.eulerAngles.y;
         held = any;
         var dir = Quaternion.Euler(0f, baseYaw, 0f) * new Vector3(h, 0f, v);
         if (dir.sqrMagnitude > 1f) dir.Normalize();
         float spd = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ? walk : run;
         vy = cc.isGrounded ? -0.5f : vy - 9.8f * Time.deltaTime;
         cc.Move((dir * spd + Vector3.up * vy) * Time.deltaTime);
+    }
+
+    void OnGUI() {
+        GUI.Label(new Rect(10, 10, 900, 24),
+            "移動:WASD/矢印  Shift=歩き  T=移動基準の切替 → いま【" +
+            (everyFrame ? "毎フレームカメラ基準" : "押しはじめラッチ") + "】");
     }
 
     System.Collections.IEnumerator Tour() {

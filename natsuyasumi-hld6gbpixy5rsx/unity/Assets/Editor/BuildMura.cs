@@ -231,7 +231,11 @@ public static class BuildMura {
         cam.backgroundColor = new Color(0.70f, 0.80f, 0.88f);
         camGO.AddComponent<UniversalAdditionalCameraData>();
         var orbit = camGO.AddComponent<CamOrbit>();
-        orbit.pitch = 26f; orbit.yaw = 180f; orbit.distance = 9.0f;
+        // ★基本カメラは **南から 北（山・祠の ほう）を 見る**（yaw=0）。
+        //   yaw180 に して いたら、カメラが 祠がわ（北）に 立って 主人公と 鳥居の
+        //   あいだに はさまり、段の 下で 主人公が 見えなく なって いた（本人の 報告）。
+        //   村は 北に 山＝「奥」なので、奥へ 歩く ときに 奥が 見えるのが 正しい
+        orbit.pitch = 26f; orbit.yaw = 0f; orbit.distance = 9.0f;
         orbit.follow = player.transform;
         orbit.followOffset = new Vector3(0f, 0.70f, 0f);
         orbit.zones = new[] {
@@ -240,10 +244,11 @@ public static class BuildMura {
                 yaw = 90f, pitch = 28f, distance = 11f, lookOffset = new Vector3(0f, 0.4f, 2f) },
             new CamOrbit.Zone { name = "たかだい",
                 area = new Bounds(new Vector3(-62f, 7f, -32f), new Vector3(34f, 8f, 30f)),
-                yaw = 0f, pitch = 24f, distance = 12f, lookOffset = new Vector3(0f, 0.5f, 2f), fogScale = 0.4f },
-            new CamOrbit.Zone { name = "いしだんとほこら",
-                area = new Bounds(new Vector3(-48f, 5f, 32f), new Vector3(44f, 10f, 26f)),
-                yaw = 180f, pitch = 18f, distance = 8.5f, lookOffset = new Vector3(0f, 0.8f, 0f) },
+                yaw = 90f, pitch = 24f, distance = 12f, lookOffset = new Vector3(3f, 0.5f, 0f), fogScale = 0.4f },
+            // 祠ゾーンは **丘の 上だけ**（y 4〜9）。段の 下まで 含めると 切りかわりが 早すぎる
+            new CamOrbit.Zone { name = "ほこらの だいら",
+                area = new Bounds(new Vector3(-48f, 6.5f, 36f), new Vector3(44f, 5f, 22f)),
+                yaw = 0f, pitch = 20f, distance = 9f, lookOffset = new Vector3(0f, 0.6f, 0f) },
         };
 
         mv.cam = camGO.transform;
