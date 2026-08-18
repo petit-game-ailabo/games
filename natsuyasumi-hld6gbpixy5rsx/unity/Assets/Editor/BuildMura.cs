@@ -230,25 +230,54 @@ public static class BuildMura {
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.70f, 0.80f, 0.88f);
         camGO.AddComponent<UniversalAdditionalCameraData>();
-        var orbit = camGO.AddComponent<CamOrbit>();
-        // ★基本カメラは **南から 北（山・祠の ほう）を 見る**（yaw=0）。
-        //   yaw180 に して いたら、カメラが 祠がわ（北）に 立って 主人公と 鳥居の
-        //   あいだに はさまり、段の 下で 主人公が 見えなく なって いた（本人の 報告）。
-        //   村は 北に 山＝「奥」なので、奥へ 歩く ときに 奥が 見えるのが 正しい
-        orbit.pitch = 26f; orbit.yaw = 0f; orbit.distance = 9.0f;
-        orbit.follow = player.transform;
-        orbit.followOffset = new Vector3(0f, 0.70f, 0f);
-        orbit.zones = new[] {
-            new CamOrbit.Zone { name = "かわべり",
-                area = new Bounds(new Vector3(20f, 1f, 8f), new Vector3(60f, 8f, 14f)),
-                yaw = 90f, pitch = 28f, distance = 11f, lookOffset = new Vector3(0f, 0.4f, 2f) },
-            new CamOrbit.Zone { name = "たかだい",
-                area = new Bounds(new Vector3(-62f, 7f, -32f), new Vector3(34f, 8f, 30f)),
-                yaw = 90f, pitch = 24f, distance = 12f, lookOffset = new Vector3(3f, 0.5f, 0f), fogScale = 0.4f },
-            // 祠ゾーンは **丘の 上だけ**（y 4〜9）。段の 下まで 含めると 切りかわりが 早すぎる
-            new CamOrbit.Zone { name = "ほこらの だいら",
-                area = new Bounds(new Vector3(-48f, 6.5f, 36f), new Vector3(44f, 5f, 22f)),
-                yaw = 0f, pitch = 20f, distance = 9f, lookOffset = new Vector3(0f, 0.6f, 0f) },
+        // ★ぼくなつ式の 固定カメラ（S0-2 v1.3・本人「一旦カメラ固定を試せないか」）。
+        //   追従（CamOrbit）は やめた。手で 置いた カメラの あいだを **カットで** 切り替える。
+        //   置き場所の 決めごと：
+        //   - 家の まえは「家が 画面に 入る」がわに 置く（家に 向かって いるのに
+        //     家が 見えない・消される、を なくす）
+        //   - 地形に 埋まらない 高さに 手で 置く（自動よけを しない＝パッと 動かない）
+        //   - 領域は 道なりに 並べ、さかい目は 曲がり角に 置く（動線と カットを そろえる）
+        var fix = camGO.AddComponent<MuraCamFixed>();
+        fix.target = player.transform;
+        MuraCamFixed.Spot S(string name, float ax, float az, float sx, float sz,
+                            float px, float py, float pz, float fov = 46f) {
+            return new MuraCamFixed.Spot {
+                name = name,
+                area = new Bounds(new Vector3(ax, 5f, az), new Vector3(sx, 24f, sz)),
+                pos = new Vector3(px, py, pz), fov = fov,
+            };
+        }
+        fix.spots = new[] {
+            // 母屋の 庭：家の 北東・高め から 家ごしに（家が 必ず 画面に 入る）
+            S("にわ",       42f, -40f, 40f, 26f,   30f, 6.5f, -20f),
+            // バス停・村の 入り口：北から 南を 見る（バス停と 主人公）
+            S("いりぐち",   14f, -54f, 34f, 14f,   12f, 4.0f, -42f),
+            // あぜ道・田んぼ：東の 高み から 田んぼ ごしに 西へ
+            S("あぜみち",   10f, -18f, 44f, 22f,   34f, 8.0f, -12f),
+            // 川べり 南がわ：南の 高み から 川面を 広く
+            S("かわ みなみ", 12f, 0f, 60f, 10f,    12f, 5.0f, -12f),
+            // 橋：東の 川すじ から 橋を 横に
+            S("はし",      -30f, 8f, 16f, 16f,    -16f, 3.5f, 8f),
+            // 川べり 北がわ：北から 南の 村を 見おろす（かえりの 絵）
+            S("かわ きた",   10f, 14f, 60f, 12f,    10f, 6.0f, 26f),
+            // 石段の した：南の ひくい 位置 から 見上げ（鳥居の ハレの 絵）
+            S("いしだん",  -45f, 16f, 18f, 12f,   -45f, 2.2f, 8f, 40f),
+            // 祠の だいら：南東の 高み から 祠と 杉
+            S("ほこら",    -48f, 38f, 44f, 34f,   -30f, 9.5f, 24f),
+            // 高台：西の そと から 谷を 背に（ご褒美の 絵は 谷がわを 見る）
+            S("たかだい",  -62f, -32f, 34f, 30f,  -76f, 11f, -32f, 52f),
+            // 高台への 坂
+            S("さか",      -41f, -21f, 12f, 26f,  -34f, 4.5f, -8f),
+            // 池：西から 池ごしに
+            S("いけ",       55f, 26f, 24f, 18f,    40f, 4.5f, 22f),
+            // 竹やぶ（余白）：北から しずかに
+            S("たけやぶ",   62f, -26f, 20f, 18f,   62f, 3.5f, -14f),
+            // 山の 棚（ひみつきち・沢）：南から
+            S("やまのたな",  10f, 52f, 120f, 14f,   0f, 10f, 40f),
+        };
+        // どこにも 入って いない ときの 引きの 絵（南の 空から 村ぜんたい）
+        fix.fallback = new MuraCamFixed.Spot {
+            name = "ひき", pos = new Vector3(0f, 26f, -78f), fov = 40f,
         };
 
         mv.cam = camGO.transform;
