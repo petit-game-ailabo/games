@@ -93,6 +93,38 @@ public static class BuildDojo {
                                   goal = new Vector3(x, 2f, zTop + 1f), minY = 1.8f });
         }
 
+        // --- 階段＋ランププロキシ（**見た目＝段(あたり無し)・あたり＝坂**）。R2の 作りかたの 試験
+        {
+            float x = 26f, rise = 0.25f, tread = 0.28f;
+            int n = Mathf.CeilToInt(2.5f / rise);
+            for (int j = 0; j < n; j++) {
+                var g = Box(root, "PKai" + j,
+                    new Vector3(x, (j + 1) * rise * 0.5f, 17f + j * tread + tread * 0.5f),
+                    new Vector3(1.2f, (j + 1) * rise, tread));
+                Object.DestroyImmediate(g.GetComponent<Collider>());
+            }
+            float ang = Mathf.Atan2(rise, tread) * Mathf.Rad2Deg;
+            float hgt = n * rise;
+            float len = Mathf.Sqrt(hgt * hgt + n * tread * n * tread);
+            var ramp = Box(root, "PKaiRamp", Vector3.zero, new Vector3(1.2f, 0.1f, len));
+            ramp.transform.rotation = Quaternion.Euler(-ang, 0f, 0f);
+            ramp.transform.position = new Vector3(x, hgt * 0.5f, 17f + n * tread * 0.5f);
+            Object.DestroyImmediate(ramp.GetComponent<MeshRenderer>());
+            Box(root, "PKaiTop", new Vector3(x, hgt * 0.5f, 17f + n * tread + 1f), new Vector3(1.2f, hgt, 2f));
+            fixtures.Add(new Fx { name = "階段+ランプ 0.25/0.28", start = new Vector3(x, 0.1f, 15.5f),
+                                  goal = new Vector3(x, hgt, 17f + n * tread + 1f), minY = hgt - 0.2f });
+        }
+
+        // --- レール。歩かせ役が 衝突で 横に 逃げ、坂を 迂回して「だめ」に 見えて いた
+        //（初回の 実測の 教訓：**たしかめが 嘘を つくと その先が 全部 あてに ならない**）
+        for (int i = 0; i < 5; i++) {
+            float x = 2f + i * 6f;
+            Box(root, "RailK_L" + i, new Vector3(x - 0.9f, 1.5f, 19.5f), new Vector3(0.15f, 3f, 9f));
+            Box(root, "RailK_R" + i, new Vector3(x + 0.9f, 1.5f, 19.5f), new Vector3(0.15f, 3f, 9f));
+            Box(root, "RailS_L" + i, new Vector3(x - 0.9f, 1.5f, 28.5f), new Vector3(0.15f, 3f, 11f));
+            Box(root, "RailS_R" + i, new Vector3(x + 0.9f, 1.5f, 28.5f), new Vector3(0.15f, 3f, 11f));
+        }
+
         // Kensa の 塗りつぶしの 種に なる 目じるし
         var player = new GameObject("Player");
         player.transform.position = new Vector3(0f, 0.1f, 0f);
@@ -137,7 +169,13 @@ public static class BuildDojo {
             var p = line.Split('|');
             Vector3 start = PV(p[1]), goal = PV(p[2]);
             float minY = float.Parse(p[3]);
+            // ★CharacterController は transform.position を 書いても テレポートできない。
+            //   内部の 位置が のこり、**前の 試験の 場所から 歩き つづける**（実測で 発覚）。
+            //   いったん 切ってから 動かし、Physics.SyncTransforms で 反映する
+            cc.enabled = false;
             go.transform.position = start + Vector3.up * 0.05f;
+            Physics.SyncTransforms();
+            cc.enabled = true;
             float vy = 0f; const float dt = 0.02f;
             for (int s = 0; s < 700; s++) {
                 var flat = goal - go.transform.position; flat.y = 0f;
