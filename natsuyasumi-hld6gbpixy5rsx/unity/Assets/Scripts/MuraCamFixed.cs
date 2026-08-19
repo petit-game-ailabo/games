@@ -26,9 +26,24 @@ public class MuraCamFixed : MonoBehaviour {
     public bool hd2d;
     public float hdPitch = 26f, hdDist = 8.5f;
 
-    Camera cam; Spot cur;
+    Camera cam; Spot cur; float lastCut = -9f;
+    // いま どの 台か（再現ログ用）
+    public static string CurName = "-";
 
     void Start() { cam = GetComponent<Camera>(); }
+
+    /// <summary>原因さがし用：おもな 台の 判定値（in/out＝領域、数字＝Edge）</summary>
+    public string DebugEdges() {
+        if (spots == null || target == null) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var s in spots) {
+            if (s.name != "いえ" && s.name != "みちみなみ" && s.name != "たんぼ" &&
+                s.name != "かわ きた" && s.name != "たかだい") continue;
+            sb.Append(s.name + (s.area.Contains(target.position) ? "[in]" : "[out]")
+                      + Edge(s).ToString("F2") + "  ");
+        }
+        return sb.ToString();
+    }
 
     void Update() {
         if (Input.GetKeyDown(KeyCode.T)) { hd2d = !hd2d; cur = null; }
@@ -66,6 +81,7 @@ public class MuraCamFixed : MonoBehaviour {
                                               1f - Mathf.Exp(-6f * Time.deltaTime));
             transform.rotation = rot;
             if (cam != null) cam.fieldOfView = 46f;
+            CurName = "HD-2D";
             return;
         }
         // ★「舞台（領域）の 中に いて、画面にも 見えて いる」あいだだけ 保つ。
@@ -80,36 +96,49 @@ public class MuraCamFixed : MonoBehaviour {
             if (Edge(cur) < 0.55f) return;
         }
 
+        // ★候補から「今の台」を 除外しない。除外すると、最良が 今の 台の ときに
+        //   2番手へ 無理やり 替わり、次の 再選考で 戻る＝**ピンポンの 直接原因**だった
+        //   （camlog の 実測：かわきた⇔たかだいが 1.2秒ごとに 入れかわって いた）
         Spot best = null; float bestV = float.MaxValue;
         if (spots != null)
             foreach (var s in spots) {
-                if (s == null || s == cur) continue;
+                if (s == null) continue;
                 if (!s.area.Contains(target.position)) continue;
                 if (Edge(s) > 0.85f) continue;                 // 入っても ふちなら 選ばない
                 float v = s.area.size.x * s.area.size.z;
                 if (v < bestV) { bestV = v; best = s; }
             }
-        if (best == null && spots != null) {                   // 領域の そと＝一番よく 見える 台
-            float bestE = 0.85f;
+        if (best == null && spots != null) {
+            // ★領域の そとは「見えて いる 台の うち **一番 近い 台**」。
+            //   まん中に 見える 度合いで えらぶと、遠い 引きの 台ほど 何でも まん中に
+            //   見える ので 常に 勝って しまう（camlog の 実測：村の 南 ぜんぶが
+            //   「かわ きた」に なって いた＝本人の 見た 引き画角の 正体）
+            float bestD = float.MaxValue;
             foreach (var s in spots) {
-                if (s == null || s == cur) continue;
-                float e = Edge(s);
-                if (e < bestE) { bestE = e; best = s; }
+                if (s == null) continue;
+                if (Edge(s) > 0.85f) continue;
+                float d = (s.pos - target.position).sqrMagnitude;
+                if (d < bestD) { bestD = d; best = s; }
             }
         }
         if (best == null && spots != null) {
-            // ★受け皿：だれも ちゃんと 見えて いなくても、**一番マシに 見える 台**を 必ず えらぶ。
-            //   これが 無いと、今の カメラに 張りついた まま 主人公が 画面の そとに 居つづける
-            float bestE = float.MaxValue;
+            // 受け皿：見えて いる 台が 無ければ、単純に 一番 近い 台（張りつき 防止）
+            float bestD = float.MaxValue;
             foreach (var s in spots) {
                 if (s == null) continue;
-                float e = Edge(s);
-                if (e < bestE) { bestE = e; best = s; }
+                float d = (s.pos - target.position).sqrMagnitude;
+                if (d < bestD) { bestD = d; best = s; }
             }
         }
         if (best == null) { if (cur == null) best = fallback; else return; }
-        if (best == null || best == cur) return;
+        if (best == null) return;
+        if (best == cur) { lastCut = Time.time; return; }      // 最良が 今の 台＝留まる
+        // ★ちらちら対策（本人の 報告：家の 裏で 竹やぶと ひきが 交互に なる）
+        //   1) 切替の あとは 1.2秒 あける  2) いま より はっきり 良い 台に しか 替えない
+        if (cur != null && Time.time - lastCut < 1.2f) return;
+        lastCut = Time.time;
         cur = best;
+        CurName = cur.name;
         transform.position = cur.pos;
         transform.rotation = Quaternion.LookRotation(cur.lookAt - cur.pos);
         if (cam != null) cam.fieldOfView = cur.fov;

@@ -15,10 +15,52 @@ public class MuraMove : MonoBehaviour {
     CharacterController cc; float vy;
     float baseYaw; float prevH, prevV;
 
+    Vector3 simDir;                      // 再現あるき（-repro）が 入力の かわりに 入れる
+
     void Start() {
         cc = GetComponent<CharacterController>();
-        foreach (var a in System.Environment.GetCommandLineArgs())
+        foreach (var a in System.Environment.GetCommandLineArgs()) {
             if (a == "-tour") { StartCoroutine(Tour()); break; }
+            if (a == "-repro") { StartCoroutine(Repro()); break; }
+        }
+    }
+
+    /// <summary>本人の 報告を **歩いて** 再現する（テレポートの ツアーでは 出ない ものが ある）。
+    /// 庭 → 家の 東わき → 家の 裏を 西へ → 北へ 戻る。カメラ名を 0.2秒ごとに ログ</summary>
+    System.Collections.IEnumerator Repro() {
+        string dir = Path.Combine(Path.GetTempPath(), "natsuyasumi", "mura");
+        Directory.CreateDirectory(dir);
+        var log = new System.Text.StringBuilder();
+        yield return new WaitForSeconds(1.0f);
+        var steps = new[] {                                   // (向きx, 向きz, 秒)
+            new Vector3(0, -1, 3.5f),   // 庭から 南へ（家の 東わき）
+            new Vector3(-1, -1, 2.0f),  // 南西へ（家の 裏の 口）
+            new Vector3(-1, 0, 6.5f),   // 家の 裏すじを 西へ
+            new Vector3(0, 1, 3.0f),    // 北へ 戻る
+            new Vector3(-1, 0, 4.0f),   // 道を 西へ（引きに 捕まらないか）
+        };
+        int shot = 0; float tAll = 0f, tick = 0f;
+        foreach (var s in steps) {
+            float t = 0f;
+            while (t < s.z) {
+                simDir = new Vector3(s.x, 0f, s.y).normalized;
+                t += Time.deltaTime; tAll += Time.deltaTime; tick += Time.deltaTime;
+                if (tick > 0.4f) {
+                    tick = 0f;
+                    var fx = cam != null ? cam.GetComponent<MuraCamFixed>() : null;
+                    log.AppendLine(tAll.ToString("F1") + "s  cam=" + MuraCamFixed.CurName +
+                                   "  pos=" + transform.position.ToString("F1") +
+                                   "  | " + (fx != null ? fx.DebugEdges() : ""));
+                }
+                yield return null;
+            }
+            simDir = Vector3.zero;
+            ScreenCapture.CaptureScreenshot(Path.Combine(dir, "repro" + (shot++).ToString("00") + ".png"));
+            yield return new WaitForSeconds(0.4f);
+        }
+        File.WriteAllText(Path.Combine(dir, "camlog.txt"), log.ToString());
+        yield return new WaitForSeconds(0.5f);
+        Application.Quit();
     }
 
     void Update() {
@@ -28,6 +70,7 @@ public class MuraMove : MonoBehaviour {
         if (any && (h != prevH || v != prevV) && cam != null) baseYaw = cam.eulerAngles.y;
         prevH = h; prevV = v;
         var dir = Quaternion.Euler(0f, baseYaw, 0f) * new Vector3(h, 0f, v);
+        if (simDir != Vector3.zero) dir = simDir;   // 再現あるきは 世界の 向きで まっすぐ
         if (dir.sqrMagnitude > 1f) dir.Normalize();
         float spd = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ? walk : run;
         vy = cc.isGrounded ? -0.5f : vy - 9.8f * Time.deltaTime;
