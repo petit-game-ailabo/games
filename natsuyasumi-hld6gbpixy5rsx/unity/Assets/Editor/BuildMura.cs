@@ -104,9 +104,25 @@ public static class BuildMura {
         Box(root, "Yagura_Ashi", new Vector3(-64f, 6f + 2.6f, -34f), new Vector3(2.6f, 5.2f, 2.6f), mWood);
         Box(root, "Yagura_Ue",  new Vector3(-64f, 6f + 5.6f, -34f), new Vector3(3.4f, 0.9f, 3.4f), mWood);
 
-        // ---- 母屋（南東・24x12 の 田の字の 置きしろ）と 庭・井戸
-        Box(root, "Omoya", new Vector3(42f, 2.4f, -42f), new Vector3(24f, 4.8f, 12f), mGrey);
-        Box(root, "Omoya_Yane", new Vector3(42f, 5.6f, -42f), new Vector3(26f, 1.6f, 14f), mDark);
+        // ---- 母屋（南東）。★S0-4：入れる 家に した。北壁に 戸口、屋内カメラの あいだは
+        //   北壁だけ 消える（すかし＝IeKabeN）。屋根は 屋内カメラの 視線を さえぎらない 高さ
+        Box(root, "Omoya_Yuka", new Vector3(42f, 0.15f, -42f), new Vector3(24f, 0.3f, 12f), mWood);
+        // 北壁（戸口 1.3m を x=40 に。3まい＝左・右・かもいの上）
+        Box(root, "IeKabeN_L", new Vector3(34.6f, 1.45f, -36.2f), new Vector3(9.2f, 2.6f, 0.3f), mGrey);
+        Box(root, "IeKabeN_R", new Vector3(47.6f, 1.45f, -36.2f), new Vector3(12.7f, 2.6f, 0.3f), mGrey);
+        Box(root, "IeKabeN_Ue", new Vector3(40.7f, 2.35f, -36.2f), new Vector3(1.4f, 0.8f, 0.3f), mGrey);
+        // 南・東・西の 壁
+        Box(root, "IeKabeS", new Vector3(42f, 1.45f, -47.8f), new Vector3(24f, 2.6f, 0.3f), mGrey);
+        Box(root, "IeKabeW", new Vector3(30.2f, 1.45f, -42f), new Vector3(0.3f, 2.6f, 12f), mGrey);
+        Box(root, "IeKabeE", new Vector3(53.8f, 1.45f, -42f), new Vector3(0.3f, 2.6f, 12f), mGrey);
+        // 中の しきり（西の 部屋と 東の 土間。戸口 1.3m）
+        Box(root, "IeSikiri_N", new Vector3(38f, 1.45f, -40.4f), new Vector3(0.25f, 2.6f, 3.4f), mGrey);
+        Box(root, "IeSikiri_S", new Vector3(38f, 1.45f, -46.2f), new Vector3(0.25f, 2.6f, 3.2f), mGrey);
+        // ちゃぶ台と ふとん（部屋の 目じるし）
+        Box(root, "Chabudai", new Vector3(34f, 0.5f, -42f), new Vector3(1.6f, 0.4f, 1.6f), mWood);
+        Box(root, "Futon", new Vector3(50f, 0.4f, -45f), new Vector3(2.2f, 0.25f, 1.4f), mGrey);
+        // 屋根（高さ 3.4〜4.0。屋内カメラは 3.2 より 低い 視線で 入る）
+        Box(root, "Omoya_Yane", new Vector3(42f, 3.7f, -42f), new Vector3(26f, 0.6f, 14f), mDark);
         Box(root, "Ido", new Vector3(33f, 0.5f, -33f), new Vector3(1.4f, 1.0f, 1.4f), mGrey);
         Box(root, "Monohoshi", new Vector3(47f, 1.1f, -33f), new Vector3(6f, 0.1f, 0.1f), mGrey);
         // ★家の 裏は 生垣で ふさぐ（本人の 方針：隠れる 場所は 配置で 消す。
@@ -222,13 +238,13 @@ public static class BuildMura {
 
         // ---- 見せ場の たちば（MURA.md の 10枚。-tour が 順に 撮る）
         var tourNames = new[] { "縁側", "あぜ道", "川べり", "橋の上", "石段した",
-                                "祠", "高台", "山道", "ひみつきち", "沢" };
+                                "祠", "高台", "山道", "ひみつきち", "沢", "どま(屋内)" };
         var tourPos = new[] {
             // ★縁側は 母屋から 15m はなす。近いと カメラ(主人公の 南 9m)が 母屋の 箱の 中に 入る
             new Vector3(40f, 0f, -25f), new Vector3(12f, 0f, -18f), new Vector3(20f, 0f, 2f),
             new Vector3(-30f, 0.4f, 8f), new Vector3(-45f, 0f, 18f), new Vector3(-45f, 4.2f, 32f),
             new Vector3(-58f, 6.2f, -30f), new Vector3(-20f, 4.2f, 44f), new Vector3(-10f, 6.2f, 49f),
-            new Vector3(25f, 6.2f, 50f) };
+            new Vector3(25f, 6.2f, 50f), new Vector3(46f, 0.5f, -42f) };
         var tour = new Transform[tourPos.Length];
         for (int i = 0; i < tourPos.Length; i++) {
             var g = new GameObject("Mise_" + tourNames[i]);
@@ -290,6 +306,25 @@ public static class BuildMura {
             S("さわ", 25f, 50f, 20f, 10f,   25.0f, 10.8f, 29.6f,   25f, 0.8f, 50f, 42f),  // 残る問題点=0
             S("あさせ", 45f, 8f, 14f, 14f,   45.0f, 9.6f, -10.1f,   45f, 0.8f, 8f, 42f),  // 残る問題点=0
         };
+        // ★S0-4 屋内カメラの 型：入ると カット＋北壁だけ 消える（sukashi）。
+        //   **部屋ごとに 1台**（入口の 1台では 中じきりの むこうが 見えない＝Checkで 実測）
+        {
+            var list = new List<MuraCamFixed.Spot>(fix.spots);
+            list.Add(new MuraCamFixed.Spot {
+                name = "どま",
+                area = new Bounds(new Vector3(46f, 1.2f, -42f), new Vector3(15f, 4.4f, 9.6f)),
+                pos = new Vector3(46f, 2.9f, -30.5f),
+                lookAt = new Vector3(46f, 0.6f, -43f), fov = 52f, sukashi = "IeKabeN",
+            });
+            list.Add(new MuraCamFixed.Spot {
+                name = "へや",
+                area = new Bounds(new Vector3(34f, 1.2f, -42f), new Vector3(7.4f, 4.4f, 9.6f)),
+                pos = new Vector3(34f, 2.9f, -30.5f),
+                lookAt = new Vector3(34f, 0.6f, -43.5f), fov = 44f, sukashi = "IeKabeN",
+            });
+            fix.spots = list.ToArray();
+        }
+
         // 起動直後に どこにも 入って いない ときだけ（南の 空から 村ぜんたい＝山頂級の 俯瞰は
         // こういう 意図した 場面に だけ 使う）
         fix.fallback = new MuraCamFixed.Spot {

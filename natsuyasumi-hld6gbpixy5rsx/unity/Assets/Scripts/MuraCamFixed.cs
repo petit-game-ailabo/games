@@ -16,6 +16,9 @@ public class MuraCamFixed : MonoBehaviour {
         public Vector3 pos;          // カメラの 置き場所（固定）
         public Vector3 lookAt;       // 見る さき（固定）
         public float fov = 46f;
+        // ★屋内の 型（S0-4）：この 台の あいだだけ 消す 物の 名前の 頭（例 "IeKabeN"）。
+        //   遮蔽の 判定too 同じ 物を 透かして 数える（Check と 実機が 同じ 答えに なる）
+        public string sukashi = "";
     }
     public Spot[] spots;
     public Transform target;
@@ -54,12 +57,19 @@ public class MuraCamFixed : MonoBehaviour {
                          Mathf.Abs(local.y / (local.z * tanV)));
     }
 
-    /// <summary>台と 点の あいだに 物が はさまって いるか（ignore＝主人公じしん）</summary>
+    /// <summary>台と 点の あいだに 物が はさまって いるか（ignore＝主人公じしん。
+    /// s.sukashi の 物は 透かして 数える）</summary>
     public static bool BlockedFrom(Spot s, Vector3 eye, Transform ignore) {
-        RaycastHit hit;
-        if (!Physics.Linecast(s.pos, eye, out hit, ~0, QueryTriggerInteraction.Ignore)) return false;
-        if (ignore == null) return true;
-        return hit.collider.transform != ignore && !hit.collider.transform.IsChildOf(ignore);
+        var d = eye - s.pos;
+        var hits = Physics.RaycastAll(s.pos, d.normalized, d.magnitude,
+                                      ~0, QueryTriggerInteraction.Ignore);
+        foreach (var hit in hits) {
+            var t = hit.collider.transform;
+            if (ignore != null && (t == ignore || t.IsChildOf(ignore))) continue;
+            if (!string.IsNullOrEmpty(s.sukashi) && t.name.StartsWith(s.sukashi)) continue;
+            return true;
+        }
+        return false;
     }
 
     float Edge(Spot s) {
@@ -82,6 +92,9 @@ public class MuraCamFixed : MonoBehaviour {
         return best;
     }
 
+    readonly System.Collections.Generic.List<Renderer> sukashiNow =
+        new System.Collections.Generic.List<Renderer>();
+
     void Cut(Spot s) {
         lastCut = Time.time; hiddenT = 0f;
         cur = s;
@@ -89,6 +102,12 @@ public class MuraCamFixed : MonoBehaviour {
         transform.position = cur.pos;
         transform.rotation = Quaternion.LookRotation(cur.lookAt - cur.pos);
         if (cam != null) cam.fieldOfView = cur.fov;
+        // すかし（屋内の 型）：前の 台の ぶんを 戻し、この 台の ぶんを 消す
+        foreach (var r in sukashiNow) if (r != null) r.enabled = true;
+        sukashiNow.Clear();
+        if (!string.IsNullOrEmpty(cur.sukashi))
+            foreach (var r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                if (r.name.StartsWith(cur.sukashi)) { r.enabled = false; sukashiNow.Add(r); }
     }
 
     void LateUpdate() {

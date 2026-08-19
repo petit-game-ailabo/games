@@ -87,9 +87,16 @@ public static class MuraCamCheck {
             var a = s.area;
             for (float x = a.min.x + 0.5f; x <= a.max.x; x += 1f)
                 for (float z = a.min.z + 0.5f; z <= a.max.z; z += 1f) {
-                    RaycastHit hit;
-                    if (!Physics.Raycast(new Vector3(x, 80f, z), Vector3.down, out hit, 300f,
-                                         ~(1 << 2), QueryTriggerInteraction.Ignore)) continue;
+                    // 屋根の 下も 見える ように 全ヒットから「範囲の 高さ内で いちばん 上の 床」を とる
+                    var hitsAll = Physics.RaycastAll(new Vector3(x, 80f, z), Vector3.down, 300f,
+                                                     ~(1 << 2), QueryTriggerInteraction.Ignore);
+                    bool found = false; RaycastHit hit = default;
+                    foreach (var hh in hitsAll) {
+                        if (hh.normal.y < 0.5f) continue;
+                        if (hh.point.y > a.max.y || hh.point.y < a.min.y) continue;
+                        if (!found || hh.point.y > hit.point.y) { hit = hh; found = true; }
+                    }
+                    if (!found) continue;
                     // 立てない ところ（かべの 中・水の そこ）は 範囲の 検証から 外す
                     var eye = hit.point + Vector3.up * 0.6f;
                     if (Physics.CheckSphere(eye, 0.22f, ~0, QueryTriggerInteraction.Ignore)) continue;
