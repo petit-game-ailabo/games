@@ -252,44 +252,54 @@ public static class BuildMura {
         //   - 領域は 道なりに 並べ、さかい目は 曲がり角に 置く（動線と カットを そろえる）
         var fix = camGO.AddComponent<MuraCamFixed>();
         fix.target = player.transform;
-        // lookAt は 領域の まん中（高さ ly）。構図の 調整は ここの 数字を 1つ 直すだけ
+        // ★1台＝1つの 被写体（本人 2026-08-18「家なら家、下に行ったら田んぼだけ、
+        //   さらに下は橋を俯瞰、くらいの 寄り」）。lookAt は 被写体そのもの
         MuraCamFixed.Spot S(string name, float ax, float az, float sx, float sz,
-                            float px, float py, float pz, float fov = 46f, float ly = 1.0f) {
+                            float px, float py, float pz,
+                            float lx, float ly, float lz, float fov = 44f) {
             return new MuraCamFixed.Spot {
                 name = name,
                 area = new Bounds(new Vector3(ax, 5f, az), new Vector3(sx, 24f, sz)),
                 pos = new Vector3(px, py, pz),
-                lookAt = new Vector3(ax, ly, az), fov = fov,
+                lookAt = new Vector3(lx, ly, lz), fov = fov,
             };
         }
         fix.spots = new[] {
-            // 母屋の 庭：家の 北東・高め から 家ごしに（家が 必ず 画面に 入る）。
-            // 領域は 出発点(38,-34)と 庭の 北がわまで 含める
-            S("にわ",       42f, -38f, 40f, 30f,   30f, 6.5f, -18f),
-            // バス停・村の 入り口：北から 南を 見る（バス停と 主人公）
-            S("いりぐち",   14f, -54f, 34f, 14f,   12f, 4.0f, -42f),
-            // あぜ道・田んぼ：東の 高み から 田んぼ ごしに 西へ
-            S("あぜみち",   10f, -18f, 44f, 22f,   34f, 8.0f, -12f),
-            // 川べり 南がわ：南の 高み から 川面を 広く
-            S("かわ みなみ", 12f, 0f, 60f, 10f,    12f, 5.0f, -12f),
-            // 橋：東の 川すじ から 橋を 横に
-            S("はし",      -30f, 8f, 16f, 16f,    -16f, 3.5f, 8f),
-            // 川べり 北がわ：北から 南の 村を 見おろす（かえりの 絵）
-            S("かわ きた",   10f, 14f, 60f, 12f,    10f, 6.0f, 26f),
-            // 石段の した：南の ひくい 位置 から 見上げ（鳥居の ハレの 絵。lookAtは 鳥居の 高さ）
-            S("いしだん",  -45f, 16f, 18f, 12f,   -45f, 2.2f, 8f, 40f, 4.5f),
-            // 祠の だいら：南東の 高み から 祠と 杉（lookAtは 丘の 上の 高さ）
-            S("ほこら",    -48f, 38f, 44f, 34f,   -30f, 9.5f, 24f, 46f, 5.5f),
-            // 高台：西の そと から 谷を 背に（ご褒美の 絵は 谷がわを 見る）
-            S("たかだい",  -62f, -32f, 34f, 30f,  -76f, 11f, -32f, 52f, 7f),
-            // 高台への 坂
-            S("さか",      -41f, -21f, 12f, 26f,  -34f, 4.5f, -8f),
-            // 池：西から 池ごしに
-            S("いけ",       55f, 26f, 24f, 18f,    40f, 4.5f, 22f),
-            // 竹やぶ（余白）：北から しずかに
-            S("たけやぶ",   62f, -26f, 20f, 18f,   62f, 3.5f, -14f),
-            // 山の 棚（ひみつきち・沢）：南から
-            S("やまのたな",  10f, 52f, 120f, 14f,   0f, 10f, 40f, 46f, 6.5f),
+            // 家（被写体＝母屋）：庭の 真北から 南の 家を 見る＝庭の どこに いても
+            // 主人公は カメラと 家の あいだ（ななめに 置くと 領域の 半分が 視野の そとに 出る）
+            S("いえ",       42f, -34f, 28f, 20f,   38f, 5.0f, -20f,   42f, 1.8f, -40f),
+            // バス停（被写体＝バス停の 標識）
+            S("ばすてい",   14f, -52f, 30f, 16f,   19f, 3.0f, -47f,   10f, 1.5f, -56f, 42f),
+            // 田んぼ（被写体＝田と 案山子）：南の 高み から 田んぼだけ
+            S("たんぼ",     14f, -18f, 40f, 22f,   15f, 6.0f, -32f,   13f, 0.5f, -17f),
+            // 飛び石（被写体＝飛び石の 列）
+            S("とびいし",   20f, 1f, 24f, 12f,     20f, 4.0f, -5f,    20f, -0.3f, 8f, 42f),
+            // 橋（被写体＝橋。すこし 俯瞰）
+            S("はし",      -30f, 8f, 18f, 18f,    -23f, 9.0f, -2f,   -30f, 0.3f, 8f),
+            // 川の 北がわの 道（被写体＝川と 対岸）
+            S("かわ きた",   6f, 16f, 44f, 12f,     6f, 5.0f, 24f,     6f, 0f, 8f),
+            // 駄菓子屋（被写体＝店と のれん）
+            S("だがしや",  -40f, -2f, 16f, 14f,   -31f, 3.0f, -8f,   -38f, 1.5f, -1f, 42f),
+            // 石段（被写体＝鳥居。見上げの ハレの 絵）
+            S("いしだん",  -45f, 16f, 14f, 12f,   -45f, 2.2f, 8f,    -45f, 4.5f, 26f, 40f),
+            // 祠（被写体＝祠と 杉）
+            S("ほこら",    -48f, 38f, 40f, 30f,   -37f, 8.5f, 26f,   -48f, 5.5f, 36f, 42f),
+            // 高台（被写体＝谷の ながめ。ここだけは 引きが 正しい）
+            S("たかだい",  -62f, -32f, 30f, 26f,  -74f, 10.5f, -32f, -30f, 2f, -10f, 50f),
+            // 高台への 坂（被写体＝坂と やぐら）
+            S("さか",      -40f, -20f, 12f, 26f,  -33f, 4.5f, -6f,   -44f, 3f, -24f),
+            // 池（被写体＝池と ハス）
+            S("いけ",       55f, 26f, 22f, 16f,    43f, 4.0f, 20f,    55f, 0.5f, 26f, 42f),
+            // 竹やぶ（被写体＝竹。余白の 隅）
+            S("たけやぶ",   62f, -26f, 18f, 16f,   55f, 3.0f, -17f,   62f, 2f, -26f, 42f),
+            // 山道の 口（被写体＝道の 先の 暗がり）
+            S("やまみち",  -20f, 44f, 16f, 12f,   -20f, 6.5f, 36f,   -20f, 6f, 50f),
+            // ひみつきち（被写体＝小屋。子どもの 目線）
+            S("ひみつきち", -10f, 52f, 18f, 10f,   -10f, 7.8f, 44f,   -10f, 7f, 52f, 42f),
+            // 蛍の 沢（被写体＝木々の あいだ）
+            S("さわ",       25f, 50f, 20f, 10f,    25f, 7.8f, 43f,    25f, 6.5f, 51f, 42f),
+            // 浅瀬（被写体＝川底の 石）
+            S("あさせ",     45f, 8f, 14f, 14f,     45f, 4.0f, -3f,    45f, -0.5f, 8f, 42f),
         };
         // 起動直後に どこにも 入って いない ときだけ（南の 空から 村ぜんたい＝山頂級の 俯瞰は
         // こういう 意図した 場面に だけ 使う）
@@ -299,8 +309,9 @@ public static class BuildMura {
         };
 
         mv.cam = camGO.transform;
-        var nuki = camGO.AddComponent<MuraKabenuki>();
-        nuki.target = player.transform;
+        // ★手前の 物を 透明にする 保険（MuraKabenuki）は 廃止（本人 2026-08-18
+        //   「急に消えるのはおかしい。消えている物を実在すると認識しながら操作できない」）。
+        //   遮蔽は カメラの 置き場所＝構図で 解く 一択に する
 
         // ---- ひかり（S0-3：舞台照明の 入口。夏の 昼の 基本＋祠の アクセント）
         var sun = new GameObject("Sun").AddComponent<Light>();
@@ -313,7 +324,25 @@ public static class BuildMura {
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.ExponentialSquared;
         RenderSettings.fogColor = new Color(0.74f, 0.78f, 0.74f);
-        RenderSettings.fogDensity = 0.006f;
+        RenderSettings.fogDensity = 0.010f;   // ★もっと あってもいい（本人）→ 増量
+
+        // ---- とおくの 山なみ（仮）。地平の 空白を 埋める。じっさいは 絵に 差し替える。
+        //   霧で とけて シルエットに なる。あたりは つけない（遊び場の そと）
+        var mYama  = Mat("MuraYama",  new Color(0.40f, 0.50f, 0.47f));
+        var mYama2 = Mat("MuraYama2", new Color(0.52f, 0.62f, 0.58f));
+        void Yama(float x, float z, float w, float d, float h, Material m) {
+            var g = Box(root, "Yamanami", new Vector3(x, h * 0.5f - 2f, z), new Vector3(w, h, d), m);
+            Object.DestroyImmediate(g.GetComponent<Collider>());
+        }
+        // 北（山。近い 列は こく、遠い 列は うすく）
+        Yama(-70f, 92f, 120f, 24f, 26f, mYama);  Yama(10f, 98f, 150f, 26f, 34f, mYama);
+        Yama(85f, 90f, 100f, 22f, 22f, mYama);
+        Yama(-30f, 135f, 200f, 30f, 44f, mYama2); Yama(90f, 130f, 160f, 28f, 38f, mYama2);
+        // 東・西（低い 尾根）
+        Yama(125f, 30f, 26f, 140f, 18f, mYama);  Yama(150f, -40f, 30f, 160f, 28f, mYama2);
+        Yama(-125f, 20f, 26f, 150f, 20f, mYama); Yama(-150f, -30f, 30f, 160f, 30f, mYama2);
+        // 南（村の 入り口の むこうの 低い 丘）
+        Yama(-40f, -115f, 130f, 24f, 14f, mYama); Yama(60f, -120f, 120f, 26f, 12f, mYama);
         // 祠の アクセント（舞台照明：見どころに 1灯）
         var spot = new GameObject("Spot_Hokora").AddComponent<Light>();
         spot.type = LightType.Spot; spot.intensity = 60f; spot.range = 22f;
@@ -334,7 +363,7 @@ public static class BuildMura {
         var dof = AddFX<DepthOfField>();
         dof.mode.overrideState = true; dof.mode.value = DepthOfFieldMode.Bokeh;
         dof.focusDistance.overrideState = true; dof.focusDistance.value = 10f;
-        dof.aperture.overrideState = true; dof.aperture.value = 4.2f;
+        dof.aperture.overrideState = true; dof.aperture.value = 3.0f;   // ぼかし 増量（本人）
         dof.focalLength.overrideState = true; dof.focalLength.value = 50f;
         var bloom = AddFX<Bloom>();
         bloom.threshold.overrideState = true; bloom.threshold.value = 1.0f;

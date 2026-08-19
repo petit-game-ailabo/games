@@ -20,9 +20,25 @@ public class MuraCamFixed : MonoBehaviour {
     public Transform target;
     public Spot fallback;            // 起動直後だけ
 
+    // ★T で HD-2D追従（オクトパス型＝yaw固定・回転なし・並進だけで 追う）と 切替できる。
+    //   カメラの 方向性が まだ 確定して いない ので、両方を 残して 比べる（本人 2026-08-18）
+    [Header("HD-2D追従（Tで切替）")]
+    public bool hd2d;
+    public float hdPitch = 26f, hdDist = 8.5f;
+
     Camera cam; Spot cur;
 
     void Start() { cam = GetComponent<Camera>(); }
+
+    void Update() {
+        if (Input.GetKeyDown(KeyCode.T)) { hd2d = !hd2d; cur = null; }
+    }
+
+    void OnGUI() {
+        GUI.Label(new Rect(10, 10, 900, 24),
+            "T=カメラ切替 → いま【" + (hd2d ? "HD-2D追従（回転なし）" : "固定カメラのカット割り") + "】"
+            + (hd2d || cur == null ? "" : "  カメラ: " + cur.name));
+    }
 
     // その カメラから 見た 主人公の「画面の はしからの 余裕」。0=まん中、1=ふち
     float Edge(Spot s) {
@@ -37,8 +53,25 @@ public class MuraCamFixed : MonoBehaviour {
 
     void LateUpdate() {
         if (target == null) return;
-        // 見えて いる あいだは ぜったいに 切り替えない
-        if (cur != null && Edge(cur) < 0.98f) return;
+        if (hd2d) {
+            // HD-2D追従：向きは 固定（yaw=0・北を 見る）。位置だけ なめらかに ついて いく
+            var rot = Quaternion.Euler(hdPitch, 0f, 0f);
+            var want = target.position + Vector3.up * 0.7f - rot * Vector3.forward * hdDist;
+            transform.position = Vector3.Lerp(transform.position, want,
+                                              1f - Mathf.Exp(-6f * Time.deltaTime));
+            transform.rotation = rot;
+            if (cam != null) cam.fieldOfView = 46f;
+            return;
+        }
+        // ★「舞台（領域）の 中に いて、画面にも 見えて いる」あいだだけ 保つ。
+        //   見えて いる だけで 保つと、広く 見える 台では 主人公が 豆つぶに なっても
+        //   永遠に 切り替わらない（v1.6の 実測：ツアーの 全スポットが 1台に 張りついた）
+        if (cur != null) {
+            var ca = cur.area; ca.Expand(new Vector3(3f, 0f, 3f));
+            if (ca.Contains(target.position) && Edge(cur) < 0.98f) return;
+            // 領域の そとでも、まだ 画面の まん中よりに いる うちは 保つ（余白の 救済）
+            if (Edge(cur) < 0.55f) return;
+        }
 
         Spot best = null; float bestV = float.MaxValue;
         if (spots != null)
@@ -53,6 +86,16 @@ public class MuraCamFixed : MonoBehaviour {
             float bestE = 0.85f;
             foreach (var s in spots) {
                 if (s == null || s == cur) continue;
+                float e = Edge(s);
+                if (e < bestE) { bestE = e; best = s; }
+            }
+        }
+        if (best == null && spots != null) {
+            // ★受け皿：だれも ちゃんと 見えて いなくても、**一番マシに 見える 台**を 必ず えらぶ。
+            //   これが 無いと、今の カメラに 張りついた まま 主人公が 画面の そとに 居つづける
+            float bestE = float.MaxValue;
+            foreach (var s in spots) {
+                if (s == null) continue;
                 float e = Edge(s);
                 if (e < bestE) { bestE = e; best = s; }
             }
