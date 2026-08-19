@@ -26,11 +26,15 @@ public class MuraCamFixed : MonoBehaviour {
     public bool hd2d;
     public float hdPitch = 26f, hdDist = 8.5f;
 
-    Camera cam; Spot cur; float lastCut = -9f;
+    Camera cam; Spot cur; float lastCut = -9f; float hiddenT;
     // いま どの 台か（再現ログ用）
     public static string CurName = "-";
 
     void Start() { cam = GetComponent<Camera>(); }
+
+    /// <summary>いまの 台の 枠余裕（切替の 検証用。0=まん中 1=ふち）</summary>
+    public float CurEdge() { return cur == null ? -1f : Edge(cur); }
+    public bool CurBlocked() { return cur != null && Blocked(cur); }
 
     /// <summary>原因さがし用：おもな 台の 判定値（in/out＝領域、数字＝Edge）</summary>
     public string DebugEdges() {
@@ -40,7 +44,7 @@ public class MuraCamFixed : MonoBehaviour {
             if (s.name != "いえ" && s.name != "みちみなみ" && s.name != "たんぼ" &&
                 s.name != "かわ きた" && s.name != "たかだい") continue;
             sb.Append(s.name + (s.area.Contains(target.position) ? "[in]" : "[out]")
-                      + Edge(s).ToString("F2") + "  ");
+                      + Edge(s).ToString("F2") + (Blocked(s) ? "遮" : "") + "  ");
         }
         return sb.ToString();
     }
@@ -53,6 +57,15 @@ public class MuraCamFixed : MonoBehaviour {
         GUI.Label(new Rect(10, 10, 900, 24),
             "T=カメラ切替 → いま【" + (hd2d ? "HD-2D追従（回転なし）" : "固定カメラのカット割り") + "】"
             + (hd2d || cur == null ? "" : "  カメラ: " + cur.name));
+    }
+
+    // カメラと 主人公の あいだに 物が はさまって いないか（家の 裏に 回った＝隠れた）
+    bool Blocked(Spot s) {
+        var eye = target.position + Vector3.up * 0.6f;
+        RaycastHit hit;
+        if (!Physics.Linecast(s.pos, eye, out hit, ~0, QueryTriggerInteraction.Ignore)) return false;
+        // 主人公 じしんに 当たった ぶんは 隠れて いない
+        return hit.collider.transform != target && !hit.collider.transform.IsChildOf(target);
     }
 
     // その カメラから 見た 主人公の「画面の はしからの 余裕」。0=まん中、1=ふち
@@ -89,12 +102,14 @@ public class MuraCamFixed : MonoBehaviour {
         //   永遠に 切り替わらない（v1.6の 実測：ツアーの 全スポットが 1台に 張りついた）
         // ★ひき（fallback）は 保持しない。広い 台は どこからでも「見えて いる」ので、
         //   一度 入ると 張りついて めちゃくちゃ 引きの 絵の まま に なる（本人の 報告）
-        if (cur != null && cur != fallback) {
-            var ca = cur.area; ca.Expand(new Vector3(3f, 0f, 3f));
-            if (ca.Contains(target.position) && Edge(cur) < 0.98f) return;
-            // 領域の そとでも、まだ 画面の まん中よりに いる うちは 保つ（余白の 救済）
-            if (Edge(cur) < 0.55f) return;
-        }
+        // ★隠れの 検知（本人の イメージ：家の 裏に 回って 家に 隠れた 時点で 切り替わる）。
+        //   0.35秒 つづけて 隠れたら「見えて いない」。一瞬 柱を よぎった 程度では 替えない
+        if (cur != null && Blocked(cur)) hiddenT += Time.deltaTime; else hiddenT = 0f;
+        // ★切り替わるのは「画面の 枠から 出た」か「0.35秒 隠れた」の **2つだけ**（本人のモデル）。
+        //   前は 領域の 出入りでも 切り替えて いて、画面の まん中に いるのに カメラが
+        //   コロコロ 変わって いた（本人の 報告：田んぼ 南⇔北）。領域は「つぎの 台を
+        //   えらぶ ときの 優先順位」にだけ 使う
+        if (cur != null && cur != fallback && hiddenT < 0.35f && Edge(cur) < 0.98f) return;
 
         // ★候補から「今の台」を 除外しない。除外すると、最良が 今の 台の ときに
         //   2番手へ 無理やり 替わり、次の 再選考で 戻る＝**ピンポンの 直接原因**だった
@@ -105,6 +120,7 @@ public class MuraCamFixed : MonoBehaviour {
                 if (s == null) continue;
                 if (!s.area.Contains(target.position)) continue;
                 if (Edge(s) > 0.85f) continue;                 // 入っても ふちなら 選ばない
+                if (Blocked(s)) continue;                      // 隠れて 見えない 台も 選ばない
                 float v = s.area.size.x * s.area.size.z;
                 if (v < bestV) { bestV = v; best = s; }
             }
@@ -117,6 +133,7 @@ public class MuraCamFixed : MonoBehaviour {
             foreach (var s in spots) {
                 if (s == null) continue;
                 if (Edge(s) > 0.85f) continue;
+                if (Blocked(s)) continue;
                 float d = (s.pos - target.position).sqrMagnitude;
                 if (d < bestD) { bestD = d; best = s; }
             }
@@ -136,7 +153,7 @@ public class MuraCamFixed : MonoBehaviour {
         // ★ちらちら対策（本人の 報告：家の 裏で 竹やぶと ひきが 交互に なる）
         //   1) 切替の あとは 1.2秒 あける  2) いま より はっきり 良い 台に しか 替えない
         if (cur != null && Time.time - lastCut < 1.2f) return;
-        lastCut = Time.time;
+        lastCut = Time.time; hiddenT = 0f;
         cur = best;
         CurName = cur.name;
         transform.position = cur.pos;

@@ -45,10 +45,12 @@ public class MuraMove : MonoBehaviour {
             while (t < s.z) {
                 simDir = new Vector3(s.x, 0f, s.y).normalized;
                 t += Time.deltaTime; tAll += Time.deltaTime; tick += Time.deltaTime;
-                if (tick > 0.4f) {
+                if (tick > 0.2f) {
                     tick = 0f;
                     var fx = cam != null ? cam.GetComponent<MuraCamFixed>() : null;
                     log.AppendLine(tAll.ToString("F1") + "s  cam=" + MuraCamFixed.CurName +
+                                   "  edge=" + (fx != null ? fx.CurEdge().ToString("F2") : "-") +
+                                   (fx != null && fx.CurBlocked() ? " 隠れ" : "") +
                                    "  pos=" + transform.position.ToString("F1") +
                                    "  | " + (fx != null ? fx.DebugEdges() : ""));
                 }
