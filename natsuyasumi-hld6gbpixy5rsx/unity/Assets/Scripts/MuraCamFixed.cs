@@ -56,7 +56,12 @@ public class MuraCamFixed : MonoBehaviour {
         if (hd2d) {
             // HD-2D追従：向きは 固定（yaw=0・北を 見る）。位置だけ なめらかに ついて いく
             var rot = Quaternion.Euler(hdPitch, 0f, 0f);
-            var want = target.position + Vector3.up * 0.7f - rot * Vector3.forward * hdDist;
+            var eye = target.position + Vector3.up * 0.7f;
+            var back = -(rot * Vector3.forward);
+            // ★距離は いつも 一定。挟まったら 寄る（カメラ衝突）は「急に 離れる/寄る」が
+            //   嫌だ と 本人評価 → 廃止。めり込みで 裏が 見えるのは、配置フェーズで
+            //   「大きすぎる 物を 置かない・裏を 歩かせない」で 解決する（PLAN 配置フェーズ送り）
+            var want = eye + back * hdDist;
             transform.position = Vector3.Lerp(transform.position, want,
                                               1f - Mathf.Exp(-6f * Time.deltaTime));
             transform.rotation = rot;
@@ -66,7 +71,9 @@ public class MuraCamFixed : MonoBehaviour {
         // ★「舞台（領域）の 中に いて、画面にも 見えて いる」あいだだけ 保つ。
         //   見えて いる だけで 保つと、広く 見える 台では 主人公が 豆つぶに なっても
         //   永遠に 切り替わらない（v1.6の 実測：ツアーの 全スポットが 1台に 張りついた）
-        if (cur != null) {
+        // ★ひき（fallback）は 保持しない。広い 台は どこからでも「見えて いる」ので、
+        //   一度 入ると 張りついて めちゃくちゃ 引きの 絵の まま に なる（本人の 報告）
+        if (cur != null && cur != fallback) {
             var ca = cur.area; ca.Expand(new Vector3(3f, 0f, 3f));
             if (ca.Contains(target.position) && Edge(cur) < 0.98f) return;
             // 領域の そとでも、まだ 画面の まん中よりに いる うちは 保つ（余白の 救済）
