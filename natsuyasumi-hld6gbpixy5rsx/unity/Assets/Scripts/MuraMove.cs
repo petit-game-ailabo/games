@@ -47,12 +47,9 @@ public class MuraMove : MonoBehaviour {
                 t += Time.deltaTime; tAll += Time.deltaTime; tick += Time.deltaTime;
                 if (tick > 0.2f) {
                     tick = 0f;
-                    var fx = cam != null ? cam.GetComponent<MuraCamFixed>() : null;
                     log.AppendLine(tAll.ToString("F1") + "s  cam=" + MuraCamFixed.CurName +
-                                   "  edge=" + (fx != null ? fx.CurEdge().ToString("F2") : "-") +
-                                   (fx != null && fx.CurBlocked() ? " 隠れ" : "") +
-                                   "  pos=" + transform.position.ToString("F1") +
-                                   "  | " + (fx != null ? fx.DebugEdges() : ""));
+                                   "  ばしょ=" + MuraCamFixed.PlaceName +
+                                   "  pos=" + transform.position.ToString("F1"));
                 }
                 yield return null;
             }
@@ -61,7 +58,14 @@ public class MuraMove : MonoBehaviour {
             yield return new WaitForSeconds(0.4f);
         }
         File.WriteAllText(Path.Combine(dir, "camlog.txt"), log.ToString());
-        yield return new WaitForSeconds(0.5f);
+        // さいごに 俯瞰エディタを 開いて 1枚（見取り図の 確認用）
+        var fk = cam != null ? cam.GetComponent<MuraFukan>() : null;
+        if (fk != null) {
+            fk.Set(true);
+            yield return new WaitForSeconds(1.0f);
+            ScreenCapture.CaptureScreenshot(Path.Combine(dir, "fukan.png"));
+            yield return new WaitForSeconds(0.5f);
+        }
         Application.Quit();
     }
 
