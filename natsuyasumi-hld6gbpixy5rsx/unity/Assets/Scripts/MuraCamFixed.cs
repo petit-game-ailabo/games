@@ -31,6 +31,8 @@ public class MuraCamFixed : MonoBehaviour {
     Camera cam; Spot cur; float lastCut = -9f; float hiddenT;
     public static string CurName = "-";
     public static string PlaceName = "-";
+    // 俯瞰（F2）の あいだは カメラを さわらない（Tの 状態に よらず 俯瞰が 支配する）
+    public static bool Suspended;
 
     void Start() { cam = GetComponent<Camera>(); }
 
@@ -110,8 +112,16 @@ public class MuraCamFixed : MonoBehaviour {
                 if (r.name.StartsWith(cur.sukashi)) { r.enabled = false; sukashiNow.Add(r); }
     }
 
+    /// <summary>俯瞰から 戻った ときに いまの 台へ 置き直す</summary>
+    public void Reapply() {
+        if (hd2d || cur == null) return;
+        transform.position = cur.pos;
+        transform.rotation = Quaternion.LookRotation(cur.lookAt - cur.pos);
+        if (cam != null) cam.fieldOfView = cur.fov;
+    }
+
     void LateUpdate() {
-        if (target == null) return;
+        if (Suspended || target == null) return;
         var zone = ZoneOf(target.position, 0f);
         PlaceName = zone != null ? zone.name : "（みちくさ）";
 

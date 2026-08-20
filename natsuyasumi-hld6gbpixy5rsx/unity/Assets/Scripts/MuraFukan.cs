@@ -22,18 +22,35 @@ public class MuraFukan : MonoBehaviour {
     }
 
     public bool On { get { return on; } }
-    public void Set(bool v) { on = v; }   // 自動撮影から 開く 用
+    Vector3 pan;                         // 見て いる 場所の ずらし（マウスで 動かす）
+
+    public void Set(bool v) {
+        if (on == v) return;
+        on = v;
+        MuraCamFixed.Suspended = on;     // 俯瞰の あいだは カメラ制御を 完全に 止める
+        if (on) { pan = Vector3.zero; }
+        else {
+            // ★もどす（前は 正射影の まま 置き去りに なり「戻れない」に なって いた）
+            if (cam != null) cam.orthographic = false;
+            var fx = GetComponent<MuraCamFixed>();
+            if (fx != null) fx.Reapply();
+        }
+    }
 
     void Update() {
-        if (Input.GetKeyDown(KeyCode.F2)) on = !on;
-        if (!on || target == null) return;
-        // 真上から。主人公を まん中に（ここでは MuraCamFixed より あとに 動く よう LateUpdate でなく
-        // OnPreCull 相当…… Unity では LateUpdate の 順が 不定なので、カメラ位置は ここで 毎回 上書き）
+        if (Input.GetKeyDown(KeyCode.F2)) Set(!on);
+        if (!on) return;
+        // マウスの 左ドラッグで 見る場所を うごかす／ホイールで 寄り引き
+        if (Input.GetMouseButton(0) || Input.GetMouseButton(1))
+            pan -= new Vector3(Input.GetAxis("Mouse X"), 0f, Input.GetAxis("Mouse Y"))
+                   * (size * 0.06f);
+        float w = Input.GetAxis("Mouse ScrollWheel");
+        if (Mathf.Abs(w) > 0.0001f) size = Mathf.Clamp(size - w * 22f, 12f, 95f);
     }
 
     void LateUpdate() {
         if (!on || target == null) return;
-        transform.position = target.position + Vector3.up * height;
+        transform.position = target.position + pan + Vector3.up * height;
         transform.rotation = Quaternion.Euler(90f, 0f, 0f);
         if (cam != null) { cam.orthographic = true; cam.orthographicSize = size; }
     }
@@ -96,7 +113,14 @@ public class MuraFukan : MonoBehaviour {
     // ---- 名前 ----
     void OnGUI() {
         if (!on || fix == null || fix.spots == null || cam == null) return;
-        GUI.Label(new Rect(10, 34, 900, 24), "F2=俯瞰をとじる   （わく＝カメラの担当範囲／黄色＝いまの台／緑の円＝音の届く半径）");
+        GUI.Label(new Rect(10, 34, 900, 24), "F2=俯瞰をとじる   左ドラッグ=見る場所をうごかす   ホイール=寄り引き");
+        // 凡例（画面の 左下）
+        var lg = new Rect(10, Screen.height - 118, 420, 112);
+        GUI.Box(lg, "");
+        GUI.Label(new Rect(18, Screen.height - 114, 400, 22), "■青のわく：カメラの担当範囲");
+        GUI.Label(new Rect(18, Screen.height - 93, 400, 22), "■黄のわく：いま効いている台（線＝カメラの位置と向き）");
+        GUI.Label(new Rect(18, Screen.height - 72, 400, 22), "●緑の円：音の届く半径（♪＝音源）");
+        GUI.Label(new Rect(18, Screen.height - 51, 400, 22), "＋赤の十字：主人公");
         foreach (var s in fix.spots) {
             if (s == null) continue;
             var sp = cam.WorldToScreenPoint(new Vector3(s.area.center.x, 1.5f, s.area.center.z));
