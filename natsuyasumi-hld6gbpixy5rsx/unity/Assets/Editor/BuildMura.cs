@@ -123,6 +123,17 @@ public static class BuildMura {
         Box(root, "Futon", new Vector3(50f, 0.4f, -45f), new Vector3(2.2f, 0.25f, 1.4f), mGrey);
         // 屋根（高さ 3.4〜4.0。屋内カメラは 3.2 より 低い 視線で 入る）
         Box(root, "Omoya_Yane", new Vector3(42f, 3.7f, -42f), new Vector3(26f, 0.6f, 14f), mDark);
+        // 屋内の 明かり（裸電球ふう。屋根で 太陽が 入らない）
+        void Denkyu(string n, float x, float z) {
+            var g = new GameObject("Denkyu_" + n);
+            g.transform.SetParent(root, false);
+            g.transform.position = new Vector3(x, 2.6f, z);
+            var li = g.AddComponent<Light>();
+            li.type = LightType.Point; li.range = 9f; li.intensity = 14f;
+            li.color = new Color(1f, 0.9f, 0.7f);
+        }
+        Denkyu("doma", 46f, -42f);
+        Denkyu("heya", 34f, -42f);
         Box(root, "Ido", new Vector3(33f, 0.5f, -33f), new Vector3(1.4f, 1.0f, 1.4f), mGrey);
         Box(root, "Monohoshi", new Vector3(47f, 1.1f, -33f), new Vector3(6f, 0.1f, 0.1f), mGrey);
         // ★家の 裏は 生垣で ふさぐ（本人の 方針：隠れる 場所は 配置で 消す。
@@ -312,7 +323,7 @@ public static class BuildMura {
             var list = new List<MuraCamFixed.Spot>(fix.spots);
             list.Add(new MuraCamFixed.Spot {
                 name = "どま",
-                area = new Bounds(new Vector3(46f, 1.2f, -42f), new Vector3(15f, 4.4f, 9.6f)),
+                area = new Bounds(new Vector3(46.5f, 1.2f, -42f), new Vector3(14f, 4.4f, 9.6f)),
                 pos = new Vector3(46f, 2.9f, -30.5f),
                 lookAt = new Vector3(46f, 0.6f, -43f), fov = 52f, sukashi = "IeKabeN",
             });
