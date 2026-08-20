@@ -346,6 +346,8 @@ public static class BuildMura {
         // ---- S1-2：俯瞰エディタ（F2）。カメラの 担当範囲・位置・向き、音源の 半径を 見る
         var fukan = camGO.AddComponent<MuraFukan>();
         fukan.fix = fix; fukan.target = player.transform;
+        var uiFont = AssetDatabase.LoadAssetAtPath<Font>("Assets/Art/Fonts/PixelMplus12-Regular.ttf");
+        fukan.font = uiFont; fix.font = uiFont;
 
         // ---- S1-3：音源（位置・届く半径・遮蔽つき。聞き手は 主人公）
         player.AddComponent<MuraOtoKikite>();

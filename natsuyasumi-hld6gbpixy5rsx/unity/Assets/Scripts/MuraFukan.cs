@@ -8,6 +8,7 @@ public class MuraFukan : MonoBehaviour {
     public MuraCamFixed fix;
     public Transform target;
     public float height = 55f, size = 45f;
+    public Font font;
 
     bool on;
     Camera cam;
@@ -112,6 +113,7 @@ public class MuraFukan : MonoBehaviour {
 
     // ---- 名前 ----
     void OnGUI() {
+        if (font != null) GUI.skin.font = font;
         if (!on || fix == null || fix.spots == null || cam == null) return;
         GUI.Label(new Rect(10, 34, 900, 24), "F2=俯瞰をとじる   左ドラッグ=見る場所をうごかす   ホイール=寄り引き");
         // 凡例（画面の 左下）

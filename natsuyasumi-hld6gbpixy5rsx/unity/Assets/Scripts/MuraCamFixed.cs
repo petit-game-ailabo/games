@@ -33,6 +33,8 @@ public class MuraCamFixed : MonoBehaviour {
     public static string PlaceName = "-";
     // 俯瞰（F2）の あいだは カメラを さわらない（Tの 状態に よらず 俯瞰が 支配する）
     public static bool Suspended;
+    // WebGL は OSの フォントを 借りられず 日本語が 消える。同梱の PixelMplus を つかう
+    public Font font;
 
     void Start() { cam = GetComponent<Camera>(); }
 
@@ -41,6 +43,7 @@ public class MuraCamFixed : MonoBehaviour {
     }
 
     void OnGUI() {
+        if (font != null) GUI.skin.font = font;
         GUI.Label(new Rect(10, 8, 1200, 26),
             "ばしょ【" + PlaceName + "】  カメラ【" + (hd2d ? "HD-2D追従" : CurName) + "】" +
             "   T=カメラ方式の切替（いま " + (hd2d ? "HD-2D追従" : "固定カット割り") + "）");
