@@ -389,6 +389,27 @@ public static class BuildMura {
         Oto("すずむし・たけやぶ", MuraOto.Koe.Suzumushi, 62f, 1f, -26f, 16f, 0.55f, 1f, 2);
         Oto("かえる・たんぼ", MuraOto.Koe.Kaeru, 8f, 0.3f, -18f, 18f, 0.5f, 1f, 2);
 
+        // ---- あそびスポット（縦切り用の 器。EVENTS 採用ぶんの 小物）
+        var te = player.AddComponent<MuraAsobiTe>();
+        te.font = uiFont;
+        void Asobi(string namae, string deki, float x, float y, float z, int hy = 0) {
+            var g = new GameObject("Asobi_" + namae);
+            g.transform.SetParent(root, false);
+            g.transform.position = new Vector3(x, y, z);
+            var a = g.AddComponent<MuraAsobi>();
+            a.namae = namae; a.dekigoto = deki; a.hiruYoru = hy;
+        }
+        // 川がわ
+        Asobi("石を ひっくり返す", "サワガニが いた！", 24f, 0f, 3.6f);
+        Asobi("あみで ガサガサ", "ちいさな エビと ヤゴが とれた！", 17f, 0f, 4.8f, 1);
+        Asobi("えいっと 飛びこむ", "ざぶん！ ……つめたい！", -59f, 1.9f, 12f, 1);
+        Asobi("スイカを ひやす", "用水路に しずめた。夕方 とりに こよう", 6f, 0f, -12.2f, 1);
+        // いえ がわ
+        Asobi("縁の下を のぞく", "すり鉢の あな……アリジゴクだ", 34f, 0f, -35.8f, 1);
+        Asobi("木を 見あげる", "セミの ようちゅうが のぼって いく……", 50.5f, 0f, -30.6f, 2);
+        // 目じるしの 小石（しらべる 石が 見える ように）
+        Box(root, "Ishi_Kani", new Vector3(24f, 0.12f, 3.6f), new Vector3(0.7f, 0.25f, 0.6f), mGrey);
+
         mv.cam = camGO.transform;
         // ★手前の 物を 透明にする 保険（MuraKabenuki）は 廃止（本人 2026-08-18
         //   「急に消えるのはおかしい。消えている物を実在すると認識しながら操作できない」）。
