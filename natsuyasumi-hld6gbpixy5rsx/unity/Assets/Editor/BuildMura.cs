@@ -181,6 +181,24 @@ public static class BuildMura {
                 new Vector3(1.1f, 0.5f, 1.1f), mGrey);
         Box(root, "Asase", new Vector3(45f, -0.5f, 8f), new Vector3(6f, 0.44f, 6.4f), mGrey);
 
+        // ---- 川上流の 岩場と 淵（D-111：飛び込み・ゴーグル潜り・水泳大会の 会場）
+        // 淵＝色の 濃い 深み（絵だけ）。岩＝低い 足場(0.3きざみ)から 飛び込み岩(1.8m)へ
+        var fuchi = Box(root, "Fuchi", new Vector3(-60f, -0.36f, 8f), new Vector3(14f, 0.06f, 5.2f),
+                        Mat("MuraFukamizu", new Color(0.22f, 0.38f, 0.52f)));
+        Object.DestroyImmediate(fuchi.GetComponent<Collider>());
+        Box(root, "Iwa_Fumi1", new Vector3(-63f, 0.15f, 12.4f), new Vector3(2.0f, 0.3f, 1.6f), mGrey);
+        Box(root, "Iwa_Fumi2", new Vector3(-61f, 0.45f, 12.2f), new Vector3(1.8f, 0.9f, 1.5f), mGrey);
+        Box(root, "Iwa_Tobikomi", new Vector3(-59f, 0.9f, 12.0f), new Vector3(2.4f, 1.8f, 2.0f), mGrey);
+        // ---- 川岸の 草ぎわ（ガサガサの 場。ヨシの 帯・あたり無し）
+        for (int i = 0; i < 9; i++) {
+            var yoshi = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            yoshi.name = "Yoshi" + i; yoshi.transform.SetParent(root, false);
+            yoshi.transform.position = new Vector3(13.5f + i * 1.6f, 0.5f, 4.7f + (i % 3) * 0.3f);
+            yoshi.transform.localScale = new Vector3(0.12f, 0.55f, 0.12f);
+            yoshi.GetComponent<Renderer>().sharedMaterial = mGreen;
+            Object.DestroyImmediate(yoshi.GetComponent<Collider>());
+        }
+
         // ---- 駄菓子屋（橋の たもと 南）・池（東）・バス停（南の入り口）
         Box(root, "Dagashiya", new Vector3(-38f, 1.5f, -1f), new Vector3(7f, 3.0f, 5f), mGrey);
         Box(root, "Dagashiya_Noren", new Vector3(-38f, 1.9f, 1.7f), new Vector3(5.4f, 1.1f, 0.1f),
@@ -315,7 +333,9 @@ public static class BuildMura {
             S("やまみち", -20f, 44f, 16f, 12f,   -20.0f, 9.3f, 26.6f,   -20f, 0.8f, 44f, 44f),  // 残る問題点=0
             S("ひみつきち", -10f, 51f, 16f, 8f,   -10f, 9.0f, 37.5f,   -10f, 0.8f, 51f, 42f),  // 真南から（Fitの斜めは枠不足だった）
             S("さわ", 25f, 50f, 20f, 10f,   25.0f, 10.8f, 29.6f,   25f, 0.8f, 50f, 42f),  // 残る問題点=0
-            S("あさせ", 45f, 8f, 14f, 14f,   45.0f, 9.6f, -10.1f,   45f, 0.8f, 8f, 42f),  // 残る問題点=0
+            S("あさせ", 45f, 8f, 14f, 14f,   45.0f, 9.6f, -10.1f,   45f, 0.8f, 8f, 42f),
+            // 岩場と 淵（D-111 の 新地形）。南から 岩と 淵を 一枚に
+            S("いわば", -60f, 8.5f, 16f, 11f,   -60.0f, 8.0f, -9.0f,   -60f, 0.8f, 9f, 46f),  // 残る問題点=0
         };
         // ★S0-4 屋内カメラの 型：入ると カット＋北壁だけ 消える（sukashi）。
         //   **部屋ごとに 1台**（入口の 1台では 中じきりの むこうが 見えない＝Checkで 実測）
