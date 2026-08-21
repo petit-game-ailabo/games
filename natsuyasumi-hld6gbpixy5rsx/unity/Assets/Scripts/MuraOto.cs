@@ -12,6 +12,8 @@ public class MuraOto : MonoBehaviour {
     public float kikoeru = 18f;      // 届く 半径(m)
     public float ookisa = 0.8f;      // もとの 大きさ 0..1
     public float takasa = 1f;        // 音の 高さの かけ算（1=素）
+    public int hiruYoru = 0;         // 0=いつも 1=昼だけ 2=夜だけ（セミ↔スズムシの 出しわけ）
+    float gateNow = 1f;
 
     Transform listener;
     AudioSource src;
@@ -64,7 +66,11 @@ public class MuraOto : MonoBehaviour {
         // 低い 音ほど 回り込む：4kHz(セミ)は 0.2 まで 落ち、220Hz(川)は 0.75 のこる
         float mawari = Mathf.Lerp(0.85f, 0.2f, Mathf.InverseLerp(200f, 4500f, BaseHz() * takasa));
         float saegiri = Mathf.Lerp(1f, mawari, sissoku);
-        src.volume = ookisa * kyori * saegiri;
+        // 昼夜の 出しわけ（なめらかに 移る）
+        float gate = hiruYoru == 0 ? 1f : hiruYoru == 1 ? (MuraDay.Night ? 0f : 1f)
+                                                        : (MuraDay.Night ? 1f : 0f);
+        gateNow = Mathf.Lerp(gateNow, gate, 1f - Mathf.Exp(-1.5f * Time.deltaTime));
+        src.volume = ookisa * kyori * saegiri * gateNow;
         lpf.cutoffFrequency = Mathf.Lerp(22000f, 900f, sissoku); // こもり
     }
 }
@@ -77,6 +83,26 @@ public class MuraOtoKikite : MonoBehaviour {
 
 /// <summary>声を 手続き生成する（ファイル 不要・44100Hz 2秒 ループ）</summary>
 public static class OtoGen {
+    /// <summary>17時の チャイム（防災無線ふうの 2音。EVENTS A「終わりの 合図」）</summary>
+    public static AudioClip Chime() {
+        const int SR = 44100; int n = SR * 3;
+        var d = new float[n];
+        // ソ→ミ の 2音を ゆっくり（遠くで 鳴って いる 感じは MuraOto 側でなく 音量で）
+        float[] f = { 784f, 659f, 784f, 659f };
+        float[] t0 = { 0.0f, 0.7f, 1.4f, 2.1f };
+        for (int k = 0; k < f.Length; k++) {
+            int s0 = (int)(t0[k] * SR), len = (int)(0.65f * SR);
+            for (int i = 0; i < len && s0 + i < n; i++) {
+                float tt = i / (float)SR;
+                float env = Mathf.Exp(-tt * 3.2f);
+                d[s0 + i] += Mathf.Sin(tt * f[k] * Mathf.PI * 2f) * env * 0.5f;
+            }
+        }
+        var clip = AudioClip.Create("Chime", n, 1, SR, false);
+        clip.SetData(d, 0);
+        return clip;
+    }
+
     public static AudioClip Clip(MuraOto.Koe koe, float takasa) {
         const int SR = 44100; int n = SR * 2;
         var d = new float[n];

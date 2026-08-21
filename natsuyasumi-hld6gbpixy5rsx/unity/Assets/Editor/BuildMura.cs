@@ -136,6 +136,9 @@ public static class BuildMura {
         Denkyu("heya", 34f, -42f);
         Box(root, "Ido", new Vector3(33f, 0.5f, -33f), new Vector3(1.4f, 1.0f, 1.4f), mGrey);
         Box(root, "Monohoshi", new Vector3(47f, 1.1f, -33f), new Vector3(6f, 0.1f, 0.1f), mGrey);
+        Tree(root, 51f, -31f, 4.5f, 0f);   // 庭の木（セミの羽化・夜の観察の場）
+        // 精霊馬の 置き台（縁側の まえ。中身は 13-15日だけ 出す＝R4）
+        Box(root, "Shoryo_Dai", new Vector3(37f, 0.35f, -35.4f), new Vector3(1.2f, 0.3f, 0.5f), mWood);
         // ★家の 裏は 生垣で ふさぐ（本人の 方針：隠れる 場所は 配置で 消す。
         //   HD-2Dで カメラが 家に めり込む 経路も これで 消える）
         Box(root, "Ikegaki_Ura", new Vector3(42f, 1.0f, -49f), new Vector3(36f, 2.0f, 1.2f), mGreen);
@@ -372,19 +375,19 @@ public static class BuildMura {
         // ---- S1-3：音源（位置・届く半径・遮蔽つき。聞き手は 主人公）
         player.AddComponent<MuraOtoKikite>();
         void Oto(string name, MuraOto.Koe koe, float x, float y, float z,
-                 float r, float vol, float pitch = 1f) {
+                 float r, float vol, float pitch = 1f, int hy = 0) {
             var g = new GameObject("Oto_" + name);
             g.transform.SetParent(root, false);
             g.transform.position = new Vector3(x, y, z);
             var o = g.AddComponent<MuraOto>();
-            o.namae = name; o.koe = koe; o.kikoeru = r; o.ookisa = vol; o.takasa = pitch;
+            o.namae = name; o.koe = koe; o.kikoeru = r; o.ookisa = vol; o.takasa = pitch; o.hiruYoru = hy;
         }
-        Oto("せみ・ぬしの木", MuraOto.Koe.Semi, 45f, 7f, 52f, 26f, 0.6f);
-        Oto("せみ・すぎ", MuraOto.Koe.Semi, -56f, 6f, 42f, 22f, 0.45f, 0.93f);
+        Oto("せみ・ぬしの木", MuraOto.Koe.Semi, 45f, 7f, 52f, 26f, 0.6f, 1f, 1);
+        Oto("せみ・すぎ", MuraOto.Koe.Semi, -56f, 6f, 42f, 22f, 0.45f, 0.93f, 1);
         Oto("かわ", MuraOto.Koe.Kawa, -10f, 0f, 8f, 30f, 0.8f);
         Oto("かわ・ひがし", MuraOto.Koe.Kawa, 40f, 0f, 8f, 26f, 0.7f, 1.15f);
-        Oto("すずむし・たけやぶ", MuraOto.Koe.Suzumushi, 62f, 1f, -26f, 16f, 0.55f);
-        Oto("かえる・たんぼ", MuraOto.Koe.Kaeru, 8f, 0.3f, -18f, 18f, 0.5f);
+        Oto("すずむし・たけやぶ", MuraOto.Koe.Suzumushi, 62f, 1f, -26f, 16f, 0.55f, 1f, 2);
+        Oto("かえる・たんぼ", MuraOto.Koe.Kaeru, 8f, 0.3f, -18f, 18f, 0.5f, 1f, 2);
 
         mv.cam = camGO.transform;
         // ★手前の 物を 透明にする 保険（MuraKabenuki）は 廃止（本人 2026-08-18
@@ -397,6 +400,10 @@ public static class BuildMura {
         sun.color = new Color(1f, 0.95f, 0.84f);
         sun.transform.rotation = Quaternion.Euler(52f, -35f, 0f);
         sun.shadows = LightShadows.Soft;
+        // 縦切り1日（R4の 先がけ）：時計・太陽・チャイム・Zで ねる
+        var dayGO = new GameObject("Day");
+        var md = dayGO.AddComponent<MuraDay>();
+        md.sun = sun; md.font = uiFont;
         RenderSettings.ambientLight = new Color(0.52f, 0.56f, 0.60f);
         // 空気感（奥ほど かすむ）。遠くの 山が 溶けて 遠近が 出る
         RenderSettings.fog = true;
