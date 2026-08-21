@@ -463,6 +463,7 @@ public static class BuildMura {
         var dayGO = new GameObject("Day");
         var md = dayGO.AddComponent<MuraDay>();
         md.sun = sun; md.font = uiFont;
+        dayGO.AddComponent<MuraHanabi>();   // 8月8日の 夜、南の 山なみの 上に 遠花火
         RenderSettings.ambientLight = new Color(0.52f, 0.56f, 0.60f);
         // 空気感（奥ほど かすむ）。遠くの 山が 溶けて 遠近が 出る
         RenderSettings.fog = true;
