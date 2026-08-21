@@ -9,7 +9,12 @@ public class MuraAsobi : MonoBehaviour {
     public string dekigoto = "なにかが いた！";
     public float chikasa = 1.9f;
     public int hiruYoru = 0;          // 0=いつも 1=昼だけ 2=夜だけ
-    public bool kieru = false;        // つかまえたら いなくなる（虫）
+    public bool kieru = false;        // つかまえたら その日は いなくなる（あした 戻る）
+    // 2段階もの（スイカ冷やし 等）：はじめに dekigoto → matsu 時間 まって dekigoto2。
+    // 待ちの あいだに 押すと mada
+    public string dekigoto2 = "", mada = "";
+    public float matsu = 0f;
+    [HideInInspector] public float readyHour = -1f;
 
     public static readonly List<MuraAsobi> All = new List<MuraAsobi>();
     void OnEnable() { All.Add(this); }
@@ -44,8 +49,15 @@ public class MuraAsobiTe : MonoBehaviour {
         if (toastT > 0f) toastT -= Time.deltaTime;
         var n = Nearest();
         if (n != null && Input.GetKeyDown(KeyCode.Space)) {
-            toast = n.dekigoto; toastT = 2.6f; kazu++;
-            if (n.kieru) Destroy(n.gameObject);
+            toastT = 2.6f;
+            if (n.matsu > 0f) {                       // 2段階もの
+                if (n.readyHour < 0f) { toast = n.dekigoto; n.readyHour = MuraDay.Hour + n.matsu; }
+                else if (MuraDay.Hour < n.readyHour) { toast = n.mada; }
+                else { toast = n.dekigoto2; n.readyHour = -1f; kazu++; }
+            } else {
+                toast = n.dekigoto; kazu++;
+                if (n.kieru) { n.gameObject.SetActive(false); MuraDay.Ashita.Add(n.gameObject); }
+            }
         }
     }
 

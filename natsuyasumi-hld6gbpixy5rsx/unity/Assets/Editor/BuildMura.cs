@@ -403,7 +403,17 @@ public static class BuildMura {
         Asobi("石を ひっくり返す", "サワガニが いた！", 24f, 0f, 3.6f);
         Asobi("あみで ガサガサ", "ちいさな エビと ヤゴが とれた！", 17f, 0f, 4.8f, 1);
         Asobi("えいっと 飛びこむ", "ざぶん！ ……つめたい！", -59f, 1.9f, 12f, 1);
-        Asobi("スイカを ひやす", "用水路に しずめた。夕方 とりに こよう", 6f, 0f, -12.2f, 1);
+        {   // スイカ冷やし＝2段階（しずめる → 3時間 まつ → つめたい）
+            var g = new GameObject("Asobi_スイカ");
+            g.transform.SetParent(root, false);
+            g.transform.position = new Vector3(6f, 0f, -12.2f);
+            var a = g.AddComponent<MuraAsobi>();
+            a.namae = "スイカを ひやす"; a.hiruYoru = 1;
+            a.dekigoto = "用水路に しずめた。あとで とりに こよう";
+            a.mada = "……まだ ぬるい。もう すこし あとで";
+            a.dekigoto2 = "よく ひえてる！ 今夜は スイカだ";
+            a.matsu = 3f;
+        }
         // いえ がわ
         Asobi("縁の下を のぞく", "すり鉢の あな……アリジゴクだ", 34f, 0f, -35.8f, 1);
         Asobi("木を 見あげる", "セミの ようちゅうが のぼって いく……", 50.5f, 0f, -30.6f, 2);

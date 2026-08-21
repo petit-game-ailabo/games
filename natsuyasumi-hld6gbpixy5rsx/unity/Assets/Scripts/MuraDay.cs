@@ -12,6 +12,9 @@ public class MuraDay : MonoBehaviour {
     public static bool Night { get { return Hour < 5f || Hour >= 19f; } }
 
     const float SecPerHour = 40f;        // 1時間=40秒 → 6:00-21:00 が 10分（検証用の 早回し）
+    // その日 つかまえた 虫など「あしたに なったら 戻る」もの
+    public static readonly System.Collections.Generic.List<GameObject> Ashita =
+        new System.Collections.Generic.List<GameObject>();
     bool chimed;
     AudioSource chime;
 
@@ -30,7 +33,11 @@ public class MuraDay : MonoBehaviour {
         if (Hour < 16f) chimed = false;
 
         // Z で ねる → 翌日の 朝
-        if (Input.GetKeyDown(KeyCode.Z)) { Day = Mathf.Min(Day + 1, 31); Hour = 6.5f; }
+        if (Input.GetKeyDown(KeyCode.Z)) {
+            Day = Mathf.Min(Day + 1, 31); Hour = 6.5f;
+            foreach (var g in Ashita) if (g != null) g.SetActive(true);   // 虫は あしたも 出る
+            Ashita.Clear();
+        }
 
         if (sun == null) return;
         float t = Mathf.InverseLerp(5f, 19f, Hour);           // 日の出〜日の入り
