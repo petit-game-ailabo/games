@@ -9,6 +9,7 @@ public class MuraAsobi : MonoBehaviour {
     public string dekigoto = "なにかが いた！";
     public float chikasa = 1.9f;
     public int hiruYoru = 0;          // 0=いつも 1=昼だけ 2=夜だけ
+    public bool kieru = false;        // つかまえたら いなくなる（虫）
 
     public static readonly List<MuraAsobi> All = new List<MuraAsobi>();
     void OnEnable() { All.Add(this); }
@@ -44,6 +45,7 @@ public class MuraAsobiTe : MonoBehaviour {
         var n = Nearest();
         if (n != null && Input.GetKeyDown(KeyCode.Space)) {
             toast = n.dekigoto; toastT = 2.6f; kazu++;
+            if (n.kieru) Destroy(n.gameObject);
         }
     }
 

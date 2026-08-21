@@ -409,6 +409,34 @@ public static class BuildMura {
         Asobi("木を 見あげる", "セミの ようちゅうが のぼって いく……", 50.5f, 0f, -30.6f, 2);
         // 目じるしの 小石（しらべる 石が 見える ように）
         Box(root, "Ishi_Kani", new Vector3(24f, 0.12f, 3.6f), new Vector3(0.7f, 0.25f, 0.6f), mGrey);
+        Asobi("ラムネを のむ", "しゅわしゅわ……王冠を もらった！", -37f, 0f, -3.4f, 1);
+
+        // ---- 虫（うごく あそびスポット。昼＝チョウ/トンボ、夜＝ホタル）
+        void Mushi(string name, string deki, Color c, float x, float z, float takasa,
+                   int hy, bool hikaru = false) {
+            var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            g.name = "Mushi_" + name;
+            g.transform.SetParent(root, false);
+            g.transform.position = new Vector3(x, takasa, z);
+            g.transform.localScale = new Vector3(0.22f, 0.1f, 0.22f);
+            g.GetComponent<Renderer>().sharedMaterial = Mat("MuraMushi_" + name.Substring(0, 2), c);
+            Object.DestroyImmediate(g.GetComponent<Collider>());
+            var mm = g.AddComponent<MuraMushi>();
+            mm.anchor = new Vector3(x, 0f, z); mm.takasa = takasa;
+            var a = g.AddComponent<MuraAsobi>();
+            a.namae = "あみを ふる"; a.dekigoto = deki; a.hiruYoru = hy; a.kieru = true; a.chikasa = 1.6f;
+            if (hikaru) {
+                var li = g.AddComponent<Light>();
+                li.type = LightType.Point; li.range = 3.5f; li.intensity = 2.4f;
+                li.color = new Color(0.7f, 1f, 0.5f);
+            }
+        }
+        Mushi("チョウ1", "モンシロチョウを つかまえた！", Color.white, 10f, -19f, 1.1f, 1);
+        Mushi("チョウ2", "キアゲハを つかまえた！", new Color(1f, 0.85f, 0.2f), 18f, -14f, 1.2f, 1);
+        Mushi("トンボ1", "シオカラトンボを つかまえた！", new Color(0.6f, 0.75f, 0.95f), 4f, -13f, 1.4f, 1);
+        Mushi("トンボ2", "アキアカネを つかまえた！", new Color(0.9f, 0.3f, 0.25f), 26f, 1.5f, 1.3f, 1);
+        Mushi("ホタル1", "ホタルを そっと つかまえた……", new Color(0.75f, 1f, 0.5f), 25f, 50f, 1.0f, 2, true);
+        Mushi("ホタル2", "ホタルが 手の なかで ひかって いる", new Color(0.75f, 1f, 0.5f), 27f, 48f, 0.9f, 2, true);
 
         mv.cam = camGO.transform;
         // ★手前の 物を 透明にする 保険（MuraKabenuki）は 廃止（本人 2026-08-18
