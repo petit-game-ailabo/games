@@ -9,6 +9,15 @@ using System.Collections.Generic;
 public static class BuildMura {
 
     static Material mGround, mRoad, mWater, mWood, mRed, mGrey, mGreen, mDark, mPaddy;
+    static Material mPlaster, mRoofT, mTatamiT;
+
+    // R5テスト第二段：本編の ドット絵化テクスチャ（CC0）を 貼る
+    static Material MatT(string name, string tex, float tx, float ty) {
+        var m = Mat(name, Color.white);
+        m.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/" + tex);
+        m.mainTextureScale = new Vector2(tx, ty);
+        return m;
+    }
 
     static Material MatH(string name, Color c, float emi) {
         var m = Mat(name, c);
@@ -69,12 +78,15 @@ public static class BuildMura {
             UnityEditor.SceneManagement.NewSceneMode.Single);
         var root = new GameObject("Mura").transform;
 
-        mGround = Mat("MuraGround", new Color(0.55f, 0.62f, 0.42f));
-        mRoad   = Mat("MuraRoad",   new Color(0.62f, 0.55f, 0.42f));
+        mGround = MatT("MuraGroundT", "grass_ground.png", 90f, 60f);
+        mRoad   = MatT("MuraRoadT",   "dirt_path.png", 2f, 10f);
         mWater  = Mat("MuraWater",  new Color(0.36f, 0.56f, 0.66f));
-        mWood   = Mat("MuraWood",   new Color(0.45f, 0.35f, 0.26f));
+        mWood   = MatT("MuraWoodT",  "wood_beam.png", 2f, 2f);
         mRed    = Mat("MuraRed",    new Color(0.78f, 0.25f, 0.20f));
-        mGrey   = Mat("MuraGrey",   new Color(0.72f, 0.72f, 0.70f));
+        mGrey   = MatT("MuraStoneT", "stone.png", 2f, 2f);
+        mPlaster = MatT("MuraPlasterT", "plaster_wall.png", 4f, 2f);
+        mRoofT   = MatT("MuraRoofT",  "roof_tile.png", 10f, 5f);
+        mTatamiT = MatT("MuraTatamiT", "tatami.png", 6f, 3f);
         mGreen  = Mat("MuraGreen",  new Color(0.36f, 0.52f, 0.30f));
         mDark   = Mat("MuraDark",   new Color(0.30f, 0.30f, 0.30f));
         mPaddy  = Mat("MuraPaddy",  new Color(0.42f, 0.58f, 0.34f));
@@ -178,23 +190,23 @@ public static class BuildMura {
 
         // ---- 母屋（南東）。★S0-4：入れる 家に した。北壁に 戸口、屋内カメラの あいだは
         //   北壁だけ 消える（すかし＝IeKabeN）。屋根は 屋内カメラの 視線を さえぎらない 高さ
-        Box(root, "Omoya_Yuka", new Vector3(42f, 0.15f, -42f), new Vector3(24f, 0.3f, 12f), mWood);
+        Box(root, "Omoya_Yuka", new Vector3(42f, 0.15f, -42f), new Vector3(24f, 0.3f, 12f), mTatamiT);
         // 北壁（戸口 1.3m を x=40 に。3まい＝左・右・かもいの上）
-        Box(root, "IeKabeN_L", new Vector3(34.6f, 1.45f, -36.2f), new Vector3(9.2f, 2.6f, 0.3f), mGrey);
-        Box(root, "IeKabeN_R", new Vector3(47.6f, 1.45f, -36.2f), new Vector3(12.7f, 2.6f, 0.3f), mGrey);
-        Box(root, "IeKabeN_Ue", new Vector3(40.7f, 2.35f, -36.2f), new Vector3(1.4f, 0.8f, 0.3f), mGrey);
+        Box(root, "IeKabeN_L", new Vector3(34.6f, 1.45f, -36.2f), new Vector3(9.2f, 2.6f, 0.3f), mPlaster);
+        Box(root, "IeKabeN_R", new Vector3(47.6f, 1.45f, -36.2f), new Vector3(12.7f, 2.6f, 0.3f), mPlaster);
+        Box(root, "IeKabeN_Ue", new Vector3(40.7f, 2.35f, -36.2f), new Vector3(1.4f, 0.8f, 0.3f), mPlaster);
         // 南・東・西の 壁
-        Box(root, "IeKabeS", new Vector3(42f, 1.45f, -47.8f), new Vector3(24f, 2.6f, 0.3f), mGrey);
-        Box(root, "IeKabeW", new Vector3(30.2f, 1.45f, -42f), new Vector3(0.3f, 2.6f, 12f), mGrey);
-        Box(root, "IeKabeE", new Vector3(53.8f, 1.45f, -42f), new Vector3(0.3f, 2.6f, 12f), mGrey);
+        Box(root, "IeKabeS", new Vector3(42f, 1.45f, -47.8f), new Vector3(24f, 2.6f, 0.3f), mPlaster);
+        Box(root, "IeKabeW", new Vector3(30.2f, 1.45f, -42f), new Vector3(0.3f, 2.6f, 12f), mPlaster);
+        Box(root, "IeKabeE", new Vector3(53.8f, 1.45f, -42f), new Vector3(0.3f, 2.6f, 12f), mPlaster);
         // 中の しきり（西の 部屋と 東の 土間。戸口 1.3m）
-        Box(root, "IeSikiri_N", new Vector3(38f, 1.45f, -40.4f), new Vector3(0.25f, 2.6f, 3.4f), mGrey);
-        Box(root, "IeSikiri_S", new Vector3(38f, 1.45f, -46.2f), new Vector3(0.25f, 2.6f, 3.2f), mGrey);
+        Box(root, "IeSikiri_N", new Vector3(38f, 1.45f, -40.4f), new Vector3(0.25f, 2.6f, 3.4f), mPlaster);
+        Box(root, "IeSikiri_S", new Vector3(38f, 1.45f, -46.2f), new Vector3(0.25f, 2.6f, 3.2f), mPlaster);
         // ちゃぶ台と ふとん（部屋の 目じるし）
         Box(root, "Chabudai", new Vector3(34f, 0.5f, -42f), new Vector3(1.6f, 0.4f, 1.6f), mWood);
         Box(root, "Futon", new Vector3(50f, 0.4f, -45f), new Vector3(2.2f, 0.25f, 1.4f), mGrey);
         // 屋根（高さ 3.4〜4.0。屋内カメラは 3.2 より 低い 視線で 入る）
-        Box(root, "Omoya_Yane", new Vector3(42f, 3.7f, -42f), new Vector3(26f, 0.6f, 14f), mDark);
+        Box(root, "Omoya_Yane", new Vector3(42f, 3.7f, -42f), new Vector3(26f, 0.6f, 14f), mRoofT);
         // 屋内の 明かり（裸電球ふう。屋根で 太陽が 入らない）
         void Denkyu(string n, float x, float z) {
             var g = new GameObject("Denkyu_" + n);
