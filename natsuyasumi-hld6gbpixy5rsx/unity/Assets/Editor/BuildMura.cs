@@ -10,6 +10,13 @@ public static class BuildMura {
 
     static Material mGround, mRoad, mWater, mWood, mRed, mGrey, mGreen, mDark, mPaddy;
 
+    static Material MatH(string name, Color c, float emi) {
+        var m = Mat(name, c);
+        m.EnableKeyword("_EMISSION");
+        m.SetColor("_EmissionColor", c * emi);
+        return m;
+    }
+
     static Material Mat(string name, Color c) {
         string dir = "Assets/Art/Materials/Mura";
         System.IO.Directory.CreateDirectory(dir);
@@ -97,6 +104,71 @@ public static class BuildMura {
         foreach (var p in new[] { new Vector2(-58,32), new Vector2(-56,42), new Vector2(-40,44),
                                   new Vector2(-36,34), new Vector2(-52,28), new Vector2(-60,38) })
             Tree(root, p.x, p.y, 6f, 4f);
+
+        // ---- 夏祭り（R5テスト・本編Zashikiのレシピを移植。本番は9-10日だけ→R4で出し入れ）
+        // 提灯＝なわに つるす。上下に 赤い わっか、まん中は **光る 紙**（発光マテリアル）。
+        // 白い 箱を ならべても 祭りには 見えない、が 本編の 教訓
+        {
+            var mAka   = Mat("MatsuriAka2",   new Color(0.78f, 0.16f, 0.14f));
+            var mShiro = Mat("MatsuriShiro2", new Color(0.94f, 0.92f, 0.86f));
+            var mHi    = MatH("MatsuriHi2",   new Color(1.00f, 0.82f, 0.46f), 2.2f);
+            var mNawa  = Mat("MatsuriNawa2",  new Color(0.30f, 0.24f, 0.16f));
+            const float Y = 4f;                       // 祠の 丘の 上
+            // 参道の 両がわに 竹→なわ→提灯
+            for (int side = -1; side <= 1; side += 2) {
+                float x = -45f + side * 3.2f;
+                for (int i = 0; i < 5; i++) {
+                    float z = 28f + i * 1.9f;
+                    Box(root, "M_Take" + side + "_" + i, new Vector3(x, Y + 1.55f, z),
+                        new Vector3(0.09f, 3.1f, 0.09f), mWood);
+                    if (i == 4) continue;
+                    Box(root, "M_Nawa" + side + "_" + i, new Vector3(x, Y + 3.02f, z + 0.95f),
+                        new Vector3(0.035f, 0.035f, 1.9f), mNawa);
+                    for (int k = 0; k < 2; k++) {
+                        float cz = z + 0.55f + k * 0.85f, cy = Y + 2.62f;
+                        Box(root, "M_ChoUe" + side + "_" + i + "_" + k, new Vector3(x, cy + 0.20f, cz),
+                            new Vector3(0.20f, 0.05f, 0.20f), mAka);
+                        Box(root, "M_Cho" + side + "_" + i + "_" + k, new Vector3(x, cy, cz),
+                            new Vector3(0.30f, 0.36f, 0.30f), mHi);
+                        Box(root, "M_ChoSita" + side + "_" + i + "_" + k, new Vector3(x, cy - 0.20f, cz),
+                            new Vector3(0.20f, 0.05f, 0.20f), mAka);
+                    }
+                }
+                // 地めんを 照らす 灯は 片がわ 1つずつ（点光源を 増やすと 夜が 白飛びする）
+                var gl = new GameObject("M_Akari" + side);
+                gl.transform.SetParent(root, false);
+                gl.transform.position = new Vector3(x, Y + 2.6f, 32f);
+                var gt = gl.AddComponent<Light>();
+                gt.type = LightType.Point; gt.color = new Color(1f, 0.78f, 0.46f);
+                gt.intensity = 3.2f; gt.range = 12f; gt.shadows = LightShadows.None;
+            }
+            // 屋台 2つ（紅白しまの 屋根＋看板＋弱い 灯）
+            for (int i = 0; i < 2; i++) {
+                float x = i == 0 ? -52f : -38f, z = 32.5f;
+                Box(root, "M_YataiDai" + i, new Vector3(x, Y + 0.5f, z), new Vector3(3.0f, 1.0f, 1.4f), mWood);
+                for (int k = -1; k <= 1; k += 2)
+                    Box(root, "M_YataiHashira" + i + "_" + k, new Vector3(x + k * 1.5f, Y + 1.35f, z),
+                        new Vector3(0.10f, 2.7f, 0.10f), mWood);
+                for (int k = 0; k < 6; k++)
+                    Box(root, "M_YataiYane" + i + "_" + k,
+                        new Vector3(x - 1.65f + 0.275f + k * 0.55f, Y + 2.65f, z),
+                        new Vector3(0.55f, 0.12f, 2.0f), (k % 2 == 0) ? mAka : mShiro);
+                Box(root, "M_YataiKanban" + i, new Vector3(x, Y + 2.20f, z - 0.98f),
+                    new Vector3(2.2f, 0.44f, 0.06f), i == 0 ? mShiro : mAka);
+                var yl = new GameObject("M_Hi" + i);
+                yl.transform.SetParent(root, false);
+                yl.transform.position = new Vector3(x, Y + 2.25f, z + 0.2f);
+                var yt = yl.AddComponent<Light>();
+                yt.type = LightType.Point; yt.color = new Color(1f, 0.86f, 0.62f);
+                yt.intensity = 2.4f; yt.range = 6f; yt.shadows = LightShadows.None;
+            }
+            // のぼり（石段の 上の 入り口に 2本）
+            for (int k = -1; k <= 1; k += 2) {
+                float x = -45f + k * 5.4f;
+                Box(root, "M_NoboriBo" + k, new Vector3(x, Y + 1.9f, 27.5f), new Vector3(0.08f, 3.8f, 0.08f), mWood);
+                Box(root, "M_Nobori" + k, new Vector3(x + 0.34f, Y + 2.6f, 27.5f), new Vector3(0.6f, 2.0f, 0.04f), mAka);
+            }
+        }
 
         // ---- 高台（+6m・南西）と やぐら
         Box(root, "Oka_Takadai", new Vector3(-62f, 3f, -32f), new Vector3(34f, 6f, 30f), mGround);

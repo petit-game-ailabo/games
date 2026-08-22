@@ -19,6 +19,8 @@ public class MuraDay : MonoBehaviour {
     AudioSource chime;
 
     void Start() {
+        foreach (var a in System.Environment.GetCommandLineArgs())
+            if (a == "-yoru") { Day = 9; Hour = 19.8f; }   // 祭りの 夜を すぐ 見る
         chime = gameObject.AddComponent<AudioSource>();
         chime.clip = OtoGen.Chime();
         chime.spatialBlend = 0f; chime.volume = 0.5f;
