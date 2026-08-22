@@ -15,7 +15,7 @@ public class MuraDay : MonoBehaviour {
     // その日 つかまえた 虫など「あしたに なったら 戻る」もの
     public static readonly System.Collections.Generic.List<GameObject> Ashita =
         new System.Collections.Generic.List<GameObject>();
-    bool chimed;
+    bool chimed; bool f3;
     AudioSource chime;
 
     void Start() {
@@ -32,8 +32,12 @@ public class MuraDay : MonoBehaviour {
         if (!chimed && Hour >= 17f && Hour < 17.2f) { chimed = true; chime.Play(); }
         if (Hour < 16f) chimed = false;
 
-        // Z で ねる → 翌日の 朝
-        if (Input.GetKeyDown(KeyCode.Z)) {
+        // デバッグ：H=+1時間 J=あしたの朝 K=8日の夜 F3=きょうできること
+        if (Input.GetKeyDown(KeyCode.H)) Hour = Mathf.Repeat(Hour + 1f, 24f);
+        if (Input.GetKeyDown(KeyCode.K)) { Day = 8; Hour = 19.5f; }
+        if (Input.GetKeyDown(KeyCode.F3)) f3 = !f3;
+        // Z で ねる → 翌日の 朝（J も 同じ）
+        if (Input.GetKeyDown(KeyCode.Z) || Input.GetKeyDown(KeyCode.J)) {
             Day = Mathf.Min(Day + 1, 31); Hour = 6.5f;
             foreach (var g in Ashita) if (g != null) g.SetActive(true);   // 虫は あしたも 出る
             Ashita.Clear();
@@ -57,5 +61,17 @@ public class MuraDay : MonoBehaviour {
         int h = Mathf.FloorToInt(Hour), m = Mathf.FloorToInt((Hour - h) * 60f);
         GUI.Label(new Rect(Screen.width - 250, 8, 240, 26),
                   "8月" + Day + "日  " + h.ToString("00") + ":" + m.ToString("00") + "   Z=ねる");
+        if (f3) {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("== きょう できること（F3で とじる） ==");
+            foreach (var a in MuraAsobi.All)
+                if (a != null && a.Dekiru && a.gameObject.activeInHierarchy)
+                    sb.AppendLine("・" + a.namae + "  (" +
+                        a.transform.position.x.ToString("F0") + "," +
+                        a.transform.position.z.ToString("F0") + ")");
+            if (Day == 8) sb.AppendLine("・よる：とおくの 花火大会（高台から）");
+            sb.AppendLine("（H=+1時間  J=あしたの朝  K=8日のよる）");
+            GUI.Label(new Rect(Screen.width - 360, 60, 350, 500), sb.ToString());
+        }
     }
 }

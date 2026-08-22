@@ -292,6 +292,7 @@ public static class BuildMura {
         cam.fieldOfView = 46f; cam.nearClipPlane = 0.1f; cam.farClipPlane = 400f;
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.70f, 0.80f, 0.88f);
+        camGO.AddComponent<AudioListener>();   // ★これが 無いと 全部 無音（手組みカメラの 抜け）
         var camData = camGO.AddComponent<UniversalAdditionalCameraData>();
         camData.renderPostProcessing = true;                 // DoF/Bloom を 効かせる
         camData.antialiasing = AntialiasingMode.None;        // ドット絵を にじませない
