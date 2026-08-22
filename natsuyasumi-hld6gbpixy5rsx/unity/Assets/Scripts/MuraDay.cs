@@ -19,6 +19,9 @@ public class MuraDay : MonoBehaviour {
     AudioSource chime;
 
     void Start() {
+        // ★一旦 全部 ミュート（本人 2026-08-23「音が気持ち悪いところもある。一旦音消しておいて」）。
+        //   音の 見直しフェーズ（PLAN）で この 行を 消して 戻す
+        AudioListener.volume = 0f;
         foreach (var a in System.Environment.GetCommandLineArgs())
             if (a == "-yoru") { Day = 9; Hour = 19.8f; }   // 祭りの 夜を すぐ 見る
         chime = gameObject.AddComponent<AudioSource>();

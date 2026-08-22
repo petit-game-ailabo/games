@@ -47,6 +47,11 @@ public class MuraCamFixed : MonoBehaviour {
         GUI.Label(new Rect(10, 8, 1200, 26),
             "ばしょ【" + PlaceName + "】  カメラ【" + (hd2d ? "HD-2D追従" : CurName) + "】" +
             "   T=カメラ方式の切替（いま " + (hd2d ? "HD-2D追従" : "固定カット割り") + "）");
+        // キー説明は 画面に 出しっぱなし（本人 2026-08-23）。俯瞰中は 俯瞰の 説明に ゆずる
+        if (!Suspended)
+            GUI.Label(new Rect(10, Screen.height - 30, 1400, 24),
+                "WASD=はしる  Shift=あるく  Space=しらべる/あそぶ  Z/J=ねる  " +
+                "H=+1時間  K=8日の夜(花火)  F2=ふかん図  F3=きょうできること  T=カメラ切替");
     }
 
     // ---- 判定（MuraCamCheck からも つかう ので static）----
