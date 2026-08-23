@@ -324,6 +324,12 @@ public static class BuildMura {
             Random.InitState(20260823);                        // 配置は 毎回 同じ（差分を 見る ため）
             const float TopY = 6f;                             // 山の 棚の 上めん
             float PathZ(float x) => 52f + 2.6f * Mathf.Sin((x + 22f) * 0.13f);  // 蛇行（ひみつきちを よける）
+            // 地面の 凸凹（写真：じめんは 平らじゃない）。道と 縁は 平らの まま、端は 0 に
+            float Deko(float wx, float wz) {
+                float damp = Mathf.Clamp01((Mathf.Abs(wz - PathZ(wx)) - 1.9f) / 1.6f);
+                float edge = Mathf.Clamp01(Mathf.Min(wz - 47f, 57f - wz) / 1.0f);
+                return Mathf.Max(0f, (Mathf.PerlinNoise(wx * 0.35f + 3.1f, wz * 0.35f) - 0.35f) * 0.5f) * damp * edge;
+            }
             // level0破損の 切り分け用スイッチ（環境変数 KODA：m=道 k=草 o=落ち葉 t=木。無指定=全部）
             string koda = System.Environment.GetEnvironmentVariable("KODA") ?? "mkot";
             Debug.Log("[Probe] KODA=" + koda);
@@ -338,18 +344,45 @@ public static class BuildMura {
                 var mid = (a + b) * 0.5f; var d = b - a;
                 float yaw = Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg;
                 var fu = Box(root, "MichiFuchi" + seg,
-                    new Vector3(mid.x, TopY + 0.008f + (seg % 2) * 0.004f, mid.z),
+                    new Vector3(mid.x, TopY + 0.020f + (seg % 2) * 0.004f, mid.z),
                     new Vector3(3.4f, 0.016f, d.magnitude + 1.0f), mFuchi);
                 fu.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
                 Object.DestroyImmediate(fu.GetComponent<Collider>());
                 // fu.isStatic = true;  // ← level0破損の容疑で外した（静的バッチング）
                 float w = 1.5f + 0.35f * Mathf.Sin(x * 0.7f);  // 人の 足あと なりの 幅ゆらぎ
                 var ts = Box(root, "MichiTsuchi" + seg,
-                    new Vector3(mid.x, TopY + 0.026f + (seg % 2) * 0.004f, mid.z),
+                    new Vector3(mid.x, TopY + 0.040f + (seg % 2) * 0.004f, mid.z),
                     new Vector3(w, 0.016f, d.magnitude + 0.7f), mTsuchi);
                 ts.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
                 Object.DestroyImmediate(ts.GetComponent<Collider>());
                 // ts.isStatic = true;  // ← level0破損の容疑で外した（静的バッチング）
+            }
+            // 凸凹の 地面の 皮（見た目＋当たり。草・木も Deko と 同じ 高さに 置く）
+            if (koda.Contains("m")) {
+                int nx = 128, nzc = 20; float gx0 = -17f, gz0 = 47f; const float step = 0.5f;
+                var verts = new Vector3[(nx + 1) * (nzc + 1)];
+                var uv = new Vector2[verts.Length];
+                for (int iz = 0; iz <= nzc; iz++)
+                    for (int ix = 0; ix <= nx; ix++) {
+                        float wx = gx0 + ix * step, wz = gz0 + iz * step;
+                        verts[iz * (nx + 1) + ix] = new Vector3(wx, TopY + 0.012f + Deko(wx, wz), wz);
+                        uv[iz * (nx + 1) + ix] = new Vector2(wx * 0.5f, wz * 0.5f);
+                    }
+                var tris = new int[nx * nzc * 6];
+                int ti = 0;
+                for (int iz = 0; iz < nzc; iz++)
+                    for (int ix = 0; ix < nx; ix++) {
+                        int a = iz * (nx + 1) + ix;
+                        tris[ti++] = a; tris[ti++] = a + nx + 1; tris[ti++] = a + 1;
+                        tris[ti++] = a + 1; tris[ti++] = a + nx + 1; tris[ti++] = a + nx + 2;
+                    }
+                var jm = new Mesh { vertices = verts, uv = uv, triangles = tris };
+                jm.RecalculateNormals();
+                var jg = new GameObject("JimenDekoboko");
+                jg.transform.SetParent(root, false);
+                jg.AddComponent<MeshFilter>().sharedMesh = jm;
+                jg.AddComponent<MeshRenderer>().sharedMaterial = mGround;
+                jg.AddComponent<MeshCollider>().sharedMesh = jm;
             }
 
             // 板ポリの もとに なる Quad メッシュ（結合用）
@@ -359,7 +392,7 @@ public static class BuildMura {
                 quadMesh = tmpQ.GetComponent<MeshFilter>().sharedMesh;
                 Object.DestroyImmediate(tmpQ);
             }
-            GameObject Katamari(string name, List<CombineInstance> cis, Material m) {
+            GameObject Katamari(string name, List<CombineInstance> cis, Material m, bool kage = false) {
                 var mesh = new Mesh();
                 mesh.CombineMeshes(cis.ToArray(), true, true);
                 var g = new GameObject(name);
@@ -367,8 +400,9 @@ public static class BuildMura {
                 g.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var mr = g.AddComponent<MeshRenderer>();
                 mr.sharedMaterial = m;
-                // ★薄い 板の 影は シャドウマップで ちらつく（本人 2026-08-23）→ 草・落ち葉は 影を 落とさない
-                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                // ★薄い 板の 影は シャドウマップで ちらつく（本人 2026-08-23）→ 草・落ち葉は 影を 落とさない。
+                //   大きい 葉カード・枯れ枝は kage=true（木もれ日の 陰影）
+                if (!kage) mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 return g;
             }
 
@@ -385,26 +419,27 @@ public static class BuildMura {
                         list.Add(new CombineInstance {
                             mesh = quadMesh,
                             transform = Matrix4x4.TRS(
-                                new Vector3(x, TopY + s * 0.5f, z),
+                                new Vector3(x, TopY + Deko(x, z) + s * 0.5f, z),
                                 Quaternion.Euler(0f, yaw0 + 90f * q + Random.Range(-20f, 20f), 0f),
                                 new Vector3(s * 1.15f, s, 1f)),
                         });
                 }
-                for (int i = 0; i < 2400; i++) {
+                // ★写真は 草が 地面を「覆う」（本人 2026-08-24）→ 9000束。低い 覆い草が 主体
+                for (int i = 0; i < 9000; i++) {
                     float x = Random.Range(-17f, 47f);
                     float z = Random.Range(47.2f, 56.8f);
                     float dz = Mathf.Abs(z - PathZ(x));
-                    if (dz < 1.0f) continue;                          // 踏まれる ところに 草は ない
-                    if (dz < 1.9f && Random.value < 0.68f) continue;  // 縁は まばら
-                    bool takai = dz > 2.4f && Random.value < 0.16f;   // 背の 高い 草は 道から はなれて
-                    if (takai) KusaAt(x, z, Random.Range(0.55f, 0.95f), 1);
-                    else       KusaAt(x, z, Random.Range(0.22f, 0.45f), 0);
+                    if (dz < 0.95f) continue;                         // 踏まれる ところに 草は ない
+                    if (dz < 1.9f && Random.value < 0.55f) continue;  // 縁は まばら
+                    if (dz > 2.4f && Random.value < 0.10f) KusaAt(x, z, Random.Range(0.55f, 0.95f), 1);
+                    else KusaAt(x, z, Random.Range(0.16f, 0.40f), 0);
                 }
                 foreach (var kv in chunks)
                     Katamari("KusaChunk" + kv.Key, kv.Value, (kv.Key % 2) == 1 ? mTakeKusa : mTuft);
             }
 
-            // 落ち葉と 小枝（道の 上と 縁に 散らす。1メッシュに 結合）
+            // 落ち葉・苔・枯れ枝（写真：苔が あり、枝が 落ちていて、陰影が ある）
+            var mKoke = MatA("MuraKokeA", "koke.png");
             if (koda.Contains("o")) {
                 var cis = new List<CombineInstance>();
                 for (int i = 0; i < 90; i++) {
@@ -414,21 +449,63 @@ public static class BuildMura {
                     cis.Add(new CombineInstance {
                         mesh = quadMesh,
                         transform = Matrix4x4.TRS(
-                            new Vector3(x, TopY + 0.048f, z),
+                            new Vector3(x, TopY + 0.062f + Deko(x, z), z),
                             Quaternion.Euler(90f, Random.Range(0f, 360f), 0f),
                             new Vector3(s, s, 1f)),
                     });
                 }
                 Katamari("OchibaChunk", cis, mOchiba);
+                // 苔の まだら（道の きわに 多め・草地にも 点々）
+                var koCis = new List<CombineInstance>();
+                for (int i = 0; i < 130; i++) {
+                    float x = Random.Range(-16.5f, 46.5f);
+                    float z = (i % 3 == 0)
+                        ? PathZ(x) + (Random.value < 0.5f ? -1f : 1f) * Random.Range(1.0f, 2.4f)
+                        : Random.Range(47.3f, 56.7f);
+                    float s = Random.Range(0.5f, 1.3f);
+                    koCis.Add(new CombineInstance {
+                        mesh = quadMesh,
+                        transform = Matrix4x4.TRS(
+                            new Vector3(x, TopY + 0.052f + Deko(x, z), z),
+                            Quaternion.Euler(90f, Random.Range(0f, 360f), 0f),
+                            new Vector3(s, s, 1f)),
+                    });
+                }
+                Katamari("KokeChunk", koCis, mKoke);
+                // 枯れ枝（ころがる 小枝。影あり）
+                Mesh cylMesh;
+                {
+                    var t2 = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    cylMesh = t2.GetComponent<MeshFilter>().sharedMesh;
+                    Object.DestroyImmediate(t2);
+                }
+                var edCis = new List<CombineInstance>();
+                for (int i = 0; i < 46; i++) {
+                    float x = Random.Range(-16f, 46f);
+                    float z = PathZ(x) + Random.Range(-3.4f, 3.4f);
+                    float len = Random.Range(0.5f, 1.6f), r = Random.Range(0.03f, 0.07f);
+                    edCis.Add(new CombineInstance {
+                        mesh = cylMesh,
+                        transform = Matrix4x4.TRS(
+                            new Vector3(x, TopY + 0.06f + Deko(x, z), z),
+                            Quaternion.Euler(Random.Range(80f, 100f), Random.Range(0f, 360f), 0f),
+                            new Vector3(r, len * 0.5f, r)),
+                    });
+                }
+                Katamari("EdaKareChunk", edCis, mKiKawa, true);
             }
 
-            // 高い 木 v2（本人 2026-08-23「丸い棒はおかしい」）：
-            //   先細り2段の みき（上段は すこし 傾く）＋斜め上に のびる 枝3〜4本＋枝先の 葉。
-            //   みきの あいだから 南の 村と 空が 抜ける
+            // 高い 木 v3（本人 2026-08-24「木の形はいびつで、枝の先に大量の葉っぱ」）：
+            //   3段の みき（ふしごとに ゆがむ）＋枝4〜6本と 小枝＋**枝先に 葉カードの かたまり**。
+            //   葉カードは 影あり（木もれ日の 陰影）。全カードは 1メッシュに 結合
+            var mHaCard = MatA("MuraHaCardA", "happa_card.png");
+            var haCis = new List<CombineInstance>();
             void KiTakai(float x, float z, float h, float futosa) {
+                float ybase = TopY + Deko(x, z) * 0.9f;
+                var kiPos = new Vector3(x, ybase, z);
                 var ki = new GameObject("KodawariKi");
                 ki.transform.SetParent(root, false);
-                ki.transform.position = new Vector3(x, TopY, z);
+                ki.transform.position = kiPos;
                 void Bou(Vector3 moto, Vector3 muki, float nagasa, float futo, bool atari) {
                     var c = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     c.name = "KiMiki";
@@ -440,7 +517,7 @@ public static class BuildMura {
                     c.GetComponent<Renderer>().sharedMaterial = mKiKawa;
                     if (!atari) Object.DestroyImmediate(c.GetComponent<Collider>());
                 }
-                void Ha(Vector3 at, float s) {
+                void HaBlob(Vector3 at, float s) {                 // 葉の 芯（カードの うしろの 密度）
                     var b = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                     b.name = "KodawariHa";
                     b.transform.SetParent(ki.transform, false);
@@ -449,24 +526,55 @@ public static class BuildMura {
                     b.GetComponent<Renderer>().sharedMaterial = mHaMori;
                     Object.DestroyImmediate(b.GetComponent<Collider>());
                 }
-                float h1 = h * 0.55f;
-                Bou(Vector3.zero, Vector3.up, h1, futosa, true);          // 下段だけ 当たりあり
-                var katamuki = new Vector3(Random.Range(-0.16f, 0.16f), 1f, Random.Range(-0.16f, 0.16f)).normalized;
-                Bou(new Vector3(0f, h1, 0f), katamuki, h * 0.45f, futosa * 0.68f, false);
-                var teppen = new Vector3(0f, h1, 0f) + katamuki * (h * 0.45f);
-                int eda = Random.Range(3, 5);
+                void HaCards(Vector3 at, float rr, int n) {        // ★枝先の 大量の 葉
+                    for (int i = 0; i < n; i++) {
+                        float cs = Random.Range(1.2f, 2.1f);
+                        haCis.Add(new CombineInstance {
+                            mesh = quadMesh,
+                            transform = Matrix4x4.TRS(
+                                kiPos + at + Random.insideUnitSphere * rr,
+                                Quaternion.Euler(Random.Range(-40f, 40f), Random.Range(0f, 360f), Random.Range(-25f, 25f)),
+                                new Vector3(cs, cs * 0.8f, 1f)),
+                        });
+                    }
+                }
+                // みき＝3段。ふしごとに ゆがむ（いびつさ）
+                var p = Vector3.zero; var dir = Vector3.up;
+                float th = futosa; float segH = h * 0.4f;
+                var fushi = new List<Vector3> { p };
+                for (int s = 0; s < 3; s++) {
+                    Bou(p, dir, segH, th, s == 0);                 // 下段だけ 当たりあり
+                    p += dir * (segH * 0.96f);
+                    fushi.Add(p);
+                    dir = (dir + new Vector3(Random.Range(-0.24f, 0.24f), 0f, Random.Range(-0.24f, 0.24f))).normalized;
+                    th *= 0.7f; segH *= 0.78f;
+                }
+                // 枝＝4〜6本。みきの 上半分から 斜め上へ。ときどき 小枝
+                int eda = Random.Range(4, 7);
                 for (int e = 0; e < eda; e++) {
-                    float ey = h * Random.Range(0.5f, 0.8f);
-                    float yaw = (360f / eda) * e + Random.Range(-40f, 40f);   // 方位は だいたい 散らす
-                    float agari = Random.Range(30f, 55f) * Mathf.Deg2Rad;     // 上向きの 角度
+                    float t01 = Random.Range(0.45f, 0.95f);
+                    var moto = Vector3.Lerp(fushi[1], fushi[3], (t01 - 0.45f) / 0.5f);
+                    float yaw = (360f / eda) * e + Random.Range(-35f, 35f);
+                    float agari = Random.Range(20f, 55f) * Mathf.Deg2Rad;
                     var yoko = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
                     var muki = (yoko * Mathf.Cos(agari) + Vector3.up * Mathf.Sin(agari)).normalized;
-                    float nagasa = h * Random.Range(0.24f, 0.38f);
-                    Bou(new Vector3(0f, ey, 0f), muki, nagasa, futosa * Random.Range(0.26f, 0.38f), false);
-                    Ha(new Vector3(0f, ey, 0f) + muki * (nagasa + 0.2f), Random.Range(1.9f, 2.9f));
+                    float nagasa = h * Random.Range(0.22f, 0.4f) * (1.2f - t01 * 0.4f);
+                    float futo = futosa * Random.Range(0.2f, 0.32f);
+                    Bou(moto, muki, nagasa, futo, false);
+                    var saki = moto + muki * nagasa;
+                    if (Random.value < 0.6f) {                     // 小枝
+                        var m2 = (muki + new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(0.1f, 0.5f), Random.Range(-0.5f, 0.5f))).normalized;
+                        float n2 = nagasa * Random.Range(0.4f, 0.6f);
+                        var m2moto = saki - muki * (nagasa * 0.25f);
+                        Bou(m2moto, m2, n2, futo * 0.6f, false);
+                        HaCards(m2moto + m2 * n2, 0.8f, 4);
+                    }
+                    HaBlob(saki, Random.Range(1.2f, 1.8f));
+                    HaCards(saki, Random.Range(0.8f, 1.2f), 6);
                 }
-                Ha(teppen + Vector3.up * 0.6f, Random.Range(3.0f, 4.0f));
-                Ha(teppen + new Vector3(Random.Range(-1f, 1f), 1.4f, Random.Range(-1f, 1f)), Random.Range(2.4f, 3.4f));
+                var teppen = fushi[3];
+                HaBlob(teppen + Vector3.up * 0.5f, Random.Range(2.0f, 2.8f));
+                HaCards(teppen + Vector3.up * 0.8f, 1.6f, 10);
             }
             // 道ぞいに 互いちがい・間かくは 4〜8m で ばらす（すき間が 抜け）
             if (koda.Contains("t")) {
@@ -480,6 +588,7 @@ public static class BuildMura {
                 // 北がわ（山すその 壁ぎわ）に もう 一列。幹が 層に なって 林に 見える＋壁を 隠す
                 foreach (float kx in new[] { -12f, -5f, 2f, 9f, 18f, 26f, 30f, 42f })  // 35 は こみちカメラの 目の前 → 30 へ
                     KiTakai(kx, Random.Range(56.3f, 57.3f), Random.Range(7f, 9f), Random.Range(0.30f, 0.45f));
+                if (haCis.Count > 0) Katamari("HaCardChunk", haCis, mHaCard, true);   // 葉カード＝影あり（木もれ日）
             }
         }
 
