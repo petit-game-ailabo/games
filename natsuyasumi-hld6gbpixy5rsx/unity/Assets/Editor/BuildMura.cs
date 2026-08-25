@@ -594,8 +594,8 @@ public static class BuildMura {
                     });
                 }
             }
-            void KiTakai(float x, float z, float h, float futosa) {
-                float ybase = TopY + Deko(x, z) * 0.9f;
+            void KiTakai(float x, float z, float h, float futosa, float ybaseOver = float.NaN) {
+                float ybase = float.IsNaN(ybaseOver) ? TopY + Deko(x, z) * 0.9f : ybaseOver;
                 float r0 = futosa * 0.5f;
                 // みきの 背骨＝輪 9つ。ゆるく 湾曲、根もとは ひろがり、上に いくほど 細い
                 const int rings = 9;
@@ -682,6 +682,82 @@ public static class BuildMura {
                 mHaCard.SetColor("_EmissionColor", Color.black);
                 if (haCis.Count > 0) Katamari("HaCardChunk", haCis, mHaCard, true);
                 // ※2Dドット絵の 木（ビルボード）は 本人判定「いまいち」で 廃止（2026-08-25）
+            }
+
+            // ---- 村ぜんたいへ 展開・第1弾（本人 2026-08-26「村全体に展開お願い」）
+            //   ①道ぜんぶに 踏み固め土＋苔の 縁どり帯 ②道ばた・川岸に 草の 帯
+            //   ③旧式の 木（丸棒＋球）を チューブ木v5に 植えかえ
+            {
+                // ①道の 質感：既存の Michi_* の 箱を 土テクスチャに 差しかえ、縁の 帯を 下に 敷く
+                var michiList = new List<Transform>();
+                foreach (Transform ch in root)
+                    if (ch.name.StartsWith("Michi_")) michiList.Add(ch);
+                foreach (var ch in michiList) {
+                    ch.GetComponent<Renderer>().sharedMaterial = mTsuchi;
+                    var fu = Object.Instantiate(ch.gameObject, root);
+                    fu.name = ch.name + "_Fuchi";
+                    fu.transform.localScale = new Vector3(
+                        ch.localScale.x + 1.7f, ch.localScale.y, ch.localScale.z + 0.9f);
+                    fu.transform.position = ch.position + Vector3.down * 0.02f;
+                    fu.GetComponent<Renderer>().sharedMaterial = mFuchi;
+                }
+                // ②草の 帯（道ばた＋川岸）。16mグリッドの チャンクに 結合
+                var muraKusa = new Dictionary<int, List<CombineInstance>>();
+                void MuraKusaAt(float x, float z, float s, int kind) {
+                    int key = (Mathf.FloorToInt((x + 92f) / 16f) * 16 + Mathf.FloorToInt((z + 62f) / 16f)) * 2 + kind;
+                    if (!muraKusa.TryGetValue(key, out var list)) muraKusa[key] = list = new List<CombineInstance>();
+                    float yaw0 = Random.Range(0f, 180f);
+                    for (int q = 0; q < 2; q++)
+                        list.Add(new CombineInstance {
+                            mesh = quadMesh,
+                            transform = Matrix4x4.TRS(
+                                new Vector3(x, s * 0.5f, z),
+                                Quaternion.Euler(0f, yaw0 + 90f * q + Random.Range(-20f, 20f), 0f),
+                                new Vector3(s * 1.15f, s, 1f)),
+                        });
+                }
+                bool KawaNoNaka(float z2) => z2 > 4.6f && z2 < 11.4f;   // 川と 川岸の 段の うえには 生やさない
+                foreach (var ch in michiList) {                          // 道ばた
+                    float halfW = ch.localScale.x * 0.5f, halfL = ch.localScale.z * 0.5f;
+                    var f = ch.rotation * Vector3.forward;
+                    var sdir = ch.rotation * Vector3.right;
+                    int hon = Mathf.RoundToInt(halfL * 2f * 1.6f);
+                    for (int i = 0; i < hon; i++) {
+                        float t2 = Random.Range(-halfL, halfL);
+                        float d2 = Random.Range(halfW + 0.3f, halfW + 2.6f) * (Random.value < 0.5f ? -1f : 1f);
+                        var pp = ch.position + f * t2 + sdir * d2;
+                        if (Mathf.Abs(pp.x) > 89f || Mathf.Abs(pp.z) > 59f || KawaNoNaka(pp.z)) continue;
+                        if (Random.value < 0.12f) MuraKusaAt(pp.x, pp.z, Random.Range(0.5f, 0.85f), 1);
+                        else MuraKusaAt(pp.x, pp.z, Random.Range(0.16f, 0.4f), 0);
+                    }
+                }
+                for (int i = 0; i < 2601; i++) {                         // 川岸（ヨシ 多め）※2601=バイト列よけ
+                    float x = Random.Range(-88f, 88f);
+                    float z = (Random.value < 0.5f) ? Random.Range(3.4f, 4.9f) : Random.Range(11.2f, 12.8f);
+                    if (Random.value < 0.35f) MuraKusaAt(x, z, Random.Range(0.5f, 0.95f), 1);
+                    else MuraKusaAt(x, z, Random.Range(0.18f, 0.42f), 0);
+                }
+                foreach (var kv in muraKusa)
+                    Katamari("MuraKusa" + kv.Key, kv.Value, (kv.Key % 2 + 2) % 2 == 1 ? mTakeKusa : mTuft, false, true);
+                // ③旧式の 木を 植えかえ（丸棒 "Ki" と 球 "Ha" を 消して、同じ 場所に v5を 立てる）
+                mikiCis.Clear(); haCis.Clear();       // ★山の 木の ぶんは 流しずみ。消さないと 二重に なる
+                var uekae = new List<Vector3>();      // (x, ybase, z)
+                var uekaeH = new List<float>();
+                var gomi = new List<GameObject>();
+                foreach (Transform ch in root) {
+                    if (ch.name == "Ki") {
+                        float hh = ch.localScale.y * 2f;
+                        uekae.Add(new Vector3(ch.position.x, ch.position.y - hh * 0.5f, ch.position.z));
+                        uekaeH.Add(hh);
+                        gomi.Add(ch.gameObject);
+                    } else if (ch.name == "Ha") gomi.Add(ch.gameObject);
+                }
+                foreach (var g in gomi) Object.DestroyImmediate(g);
+                for (int i = 0; i < uekae.Count; i++)
+                    KiTakai(uekae[i].x, uekae[i].z,
+                            uekaeH[i] + Random.Range(1.5f, 3f), Random.Range(0.3f, 0.44f), uekae[i].y);
+                if (mikiCis.Count > 0) Katamari("KiMikiChunk2", mikiCis, mKiKawa, true);
+                if (haCis.Count > 0) Katamari("HaCardChunk2", haCis, mHaCard, true);
             }
         }
 
