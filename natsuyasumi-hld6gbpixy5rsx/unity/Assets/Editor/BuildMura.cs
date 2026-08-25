@@ -371,8 +371,8 @@ public static class BuildMura {
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
             if (koda.Contains("m")) {
-                Ribbon("MichiFuchi", x => 1.7f, 0.020f, mFuchi);
-                Ribbon("MichiTsuchi", x => 0.75f + 0.18f * Mathf.Sin(x * 0.7f), 0.036f, mTsuchi);
+                Ribbon("MichiFuchi", x => 1.7f, 0.050f, mFuchi);   // 層の間かく広め（Zファイトよけ・2026-08-26）
+                Ribbon("MichiTsuchi", x => 0.75f + 0.18f * Mathf.Sin(x * 0.7f), 0.090f, mTsuchi);
             }
             // 凸凹の 地面の 皮（見た目＋当たり。草・木も Deko と 同じ 高さに 置く）
             if (koda.Contains("m")) {
@@ -474,7 +474,7 @@ public static class BuildMura {
                     cis.Add(new CombineInstance {
                         mesh = quadMesh,
                         transform = Matrix4x4.TRS(
-                            new Vector3(x, TopY + 0.062f + Deko(x, z), z),
+                            new Vector3(x, TopY + 0.130f + Deko(x, z), z),
                             Quaternion.Euler(90f, Random.Range(0f, 360f), 0f),
                             new Vector3(s, s, 1f)),
                     });
@@ -495,7 +495,7 @@ public static class BuildMura {
                         koCis.Add(new CombineInstance {
                             mesh = quadMesh,
                             transform = Matrix4x4.TRS(
-                                new Vector3(x, TopY + 0.055f + Deko(x, z), z),
+                                new Vector3(x, TopY + 0.120f + Deko(x, z), z),
                                 Quaternion.Euler(90f, Random.Range(0f, 360f), 0f),
                                 new Vector3(s, s, 1f)),
                         });
@@ -514,7 +514,7 @@ public static class BuildMura {
                 for (int i = 0; i < 46; i++) {
                     float x = Random.Range(-16f, 46f);
                     float z = PathZ(x) + Random.Range(-3.4f, 3.4f);
-                    var p = new Vector3(x, TopY + 0.05f + Deko(x, z), z);
+                    var p = new Vector3(x, TopY + 0.11f + Deko(x, z), z);
                     float yaw = Random.Range(0f, 360f);
                     var dir = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
                     float len = Random.Range(0.35f, 0.8f), r = Random.Range(0.035f, 0.06f);
@@ -731,7 +731,7 @@ public static class BuildMura {
                         else MuraKusaAt(pp.x, pp.z, Random.Range(0.16f, 0.4f), 0);
                     }
                 }
-                for (int i = 0; i < 2601; i++) {                         // 川岸（ヨシ 多め）※2601=バイト列よけ
+                for (int i = 0; i < 2602; i++) {                         // 川岸（ヨシ 多め）※2602=バイト列よけ
                     float x = Random.Range(-88f, 88f);
                     float z = (Random.value < 0.5f) ? Random.Range(3.4f, 4.9f) : Random.Range(11.2f, 12.8f);
                     if (Random.value < 0.35f) MuraKusaAt(x, z, Random.Range(0.5f, 0.95f), 1);
@@ -826,7 +826,7 @@ public static class BuildMura {
         var camGO = new GameObject("Main Camera");
         camGO.tag = "MainCamera";
         var cam = camGO.AddComponent<Camera>();
-        cam.fieldOfView = 46f; cam.nearClipPlane = 0.1f; cam.farClipPlane = 400f;
+        cam.fieldOfView = 46f; cam.nearClipPlane = 0.3f;   // 深度精度（Zファイトよけ） cam.farClipPlane = 400f;
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.70f, 0.80f, 0.88f);
         camGO.AddComponent<AudioListener>();   // ★これが 無いと 全部 無音（手組みカメラの 抜け）

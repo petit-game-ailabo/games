@@ -59,25 +59,33 @@ public class MuraDay : MonoBehaviour {
         else if (Hour < 5.8f) bright = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(4.7f, 5.8f, Hour));
         else if (Hour < 18f) bright = 1f;
         else bright = Mathf.SmoothStep(1f, 0f, Mathf.InverseLerp(18f, 19f, Hour));
-        // ★夜は 月明かりだけ の 暗さ（本人 2026-08-25「明かりを用意してないから、月明かりだけの明るさになるはず」）
+        // ★夕焼けの 山（本人 2026-08-26「赤い光になると思う」）：18:24ごろを 頂点に 世界が 赤く 染まる
+        float yu = Mathf.Clamp01(1f - Mathf.Abs(Hour - 18.4f) / 1.0f);
+        // ★夜は 月明かりだけ の 暗さ。草・地面は 上向きの 面で 月光を まともに 受けるので
+        //   月光は かなり 弱く（本人 2026-08-26「草が光ってない？地面も」）
         if (bright > 0.001f) {
             sun.transform.rotation = Quaternion.Euler(Mathf.Lerp(8f, 172f, t), -35f, 0f);
             sun.intensity = Mathf.Lerp(0.02f, 1.25f, bright);
-            sun.color = Color.Lerp(new Color(1f, 0.55f, 0.35f),   // 朝夕は 焼ける（オレンジに 寄せぎみ）
-                                   new Color(1f, 0.95f, 0.84f), bright * bright);
+            var hiruIro = Color.Lerp(new Color(1f, 0.55f, 0.35f),
+                                     new Color(1f, 0.95f, 0.84f), bright * bright);
+            sun.color = Color.Lerp(hiruIro, new Color(1f, 0.38f, 0.22f), yu);   // 夕焼け＝赤い 光
         } else {
             sun.transform.rotation = Quaternion.Euler(55f, 140f, 0f);       // 太陽の 光を 月に 兼ねさせる
-            sun.intensity = 0.06f;
+            sun.intensity = 0.035f;
             sun.color = new Color(0.62f, 0.70f, 0.90f);                     // 青白い 月光
         }
-        RenderSettings.ambientLight = Color.Lerp(new Color(0.030f, 0.038f, 0.070f),
-                                                 new Color(0.52f, 0.56f, 0.60f), bright);
-        RenderSettings.fogColor = Color.Lerp(new Color(0.020f, 0.026f, 0.050f),
-                                             new Color(0.74f, 0.78f, 0.74f), bright);
-        var cam = Camera.main;                                 // 空の 色も 夜は 落とす
-        if (cam != null)
-            cam.backgroundColor = Color.Lerp(new Color(0.020f, 0.030f, 0.065f),
-                                             new Color(0.70f, 0.80f, 0.88f), bright);
+        var amb = Color.Lerp(new Color(0.022f, 0.028f, 0.055f),
+                             new Color(0.52f, 0.56f, 0.60f), bright);
+        RenderSettings.ambientLight = Color.Lerp(amb, new Color(0.42f, 0.30f, 0.24f), yu * 0.8f);
+        var fogc = Color.Lerp(new Color(0.020f, 0.026f, 0.050f),
+                              new Color(0.74f, 0.78f, 0.74f), bright);
+        RenderSettings.fogColor = Color.Lerp(fogc, new Color(0.86f, 0.55f, 0.38f), yu * 0.85f);
+        var cam = Camera.main;                                 // 空の 色も 夕焼け／夜に 合わせる
+        if (cam != null) {
+            var sky = Color.Lerp(new Color(0.020f, 0.030f, 0.065f),
+                                 new Color(0.70f, 0.80f, 0.88f), bright);
+            cam.backgroundColor = Color.Lerp(sky, new Color(0.90f, 0.56f, 0.38f), yu * 0.9f);
+        }
     }
 
     void OnGUI() {
