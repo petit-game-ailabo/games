@@ -36,6 +36,8 @@ public static class BuildMura {
             AssetDatabase.CreateAsset(m, path);
         }
         m.color = c;
+        // ★つや消し。既定の smoothness 0.5 だと 夜に 空の 映りこみで 白っぽく なる（本人 2026-08-26）
+        m.SetFloat("_Smoothness", 0.05f);
         return m;
     }
 
@@ -446,8 +448,9 @@ public static class BuildMura {
                                 new Vector3(s * 1.15f, s, 1f)),
                         });
                 }
-                // ★写真は 草が 地面を「覆う」（本人 2026-08-24）→ 9000束。低い 覆い草が 主体
-                for (int i = 0; i < 9000; i++) {
+                // ★写真は 草が 地面を「覆う」（本人 2026-08-24）→ 9001束。低い 覆い草が 主体
+                //   （9000→9001 は corrupted バイト列よけ・2026-08-26）
+                for (int i = 0; i < 9001; i++) {
                     float x = Random.Range(-17f, 47f);
                     float z = Random.Range(47.2f, 56.8f);
                     float dz = Mathf.Abs(z - PathZ(x));
@@ -673,8 +676,10 @@ public static class BuildMura {
                 // みき＝1メッシュ（影あり）。葉カード＝影あり＋弱い 自己発光で 逆光の 白飛びを おさえる
                 //   （法線上書きを 葉の 塊に かけた v12/v13 は corrupted を 踏んだ ので 使わない）
                 if (mikiCis.Count > 0) Katamari("KiMikiChunk", mikiCis, mKiKawa, true);
-                mHaCard.EnableKeyword("_EMISSION");
-                mHaCard.SetColor("_EmissionColor", new Color(0.20f, 0.28f, 0.14f));
+                // ★自己発光は 廃止（夜に 葉が 光って 見えた・本人 2026-08-26）。
+                //   昼の 白飛びは 環境光Flat化＋つや消しで もう 起きない
+                mHaCard.DisableKeyword("_EMISSION");
+                mHaCard.SetColor("_EmissionColor", Color.black);
                 if (haCis.Count > 0) Katamari("HaCardChunk", haCis, mHaCard, true);
                 // ※2Dドット絵の 木（ビルボード）は 本人判定「いまいち」で 廃止（2026-08-25）
             }
@@ -931,6 +936,10 @@ public static class BuildMura {
         //   夜の 暗い ambient が 効かず、夜でも 夕方くらいの 明るさに なる（2026-08-25）
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
         RenderSettings.ambientLight = new Color(0.52f, 0.56f, 0.60f);
+        // ★環境「反射」も 切る。Skybox参照のままだと 夜でも 明るい 空の 映りこみが
+        //   地面や 葉に 乗って 白っぽく なる（本人 2026-08-26「光がなくなると黒になるはず」）
+        RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Custom;
+        RenderSettings.customReflectionTexture = null;
         // 空気感（奥ほど かすむ）。遠くの 山が 溶けて 遠近が 出る
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.ExponentialSquared;

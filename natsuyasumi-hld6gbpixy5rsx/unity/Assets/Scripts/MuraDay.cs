@@ -9,7 +9,7 @@ public class MuraDay : MonoBehaviour {
 
     public static int Day = 1;
     public static float Hour = 6.5f;
-    public static bool Night { get { return Hour < 5f || Hour >= 19f; } }
+    public static bool Night { get { return Hour < 4.7f || Hour >= 19f; } }   // 8月の 実際：日の出4:50ごろ・19時で 夜
 
     const float SecPerHour = 60f;        // 1時間=60秒 → 1日=24分（本人 2026-08-25「1日30分とか20分ぐらい」）
     // その日 つかまえた 虫など「あしたに なったら 戻る」もの
@@ -22,8 +22,10 @@ public class MuraDay : MonoBehaviour {
         // ★一旦 全部 ミュート（本人 2026-08-23「音が気持ち悪いところもある。一旦音消しておいて」）。
         //   音の 見直しフェーズ（PLAN）で この 行を 消して 戻す
         AudioListener.volume = 0f;
-        foreach (var a in System.Environment.GetCommandLineArgs())
-            if (a == "-yoru") { Day = 9; Hour = 19.8f; }   // 祭りの 夜を すぐ 見る
+        foreach (var a in System.Environment.GetCommandLineArgs()) {
+            if (a == "-yoru") { Day = 9; Hour = 19.8f; }      // 祭りの 夜を すぐ 見る
+            if (a == "-yuyake") { Day = 3; Hour = 18.0f; }    // 夕焼けの 確認用
+        }
         chime = gameObject.AddComponent<AudioSource>();
         chime.clip = OtoGen.Chime();
         chime.spatialBlend = 0f; chime.volume = 0.5f;
@@ -49,14 +51,20 @@ public class MuraDay : MonoBehaviour {
         }
 
         if (sun == null) return;
-        float t = Mathf.InverseLerp(5f, 19f, Hour);           // 日の出〜日の入り
-        float bright = Mathf.Clamp01(Mathf.Sin(t * Mathf.PI));
+        float t = Mathf.InverseLerp(4.7f, 19f, Hour);         // 日の出〜日の入り（8月の 関東の 実際）
+        // ★台形カーブ（本人 2026-08-26「18時はまだ夕焼け」「実際の日本の日の出を意識して」）：
+        //   日の出 4:50ごろ→5:50には 明るい／17:40から 夕焼け→日の入り 18:45ごろ→19時で 夜
+        float bright;
+        if (Hour < 4.7f || Hour >= 19f) bright = 0f;
+        else if (Hour < 5.8f) bright = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(4.7f, 5.8f, Hour));
+        else if (Hour < 18f) bright = 1f;
+        else bright = Mathf.SmoothStep(1f, 0f, Mathf.InverseLerp(18f, 19f, Hour));
         // ★夜は 月明かりだけ の 暗さ（本人 2026-08-25「明かりを用意してないから、月明かりだけの明るさになるはず」）
         if (bright > 0.001f) {
             sun.transform.rotation = Quaternion.Euler(Mathf.Lerp(8f, 172f, t), -35f, 0f);
             sun.intensity = Mathf.Lerp(0.02f, 1.25f, bright);
-            sun.color = Color.Lerp(new Color(1f, 0.55f, 0.35f),   // 朝夕は 焼ける
-                                   new Color(1f, 0.95f, 0.84f), bright);
+            sun.color = Color.Lerp(new Color(1f, 0.55f, 0.35f),   // 朝夕は 焼ける（オレンジに 寄せぎみ）
+                                   new Color(1f, 0.95f, 0.84f), bright * bright);
         } else {
             sun.transform.rotation = Quaternion.Euler(55f, 140f, 0f);       // 太陽の 光を 月に 兼ねさせる
             sun.intensity = 0.06f;
