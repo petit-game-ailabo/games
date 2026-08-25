@@ -11,7 +11,7 @@ public class MuraDay : MonoBehaviour {
     public static float Hour = 6.5f;
     public static bool Night { get { return Hour < 5f || Hour >= 19f; } }
 
-    const float SecPerHour = 40f;        // 1時間=40秒 → 6:00-21:00 が 10分（検証用の 早回し）
+    const float SecPerHour = 60f;        // 1時間=60秒 → 1日=24分（本人 2026-08-25「1日30分とか20分ぐらい」）
     // その日 つかまえた 虫など「あしたに なったら 戻る」もの
     public static readonly System.Collections.Generic.List<GameObject> Ashita =
         new System.Collections.Generic.List<GameObject>();
@@ -51,14 +51,25 @@ public class MuraDay : MonoBehaviour {
         if (sun == null) return;
         float t = Mathf.InverseLerp(5f, 19f, Hour);           // 日の出〜日の入り
         float bright = Mathf.Clamp01(Mathf.Sin(t * Mathf.PI));
-        sun.transform.rotation = Quaternion.Euler(Mathf.Lerp(8f, 172f, t), -35f, 0f);
-        sun.intensity = Mathf.Lerp(0.02f, 1.25f, bright);
-        sun.color = Color.Lerp(new Color(1f, 0.55f, 0.35f),   // 朝夕は 焼ける
-                               new Color(1f, 0.95f, 0.84f), bright);
-        RenderSettings.ambientLight = Color.Lerp(new Color(0.10f, 0.12f, 0.20f),
+        // ★夜は 月明かりだけ の 暗さ（本人 2026-08-25「明かりを用意してないから、月明かりだけの明るさになるはず」）
+        if (bright > 0.001f) {
+            sun.transform.rotation = Quaternion.Euler(Mathf.Lerp(8f, 172f, t), -35f, 0f);
+            sun.intensity = Mathf.Lerp(0.02f, 1.25f, bright);
+            sun.color = Color.Lerp(new Color(1f, 0.55f, 0.35f),   // 朝夕は 焼ける
+                                   new Color(1f, 0.95f, 0.84f), bright);
+        } else {
+            sun.transform.rotation = Quaternion.Euler(55f, 140f, 0f);       // 太陽の 光を 月に 兼ねさせる
+            sun.intensity = 0.06f;
+            sun.color = new Color(0.62f, 0.70f, 0.90f);                     // 青白い 月光
+        }
+        RenderSettings.ambientLight = Color.Lerp(new Color(0.030f, 0.038f, 0.070f),
                                                  new Color(0.52f, 0.56f, 0.60f), bright);
-        RenderSettings.fogColor = Color.Lerp(new Color(0.10f, 0.12f, 0.18f),
+        RenderSettings.fogColor = Color.Lerp(new Color(0.020f, 0.026f, 0.050f),
                                              new Color(0.74f, 0.78f, 0.74f), bright);
+        var cam = Camera.main;                                 // 空の 色も 夜は 落とす
+        if (cam != null)
+            cam.backgroundColor = Color.Lerp(new Color(0.020f, 0.030f, 0.065f),
+                                             new Color(0.70f, 0.80f, 0.88f), bright);
     }
 
     void OnGUI() {

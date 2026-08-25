@@ -533,101 +533,128 @@ public static class BuildMura {
                 Katamari("EdaKareChunk", edCis, mKiKawa, true);
             }
 
-            // 高い 木 v3（本人 2026-08-24「木の形はいびつで、枝の先に大量の葉っぱ」）：
-            //   3段の みき（ふしごとに ゆがむ）＋枝4〜6本と 小枝＋**枝先に 葉カードの かたまり**。
-            //   葉カードは 影あり（木もれ日の 陰影）。全カードは 1メッシュに 結合
+            // 高い 木 v5（本人 2026-08-25「円柱のくっつく部分がいびつ。ポリゴンを増やして精密に」）：
+            //   円柱の 継ぎ足しを 廃止。**背骨に そって 輪を ならべて 面を 張る チューブメッシュ**で
+            //   みきも 枝も 1本の 連続した 皮に する（関節の 段差が 出ない）。
+            //   葉は カードの 房（影あり・弱い 自己発光）。みきは 全部で 1メッシュに 結合
             var mHaCard = MatA("MuraHaCardA", "happa_card.png");
             var haCis = new List<CombineInstance>();
+            var mikiCis = new List<CombineInstance>();
+            void Tube(Vector3[] pts, float[] rad, int sides) {
+                int n = pts.Length;
+                var verts = new Vector3[n * sides + 1];
+                var uv = new Vector2[verts.Length];
+                var nrm = Vector3.Cross((pts[1] - pts[0]).normalized, Vector3.right);
+                if (nrm.sqrMagnitude < 0.01f) nrm = Vector3.forward; else nrm = nrm.normalized;
+                float vlen = 0f;
+                for (int i = 0; i < n; i++) {
+                    var dir = (i == 0 ? pts[1] - pts[0]
+                             : i == n - 1 ? pts[n - 1] - pts[n - 2]
+                             : pts[i + 1] - pts[i - 1]).normalized;
+                    nrm = (nrm - dir * Vector3.Dot(nrm, dir)).normalized;   // ねじれない ように 前の 輪から 引きつぐ
+                    var bin = Vector3.Cross(dir, nrm);
+                    if (i > 0) vlen += (pts[i] - pts[i - 1]).magnitude;
+                    for (int s = 0; s < sides; s++) {
+                        float a = s * Mathf.PI * 2f / sides;
+                        verts[i * sides + s] = pts[i] + (nrm * Mathf.Cos(a) + bin * Mathf.Sin(a)) * rad[i];
+                        uv[i * sides + s] = new Vector2((float)s / sides, vlen * 0.8f);
+                    }
+                }
+                verts[n * sides] = pts[n - 1];                              // 先端の ふさぎ
+                uv[n * sides] = new Vector2(0.5f, vlen * 0.8f + 0.2f);
+                var tris = new List<int>();
+                for (int i = 0; i < n - 1; i++)
+                    for (int s = 0; s < sides; s++) {
+                        int s2 = (s + 1) % sides;
+                        int a0 = i * sides + s, a1 = i * sides + s2;
+                        int b0 = (i + 1) * sides + s, b1 = (i + 1) * sides + s2;
+                        tris.Add(a0); tris.Add(a1); tris.Add(b0);
+                        tris.Add(a1); tris.Add(b1); tris.Add(b0);
+                    }
+                for (int s = 0; s < sides; s++) {
+                    int s2 = (s + 1) % sides;
+                    tris.Add((n - 1) * sides + s); tris.Add(n * sides); tris.Add((n - 1) * sides + s2);
+                }
+                var mesh = new Mesh { vertices = verts, uv = uv, triangles = tris.ToArray() };
+                mesh.RecalculateNormals();
+                mikiCis.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.identity });
+            }
+            void HaCards(Vector3 at, float rr, int n) {        // ★枝先の 大量の 葉（world座標）
+                for (int i = 0; i < n; i++) {
+                    float cs = Random.Range(1.2f, 2.1f);
+                    haCis.Add(new CombineInstance {
+                        mesh = quadMesh,
+                        transform = Matrix4x4.TRS(
+                            at + Random.insideUnitSphere * rr,
+                            Quaternion.Euler(Random.Range(-40f, 40f), Random.Range(0f, 360f), Random.Range(-25f, 25f)),
+                            new Vector3(cs, cs * 0.8f, 1f)),
+                    });
+                }
+            }
             void KiTakai(float x, float z, float h, float futosa) {
                 float ybase = TopY + Deko(x, z) * 0.9f;
-                var kiPos = new Vector3(x, ybase, z);
-                var ki = new GameObject("KodawariKi");
-                ki.transform.SetParent(root, false);
-                ki.transform.position = kiPos;
-                void Bou(Vector3 moto, Vector3 muki, float nagasa, float futo, bool atari) {
-                    var c = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    c.name = "KiMiki";
-                    c.transform.SetParent(ki.transform, false);
-                    muki = muki.normalized;
-                    c.transform.localPosition = moto + muki * (nagasa * 0.5f);
-                    c.transform.localRotation = Quaternion.FromToRotation(Vector3.up, muki);
-                    c.transform.localScale = new Vector3(futo, nagasa * 0.5f, futo);
-                    c.GetComponent<Renderer>().sharedMaterial = mKiKawa;
-                    if (!atari) Object.DestroyImmediate(c.GetComponent<Collider>());
+                float r0 = futosa * 0.5f;
+                // みきの 背骨＝輪 9つ。ゆるく 湾曲、根もとは ひろがり、上に いくほど 細い
+                const int rings = 9;
+                var pts = new Vector3[rings]; var rad = new float[rings];
+                var p = new Vector3(x, ybase - 0.2f, z); var dir = Vector3.up;
+                for (int i = 0; i < rings; i++) {
+                    pts[i] = p;
+                    float t01 = (float)i / (rings - 1);
+                    rad[i] = r0 * (i == 0 ? 1.55f : Mathf.Lerp(1.0f, 0.4f, t01))
+                                * (1f + Random.Range(-0.05f, 0.05f));
+                    p += dir * ((h + 0.2f) / (rings - 1));
+                    dir = (dir + new Vector3(Random.Range(-0.08f, 0.08f), 0f, Random.Range(-0.08f, 0.08f))).normalized;
                 }
-                void HaBlob(Vector3 at, float s) {                 // 葉の 芯（カードの うしろの 密度）
-                    var b = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    b.name = "KodawariHa";
-                    b.transform.SetParent(ki.transform, false);
-                    b.transform.localPosition = at;
-                    b.transform.localScale = new Vector3(s, s * 0.7f, s);
-                    b.GetComponent<Renderer>().sharedMaterial = mHaMori;
-                    Object.DestroyImmediate(b.GetComponent<Collider>());
-                }
-                void HaCards(Vector3 at, float rr, int n) {        // ★枝先の 大量の 葉
-                    for (int i = 0; i < n; i++) {
-                        float cs = Random.Range(1.2f, 2.1f);
-                        haCis.Add(new CombineInstance {
-                            mesh = quadMesh,
-                            transform = Matrix4x4.TRS(
-                                kiPos + at + Random.insideUnitSphere * rr,
-                                Quaternion.Euler(Random.Range(-40f, 40f), Random.Range(0f, 360f), Random.Range(-25f, 25f)),
-                                new Vector3(cs, cs * 0.8f, 1f)),
-                        });
-                    }
-                }
-                // ★v4（本人 2026-08-25・公園の写真より）：緑の 球は 廃止（「スイカみたい」の 正体）。
-                //   すらっと 高い みき（4段・根もとに ひろがり）、枝は 上半分から 上向きに 弧、
-                //   葉は **カードの 房を 枝に そって 何個も**（塊は 層に なる）
-                var motoHiro = GameObject.CreatePrimitive(PrimitiveType.Cylinder);   // 根もとの ひろがり
-                motoHiro.name = "KiMoto";
-                motoHiro.transform.SetParent(ki.transform, false);
-                motoHiro.transform.localPosition = new Vector3(0f, 0.22f, 0f);
-                motoHiro.transform.localScale = new Vector3(futosa * 1.5f, 0.25f, futosa * 1.5f);
-                motoHiro.GetComponent<Renderer>().sharedMaterial = mKiKawa;
-                Object.DestroyImmediate(motoHiro.GetComponent<Collider>());
-                var p = Vector3.zero; var dir = Vector3.up;
-                float th = futosa; float segH = h * 0.30f;
-                var fushi = new List<Vector3> { p };
-                for (int s = 0; s < 4; s++) {
-                    Bou(p, dir, segH, th, s == 0);                 // 下段だけ 当たりあり
-                    p += dir * (segH * 0.96f);
-                    fushi.Add(p);
-                    dir = (dir + new Vector3(Random.Range(-0.14f, 0.14f), 0f, Random.Range(-0.14f, 0.14f))).normalized;
-                    th *= 0.78f; segH *= 0.9f;
-                }
-                var teppen = fushi[4];
-                // 枝＝3〜5本。みきの 上半分から。枝の とちゅうと 先に 葉の 房を 重ねる
+                Tube(pts, rad, 12);
+                var col = new GameObject("KiAtari");            // 当たりは カプセルで 別に
+                col.transform.SetParent(root, false);
+                col.transform.position = new Vector3(x, ybase + 1.7f, z);
+                var cap = col.AddComponent<CapsuleCollider>();
+                cap.radius = Mathf.Max(0.18f, r0); cap.height = 3.6f;
+                // 枝＝3〜5本。みきの 輪の 位置から チューブで（先は 上へ しなる）
                 int eda = Random.Range(3, 6);
                 for (int e = 0; e < eda; e++) {
-                    float t01 = Random.Range(0.5f, 0.85f);
-                    var moto = Vector3.Lerp(fushi[2], fushi[4], (t01 - 0.5f) / 0.35f);
+                    int baseRing = Random.Range(4, 8);
+                    var moto = pts[baseRing];
                     float yaw = (360f / eda) * e + Random.Range(-30f, 30f);
-                    float agari = Random.Range(28f, 50f) * Mathf.Deg2Rad;
+                    float agari = Random.Range(22f, 48f) * Mathf.Deg2Rad;
                     var yoko = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
-                    var muki = (yoko * Mathf.Cos(agari) + Vector3.up * Mathf.Sin(agari)).normalized;
-                    float nagasa = h * Random.Range(0.2f, 0.32f);
-                    float futo = futosa * Random.Range(0.22f, 0.3f);
-                    Bou(moto, muki, nagasa, futo, false);
-                    var saki = moto + muki * nagasa;
-                    // 小枝 1〜2本
+                    var bdir = (yoko * Mathf.Cos(agari) + Vector3.up * Mathf.Sin(agari)).normalized;
+                    float blen = h * Random.Range(0.22f, 0.34f);
+                    const int bn = 5;
+                    var bp = new Vector3[bn]; var br = new float[bn];
+                    var q = moto; var d2 = bdir;
+                    float br0 = rad[baseRing] * 0.6f;
+                    for (int i = 0; i < bn; i++) {
+                        bp[i] = q;
+                        br[i] = br0 * Mathf.Lerp(1f, 0.22f, (float)i / (bn - 1));
+                        q += d2 * (blen / (bn - 1));
+                        d2 = (d2 + Vector3.up * 0.10f
+                              + new Vector3(Random.Range(-0.08f, 0.08f), 0f, Random.Range(-0.08f, 0.08f))).normalized;
+                    }
+                    Tube(bp, br, 8);
+                    // 小枝 1〜2本（さらに 細い チューブ）＋葉
                     int koeda = Random.Range(1, 3);
                     for (int k2 = 0; k2 < koeda; k2++) {
-                        var m2 = (muki + new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(0.2f, 0.6f), Random.Range(-0.6f, 0.6f))).normalized;
-                        float n2 = nagasa * Random.Range(0.45f, 0.65f);
-                        var m2moto = moto + muki * (nagasa * Random.Range(0.55f, 0.8f));
-                        Bou(m2moto, m2, n2, futo * 0.55f, false);
-                        HaCards(m2moto + m2 * n2, Random.Range(0.9f, 1.3f), 7);
+                        var m2 = (d2 + new Vector3(Random.Range(-0.6f, 0.6f), Random.Range(0.2f, 0.5f), Random.Range(-0.6f, 0.6f))).normalized;
+                        float n2 = blen * Random.Range(0.4f, 0.6f);
+                        var kmoto = bp[Random.Range(2, 4)];
+                        var kp = new Vector3[3];
+                        var kr = new float[3] { br0 * 0.35f, br0 * 0.22f, br0 * 0.1f };
+                        kp[0] = kmoto; kp[1] = kmoto + m2 * (n2 * 0.5f);
+                        kp[2] = kmoto + m2 * n2 + Vector3.up * 0.15f;
+                        Tube(kp, kr, 6);
+                        HaCards(kp[2], Random.Range(0.9f, 1.3f), 7);
                     }
-                    HaCards(moto + muki * (nagasa * 0.7f), Random.Range(0.9f, 1.2f), 6);   // 枝の とちゅう
-                    HaCards(saki + Vector3.up * 0.3f, Random.Range(1.0f, 1.5f), 9);        // 枝の 先
+                    HaCards(bp[3], Random.Range(0.9f, 1.2f), 6);                    // 枝の とちゅう
+                    HaCards(bp[bn - 1] + Vector3.up * 0.3f, Random.Range(1.0f, 1.5f), 9);   // 枝の 先
                 }
                 // てっぺんの 冠＝房を 3つ 横に ならべて 層に（1つの 玉に しない）
+                var teppen = pts[rings - 1];
                 for (int c2 = 0; c2 < 3; c2++) {
                     var off = Quaternion.Euler(0f, 120f * c2 + Random.Range(-30f, 30f), 0f) * Vector3.forward
                               * Random.Range(0.6f, 1.6f);
-                    // ※11枚：level0が「corrupted」になる バイト列を 踏んだ ときは、こうして
-                    //   中身を すこし 変えて 乱数列ごと ずらす（→PLAN 運用の教訓）
                     HaCards(teppen + off + Vector3.up * Random.Range(0.2f, 0.9f), Random.Range(1.1f, 1.6f), 11);
                 }
             }
@@ -643,39 +670,13 @@ public static class BuildMura {
                 // 北がわ（山すその 壁ぎわ）に もう 一列。幹が 層に なって 林に 見える＋壁を 隠す
                 foreach (float kx in new[] { -12f, -5f, 2f, 9f, 18f, 26f, 30f, 42f })  // 35 は こみちカメラの 目の前 → 30 へ
                     KiTakai(kx, Random.Range(56.3f, 57.3f), Random.Range(8f, 11f), Random.Range(0.28f, 0.4f));
-                // 葉カード＝影あり（木もれ日）。逆光の 白飛びは 弱い 自己発光で おさえる
-                //   （法線上書きを この 塊に かけた v12/v13 は corrupted を 踏んだ ので 使わない）
+                // みき＝1メッシュ（影あり）。葉カード＝影あり＋弱い 自己発光で 逆光の 白飛びを おさえる
+                //   （法線上書きを 葉の 塊に かけた v12/v13 は corrupted を 踏んだ ので 使わない）
+                if (mikiCis.Count > 0) Katamari("KiMikiChunk", mikiCis, mKiKawa, true);
                 mHaCard.EnableKeyword("_EMISSION");
                 mHaCard.SetColor("_EmissionColor", new Color(0.20f, 0.28f, 0.14f));
                 if (haCis.Count > 0) Katamari("HaCardChunk", haCis, mHaCard, true);
-
-                // 2Dの 木（ドット絵の ビルボード）＝ 3Dモデリング木との 見くらべ用（本人 2026-08-25「二刀流で試して」）
-                // ★ライト付きだと 逆光で 真っ黒に なる → Unlit（絵の 色を そのまま 出す）
-                var mKi2D = MatA("MuraKi2DA", "ki_2d.png");
-                mKi2D.shader = Shader.Find("Universal Render Pipeline/Unlit");
-                mKi2D.SetFloat("_AlphaClip", 1f); mKi2D.SetFloat("_Cutoff", 0.5f);
-                mKi2D.EnableKeyword("_ALPHATEST_ON");
-                mKi2D.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
-                mKi2D.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/ki_2d.png");
-                void Ki2D(float x, float z, float takasa2) {
-                    var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                    q.name = "Ki2D";
-                    Object.DestroyImmediate(q.GetComponent<Collider>());
-                    q.transform.SetParent(root, false);
-                    float yb = TopY + Deko(x, z) * 0.9f;
-                    q.transform.position = new Vector3(x, yb + takasa2 * 0.5f, z);
-                    q.transform.localScale = new Vector3(takasa2 * 96f / 160f, takasa2, 1f);
-                    q.GetComponent<Renderer>().sharedMaterial = mKi2D;
-                    q.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                    q.AddComponent<MuraBillboard>();
-                    var col = new GameObject("Ki2DAtari");                      // みきの 当たり
-                    col.transform.SetParent(root, false);
-                    col.transform.position = new Vector3(x, yb + 1.5f, z);
-                    var cc2 = col.AddComponent<CapsuleCollider>();
-                    cc2.radius = 0.25f; cc2.height = 3f;
-                }
-                Ki2D(36.5f, 51.0f, 8.5f);   // 初期位置の 目の前＝3D木（x39）と ならべて 見くらべ
-                Ki2D(20f, 48.2f, 7.5f);
+                // ※2Dドット絵の 木（ビルボード）は 本人判定「いまいち」で 廃止（2026-08-25）
             }
         }
 
@@ -797,7 +798,7 @@ public static class BuildMura {
             // 木の 見くらべ（3Dモデリング木 と 2Dドット絵木 を 全身で。D-113 二刀流の 判定用）。
             // ★ゾーンを こみちの 範囲の **そと**（西）に 置く：入れ子だと「今の カメラに 映っている」が
             //   勝って カットされない（居座りルールの 仕様）
-            S("きくらべ", 30f, 52.6f, 3f, 3f,   26.0f, 7.5f, 48.0f,   37f, 10.5f, 52f, 55f),
+            S("きくらべ", 30f, 52.6f, 3f, 3f,   28.0f, 7.6f, 46.5f,   37f, 10f, 52f, 55f),
             S("あさせ", 45f, 8f, 14f, 14f,   45.0f, 9.6f, -10.1f,   45f, 0.8f, 8f, 42f),
             // 岩場と 淵（D-111 の 新地形）。南から 岩と 淵を 一枚に
             S("いわば", -60f, 8.5f, 16f, 11f,   -60.0f, 8.0f, -9.0f,   -60f, 0.8f, 9f, 46f),  // 残る問題点=0
@@ -926,6 +927,9 @@ public static class BuildMura {
         var md = dayGO.AddComponent<MuraDay>();
         md.sun = sun; md.font = uiFont;
         dayGO.AddComponent<MuraHanabi>();   // 8月8日の 夜、南の 山なみの 上に 遠花火
+        // ★環境光は Flat（色指定）に 固定。Skyboxモードだと MuraDay が 毎フレーム 入れる
+        //   夜の 暗い ambient が 効かず、夜でも 夕方くらいの 明るさに なる（2026-08-25）
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
         RenderSettings.ambientLight = new Color(0.52f, 0.56f, 0.60f);
         // 空気感（奥ほど かすむ）。遠くの 山が 溶けて 遠近が 出る
         RenderSettings.fog = true;
