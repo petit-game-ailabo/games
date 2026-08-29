@@ -27,6 +27,7 @@ public class MuraCamFixed : MonoBehaviour {
     [Header("HD-2D追従（Tで切替・比較用）")]
     public bool hd2d;
     public float hdPitch = 26f, hdDist = 8.5f;
+    public float hdFov = 46f;   // 庭シーンは 望遠28（HD-2Dの 型）。むかしの 箱庭は 46 の まま
 
     Camera cam; Spot cur; float lastCut = -9f; float hiddenT;
     public static string CurName = "-";
@@ -140,7 +141,7 @@ public class MuraCamFixed : MonoBehaviour {
             transform.position = Vector3.Lerp(transform.position, want,
                                               1f - Mathf.Exp(-6f * Time.deltaTime));
             transform.rotation = rot;
-            if (cam != null) cam.fieldOfView = 46f;
+            if (cam != null) cam.fieldOfView = hdFov;
             CurName = "HD-2D";
             return;
         }

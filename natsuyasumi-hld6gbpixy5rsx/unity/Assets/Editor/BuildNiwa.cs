@@ -251,6 +251,10 @@ public static class BuildNiwa {
         camData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;   // FXAA（HD-2D必須の 型）
         var fix = camGO.AddComponent<MuraCamFixed>();
         fix.target = player.transform;
+        // ★初期は HD-2D追従（本人 2026-08-30「初期値はHD-2Dの方にして」。
+        //   固定カットは ゾーン境界の カット往復＝ちらつきが 出ていた。Tで 切替は 残す）
+        fix.hd2d = true;
+        fix.hdPitch = 32f; fix.hdDist = 16f; fix.hdFov = 28f;   // 望遠で 見下ろす HD-2Dの 型
         fix.spots = new[] {
             new MuraCamFixed.Spot {
                 name = "にわ",
