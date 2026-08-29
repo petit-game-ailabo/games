@@ -53,9 +53,10 @@ public static class BuildNiwa {
         RenderSettings.fogDensity = 0.0045f;   // せまい シーンなので うすめ（0.008 は 白く かすんだ）
 
         // ---- 地めん（草）と 門の外の 道（土）
-        var mGrass = MatT("NiwaGrassT", "grass_ground.png", 40f, 30f);
+        var mGrass = MatT("NiwaGrassT", "grass_ground.png", 110f, 85f);
         var mDirt  = MatT("NiwaDirtT",  "dirt_path.png", 20f, 2f);
-        Box(root, "Jimen", new Vector3(0f, -0.25f, 4f), new Vector3(80f, 0.5f, 60f), mGrass);
+        // 地めんは 広く（浅い 追従カメラは 遠くまで 見える。せまいと 端の 空色が 見える）
+        Box(root, "Jimen", new Vector3(0f, -0.25f, 4f), new Vector3(220f, 0.5f, 170f), mGrass);
         Box(root, "MichiSoto", new Vector3(0f, 0.011f, -9.5f), new Vector3(80f, 0.02f, 5.0f), mDirt)
             .GetComponent<Collider>().enabled = false;
 
@@ -194,11 +195,22 @@ public static class BuildNiwa {
         var mYamaToi = MatE("NiwaYamaToi", "yama_toi.png");
         var mYamaChikai = MatE("NiwaYamaChikai", "yama_chikai.png");
         var mKumo = MatE("NiwaKumo", "kumo_nyudo.png");
-        Kakiwari("Yama_Toi",    mYamaToi,    new Vector3(-15f, 9f, 70f), 170f, 42f);   // 遠い 尾根
-        Kakiwari("Yama_Chikai", mYamaChikai, new Vector3(20f, 6f, 55f), 130f, 30f);    // 近い 尾根（ずらして 重ねる）
-        Kakiwari("Kumo1", mKumo, new Vector3(-28f, 26f, 67f), 26f, 26f);               // 入道雲（尾根より 手前）
-        Kakiwari("Kumo2", mKumo, new Vector3(14f, 30f, 68f), 34f, 34f);
-        Kakiwari("Kumo3", mKumo, new Vector3(38f, 24f, 66f), 20f, 20f);
+        // ★カメラ連動（NiwaKakiwari）：追従カメラでも 画面の 上の 帯に いつも 山が 出る。
+        //   ずれの 数字は「ピッチ17°・FOV30」の 画角から 逆算（上端≒水平線）
+        void KakiwariCam(string name, Material m, Vector3 zurashi, float w, float h) {
+            var q = Kakiwari(name, m, Vector3.zero, w, h);
+            q.AddComponent<NiwaKakiwari>().zurashi = zurashi;
+        }
+        // ★里山（本人 2026-08-30「田舎って山が近い。遠くの峰って感じではない」）：
+        //   近い 山は 画面上端を つきぬける 高さ。谷間の くぼみから だけ 空と 遠い 峰が のぞく
+        var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
+        mSatoyama.color = new Color(0.80f, 0.89f, 0.96f);   // 空気の 青（手前の 草と 分離する）
+        // 尾根線が 画面の 帯（水平線0〜+4°）を またぐ 高さ：高い ところは 山・低い ところは 空
+        KakiwariCam("Satoyama", mSatoyama, new Vector3(6f, 2f, 55f), 200f, 44f);
+        KakiwariCam("Yama_Toi", mYamaToi,  new Vector3(-20f, -14f, 92f), 240f, 44f);      // 遠い 峰＝谷間の おく
+        KakiwariCam("Kumo1", mKumo, new Vector3(-34f, 9f, 88f), 26f, 26f);                // 入道雲（くぼみの 空）
+        KakiwariCam("Kumo2", mKumo, new Vector3(14f, 11f, 89f), 34f, 34f);
+        KakiwariCam("Kumo3", mKumo, new Vector3(44f, 8f, 87f), 20f, 20f);
 
         // ---- 主人公（マリサ 8方向スプライト・ライトを 受ける）
         var player = new GameObject("Player");
@@ -254,7 +266,9 @@ public static class BuildNiwa {
         // ★初期は HD-2D追従（本人 2026-08-30「初期値はHD-2Dの方にして」。
         //   固定カットは ゾーン境界の カット往復＝ちらつきが 出ていた。Tで 切替は 残す）
         fix.hd2d = true;
-        fix.hdPitch = 32f; fix.hdDist = 16f; fix.hdFov = 28f;   // 望遠で 見下ろす HD-2Dの 型
+        // ★ピッチは 浅く（本人 2026-08-30「背景の山が見えてない」）。32°だと 画面の 上端でも
+        //   水平線より 18°下＝地面の 15m先までしか 映らず、遠景が 構造的に 出ない
+        fix.hdPitch = 12f; fix.hdDist = 15f; fix.hdFov = 32f;   // 上端＝水平線+4°（山の 帯が 出る）
         fix.spots = new[] {
             new MuraCamFixed.Spot {
                 name = "にわ",
