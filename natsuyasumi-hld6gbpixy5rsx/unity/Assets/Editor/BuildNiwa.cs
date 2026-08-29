@@ -159,6 +159,47 @@ public static class BuildNiwa {
         KenneyKit.Put(root, "log", new Vector3(9.2f, 0f, 6.5f), 75f, 2f);
         KenneyKit.Put(root, "mushroom_red", new Vector3(-8.6f, 0f, 7.2f), 0f, 1.6f);
 
+        // ---- 遠景の 描き割り（絵はがき文法の 検証・2026-08-30 本人GO）：
+        //   歩けないが 見える 遠景が「世界は 続いてる」を 作る。山なみ 2層＋入道雲。
+        //   絵なので 影は 受けず 落とさず、昼夜の 明るさだけ 受ける（Lit・かげOFF）
+        Material MatE(string name, string tex) {
+            string dir = "Assets/Art/Materials/Niwa";
+            string path = dir + "/" + name + ".mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null) {
+                m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                AssetDatabase.CreateAsset(m, path);
+            }
+            m.color = Color.white;
+            m.SetFloat("_AlphaClip", 1f); m.SetFloat("_Cutoff", 0.5f);
+            m.EnableKeyword("_ALPHATEST_ON");
+            m.SetFloat("_Smoothness", 0.02f);
+            m.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/" + tex);
+            return m;
+        }
+        GameObject Kakiwari(string name, Material m, Vector3 pos, float w, float h) {
+            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            q.name = name;
+            Object.DestroyImmediate(q.GetComponent<Collider>());
+            q.transform.SetParent(root, false);
+            q.transform.position = pos;
+            q.transform.rotation = Quaternion.Euler(0f, 0f, 0f);    // 南を 向く（カメラは 南から）
+            q.transform.localScale = new Vector3(w, h, 1f);
+            var r = q.GetComponent<Renderer>();
+            r.sharedMaterial = m;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            return q;
+        }
+        var mYamaToi = MatE("NiwaYamaToi", "yama_toi.png");
+        var mYamaChikai = MatE("NiwaYamaChikai", "yama_chikai.png");
+        var mKumo = MatE("NiwaKumo", "kumo_nyudo.png");
+        Kakiwari("Yama_Toi",    mYamaToi,    new Vector3(-15f, 9f, 70f), 170f, 42f);   // 遠い 尾根
+        Kakiwari("Yama_Chikai", mYamaChikai, new Vector3(20f, 6f, 55f), 130f, 30f);    // 近い 尾根（ずらして 重ねる）
+        Kakiwari("Kumo1", mKumo, new Vector3(-28f, 26f, 67f), 26f, 26f);               // 入道雲（尾根より 手前）
+        Kakiwari("Kumo2", mKumo, new Vector3(14f, 30f, 68f), 34f, 34f);
+        Kakiwari("Kumo3", mKumo, new Vector3(38f, 24f, 66f), 20f, 20f);
+
         // ---- 主人公（マリサ 8方向スプライト・ライトを 受ける）
         var player = new GameObject("Player");
         player.transform.position = new Vector3(0f, 0.3f, -1.5f);
@@ -214,14 +255,16 @@ public static class BuildNiwa {
             new MuraCamFixed.Spot {
                 name = "にわ",
                 area = new Bounds(new Vector3(0f, 3f, 4.5f), new Vector3(23f, 14f, 21.5f)),
-                pos = new Vector3(0f, 13.5f, -16.5f),
-                lookAt = new Vector3(0f, 1.0f, 4.5f), fov = 26f,
+                pos = new Vector3(0f, 11f, -18f),
+                lookAt = new Vector3(0f, 4.2f, 5f), fov = 26f,    // 屋根の 上に 山なみが 抜ける 角度
             },
             new MuraCamFixed.Spot {
                 name = "もんのそと",
                 area = new Bounds(new Vector3(0f, 3f, -9f), new Vector3(60f, 14f, 6.5f)),
-                pos = new Vector3(0f, 9.5f, -22f),
-                lookAt = new Vector3(0f, 1.2f, -7f), fov = 30f,   // 門ごしに 家を 見上げる
+                // ★道の 近くに 置く：遠いと「今の カメラ（にわ）の ほうが 近い」に なって
+                //   切り替わらない（nearest-visible の 罠・mura で 学んだ）
+                pos = new Vector3(0f, 5.5f, -16.5f),
+                lookAt = new Vector3(0f, 3.4f, -6.5f), fov = 32f,   // 門ごしの 家＋奥に 山と 雲
             },
         };
         fix.fallback = new MuraCamFixed.Spot {
