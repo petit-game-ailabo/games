@@ -91,7 +91,12 @@ public static class BuildKitTown {
     //   Overhang_Plaster_Long は「壁＋せり出した 床」が ひとかたまりに なった 部品で、
     //   -Z 方向へ 2m 出る。yaw=180 で 手前(+Z)へ 出す
     static void Jetty(Transform parent, float cx, float cz) {
-        var t = Site(parent, "Kit_Jetty", cx, cz);
+        JettyBody(Site(parent, "Kit_Jetty", cx, cz));
+    }
+
+    /// <summary>庭シーン（Niwa・D-114）からも つかう。anchor の 下に 家を 組む。
+    /// 地形サンプルは しない（Site は Zashiki の 地形前提な ので 切りはなした）</summary>
+    public static void JettyBody(Transform t) {
         const int NX = 3, NZ = 4;
         float hx = NX * G * 0.5f, hz = NZ * G * 0.5f;   // 3.0 x 4.0
 

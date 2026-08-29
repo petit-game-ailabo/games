@@ -82,6 +82,13 @@
   ＝**商用可・改変可・再配布可・ゲームへの 同梱可**。ライセンス文 `unity/Assets/Art/Fonts/LICENSE-PixelMplus-*.txt` 同梱
 - JIS第1・第2水準の 漢字を ふくむ。点で 描かれた 書体なので 12px の 整数倍で 出せば ドット絵と 目が そろう
 
+## 庭シーンの 3Dモデル（`unity/` Niwa）― 2026-08-29
+
+**Nature Kit (2.1)** — 作者: **Kenney (kenney.nl)**
+- 配布元: https://kenney.nl/assets/nature-kit
+- ライセンス: **CC0 1.0**（商用可・改変可・再配布可・クレジット任意）
+- つかいどころ: 庭シーンの 木・草・花・塀・門・飛び石・岩・鉢（`unity/Assets/Art/Models/kenney/`）
+
 ## つぶ（雨・もや）（`unity/` 奥行き版）― 2026-08-14
 
 **Particle Pack** — 作者: **Kenney (kenney.nl)**
