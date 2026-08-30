@@ -221,12 +221,12 @@ public static class BuildNiwa {
         var mSora = MatE("NiwaSora", "sora.png");
         mSora.SetFloat("_AlphaClip", 0f); mSora.DisableKeyword("_ALPHATEST_ON");
         mSora.renderQueue = 1900;                       // いちばん おく（不とうめいの まま）
-        KakiwariCam("Sora", mSora, new Vector3(0f, 36f, 200f), 230f, 86f);
+        KakiwariCam("Sora", mSora, new Vector3(0f, 48f, 200f), 230f, 86f);
 
         var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
         Toumei(mSatoyama, 2990);
         Toumei(mYamaToi, 2985);
-        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 7.08f, 55f), 96.0f, 36.0f);
+        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 8.64f, 55f), 96.0f, 36.0f);
 
         // 流れる 雲（空の 絵から 抜いた 3つ）。山の おく・空の 手前
         var kumoTex = new[] { "kumo_a.png", "kumo_b.png", "kumo_c.png" };
@@ -237,11 +237,11 @@ public static class BuildNiwa {
         }
         //  （よこ位置, 見上げ角, 奥ゆき, はば, 絵, ながれる 速さ）
         var kumoSet = new[] {
-            new [] { -30f,  7.2f, 150f, 60f, 0f, 0.24f },
-            new [] {  60f,  9.5f, 165f, 48f, 1f, 0.32f },
-            new [] {-120f,  6.2f, 140f, 40f, 2f, 0.40f },
-            new [] { 140f, 12.0f, 175f, 66f, 0f, 0.18f },
-            new [] { -60f, 14.5f, 185f, 52f, 1f, 0.26f },
+            new [] { -30f,  9.4f, 150f, 60f, 0f, 0.24f },
+            new [] {  60f,  11.8f, 165f, 48f, 1f, 0.32f },
+            new [] {-120f,  8.4f, 140f, 40f, 2f, 0.40f },
+            new [] { 140f, 14.2f, 175f, 66f, 0f, 0.18f },
+            new [] { -60f, 16.6f, 185f, 52f, 1f, 0.26f },
         };
         foreach (var k in kumoSet) {
             var mat = mKumos[(int)k[4]];
@@ -305,7 +305,7 @@ public static class BuildNiwa {
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Mi"; quad.transform.SetParent(player.transform, false);
         quad.transform.localPosition = new Vector3(0f, 0.66f, 0f);
-        quad.transform.localScale = new Vector3(1.30f * 128f / 160f, 1.30f, 1f);
+        quad.transform.localScale = new Vector3(1.34f * 160f / 200f, 1.34f, 1f);
         Object.DestroyImmediate(quad.GetComponent<Collider>());
         var sm = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         AssetDatabase.CreateAsset(sm, "Assets/Art/Materials/Niwa/NiwaMarisa.mat");
@@ -319,7 +319,7 @@ public static class BuildNiwa {
         var cs = player.AddComponent<CharSprite>();
         cs.target = quad.GetComponent<Renderer>();
         cs.runSpeed = 3.4f;
-        cs.walkSheet = true;            // ★新しい 絵は 行が 歩きの 8コマ（2026-08-30）
+        cs.walkSheet = false;           // 立ち絵＋目とじ だけ（歩き差分は これから）
         var mv = player.AddComponent<MuraMove>();
         mv.sprite = cs;
 
