@@ -24,7 +24,10 @@ public class NiwaKageAshi : MonoBehaviour {
             if (h.point.y > bestY) bestY = h.point.y;
         }
         // 地面が 見つからない ときも 消さない（足もとに そのまま 置く）。
-        // 消すと 出て いない のか 見つからないのか 分からなく なる
+        // ★カメラの ふせ角が 10°と 浅い ので 地面は ひどく つぶれて 映る。
+        //   50cm四方の 影でも 画面では たて 6px ほど。小さいと 見えない
+        //   （はじめ 0.42x0.30・濃さ0.40で 出して、まったく 見えなかった。
+        //    地面さがしは 正常だった＝実測 あたり0.00 足0.06 あたり2件）
         if (float.IsNegativeInfinity(bestY)) bestY = target.position.y;
         transform.position = new Vector3(target.position.x, bestY + 0.045f, target.position.z);
         if (rend != null) {
