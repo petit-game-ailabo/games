@@ -209,11 +209,11 @@ public static class BuildNiwa {
         var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
         // 尾根線が 画面の 帯（水平線0〜+4°）を またぐ 高さ：高い ところは 山・低い ところは 空
         // 稜線（テクスチャ上から 24%）が 水平線+3°に 来る 高さ：+2.9 = 上端13.5 → 中心 -8.5
-        KakiwariCam("Satoyama", mSatoyama, new Vector3(6f, -1.55f, 55f), 72.0f, 16.0f);
-        KakiwariCam("Yama_Toi", mYamaToi,  new Vector3(-14f, 6.65f, 92f), 116.0f, 22.0f);      // 遠い 峰＝谷間の おく
-        KakiwariCam("Kumo1", mKumo, new Vector3(-34f, 9.9f, 88f), 30f, 16f);                // 入道雲（写真の 比率）
-        KakiwariCam("Kumo2", mKumo, new Vector3(14f, 10.9f, 89f), 40f, 21f);
-        KakiwariCam("Kumo3", mKumo, new Vector3(44f, 9.1f, 87f), 24f, 13f);
+        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, -0.64f, 55f), 71.0f, 16.6f);
+        KakiwariCam("Yama_Toi", mYamaToi,  new Vector3(-6f, 3.9f, 92f), 116.0f, 22.0f);      // 遠い 峰＝谷間の おく
+        KakiwariCam("Kumo1", mKumo, new Vector3(-26f, 8.9f, 88f), 30f, 15f);                // 入道雲（写真の 比率）
+        KakiwariCam("Kumo2", mKumo, new Vector3(4f, 9.8f, 89f), 26f, 13f);
+        KakiwariCam("Kumo3", mKumo, new Vector3(30f, 8.4f, 87f), 22f, 11f);
 
         // ---- 主人公（マリサ 8方向スプライト・ライトを 受ける）
         var player = new GameObject("Player");

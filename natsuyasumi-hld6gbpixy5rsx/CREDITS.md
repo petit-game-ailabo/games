@@ -84,10 +84,12 @@
 
 ## 遠景の 描き割り（`unity/` Niwa の 山・雲）― 2026-08-30
 
-**里山（近い 山）** — 出所: Flickr「Hills and Forest in Landscape」
-- https://live.staticflickr.com/7798/18284962651_6f7332569e_b.jpg
+**里山（近い 山）** — 出所: WordPress Photo Directory「peaceful countryside」（畑の うしろに 森の 丘）
+- https://pd.w.org/2026/04/94269e79e0000e360.94603194-1536x2048.jpg
 - ライセンス: **CC0 1.0**（商用可・改変可・再配布可）
-- 加工: 尾根の 帯を 切りとり → 稜線より 上を 透明に → 鏡うつしで 横へ のばす → 12色に 減色
+- 加工: 空を 抜く（稜線は 列ごとに 探して **中央値で ならす**＝1列だけ 木を 拾って 縦の 筋に なるのを 止める）
+  → 鏡うつしで 横へ のばす → 18色に 減色。**地上から 見上げた 写真**を 選んだ
+  （谷を 見おろす 写真だと「自分が 高台に いる」画に なる・本人 2026-08-30）
 
 **遠い 峰** — 出所: WordPress Photo Directory「Layered blue and green mountains」
 - https://pd.w.org/2026/07/2416a5e2756cedeb7.32696644-2048x1536.jpg
