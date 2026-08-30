@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-# 本人が 用意した 立ち絵・目とじ・走り6コマ（ぜんぶ 正面）を、
-# CharSprite が 読む **8列 x 8行** の アトラスに 組む。
+# 本人が 用意した 絵から、CharSprite が 読む アトラスを 組む（2026-08-30）。
 #
-#   列0..6 = 向き（いまは 絵が 正面しか 無いので どれも 正面。左右は 鏡）
-#   列7    = 立ち（行0）と 目とじ（行1）＝止まって いる ときに つかう
-#   行     = 走りの 8コマ
+# もらった もの
+#   立ち絵（目あき／目とじ）… 1枚ずつ・正面
+#   走り 8方向 x 8コマ … 1方向が 4列x2行の シート 1枚。ぜんぶで 8枚
 #
-# ★1コマは 192x336（キャラの 比に あわせる）。取りこみは 上限4096・ミップなし・なめらか
-# ★取りこみは **点フィルタに しない**（SetupURP が marisa_walk を 対象外に して いる）
+# 出力の わりつけ（8列 x 10行）
+#   列 = 0:正面 1:左ななめ前 2:左 3:左ななめ奥 4:奥 5:右ななめ奥 6:右 7:右ななめ前
+#   行 = 0..7:走りの 8コマ / 8:立ち / 9:目とじ
+#
+# ★出どころが ちがう 絵は **座標系も ちがう**（立ち絵は 1024x1536、走りは 214x491）。
+#   同じ 枠で 切ると 片方だけ 極端に 小さく なる → 出どころ ごとに 枠を とって
+#   **背たけを そろえて から** コマに 詰める。
+# ★取りこみは 点フィルタに しない・ミップも 切る（SetupURP が marisa_walk を 別あつかい）
 #
 # 走らせかた: python unity/ArtSource/make_marisa_walk.py
 import os, glob
@@ -19,8 +24,13 @@ REF = os.path.join(HERE, "ref", "photos")
 OUT = os.path.join(HERE, "..", "Assets", "Art", "Sprites", "marisa_walk.png")
 TACHIE_DIR = os.path.join(HERE, "..", "Assets", "Art", "Sprites", "tachie")
 
-# キャラは たて長（およそ 1:2.1）。四角い コマだと 横が あまって 絵が 小さく なる
 CELL_W, CELL_H = 192, 336
+COLS, ROWS = 8, 10
+
+# 向きの ならび（列の 順）。タグは もらった ファイル名の 一部
+DIRS = ["16_09_44",                          # 0 正面
+        "16_27_04 (1)", "16_27_05 (2)", "16_27_05 (3)", "16_27_06 (4)",
+        "16_27_07 (5)", "16_27_07 (6)", "16_27_07 (7)"]
 
 
 def is_bg(p):
@@ -63,82 +73,89 @@ def one(tag):
     return cut(sorted(f)[0])
 
 
-def sheet_cells(tag, cols, rows):
-    """1枚に ならんだ コマを 切りだす（中みの ある 帯を さがして 割る）"""
-    im = one(tag)
-    w, h = im.size
-    px = im.load()
-
-    def bands(f, thr=1):
-        out = []; s = None
-        for i, v in enumerate(f):
-            if v > thr and s is None:
-                s = i
-            elif v <= thr and s is not None:
-                out.append((s, i - 1)); s = None
-        if s is not None:
-            out.append((s, len(f) - 1))
-        return out
-
-    colf = [sum(0 if px[x, y][3] == 0 else 1 for y in range(0, h, 3)) for x in range(w)]
-    rowf = [sum(0 if px[x, y][3] == 0 else 1 for x in range(0, w, 3)) for y in range(h)]
-    cb, rb = bands(colf), bands(rowf)
-    assert len(cb) == cols and len(rb) == rows, "コマの ならびが ちがう %d x %d" % (len(cb), len(rb))
-    out = []
-    for (ra, rz) in rb:
-        for (ca, cz) in cb:
-            out.append(im.crop((ca - 8, ra - 8, cz + 9, rz + 9)))
+def bands(f, thr=1):
+    out = []; s = None
+    for i, v in enumerate(f):
+        if v > thr and s is None:
+            s = i
+        elif v <= thr and s is not None:
+            out.append((s, i - 1)); s = None
+    if s is not None:
+        out.append((s, len(f) - 1))
     return out
 
 
+def sheet_cells(tag, cols=4, rows=2):
+    """4列x2行の シートを 8コマに 割る"""
+    im = one(tag)
+    w, h = im.size
+    px = im.load()
+    colf = [sum(0 if px[x, y][3] == 0 else 1 for y in range(0, h, 3)) for x in range(w)]
+    rowf = [sum(0 if px[x, y][3] == 0 else 1 for x in range(0, w, 3)) for y in range(h)]
+    cb, rb = bands(colf), bands(rowf)
+    assert len(cb) == cols and len(rb) == rows, \
+        "%s の ならびが ちがう %d x %d" % (tag, len(cb), len(rb))
+    return [im.crop((ca - 8, ra - 8, cz + 9, rz + 9)) for (ra, rz) in rb for (ca, cz) in cb]
+
+
+def union(ims):
+    b = None
+    for im in ims:
+        t = im.getbbox()
+        if t is None:
+            continue
+        b = t if b is None else (min(b[0], t[0]), min(b[1], t[1]),
+                                 max(b[2], t[2]), max(b[3], t[3]))
+    return b
+
+
 def main():
-    tachi = one("15_27_01")          # 立ち（目あき）
-    metsu = one("15_27_20")          # 目とじ
-    # ★走りは 8コマ（4列 x 2行の 1枚）。前の 6コマは 動きが いまいち だった（本人 2026-08-30）
-    runs = sheet_cells("16_09_44", 4, 2)
-
-    def union(ims):
-        b = None
-        for im in ims:
-            t = im.getbbox()
-            if t is None:
-                continue
-            b = t if b is None else (min(b[0], t[0]), min(b[1], t[1]),
-                                     max(b[2], t[2]), max(b[3], t[3]))
-        return b
-
-    # ★出どころ ごとに そろえる（走りは 走りの 枠、立ちは 立ちの 枠）。
-    #   そのうえで **背たけが そろう ように** 縮尺を あわせる
-    box_run = union(runs)
+    tachi = one("15_27_01")
+    metsu = one("15_27_20")
     box_tac = union([tachi, metsu])
-    h_run = box_run[3] - box_run[1]
     h_tac = box_tac[3] - box_tac[1]
 
-    def fit(im, group, flip=False):
-        box = box_run if group == "run" else box_tac
+    runs = {}       # 列 → 8コマ
+    boxes = {}      # 列 → その 方向の 枠
+    for col, tag in enumerate(DIRS):
+        cells = sheet_cells(tag)
+        runs[col] = cells
+        boxes[col] = union(cells)
+
+    # 背たけの 基準＝いちばん 高い 方向（これに みんな そろえる）
+    h_base = max(boxes[c][3] - boxes[c][1] for c in runs)
+
+    def fit(im, box, h_src):
         c = im.crop(box)
-        if flip:
-            c = c.transpose(Image.FLIP_LEFT_RIGHT)
-        # 高さ（走りの 枠）を そろえて から コマに 収める
-        base = h_run if group == "run" else h_tac
-        sc = min((CELL_W - 12) / (c.width * (h_run / float(base))), (CELL_H - 10) / base)
-        c = c.resize((max(1, int(c.width * sc)), max(1, int(c.height * sc))), Image.LANCZOS)
+        sc = (CELL_H - 10) / float(h_base) * (h_base / float(h_src)) * (h_src / float(h_src))
+        sc = (CELL_H - 10) / float(h_base)          # 全部 同じ 縮尺（背たけが そろう）
+        w2 = max(1, int(c.width * sc)); h2 = max(1, int(c.height * sc))
+        if w2 > CELL_W - 8:                          # はみ出す ときだけ 横で 抑える
+            k = (CELL_W - 8) / float(w2); w2 = CELL_W - 8; h2 = max(1, int(h2 * k))
+        c = c.resize((w2, h2), Image.LANCZOS)
         out = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
         out.alpha_composite(c, ((CELL_W - c.width) // 2, CELL_H - c.height - 3))
         return out
 
-    # 行 0..7 = 走りの 8コマ。立ち／目とじは **列7**に 入れる（列7は 向きに つかわない）
-    atlas = Image.new("RGBA", (CELL_W * 8, CELL_H * 8), (0, 0, 0, 0))
-    for col in range(7):
-        flip = col in (5, 6)              # 右がわの 列は 鏡（向きの 絵が そろうまでの つなぎ）
+    atlas = Image.new("RGBA", (CELL_W * COLS, CELL_H * ROWS), (0, 0, 0, 0))
+    for col in range(COLS):
+        box = boxes[col]
+        hh = box[3] - box[1]
         for row in range(8):
-            atlas.alpha_composite(fit(runs[row], "run", flip), (col * CELL_W, row * CELL_H))
-    for row in range(8):
-        atlas.alpha_composite(fit(metsu if row == 1 else tachi, "tac"), (7 * CELL_W, row * CELL_H))
+            atlas.alpha_composite(fit(runs[col][row], box, hh), (col * CELL_W, row * CELL_H))
+        # 行8＝立ち。正面は 立ち絵、ほかは **足の そろった コマ**（横はばが いちばん せまい）
+        if col == 0:
+            stand = fit(tachi, box_tac, h_tac)
+            blink = fit(metsu, box_tac, h_tac)
+        else:
+            k = min(range(8), key=lambda i: (runs[col][i].getbbox()[2] - runs[col][i].getbbox()[0]))
+            stand = blink = fit(runs[col][k], box, hh)
+        atlas.alpha_composite(stand, (col * CELL_W, 8 * CELL_H))
+        atlas.alpha_composite(blink, (col * CELL_W, 9 * CELL_H))
+
     atlas.save(OUT)
     print("wrote", os.path.abspath(OUT), atlas.size, "cell", (CELL_W, CELL_H))
 
-    # 会話用の 立ち絵（大きいまま・目あき／目とじ）
     os.makedirs(TACHIE_DIR, exist_ok=True)
     tachi.crop(box_tac).save(os.path.join(TACHIE_DIR, "marisa_tachie.png"))
     metsu.crop(box_tac).save(os.path.join(TACHIE_DIR, "marisa_tachie_me.png"))

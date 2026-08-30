@@ -320,8 +320,10 @@ public static class BuildNiwa {
         cs.target = quad.GetComponent<Renderer>();
         cs.runSpeed = 3.4f;
         cs.walkSheet = true;            // 行0..5=走り / 6=立ち / 7=目とじ（2026-08-30）
-        cs.cycleFrames = 8;             // 走りは 8コマ（新しい 絵・2026-08-30）
-        cs.idleCol = 7; cs.idleRow = 0; cs.blinkRow = 1;   // 列7＝立ち(行0)／目とじ(行1)
+        cs.Cols = 8; cs.Rows = 10;      // 8方向(列) x 走り8コマ＋立ち＋目とじ(行)
+        cs.cycleFrames = 8;             // 行0..7＝走り
+        cs.idleCol = -1;                // 止まっても **向きは そのまま**
+        cs.idleRow = 8; cs.blinkRow = 9;
         cs.walkCycleFps = 9f; cs.runCycleFps = 14f;
         var mv = player.AddComponent<MuraMove>();
         mv.sprite = cs;

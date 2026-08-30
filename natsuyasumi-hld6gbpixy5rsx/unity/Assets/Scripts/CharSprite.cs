@@ -13,7 +13,9 @@ using UnityEngine;
 // ★歩き・走りは **1コマ ずつ しか ない**ので、立ちと 交ごに 出して 2コマの
 //   アニメに する。走りは 速く 切りかえる。昔の ドット絵と 同じ やりかた。
 public class CharSprite : MonoBehaviour {
-    public const int Cols = 8, Rows = 8;
+    // ★アトラスの わりつけは 絵に あわせて 変えられる（2026-08-30）。
+    //   庭シーン＝8列(向き) x 10行(走り8＋立ち＋目とじ)
+    public int Cols = 8, Rows = 8;
 
     public enum Pose { Tachi = 0, Aruki = 1, Hashiri = 2, Yorokobi = 3, Ikari = 4, Kanashimi = 5, Tanoshii = 6, Meturi = 7 }
 
