@@ -140,6 +140,34 @@ public static class SetupURP {
                 }
                 continue;
             }
+            // ★地めんの 写真素材（ji_*）と 焼いた 一枚絵（niwa_jimen）も 対象外（2026-08-31）。
+            //   ・**ミップと 異方性フィルタが 要る**：カメラの ふせ角が 10°＝地面を
+            //     ほぼ 真横から 見る ので、ミップ無しだと 奥が じゃりじゃり ちらつく。
+            //     異方性は 斜めに 引きのばして 読む ための もので、地面には 必須
+            //   ・**読みだし可**：一枚絵を 焼く ときに GetPixels32 で 中身を 読む
+            {
+                string fn0 = System.IO.Path.GetFileNameWithoutExtension(path);
+                if (fn0.StartsWith("ji_") || fn0.StartsWith("niwa_jimen")) {
+                    var tig = AssetImporter.GetAtPath(path) as TextureImporter;
+                    if (tig == null) continue;
+                    bool moto = fn0.StartsWith("ji_");    // 素材は 焼く ために 読みだす
+                    bool okg = tig.filterMode == FilterMode.Bilinear && tig.mipmapEnabled
+                               && tig.anisoLevel >= 8 && tig.isReadable == moto
+                               && tig.maxTextureSize >= 4096;
+                    if (!okg) {
+                        tig.textureType = TextureImporterType.Default;
+                        tig.filterMode = FilterMode.Bilinear;
+                        tig.mipmapEnabled = true;
+                        tig.anisoLevel = 8;
+                        tig.isReadable = moto;
+                        tig.wrapMode = TextureWrapMode.Repeat;
+                        tig.maxTextureSize = 4096;
+                        tig.SaveAndReimport();
+                        Debug.Log("[SetupURP] jimen: " + path);
+                    }
+                    continue;
+                }
+            }
             // ★写真から 起こした 遠景の 描き割りも 対象外（2026-08-30）。
             //   点フィルタ＋ミップ無しだと 縮小で ちらつき、色の ノイズに 見える
             string fn = System.IO.Path.GetFileNameWithoutExtension(path);

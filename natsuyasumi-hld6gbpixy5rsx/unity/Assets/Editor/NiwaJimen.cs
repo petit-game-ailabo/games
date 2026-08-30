@@ -24,7 +24,7 @@ using UnityEditor;
 public static class NiwaJimen {
     // 影を 敷かない もの（地面 じしん・描き割り・あたり判定・主人公・仕組みの 入れもの）
     static readonly string[] NUKI = {
-        "Jimen", "MichiSoto", "TakadaiMichi", "Sora", "Satoyama", "YamaToi", "Kumo",
+        "Jimen", "JimenE", "MichiSoto", "TakadaiMichi", "Sora", "Satoyama", "YamaToi", "Kumo",
         "BLK_", "Marisa", "Kage", "Cam", "Sun", "Day", "Volume", "Takadai",
     };
 
@@ -72,6 +72,44 @@ public static class NiwaJimen {
         return m;
     }
 
+    /// <summary>足もと(w x d)＋のりしろ nori の **だ円**の 輪。木や 岩の 影は 四角では おかしい</summary>
+    public static Mesh Maru(float w, float d, float nori, float koi) {
+        const int K = 24;
+        var v = new Vector3[K * 2 + 1];
+        var c = new Color[K * 2 + 1];
+        v[0] = Vector3.zero; c[0] = new Color(0f, 0f, 0f, koi);
+        for (int i = 0; i < K; i++) {
+            float t = i / (float)K * Mathf.PI * 2f;
+            float cs = Mathf.Cos(t), sn = Mathf.Sin(t);
+            v[1 + i] = new Vector3(cs * w * 0.5f, 0f, sn * d * 0.5f);
+            c[1 + i] = new Color(0f, 0f, 0f, koi);
+            v[1 + K + i] = new Vector3(cs * (w * 0.5f + nori), 0f, sn * (d * 0.5f + nori));
+            c[1 + K + i] = new Color(0f, 0f, 0f, 0f);
+        }
+        var tri = new List<int>(K * 9);
+        for (int i = 0; i < K; i++) {
+            int a = 1 + i, b = 1 + (i + 1) % K;
+            tri.Add(0); tri.Add(a); tri.Add(b);
+            int e = 1 + K + i, f = 1 + K + (i + 1) % K;
+            tri.Add(a); tri.Add(e); tri.Add(f);
+            tri.Add(a); tri.Add(f); tri.Add(b);
+        }
+        var m = new Mesh { name = "KageMaru" };
+        m.vertices = v; m.colors = c; m.triangles = tri.ToArray();
+        m.RecalculateBounds();
+        return m;
+    }
+
+    // 丸い 影に する もの（木・岩・草など）。塀や 家は 四角の まま
+    static readonly string[] MARUI = {
+        "tree", "rock", "stone", "grass", "flower", "crops", "pot", "log", "mushroom", "bush",
+    };
+    static bool Marui(string n) {
+        string l = n.ToLowerInvariant();
+        foreach (var k in MARUI) if (l.Contains(k)) return true;
+        return false;
+    }
+
     /// <summary>場面の 物 ぜんぶの 足もとに 影を 敷く。組み立ての いちばん さいごに 呼ぶ</summary>
     public static int Setchi(Transform root) {
         var mat = KageMat();
@@ -101,13 +139,14 @@ public static class NiwaJimen {
             if (w > 30f || d > 30f) continue;             // 地面なみに 大きい ものは 対象外
 
             // のりしろ＝根元から 影が とどく 長さ。背が 高いほど 少し 広いが 上限 0.5m
-            float nori = Mathf.Clamp(0.10f + h * 0.08f, 0.14f, 0.50f);
-            float koi  = Mathf.Clamp(0.22f + h * 0.03f, 0.22f, 0.42f);
+            float nori = Mathf.Clamp(0.10f + h * 0.06f, 0.14f, 0.38f);
+            float koi  = Mathf.Clamp(0.20f + h * 0.025f, 0.20f, 0.33f);
 
             var go = new GameObject("Kage_" + t.name);
             go.transform.SetParent(oya, false);
             go.transform.position = new Vector3(b.center.x, 0.035f, b.center.z);
-            go.AddComponent<MeshFilter>().sharedMesh = Ita(w, d, nori, koi);
+            go.AddComponent<MeshFilter>().sharedMesh =
+                Marui(t.name) ? Maru(w, d, nori, koi) : Ita(w, d, nori, koi);
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;

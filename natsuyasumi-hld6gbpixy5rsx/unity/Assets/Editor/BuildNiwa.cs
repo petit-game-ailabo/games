@@ -53,11 +53,14 @@ public static class BuildNiwa {
         RenderSettings.fogDensity = 0.0028f;   // せまい シーンなので うすめ（0.008 は 白く かすんだ）
 
         // ---- 地めん（草）と 門の外の 道（土）
-        var mGrass = MatT("NiwaGrassT", "grass_ground.png", 65f, 55f);
-        var mDirt  = MatT("NiwaDirtT",  "dirt_path.png", 20f, 2f);
+        // ★素材は 本人が 用意した 真上からの 写真（2026-08-31）。
+        //   タイルの 大きさは **世界の 長さで** 決める（草3m・土2.25m）。
+        //   焼いた 一枚絵（NiwaJimenE）も 同じ 大きさで 敷く ので、さかい目で 柄が つながる
+        var mGrass = MatT("NiwaGrassT", "ji_kusa.jpg", 130f / 3f, 110f / 3f);
+        var mDirt  = MatT("NiwaDirtT",  "ji_tsuchi.jpg", 80f / 2.25f, 5f / 2.25f);
         // 地めんは 広く（浅い 追従カメラは 遠くまで 見える。せまいと 端の 空色が 見える）
         Box(root, "Jimen", new Vector3(0f, -0.25f, 4f), new Vector3(130f, 0.5f, 110f), mGrass);
-        Box(root, "MichiSoto", new Vector3(0f, 0.011f, -9.5f), new Vector3(80f, 0.02f, 5.0f), mDirt)
+        Box(root, "MichiSoto", new Vector3(0f, 0.008f, -9.5f), new Vector3(80f, 0.02f, 5.0f), mDirt)
             .GetComponent<Collider>().enabled = false;
 
         // ---- 家（megakit の ジェッティの 家。玄関は 南=庭がわ を 向く）
@@ -450,6 +453,24 @@ public static class BuildNiwa {
         vol.sharedProfile = prof;
         var focus = volGO.AddComponent<FocusOnPlayer>();
         focus.volume = vol; focus.target = player.transform;
+
+        // ---- 庭の 地面の 一枚絵（D-119）。物が ぜんぶ 置かれて から 焼く
+        //   （とびいし・木・塀・家の 位置を 場面から 拾って 踏み跡や 苔を 描く）
+        var jimenE = NiwaJimenE.Yaku(root);
+        if (jimenE != null) {
+            var ita = new GameObject("JimenE");
+            ita.transform.SetParent(root, false);
+            ita.transform.position = new Vector3(NiwaJimenE.NAKA.x, 0.03f, NiwaJimenE.NAKA.y);
+            ita.AddComponent<MeshFilter>().sharedMesh = NiwaJimenE.Ita();
+            ita.AddComponent<MeshRenderer>();                        // あたりは Jimen が 持つ
+            var mE = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            AssetDatabase.CreateAsset(mE, "Assets/Art/Materials/Niwa/NiwaJimenE.mat");
+            mE.SetFloat("_Smoothness", 0.03f);
+            mE.mainTexture = jimenE;
+            ita.GetComponent<Renderer>().sharedMaterial = mE;
+            ita.GetComponent<Renderer>().shadowCastingMode =
+                UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
 
         // ---- 接地の影（いちばん さいごに。物が ぜんぶ 置かれて から 足もとに 敷く）
         NiwaJimen.Setchi(root);
