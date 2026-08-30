@@ -144,9 +144,15 @@ public static class NiwaJimen {
 
             var go = new GameObject("Kage_" + t.name);
             go.transform.SetParent(oya, false);
-            go.transform.position = new Vector3(b.center.x, 0.035f, b.center.z);
-            go.AddComponent<MeshFilter>().sharedMesh =
-                Marui(t.name) ? Maru(w, d, nori, koi) : Ita(w, d, nori, koi);
+            float h0 = NiwaJimenE.Takasa(b.center.x, b.center.z);
+            go.transform.position = new Vector3(b.center.x, h0 + 0.05f, b.center.z);
+            var ms = Marui(t.name) ? Maru(w, d, nori, koi) : Ita(w, d, nori, koi);
+            // 地ばんが 凸凹に なった ので 影も そわせる（平らな ままだと 土に もぐる）
+            var vs = ms.vertices;
+            for (int i = 0; i < vs.Length; i++)
+                vs[i].y = NiwaJimenE.Takasa(b.center.x + vs[i].x, b.center.z + vs[i].z) - h0;
+            ms.vertices = vs; ms.RecalculateBounds();
+            go.AddComponent<MeshFilter>().sharedMesh = ms;
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;

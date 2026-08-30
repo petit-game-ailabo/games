@@ -56,12 +56,36 @@ public static class BuildNiwa {
         // ★素材は 本人が 用意した 真上からの 写真（2026-08-31）。
         //   タイルの 大きさは **世界の 長さで** 決める（草3m・土2.25m）。
         //   焼いた 一枚絵（NiwaJimenE）も 同じ 大きさで 敷く ので、さかい目で 柄が つながる
-        var mGrass = MatT("NiwaGrassT", "ji_kusa.jpg", 130f / 3f, 110f / 3f);
-        var mDirt  = MatT("NiwaDirtT",  "ji_tsuchi.jpg", 80f / 2.25f, 5f / 2.25f);
-        // 地めんは 広く（浅い 追従カメラは 遠くまで 見える。せまいと 端の 空色が 見える）
-        Box(root, "Jimen", new Vector3(0f, -0.25f, 4f), new Vector3(130f, 0.5f, 110f), mGrass);
-        Box(root, "MichiSoto", new Vector3(0f, 0.008f, -9.5f), new Vector3(80f, 0.02f, 5.0f), mDirt)
-            .GetComponent<Collider>().enabled = false;
+        // ★あみの UVは すでに 世界の 長さ÷タイル（草3m・土2.25m）なので、
+        //   材質がわの 倍率は **1** に する。箱の ころの 43.33倍を のこしたら
+        //   かけ算に なって 1タイル7cmに なり、ミップで つぶれて 単色の 板に 見えた
+        var mGrass = MatT("NiwaGrassT", "ji_kusa.jpg", 1f, 1f);
+        var mDirt  = MatT("NiwaDirtT",  "ji_tsuchi.jpg", 1f, 1f);
+        // 高台は 箱（UVは 面ごとに 0..1）なので 大きさに 合わせた 倍率が いる
+        var mGrassH = MatT("NiwaGrassHako", "ji_kusa.jpg", 11f / 3f, 9f / 3f);
+        // ---- 地めんは **凸凹の あみ**（箱では ない・本人 2026-08-31）
+        //   ふせ角10°の カメラは 高さだけ 6倍に 拡大して 映す（奥ゆき1m=21px / 高さ1m=121px）。
+        //   20cmの 起伏でも 24px 動く。歩く ところ（庭の 踏み跡・家・道・高台）は 平ら
+        //   地めんは 広く（浅い 追従カメラは 遠くまで 見える。せまいと 端の 空色が 見える）
+        System.IO.Directory.CreateDirectory("Assets/Art/Meshes");
+        var jibanM = NiwaJimenE.Ami("NiwaJiban", 130f, 110f, new Vector2(0f, 4f), 0.5f, 3.0f);
+        AssetDatabase.CreateAsset(jibanM, "Assets/Art/Meshes/NiwaJiban.asset");
+        var jiban = new GameObject("Jimen");
+        jiban.transform.SetParent(root, false);
+        jiban.transform.position = new Vector3(0f, 0f, 4f);
+        jiban.AddComponent<MeshFilter>().sharedMesh = jibanM;
+        jiban.AddComponent<MeshRenderer>().sharedMaterial = mGrass;
+        jiban.AddComponent<MeshCollider>().sharedMesh = jibanM;
+
+        // 門の 外の 道。**うねった ふち**の 帯（箱だと まっすぐな 線が 出る）。
+        // ふちの 式は 焼いた 一枚絵と 同じ ものを つかう ので、絵の ところ（±16m）と つながる
+        var michiM = NiwaJimenE.MichiAmi(-40f, 44f, 0.5f, 2.25f);
+        AssetDatabase.CreateAsset(michiM, "Assets/Art/Meshes/NiwaMichi.asset");
+        var michiGO = new GameObject("MichiSoto");
+        michiGO.transform.SetParent(root, false);
+        michiGO.transform.position = new Vector3(2f, 0f, 0f);
+        michiGO.AddComponent<MeshFilter>().sharedMesh = michiM;
+        michiGO.AddComponent<MeshRenderer>().sharedMaterial = mDirt;
 
         // ---- 家（megakit の ジェッティの 家。玄関は 南=庭がわ を 向く）
         var ie = new GameObject("Ie").transform;
@@ -260,9 +284,9 @@ public static class BuildNiwa {
         // ---- 高台（本人 2026-08-30「俯瞰するカメラアングルの場所を作って、そこから空を見上げられるように」）
         //   門の 外の 東の 土手。のぼると カメラが 空を 向き、雲と 遠い 峰が 見える
         {
-            var mTsuchi = MatT("NiwaTsuchiT", "dirt_path.png", 6f, 6f);
+            var mTsuchi = MatT("NiwaTsuchiT", "ji_tsuchi.jpg", 3f, 1.4f);
             const float TX = 21f, TZ = -9.5f, TH = 3.4f;
-            Box(root, "Takadai", new Vector3(TX, TH * 0.5f, TZ), new Vector3(11f, TH, 9f), mGrass);
+            Box(root, "Takadai", new Vector3(TX, TH * 0.5f, TZ), new Vector3(11f, TH, 9f), mGrassH);
             // のぼり坂（西から。上端が 高台の 天と そろう ように 逆算・本人 2026-08-30
             //   「坂道が高台と高さがあっていなくて歩いていけない」）
             const float SLOPE = 18f;                       // 18度（CCの 上限50度に 余裕）
@@ -272,7 +296,7 @@ public static class BuildNiwa {
             // 斜面は **草の 土手**（板に 見えない ように 幅ひろ・草の 材質）
             var saka = Box(root, "TakadaiSaka",
                 new Vector3((x0 + x1) * 0.5f, TH * 0.5f, TZ),
-                new Vector3(L, 0.6f, 7.2f), mGrass);
+                new Vector3(L, 0.6f, 7.2f), mGrassH);
             saka.transform.rotation = Quaternion.Euler(0f, 0f, SLOPE);
             // 上に 土の 道すじを のせる（人が 通る ところだけ 土）
             var michi = Box(root, "TakadaiMichi",
@@ -454,13 +478,33 @@ public static class BuildNiwa {
         var focus = volGO.AddComponent<FocusOnPlayer>();
         focus.volume = vol; focus.target = player.transform;
 
+        // ---- 物を 地ばんに すわらせる（凸凹に した ぶん、y=0 のままだと 浮く／沈む）
+        {
+            string[] nuki = { "Jimen", "JimenE", "MichiSoto", "BLK_", "Sora", "Satoyama",
+                              "YamaToi", "Kumo", "Cam", "Sun", "Day", "Volume", "Player",
+                              "Takadai", "Kage" };
+            int naosi = 0;
+            for (int i = 0; i < root.childCount; i++) {
+                var t = root.GetChild(i);
+                bool tobu = false;
+                foreach (var k in nuki) if (t.name.StartsWith(k)) { tobu = true; break; }
+                if (tobu) continue;
+                var q = t.position;
+                float dy = NiwaJimenE.Takasa(q.x, q.z);
+                if (Mathf.Abs(dy) < 0.0005f) continue;
+                t.position = new Vector3(q.x, q.y + dy, q.z);
+                naosi++;
+            }
+            Debug.Log("[Probe] NiwaJiban すわらせた " + naosi + " 個");
+        }
+
         // ---- 庭の 地面の 一枚絵（D-119）。物が ぜんぶ 置かれて から 焼く
         //   （とびいし・木・塀・家の 位置を 場面から 拾って 踏み跡や 苔を 描く）
         var jimenE = NiwaJimenE.Yaku(root);
         if (jimenE != null) {
             var ita = new GameObject("JimenE");
             ita.transform.SetParent(root, false);
-            ita.transform.position = new Vector3(NiwaJimenE.NAKA.x, 0.03f, NiwaJimenE.NAKA.y);
+            ita.transform.position = new Vector3(NiwaJimenE.NAKA.x, 0.05f, NiwaJimenE.NAKA.y);
             ita.AddComponent<MeshFilter>().sharedMesh = NiwaJimenE.Ita();
             ita.AddComponent<MeshRenderer>();                        // あたりは Jimen が 持つ
             var mE = new Material(Shader.Find("Universal Render Pipeline/Lit"));

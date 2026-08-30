@@ -106,6 +106,129 @@ public static class NiwaJimenE {
         return t * t * (3f - 2f * t);
     }
 
+    // ================= 地ばんの 凸凹 =================
+    // 本人 2026-08-31「地面自体を多少凸凹させてテクスチャ貼り付ければ解決しないかな。
+    // 人が上下しないレベルの凸凹か、あるいは特定の場所だけ」
+    //
+    // ★カメラの ふせ角が 10°＝**高さだけ 6倍に 拡大されて 映る**。
+    //   奥ゆき 1m は 画面で 21px しか ないが、高さ 1m は 121px。
+    //   だから 20cmの 起伏でも 画面では 24px 動く＝平らな 面が 平らに 見える 弱点に 直に 効く。
+    // ★歩く ところは 平ら（本人の 指示）。庭の 踏み跡・家の 敷地・道・高台は うねらせない。
+    //   塀の そとは 誰も 歩かない ので 大きく うねらせる
+
+    /// <summary>箱の 中なら 1、そとへ yawa で 0</summary>
+    static float Hako(float wx, float wz, float x0, float x1, float z0, float z1, float yawa) {
+        float d = Mathf.Max(Mathf.Max(x0 - wx, wx - x1), Mathf.Max(z0 - wz, wz - z1));
+        return 1f - Fuchi(0f, yawa, d);
+    }
+
+    /// <summary>その 場所の 起伏の 大きさ（0＝平ら）</summary>
+    static float Haba(float wx, float wz) {
+        float hira = 0f;
+        // ★平らに する ところを 取りすぎない こと。はじめ 家の 敷地を |x|<7.5・z0.5〜18.5、
+        //   踏み跡を |x|<3.3 に したら **見えて いる 芝生の ほぼ 全部が 平ら**に なり、
+        //   凸凹が まったく 出なかった
+        hira = Mathf.Max(hira, Hako(wx, wz, -1.3f, 1.3f, -7.5f, 8.5f, 1.0f));   // 庭の 踏み跡
+        hira = Mathf.Max(hira, Hako(wx, wz, -4.6f, 4.6f, 3f, 16f, 1.0f));       // 家の 敷地
+        hira = Mathf.Max(hira, Hako(wx, wz, -44f, 44f, -12.6f, -6.6f, 1.2f) * 0.85f); // 道
+        hira = Mathf.Max(hira, Hako(wx, wz, 11f, 31f, -16f, -2f, 2.0f));        // 高台と 坂
+        // ★塀の 線は ほぼ 平ら（0.8）。塀は 1枚ずつ 固い ので、支柱の 間で 段が つくと
+        //   垣根が こわれて 見える。2.5m間かくで 振幅20cm・波長7.7mだと 段が 19cm＝
+        //   塀の 高さ87cmの 2割。0.8 平らに すれば 段は 6cmに おさまる
+        hira = Mathf.Max(hira, Hako(wx, wz, -12f, 12f, -6.7f, -5.3f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, -12f, 12f, 14.5f, 15.9f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, -11.9f, -10.5f, -7f, 16f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, 10.5f, 11.9f, -7f, 16f, 1.0f) * 0.8f);
+        // 塀の そと（誰も 歩かない）は 大きく
+        float soto = 1f + Fuchi(12f, 26f, Mathf.Max(Mathf.Abs(wx), wz - 16f)) * 0.9f;
+        return 0.30f * soto * (1f - hira);
+    }
+
+    /// <summary>地ばんの 高さ</summary>
+    public static float Takasa(float wx, float wz) {
+        float a = Haba(wx, wz);
+        if (a < 0.001f) return 0f;
+        // ★Fbm を そのまま つかっては いけない（2026-08-31）。
+        //   4段の 値ノイズは 理屈のうえでは 0〜0.94 だが、**実際の ばらつきは 標準偏差0.11**。
+        //   (Fbm-0.5) を そのまま つかったら 高低差が 18cmしか 出なかった（狙いの 半分以下）。
+        //   平均0.47 を 引いて 3.0倍する と ふつうに ±0.10、たまに ±0.30 に なる
+        return ((Fbm(wx * 0.13f, wz * 0.13f, 401) - 0.47f) * 3.0f
+                + (Fbm(wx * 0.42f, wz * 0.42f, 733) - 0.47f) * 1.05f) * a;
+    }
+
+    // ---- 門の 外の 道の ふち。**焼いた 絵と 形の 両方で 同じ 式を つかう**ので
+    //      絵の ところ（±16m）と そとの 形が つながる
+    public static float MichiKita(float wx) {
+        return -7.0f + (Fbm(wx * 0.25f, 3.7f, 53) - 0.5f) * 1.2f;
+    }
+    public static float MichiMinami(float wx) {
+        return -12.4f + (Fbm(wx * 0.21f, 11.3f, 97) - 0.5f) * 1.3f;
+    }
+
+    /// <summary>凸凹に そった 地面の あみ。uvTile>0 なら 世界の 長さで タイル、
+    /// 0以下なら 0..1（焼いた 一枚絵むけ）</summary>
+    public static Mesh Ami(string name, float habaX, float habaZ, Vector2 naka,
+                           float masu, float uvTile) {
+        int nx = Mathf.Max(1, Mathf.RoundToInt(habaX / masu));
+        int nz = Mathf.Max(1, Mathf.RoundToInt(habaZ / masu));
+        var v = new Vector3[(nx + 1) * (nz + 1)];
+        var uv = new Vector2[v.Length];
+        for (int j = 0; j <= nz; j++)
+            for (int i = 0; i <= nx; i++) {
+                float lx = -habaX * 0.5f + habaX * i / nx;
+                float lz = -habaZ * 0.5f + habaZ * j / nz;
+                float wx = naka.x + lx, wz = naka.y + lz;
+                int k = j * (nx + 1) + i;
+                v[k] = new Vector3(lx, Takasa(wx, wz), lz);
+                uv[k] = uvTile > 0f ? new Vector2(wx / uvTile, wz / uvTile)
+                                    : new Vector2(i / (float)nx, j / (float)nz);
+            }
+        var tri = new int[nx * nz * 6];
+        int t = 0;
+        for (int j = 0; j < nz; j++)
+            for (int i = 0; i < nx; i++) {
+                int a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+                tri[t++] = a; tri[t++] = c; tri[t++] = d;
+                tri[t++] = a; tri[t++] = d; tri[t++] = b;
+            }
+        var m = new Mesh { name = name };
+        if (v.Length > 65000) m.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        m.vertices = v; m.uv = uv; m.triangles = tri;
+        m.RecalculateNormals(); m.RecalculateBounds();
+        return m;
+    }
+
+    /// <summary>門の 外の 道。**うねった ふち**の 帯（箱だと まっすぐな 線に なる）</summary>
+    public static Mesh MichiAmi(float x0, float x1, float masu, float uvTile) {
+        int nx = Mathf.Max(2, Mathf.RoundToInt((x1 - x0) / masu));
+        const int NZ = 6;
+        var v = new Vector3[(nx + 1) * (NZ + 1)];
+        var uv = new Vector2[v.Length];
+        float cx = (x0 + x1) * 0.5f;
+        for (int i = 0; i <= nx; i++) {
+            float wx = Mathf.Lerp(x0, x1, i / (float)nx);
+            float zk = MichiKita(wx), zm = MichiMinami(wx);
+            for (int j = 0; j <= NZ; j++) {
+                float wz = Mathf.Lerp(zm, zk, j / (float)NZ);
+                int k = j * (nx + 1) + i;
+                v[k] = new Vector3(wx - cx, Takasa(wx, wz) + 0.02f, wz);
+                uv[k] = new Vector2(wx / uvTile, wz / uvTile);
+            }
+        }
+        var tri = new int[nx * NZ * 6];
+        int t = 0;
+        for (int j = 0; j < NZ; j++)
+            for (int i = 0; i < nx; i++) {
+                int a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+                tri[t++] = a; tri[t++] = c; tri[t++] = d;
+                tri[t++] = a; tri[t++] = d; tri[t++] = b;
+            }
+        var m = new Mesh { name = "NiwaMichi" };
+        m.vertices = v; m.uv = uv; m.triangles = tri;
+        m.RecalculateNormals(); m.RecalculateBounds();
+        return m;
+    }
+
     // ---- マスク（世界座標で 描く）
     static int Mx(float wx) { return Mathf.RoundToInt((wx - (NAKA.x - HABA * 0.5f)) / HABA * MN); }
     static int Mz(float wz) { return Mathf.RoundToInt((wz - (NAKA.y - HABA * 0.5f)) / HABA * MN); }
@@ -143,18 +266,7 @@ public static class NiwaJimenE {
     /// <summary>絵を 敷く 板。**UVは 自分で 持つ**（2026-08-31）。
     /// Unityの Plane の UVの 向きに 頼ったら 奥と 手前が 逆に なり、
     /// 門の外の 道が 家の うしろに 出た。v=0 が z の 小さい ほう＝焼いた 絵の 並びと 同じ</summary>
-    public static Mesh Ita() {
-        float h = HABA * 0.5f;
-        var m = new Mesh { name = "JimenEIta" };
-        m.vertices = new[] { new Vector3(-h, 0f, -h), new Vector3(h, 0f, -h),
-                             new Vector3(h, 0f, h),   new Vector3(-h, 0f, h) };
-        m.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f),
-                       new Vector2(1f, 1f), new Vector2(0f, 1f) };
-        m.normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
-        m.triangles = new[] { 0, 2, 1, 0, 3, 2 };   // 上から 見て 表に なる 向き
-        m.RecalculateBounds();
-        return m;
-    }
+    public static Mesh Ita() { return Ami("JimenEIta", HABA, HABA, NAKA, 0.35f, 0f); }
 
     /// <summary>庭の 地面の 絵を 焼いて、その テクスチャを 返す</summary>
     public static Texture2D Yaku(Transform root) {
@@ -204,8 +316,9 @@ public static class NiwaJimenE {
             float wz = NAKA.y - HABA * 0.5f + z * M2W;
             for (int x = 0; x < MN; x++) {
                 float wx = NAKA.x - HABA * 0.5f + x * M2W;
-                float fuchi = -7.0f + (Fbm(wx * 0.25f, 3.7f, 53) - 0.5f) * 1.2f;
-                float a = 1f - Fuchi(fuchi - 0.35f, fuchi + 0.35f, wz);
+                float zk = MichiKita(wx), zm = MichiMinami(wx);
+                float a = (1f - Fuchi(zk - 0.35f, zk + 0.35f, wz))
+                          * Fuchi(zm - 0.35f, zm + 0.35f, wz);
                 if (a > mDoro[z * MN + x]) mDoro[z * MN + x] = a;
             }
         }
@@ -237,6 +350,25 @@ public static class NiwaJimenE {
             Sen(mKoke, p2, p3, 0.40f, 0.60f, 0.85f);   // 北がわは いちばん 日かげ
             Sen(mKoke, p3, p0, 0.35f, 0.50f, 0.7f);
         }
+
+        // ★地ばんの 高さを 絵に 焼きこむ（2026-08-31）。
+        //   なめらかな 起伏は **明るさでは ほとんど 見えない**。傾斜 5〜8%＝3〜5°なので
+        //   真昼だと 明るさの ちがいは 0.3%。ふせ角10°では 自分を 隠しも しない。
+        //   実際の 地面は 高い ところが 乾いて 黄みどり、低い ところが 湿って 苔っぽい。
+        //   色に すれば 時こくに よらず 見える
+        var mTaka = new float[MN * MN];
+        float takaMin = 9f, takaMax = -9f;
+        for (int z = 0; z < MN; z++) {
+            float wz = NAKA.y - HABA * 0.5f + z * M2W;
+            for (int x = 0; x < MN; x++) {
+                float wx = NAKA.x - HABA * 0.5f + x * M2W;
+                float h = Takasa(wx, wz);
+                mTaka[z * MN + x] = h;
+                if (h < takaMin) takaMin = h;
+                if (h > takaMax) takaMax = h;
+            }
+        }
+        Debug.Log("[Probe] JimenE takasa " + takaMin.ToString("F2") + " .. " + takaMax.ToString("F2"));
 
         // ---- 中身が 前と 同じ なら 焼き直さない（1回 28.6秒 かかる・2026-08-31）
         var sig = new System.Text.StringBuilder();
@@ -285,7 +417,9 @@ public static class NiwaJimenE {
                 var c = Hiku(kusa, wx, wz);
                 float r = c.r, g = c.g, b = c.b;
 
-                float mk = Toru(mKoke, u + nx, v + nz);
+                float taka = Toru(mTaka, u, v);
+                float mk = Mathf.Max(Toru(mKoke, u + nx, v + nz),
+                                     Mathf.Clamp01((-taka - 0.015f) * 7f) * 0.40f);  // くぼみは 湿る
                 if (mk > 0.004f) {
                     var s = Hiku(koke, wx, wz);
                     r += (s.r - r) * mk; g += (s.g - g) * mk; b += (s.b - b) * mk;
@@ -302,8 +436,10 @@ public static class NiwaJimenE {
                 }
 
                 // 夏の 焼け（日なたの 草は 黄みどりに なる）。一様な 緑の 面を こわす
-                float kare = Mathf.Clamp01((Fbm(wx * 0.075f, wz * 0.075f, 211) - 0.50f) * 3.0f)
-                             * 0.5f * (1f - md);            // 土の 上では やらない
+                float kare = Mathf.Max(
+                                 Mathf.Clamp01((Fbm(wx * 0.075f, wz * 0.075f, 211) - 0.50f) * 3.0f),
+                                 Mathf.Clamp01((taka - 0.015f) * 7f))            // 高みは 乾く
+                             * 0.62f * (1f - md);            // 土の 上では やらない
                 if (kare > 0.004f) {
                     r += (r * 1.16f - r) * kare;
                     g += (g * 1.02f - g) * kare;
