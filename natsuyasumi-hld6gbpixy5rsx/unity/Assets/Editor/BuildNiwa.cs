@@ -216,39 +216,32 @@ public static class BuildNiwa {
         }
         // ★里山（本人 2026-08-30「田舎って山が近い。遠くの峰って感じではない」）：
         //   近い 山は 画面上端を つきぬける 高さ。谷間の くぼみから だけ 空と 遠い 峰が のぞく
-        var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
-        Toumei(mSatoyama, 2990);      // ★切り抜きでは なく 半とうめい（ぼかした ふちを そのまま 出す）
-        Toumei(mYamaToi, 2985);
-        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 1.81f, 55f), 88f, 21.0f);
-        // ★遠い 青い 峰は **高台に 登った ときだけ**（平地から 見えるのは おかしい・本人 2026-08-30）
-        var toi = KakiwariCam("Yama_Toi", mYamaToi, new Vector3(-10f, 14.47f, 150f), 130.0f, 26.0f);
-        toi.GetComponent<NiwaKakiwari>().onlyZone = "たかだい";
+        // ★背景の 絵は 本人が 用意（2026-08-30）：山＝重なる 稜線（緑の 近景＋青い 遠景）、
+        //   空＝入道雲の 空。空は いちばん おくの 幕、山は その 手前、雲は あいだを ながれる
+        var mSora = MatE("NiwaSora", "sora.png");
+        mSora.SetFloat("_AlphaClip", 0f); mSora.DisableKeyword("_ALPHATEST_ON");
+        mSora.renderQueue = 1900;                       // いちばん おく（不とうめいの まま）
+        KakiwariCam("Sora", mSora, new Vector3(0f, 36f, 200f), 230f, 86f);
 
-        // ★雲は 山より **奥・高いところ**。1つずつ ちがう 形で ゆっくり ながれる。
-        //   ふだんは 谷間から すこし 顔を 出すだけ、高台で 見上げると ぜんぶ 見える
-        var kumoTex = new[] { "kumo1.png", "kumo3.png", "kumo4.png", "kumo6.png" };
+        var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
+        Toumei(mSatoyama, 2990);
+        Toumei(mYamaToi, 2985);
+        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 7.08f, 55f), 96.0f, 36.0f);
+
+        // 流れる 雲（空の 絵から 抜いた 3つ）。山の おく・空の 手前
+        var kumoTex = new[] { "kumo_a.png", "kumo_b.png", "kumo_c.png" };
         var mKumos = new Material[kumoTex.Length];
         for (int i = 0; i < kumoTex.Length; i++) {
             mKumos[i] = MatE("NiwaKumo" + (i + 1), kumoTex[i]);
-            mKumos[i].SetFloat("_Surface", 1f);                 // 半とうめい（ふちを やわらかく）
-            mKumos[i].SetFloat("_Blend", 0f);
-            mKumos[i].SetFloat("_AlphaClip", 0f);
-            mKumos[i].DisableKeyword("_ALPHATEST_ON");
-            mKumos[i].SetOverrideTag("RenderType", "Transparent");
-            mKumos[i].EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            mKumos[i].SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            mKumos[i].SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            mKumos[i].SetInt("_ZWrite", 0);
-            mKumos[i].renderQueue = 3000;
+            Toumei(mKumos[i], 2960);                    // 空(1900)と 山(2990)の あいだ
         }
         //  （よこ位置, 見上げ角, 奥ゆき, はば, 絵, ながれる 速さ）
         var kumoSet = new[] {
-            new [] { -40f,  6.6f, 190f, 46f, 0f, 0.30f },   // 谷間から のぞく
-            new [] {  25f,  7.4f, 200f, 54f, 1f, 0.22f },
-            new [] { -95f, 10.5f, 210f, 62f, 2f, 0.26f },   // 見上げないと 見えない
-            new [] {  95f, 12.5f, 230f, 70f, 3f, 0.18f },
-            new [] { 160f,  9.0f, 250f, 58f, 0f, 0.34f },
-            new [] {-170f, 14.0f, 240f, 66f, 2f, 0.20f },
+            new [] { -30f,  7.2f, 150f, 60f, 0f, 0.24f },
+            new [] {  60f,  9.5f, 165f, 48f, 1f, 0.32f },
+            new [] {-120f,  6.2f, 140f, 40f, 2f, 0.40f },
+            new [] { 140f, 12.0f, 175f, 66f, 0f, 0.18f },
+            new [] { -60f, 14.5f, 185f, 52f, 1f, 0.26f },
         };
         foreach (var k in kumoSet) {
             var mat = mKumos[(int)k[4]];
@@ -258,7 +251,7 @@ public static class BuildNiwa {
             Object.DestroyImmediate(q.GetComponent<NiwaKakiwari>());
             var km = q.AddComponent<NiwaKumo>();
             km.zurashi = new Vector3(k[0], k[2] * Mathf.Tan(k[1] * Mathf.Deg2Rad), k[2]);
-            km.hayasa = k[5]; km.haba = 420f;
+            km.hayasa = k[5]; km.haba = 460f;
         }
 
         // ---- 高台（本人 2026-08-30「俯瞰するカメラアングルの場所を作って、そこから空を見上げられるように」）
@@ -346,7 +339,7 @@ public static class BuildNiwa {
         var cam = camGO.AddComponent<Camera>();
         cam.fieldOfView = 26f; cam.nearClipPlane = 0.3f; cam.farClipPlane = 300f;
         cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.70f, 0.80f, 0.88f);
+        cam.backgroundColor = new Color(0.667f, 0.902f, 0.980f);   // 空の 絵の 地平ぎわの 色
         camGO.AddComponent<AudioListener>();
         var camData = camGO.AddComponent<UniversalAdditionalCameraData>();
         camData.renderPostProcessing = true;
@@ -402,7 +395,7 @@ public static class BuildNiwa {
         // 描き割りの 昼夜（Unlit なので 色で つける）
         var haikei = dayGO.AddComponent<NiwaHaikeiIro>();
         haikei.sun = sun;
-        haikei.mats = new[] { mSatoyama, mYamaToi, mKumos[0], mKumos[1], mKumos[2], mKumos[3] };
+        haikei.mats = new[] { mSora, mSatoyama, mYamaToi, mKumos[0], mKumos[1], mKumos[2] };
 
         // 玄関わきの 舞台照明（HD-2D＝スポットの 型。夜に 効く）
         var porch = new GameObject("PorchLight");

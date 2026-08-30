@@ -82,24 +82,16 @@
   ＝**商用可・改変可・再配布可・ゲームへの 同梱可**。ライセンス文 `unity/Assets/Art/Fonts/LICENSE-PixelMplus-*.txt` 同梱
 - JIS第1・第2水準の 漢字を ふくむ。点で 描かれた 書体なので 12px の 整数倍で 出せば ドット絵と 目が そろう
 
-## 遠景の 描き割り（`unity/` Niwa の 山・雲）― 2026-08-30
+## 遠景の 描き割り（`unity/` Niwa の 山・空・雲）― 2026-08-30
 
-**里山（近い 山）** — 出所: WordPress Photo Directory「peaceful countryside」（畑の うしろに 森の 丘）
-- https://pd.w.org/2026/04/94269e79e0000e360.94603194-1536x2048.jpg
-- ライセンス: **CC0 1.0**（商用可・改変可・再配布可）
-- 加工: 空を 抜く（稜線は 列ごとに 探して **中央値で ならす**＝1列だけ 木を 拾って 縦の 筋に なるのを 止める）
-  → 鏡うつしで 横へ のばす → 18色に 減色。**地上から 見上げた 写真**を 選んだ
-  （谷を 見おろす 写真だと「自分が 高台に いる」画に なる・本人 2026-08-30）
-
-**遠い 峰** — 出所: WordPress Photo Directory「Layered blue and green mountains」
-- https://pd.w.org/2026/07/2416a5e2756cedeb7.32696644-2048x1536.jpg
-- ライセンス: **CC0 1.0**
-- 加工: 稜線の 帯を 切りとり → 空を 抜く → 10色に 減色
-
-**入道雲** — 出所: Flickr「Cumulonimbus clouds; Desert Queen Valley」（米国 国立公園局）
-- https://live.staticflickr.com/2849/12489661463_ffd65ddf9c_b.jpg
-- ライセンス: **パブリックドメイン（PDM）**
-- 加工: 雲の ところだけ 切りとり → 青空を 抜く → 10色に 減色
+**山（重なる 稜線）／空（入道雲）** — **本人が 生成した 絵**
+- もと: `unity/ArtSource/ref/photos/ChatGPT Image 2026年8月30日 14_03_38.png`（山・2048x768）
+  `ChatGPT Image 2026年8月30日 14_07_15.png`（空・2048x768）
+- こちらでの 手あて: 山＝上の 暗い ぼかしを 明るさから アルファに して 抜いた（`satoyama.png`）／
+  空＝そのまま 幕に（`sora.png`）＋青空を 抜いて 雲を 3つ 切りだし（`kumo_a/b/c.png`）、
+  1つずつ ちがう 速さで 横に ながす
+- ※ 前に つかって いた CC0/PDM の 写真（Flickr・WordPress Photo Directory）は
+  `ref/photos/` に 残して あるが **いまは 未使用**
 
 ## 庭シーンの 3Dモデル（`unity/` Niwa）― 2026-08-29
 
