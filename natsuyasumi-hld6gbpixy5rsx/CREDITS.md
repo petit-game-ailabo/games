@@ -28,6 +28,16 @@
 のっぺりした漆喰・砂は256pxにするとただのざらざらになって、何の材質か読めなくなった。
 漆喰と道の土は**手で描いたものを残している**（草の絵と色がそろっているため）。
 
+## 主人公（`unity/` Niwa）― 2026-08-30 差し替え
+
+**本人が 用意した 魔理沙の 立ち絵と 歩き差分**
+- もと: `unity/ArtSource/marisa_tachie_source.png`（立ち絵）／`marisa_walk_source.png`（歩き 8コマ x 7方向）
+- こちらでの 手あて（`unity/ArtSource/make_marisa_walk.py`）：市松の 地を ふちから 塗りつぶして 抜き
+  （エプロンの 白は 囲まれて いるので 残る）、足もとの まん中で そろえて 1コマ 128x160 に 詰め、
+  **8方向(列) x 8コマ(行)** の アトラス `Assets/Art/Sprites/marisa_walk.png` に 組みなおした。
+  もらった 絵は 7方向 だったので、「右」は 「左」を 鏡に して 埋めて いる
+- 立ち絵は 透過して `Assets/Art/Sprites/tachie/marisa_tachie.png`（会話の 差しこみ用・まだ 未使用）
+
 ## 主人公（`unity/` 奥行き版）― 2026-08-15 差し替え
 
 **本人が用意した 魔理沙の 8方向 x 8状態**（元画像 `unity/ArtSource/marisa_source_8x8.png`）。

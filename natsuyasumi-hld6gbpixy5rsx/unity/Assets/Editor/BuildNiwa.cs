@@ -301,11 +301,11 @@ public static class BuildNiwa {
         var cc = player.AddComponent<CharacterController>();
         cc.height = 1.0f; cc.radius = 0.26f; cc.center = new Vector3(0f, 0.52f, 0f);
         cc.slopeLimit = 50f; cc.stepOffset = 0.35f;
-        var marisa = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_8x8.png");
+        var marisa = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_walk.png");
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Mi"; quad.transform.SetParent(player.transform, false);
         quad.transform.localPosition = new Vector3(0f, 0.66f, 0f);
-        quad.transform.localScale = new Vector3(1.30f * 115f / 167f, 1.30f, 1f);
+        quad.transform.localScale = new Vector3(1.30f * 128f / 160f, 1.30f, 1f);
         Object.DestroyImmediate(quad.GetComponent<Collider>());
         var sm = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         AssetDatabase.CreateAsset(sm, "Assets/Art/Materials/Niwa/NiwaMarisa.mat");
@@ -319,6 +319,7 @@ public static class BuildNiwa {
         var cs = player.AddComponent<CharSprite>();
         cs.target = quad.GetComponent<Renderer>();
         cs.runSpeed = 3.4f;
+        cs.walkSheet = true;            // ★新しい 絵は 行が 歩きの 8コマ（2026-08-30）
         var mv = player.AddComponent<MuraMove>();
         mv.sprite = cs;
 

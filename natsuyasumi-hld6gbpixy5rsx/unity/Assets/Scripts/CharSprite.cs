@@ -22,6 +22,12 @@ public class CharSprite : MonoBehaviour {
     [Tooltip("空なら Camera.main を つかう")]
     public Camera cam;
 
+    [Header("歩きコマ方式（2026-08-30・新しい 絵）")]
+    [Tooltip("行が 歩きの 8コマ の アトラスなら ON（旧＝行が 立ち/歩き/表情）")]
+    public bool walkSheet;
+    public float walkCycleFps = 9f;
+    public float runCycleFps = 14f;
+
     [Header("うごき")]
     public float walkFps = 5.0f;
     public float runFps = 8.0f;
@@ -90,6 +96,17 @@ public class CharSprite : MonoBehaviour {
         if (blinkT > 0f) blinkT -= dt;
 
         int row;
+        if (walkSheet) {
+            // ★新しい 絵：行が 歩きの 8コマ。止まって いれば 0コマめ（立ち）
+            if (moving) {
+                step += dt * (speed > runSpeed ? runCycleFps : walkCycleFps);
+                row = Mathf.FloorToInt(step) % Rows;
+            } else {
+                step = 0f; row = 0;
+            }
+            Set(dir, row);
+            return;
+        }
         if (moodLeft > 0f) {
             row = (int)mood;
         } else if (moving) {
