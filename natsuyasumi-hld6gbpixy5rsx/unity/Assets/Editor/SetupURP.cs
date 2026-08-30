@@ -116,6 +116,22 @@ public static class SetupURP {
             //   ざらざらに なった うえに ビルドが 何十MBも ふくらむ。
             //   取りこみかたは MegaKit.Setup が べつに 面倒を みる
             if (path.Contains("/megakit/")) continue;
+            // ★写真から 起こした 遠景の 描き割りも 対象外（2026-08-30）。
+            //   点フィルタ＋ミップ無しだと 縮小で ちらつき、色の ノイズに 見える
+            string fn = System.IO.Path.GetFileNameWithoutExtension(path);
+            if (fn.StartsWith("satoyama") || fn.StartsWith("yama_") || fn.StartsWith("kumo")) {
+                var ti2 = AssetImporter.GetAtPath(path) as TextureImporter;
+                if (ti2 != null && (ti2.filterMode != FilterMode.Bilinear || !ti2.mipmapEnabled)) {
+                    ti2.textureType = TextureImporterType.Default;
+                    ti2.filterMode = FilterMode.Bilinear;
+                    ti2.mipmapEnabled = true;
+                    ti2.alphaIsTransparency = true;
+                    ti2.textureCompression = TextureImporterCompression.Uncompressed;
+                    ti2.SaveAndReimport();
+                    Debug.Log("[SetupURP] photo backdrop: " + path);
+                }
+                continue;
+            }
             var ti = AssetImporter.GetAtPath(path) as TextureImporter;
             if (ti == null) continue;
             bool ok = !ti.mipmapEnabled && !ti.streamingMipmaps

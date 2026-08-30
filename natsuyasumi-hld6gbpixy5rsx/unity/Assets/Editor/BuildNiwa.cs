@@ -98,7 +98,7 @@ public static class BuildNiwa {
         Box(root, "BLK_N",  new Vector3(0f, 1f, 15.2f),   new Vector3(23f, 2f, 0.3f), null, false);
         // 道の 外がわ（散歩の はんい）
         Box(root, "BLK_Road", new Vector3(0f, 1f, -12.2f), new Vector3(80f, 2f, 0.3f), null, false);
-        Box(root, "BLK_RoadE", new Vector3(30f, 1f, -9f), new Vector3(0.3f, 2f, 7f), null, false);
+        Box(root, "BLK_RoadE", new Vector3(34f, 1f, -9f), new Vector3(0.3f, 2f, 9f), null, false);
         Box(root, "BLK_RoadW", new Vector3(-30f, 1f, -9f), new Vector3(0.3f, 2f, 7f), null, false);
 
         // ---- 玄関→門の 飛び石、くつぬぎ石、鉢
@@ -196,24 +196,78 @@ public static class BuildNiwa {
             return q;
         }
         var mYamaToi = MatE("NiwaYamaToi", "yama_toi.png");
-        var mYamaChikai = MatE("NiwaYamaChikai", "yama_chikai.png");
-        var mKumo = MatE("NiwaKumo", "kumo_nyudo.png");
         // ★カメラ連動（NiwaKakiwari）：追従カメラでも 画面の 上の 帯に いつも 山が 出る。
         //   ずれの 数字は「ピッチ17°・FOV30」の 画角から 逆算（上端≒水平線）
-        void KakiwariCam(string name, Material m, Vector3 zurashi, float w, float h) {
+        GameObject KakiwariCam(string name, Material m, Vector3 zurashi, float w, float h) {
             var q = Kakiwari(name, m, Vector3.zero, w, h);
             q.AddComponent<NiwaKakiwari>().zurashi = zurashi;
+            return q;
         }
         // ★里山（本人 2026-08-30「田舎って山が近い。遠くの峰って感じではない」）：
         //   近い 山は 画面上端を つきぬける 高さ。谷間の くぼみから だけ 空と 遠い 峰が のぞく
         var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
-        // 尾根線が 画面の 帯（水平線0〜+4°）を またぐ 高さ：高い ところは 山・低い ところは 空
-        // 稜線（テクスチャ上から 24%）が 水平線+3°に 来る 高さ：+2.9 = 上端13.5 → 中心 -8.5
-        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, -0.64f, 55f), 71.0f, 16.6f);
-        KakiwariCam("Yama_Toi", mYamaToi,  new Vector3(-6f, 3.9f, 92f), 116.0f, 22.0f);      // 遠い 峰＝谷間の おく
-        KakiwariCam("Kumo1", mKumo, new Vector3(-26f, 8.9f, 88f), 30f, 15f);                // 入道雲（写真の 比率）
-        KakiwariCam("Kumo2", mKumo, new Vector3(4f, 9.8f, 89f), 26f, 13f);
-        KakiwariCam("Kumo3", mKumo, new Vector3(30f, 8.4f, 87f), 22f, 11f);
+        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 2.64f, 55f), 88.0f, 24.8f);
+        // ★遠い 青い 峰は **高台に 登った ときだけ**（平地から 見えるのは おかしい・本人 2026-08-30）
+        var toi = KakiwariCam("Yama_Toi", mYamaToi, new Vector3(-10f, 14.47f, 150f), 130.0f, 26.0f);
+        toi.GetComponent<NiwaKakiwari>().onlyZone = "たかだい";
+
+        // ★雲は 山より **奥・高いところ**。1つずつ ちがう 形で ゆっくり ながれる。
+        //   ふだんは 谷間から すこし 顔を 出すだけ、高台で 見上げると ぜんぶ 見える
+        var kumoTex = new[] { "kumo1.png", "kumo3.png", "kumo4.png", "kumo6.png" };
+        var mKumos = new Material[kumoTex.Length];
+        for (int i = 0; i < kumoTex.Length; i++) {
+            mKumos[i] = MatE("NiwaKumo" + (i + 1), kumoTex[i]);
+            mKumos[i].SetFloat("_Surface", 1f);                 // 半とうめい（ふちを やわらかく）
+            mKumos[i].SetFloat("_Blend", 0f);
+            mKumos[i].SetFloat("_AlphaClip", 0f);
+            mKumos[i].DisableKeyword("_ALPHATEST_ON");
+            mKumos[i].SetOverrideTag("RenderType", "Transparent");
+            mKumos[i].EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mKumos[i].SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mKumos[i].SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mKumos[i].SetInt("_ZWrite", 0);
+            mKumos[i].renderQueue = 3000;
+        }
+        //  （よこ位置, 見上げ角, 奥ゆき, はば, 絵, ながれる 速さ）
+        var kumoSet = new[] {
+            new [] { -40f,  6.6f, 190f, 46f, 0f, 0.30f },   // 谷間から のぞく
+            new [] {  25f,  7.4f, 200f, 54f, 1f, 0.22f },
+            new [] { -95f, 10.5f, 210f, 62f, 2f, 0.26f },   // 見上げないと 見えない
+            new [] {  95f, 12.5f, 230f, 70f, 3f, 0.18f },
+            new [] { 160f,  9.0f, 250f, 58f, 0f, 0.34f },
+            new [] {-170f, 14.0f, 240f, 66f, 2f, 0.20f },
+        };
+        foreach (var k in kumoSet) {
+            var mat = mKumos[(int)k[4]];
+            var tex = mat.mainTexture;
+            float w = k[3], h = w * tex.height / (float)tex.width;
+            var q = Kakiwari("Kumo", mat, Vector3.zero, w, h);
+            Object.DestroyImmediate(q.GetComponent<NiwaKakiwari>());
+            var km = q.AddComponent<NiwaKumo>();
+            km.zurashi = new Vector3(k[0], k[2] * Mathf.Tan(k[1] * Mathf.Deg2Rad), k[2]);
+            km.hayasa = k[5]; km.haba = 420f;
+        }
+
+        // ---- 高台（本人 2026-08-30「俯瞰するカメラアングルの場所を作って、そこから空を見上げられるように」）
+        //   門の 外の 東の 土手。のぼると カメラが 空を 向き、雲と 遠い 峰が 見える
+        {
+            var mTsuchi = MatT("NiwaTsuchiT", "dirt_path.png", 6f, 6f);
+            const float TX = 21f, TZ = -9.5f, TH = 4.2f;
+            Box(root, "Takadai", new Vector3(TX, TH * 0.5f, TZ), new Vector3(11f, TH, 9f), mGrass);
+            // のぼり坂（西がわ から。20度）
+            var saka = Box(root, "TakadaiSaka", new Vector3(TX - 5.5f - 2.9f, TH * 0.5f, TZ),
+                           new Vector3(8.2f, 0.4f, 4.2f), mTsuchi);
+            saka.transform.rotation = Quaternion.Euler(0f, 0f, 27f);
+            // 上の かざり（草・岩・木のベンチ代わりの 丸太）
+            for (int i = 0; i < 14; i++) {
+                var d = Random.insideUnitCircle * 4.2f;
+                KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)],
+                    new Vector3(TX + d.x, TH + 0.01f, TZ + d.y), Random.Range(0f, 360f), Random.Range(1.4f, 2.2f));
+            }
+            KenneyKit.Put(root, "rock_smallA", new Vector3(TX + 3.2f, TH, TZ + 2.6f), 40f, 2.4f);
+            KenneyKit.Put(root, "log", new Vector3(TX - 1.6f, TH, TZ - 2.2f), 15f, 2.2f);
+            KenneyKit.Put(root, "tree_default", new Vector3(TX + 4.4f, TH, TZ - 3.2f), 60f, 3.2f);
+        }
 
         // ---- 主人公（マリサ 8方向スプライト・ライトを 受ける）
         var player = new GameObject("Player");
@@ -243,8 +297,8 @@ public static class BuildNiwa {
         mv.sprite = cs;
 
         // ---- 撮影ツアーの たちば
-        var tourNames = new[] { "にわ", "もんのそと" };
-        var tourPos = new[] { new Vector3(0f, 0.3f, -1.5f), new Vector3(3f, 0.3f, -9.3f) };
+        var tourNames = new[] { "にわ", "もんのそと", "たかだい" };
+        var tourPos = new[] { new Vector3(0f, 0.3f, -1.5f), new Vector3(3f, 0.3f, -9.3f), new Vector3(21f, 4.5f, -9.5f) };
         var tour = new Transform[tourPos.Length];
         for (int i = 0; i < tourPos.Length; i++) {
             var g = new GameObject("Mise_" + tourNames[i]);
@@ -280,6 +334,13 @@ public static class BuildNiwa {
                 lookAt = new Vector3(0f, 4.2f, 5f), fov = 26f,    // 屋根の 上に 山なみが 抜ける 角度
             },
             new MuraCamFixed.Spot {
+                name = "たかだい",
+                area = new Bounds(new Vector3(21f, 6f, -9.5f), new Vector3(12f, 12f, 10f)),
+                pos = new Vector3(21f, 9.5f, -24f),
+                lookAt = new Vector3(21f, 7.5f, -9.5f), fov = 34f,
+                hdPitchOver = -6f, hdDistOver = 13f,      // ★空を 見上げる
+            },
+            new MuraCamFixed.Spot {
                 name = "もんのそと",
                 area = new Bounds(new Vector3(0f, 3f, -9f), new Vector3(60f, 14f, 6.5f)),
                 // ★道の 近くに 置く：遠いと「今の カメラ（にわ）の ほうが 近い」に なって
@@ -308,7 +369,7 @@ public static class BuildNiwa {
         // 描き割りの 昼夜（Unlit なので 色で つける）
         var haikei = dayGO.AddComponent<NiwaHaikeiIro>();
         haikei.sun = sun;
-        haikei.mats = new[] { mSatoyama, mYamaToi, mKumo };
+        haikei.mats = new[] { mSatoyama, mYamaToi, mKumos[0], mKumos[1], mKumos[2], mKumos[3] };
 
         // 玄関わきの 舞台照明（HD-2D＝スポットの 型。夜に 効く）
         var porch = new GameObject("PorchLight");

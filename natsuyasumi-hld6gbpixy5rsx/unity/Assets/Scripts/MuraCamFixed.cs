@@ -19,6 +19,9 @@ public class MuraCamFixed : MonoBehaviour {
         // ★屋内の 型（S0-4）：この 台の あいだだけ 消す 物の 名前の 頭（例 "IeKabeN"）。
         //   遮蔽の 判定too 同じ 物を 透かして 数える（Check と 実機が 同じ 答えに なる）
         public string sukashi = "";
+        // ★場所ごとの HD-2D追従の 上書き（0 なら 既定）。高台で 空を 見上げる（2026-08-30）
+        public float hdPitchOver;
+        public float hdDistOver;
     }
     public Spot[] spots;
     public Transform target;
@@ -27,7 +30,8 @@ public class MuraCamFixed : MonoBehaviour {
     [Header("HD-2D追従（Tで切替・比較用）")]
     public bool hd2d;
     public float hdPitch = 26f, hdDist = 8.5f;
-    public float hdFov = 46f;   // 庭シーンは 望遠28（HD-2Dの 型）。むかしの 箱庭は 46 の まま
+    public float hdFov = 46f;
+    float hdPitchNow = -999f, hdDistNow;   // 庭シーンは 望遠28（HD-2Dの 型）。むかしの 箱庭は 46 の まま
 
     Camera cam; Spot cur; float lastCut = -9f; float hiddenT;
     public static string CurName = "-";
@@ -37,7 +41,7 @@ public class MuraCamFixed : MonoBehaviour {
     // WebGL は OSの フォントを 借りられず 日本語が 消える。同梱の PixelMplus を つかう
     public Font font;
 
-    void Start() { cam = GetComponent<Camera>(); }
+    void Start() { cam = GetComponent<Camera>(); hdPitchNow = hdPitch; hdDistNow = hdDist; }
 
     void Update() {
         if (Input.GetKeyDown(KeyCode.T)) { hd2d = !hd2d; cur = null; }
@@ -135,9 +139,14 @@ public class MuraCamFixed : MonoBehaviour {
         PlaceName = zone != null ? zone.name : "（みちくさ）";
 
         if (hd2d) {
-            var rot = Quaternion.Euler(hdPitch, 0f, 0f);
+            // ★場所ごとの 見上げ角（高台では 空を 見上げる・本人 2026-08-30）
+            float wantPitch = (zone != null && zone.hdPitchOver != 0f) ? zone.hdPitchOver : hdPitch;
+            float wantDist  = (zone != null && zone.hdDistOver  != 0f) ? zone.hdDistOver  : hdDist;
+            hdPitchNow = Mathf.Lerp(hdPitchNow, wantPitch, 1f - Mathf.Exp(-2.5f * Time.deltaTime));
+            hdDistNow  = Mathf.Lerp(hdDistNow,  wantDist,  1f - Mathf.Exp(-2.5f * Time.deltaTime));
+            var rot = Quaternion.Euler(hdPitchNow, 0f, 0f);
             var eye = target.position + Vector3.up * 0.7f;
-            var want = eye - rot * Vector3.forward * hdDist;
+            var want = eye - rot * Vector3.forward * hdDistNow;
             transform.position = Vector3.Lerp(transform.position, want,
                                               1f - Mathf.Exp(-6f * Time.deltaTime));
             transform.rotation = rot;
