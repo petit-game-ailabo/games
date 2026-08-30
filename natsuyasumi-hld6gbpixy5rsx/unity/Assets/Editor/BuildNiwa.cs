@@ -50,13 +50,13 @@ public static class BuildNiwa {
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Exponential;
         RenderSettings.fogColor = new Color(0.74f, 0.78f, 0.74f);
-        RenderSettings.fogDensity = 0.0045f;   // せまい シーンなので うすめ（0.008 は 白く かすんだ）
+        RenderSettings.fogDensity = 0.0028f;   // せまい シーンなので うすめ（0.008 は 白く かすんだ）
 
         // ---- 地めん（草）と 門の外の 道（土）
-        var mGrass = MatT("NiwaGrassT", "grass_ground.png", 110f, 85f);
+        var mGrass = MatT("NiwaGrassT", "grass_ground.png", 65f, 55f);
         var mDirt  = MatT("NiwaDirtT",  "dirt_path.png", 20f, 2f);
         // 地めんは 広く（浅い 追従カメラは 遠くまで 見える。せまいと 端の 空色が 見える）
-        Box(root, "Jimen", new Vector3(0f, -0.25f, 4f), new Vector3(220f, 0.5f, 170f), mGrass);
+        Box(root, "Jimen", new Vector3(0f, -0.25f, 4f), new Vector3(130f, 0.5f, 110f), mGrass);
         Box(root, "MichiSoto", new Vector3(0f, 0.011f, -9.5f), new Vector3(80f, 0.02f, 5.0f), mDirt)
             .GetComponent<Collider>().enabled = false;
 
@@ -163,18 +163,21 @@ public static class BuildNiwa {
         // ---- 遠景の 描き割り（絵はがき文法の 検証・2026-08-30 本人GO）：
         //   歩けないが 見える 遠景が「世界は 続いてる」を 作る。山なみ 2層＋入道雲。
         //   絵なので 影は 受けず 落とさず、昼夜の 明るさだけ 受ける（Lit・かげOFF）
+        // ★描き割りは **Unlit**（本人 2026-08-30「もっときれいに」）。Lit で 光を 受けさせると
+        //   写真の 色が 飛んで 白い もやに なる。昼夜は NiwaHaikeiIro が 色で つける
         Material MatE(string name, string tex) {
             string dir = "Assets/Art/Materials/Niwa";
             string path = dir + "/" + name + ".mat";
             var m = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (m == null) {
-                m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                m = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
                 AssetDatabase.CreateAsset(m, path);
             }
+            m.shader = Shader.Find("Universal Render Pipeline/Unlit");
             m.color = Color.white;
             m.SetFloat("_AlphaClip", 1f); m.SetFloat("_Cutoff", 0.5f);
             m.EnableKeyword("_ALPHATEST_ON");
-            m.SetFloat("_Smoothness", 0.02f);
+            m.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
             m.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/" + tex);
             return m;
         }
@@ -204,13 +207,13 @@ public static class BuildNiwa {
         // ★里山（本人 2026-08-30「田舎って山が近い。遠くの峰って感じではない」）：
         //   近い 山は 画面上端を つきぬける 高さ。谷間の くぼみから だけ 空と 遠い 峰が のぞく
         var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
-        mSatoyama.color = new Color(0.80f, 0.89f, 0.96f);   // 空気の 青（手前の 草と 分離する）
         // 尾根線が 画面の 帯（水平線0〜+4°）を またぐ 高さ：高い ところは 山・低い ところは 空
-        KakiwariCam("Satoyama", mSatoyama, new Vector3(6f, 2f, 55f), 200f, 44f);
-        KakiwariCam("Yama_Toi", mYamaToi,  new Vector3(-20f, -14f, 92f), 240f, 44f);      // 遠い 峰＝谷間の おく
-        KakiwariCam("Kumo1", mKumo, new Vector3(-34f, 9f, 88f), 26f, 26f);                // 入道雲（くぼみの 空）
-        KakiwariCam("Kumo2", mKumo, new Vector3(14f, 11f, 89f), 34f, 34f);
-        KakiwariCam("Kumo3", mKumo, new Vector3(44f, 8f, 87f), 20f, 20f);
+        // 稜線（テクスチャ上から 24%）が 水平線+3°に 来る 高さ：+2.9 = 上端13.5 → 中心 -8.5
+        KakiwariCam("Satoyama", mSatoyama, new Vector3(6f, -1.55f, 55f), 72.0f, 16.0f);
+        KakiwariCam("Yama_Toi", mYamaToi,  new Vector3(-14f, 6.65f, 92f), 116.0f, 22.0f);      // 遠い 峰＝谷間の おく
+        KakiwariCam("Kumo1", mKumo, new Vector3(-34f, 9.9f, 88f), 30f, 16f);                // 入道雲（写真の 比率）
+        KakiwariCam("Kumo2", mKumo, new Vector3(14f, 10.9f, 89f), 40f, 21f);
+        KakiwariCam("Kumo3", mKumo, new Vector3(44f, 9.1f, 87f), 24f, 13f);
 
         // ---- 主人公（マリサ 8方向スプライト・ライトを 受ける）
         var player = new GameObject("Player");
@@ -268,7 +271,7 @@ public static class BuildNiwa {
         fix.hd2d = true;
         // ★ピッチは 浅く（本人 2026-08-30「背景の山が見えてない」）。32°だと 画面の 上端でも
         //   水平線より 18°下＝地面の 15m先までしか 映らず、遠景が 構造的に 出ない
-        fix.hdPitch = 12f; fix.hdDist = 15f; fix.hdFov = 32f;   // 上端＝水平線+4°（山の 帯が 出る）
+        fix.hdPitch = 10f; fix.hdDist = 15f; fix.hdFov = 33f;   // 上端＝水平線+6.5°（山を 大きく 見せる）
         fix.spots = new[] {
             new MuraCamFixed.Spot {
                 name = "にわ",
@@ -302,6 +305,11 @@ public static class BuildNiwa {
         var dayGO = new GameObject("Day");
         var md = dayGO.AddComponent<MuraDay>();
         md.sun = sun; md.font = uiFont;
+        // 描き割りの 昼夜（Unlit なので 色で つける）
+        var haikei = dayGO.AddComponent<NiwaHaikeiIro>();
+        haikei.sun = sun;
+        haikei.mats = new[] { mSatoyama, mYamaToi, mKumo };
+
         // 玄関わきの 舞台照明（HD-2D＝スポットの 型。夜に 効く）
         var porch = new GameObject("PorchLight");
         porch.transform.SetParent(root, false);

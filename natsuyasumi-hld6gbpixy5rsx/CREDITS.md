@@ -82,6 +82,23 @@
   ＝**商用可・改変可・再配布可・ゲームへの 同梱可**。ライセンス文 `unity/Assets/Art/Fonts/LICENSE-PixelMplus-*.txt` 同梱
 - JIS第1・第2水準の 漢字を ふくむ。点で 描かれた 書体なので 12px の 整数倍で 出せば ドット絵と 目が そろう
 
+## 遠景の 描き割り（`unity/` Niwa の 山・雲）― 2026-08-30
+
+**里山（近い 山）** — 出所: Flickr「Hills and Forest in Landscape」
+- https://live.staticflickr.com/7798/18284962651_6f7332569e_b.jpg
+- ライセンス: **CC0 1.0**（商用可・改変可・再配布可）
+- 加工: 尾根の 帯を 切りとり → 稜線より 上を 透明に → 鏡うつしで 横へ のばす → 12色に 減色
+
+**遠い 峰** — 出所: WordPress Photo Directory「Layered blue and green mountains」
+- https://pd.w.org/2026/07/2416a5e2756cedeb7.32696644-2048x1536.jpg
+- ライセンス: **CC0 1.0**
+- 加工: 稜線の 帯を 切りとり → 空を 抜く → 10色に 減色
+
+**入道雲** — 出所: Flickr「Cumulonimbus clouds; Desert Queen Valley」（米国 国立公園局）
+- https://live.staticflickr.com/2849/12489661463_ffd65ddf9c_b.jpg
+- ライセンス: **パブリックドメイン（PDM）**
+- 加工: 雲の ところだけ 切りとり → 青空を 抜く → 10色に 減色
+
 ## 庭シーンの 3Dモデル（`unity/` Niwa）― 2026-08-29
 
 **Nature Kit (2.1)** — 作者: **Kenney (kenney.nl)**

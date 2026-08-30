@@ -47,6 +47,7 @@ Unity 公式「Happy Harvest - 2D Sample Project」が挙がった。**3つと�
 | **キャラ絵（奥行き版）** | `unity/Assets/Art/Sprites/chars_tall.png`（元：`unity/ArtSource/chars_source_10x3.png`）| **2026-08-13、本人が用意した絵に差し替え**（30体・1コマ48x64の10列3行）。こちらで 背景の 黒を ぬいて 透過に し、足もとを 下端に そろえて 組み直した。**Majstek（非商用）は もう 使っていない**＝奥行き版の R-001 は 解消 |
 | **草木（奥行き版）** | `unity/Assets/Art/Sprites/nature.png` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：OpenGameArt「Trees & Bushes」by Luis Zuno (ansimuz)。2026-08-14、**自分で 描いた 32px の 草木を やめて 差し替えた**（木が ただの 緑の かたまりに 見えていた）。PSD の vegetation レイヤーだけを 抜き、32px＝1m で 144px の コマ 8つに 詰めなおし。焼かれた 影は 捨て、影は Unity に 落とさせる。ライセンス文 同梱 |
 | **つぶ（雨・もや）** | `unity/Assets/Art/Particles/*.png` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：Kenney「Particle Pack」。`circle_05`＝雨つぶ、`smoke_09`＝もや |
+| **遠景の 描き割り（山・雲）** | `unity/Assets/Art/Textures/{satoyama,yama_toi,kumo_nyudo}.png` | **CC0／PDM。商用OK・再配布OK・クレジット任意。** 出所は CREDITS.md（Flickr の CC0写真2枚＋米国国立公園局の PD写真1枚）。実写を 切りとり→空ぬき→減色した もの。**絵柄を そろえる 段で 描きおこしに 差し替える 余地あり** |
 | **庭シーンの 3Dモデル** | `unity/Assets/Art/Models/kenney/*.fbx` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：Kenney「Nature Kit 2.1」。木・草・塀・門・飛び石など。見た目のスタイルが変わるときは同型の部品に差し替え |
 | **UI 素材** | `unity/Assets/Art/UI/*.png` | **CC0。商用OK・再配布OK・クレジット任意。** 出所：Kenney「UI Pack - Pixel Adventure」。ライセンス文 同梱。※ 画面の 枠は 色みが 合わず 不採用。記号として 温存 |
 | **書体** | `unity/Assets/Art/Fonts/PixelMplus12-Regular.ttf` | **M+ FONT LICENSE。商用OK・改変OK・再配布OK・同梱OK。** 作者 itouhiro。JIS第1・第2水準の 漢字を ふくむ ドット書体。ライセンス文 同梱 |
