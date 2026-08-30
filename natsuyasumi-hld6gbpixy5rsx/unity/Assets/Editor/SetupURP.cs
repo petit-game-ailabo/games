@@ -116,6 +116,21 @@ public static class SetupURP {
             //   ざらざらに なった うえに ビルドが 何十MBも ふくらむ。
             //   取りこみかたは MegaKit.Setup が べつに 面倒を みる
             if (path.Contains("/megakit/")) continue;
+            // ★描き おこしの キャラ絵も 対象外（2026-08-30）。点フィルタだと 縮小で ぎざぎざに なる
+            if (path.Contains("marisa_walk") || path.Contains("/tachie/")) {
+                var ti3 = AssetImporter.GetAtPath(path) as TextureImporter;
+                if (ti3 != null && (ti3.filterMode != FilterMode.Bilinear || !ti3.mipmapEnabled)) {
+                    ti3.textureType = TextureImporterType.Default;
+                    ti3.filterMode = FilterMode.Bilinear;
+                    ti3.mipmapEnabled = true;
+                    ti3.alphaIsTransparency = true;
+                    ti3.textureCompression = TextureImporterCompression.Uncompressed;
+                    ti3.maxTextureSize = 4096;
+                    ti3.SaveAndReimport();
+                    Debug.Log("[SetupURP] char art: " + path);
+                }
+                continue;
+            }
             // ★写真から 起こした 遠景の 描き割りも 対象外（2026-08-30）。
             //   点フィルタ＋ミップ無しだと 縮小で ちらつき、色の ノイズに 見える
             string fn = System.IO.Path.GetFileNameWithoutExtension(path);

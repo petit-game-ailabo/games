@@ -27,6 +27,12 @@ public class CharSprite : MonoBehaviour {
     public bool walkSheet;
     public float walkCycleFps = 9f;
     public float runCycleFps = 14f;
+    [Tooltip("うごきの コマ数（行0から この 数だけ つかう）")]
+    public int cycleFrames = 8;
+    [Tooltip("止まって いる ときの 行")]
+    public int idleRow = 0;
+    [Tooltip("まばたきの 行（-1 なら 無し）")]
+    public int blinkRow = -1;
 
     [Header("うごき")]
     public float walkFps = 5.0f;
@@ -100,9 +106,10 @@ public class CharSprite : MonoBehaviour {
             // ★新しい 絵：行が 歩きの 8コマ。止まって いれば 0コマめ（立ち）
             if (moving) {
                 step += dt * (speed > runSpeed ? runCycleFps : walkCycleFps);
-                row = Mathf.FloorToInt(step) % Rows;
+                row = Mathf.FloorToInt(step) % Mathf.Max(1, cycleFrames);
             } else {
-                step = 0f; row = 0;
+                step = 0f;
+                row = (blinkRow >= 0 && blinkT > 0f) ? blinkRow : idleRow;
             }
             Set(dir, row);
             return;

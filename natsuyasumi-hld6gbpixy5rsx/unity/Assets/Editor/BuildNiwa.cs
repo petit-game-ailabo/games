@@ -221,12 +221,12 @@ public static class BuildNiwa {
         var mSora = MatE("NiwaSora", "sora.png");
         mSora.SetFloat("_AlphaClip", 0f); mSora.DisableKeyword("_ALPHATEST_ON");
         mSora.renderQueue = 1900;                       // いちばん おく（不とうめいの まま）
-        KakiwariCam("Sora", mSora, new Vector3(0f, 48f, 200f), 230f, 86f);
+        KakiwariCam("Sora", mSora, new Vector3(0f, 44f, 200f), 320f, 120f);
 
         var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
         Toumei(mSatoyama, 2990);
         Toumei(mYamaToi, 2985);
-        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 8.64f, 55f), 96.0f, 36.0f);
+        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 10.01f, 55f), 96.0f, 36.0f);
 
         // 流れる 雲（空の 絵から 抜いた 3つ）。山の おく・空の 手前
         var kumoTex = new[] { "kumo_a.png", "kumo_b.png", "kumo_c.png" };
@@ -305,7 +305,7 @@ public static class BuildNiwa {
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Mi"; quad.transform.SetParent(player.transform, false);
         quad.transform.localPosition = new Vector3(0f, 0.66f, 0f);
-        quad.transform.localScale = new Vector3(1.34f * 160f / 200f, 1.34f, 1f);
+        quad.transform.localScale = new Vector3(1.40f * 256f / 320f, 1.40f, 1f);
         Object.DestroyImmediate(quad.GetComponent<Collider>());
         var sm = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         AssetDatabase.CreateAsset(sm, "Assets/Art/Materials/Niwa/NiwaMarisa.mat");
@@ -319,7 +319,9 @@ public static class BuildNiwa {
         var cs = player.AddComponent<CharSprite>();
         cs.target = quad.GetComponent<Renderer>();
         cs.runSpeed = 3.4f;
-        cs.walkSheet = false;           // 立ち絵＋目とじ だけ（歩き差分は これから）
+        cs.walkSheet = true;            // 行0..5=走り / 6=立ち / 7=目とじ（2026-08-30）
+        cs.cycleFrames = 6; cs.idleRow = 6; cs.blinkRow = 7;
+        cs.walkCycleFps = 8f; cs.runCycleFps = 13f;
         var mv = player.AddComponent<MuraMove>();
         mv.sprite = cs;
 

@@ -1,40 +1,35 @@
 # -*- coding: utf-8 -*-
-# 本人が 用意した 歩き差分（8コマ x 7方向）を、CharSprite が そのまま 読める
-# **8方向(列) x 8コマ(行)** の アトラスに 組みなおす。
+# 本人が 用意した 立ち絵・目とじ・走り6コマ（ぜんぶ 正面）を、
+# CharSprite が 読む **8列 x 8行** の アトラスに 組む。
 #
-# もらった 絵の ならび（機械で 検出＋目視で 確認）
-#   行 = 正面 / 左ななめ前 / 左 / 左ななめ奥 / 奥 / 右ななめ奥 / 右ななめ前
-#   列 = 歩きの 8コマ
-#   ★「右」だけ 無いので **「左」を 鏡に して** 埋める（7方向 → 8方向）
+#   列 = 向き（いまは 絵が 正面しか 無いので **どの 列も 正面**。
+#        左右は 鏡に して おく＝向きの 絵が そろったら ここを 差し替える）
+#   行 = 0..5:走りの 6コマ / 6:立ち / 7:目とじ
 #
-# 出力の ならび（CharSprite の きまり）
-#   列 = 0:正面 1:左ななめ前 2:左 3:左ななめ奥 4:奥 5:右ななめ奥 6:右 7:右ななめ前
-#   行 = 歩きの 8コマ（0が 立ちも かねる）
+# ★1コマは 256x320（前は 160x200 で つぶれて いた・本人「解像度が悪くて荒い」）
+# ★取りこみは **点フィルタに しない**（SetupURP が marisa_walk を 対象外に して いる）
 #
 # 走らせかた: python unity/ArtSource/make_marisa_walk.py
-import os
+import os, glob
 from collections import deque
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "ref", "photos", "ChatGPT Image 2026年8月30日 14_32_43.png")
+REF = os.path.join(HERE, "ref", "photos")
 OUT = os.path.join(HERE, "..", "Assets", "Art", "Sprites", "marisa_walk.png")
+TACHIE_DIR = os.path.join(HERE, "..", "Assets", "Art", "Sprites", "tachie")
 
-COLS_IN, ROWS_IN = 8, 7
-CELL_W, CELL_H = 128, 160          # 出力 1コマ（背たけ 1.3m ＝ 1mあたり 約123ドット）
+CELL_W, CELL_H = 256, 320
 
 
 def is_bg(p):
-    """市松の 地か（灰色に 近く 明るい）"""
     r, g, b = p[0], p[1], p[2]
-    if min(r, g, b) < 224:
-        return False
-    return abs(r - g) < 12 and abs(g - b) < 12 and abs(r - b) < 12
+    return min(r, g, b) >= 222 and abs(r - g) < 14 and abs(g - b) < 14 and abs(r - b) < 14
 
 
-def cut_bg(im):
-    """ふちから たどれる 地だけ 抜く（エプロンの 白は 囲まれて いるので 残る）"""
-    im = im.convert("RGBA")
+def cut(path):
+    """ふちから たどれる 市松の 地だけ 抜く（囲まれた 白い エプロンは 残す）"""
+    im = Image.open(path).convert("RGBA")
     w, h = im.size
     px = im.load()
     seen = bytearray(w * h)
@@ -61,74 +56,49 @@ def cut_bg(im):
     return im
 
 
-def bands(f, thr):
-    out = []
-    s = None
-    for i, v in enumerate(f):
-        if v > thr and s is None:
-            s = i
-        elif v <= thr and s is not None:
-            out.append((s, i - 1)); s = None
-    if s is not None:
-        out.append((s, len(f) - 1))
-    return out
+def one(tag):
+    f = [x for x in glob.glob(os.path.join(REF, "ChatGPT*.png")) if tag in os.path.basename(x)]
+    assert f, "見つからない: " + tag
+    return cut(sorted(f)[0])
 
 
 def main():
-    src = Image.open(SRC).convert("RGB")
-    w, h = src.size
-    px = src.load()
+    tachi = one("15_27_01")          # 立ち（目あき）
+    metsu = one("15_27_20")          # 目とじ
+    runs = [one("15_37_06 (1)"), one("15_37_06 (2)"), one("15_37_07 (3)"),
+            one("15_37_07 (4)"), one("15_37_08 (5)"), one("15_37_08 (6)")]
 
-    colf = [sum(0 if is_bg(px[x, y]) else 1 for y in range(0, h, 3)) for x in range(w)]
-    cb = bands(colf, 1)
-    assert len(cb) == COLS_IN, "列が %d 個（8のはず）" % len(cb)
+    # ★ぜんぶ **同じ 枠**で 切る。コマごとに 詰めると 足もとが 上下に はねる
+    box = None
+    for im in [tachi, metsu] + runs:
+        b = im.getbbox()
+        box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]),
+                                     max(box[2], b[2]), max(box[3], b[3]))
 
-    rowf = [sum(0 if is_bg(px[x, y]) else 1 for x in range(0, w, 2)) for y in range(h)]
-    rb = bands(rowf, 3)
-    # くっついた 帯（正面ななめ前の 2行）を 半分に わる
-    fixed = []
-    for a, z in rb:
-        if z - a > 220:
-            m = (a + z) // 2
-            fixed.append((a, m - 3)); fixed.append((m + 3, z))
-        else:
-            fixed.append((a, z))
-    assert len(fixed) == ROWS_IN, "行が %d 個（7のはず）" % len(fixed)
-
-    cut = cut_bg(src)
-
-    def cell(ri, ci):
-        """1コマを 切って、**足もとの まん中**で そろえて 詰める"""
-        x0, x1 = cb[ci]
-        y0, y1 = fixed[ri]
-        im = cut.crop((x0 - 6, y0 - 6, x1 + 7, y1 + 7))
-        bb = im.getbbox()
-        if bb is None:
-            return Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
-        im = im.crop(bb)
-        sc = min((CELL_W - 8) / im.width, (CELL_H - 6) / im.height)
-        im = im.resize((max(1, int(im.width * sc)), max(1, int(im.height * sc))), Image.LANCZOS)
+    def fit(im, flip=False):
+        c = im.crop(box)
+        if flip:
+            c = c.transpose(Image.FLIP_LEFT_RIGHT)
+        sc = min((CELL_W - 12) / c.width, (CELL_H - 10) / c.height)
+        c = c.resize((max(1, int(c.width * sc)), max(1, int(c.height * sc))), Image.LANCZOS)
         out = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
-        out.alpha_composite(im, ((CELL_W - im.width) // 2, CELL_H - im.height - 2))
+        out.alpha_composite(c, ((CELL_W - c.width) // 2, CELL_H - c.height - 3))
         return out
 
-    # もらった 行 → 出力の 列（向き）
-    #   0:正面=行0 / 1:左ななめ前=行1 / 2:左=行2 / 3:左ななめ奥=行3 / 4:奥=行4
-    #   5:右ななめ奥=行5 / 6:右=行2の鏡 / 7:右ななめ前=行6
-    MAP = [(0, False), (1, False), (2, False), (3, False),
-           (4, False), (5, False), (2, True), (6, False)]
-
+    rows = runs + [tachi, metsu]          # 行 0..5=走り / 6=立ち / 7=目とじ
     atlas = Image.new("RGBA", (CELL_W * 8, CELL_H * 8), (0, 0, 0, 0))
-    for out_col, (src_row, mirror) in enumerate(MAP):
-        for frame in range(8):
-            c = cell(src_row, frame)
-            if mirror:
-                c = c.transpose(Image.FLIP_LEFT_RIGHT)
-            atlas.alpha_composite(c, (out_col * CELL_W, frame * CELL_H))
-
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    for col in range(8):
+        flip = col in (5, 6, 7)           # 右がわの 列は 鏡（絵が そろうまでの つなぎ）
+        for row, src in enumerate(rows):
+            atlas.alpha_composite(fit(src, flip), (col * CELL_W, row * CELL_H))
     atlas.save(OUT)
     print("wrote", os.path.abspath(OUT), atlas.size, "cell", (CELL_W, CELL_H))
+
+    # 会話用の 立ち絵（大きいまま・目あき／目とじ）
+    os.makedirs(TACHIE_DIR, exist_ok=True)
+    tachi.crop(box).save(os.path.join(TACHIE_DIR, "marisa_tachie.png"))
+    metsu.crop(box).save(os.path.join(TACHIE_DIR, "marisa_tachie_me.png"))
+    print("tachie", tachi.crop(box).size)
 
 
 if __name__ == "__main__":
