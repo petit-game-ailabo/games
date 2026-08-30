@@ -198,6 +198,17 @@ public static class BuildNiwa {
         var mYamaToi = MatE("NiwaYamaToi", "yama_toi.png");
         // ★カメラ連動（NiwaKakiwari）：追従カメラでも 画面の 上の 帯に いつも 山が 出る。
         //   ずれの 数字は「ピッチ17°・FOV30」の 画角から 逆算（上端≒水平線）
+        void Toumei(Material m, int queue) {
+            m.SetFloat("_Surface", 1f); m.SetFloat("_Blend", 0f);
+            m.SetFloat("_AlphaClip", 0f); m.DisableKeyword("_ALPHATEST_ON");
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.renderQueue = queue;     // 遠い ものほど 先に（山→雲の 順に かさなる）
+        }
+
         GameObject KakiwariCam(string name, Material m, Vector3 zurashi, float w, float h) {
             var q = Kakiwari(name, m, Vector3.zero, w, h);
             q.AddComponent<NiwaKakiwari>().zurashi = zurashi;
@@ -206,7 +217,9 @@ public static class BuildNiwa {
         // ★里山（本人 2026-08-30「田舎って山が近い。遠くの峰って感じではない」）：
         //   近い 山は 画面上端を つきぬける 高さ。谷間の くぼみから だけ 空と 遠い 峰が のぞく
         var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
-        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 2.64f, 55f), 88.0f, 24.8f);
+        Toumei(mSatoyama, 2990);      // ★切り抜きでは なく 半とうめい（ぼかした ふちを そのまま 出す）
+        Toumei(mYamaToi, 2985);
+        KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 1.81f, 55f), 88f, 21.0f);
         // ★遠い 青い 峰は **高台に 登った ときだけ**（平地から 見えるのは おかしい・本人 2026-08-30）
         var toi = KakiwariCam("Yama_Toi", mYamaToi, new Vector3(-10f, 14.47f, 150f), 130.0f, 26.0f);
         toi.GetComponent<NiwaKakiwari>().onlyZone = "たかだい";
@@ -252,12 +265,32 @@ public static class BuildNiwa {
         //   門の 外の 東の 土手。のぼると カメラが 空を 向き、雲と 遠い 峰が 見える
         {
             var mTsuchi = MatT("NiwaTsuchiT", "dirt_path.png", 6f, 6f);
-            const float TX = 21f, TZ = -9.5f, TH = 4.2f;
+            const float TX = 21f, TZ = -9.5f, TH = 3.4f;
             Box(root, "Takadai", new Vector3(TX, TH * 0.5f, TZ), new Vector3(11f, TH, 9f), mGrass);
-            // のぼり坂（西がわ から。20度）
-            var saka = Box(root, "TakadaiSaka", new Vector3(TX - 5.5f - 2.9f, TH * 0.5f, TZ),
-                           new Vector3(8.2f, 0.4f, 4.2f), mTsuchi);
-            saka.transform.rotation = Quaternion.Euler(0f, 0f, 27f);
+            // のぼり坂（西から。上端が 高台の 天と そろう ように 逆算・本人 2026-08-30
+            //   「坂道が高台と高さがあっていなくて歩いていけない」）
+            const float SLOPE = 18f;                       // 18度（CCの 上限50度に 余裕）
+            float L = TH / Mathf.Sin(SLOPE * Mathf.Deg2Rad);          // 斜面の 長さ
+            float x1 = TX - 5.5f + 0.8f;                              // 上端＝高台に 食いこませる
+            float x0 = x1 - L * Mathf.Cos(SLOPE * Mathf.Deg2Rad);     // 下端＝地めん
+            // 斜面は **草の 土手**（板に 見えない ように 幅ひろ・草の 材質）
+            var saka = Box(root, "TakadaiSaka",
+                new Vector3((x0 + x1) * 0.5f, TH * 0.5f, TZ),
+                new Vector3(L, 0.6f, 7.2f), mGrass);
+            saka.transform.rotation = Quaternion.Euler(0f, 0f, SLOPE);
+            // 上に 土の 道すじを のせる（人が 通る ところだけ 土）
+            var michi = Box(root, "TakadaiMichi",
+                new Vector3((x0 + x1) * 0.5f, TH * 0.5f, TZ), new Vector3(L, 0.62f, 2.4f), mTsuchi);
+            michi.transform.rotation = Quaternion.Euler(0f, 0f, SLOPE);
+            Object.DestroyImmediate(michi.GetComponent<Collider>());
+            // 土手の 両わきに 草（切り口を 隠す）
+            for (int i = 0; i < 10; i++) {
+                float t2 = Random.Range(0.15f, 0.95f);
+                float mx = Mathf.Lerp(x0, x1, t2), my = TH * t2;
+                KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)],
+                    new Vector3(mx, my, TZ + (Random.value < 0.5f ? -1f : 1f) * Random.Range(1.6f, 3.2f)),
+                    Random.Range(0f, 360f), Random.Range(1.4f, 2.0f));
+            }
             // 上の かざり（草・岩・木のベンチ代わりの 丸太）
             for (int i = 0; i < 14; i++) {
                 var d = Random.insideUnitCircle * 4.2f;
