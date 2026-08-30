@@ -6,7 +6,7 @@
 #        左右は 鏡に して おく＝向きの 絵が そろったら ここを 差し替える）
 #   行 = 0..5:走りの 6コマ / 6:立ち / 7:目とじ
 #
-# ★1コマは 256x320（前は 160x200 で つぶれて いた・本人「解像度が悪くて荒い」）
+# ★1コマは 192x336（キャラの 比に あわせる）。取りこみは 上限4096・ミップなし・なめらか
 # ★取りこみは **点フィルタに しない**（SetupURP が marisa_walk を 対象外に して いる）
 #
 # 走らせかた: python unity/ArtSource/make_marisa_walk.py
@@ -19,7 +19,8 @@ REF = os.path.join(HERE, "ref", "photos")
 OUT = os.path.join(HERE, "..", "Assets", "Art", "Sprites", "marisa_walk.png")
 TACHIE_DIR = os.path.join(HERE, "..", "Assets", "Art", "Sprites", "tachie")
 
-CELL_W, CELL_H = 256, 320
+# キャラは たて長（およそ 1:2.1）。四角い コマだと 横が あまって 絵が 小さく なる
+CELL_W, CELL_H = 192, 336
 
 
 def is_bg(p):

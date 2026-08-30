@@ -119,15 +119,24 @@ public static class SetupURP {
             // ★描き おこしの キャラ絵も 対象外（2026-08-30）。点フィルタだと 縮小で ぎざぎざに なる
             if (path.Contains("marisa_walk") || path.Contains("/tachie/")) {
                 var ti3 = AssetImporter.GetAtPath(path) as TextureImporter;
-                if (ti3 != null && (ti3.filterMode != FilterMode.Bilinear || !ti3.mipmapEnabled)) {
+                if (ti3 == null) continue;
+                // ★ここを まちがえると 絵が ぼける（2026-08-30・本人「まだ解像度が下がってる」）
+                //   ・maxTextureSize 既定2048 → 2048x2560 の アトラスが 0.8倍に 縮んで いた
+                //   ・ミップマップ → 画面の 3倍の こまかさが ある のに ぼけた 段を えらぶ
+                //     キャラは 画面での 大きさが ほぼ 一定 なので **ミップは 要らない**
+                bool ok3 = ti3.filterMode == FilterMode.Bilinear
+                           && !ti3.mipmapEnabled
+                           && ti3.maxTextureSize >= 4096
+                           && ti3.textureCompression == TextureImporterCompression.Uncompressed;
+                if (!ok3) {
                     ti3.textureType = TextureImporterType.Default;
                     ti3.filterMode = FilterMode.Bilinear;
-                    ti3.mipmapEnabled = true;
+                    ti3.mipmapEnabled = false;
                     ti3.alphaIsTransparency = true;
                     ti3.textureCompression = TextureImporterCompression.Uncompressed;
                     ti3.maxTextureSize = 4096;
                     ti3.SaveAndReimport();
-                    Debug.Log("[SetupURP] char art: " + path);
+                    Debug.Log("[SetupURP] char art: " + path + " (max4096/mipなし/なめらか)");
                 }
                 continue;
             }
