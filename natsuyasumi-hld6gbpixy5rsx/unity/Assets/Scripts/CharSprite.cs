@@ -33,6 +33,8 @@ public class CharSprite : MonoBehaviour {
     public int idleRow = 0;
     [Tooltip("まばたきの 行（-1 なら 無し）")]
     public int blinkRow = -1;
+    [Tooltip("止まって いる ときに つかう 列（-1 なら いまの 向きの まま）")]
+    public int idleCol = -1;
 
     [Header("うごき")]
     public float walkFps = 5.0f;
@@ -110,6 +112,8 @@ public class CharSprite : MonoBehaviour {
             } else {
                 step = 0f;
                 row = (blinkRow >= 0 && blinkT > 0f) ? blinkRow : idleRow;
+                Set(idleCol >= 0 ? idleCol : dir, row);
+                return;
             }
             Set(dir, row);
             return;

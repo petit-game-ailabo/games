@@ -2,9 +2,9 @@
 # 本人が 用意した 立ち絵・目とじ・走り6コマ（ぜんぶ 正面）を、
 # CharSprite が 読む **8列 x 8行** の アトラスに 組む。
 #
-#   列 = 向き（いまは 絵が 正面しか 無いので **どの 列も 正面**。
-#        左右は 鏡に して おく＝向きの 絵が そろったら ここを 差し替える）
-#   行 = 0..5:走りの 6コマ / 6:立ち / 7:目とじ
+#   列0..6 = 向き（いまは 絵が 正面しか 無いので どれも 正面。左右は 鏡）
+#   列7    = 立ち（行0）と 目とじ（行1）＝止まって いる ときに つかう
+#   行     = 走りの 8コマ
 #
 # ★1コマは 192x336（キャラの 比に あわせる）。取りこみは 上限4096・ミップなし・なめらか
 # ★取りこみは **点フィルタに しない**（SetupURP が marisa_walk を 対象外に して いる）
@@ -63,43 +63,86 @@ def one(tag):
     return cut(sorted(f)[0])
 
 
+def sheet_cells(tag, cols, rows):
+    """1枚に ならんだ コマを 切りだす（中みの ある 帯を さがして 割る）"""
+    im = one(tag)
+    w, h = im.size
+    px = im.load()
+
+    def bands(f, thr=1):
+        out = []; s = None
+        for i, v in enumerate(f):
+            if v > thr and s is None:
+                s = i
+            elif v <= thr and s is not None:
+                out.append((s, i - 1)); s = None
+        if s is not None:
+            out.append((s, len(f) - 1))
+        return out
+
+    colf = [sum(0 if px[x, y][3] == 0 else 1 for y in range(0, h, 3)) for x in range(w)]
+    rowf = [sum(0 if px[x, y][3] == 0 else 1 for x in range(0, w, 3)) for y in range(h)]
+    cb, rb = bands(colf), bands(rowf)
+    assert len(cb) == cols and len(rb) == rows, "コマの ならびが ちがう %d x %d" % (len(cb), len(rb))
+    out = []
+    for (ra, rz) in rb:
+        for (ca, cz) in cb:
+            out.append(im.crop((ca - 8, ra - 8, cz + 9, rz + 9)))
+    return out
+
+
 def main():
     tachi = one("15_27_01")          # 立ち（目あき）
     metsu = one("15_27_20")          # 目とじ
-    runs = [one("15_37_06 (1)"), one("15_37_06 (2)"), one("15_37_07 (3)"),
-            one("15_37_07 (4)"), one("15_37_08 (5)"), one("15_37_08 (6)")]
+    # ★走りは 8コマ（4列 x 2行の 1枚）。前の 6コマは 動きが いまいち だった（本人 2026-08-30）
+    runs = sheet_cells("16_09_44", 4, 2)
 
-    # ★ぜんぶ **同じ 枠**で 切る。コマごとに 詰めると 足もとが 上下に はねる
-    box = None
-    for im in [tachi, metsu] + runs:
-        b = im.getbbox()
-        box = b if box is None else (min(box[0], b[0]), min(box[1], b[1]),
-                                     max(box[2], b[2]), max(box[3], b[3]))
+    def union(ims):
+        b = None
+        for im in ims:
+            t = im.getbbox()
+            if t is None:
+                continue
+            b = t if b is None else (min(b[0], t[0]), min(b[1], t[1]),
+                                     max(b[2], t[2]), max(b[3], t[3]))
+        return b
 
-    def fit(im, flip=False):
+    # ★出どころ ごとに そろえる（走りは 走りの 枠、立ちは 立ちの 枠）。
+    #   そのうえで **背たけが そろう ように** 縮尺を あわせる
+    box_run = union(runs)
+    box_tac = union([tachi, metsu])
+    h_run = box_run[3] - box_run[1]
+    h_tac = box_tac[3] - box_tac[1]
+
+    def fit(im, group, flip=False):
+        box = box_run if group == "run" else box_tac
         c = im.crop(box)
         if flip:
             c = c.transpose(Image.FLIP_LEFT_RIGHT)
-        sc = min((CELL_W - 12) / c.width, (CELL_H - 10) / c.height)
+        # 高さ（走りの 枠）を そろえて から コマに 収める
+        base = h_run if group == "run" else h_tac
+        sc = min((CELL_W - 12) / (c.width * (h_run / float(base))), (CELL_H - 10) / base)
         c = c.resize((max(1, int(c.width * sc)), max(1, int(c.height * sc))), Image.LANCZOS)
         out = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
         out.alpha_composite(c, ((CELL_W - c.width) // 2, CELL_H - c.height - 3))
         return out
 
-    rows = runs + [tachi, metsu]          # 行 0..5=走り / 6=立ち / 7=目とじ
+    # 行 0..7 = 走りの 8コマ。立ち／目とじは **列7**に 入れる（列7は 向きに つかわない）
     atlas = Image.new("RGBA", (CELL_W * 8, CELL_H * 8), (0, 0, 0, 0))
-    for col in range(8):
-        flip = col in (5, 6, 7)           # 右がわの 列は 鏡（絵が そろうまでの つなぎ）
-        for row, src in enumerate(rows):
-            atlas.alpha_composite(fit(src, flip), (col * CELL_W, row * CELL_H))
+    for col in range(7):
+        flip = col in (5, 6)              # 右がわの 列は 鏡（向きの 絵が そろうまでの つなぎ）
+        for row in range(8):
+            atlas.alpha_composite(fit(runs[row], "run", flip), (col * CELL_W, row * CELL_H))
+    for row in range(8):
+        atlas.alpha_composite(fit(metsu if row == 1 else tachi, "tac"), (7 * CELL_W, row * CELL_H))
     atlas.save(OUT)
     print("wrote", os.path.abspath(OUT), atlas.size, "cell", (CELL_W, CELL_H))
 
     # 会話用の 立ち絵（大きいまま・目あき／目とじ）
     os.makedirs(TACHIE_DIR, exist_ok=True)
-    tachi.crop(box).save(os.path.join(TACHIE_DIR, "marisa_tachie.png"))
-    metsu.crop(box).save(os.path.join(TACHIE_DIR, "marisa_tachie_me.png"))
-    print("tachie", tachi.crop(box).size)
+    tachi.crop(box_tac).save(os.path.join(TACHIE_DIR, "marisa_tachie.png"))
+    metsu.crop(box_tac).save(os.path.join(TACHIE_DIR, "marisa_tachie_me.png"))
+    print("tachie", tachi.crop(box_tac).size)
 
 
 if __name__ == "__main__":
