@@ -143,7 +143,9 @@ public static class SetupURP {
             // ★写真から 起こした 遠景の 描き割りも 対象外（2026-08-30）。
             //   点フィルタ＋ミップ無しだと 縮小で ちらつき、色の ノイズに 見える
             string fn = System.IO.Path.GetFileNameWithoutExtension(path);
-            if (fn.StartsWith("satoyama") || fn.StartsWith("yama_") || fn.StartsWith("kumo")) {
+            // kage_＝接地の影の ぼかし。点フィルタだと 輪が 階段に なる
+            if (fn.StartsWith("satoyama") || fn.StartsWith("yama_") || fn.StartsWith("kumo")
+                || fn.StartsWith("kage_")) {
                 var ti2 = AssetImporter.GetAtPath(path) as TextureImporter;
                 if (ti2 != null && (ti2.filterMode != FilterMode.Bilinear || !ti2.mipmapEnabled)) {
                     ti2.textureType = TextureImporterType.Default;

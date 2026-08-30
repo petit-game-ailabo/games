@@ -325,6 +325,16 @@ public static class BuildNiwa {
         cs.idleCol = -1;                // 止まっても **向きは そのまま**
         cs.idleRow = 8; cs.blinkRow = 9;
         cs.walkCycleFps = 9f; cs.runCycleFps = 14f;
+        // ---- 足もとの 影（絵の 板は 影を 落とせない ので 別に 敷く）
+        var kageGO = new GameObject("KageAshi");
+        kageGO.transform.SetParent(root, false);
+        kageGO.AddComponent<MeshFilter>().sharedMesh = NiwaJimen.Ita(0.50f, 0.34f, 0.22f, 0.50f);
+        var kmr = kageGO.AddComponent<MeshRenderer>();
+        kmr.sharedMaterial = NiwaJimen.KageMat();
+        kmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        kmr.receiveShadows = false;
+        kageGO.AddComponent<NiwaKageAshi>().target = player.transform;
+
         var mv = player.AddComponent<MuraMove>();
         mv.sprite = cs;
 
@@ -440,6 +450,9 @@ public static class BuildNiwa {
         vol.sharedProfile = prof;
         var focus = volGO.AddComponent<FocusOnPlayer>();
         focus.volume = vol; focus.target = player.transform;
+
+        // ---- 接地の影（いちばん さいごに。物が ぜんぶ 置かれて から 足もとに 敷く）
+        NiwaJimen.Setchi(root);
 
         System.IO.Directory.CreateDirectory("Assets/Scenes");
         UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene, "Assets/Scenes/Niwa.unity");

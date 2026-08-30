@@ -25,6 +25,12 @@ public class MuraDay : MonoBehaviour {
         foreach (var a in System.Environment.GetCommandLineArgs()) {
             if (a == "-yoru") { Day = 9; Hour = 19.8f; }      // 祭りの 夜を すぐ 見る
             if (a == "-yuyake") { Day = 3; Hour = 18.0f; }    // 夕焼けの 確認用
+            // ★-hour 12 で その 時刻から はじめる（撮影の 検証用・2026-08-30）。
+            //   真昼は 太陽が ほぼ 真上＝落ちる 影が 消える ので、接地の 影の 確かめに いる
+            if (a.StartsWith("-hour=")) {
+                float h;
+                if (float.TryParse(a.Substring(6), out h)) Hour = Mathf.Repeat(h, 24f);
+            }
         }
         chime = gameObject.AddComponent<AudioSource>();
         chime.clip = OtoGen.Chime();
