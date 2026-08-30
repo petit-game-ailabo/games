@@ -15,7 +15,7 @@
 # ★取りこみは 点フィルタに しない・ミップも 切る（SetupURP が marisa_walk を 別あつかい）
 #
 # 走らせかた: python unity/ArtSource/make_marisa_walk.py
-import os, glob
+import os, glob, math, itertools
 from collections import deque
 from PIL import Image
 
@@ -24,7 +24,7 @@ REF = os.path.join(HERE, "ref", "photos")
 OUT = os.path.join(HERE, "..", "Assets", "Art", "Sprites", "marisa_walk.png")
 TACHIE_DIR = os.path.join(HERE, "..", "Assets", "Art", "Sprites", "tachie")
 
-CELL_W, CELL_H = 192, 336
+CELL_W, CELL_H = 224, 336
 COLS, ROWS = 8, 10
 
 # 向きの ならび（列の 順）。タグは もらった ファイル名の 一部
@@ -109,57 +109,141 @@ def union(ims):
     return b
 
 
+def tate(im):
+    """bbox の 背たけ"""
+    b = im.getbbox()
+    return b[3] - b[1]
+
+
+def sotto(ims):
+    """その 方向の **いちばん 直立した コマ**の 背たけ。
+    走りは 前かがみに なる ので、全コマの 平均や 面積で そろえると 方向ごとに ずれる
+    （実測：面積ぞろえでも 止まりの 背たけが 10%ちがった）。
+    走りの 山＝直立の しゅんかんは どの 方向でも 同じ 背たけの はず なので、
+    そこを 基準に すれば **方向を またいで ぴったり** そろう"""
+    return max(tate(c) for c in ims)
+
+
+def torso_cx(im):
+    """胴（たて 35〜60%）の よこ 重心。腕や 足の ふりに 引っぱられない"""
+    b = im.getbbox()
+    a = im.crop(b).getchannel("A")
+    px = a.load(); w, h = a.size
+    tot = 0; sx = 0
+    for y in range(int(h * 0.35), int(h * 0.60)):
+        for x in range(w):
+            if px[x, y] > 128:
+                tot += 1; sx += x
+    return (sx / float(tot)) if tot else w / 2.0
+
+
+def place(im, scale):
+    """1コマを セルに 置く。**胴の よこ位置を まん中・足もとを 下の 線**に そろえる。
+    もらった 絵は コマごとに 位置が ばらついて いて（実測：足もとが 最大 48px＝背たけの
+    10% も 上下）、そのまま だと がくがく 跳ねて 見える"""
+    b = im.getbbox()
+    c = im.crop(b)
+    w2 = max(1, int(round(c.width * scale)))
+    h2 = max(1, int(round(c.height * scale)))
+    c = c.resize((w2, h2), Image.LANCZOS)
+    cx = torso_cx(im) * scale                      # 胴の よこ位置（切りぬきの 中での 座標）
+    out = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
+    x = int(round(CELL_W * 0.5 - cx))
+    y = CELL_H - h2 - 3
+    out.alpha_composite(c, (max(-w2 + 1, min(CELL_W - 1, x)), y))
+    return out
+
+
+def frame_diff(a, b):
+    """2コマの ちがい（そろえた あとの 画素差）。なめらかな 並び順を さがす ため"""
+    pa, pb = a.load(), b.load()
+    d = 0
+    for y in range(0, CELL_H, 4):
+        for x in range(0, CELL_W, 4):
+            ca, cb = pa[x, y], pb[x, y]
+            d += abs(ca[3] - cb[3])
+            if ca[3] > 128 and cb[3] > 128:
+                d += (abs(ca[0]-cb[0]) + abs(ca[1]-cb[1]) + abs(ca[2]-cb[2])) // 3
+    return d
+
+
+def smooth_order(frames):
+    """8コマを **いちばん なめらかな わっか**に ならべ直す。
+    もらった コマは 1枚ずつ 別に 描かれて いる ので、ならびが 手足の 動きとして
+    つながって いない（実測：足の ひらきが 262→118→292 と 飛ぶ 方向が あった）。
+    0番を 起点に、となりどうしの ちがいの 合計が いちばん 小さい 順を さがす"""
+    n = len(frames)
+    d = [[0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            d[i][j] = d[j][i] = frame_diff(frames[i], frames[j])
+    best = None; best_cost = None
+    for perm in itertools.permutations(range(1, n)):
+        order = (0,) + perm
+        cost = sum(d[order[k]][order[(k + 1) % n]] for k in range(n))
+        if best_cost is None or cost < best_cost:
+            best_cost = cost; best = order
+    return list(best), best_cost
+
+
 def main():
     tachi = one("15_27_01")
     metsu = one("15_27_20")
-    box_tac = union([tachi, metsu])
-    h_tac = box_tac[3] - box_tac[1]
 
-    runs = {}       # 列 → 8コマ
-    boxes = {}      # 列 → その 方向の 枠
+    runs = {}
     for col, tag in enumerate(DIRS):
-        cells = sheet_cells(tag)
-        runs[col] = cells
-        boxes[col] = union(cells)
+        runs[col] = sheet_cells(tag)
 
-    # 背たけの 基準＝いちばん 高い 方向（これに みんな そろえる）
-    h_base = max(boxes[c][3] - boxes[c][1] for c in runs)
-
-    def fit(im, box, h_src):
-        c = im.crop(box)
-        sc = (CELL_H - 10) / float(h_base) * (h_base / float(h_src)) * (h_src / float(h_src))
-        sc = (CELL_H - 10) / float(h_base)          # 全部 同じ 縮尺（背たけが そろう）
-        w2 = max(1, int(c.width * sc)); h2 = max(1, int(c.height * sc))
-        if w2 > CELL_W - 8:                          # はみ出す ときだけ 横で 抑える
-            k = (CELL_W - 8) / float(w2); w2 = CELL_W - 8; h2 = max(1, int(h2 * k))
-        c = c.resize((w2, h2), Image.LANCZOS)
-        out = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
-        out.alpha_composite(c, ((CELL_W - c.width) // 2, CELL_H - c.height - 3))
-        return out
+    # ① 大きさを そろえる（直立コマの 背たけ を 基準に）
+    TARGET = CELL_H - 24                       # セルの 中の 背たけ（ふちに 少し 余白）
+    scales = {col: TARGET / float(sotto(runs[col])) for col in runs}
 
     atlas = Image.new("RGBA", (CELL_W * COLS, CELL_H * ROWS), (0, 0, 0, 0))
     for col in range(COLS):
-        box = boxes[col]
-        hh = box[3] - box[1]
+        placed = [place(c, scales[col]) for c in runs[col]]
+        order, cost = smooth_order(placed)
+        n = len(placed)
+        raw = sum(frame_diff(placed[k], placed[(k + 1) % n]) for k in range(n))
+        print("列%d %-10s 縮尺%.3f  順 %s  つなぎの ちがい %d→%d (%.0f%%減)"
+              % (col, DIRS[col][-6:], scales[col], order, raw, cost, 100.0 * (raw - cost) / raw))
         for row in range(8):
-            atlas.alpha_composite(fit(runs[col][row], box, hh), (col * CELL_W, row * CELL_H))
-        # 行8＝立ち。正面は 立ち絵、ほかは **足の そろった コマ**（横はばが いちばん せまい）
+            atlas.alpha_composite(placed[order[row]], (col * CELL_W, row * CELL_H))
+        # 行8＝立ち／行9＝目とじ
         if col == 0:
-            stand = fit(tachi, box_tac, h_tac)
-            blink = fit(metsu, box_tac, h_tac)
+            # 立ち絵は 走りと **背たけ**を そろえる（姿勢が ちがうので 面積では 合わない）
+            s_tac = TARGET / float(tate(tachi))
+            stand, blink = place(tachi, s_tac), place(metsu, s_tac)
         else:
-            k = min(range(8), key=lambda i: (runs[col][i].getbbox()[2] - runs[col][i].getbbox()[0]))
-            stand = blink = fit(runs[col][k], box, hh)
+            # いちばん 背の 高い コマ＝いちばん 直立して いる（前かがみの コマを 立ちに すると
+            # 方向に よって 背たけが ちがって 見える）
+            k = max(range(8), key=lambda i: tate(runs[col][i]))
+            stand = blink = place(runs[col][k], scales[col])
         atlas.alpha_composite(stand, (col * CELL_W, 8 * CELL_H))
         atlas.alpha_composite(blink, (col * CELL_W, 9 * CELL_H))
 
     atlas.save(OUT)
     print("wrote", os.path.abspath(OUT), atlas.size, "cell", (CELL_W, CELL_H))
 
+    # 検算：方向ごとの 背たけが そろって いるか
+    hs = []
+    for col in range(COLS):
+        b = atlas.crop((col * CELL_W, 8 * CELL_H, (col + 1) * CELL_W, 9 * CELL_H)).getbbox()
+        hs.append(b[3] - b[1])
+    print("止まりの 背たけ:", hs, " ばらつき %.1f%%" % (100.0 * (max(hs) - min(hs)) / max(hs)))
+    ph = []
+    for col in range(COLS):
+        v = []
+        for row in range(8):
+            b = atlas.crop((col * CELL_W, row * CELL_H,
+                            (col + 1) * CELL_W, (row + 1) * CELL_H)).getbbox()
+            v.append(b[3] - b[1])
+        ph.append(max(v))
+    print("走りの 山の 背たけ:", ph, " ばらつき %.1f%%" % (100.0 * (max(ph) - min(ph)) / max(ph)))
+
     os.makedirs(TACHIE_DIR, exist_ok=True)
-    tachi.crop(box_tac).save(os.path.join(TACHIE_DIR, "marisa_tachie.png"))
-    metsu.crop(box_tac).save(os.path.join(TACHIE_DIR, "marisa_tachie_me.png"))
-    print("tachie", tachi.crop(box_tac).size)
+    bt = union([tachi, metsu])
+    tachi.crop(bt).save(os.path.join(TACHIE_DIR, "marisa_tachie.png"))
+    metsu.crop(bt).save(os.path.join(TACHIE_DIR, "marisa_tachie_me.png"))
 
 
 if __name__ == "__main__":

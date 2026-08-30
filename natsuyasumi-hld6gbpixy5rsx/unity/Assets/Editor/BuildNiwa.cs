@@ -305,7 +305,7 @@ public static class BuildNiwa {
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Mi"; quad.transform.SetParent(player.transform, false);
         quad.transform.localPosition = new Vector3(0f, 0.66f, 0f);
-        quad.transform.localScale = new Vector3(1.40f * 192f / 336f, 1.40f, 1f);
+        quad.transform.localScale = new Vector3(1.40f * 224f / 336f, 1.40f, 1f);
         Object.DestroyImmediate(quad.GetComponent<Collider>());
         var sm = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         AssetDatabase.CreateAsset(sm, "Assets/Art/Materials/Niwa/NiwaMarisa.mat");
