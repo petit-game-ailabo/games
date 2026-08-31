@@ -11,6 +11,10 @@ public class MuraMove : MonoBehaviour {
     public float walk = 2.6f, run = 4.4f;
     public Transform cam;
     public Transform[] tour;
+    // 高台に のぼれるかの 機械検査（本人 2026-08-31「高台が歩いていけない」）。
+    // 目で 見て 気づく まえに 数字で 落とす
+    public Vector3 noboruKara;
+    public float noboruMade;
     public CharSprite sprite;            // 8方向スプライト（S0-3。空なら 何も しない）
     CharacterController cc; float vy;
     float baseYaw; float prevH, prevV;
@@ -21,6 +25,7 @@ public class MuraMove : MonoBehaviour {
         cc = GetComponent<CharacterController>();
         foreach (var a in System.Environment.GetCommandLineArgs()) {
             if (a == "-tour") { StartCoroutine(Tour()); break; }
+            if (a == "-noboru") { StartCoroutine(Noboru()); break; }
             if (a == "-repro") { StartCoroutine(Repro()); break; }
         }
     }
@@ -82,6 +87,33 @@ public class MuraMove : MonoBehaviour {
         vy = cc.isGrounded ? -0.5f : vy - 9.8f * Time.deltaTime;
         cc.Move((dir * spd + Vector3.up * vy) * Time.deltaTime);
         if (sprite != null) sprite.Drive(dir, dir.magnitude * spd, false);
+    }
+
+    System.Collections.IEnumerator Noboru() {
+        string dir = Path.Combine(Path.GetTempPath(), "natsuyasumi", "mura");
+        Directory.CreateDirectory(dir);
+        yield return new WaitForSeconds(1.2f);
+        cc.enabled = false;
+        transform.position = noboruKara;
+        Physics.SyncTransforms();
+        cc.enabled = true;
+        yield return new WaitForSeconds(0.4f);
+        float t = 0f, best = transform.position.y;
+        while (t < 12f) {
+            simDir = Vector3.forward;                    // 北へ まっすぐ
+            t += Time.deltaTime;
+            if (transform.position.y > best) best = transform.position.y;
+            yield return null;
+        }
+        simDir = Vector3.zero;
+        yield return new WaitForSeconds(0.4f);
+        ScreenCapture.CaptureScreenshot(Path.Combine(dir, "noboru.png"));
+        yield return new WaitForSeconds(0.6f);
+        string kekka = (best >= noboruMade - 0.35f) ? "OK" : "NG";
+        File.WriteAllText(Path.Combine(dir, "noboru.txt"),
+            "takadai=" + noboruMade.ToString("F2") + " todatta=" + best.ToString("F2")
+            + " ima=" + transform.position.ToString("F1") + " " + kekka);
+        Application.Quit();
     }
 
     System.Collections.IEnumerator Tour() {

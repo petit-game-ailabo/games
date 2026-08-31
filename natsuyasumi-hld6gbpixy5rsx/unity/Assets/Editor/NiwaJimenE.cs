@@ -131,7 +131,7 @@ public static class NiwaJimenE {
         hira = Mathf.Max(hira, Hako(wx, wz, -1.3f, 1.3f, -7.5f, 8.5f, 1.0f));   // 庭の 踏み跡
         hira = Mathf.Max(hira, Hako(wx, wz, -4.6f, 4.6f, 3f, 16f, 1.0f));       // 家の 敷地
         hira = Mathf.Max(hira, Hako(wx, wz, -44f, 44f, -12.6f, -6.6f, 1.2f) * 0.85f); // 道
-        hira = Mathf.Max(hira, Hako(wx, wz, 12f, 28f, -5f, 9f, 2.5f));          // 高台
+        hira = Mathf.Max(hira, Hako(wx, wz, 9f, 31f, -8f, 12f, 2.5f));          // 高台
         // ★塀の 線は ほぼ 平ら（0.8）。塀は 1枚ずつ 固い ので、支柱の 間で 段が つくと
         //   垣根が こわれて 見える。2.5m間かくで 振幅20cm・波長7.7mだと 段が 19cm＝
         //   塀の 高さ87cmの 2割。0.8 平らに すれば 段は 6cmに おさまる
@@ -149,10 +149,25 @@ public static class NiwaJimenE {
     //   地ばんの 高さの 一部に して しまえば、地面の あみも 物の すわりも 影も 影の 形も
     //   ぜんぶ 自動で ついてくる。坂も 別に 作らなくて よい（ふち全体が 21°の 土手）。
     //   ★道（z -12.4〜-7）に かからない よう 北へ ずらす（道が 土手を 登って しまう）
-    public const float TX = 20f, TZ = 2f, TH = 3.4f;
+    // ★のぼれる 傾斜に する（本人 2026-08-31「高台が歩いていけない」）。
+    //   なめらかな 落としかた（Fuchi＝smoothstep）は **平均の 1.5倍**の 傾斜が まん中に 出る。
+    //   はじめ 半径(7.5, 6.0)・高さ3.4m に したら
+    //     東西 1.5*3.4/(0.58*7.5)=1.17 → 49.5°
+    //     南北 1.5*3.4/(0.58*6.0)=1.47 → 55.7°
+    //   CharacterController の 上限は 50°なので **南北からは のぼれなかった**。
+    //   いちばん 急な ところ＝1.5*TH/(0.58*R) を 40°(0.839) 以下に おさめる
+    public const float TX = 20f, TZ = 2f, TH = 2.8f;
+    const float TRX = 11f, TRZ = 9f;      // 東西33.4° / 南北38.8°
     static float Takadai(float wx, float wz) {
-        float dx = (wx - TX) / 7.5f, dz = (wz - TZ) / 6.0f;
+        float dx = (wx - TX) / TRX, dz = (wz - TZ) / TRZ;
         return TH * (1f - Fuchi(0.42f, 1f, Mathf.Sqrt(dx * dx + dz * dz)));
+    }
+
+    /// <summary>いちばん 急な ところの 傾斜（度）。組み立ての ときに 出して 確かめる</summary>
+    public static string TakadaiKeisha() {
+        float ax = 1.5f * TH / (0.58f * TRX), az = 1.5f * TH / (0.58f * TRZ);
+        return "東西" + (Mathf.Atan(ax) * Mathf.Rad2Deg).ToString("F1")
+             + "° 南北" + (Mathf.Atan(az) * Mathf.Rad2Deg).ToString("F1") + "°";
     }
 
     /// <summary>地ばんの 高さ</summary>

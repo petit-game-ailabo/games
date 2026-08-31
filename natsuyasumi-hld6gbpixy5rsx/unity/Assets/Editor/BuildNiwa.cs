@@ -140,7 +140,14 @@ public static class BuildNiwa {
         //   ★根もとは 凸凹の 地ばんに あわせる
         var hayashi = new KiV5.Hayashi(root);
         void Ki(float x, float z, float h, float futosa) {
-            hayashi.Ueru(x, NiwaJimenE.Takasa(x, z), z, h, futosa);
+            float y = NiwaJimenE.Takasa(x, z);
+            // ★本人 2026-08-31「高台のところは奥側の木を減らそう、奥の背景が見えない。
+            //   山の頂上は木が少ない、みたいなイメージで」
+            if (y > 0.9f) return;                                   // 高みは 木が まばら
+            // 高台から 北を 見た ときの 眺めを あける（背景の 山と 空を 見せる）
+            //   ★塀の そとから（x>12）。7 から に したら 庭の 東の 木まで 消えた
+            if (x > 12f && x < 34f && z > 6f && z < 28f && Random.value > 0.14f) return;
+            hayashi.Ueru(x, y, z, h, futosa);
         }
         // ★高さは **画角に 入る 上限**から 決める（2026-08-31）。
         //   ふせ角10°・FOV33 → 画面の 上端は 水平線+6.5°。カメラの 目線は 3.30m。
@@ -158,21 +165,15 @@ public static class BuildNiwa {
             Ki(-13.2f - Random.Range(0f, 10f), -5f + i * 2.0f + Random.Range(-1.2f, 1.2f),
                Random.Range(5.5f, 7.2f), Random.Range(0.26f, 0.40f));
         }
-        // 東は **高台の 北がわ**だけ（高台の 上と 空を ふさがない）
-        for (int i = 0; i < 9; i++) {
-            if (Random.value < 0.15f) continue;
-            Ki(13f + Random.Range(0f, 11f), 10.5f + i * 1.1f + Random.Range(-1f, 1f),
-               Random.Range(6.0f, 7.6f), Random.Range(0.26f, 0.40f));
-        }
         // 家の うしろ（北）＝林の ふち。★等間かくは 柵に 見える ので 抜けを つくって かたまらせる
-        for (int i = 0; i < 34; i++) {
-            if (Random.value < 0.16f) continue;
-            Ki(-36f + i * 2.2f + Random.Range(-1.7f, 1.7f), 19f + Random.Range(0f, 8f),
+        for (int i = 0; i < 40; i++) {
+            if (Random.value < 0.12f) continue;
+            Ki(-38f + i * 2.1f + Random.Range(-1.7f, 1.7f), 19f + Random.Range(0f, 8f),
                Random.Range(6.6f, 8.1f), Random.Range(0.30f, 0.46f));
         }
-        for (int i = 0; i < 28; i++) {
-            if (Random.value < 0.14f) continue;
-            Ki(-40f + i * 3.0f + Random.Range(-2f, 2f), 29f + Random.Range(0f, 12f),
+        for (int i = 0; i < 32; i++) {
+            if (Random.value < 0.12f) continue;
+            Ki(-42f + i * 2.8f + Random.Range(-2f, 2f), 29f + Random.Range(0f, 12f),
                Random.Range(7.5f, 9.3f), Random.Range(0.30f, 0.46f));
         }
         // 東の おく（高台の むこう）
@@ -395,6 +396,9 @@ public static class BuildNiwa {
             tour[i] = g.transform;
         }
         mv.tour = tour;
+        // のぼれるかの 機械検査（-noboru）：南の ふもとから 北へ 歩いて 高台に 上がれるか
+        mv.noboruKara = new Vector3(NiwaJimenE.TX, 1.5f, NiwaJimenE.TZ - 12f);
+        mv.noboruMade = NiwaJimenE.TH;
 
         // ---- カメラ（HD-2Dの 型＝望遠 FOV26・見下ろし 33度・固定 2台）
         var camGO = new GameObject("Main Camera");
@@ -499,6 +503,7 @@ public static class BuildNiwa {
         var focus = volGO.AddComponent<FocusOnPlayer>();
         focus.volume = vol; focus.target = player.transform;
 
+        Debug.Log("[Probe] Takadai いちばん急な傾斜 " + NiwaJimenE.TakadaiKeisha());
         hayashi.Katameru();
 
         // ---- 物を 地ばんに すわらせる（凸凹に した ぶん、y=0 のままだと 浮く／沈む）
