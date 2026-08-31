@@ -57,6 +57,7 @@ public static class KiV5 {
             new Dictionary<int, List<CombineInstance>>();
         /// <summary>木の 根もと（x, ybase, z）と みきの ふとさ。接地の 影に つかう</summary>
         public readonly List<Vector4> Moto = new List<Vector4>();
+        readonly List<Vector4> kanmuri = new List<Vector4>();   // 樹冠の まん中(xyz)と 半径
         int nowKey;
 
         public Hayashi(Transform root) { this.root = root; }
@@ -150,6 +151,7 @@ public static class KiV5 {
         public void Ueru(float x, float ybase, float z, float h, float futosa) {
             nowKey = Key(x, z);
             kiX = x; kiZ = z; kanR = h * 0.38f;   // 枝の ひろがりの めやす
+            kanmuri.Add(new Vector4(x, ybase + h * 0.74f, z, h * 0.42f));
             Moto.Add(new Vector4(x, ybase, z, futosa));
             float r0 = futosa * 0.5f;
             // みきの 背骨＝輪 9つ。ゆるく 湾曲、根もとは ひろがり、上に いくほど 細い
@@ -221,9 +223,39 @@ public static class KiV5 {
             }
         }
 
-        static GameObject Katamari(Transform root, string name, List<CombineInstance> cis, Material m) {
+        /// <summary>葉の 板の 法線を **樹冠の まん中から 外へ**向ける（2026-08-31）。
+        /// ★本人「木を手前から見てるのに一部が影で一部が光ってる。日の位置や、他の木の陰
+        ///   ということなら理解できるんだけど、そういう感じでもない」。
+        ///   板は 平ら＋両面（Cull Off）だが、**URPの Lit は 裏面でも 法線を 反転しない**。
+        ///   ヨーを 0°か180°で ふって いる ので となりの 板の 法線が +Z と -Z で 正反対に なり、
+        ///   斜めの 日ざしで 片方は 明るく 片方は N·L が 負＝まっ暗。それが 樹冠の 中で
+        ///   入りまじって、日の むきとも 他の 木とも 関係の ない まだらに 見えて いた。
+        ///   （草の 板でも 同じ ことが 起き、あちらは 法線を ぜんぶ 上向きに して 直した。
+        ///     樹冠は 玉なので **外向き**の ほうが 自然。真下が 黒く 沈まない よう 上へ 0.5 混ぜる）</summary>
+        void Housen(Mesh mesh) {
+            if (kanmuri.Count == 0) return;
+            var vs = mesh.vertices;
+            var ns = new Vector3[vs.Length];
+            for (int i = 0; i < vs.Length; i++) {
+                var v = vs[i];
+                float best = float.MaxValue; Vector3 c = v + Vector3.up;
+                foreach (var k in kanmuri) {
+                    var d = new Vector3(k.x - v.x, (k.y - v.y) * 0.6f, k.z - v.z);
+                    float q = d.sqrMagnitude;
+                    if (q < best) { best = q; c = new Vector3(k.x, k.y, k.z); }
+                }
+                var o = v - c;
+                ns[i] = (o.sqrMagnitude < 1e-4f ? Vector3.up
+                                                : (o.normalized + Vector3.up * 0.5f).normalized);
+            }
+            mesh.normals = ns;
+        }
+
+        GameObject Katamari(Transform root, string name, List<CombineInstance> cis, Material m,
+                            bool ha = false) {
             var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
             mesh.CombineMeshes(cis.ToArray(), true, true);
+            if (ha) Housen(mesh);
             var g = new GameObject(name);
             g.transform.SetParent(root, false);
             g.AddComponent<MeshFilter>().sharedMesh = mesh;
@@ -240,7 +272,7 @@ public static class KiV5 {
             var mHa = Mat("NiwaHaCard", "ki_ha.png", true, Vector2.one);
             int nm = 0, nh = 0;
             foreach (var kv in miki) { Katamari(root, "KiMiki" + kv.Key, kv.Value, mKawa); nm++; }
-            foreach (var kv in ha) { Katamari(root, "KiHa" + kv.Key, kv.Value, mHa); nh++; }
+            foreach (var kv in ha) { Katamari(root, "KiHa" + kv.Key, kv.Value, mHa, true); nh++; }
             Debug.Log("[Probe] KiV5 " + Moto.Count + "本 みきの塊" + nm + " 葉の塊" + nh);
         }
     }
