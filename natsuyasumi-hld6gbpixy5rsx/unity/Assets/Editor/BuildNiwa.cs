@@ -88,9 +88,16 @@ public static class BuildNiwa {
         // ---- 家（megakit の ジェッティの 家。玄関は 南=庭がわ を 向く）
         var ie = new GameObject("Ie").transform;
         ie.SetParent(root, false);
-        ie.position = new Vector3(0f, 0f, 10f);
+        // ★母屋＝日本の 農家（24 x 12m・NiwaIe → BuildHouse）。縁側と 玄関は 部品の +Z がわ
+        //   なので 180°まわして 南（カメラの ほう）へ 向ける。
+        //   ★前庭を 深く とる（2026-09-01）。棟は 地面から 6.52m。
+        //     画面に 入る 高さは h < 3.30 + 0.114*d なので **d > 28m** 要る。
+        //     はじめ 縁側を z=2.3 に 置いたら 障子の 壁しか 映らず、入母屋の 屋根＝
+        //     いちばんの 見どころが フレームの 外に 出て いた。
+        //   世界での 位置：縁側の 南ばし z=8.8 / うしろの 壁 z=22
+        ie.position = new Vector3(0f, 0f, 16f);
         ie.rotation = Quaternion.Euler(0f, 180f, 0f);           // 部品の 手前(+Z)を 南へ
-        BuildKitTown.JettyBody(ie);
+        NiwaIe.Build(ie);
 
         // ---- 塀と 門（Kenney。fence は 板が pivot から +Z*0.46 はなれて いる → 線に そろえる）
         const float FS = 2.5f;                                   // 塀の 縮尺（高さ 0.87m）
@@ -99,41 +106,41 @@ public static class BuildNiwa {
             KenneyKit.Put(root, piece, linePos - rot * Vector3.forward * (0.46f * FS), yaw, FS);
         }
         // 南（門を まん中に）: z=-6。すきま |x|<1.25 が 門
-        for (float x = -10f; x <= 10.01f; x += FS) {
+        for (float x = -12f; x <= 12.01f; x += FS) {
             if (Mathf.Abs(x) < 1.3f) continue;
             Fence("fence_simple", new Vector3(x, 0f, -6f), 0f);
         }
         KenneyKit.Put(root, "fence_gate", new Vector3(0f, 0f, -6f - 0.46f * FS), 0f, FS);
         // 東西: x=±11.2、z -6..14
-        for (float z = -4.5f; z <= 14.01f; z += FS) {
-            Fence("fence_simple", new Vector3(-11.2f, 0f, z), 90f);
-            Fence("fence_simple", new Vector3( 11.2f, 0f, z), 270f);
+        for (float z = -4.5f; z <= 21.81f; z += FS) {
+            Fence("fence_simple", new Vector3(-13f, 0f, z), 90f);
+            Fence("fence_simple", new Vector3( 13f, 0f, z), 270f);
         }
         // 北（家の 両わきだけ）
-        for (float x = -10f; x <= 10.01f; x += FS) {
-            if (Mathf.Abs(x) < 4.6f) continue;                   // 家の うしろは 家が 壁
-            Fence("fence_simple", new Vector3(x, 0f, 15.2f), 180f);
+        for (float x = -12f; x <= 12.01f; x += FS) {
+            if (Mathf.Abs(x) < 12.2f) continue;                  // 家の うしろは 家が 壁
+            Fence("fence_simple", new Vector3(x, 0f, 23f), 180f);
         }
 
         // ---- 見えない かべ（Kenney の 塀には あたりが 無い）
-        Box(root, "BLK_S1", new Vector3(-6.15f, 1f, -6f), new Vector3(9.7f, 2f, 0.3f), null, false);
-        Box(root, "BLK_S2", new Vector3( 6.15f, 1f, -6f), new Vector3(9.7f, 2f, 0.3f), null, false);
-        Box(root, "BLK_E",  new Vector3( 11.2f, 1f, 4f),  new Vector3(0.3f, 2f, 21f), null, false);
-        Box(root, "BLK_W",  new Vector3(-11.2f, 1f, 4f),  new Vector3(0.3f, 2f, 21f), null, false);
-        Box(root, "BLK_N",  new Vector3(0f, 1f, 15.2f),   new Vector3(23f, 2f, 0.3f), null, false);
+        Box(root, "BLK_S1", new Vector3(-7.15f, 1f, -6f), new Vector3(11.7f, 2f, 0.3f), null, false);
+        Box(root, "BLK_S2", new Vector3( 7.15f, 1f, -6f), new Vector3(11.7f, 2f, 0.3f), null, false);
+        Box(root, "BLK_E",  new Vector3( 13f, 1f, 8.5f),  new Vector3(0.3f, 2f, 30f), null, false);
+        Box(root, "BLK_W",  new Vector3(-13f, 1f, 8.5f),  new Vector3(0.3f, 2f, 30f), null, false);
+        Box(root, "BLK_N",  new Vector3(0f, 1f, 23f),   new Vector3(27f, 2f, 0.3f), null, false);
         // 道の 外がわ（散歩の はんい）
         Box(root, "BLK_Road", new Vector3(0f, 1f, -12.2f), new Vector3(80f, 2f, 0.3f), null, false);
-        Box(root, "BLK_RoadE", new Vector3(34f, 1f, -9f), new Vector3(0.3f, 2f, 9f), null, false);
+        Box(root, "BLK_RoadE", new Vector3(39f, 1f, -9f), new Vector3(0.3f, 2f, 9f), null, false);
         Box(root, "BLK_RoadW", new Vector3(-30f, 1f, -9f), new Vector3(0.3f, 2f, 7f), null, false);
 
         // ---- 玄関→門の 飛び石、くつぬぎ石、鉢
-        for (int i = 0; i < 6; i++)
+        for (int i = 0; i < 10; i++)
             KenneyKit.Put(root, (i % 2 == 0) ? "path_stone" : "path_stoneCircle",
-                new Vector3(Random.Range(-0.25f, 0.25f), 0.02f, 4.6f - i * 1.85f),
+                new Vector3(Random.Range(-0.25f, 0.25f), 0.02f, 7.9f - i * 1.5f),
                 Random.Range(-14f, 14f), 1.6f);
-        KenneyKit.Put(root, "stone_smallFlatA", new Vector3(0f, 0.02f, 5.65f), 8f, 2.2f);
-        KenneyKit.Put(root, "pot_large", new Vector3(2.6f, 0f, 5.4f), 30f, 2f);
-        KenneyKit.Put(root, "pot_small", new Vector3(3.4f, 0f, 5.1f), 70f, 2f);
+        KenneyKit.Put(root, "stone_smallFlatA", new Vector3(0f, 0.02f, 8.5f), 8f, 2.2f);   // くつぬぎ石
+        KenneyKit.Put(root, "pot_large", new Vector3(2.9f, 0f, 8.9f), 30f, 2f);
+        KenneyKit.Put(root, "pot_small", new Vector3(3.7f, 0f, 8.6f), 70f, 2f);
 
         // ---- 木（本人 2026-08-31「3Dで作った方の木で、葉っぱとかも作りこんでたやつを
         //   大量に配置してみてほしい」）。チューブ木v5＝KiV5（BuildMura から 取りだした）。
@@ -146,7 +153,7 @@ public static class BuildNiwa {
             if (y > 0.9f) return;                                   // 高みは 木が まばら
             // 高台から 北を 見た ときの 眺めを あける（背景の 山と 空を 見せる）
             //   ★塀の そとから（x>12）。7 から に したら 庭の 東の 木まで 消えた
-            if (x > 12f && x < 34f && z > 6f && z < 28f && Random.value > 0.14f) return;
+            if (x > 14f && x < 38f && z > 6f && z < 30f && Random.value > 0.14f) return;
             hayashi.Ueru(x, y, z, h, futosa);
         }
         // ★高さは **画角に 入る 上限**から 決める（2026-08-31）。
@@ -156,29 +163,29 @@ public static class BuildNiwa {
         // ★本人 2026-08-31「手前からのカメラに固定…キャラより奥側の木はもっとあってもいい。
         //   逆にキャラより手前は最小限。高台とか青空の画像を見せたいから手前の木は無くていい」
         //   → カメラは いつも 南から 北を 見る。**奥（北）は 厚く、手前（南）は ほんの 数本**
-        Ki(-7.6f, 8.6f, 6.2f, 0.46f);                 // 庭の ぬし（セミの木）
-        Ki(8.4f, 11.5f, 5.6f, 0.34f);
-        Ki(-9.0f, -2.0f, 5.0f, 0.30f);
+        Ki(-9.5f, -1.0f, 6.2f, 0.46f);                // 庭の ぬし（セミの木）
+        Ki(9.2f, 1.2f, 5.6f, 0.34f);
+        Ki(-11.4f, -4.6f, 5.0f, 0.30f);
         // 西の 塀の そと（庭を 木立ちで はさむ）
         for (int i = 0; i < 13; i++) {
             if (Random.value < 0.15f) continue;
-            Ki(-13.2f - Random.Range(0f, 10f), -5f + i * 2.0f + Random.Range(-1.2f, 1.2f),
+            Ki(-15f - Random.Range(0f, 10f), -5f + i * 2.0f + Random.Range(-1.2f, 1.2f),
                Random.Range(5.5f, 7.2f), Random.Range(0.26f, 0.40f));
         }
         // 家の うしろ（北）＝林の ふち。★等間かくは 柵に 見える ので 抜けを つくって かたまらせる
         for (int i = 0; i < 40; i++) {
             if (Random.value < 0.12f) continue;
-            Ki(-38f + i * 2.1f + Random.Range(-1.7f, 1.7f), 19f + Random.Range(0f, 8f),
+            Ki(-38f + i * 2.1f + Random.Range(-1.7f, 1.7f), 26f + Random.Range(0f, 8f),
                Random.Range(6.6f, 8.1f), Random.Range(0.30f, 0.46f));
         }
         for (int i = 0; i < 32; i++) {
             if (Random.value < 0.12f) continue;
-            Ki(-42f + i * 2.8f + Random.Range(-2f, 2f), 29f + Random.Range(0f, 12f),
+            Ki(-42f + i * 2.8f + Random.Range(-2f, 2f), 36f + Random.Range(0f, 12f),
                Random.Range(7.5f, 9.3f), Random.Range(0.30f, 0.46f));
         }
         // 東の おく（高台の むこう）
         for (int i = 0; i < 10; i++)
-            Ki(30f + Random.Range(0f, 13f), -12f + i * 3.4f + Random.Range(-2f, 2f),
+            Ki(38f + Random.Range(0f, 12f), -12f + i * 3.4f + Random.Range(-2f, 2f),
                Random.Range(6.5f, 8.5f), Random.Range(0.28f, 0.44f));
         // 手前（南）＝**最小限**。左右の はしだけ。門の 正面と 高台の 見あげは あける
         foreach (float hx in new[] { -30f, -24f, 25f, 31f })
@@ -347,8 +354,8 @@ public static class BuildNiwa {
                     Random.Range(0f, 360f), Random.Range(1.3f, 2.0f));
             }
             // 東の あそび場を 囲う（絵はがきの 外へ 出られない ように）
-            Box(root, "BLK_HigashiN", new Vector3(22f, 3f, 20f), new Vector3(26f, 8f, 0.3f), null, false);
-            Box(root, "BLK_HigashiE", new Vector3(34f, 3f, 8f), new Vector3(0.3f, 8f, 25f), null, false);
+            Box(root, "BLK_HigashiN", new Vector3(26f, 3f, 24f), new Vector3(28f, 8f, 0.3f), null, false);
+            Box(root, "BLK_HigashiE", new Vector3(39f, 3f, 10f), new Vector3(0.3f, 8f, 30f), null, false);
         }
 
         // ---- 主人公（マリサ 8方向スプライト・ライトを 受ける）

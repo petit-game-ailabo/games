@@ -129,16 +129,16 @@ public static class NiwaJimenE {
         //   踏み跡を |x|<3.3 に したら **見えて いる 芝生の ほぼ 全部が 平ら**に なり、
         //   凸凹が まったく 出なかった
         hira = Mathf.Max(hira, Hako(wx, wz, -1.3f, 1.3f, -7.5f, 8.5f, 1.0f));   // 庭の 踏み跡
-        hira = Mathf.Max(hira, Hako(wx, wz, -4.6f, 4.6f, 3f, 16f, 1.0f));       // 家の 敷地
+        hira = Mathf.Max(hira, Hako(wx, wz, -12.5f, 12.5f, 8f, 23f, 1.2f));     // 家の 敷地（24x12mの 農家）
         hira = Mathf.Max(hira, Hako(wx, wz, -44f, 44f, -12.6f, -6.6f, 1.2f) * 0.85f); // 道
-        hira = Mathf.Max(hira, Hako(wx, wz, 9f, 31f, -8f, 12f, 2.5f));          // 高台
+        hira = Mathf.Max(hira, Hako(wx, wz, 14f, 36f, -8f, 12f, 2.5f));         // 高台
         // ★塀の 線は ほぼ 平ら（0.8）。塀は 1枚ずつ 固い ので、支柱の 間で 段が つくと
         //   垣根が こわれて 見える。2.5m間かくで 振幅20cm・波長7.7mだと 段が 19cm＝
         //   塀の 高さ87cmの 2割。0.8 平らに すれば 段は 6cmに おさまる
-        hira = Mathf.Max(hira, Hako(wx, wz, -12f, 12f, -6.7f, -5.3f, 1.0f) * 0.8f);
-        hira = Mathf.Max(hira, Hako(wx, wz, -12f, 12f, 14.5f, 15.9f, 1.0f) * 0.8f);
-        hira = Mathf.Max(hira, Hako(wx, wz, -11.9f, -10.5f, -7f, 16f, 1.0f) * 0.8f);
-        hira = Mathf.Max(hira, Hako(wx, wz, 10.5f, 11.9f, -7f, 16f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, -13.5f, 13.5f, -6.7f, -5.3f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, -13.5f, 13.5f, 22.3f, 23.7f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, -13.7f, -12.3f, -7f, 23.5f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, 12.3f, 13.7f, -7f, 23.5f, 1.0f) * 0.8f);
         // 塀の そと（誰も 歩かない）は 大きく
         float soto = 1f + Fuchi(12f, 26f, Mathf.Max(Mathf.Abs(wx), wz - 16f)) * 0.9f;
         return 0.30f * soto * (1f - hira);
@@ -156,7 +156,7 @@ public static class NiwaJimenE {
     //     南北 1.5*3.4/(0.58*6.0)=1.47 → 55.7°
     //   CharacterController の 上限は 50°なので **南北からは のぼれなかった**。
     //   いちばん 急な ところ＝1.5*TH/(0.58*R) を 40°(0.839) 以下に おさめる
-    public const float TX = 20f, TZ = 2f, TH = 2.8f;
+    public const float TX = 25f, TZ = 2f, TH = 2.8f;   // ★庭を 広げた ぶん 東へ（塀は x=13）
     const float TRX = 11f, TRZ = 9f;      // 東西33.4° / 南北38.8°
     static float Takadai(float wx, float wz) {
         float dx = (wx - TX) / TRX, dz = (wz - TZ) / TRZ;
