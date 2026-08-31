@@ -32,6 +32,13 @@ public static class BuildNiwaPlayer {
             EditorUtility.SetDirty(urp);
             AssetDatabase.SaveAssets();
         }
+        // ★圧縮は **コードで 指定する**（2026-08-31）。ProjectSettings.asset を 直に 書きかえても
+        //   Unity が 終わる ときに 自分の 設定を 書きもどして 消える。
+        //   公開まえの 素の 大きさは .data 61.6MB＋.wasm 42MB＝103MB あった。
+        //   GitHub Pages は Content-Encoding を つけられない ので ブラウザ側で 展開する
+        //   （gzip。Brotli の ほうが 小さいが JS での 展開が おそい）
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+        PlayerSettings.WebGL.decompressionFallback = true;
         var opts = new BuildPlayerOptions {
             scenes = new[] { "Assets/Scenes/Niwa.unity" },
             locationPathName = "../niwa-web",

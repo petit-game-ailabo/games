@@ -110,15 +110,25 @@ public static class KiV5 {
             Tsumu(miki, nowKey, new CombineInstance { mesh = mesh, transform = Matrix4x4.identity });
         }
 
+        // ★葉の 板の 向きは **カメラに 真横に ならない 範囲**だけ（本人 2026-08-31
+        //   「特定の木の葉は、1枚の薄い紙であることが見て取れる状態になっちゃってる。
+        //     HD-2D想定なら、配置の向きをカメラに対して直角にしないようにすることで
+        //     回避できないかな。多少角度がついているのは影にもいい影響が出るから、
+        //     角度自体は否定してない」）。
+        //   カメラは いつも 南から 北を 見る（HD-2D追従は ヨーを ふらない）ので、
+        //   ヨーが 90°/270° あたりの 板は 真横を 向いて 紙に 見える。
+        //   0°か180°を もとに ±52° に かぎれば、いちばん 悪くても 正面から 52°＝
+        //   板の はばの 62%は 見える。かたむき自体は 残す（影の 出かたに 効く）
+        const float YOKO = 52f;
         void HaCards(Vector3 at, float rr, int n) {        // 枝先の 大量の 葉（world座標）
             for (int i = 0; i < n; i++) {
                 float cs = Random.Range(1.9f, 3.1f);
+                float yaw = (Random.value < 0.5f ? 0f : 180f) + Random.Range(-YOKO, YOKO);
                 Tsumu(ha, nowKey, new CombineInstance {
                     mesh = Quad(),
                     transform = Matrix4x4.TRS(
                         at + Random.insideUnitSphere * rr,
-                        Quaternion.Euler(Random.Range(-40f, 40f), Random.Range(0f, 360f),
-                                         Random.Range(-25f, 25f)),
+                        Quaternion.Euler(Random.Range(-32f, 32f), yaw, Random.Range(-25f, 25f)),
                         new Vector3(cs, cs * 0.8f, 1f)),
                 });
             }
