@@ -264,7 +264,14 @@ public static class BuildNiwa {
             m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             m.SetInt("_ZWrite", 0);
-            m.renderQueue = queue;     // 遠い ものほど 先に（山→雲の 順に かさなる）
+            // ★描き割りは **不とうめいより 先に** 描く（2026-08-31・本人
+            //   「高台辺りで、奥の背景の山が、木より手前に表示されて、木が見えなくなる」）。
+            //   透明の 列（2500〜）に 置くと 不とうめいの あとに 描かれ、深度で 判定される。
+            //   板は カメラの 55m前に 追従する ので、いちばん 奥の 木(z=41)は
+            //   カメラz < -14＝主人公z < 0.77 の あいだ ずっと 山に 隠れて いた。
+            //   2000より 小さい 列に すれば 深度は まだ 空っぽで、あとから 来る 地面や 木が
+            //   かならず 上に 乗る＝**背景の 本来の 描きかた**（距離に 左右されない）
+            m.renderQueue = queue;     // 空1000 → 雲1100 → 山1200 の 順に かさねる
         }
 
         GameObject KakiwariCam(string name, Material m, Vector3 zurashi, float w, float h) {
@@ -278,12 +285,14 @@ public static class BuildNiwa {
         //   空＝入道雲の 空。空は いちばん おくの 幕、山は その 手前、雲は あいだを ながれる
         var mSora = MatE("NiwaSora", "sora.png");
         mSora.SetFloat("_AlphaClip", 0f); mSora.DisableKeyword("_ALPHATEST_ON");
-        mSora.renderQueue = 1900;                       // いちばん おく（不とうめいの まま）
+        mSora.renderQueue = 1000;                       // いちばん おく（不とうめいの まま）。
+        // ★1900の ままだと 雲(1100)より **あとに** 描かれて 雲を 消す。
+        //   空は 深度を 書く ので、雲と 山(どちらも 手前・深度は 書かない)は 通る
         KakiwariCam("Sora", mSora, new Vector3(0f, 44f, 200f), 320f, 120f);
 
         var mSatoyama = MatE("NiwaSatoyama", "satoyama.png");
-        Toumei(mSatoyama, 2990);
-        Toumei(mYamaToi, 2985);
+        Toumei(mSatoyama, 1200);
+        Toumei(mYamaToi, 1150);
         KakiwariCam("Satoyama", mSatoyama, new Vector3(0f, 10.01f, 55f), 96.0f, 36.0f);
 
         // 流れる 雲（空の 絵から 抜いた 3つ）。山の おく・空の 手前
@@ -291,7 +300,7 @@ public static class BuildNiwa {
         var mKumos = new Material[kumoTex.Length];
         for (int i = 0; i < kumoTex.Length; i++) {
             mKumos[i] = MatE("NiwaKumo" + (i + 1), kumoTex[i]);
-            Toumei(mKumos[i], 2960);                    // 空(1900)と 山(2990)の あいだ
+            Toumei(mKumos[i], 1100);                    // 空(1000)と 山(1200)の あいだ
         }
         //  （よこ位置, 見上げ角, 奥ゆき, はば, 絵, ながれる 速さ）
         var kumoSet = new[] {
