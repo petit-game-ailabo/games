@@ -34,7 +34,8 @@ public static class KiV5 {
         m.shader = Shader.Find("Universal Render Pipeline/Lit");
         m.color = Color.white;
         m.SetFloat("_Smoothness", 0.05f);
-        m.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Textures/" + tex);
+        m.mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(
+            "Assets/Art/Textures/shashin/" + tex);
         m.mainTextureScale = tiling;
         if (sukashi) {
             m.SetFloat("_AlphaClip", 1f); m.SetFloat("_Cutoff", 0.5f);
@@ -111,7 +112,7 @@ public static class KiV5 {
 
         void HaCards(Vector3 at, float rr, int n) {        // 枝先の 大量の 葉（world座標）
             for (int i = 0; i < n; i++) {
-                float cs = Random.Range(1.2f, 2.1f);
+                float cs = Random.Range(1.9f, 3.1f);
                 Tsumu(ha, nowKey, new CombineInstance {
                     mesh = Quad(),
                     transform = Matrix4x4.TRS(
@@ -182,10 +183,10 @@ public static class KiV5 {
                     kp[0] = kmoto; kp[1] = kmoto + m2 * (n2 * 0.5f);
                     kp[2] = kmoto + m2 * n2 + Vector3.up * 0.15f;
                     Tube(kp, kr, 6);
-                    HaCards(kp[2], Random.Range(0.9f, 1.3f), 7);
+                    HaCards(kp[2], Random.Range(0.9f, 1.3f), 4);
                 }
-                HaCards(bp[3], Random.Range(0.9f, 1.2f), 6);                          // 枝の とちゅう
-                HaCards(bp[bn - 1] + Vector3.up * 0.3f, Random.Range(1.0f, 1.5f), 9); // 枝の 先
+                HaCards(bp[3], Random.Range(0.9f, 1.2f), 3);                          // 枝の とちゅう
+                HaCards(bp[bn - 1] + Vector3.up * 0.3f, Random.Range(1.0f, 1.5f), 5); // 枝の 先
             }
             // てっぺんの 冠＝房を 3つ 横に ならべて 層に（1つの 玉に しない）
             var teppen = pts[rings - 1];
@@ -193,7 +194,7 @@ public static class KiV5 {
                 var off = Quaternion.Euler(0f, 120f * c2 + Random.Range(-30f, 30f), 0f)
                           * Vector3.forward * Random.Range(0.6f, 1.6f);
                 HaCards(teppen + off + Vector3.up * Random.Range(0.2f, 0.9f),
-                        Random.Range(1.1f, 1.6f), 11);
+                        Random.Range(1.1f, 1.6f), 6);
             }
         }
 
@@ -209,8 +210,11 @@ public static class KiV5 {
 
         /// <summary>結合して 場面に 置く。24m四方ごとに 分ける（画角の 外は 描かない）</summary>
         public void Katameru() {
-            var mKawa = Mat("NiwaKiKawa", "ki_kawa.png", false, new Vector2(1f, 3f));
-            var mHa = Mat("NiwaHaCard", "happa_card.png", true, Vector2.one);
+            // ★皮も 葉も 本人の 写真（2026-08-31）。前は 32x64px・5色の 点フィルタで、
+            //   地面を 写真に した ぶん 木だけ 四角い 塊に 見えて いた。
+            //   タイルは (1,1)＝みきの UVは たて 1.25mで 1回りなので ちょうど よい
+            var mKawa = Mat("NiwaKiKawa", "ki_kawa.jpg", false, Vector2.one);
+            var mHa = Mat("NiwaHaCard", "ki_ha.png", true, Vector2.one);
             int nm = 0, nh = 0;
             foreach (var kv in miki) { Katamari(root, "KiMiki" + kv.Key, kv.Value, mKawa); nm++; }
             foreach (var kv in ha) { Katamari(root, "KiHa" + kv.Key, kv.Value, mHa); nh++; }

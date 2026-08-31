@@ -147,10 +147,11 @@ public static class SetupURP {
             //   ・**読みだし可**：一枚絵を 焼く ときに GetPixels32 で 中身を 読む
             {
                 string fn0 = System.IO.Path.GetFileNameWithoutExtension(path);
-                if (fn0.StartsWith("ji_") || fn0.StartsWith("niwa_jimen")) {
+                if (fn0.StartsWith("ji_") || fn0.StartsWith("niwa_jimen")
+                    || path.Contains("/shashin/")) {
                     var tig = AssetImporter.GetAtPath(path) as TextureImporter;
                     if (tig == null) continue;
-                    bool moto = fn0.StartsWith("ji_");    // 素材は 焼く ために 読みだす
+                    bool moto = fn0.StartsWith("ji_");    // 地面の 素材は 焼く ために 読みだす
                     bool okg = tig.filterMode == FilterMode.Bilinear && tig.mipmapEnabled
                                && tig.anisoLevel >= 8 && tig.isReadable == moto
                                && tig.maxTextureSize >= 4096;

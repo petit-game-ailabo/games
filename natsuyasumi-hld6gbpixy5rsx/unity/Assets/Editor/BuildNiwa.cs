@@ -61,8 +61,6 @@ public static class BuildNiwa {
         //   かけ算に なって 1タイル7cmに なり、ミップで つぶれて 単色の 板に 見えた
         var mGrass = MatT("NiwaGrassT", "ji_kusa.jpg", 1f, 1f);
         var mDirt  = MatT("NiwaDirtT",  "ji_tsuchi.jpg", 1f, 1f);
-        // 高台は 箱（UVは 面ごとに 0..1）なので 大きさに 合わせた 倍率が いる
-        var mGrassH = MatT("NiwaGrassHako", "ji_kusa.jpg", 11f / 3f, 9f / 3f);
         // ---- 地めんは **凸凹の あみ**（箱では ない・本人 2026-08-31）
         //   ふせ角10°の カメラは 高さだけ 6倍に 拡大して 映す（奥ゆき1m=21px / 高さ1m=121px）。
         //   20cmの 起伏でも 24px 動く。歩く ところ（庭の 踏み跡・家・道・高台）は 平ら
@@ -148,43 +146,43 @@ public static class BuildNiwa {
         //   ふせ角10°・FOV33 → 画面の 上端は 水平線+6.5°。カメラの 目線は 3.30m。
         //   距離 d で 葉が 画面に 入る 高さ h < 3.30 + 0.114*d。
         //   はじめ 7〜13m で 植えたら **葉が ぜんぶ フレームの 外**＝幹だけの 林に なった
+        // ★本人 2026-08-31「手前からのカメラに固定…キャラより奥側の木はもっとあってもいい。
+        //   逆にキャラより手前は最小限。高台とか青空の画像を見せたいから手前の木は無くていい」
+        //   → カメラは いつも 南から 北を 見る。**奥（北）は 厚く、手前（南）は ほんの 数本**
         Ki(-7.6f, 8.6f, 6.2f, 0.46f);                 // 庭の ぬし（セミの木）
         Ki(8.4f, 11.5f, 5.6f, 0.34f);
         Ki(-9.0f, -2.0f, 5.0f, 0.30f);
-        // 塀の そと 西・東（庭を 木立ちで はさむ）
-        for (int i = 0; i < 11; i++) {
-            if (Random.value < 0.18f) continue;
-            Ki(-13.5f - Random.Range(0f, 9f), -5f + i * 2.2f + Random.Range(-1.2f, 1.2f),
-               Random.Range(5.5f, 7.0f), Random.Range(0.26f, 0.40f));
-            Ki(13.5f + Random.Range(0f, 9f), -4f + i * 2.2f + Random.Range(-1.2f, 1.2f),
-               Random.Range(5.5f, 7.0f), Random.Range(0.26f, 0.40f));
+        // 西の 塀の そと（庭を 木立ちで はさむ）
+        for (int i = 0; i < 13; i++) {
+            if (Random.value < 0.15f) continue;
+            Ki(-13.2f - Random.Range(0f, 10f), -5f + i * 2.0f + Random.Range(-1.2f, 1.2f),
+               Random.Range(5.5f, 7.2f), Random.Range(0.26f, 0.40f));
+        }
+        // 東は **高台の 北がわ**だけ（高台の 上と 空を ふさがない）
+        for (int i = 0; i < 9; i++) {
+            if (Random.value < 0.15f) continue;
+            Ki(13f + Random.Range(0f, 11f), 10.5f + i * 1.1f + Random.Range(-1f, 1f),
+               Random.Range(6.0f, 7.6f), Random.Range(0.26f, 0.40f));
         }
         // 家の うしろ（北）＝林の ふち。★等間かくは 柵に 見える ので 抜けを つくって かたまらせる
-        for (int i = 0; i < 26; i++) {
-            if (Random.value < 0.24f) continue;
-            Ki(-32f + i * 2.6f + Random.Range(-1.7f, 1.7f), 19f + Random.Range(0f, 8f),
+        for (int i = 0; i < 34; i++) {
+            if (Random.value < 0.16f) continue;
+            Ki(-36f + i * 2.2f + Random.Range(-1.7f, 1.7f), 19f + Random.Range(0f, 8f),
                Random.Range(6.6f, 8.1f), Random.Range(0.30f, 0.46f));
         }
-        for (int i = 0; i < 20; i++) {
-            if (Random.value < 0.20f) continue;
-            Ki(-36f + i * 3.7f + Random.Range(-2f, 2f), 29f + Random.Range(0f, 10f),
+        for (int i = 0; i < 28; i++) {
+            if (Random.value < 0.14f) continue;
+            Ki(-40f + i * 3.0f + Random.Range(-2f, 2f), 29f + Random.Range(0f, 12f),
                Random.Range(7.5f, 9.3f), Random.Range(0.30f, 0.46f));
         }
-        // 道の 向こうがわ（南）。★門の 正面（|x|<3.5）は あける＝カメラの すじ
-        for (int i = 0; i < 20; i++) {
-            float x = -34f + i * 3.7f + Random.Range(-1.6f, 1.6f);
-            if (Mathf.Abs(x) < 3.5f || Random.value < 0.22f) continue;
-            Ki(x, -15.5f - Random.Range(0f, 6f), Random.Range(5.8f, 7.4f), Random.Range(0.26f, 0.40f));
-        }
-        for (int i = 0; i < 14; i++) {
-            if (Random.value < 0.18f) continue;
-            Ki(-32f + i * 5.0f + Random.Range(-2.2f, 2.2f), -25f - Random.Range(0f, 9f),
-               Random.Range(7.0f, 9.0f), Random.Range(0.30f, 0.46f));
-        }
-        // 高台の むこう（東の おく）
-        for (int i = 0; i < 9; i++)
-            Ki(30f + Random.Range(0f, 13f), -19f + i * 4.2f + Random.Range(-2f, 2f),
+        // 東の おく（高台の むこう）
+        for (int i = 0; i < 10; i++)
+            Ki(30f + Random.Range(0f, 13f), -12f + i * 3.4f + Random.Range(-2f, 2f),
                Random.Range(6.5f, 8.5f), Random.Range(0.28f, 0.44f));
+        // 手前（南）＝**最小限**。左右の はしだけ。門の 正面と 高台の 見あげは あける
+        foreach (float hx in new[] { -30f, -24f, 25f, 31f })
+            Ki(hx + Random.Range(-1.5f, 1.5f), -16f - Random.Range(0f, 5f),
+               Random.Range(6.0f, 7.6f), Random.Range(0.28f, 0.42f));
 
         // 竹（北西の かど・和の 気配）
         for (int i = 0; i < 5; i++)
@@ -313,45 +311,34 @@ public static class BuildNiwa {
             km.hayasa = k[5]; km.haba = 460f;
         }
 
-        // ---- 高台（本人 2026-08-30「俯瞰するカメラアングルの場所を作って、そこから空を見上げられるように」）
-        //   門の 外の 東の 土手。のぼると カメラが 空を 向き、雲と 遠い 峰が 見える
+        // ---- 高台（本人 2026-08-31「先に高台の箱を直しておいて」）。
+        //   箱を やめて **地ばんの 高さの 一部**に した（NiwaJimenE の Takadai）。
+        //   箱だと 垂直な 壁と まっすぐな 天＝画面で いちばん 目立つ 直線に なる。
+        //   地ばんに して しまえば 地面の あみ・物の すわり・接地の 影・足もとの 影の
+        //   落ちる さきが ぜんぶ ついてくる。坂も 別に 作らない（ふち全体が 21°の 土手）。
+        //   ★道（z -12.4〜-7）に かからない よう 北へ ずらした（道が 土手を 登って しまう）
         {
-            var mTsuchi = MatT("NiwaTsuchiT", "ji_tsuchi.jpg", 3f, 1.4f);
-            const float TX = 21f, TZ = -9.5f, TH = 3.4f;
-            Box(root, "Takadai", new Vector3(TX, TH * 0.5f, TZ), new Vector3(11f, TH, 9f), mGrassH);
-            // のぼり坂（西から。上端が 高台の 天と そろう ように 逆算・本人 2026-08-30
-            //   「坂道が高台と高さがあっていなくて歩いていけない」）
-            const float SLOPE = 18f;                       // 18度（CCの 上限50度に 余裕）
-            float L = TH / Mathf.Sin(SLOPE * Mathf.Deg2Rad);          // 斜面の 長さ
-            float x1 = TX - 5.5f + 0.8f;                              // 上端＝高台に 食いこませる
-            float x0 = x1 - L * Mathf.Cos(SLOPE * Mathf.Deg2Rad);     // 下端＝地めん
-            // 斜面は **草の 土手**（板に 見えない ように 幅ひろ・草の 材質）
-            var saka = Box(root, "TakadaiSaka",
-                new Vector3((x0 + x1) * 0.5f, TH * 0.5f, TZ),
-                new Vector3(L, 0.6f, 7.2f), mGrassH);
-            saka.transform.rotation = Quaternion.Euler(0f, 0f, SLOPE);
-            // 上に 土の 道すじを のせる（人が 通る ところだけ 土）
-            var michi = Box(root, "TakadaiMichi",
-                new Vector3((x0 + x1) * 0.5f, TH * 0.5f, TZ), new Vector3(L, 0.62f, 2.4f), mTsuchi);
-            michi.transform.rotation = Quaternion.Euler(0f, 0f, SLOPE);
-            Object.DestroyImmediate(michi.GetComponent<Collider>());
-            // 土手の 両わきに 草（切り口を 隠す）
-            for (int i = 0; i < 10; i++) {
-                float t2 = Random.Range(0.15f, 0.95f);
-                float mx = Mathf.Lerp(x0, x1, t2), my = TH * t2;
+            float TX = NiwaJimenE.TX, TZ = NiwaJimenE.TZ, TH = NiwaJimenE.TH;
+            // 上の かざり（草・岩・丸太）。すわらせ直しで 地ばんの 高さに のる
+            for (int i2 = 0; i2 < 16; i2++) {
+                var d = Random.insideUnitCircle * 3.6f;
                 KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)],
-                    new Vector3(mx, my, TZ + (Random.value < 0.5f ? -1f : 1f) * Random.Range(1.6f, 3.2f)),
-                    Random.Range(0f, 360f), Random.Range(1.4f, 2.0f));
+                    new Vector3(TX + d.x, 0f, TZ + d.y), Random.Range(0f, 360f),
+                    Random.Range(1.4f, 2.2f));
             }
-            // 上の かざり（草・岩・木のベンチ代わりの 丸太）
-            for (int i = 0; i < 14; i++) {
-                var d = Random.insideUnitCircle * 4.2f;
+            KenneyKit.Put(root, "rock_smallA", new Vector3(TX + 2.6f, 0f, TZ + 2.0f), 40f, 2.4f);
+            KenneyKit.Put(root, "log", new Vector3(TX - 1.4f, 0f, TZ - 1.8f), 15f, 2.2f);
+            // 土手の ふちにも 草（切り口を やわらげる）
+            for (int i2 = 0; i2 < 22; i2++) {
+                float a = Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                float r = Random.Range(0.62f, 0.95f);
                 KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)],
-                    new Vector3(TX + d.x, TH + 0.01f, TZ + d.y), Random.Range(0f, 360f), Random.Range(1.4f, 2.2f));
+                    new Vector3(TX + Mathf.Cos(a) * 7.5f * r, 0f, TZ + Mathf.Sin(a) * 6.0f * r),
+                    Random.Range(0f, 360f), Random.Range(1.3f, 2.0f));
             }
-            KenneyKit.Put(root, "rock_smallA", new Vector3(TX + 3.2f, TH, TZ + 2.6f), 40f, 2.4f);
-            KenneyKit.Put(root, "log", new Vector3(TX - 1.6f, TH, TZ - 2.2f), 15f, 2.2f);
-            KenneyKit.Put(root, "tree_default", new Vector3(TX + 4.4f, TH, TZ - 3.2f), 60f, 3.2f);
+            // 東の あそび場を 囲う（絵はがきの 外へ 出られない ように）
+            Box(root, "BLK_HigashiN", new Vector3(22f, 3f, 20f), new Vector3(26f, 8f, 0.3f), null, false);
+            Box(root, "BLK_HigashiE", new Vector3(34f, 3f, 8f), new Vector3(0.3f, 8f, 25f), null, false);
         }
 
         // ---- 主人公（マリサ 8方向スプライト・ライトを 受ける）
@@ -399,7 +386,8 @@ public static class BuildNiwa {
 
         // ---- 撮影ツアーの たちば
         var tourNames = new[] { "にわ", "もんのそと", "たかだい", "にわのにし" };
-        var tourPos = new[] { new Vector3(0f, 0.3f, -1.5f), new Vector3(3f, 0.3f, -9.3f), new Vector3(21f, 4.5f, -9.5f), new Vector3(-9f, 0.5f, 6f) };
+        var tourPos = new[] { new Vector3(0f, 0.3f, -1.5f), new Vector3(3f, 0.3f, -9.3f), new Vector3(NiwaJimenE.TX, NiwaJimenE.TH + 0.6f, NiwaJimenE.TZ),
+                                new Vector3(-9f, 0.5f, 6f) };
         var tour = new Transform[tourPos.Length];
         for (int i = 0; i < tourPos.Length; i++) {
             var g = new GameObject("Mise_" + tourNames[i]);
@@ -436,9 +424,10 @@ public static class BuildNiwa {
             },
             new MuraCamFixed.Spot {
                 name = "たかだい",
-                area = new Bounds(new Vector3(21f, 6f, -9.5f), new Vector3(12f, 12f, 10f)),
-                pos = new Vector3(21f, 9.5f, -24f),
-                lookAt = new Vector3(21f, 7.5f, -9.5f), fov = 34f,
+                area = new Bounds(new Vector3(NiwaJimenE.TX, 6f, NiwaJimenE.TZ),
+                                  new Vector3(13f, 12f, 11f)),
+                pos = new Vector3(NiwaJimenE.TX, 9.5f, NiwaJimenE.TZ - 15f),
+                lookAt = new Vector3(NiwaJimenE.TX, 7.5f, NiwaJimenE.TZ), fov = 34f,
                 hdPitchOver = -6f, hdDistOver = 13f,      // ★空を 見上げる
             },
             new MuraCamFixed.Spot {

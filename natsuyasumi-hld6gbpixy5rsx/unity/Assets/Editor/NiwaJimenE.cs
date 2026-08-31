@@ -131,7 +131,7 @@ public static class NiwaJimenE {
         hira = Mathf.Max(hira, Hako(wx, wz, -1.3f, 1.3f, -7.5f, 8.5f, 1.0f));   // 庭の 踏み跡
         hira = Mathf.Max(hira, Hako(wx, wz, -4.6f, 4.6f, 3f, 16f, 1.0f));       // 家の 敷地
         hira = Mathf.Max(hira, Hako(wx, wz, -44f, 44f, -12.6f, -6.6f, 1.2f) * 0.85f); // 道
-        hira = Mathf.Max(hira, Hako(wx, wz, 11f, 31f, -16f, -2f, 2.0f));        // 高台と 坂
+        hira = Mathf.Max(hira, Hako(wx, wz, 12f, 28f, -5f, 9f, 2.5f));          // 高台
         // ★塀の 線は ほぼ 平ら（0.8）。塀は 1枚ずつ 固い ので、支柱の 間で 段が つくと
         //   垣根が こわれて 見える。2.5m間かくで 振幅20cm・波長7.7mだと 段が 19cm＝
         //   塀の 高さ87cmの 2割。0.8 平らに すれば 段は 6cmに おさまる
@@ -144,16 +144,28 @@ public static class NiwaJimenE {
         return 0.30f * soto * (1f - hira);
     }
 
+    // ---- 高台（本人 2026-08-31「先に高台の箱を直しておいて」）。
+    //   箱だと **垂直な 壁と まっすぐな 天**＝画面で いちばん 目立つ 直線に なる。
+    //   地ばんの 高さの 一部に して しまえば、地面の あみも 物の すわりも 影も 影の 形も
+    //   ぜんぶ 自動で ついてくる。坂も 別に 作らなくて よい（ふち全体が 21°の 土手）。
+    //   ★道（z -12.4〜-7）に かからない よう 北へ ずらす（道が 土手を 登って しまう）
+    public const float TX = 20f, TZ = 2f, TH = 3.4f;
+    static float Takadai(float wx, float wz) {
+        float dx = (wx - TX) / 7.5f, dz = (wz - TZ) / 6.0f;
+        return TH * (1f - Fuchi(0.42f, 1f, Mathf.Sqrt(dx * dx + dz * dz)));
+    }
+
     /// <summary>地ばんの 高さ</summary>
     public static float Takasa(float wx, float wz) {
+        float taka = Takadai(wx, wz);
         float a = Haba(wx, wz);
-        if (a < 0.001f) return 0f;
+        if (a < 0.001f) return taka;
         // ★Fbm を そのまま つかっては いけない（2026-08-31）。
         //   4段の 値ノイズは 理屈のうえでは 0〜0.94 だが、**実際の ばらつきは 標準偏差0.11**。
         //   (Fbm-0.5) を そのまま つかったら 高低差が 18cmしか 出なかった（狙いの 半分以下）。
         //   平均0.47 を 引いて 3.0倍する と ふつうに ±0.10、たまに ±0.30 に なる
-        return ((Fbm(wx * 0.13f, wz * 0.13f, 401) - 0.47f) * 3.0f
-                + (Fbm(wx * 0.42f, wz * 0.42f, 733) - 0.47f) * 1.05f) * a;
+        return taka + ((Fbm(wx * 0.13f, wz * 0.13f, 401) - 0.47f) * 3.0f
+                       + (Fbm(wx * 0.42f, wz * 0.42f, 733) - 0.47f) * 1.05f) * a;
     }
 
     // ---- 門の 外の 道の ふち。**焼いた 絵と 形の 両方で 同じ 式を つかう**ので
