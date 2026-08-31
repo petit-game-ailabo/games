@@ -54,10 +54,11 @@ public static class BuildNiwaPlayer {
         if (System.IO.File.Exists(htmlPath)) {
             string v = "?v=" + System.DateTime.Now.ToString("yyyyMMddHHmm");
             var html = System.IO.File.ReadAllText(htmlPath);
-            html = html.Replace(".loader.js\"", ".loader.js" + v + "\"")
-                       .Replace(".data\"", ".data" + v + "\"")
-                       .Replace(".framework.js\"", ".framework.js" + v + "\"")
-                       .Replace(".wasm\"", ".wasm" + v + "\"");
+            // ★圧縮を 入れると 名まえが .unityweb に なる。版数を つける さきも そちら
+            foreach (var e in new[] { ".loader.js", ".data.unityweb",
+                                      ".framework.js.unityweb", ".wasm.unityweb",
+                                      ".data", ".framework.js", ".wasm" })
+                if (html.Contains(e + "\"")) html = html.Replace(e + "\"", e + v + "\"");
             System.IO.File.WriteAllText(htmlPath, html);
         }
     }
