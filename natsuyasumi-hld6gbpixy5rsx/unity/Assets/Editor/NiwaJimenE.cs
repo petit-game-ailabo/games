@@ -266,7 +266,39 @@ public static class NiwaJimenE {
     /// <summary>絵を 敷く 板。**UVは 自分で 持つ**（2026-08-31）。
     /// Unityの Plane の UVの 向きに 頼ったら 奥と 手前が 逆に なり、
     /// 門の外の 道が 家の うしろに 出た。v=0 が z の 小さい ほう＝焼いた 絵の 並びと 同じ</summary>
-    public static Mesh Ita() { return Ami("JimenEIta", HABA, HABA, NAKA, 0.35f, 0f); }
+    /// <summary>一枚絵の 板。**ふちは 地ばんの 下へ もぐらせる**（2026-08-31）。
+    /// 本人「家の周囲と、その先とで 緑の線が 断絶されるタイミングがある」＝
+    /// 板を 5cm 浮かせて いた ので、その ふちが 段差の 線に なって いた。
+    /// もぐらせれば 段が 出ず、見える さかいは 絵と タイルが 一致する ところに なる</summary>
+    public static Mesh Ita() {
+        const float masu = 0.35f;
+        int n = Mathf.RoundToInt(HABA / masu);
+        var v = new Vector3[(n + 1) * (n + 1)];
+        var uv = new Vector2[v.Length];
+        for (int j = 0; j <= n; j++)
+            for (int i = 0; i <= n; i++) {
+                float lx = -HABA * 0.5f + HABA * i / n, lz = -HABA * 0.5f + HABA * j / n;
+                float wx = NAKA.x + lx, wz = NAKA.y + lz;
+                float d = Mathf.Min(HABA * 0.5f - Mathf.Abs(lx), HABA * 0.5f - Mathf.Abs(lz));
+                float uki = Mathf.Lerp(-0.15f, 0.05f, Fuchi(0f, 0.8f, d));
+                int k = j * (n + 1) + i;
+                v[k] = new Vector3(lx, Takasa(wx, wz) + uki, lz);
+                uv[k] = new Vector2(i / (float)n, j / (float)n);
+            }
+        var tri = new int[n * n * 6];
+        int t = 0;
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++) {
+                int a = j * (n + 1) + i, b = a + 1, c = a + n + 1, e = c + 1;
+                tri[t++] = a; tri[t++] = c; tri[t++] = e;
+                tri[t++] = a; tri[t++] = e; tri[t++] = b;
+            }
+        var m = new Mesh { name = "JimenEIta" };
+        if (v.Length > 65000) m.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        m.vertices = v; m.uv = uv; m.triangles = tri;
+        m.RecalculateNormals(); m.RecalculateBounds();
+        return m;
+    }
 
     /// <summary>庭の 地面の 絵を 焼いて、その テクスチャを 返す</summary>
     public static Texture2D Yaku(Transform root) {
@@ -435,18 +467,23 @@ public static class NiwaJimenE {
                     r += (s.r - r) * mj; g += (s.g - g) * mj; b += (s.b - b) * mj;
                 }
 
+                // ★ふちの 3mは むらを 消す。そとは むらの 無い タイルの 草なので、
+                //   消して おかないと 明暗の 差が 線に 見える
+                // 大きな むら（10mほどの ゆるい 明暗）。これが タイルの 目を いちばん こわす
+                float fchi = Fuchi(0f, 3.0f,
+                    Mathf.Min(HABA * 0.5f - Mathf.Abs(wx - NAKA.x),
+                              HABA * 0.5f - Mathf.Abs(wz - NAKA.y)));
                 // 夏の 焼け（日なたの 草は 黄みどりに なる）。一様な 緑の 面を こわす
                 float kare = Mathf.Max(
                                  Mathf.Clamp01((Fbm(wx * 0.075f, wz * 0.075f, 211) - 0.50f) * 3.0f),
                                  Mathf.Clamp01((taka - 0.015f) * 7f))            // 高みは 乾く
-                             * 0.62f * (1f - md);            // 土の 上では やらない
+                             * 0.62f * (1f - md) * fchi;     // 土の 上では やらない
                 if (kare > 0.004f) {
                     r += (r * 1.16f - r) * kare;
                     g += (g * 1.02f - g) * kare;
                     b += (b * 0.68f - b) * kare;
                 }
-                // 大きな むら（10mほどの ゆるい 明暗）。これが タイルの 目を いちばん こわす
-                float mura = 0.86f + Fbm(wx * 0.11f, wz * 0.11f, 7) * 0.30f;
+                float mura = 1f + (Fbm(wx * 0.11f, wz * 0.11f, 7) - 0.47f) * 0.62f * fchi;
                 buf[y * N + x] = new Color32(
                     (byte)Mathf.Clamp(r * mura, 0f, 255f),
                     (byte)Mathf.Clamp(g * mura, 0f, 255f),
