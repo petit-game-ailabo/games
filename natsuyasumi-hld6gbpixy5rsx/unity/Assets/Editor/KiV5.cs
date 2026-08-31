@@ -119,16 +119,28 @@ public static class KiV5 {
         //   ヨーが 90°/270° あたりの 板は 真横を 向いて 紙に 見える。
         //   0°か180°を もとに ±52° に かぎれば、いちばん 悪くても 正面から 52°＝
         //   板の はばの 62%は 見える。かたむき自体は 残す（影の 出かたに 効く）
-        const float YOKO = 52f;
+        //   ★さらに **幹から はなれる ほど なだらかに**（本人 2026-08-31
+        //     「木の葉の角度がまだおかしいかも。もっと角度の許容範囲を減らすか、あるいは
+        //       先っぽや幹から離れるほど、角度をなだらかにするとか工夫してみて」）。
+        //     外がわの 板は 空を 背に して 輪郭が 出る ので、かたむいて いると 紙に 見える。
+        //     幹の ちかくは 板どうしが 重なって 見えない ので かたむけて よい
+        float kiX, kiZ, kanR;         // みきの 位置と 枝の ひろがり
         void HaCards(Vector3 at, float rr, int n) {        // 枝先の 大量の 葉（world座標）
+            float soto = Mathf.Clamp01(
+                new Vector2(at.x - kiX, at.z - kiZ).magnitude / Mathf.Max(0.5f, kanR));
+            float yokoHaba = Mathf.Lerp(46f, 20f, soto);   // 幹ちかく46° → 先っぽ20°
+            float tateHaba = Mathf.Lerp(30f, 11f, soto);
+            float mawari   = Mathf.Lerp(25f, 14f, soto);
             for (int i = 0; i < n; i++) {
                 float cs = Random.Range(1.9f, 3.1f);
-                float yaw = (Random.value < 0.5f ? 0f : 180f) + Random.Range(-YOKO, YOKO);
+                float yaw = (Random.value < 0.5f ? 0f : 180f)
+                            + Random.Range(-yokoHaba, yokoHaba);
                 Tsumu(ha, nowKey, new CombineInstance {
                     mesh = Quad(),
                     transform = Matrix4x4.TRS(
                         at + Random.insideUnitSphere * rr,
-                        Quaternion.Euler(Random.Range(-32f, 32f), yaw, Random.Range(-25f, 25f)),
+                        Quaternion.Euler(Random.Range(-tateHaba, tateHaba), yaw,
+                                         Random.Range(-mawari, mawari)),
                         new Vector3(cs, cs * 0.8f, 1f)),
                 });
             }
@@ -137,6 +149,7 @@ public static class KiV5 {
         /// <summary>1本 植える。ybase＝根もとの 地めんの 高さ</summary>
         public void Ueru(float x, float ybase, float z, float h, float futosa) {
             nowKey = Key(x, z);
+            kiX = x; kiZ = z; kanR = h * 0.38f;   // 枝の ひろがりの めやす
             Moto.Add(new Vector4(x, ybase, z, futosa));
             float r0 = futosa * 0.5f;
             // みきの 背骨＝輪 9つ。ゆるく 湾曲、根もとは ひろがり、上に いくほど 細い
