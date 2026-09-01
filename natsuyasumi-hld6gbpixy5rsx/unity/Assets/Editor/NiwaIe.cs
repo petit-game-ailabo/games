@@ -141,9 +141,12 @@ public static class NiwaIe {
     ///     壁 1面を またぐ 汚れに ならない。面ごとに 明るさを ずらして 単調さを こわす
     ///   ・**軒下の 黒ずみ**：雨だれが たまる ところ。上の 0.35mを 暗く する
     ///   ・**2階は 下見板を 高く**（1.45m）。白い 面積が へって 昭和の 家に 近づく</summary>
+    /// <param name="koshiH">腰の 下見板の 高さ。**2階は 0**（参考写真の 2階は 腰板が 無く
+    /// 全面 モルタル）。1階も 0.55mの 低い 腰だけ。0.9mを 両階に まわして いたら
+    /// 濃い 木の 枠と あわさって 家ぜんたいが 暗く「シックで今風」に なって いた</param>
     static void Menkabe(string nm, float x0, float x1, float z0, float z1,
-                        float yBottom, float yTop, bool ni = false) {
-        float koshi = Mathf.Min(yBottom + (ni ? 1.45f : 0.9f), yTop);
+                        float yBottom, float yTop, float koshiH = 0.55f) {
+        float koshi = Mathf.Min(yBottom + koshiH, yTop);
         // 面ごとの しみ（0.86〜1.0 の あいだで ばらす）
         float shimi = 0.86f + 0.14f * Mathf.Abs(Mathf.Sin(menKazu * 2.399f));
         menKazu++;
@@ -238,11 +241,11 @@ public static class NiwaIe {
         // ★**東の 壁は 切りかきの 反対がわ なので z=ZS から ZN まで 通しで 立つ**。
         //   ここが 通って いる ことで「箱が 2つ」では なく「1つの 家の くぼみ」に 見える
         Menkabe("Ie_Higashi1", X1 - 0.08f, X1 + 0.08f, ZS, ZN, 0.06f, DOSHI);
-        Menkabe("Ie_Higashi2", X1 - 0.08f, X1 + 0.08f, ZM, ZN, DOSHI, NOKI, true);
+        Menkabe("Ie_Higashi2", X1 - 0.08f, X1 + 0.08f, ZM, ZN, DOSHI, NOKI, 0f);
         Menkabe("Ie_Kita1", X0, X1, ZN - 0.08f, ZN + 0.08f, YUKA - 0.06f, DOSHI);
-        Menkabe("Ie_Kita2", X0, X1, ZN - 0.08f, ZN + 0.08f, DOSHI, NOKI, true);
+        Menkabe("Ie_Kita2", X0, X1, ZN - 0.08f, ZN + 0.08f, DOSHI, NOKI, 0f);
         Menkabe("Ie_Nishi1", X0 - 0.08f, X0 + 0.08f, ZM, ZN, YUKA - 0.06f, DOSHI);
-        Menkabe("Ie_Nishi2", X0 - 0.08f, X0 + 0.08f, ZM, ZN, DOSHI, NOKI, true);
+        Menkabe("Ie_Nishi2", X0 - 0.08f, X0 + 0.08f, ZM, ZN, DOSHI, NOKI, 0f);
         // 切りかきの 内がわの 壁（玄関の 西）
         Menkabe("Ie_Kirikaki", KX - 0.08f, KX + 0.08f, ZS, ZM, 0.06f, GNOKI);
 
@@ -253,7 +256,7 @@ public static class NiwaIe {
         GarasuDo("Ie_Dei", 0f, KX, ZM, YUKA, DOSHI);
         Menkabe("Ie_MinamiOku", KX, X1, ZM - 0.08f, ZM + 0.08f, 0.06f, DOSHI);
         // 2階の 南面：まどを 2つ（下屋の 屋根の 上に 出る）
-        Menkabe("Ie_Minami2", X0, X1, ZM - 0.08f, ZM + 0.08f, DOSHI, NOKI, true);
+        Menkabe("Ie_Minami2", X0, X1, ZM - 0.08f, ZM + 0.08f, DOSHI, NOKI, 0f);
         Mado2("Ie_Mado2a", X0 + 0.9f, X0 + 2.7f, ZM - 0.10f);
         Mado2("Ie_Mado2b", 1.2f, 3.0f, ZM - 0.10f);
 
@@ -301,7 +304,10 @@ public static class NiwaIe {
             yEave = NOKI + 0.16f,
             rise = 1.25f,
             // 反り(sori)と 軒先の はね上げ(tipLift)は 寺社や 地主の 家の 意匠。ふつうの 家は まっすぐ
-            hipRun = 2.0f, tHip = 0.97f, sori = 1.0f, tipLift = 0.02f,
+            // ★軒の 出が **水平**だと 軒が 反って 見える（寺社の 反りと 同じ 形）。
+            //   本人「二階の屋根、なんか丸み帯びてる」。軒の 出 0.90m x 勾配(1.35/2.7)
+            //   ＝0.45m 下げて、流れと 同じ 勾配で つづける
+            hipRun = 2.0f, tHip = 0.97f, sori = 1.0f, tipLift = -0.45f,
             thick = 0.16f, texM = TM_KAWARA, nx = 12, nz = 8, rings = 11,
         };
         var honyaT = new GameObject("Ie_Honya").transform;
@@ -365,10 +371,8 @@ public static class NiwaIe {
                 new Vector3(eaveX * 2f, 0.11f, 0.12f), mKiM);
             Box("Ie_Toi_N", new Vector3(0f, yG, eaveN - 0.05f),
                 new Vector3(eaveX * 2f, 0.11f, 0.12f), mKiM);
-            // 竪樋（四すみ。地面まで おろす）
-            foreach (float x in new[] { -eaveX + 0.2f, eaveX - 0.2f })
-                Box("Ie_Tatedoi", new Vector3(x, yG * 0.5f, eaveS + 0.05f),
-                    new Vector3(0.09f, yG, 0.09f), mKiM);
+            // ★竪樋は 消した。軒先（壁から 0.9m 外）に 立てて いた ので
+            //   **空中に 浮いた 棒**に 見えて いた（本人「謎の棒が下に伸びてる」）
             // 垂木の 木口（南の 軒の 下。45cm ごとの こまかい 影の リズム）
             for (float x = -eaveX + 0.25f; x <= eaveX - 0.24f; x += 0.45f)
                 Box("Ie_Taruki", new Vector3(x, NOKI + 0.16f - 0.13f, eaveS + 0.16f),

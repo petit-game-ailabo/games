@@ -66,99 +66,76 @@ public static class NiwaKawara {
         return m;
     }
 
-    /// <summary>屋根の 面を なぞって 瓦を ならべる。sz=-1 が 南の 面、+1 が 北の 面</summary>
-    static void Men(List<CombineInstance> cis, HouseRoof.Opt o, int sz,
-                    Mesh hira, Mesh noki) {
-        // t を こまかく サンプルして **弧長**で 段を きる
-        const int N = 600;
-        var ts = new float[N + 1];
-        var p = new Vector2[N + 1];               // (z, y)
-        for (int i = 0; i <= N; i++) {
-            float t = Mathf.Lerp(-1f, 0.985f, i / (float)N);
-            ts[i] = t;
-            p[i] = new Vector2(sz * HouseRoof.HalfZ(o, t), HouseRoof.Y(o, t));
-        }
-        float acc = 0f, next = NOBE * 0.5f;
-        bool first = true;
-        for (int i = 1; i <= N; i++) {
-            acc += Vector2.Distance(p[i], p[i - 1]);
-            if (acc < next) continue;
-            next += NOBE;
-            float t = ts[i];
-            float hx = HouseRoof.HalfX(o, t) - HABA * 0.55f;
-            if (hx <= HABA) continue;                       // 棟の ちかくは 隅棟に ゆずる
-            // 面の 向き：のぼりの むきと 面の 法線
-            var a3 = new Vector3(0f, p[i - 1].y, p[i - 1].x);
-            var b3 = new Vector3(0f, p[i].y, p[i].x);
-            var nobori = (b3 - a3).normalized;
-            var hosen = Vector3.Cross(nobori, Vector3.right).normalized;
-            if (hosen.y < 0f) hosen = -hosen;
-            var rot = Quaternion.LookRotation(nobori, hosen);
-            int kazu = Mathf.FloorToInt(hx * 2f / HABA);
-            float x0 = -kazu * HABA * 0.5f + HABA * 0.5f;
-            for (int k = 0; k < kazu; k++) {
-                var pos = new Vector3(x0 + k * HABA, p[i].y, p[i].x);
-                cis.Add(new CombineInstance {
-                    mesh = first ? noki : hira,
-                    transform = Matrix4x4.TRS(pos, rot, Vector3.one),
-                });
-            }
-            first = false;
+    /// <summary>**軒先の 一列だけ** ならべる（2026-09-01・2版目）。
+    /// ★本人「瓦は、1300枚にしてる？全然立体感がない。…手前側の雨樋あたりが、波打ってるのが
+    ///   瓦の立体感出してるかも。この波打ちを一階の瓦の手前にも適用。逆に瓦を一枚一枚
+    ///   設置する意味ないから、ここは前のに戻そう」
+    ///   1300まい ならべても 面の 上では 25m先で つぶれて 見えなかった。効いて いたのは
+    ///   **軒先の 波うつ 輪郭**だけ。だから そこだけ 形で 作り、面は 絵に もどす。
+    ///   （労力と 効果が 合わない ところを 落とす。左右の はしの 抜けも これで 消える）</summary>
+    static void Nokinami(List<CombineInstance> cis, Mesh noki,
+                         Vector3 hidari, Vector3 migi, Quaternion rot) {
+        float haba = Vector3.Distance(hidari, migi);
+        int kazu = Mathf.Max(1, Mathf.RoundToInt(haba / HABA));
+        for (int k = 0; k < kazu; k++) {
+            float u = (k + 0.5f) / kazu;
+            cis.Add(new CombineInstance {
+                mesh = noki,
+                transform = Matrix4x4.TRS(Vector3.Lerp(hidari, migi, u), rot, Vector3.one),
+            });
         }
     }
 
     /// <summary>下屋（一方ながれの 平らな 面）に ふく。HouseRoof.Shed と 同じ 引数で 呼ぶ</summary>
     public static int Geya(Transform parent, string name, float x0, float x1,
                            float zIn, float zOut, float yIn, float yOut, Material mat) {
-        var hira = Ichimai(false);
         var noki = Ichimai(true);
         var cis = new List<CombineInstance>();
         var a = new Vector3(0f, yIn, zIn);
         var b = new Vector3(0f, yOut, zOut);
-        float len = Vector3.Distance(a, b);
         var nobori = (a - b).normalized;                 // 軒（外）から 棟（内）へ のぼる
         var hosen = Vector3.Cross(nobori, Vector3.right).normalized;
         if (hosen.y < 0f) hosen = -hosen;
         var rot = Quaternion.LookRotation(nobori, hosen);
-        int dan = Mathf.Max(1, Mathf.FloorToInt(len / NOBE));
-        int kazu = Mathf.Max(1, Mathf.FloorToInt((x1 - x0) / HABA));
-        float xs = (x0 + x1) * 0.5f - kazu * HABA * 0.5f + HABA * 0.5f;
-        for (int j = 0; j < dan; j++) {
-            float u = (j * NOBE + NOBE * 0.5f) / len;     // 軒がわ から
-            var pos = Vector3.Lerp(b, a, u);
-            for (int k = 0; k < kazu; k++)
-                cis.Add(new CombineInstance {
-                    mesh = j == 0 ? noki : hira,
-                    transform = Matrix4x4.TRS(new Vector3(xs + k * HABA, pos.y, pos.z),
-                                              rot, Vector3.one),
-                });
-        }
-        var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+        // 軒先に すこし かかる 位置へ
+        var moto = b + nobori * (NOBE * 0.45f);
+        Nokinami(cis, noki, new Vector3(x0, moto.y, moto.z), new Vector3(x1, moto.y, moto.z), rot);
+        int n = cis.Count;
+        var mesh = new Mesh();
         mesh.CombineMeshes(cis.ToArray(), true, true);
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
         go.AddComponent<MeshFilter>().sharedMesh = mesh;
         go.AddComponent<MeshRenderer>().sharedMaterial = mat;
-        Object.DestroyImmediate(hira); Object.DestroyImmediate(noki);
-        return cis.Count;
+        Object.DestroyImmediate(noki);
+        return n;
     }
 
-    /// <summary>屋根に 瓦を ふく。parent は HouseRoof.Build に わたした のと 同じ 入れもの</summary>
+    /// <summary>屋根の **軒先だけ** ならべる。parent は HouseRoof.Build と 同じ 入れもの</summary>
     public static int Fuku(Transform parent, HouseRoof.Opt o, Material mat, string name) {
-        var hira = Ichimai(false);
         var noki = Ichimai(true);
         var cis = new List<CombineInstance>();
-        Men(cis, o, -1, hira, noki);
-        Men(cis, o, +1, hira, noki);
-        if (cis.Count == 0) return 0;
-        var mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+        float t0 = -1f, t1 = -0.90f;
+        foreach (int sz in new[] { -1, 1 }) {
+            var a = new Vector3(0f, HouseRoof.Y(o, t0), sz * HouseRoof.HalfZ(o, t0));
+            var b = new Vector3(0f, HouseRoof.Y(o, t1), sz * HouseRoof.HalfZ(o, t1));
+            var nobori = (b - a).normalized;
+            var hosen = Vector3.Cross(nobori, Vector3.right).normalized;
+            if (hosen.y < 0f) hosen = -hosen;
+            var rot = Quaternion.LookRotation(nobori, hosen);
+            float hx = HouseRoof.HalfX(o, t0);
+            var moto = a + nobori * (NOBE * 0.45f);
+            Nokinami(cis, noki, new Vector3(-hx, moto.y, moto.z),
+                     new Vector3(hx, moto.y, moto.z), rot);
+        }
+        int n = cis.Count;
+        var mesh = new Mesh();
         mesh.CombineMeshes(cis.ToArray(), true, true);
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
         go.AddComponent<MeshFilter>().sharedMesh = mesh;
-        var mr = go.AddComponent<MeshRenderer>();
-        mr.sharedMaterial = mat;
-        Object.DestroyImmediate(hira); Object.DestroyImmediate(noki);
-        return cis.Count;
+        go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        Object.DestroyImmediate(noki);
+        return n;
     }
 }
