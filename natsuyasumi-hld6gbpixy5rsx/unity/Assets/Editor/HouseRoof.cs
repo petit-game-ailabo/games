@@ -35,7 +35,11 @@ public static class HouseRoof {
         public float hipRun = 1.50f; // 隅棟が 内へ 入る 長さ＝妻の 位置
         public float tHip = 0.49f;   // 隅棟の 天(0..1)。ここから 上が 切妻
         public float sori = 1.34f;   // 反り。1で まっすぐ、大きいほど 軒がわが ゆるむ
-        public float tipLift = 0.17f;// 軒先の はね上げ
+        public float tipLift = 0.17f;// 軒先の はね上げ（t*t なので **曲がる**）
+        // ★軒先を **直線で** 下げる（2026-09-02）。tipLift を 負に すると t*t の
+        //   放物線に なり、そこから 直線の 流れへ つながる ので **屋根が 波うつ**。
+        //   流れと 同じ 勾配で まっすぐ 下げたい ときは こちらを つかう
+        public float eaveDrop = 0f;  // 軒先の 下がり（t に 比例＝直線）
         public float thick = 0.20f;  // 屋根の 厚み（軒先の 小口）
         public float texM = 1.5f;    // 絵の 1くりかえし ＝ 何m（48px ÷ 32px/m）
         public int nx = 14, nz = 10; // 輪を 何点で きざむか
@@ -52,7 +56,7 @@ public static class HouseRoof {
         return o.az * (1f - t);
     }
     public static float Y(Opt o, float t) {
-        if (t <= 0f) return o.yEave + o.tipLift * t * t;   // 軒先だけ すこし 上がる
+        if (t <= 0f) return o.yEave + o.tipLift * t * t + o.eaveDrop * t;   // 軒先の 上下
         return o.yEave + o.rise * Mathf.Pow(t, o.sori);
     }
 

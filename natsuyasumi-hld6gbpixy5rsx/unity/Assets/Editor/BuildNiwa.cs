@@ -559,6 +559,8 @@ public static class BuildNiwa {
         // ---- 接地の影（いちばん さいごに。物が ぜんぶ 置かれて から 足もとに 敷く）
         NiwaJimen.Setchi(root);
         NiwaJimen.Ki(root, hayashi.Moto);
+        NiwaJimen.Uki(ie, "家");
+        NiwaJimen.Uki(root, "場面ぜんぶ");
         // 家は L字。**切りかき（家の 前の 空き地）に 影を 落とさない**よう 2つに 分けて 敷く
         //   実測：外接矩形で 敷いて いた ときは 切りかきの 芝生が 緑成分 110／
         //   同じ 奥ゆきの 庭 134＝18%も 暗かった

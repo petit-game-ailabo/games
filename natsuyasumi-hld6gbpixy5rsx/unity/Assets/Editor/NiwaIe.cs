@@ -307,7 +307,9 @@ public static class NiwaIe {
             // ★軒の 出が **水平**だと 軒が 反って 見える（寺社の 反りと 同じ 形）。
             //   本人「二階の屋根、なんか丸み帯びてる」。軒の 出 0.90m x 勾配(1.35/2.7)
             //   ＝0.45m 下げて、流れと 同じ 勾配で つづける
-            hipRun = 2.0f, tHip = 0.97f, sori = 1.0f, tipLift = -0.45f,
+            //   ★tipLift は t*t なので 負に すると **放物線に 垂れて 屋根が 波うつ**
+            //     （本人 2026-09-02「屋根がなんかウェーブしてる」）。直線で 下げる eaveDrop を つかう
+            hipRun = 2.0f, tHip = 0.97f, sori = 1.0f, tipLift = 0f, eaveDrop = 0.45f,
             thick = 0.16f, texM = TM_KAWARA, nx = 12, nz = 8, rings = 11,
         };
         var honyaT = new GameObject("Ie_Honya").transform;
@@ -317,7 +319,8 @@ public static class NiwaIe {
         // ★瓦は **1まいずつ 置く**（本人 2026-09-01「3Dでやるなら、瓦一枚ずつ
         //   配置してみるしかないんじゃない？」）。法線マップは 面の かたむきを だます だけで、
         //   **軒先の 輪郭は まっすぐな 線の まま**。屋根らしさの 大半は 波うつ 軒先が つくる
-        int nKawara = NiwaKawara.Fuku(honyaT, honya, mKawaraM, "Ie_KawaraFuki");
+        int nKawara = NiwaKawara.Fuku(honyaT, honya, mKawaraM, "Ie_KawaraFuki", TM_KAWARA);
+
 
         // 玄関の 屋根＝**母屋の 壁に とりつく 下屋**（独立した 屋根に しない）。
         // ★HouseRoof.Shed は zIn < zOut（zが ふえる 向き）で 呼ぶ ことが 前提。
@@ -332,7 +335,13 @@ public static class NiwaIe {
         // 下屋にも 1まいずつ ふく（いちばん 手前に あって 目に つく）
         nKawara += NiwaKawara.Geya(muki, "Ie_GeyaKawara", -X1 - 0.85f, -KX + 0.85f,
                                    -ZM + 0.05f, -ZS + 0.85f,
-                                   GNOKI + 0.55f + 0.02f, GNOKI + 0.05f + 0.02f, mKawaraM);
+                                   GNOKI + 0.55f + 0.02f, GNOKI + 0.05f + 0.02f, mKawaraM, TM_KAWARA);
+        {   // 軒瓦が 屋根板より 下・外に 出て いるかを **数で** 見はる
+            var rg = muki.Find("Ie_Geya").GetComponentInChildren<MeshRenderer>().bounds;
+            var rk = muki.Find("Ie_GeyaKawara").GetComponent<MeshRenderer>().bounds;
+            Debug.Log("[Probe] nokigawara shita e " + (rg.min.y - rk.min.y).ToString("F3") +
+                      "m soto e " + (rg.min.z - rk.min.z).ToString("F3") + "m");
+        }
 
         // ========== 棟瓦と 隅棟
         // ★屋根が のっぺり 見える 理由の ひとつは **棟が ただの 折れ目**だから。
@@ -387,9 +396,18 @@ public static class NiwaIe {
 
         // ========== 雨戸と 戸袋（ガラス戸の 西の はし）。昭和の 家の 顔
         {
-            float y0 = YUKA + 0.30f, y1 = YUKA + 1.95f;
-            // ★前は X0-0.42（壁より **外**）に 置いて いて 宙に 浮いて いた
-            //   （本人「浮いてる柱がある」）。ガラス戸の 西の はしの **内がわ**に 立てる
+            // ★戸袋は **石場まで おろす**。0.75mから 始めて いたら 下に すきまが のこり、
+            //   壁より 前へ 出て いる ぶん 下から のぞけて 浮いて 見えた
+            float y0 = YUKA - 0.06f, y1 = YUKA + 1.95f;
+            // ★浮きの 直し 2回目（2026-09-02）。1回目は X0-0.42＝**壁より 外**に 置いて いた。
+            //   内がわ（X0+0.42）へ 移した が、こんどは **戸袋の 下に 何も 無かった**
+            //   （ガラス戸の 腰板を X0+0.85 から 始めた ので、その 西の 0.85mが 空洞）。
+            //   機械検査（NiwaJimen.Uki）が Ie_Tobukuro を 拾って 分かった。
+            //   下の 腰板と 上の 小壁を 足して 壁として つなぐ
+            Kabe("Ie_TobukuroShita", X0, X0 + 0.85f, ZM - 0.06f, ZM + 0.06f,
+                 YUKA - 0.06f, y0 + 0.02f, TX_SHITAMI, 0.88f, koshiIro, "Koshi", TM_SHITAMI);
+            Kabe("Ie_TobukuroUe", X0, X0 + 0.85f, ZM - 0.06f, ZM + 0.06f,
+                 y1 + 0.12f, DOSHI, TX_KABE, 0.96f, Color.white, "Kabe", TM_KABE);
             Box("Ie_Tobukuro", new Vector3(X0 + 0.42f, (y0 + y1) * 0.5f, ZM - 0.13f),
                 new Vector3(0.84f, y1 - y0, 0.22f),
                 Fit("Koshi", TX_SHITAMI, 0.84f, y1 - y0, 0.88f, koshiIro, TM_SHITAMI));

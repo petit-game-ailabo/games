@@ -113,6 +113,41 @@ public static class NiwaJimen {
         return false;
     }
 
+    /// <summary>**宙に 浮いて いる 物**を さがす（2026-09-02）。
+    /// 本人「まだ浮いてる柱がある。再度確認して」＝目で さがすのを やめて 機械で 落とす。
+    /// 下が 0.45mより 高い のに、その 真下（XZが かさなる ところ）に 何も 無い ものを 出す</summary>
+    public static void Uki(Transform oya, string dare) {
+        var rs = new List<Renderer>();
+        foreach (var r in oya.GetComponentsInChildren<Renderer>())
+            if (r != null && r.enabled) rs.Add(r);
+        int n = 0;
+        var sb = new System.Text.StringBuilder();
+        foreach (var r in rs) {
+            var b = r.bounds;
+            if (b.min.y <= 0.45f) continue;                 // 地めんに ついて いる
+            bool sasae = false;
+            foreach (var o in rs) {
+                if (o == r) continue;
+                var c = o.bounds;
+                if (c.max.y < b.min.y - 0.12f) continue;    // ずっと 下＝ささえに ならない
+                if (c.min.y > b.min.y + 0.02f) continue;    // 自分より 上だけ
+                // ★**真下に かさなる 面積**が ある か。横で 接して いる だけは 支えに しない
+                float kx = Mathf.Min(c.max.x, b.max.x) - Mathf.Max(c.min.x, b.min.x);
+                float kz = Mathf.Min(c.max.z, b.max.z) - Mathf.Max(c.min.z, b.min.z);
+                if (kx <= 0.02f || kz <= 0.02f) continue;
+                float jibun = Mathf.Max(0.01f, (b.max.x - b.min.x) * (b.max.z - b.min.z));
+                if (kx * kz < jibun * 0.20f) continue;      // 2わり 以上 かさなって いる こと
+                sasae = true; break;
+            }
+            if (!sasae) {
+                n++;
+                if (n <= 20) sb.Append(" ").Append(r.transform.name)
+                               .Append(b.center.ToString("F1"));
+            }
+        }
+        Debug.Log("[Probe] うき " + dare + " " + n + "こ" + sb);
+    }
+
     /// <summary>四角い 影を 1つ 敷く（L字の 家など、外接矩形では 合わない もの）</summary>
     public static void Kaku(Transform root, string name, float x0, float x1, float z0, float z1,
                             float takasa) {
