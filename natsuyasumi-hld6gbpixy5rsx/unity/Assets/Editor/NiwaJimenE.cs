@@ -129,7 +129,7 @@ public static class NiwaJimenE {
         //   踏み跡を |x|<3.3 に したら **見えて いる 芝生の ほぼ 全部が 平ら**に なり、
         //   凸凹が まったく 出なかった
         hira = Mathf.Max(hira, Hako(wx, wz, -1.3f, 1.3f, -7.5f, 8.5f, 1.0f));   // 庭の 踏み跡
-        hira = Mathf.Max(hira, Hako(wx, wz, -6.0f, 9.5f, 0.5f, 12f, 1.2f));     // 家の 敷地（L字の 民家）
+        hira = Mathf.Max(hira, Hako(wx, wz, -6.5f, 6.5f, 1.5f, 13f, 1.2f));     // 家の 敷地（2階建て・南西を 切りかき）
         hira = Mathf.Max(hira, Hako(wx, wz, -44f, 44f, -12.6f, -6.6f, 1.2f) * 0.85f); // 道
         hira = Mathf.Max(hira, Hako(wx, wz, 10f, 32f, -8f, 12f, 2.5f));         // 高台
         // ★塀の 線は ほぼ 平ら（0.8）。塀は 1枚ずつ 固い ので、支柱の 間で 段が つくと

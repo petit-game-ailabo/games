@@ -131,10 +131,12 @@ public static class BuildNiwa {
         // ---- 玄関→門の 飛び石、くつぬぎ石、鉢
         for (int i = 0; i < 10; i++)
             KenneyKit.Put(root, (i % 2 == 0) ? "path_stone" : "path_stoneCircle",
-                new Vector3(Random.Range(-0.25f, 0.25f), 0.02f, 3.1f - i * 1.35f),
+                // 門(x=0)から 玄関(x=3.15)へ ゆるく 東へ 寄せる
+                new Vector3(NiwaIe.GENKAN_X * (1f - i / 9f) + Random.Range(-0.2f, 0.2f),
+                            0.02f, 2.0f - i * 1.15f),
                 Random.Range(-14f, 14f), 1.6f);
-                KenneyKit.Put(root, "pot_large", new Vector3(3.1f, 0f, 4.3f), 30f, 2f);
-        KenneyKit.Put(root, "pot_small", new Vector3(3.9f, 0f, 4.0f), 70f, 2f);
+                KenneyKit.Put(root, "pot_large", new Vector3(-3.4f, 0f, 4.2f), 30f, 2f);
+        KenneyKit.Put(root, "pot_small", new Vector3(-4.2f, 0f, 3.9f), 70f, 2f);
 
         // ---- 木（本人 2026-08-31「3Dで作った方の木で、葉っぱとかも作りこんでたやつを
         //   大量に配置してみてほしい」）。チューブ木v5＝KiV5（BuildMura から 取りだした）。
