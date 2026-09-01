@@ -251,7 +251,7 @@ public static class NiwaIe {
 
         // 母屋の 南面（切りかきに 面する ところ）＝部屋ごとに 開口を 分節
         //   オモテ(座敷) 3.6m ／ あいだの 壁 0.9m ／ デイ(居間) 4.5m は 玄関の うしろ
-        GarasuDo("Ie_Omote", X0, -0.9f, ZM, YUKA, DOSHI);
+        GarasuDo("Ie_Omote", X0 + 0.85f, -0.9f, ZM, YUKA, DOSHI);   // 西の はしは 戸袋
         Menkabe("Ie_Nakakabe", -0.9f, 0f, ZM - 0.08f, ZM + 0.08f, YUKA - 0.06f, DOSHI);
         GarasuDo("Ie_Dei", 0f, KX, ZM, YUKA, DOSHI);
         Menkabe("Ie_MinamiOku", KX, X1, ZM - 0.08f, ZM + 0.08f, 0.06f, DOSHI);
@@ -365,7 +365,13 @@ public static class NiwaIe {
             float eaveS = exZ - (ZN - ZM) * 0.5f - honyaEave; // 南の 軒先
             float eaveN = exZ + (ZN - ZM) * 0.5f + honyaEave;
             float eaveX = (X1 - X0) * 0.5f + honyaEave;
-            float yG = NOKI + 0.16f - 0.24f;                  // 樋の 高さ（屋根の 下）
+            // ★軒先の 高さは **屋根の 式から とる**（2026-09-02）。
+            //   軒の 反りを 直す ときに 軒先を 0.45m 下げた のに、樋と 垂木を もとの 高さの
+            //   まま のこして いた。屋根が 下がった ので 樋だけ 上に のこり、
+            //   **屋根を つきぬけた 棒**に 見えて いた（本人「上向きと下向きの2本の柱」）。
+            //   数字を 手で 2か所に 書くと こうなる。式から 引く
+            float yNoki = HouseRoof.Y(honya, -1f);            // 軒先の 高さ
+            float yG = yNoki - 0.13f;                         // 樋（軒先の すぐ 下）
             // 雨樋（南・北）
             Box("Ie_Toi_S", new Vector3(0f, yG, eaveS + 0.05f),
                 new Vector3(eaveX * 2f, 0.11f, 0.12f), mKiM);
@@ -375,18 +381,20 @@ public static class NiwaIe {
             //   **空中に 浮いた 棒**に 見えて いた（本人「謎の棒が下に伸びてる」）
             // 垂木の 木口（南の 軒の 下。45cm ごとの こまかい 影の リズム）
             for (float x = -eaveX + 0.25f; x <= eaveX - 0.24f; x += 0.45f)
-                Box("Ie_Taruki", new Vector3(x, NOKI + 0.16f - 0.13f, eaveS + 0.16f),
+                Box("Ie_Taruki", new Vector3(x, yNoki - 0.05f, eaveS + 0.18f),
                     new Vector3(0.07f, 0.09f, 0.34f), mKiM);
         }
 
         // ========== 雨戸と 戸袋（ガラス戸の 西の はし）。昭和の 家の 顔
         {
             float y0 = YUKA + 0.30f, y1 = YUKA + 1.95f;
-            Box("Ie_Tobukuro", new Vector3(X0 - 0.42f, (y0 + y1) * 0.5f, ZM - 0.16f),
-                new Vector3(0.84f, y1 - y0, 0.26f),
+            // ★前は X0-0.42（壁より **外**）に 置いて いて 宙に 浮いて いた
+            //   （本人「浮いてる柱がある」）。ガラス戸の 西の はしの **内がわ**に 立てる
+            Box("Ie_Tobukuro", new Vector3(X0 + 0.42f, (y0 + y1) * 0.5f, ZM - 0.13f),
+                new Vector3(0.84f, y1 - y0, 0.22f),
                 Fit("Koshi", TX_SHITAMI, 0.84f, y1 - y0, 0.88f, koshiIro, TM_SHITAMI));
-            Box("Ie_TobukuroYa", new Vector3(X0 - 0.42f, y1 + 0.07f, ZM - 0.16f),
-                new Vector3(0.96f, 0.10f, 0.34f), mKiM);
+            Box("Ie_TobukuroYa", new Vector3(X0 + 0.42f, y1 + 0.07f, ZM - 0.13f),
+                new Vector3(0.96f, 0.10f, 0.30f), mKiM);
         }
 
         // ========== くつぬぎ石（玄関の 前）
