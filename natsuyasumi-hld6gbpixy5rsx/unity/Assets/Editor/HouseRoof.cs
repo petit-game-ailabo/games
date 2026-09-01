@@ -79,7 +79,10 @@ public static class HouseRoof {
             m.SetVertices(v); m.SetUVs(0, uv);
             m.subMeshCount = tri.Length;
             for (int i = 0; i < tri.Length; i++) m.SetTriangles(tri[i], i);
-            m.RecalculateNormals(); m.RecalculateBounds();
+            m.RecalculateNormals();
+            // ★接線が 無いと 法線マップが でたらめに なる（2026-09-01）
+            m.RecalculateTangents();
+            m.RecalculateBounds();
             return m;
         }
         public bool Empty { get { return v.Count == 0; } }

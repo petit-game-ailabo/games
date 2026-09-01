@@ -72,6 +72,19 @@ public static class NiwaIe {
         }
         if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 1f - rough);
         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
+        // ★法線マップ（本人 2026-09-01「瓦がのっぺりなのも嫌だね」）。
+        //   DitherLit は もともと _BumpMap に 対応して いた のに つかって いなかった。
+        //   平らな 面に 凹凸の 影が つく＝日の むきで 表情が 変わる。のっぺりの 根本の 直し
+        string np = TEX + tex.Substring(0, tex.LastIndexOf('.')) + "_n.png";
+        var nt = AssetDatabase.LoadAssetAtPath<Texture2D>(np);
+        if (nt != null && m.HasProperty("_BumpMap")) {
+            m.SetTexture("_BumpMap", nt);
+            m.SetTextureScale("_BumpMap", tiling);
+            if (m.HasProperty("_BumpScale")) m.SetFloat("_BumpScale", 1.0f);
+            m.EnableKeyword("_NORMALMAP");
+        } else {
+            m.DisableKeyword("_NORMALMAP");
+        }
         return m;
     }
 
@@ -283,6 +296,28 @@ public static class NiwaIe {
         HouseRoof.Shed(muki, "Ie_Geya", -X1 - 0.85f, -KX + 0.85f,
                        -ZM + 0.05f, -ZS + 0.85f,
                        GNOKI + 0.55f, GNOKI + 0.05f, TM_KAWARA, mKawaraM, mKiM);
+
+        // ========== 棟瓦と 隅棟
+        // ★屋根が のっぺり 見える 理由の ひとつは **棟が ただの 折れ目**だから。
+        //   本ものは 棟に 瓦を 積むので、太い 線と その 影が 出る
+        {
+            float ax = honya.ax, az = honya.az, ev = honya.eave;
+            float yTop = honya.yEave + honya.rise;
+            float mx = ax - honya.hipRun;                 // 棟の 長さの 半分
+            float cz = (ZM + ZN) * 0.5f;
+            Box("Ie_Munegawara", new Vector3(0f, yTop + 0.11f, cz),
+                new Vector3(mx * 2f + 0.3f, 0.24f, 0.34f), mKawaraM);
+            // 隅棟＝棟の はしから 軒の かどへ 下る 4本
+            foreach (float sx in new[] { -1f, 1f })
+                foreach (float sz in new[] { -1f, 1f }) {
+                    var a = new Vector3(sx * mx, yTop + 0.06f, cz);
+                    var b = new Vector3(sx * (ax + ev) * 0.99f, honya.yEave + 0.10f,
+                                        cz + sz * (az + ev) * 0.99f);
+                    var go = Box("Ie_Sumimune", (a + b) * 0.5f,
+                                 new Vector3(0.26f, 0.18f, (b - a).magnitude), mKawaraM);
+                    go.transform.localRotation = Quaternion.LookRotation(b - a, Vector3.up);
+                }
+        }
 
         // ========== 軒まわりの 造作
         // ★遠くから 家を「家」に 見せるのは 壁の 絵より **軒の 線**。

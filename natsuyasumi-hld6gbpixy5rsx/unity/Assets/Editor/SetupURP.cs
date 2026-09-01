@@ -147,6 +147,22 @@ public static class SetupURP {
             //   ・**読みだし可**：一枚絵を 焼く ときに GetPixels32 で 中身を 読む
             {
                 string fn0 = System.IO.Path.GetFileNameWithoutExtension(path);
+                // 法線マップは 種類を まちがえると 色として 読まれて 効かない
+                if (fn0.EndsWith("_n") && path.Contains("/shashin/")) {
+                    var tin = AssetImporter.GetAtPath(path) as TextureImporter;
+                    if (tin != null && (tin.textureType != TextureImporterType.NormalMap
+                                        || !tin.mipmapEnabled)) {
+                        tin.textureType = TextureImporterType.NormalMap;
+                        tin.mipmapEnabled = true;
+                        tin.filterMode = FilterMode.Bilinear;
+                        tin.anisoLevel = 8;
+                        tin.wrapMode = TextureWrapMode.Repeat;
+                        tin.maxTextureSize = 2048;
+                        tin.SaveAndReimport();
+                        Debug.Log("[SetupURP] normal: " + path);
+                    }
+                    continue;
+                }
                 if (fn0.StartsWith("ji_") || fn0.StartsWith("niwa_jimen")
                     || path.Contains("/shashin/")) {
                     var tig = AssetImporter.GetAtPath(path) as TextureImporter;
