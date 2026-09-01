@@ -308,6 +308,10 @@ public static class NiwaIe {
         honyaT.SetParent(ie, false);
         honyaT.localPosition = new Vector3(0f, 0f, (ZM + ZN) * 0.5f);
         HouseRoof.Build(honyaT, honya, mKawaraM, mKiYane, null);
+        // ★瓦は **1まいずつ 置く**（本人 2026-09-01「3Dでやるなら、瓦一枚ずつ
+        //   配置してみるしかないんじゃない？」）。法線マップは 面の かたむきを だます だけで、
+        //   **軒先の 輪郭は まっすぐな 線の まま**。屋根らしさの 大半は 波うつ 軒先が つくる
+        int nKawara = NiwaKawara.Fuku(honyaT, honya, mKawaraM, "Ie_KawaraFuki");
 
         // 玄関の 屋根＝**母屋の 壁に とりつく 下屋**（独立した 屋根に しない）。
         // ★HouseRoof.Shed は zIn < zOut（zが ふえる 向き）で 呼ぶ ことが 前提。
@@ -319,6 +323,10 @@ public static class NiwaIe {
         HouseRoof.Shed(muki, "Ie_Geya", -X1 - 0.85f, -KX + 0.85f,
                        -ZM + 0.05f, -ZS + 0.85f,
                        GNOKI + 0.55f, GNOKI + 0.05f, TM_KAWARA, mKawaraM, mKiYane);
+        // 下屋にも 1まいずつ ふく（いちばん 手前に あって 目に つく）
+        nKawara += NiwaKawara.Geya(muki, "Ie_GeyaKawara", -X1 - 0.85f, -KX + 0.85f,
+                                   -ZM + 0.05f, -ZS + 0.85f,
+                                   GNOKI + 0.55f + 0.02f, GNOKI + 0.05f + 0.02f, mKawaraM);
 
         // ========== 棟瓦と 隅棟
         // ★屋根が のっぺり 見える 理由の ひとつは **棟が ただの 折れ目**だから。
@@ -381,6 +389,7 @@ public static class NiwaIe {
         Box("Ie_Kutsunugi", new Vector3(KX + 1.0f, 0.14f, ZS - 0.55f),
             new Vector3(1.2f, 0.28f, 0.75f), mIshi);
 
+        Debug.Log("[Probe] NiwaIe 瓦 " + nKawara + "まい");
         Debug.Log(string.Format(
             "[Probe] NiwaIe 2階建て {0}x{1}m の 四角から 南西{2}x{3}m を 切りかき／"
             + "玄関だけ 平屋／軒げた{4:F2}m 棟{5:F2}m",
