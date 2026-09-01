@@ -78,14 +78,23 @@ public static class NiwaIe {
     // 面の 大きさ(m)から 貼りかたを 決める（箱の UVは どの 面も 0〜1 なので、
     // 貼りかたが 1つだと 10mの 壁と 0.6mの 柱で 絵の こまかさが 15倍 ちがう）
     static readonly Dictionary<string, Material> fitCache = new Dictionary<string, Material>();
-    static Material Fit(string prefix, string tex, float w, float h, float rough, Color tint) {
+    static Material Fit(string prefix, string tex, float w, float h, float rough, Color tint,
+                        float tileM) {
         string k = prefix + "_" + Mathf.RoundToInt(w * 20) + "_" + Mathf.RoundToInt(h * 20);
         Material got;
         if (fitCache.TryGetValue(k, out got)) return got;
-        got = Mat("IeFit_" + k, tex, new Vector2(w / 1.5f, h / 1.5f), rough, tint);
+        got = Mat("IeFit_" + k, tex, new Vector2(w / tileM, h / tileM), rough, tint);
         fitCache[k] = got;
         return got;
     }
+
+    // ---- 絵と タイルの 大きさ（本人の 写真。実寸から 決めた）
+    //   瓦   … 1タイルに 12段。桟瓦の 働き寸法 0.235m → 2.8m
+    //   下見板 … 1タイルに 約7まい。板の 働き 0.20m → 1.4m
+    //   土壁・障子紙 … 模様が ない ので 大きさは 自由
+    const string TX_KAWARA = "shashin/ie_kawara.jpg", TX_KABE = "shashin/ie_kabe.jpg";
+    const string TX_SHITAMI = "shashin/ie_shitami.jpg", TX_SHOJI = "shashin/ie_shoji.jpg";
+    const float TM_KAWARA = 2.8f, TM_KABE = 2.0f, TM_SHITAMI = 1.4f, TM_SHOJI = 1.5f;
 
     static Transform ROOT;
     static Material mKiM, mIshi, mGarasu;
@@ -100,10 +109,11 @@ public static class NiwaIe {
     }
 
     static GameObject Kabe(string name, float x0, float x1, float z0, float z1,
-                           float y0, float y1, string tex, float rough, Color tint, string fitKey) {
+                           float y0, float y1, string tex, float rough, Color tint,
+                           string fitKey, float tileM) {
         var c = new Vector3((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, (z0 + z1) * 0.5f);
         var s = new Vector3(x1 - x0, y1 - y0, z1 - z0);
-        return Box(name, c, s, Fit(fitKey, tex, Mathf.Max(s.x, s.z), s.y, rough, tint));
+        return Box(name, c, s, Fit(fitKey, tex, Mathf.Max(s.x, s.z), s.y, rough, tint, tileM));
     }
 
     /// <summary>土壁＋腰の 下見板の 面（真壁づくり）。
@@ -112,17 +122,17 @@ public static class NiwaIe {
     static void Menkabe(string nm, float x0, float x1, float z0, float z1,
                         float yBottom, float yTop) {
         float koshi = Mathf.Min(yBottom + 0.9f, yTop);
-        Kabe(nm + "_Koshi", x0, x1, z0, z1, yBottom, koshi, "wood_beam.png", 0.88f,
-             koshiIro, "Koshi");
+        Kabe(nm + "_Koshi", x0, x1, z0, z1, yBottom, koshi, TX_SHITAMI, 0.88f,
+             koshiIro, "Koshi", TM_SHITAMI);
         if (yTop > koshi + 0.01f)
-            Kabe(nm + "_Kabe", x0, x1, z0, z1, koshi, yTop, "plaster_wall.png", 0.96f,
-                 Color.white, "Kabe");
+            Kabe(nm + "_Kabe", x0, x1, z0, z1, koshi, yTop, TX_KABE, 0.96f,
+                 Color.white, "Kabe", TM_KABE);
     }
 
     /// <summary>ガラスの 引き戸 1くぎり（腰板・ガラス・木の 桟・鴨居・敷居・小壁）</summary>
     static void GarasuDo(string nm, float x0, float x1, float z, float yFloor, float yTop) {
         Kabe(nm + "_Koshi", x0, x1, z - 0.06f, z + 0.06f, yFloor - 0.06f, yFloor + 0.32f,
-             "wood_beam.png", 0.88f, koshiIro, "Koshi");
+             TX_SHITAMI, 0.88f, koshiIro, "Koshi", TM_SHITAMI);
         for (float x = x0; x < x1 - 0.01f; x += 0.9f) {
             float xe = Mathf.Min(x + 0.9f, x1);
             Box(nm + "_Garasu", new Vector3((x + xe) * 0.5f, yFloor + 1.10f, z),
@@ -136,7 +146,7 @@ public static class NiwaIe {
             new Vector3(x1 - x0, 0.09f, 0.09f), mKiM);
         if (yTop > yFloor + 1.92f)
             Kabe(nm + "_Kokabe", x0, x1, z - 0.06f, z + 0.06f, yFloor + 1.92f, yTop,
-                 "plaster_wall.png", 0.96f, Color.white, "Kabe");
+                 TX_KABE, 0.96f, Color.white, "Kabe", TM_KABE);
     }
 
     /// <summary>2階の まど（腰高。ガラス＋木の 桟）</summary>
@@ -156,11 +166,13 @@ public static class NiwaIe {
     public static void Build(Transform ie) {
         ROOT = ie;
         fitCache.Clear();
-        var mKawaraM = Mat("IeKawaraMesh", "roof_tile.png", Vector2.one, 0.86f, Color.white);
+        var mKawaraM = Mat("IeKawaraMesh", TX_KAWARA, Vector2.one, 0.86f, Color.white);
         mKiM = Mat("IeKiMesh", "wood_beam.png", Vector2.one, 0.80f, Color.white);
         mIshi = Mat("IeIshi", "stone.png", new Vector2(3f, 1.4f), 0.95f, Color.white);
-        koshiIro = new Color(0.46f, 0.40f, 0.34f);
-        mGarasu = Mat("IeGarasu", "shoji_paper.png", Vector2.one, 0.25f,
+        // ★写真の 下見板は もともと 明るさ42（かなり 暗い）。前の ドット絵むけの
+        //   暗い 色補正(0.46,0.40,0.34)を のこすと 18＝まっ黒に なる
+        koshiIro = Color.white;
+        mGarasu = Mat("IeGarasu", TX_SHOJI, Vector2.one, 0.25f,
                       new Color(0.78f, 0.86f, 0.88f, 0.42f));
         mGarasu.SetFloat("_Surface", 1f); mGarasu.SetFloat("_Blend", 0f);
         mGarasu.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
@@ -172,19 +184,19 @@ public static class NiwaIe {
 
         // ========== 土台と 床
         Kabe("Ie_Ishiba", X0 - 0.1f, X1 + 0.1f, ZM - 0.1f, ZN + 0.1f, 0f, YUKA - 0.06f,
-             "stone.png", 0.95f, Color.white, "Ishi");
+             "stone.png", 0.95f, Color.white, "Ishi", 1.5f);
         Kabe("Ie_IshibaG", KX - 0.1f, X1 + 0.1f, ZS - 0.1f, ZM, 0f, 0.16f,
-             "stone.png", 0.95f, Color.white, "Ishi");
+             "stone.png", 0.95f, Color.white, "Ishi", 1.5f);
         // 母屋 1階：南の 3尺が 廊下、その おくが 座敷
         Kabe("Ie_Rouka", X0, X1, ZM, ZM + ROUKA, YUKA - 0.05f, YUKA,
-             "wood_floor.png", 0.75f, Color.white, "Yuka");
+             "wood_floor.png", 0.75f, Color.white, "Yuka", 1.5f);
         Kabe("Ie_Tatami", X0, X1, ZM + ROUKA, ZN, YUKA - 0.06f, YUKA, "tatami.png", 0.95f,
-             Color.white, "Tatami");
+             Color.white, "Tatami", 1.5f);
         // 玄関＝土間（床を 上げない）
-        Kabe("Ie_Doma", KX, X1, ZS, ZM, 0.02f, 0.12f, "ji_tsuchi.jpg", 1f, Color.white, "Doma");
+        Kabe("Ie_Doma", KX, X1, ZS, ZM, 0.02f, 0.12f, "ji_tsuchi.jpg", 1f, Color.white, "Doma", 2.25f);
         // 2階の 床
         Kabe("Ie_Yuka2", X0, X1, ZM, ZN, DOSHI - 0.14f, DOSHI, "wood_floor.png", 0.75f,
-             Color.white, "Yuka");
+             Color.white, "Yuka", 1.5f);
 
         // ========== 壁
         // ★**東の 壁は 切りかきの 反対がわ なので z=ZS から ZN まで 通しで 立つ**。
@@ -213,7 +225,7 @@ public static class NiwaIe {
         for (float x = X0; x < KX - 0.01f; x += 0.9f) {
             float xe = Mathf.Min(x + 0.9f, KX);
             Kabe("Ie_Shoji", x + 0.03f, xe - 0.03f, ZM + ROUKA - 0.04f, ZM + ROUKA + 0.04f,
-                 YUKA, YUKA + 1.80f, "shoji_paper.png", 0.90f, Color.white, "Shoji");
+                 YUKA, YUKA + 1.80f, TX_SHOJI, 0.90f, Color.white, "Shoji", TM_SHOJI);
             Box("Ie_ShojiSan", new Vector3(xe, YUKA + 0.90f, ZM + ROUKA - 0.05f),
                 new Vector3(0.05f, 1.80f, 0.05f), mKiM);
         }
@@ -221,7 +233,7 @@ public static class NiwaIe {
         // ========== 玄関（下屋。**平屋**。ここだけ 1階しか ない）
         Menkabe("Ie_GenkanKabe", KX, X1, ZS - 0.07f, ZS + 0.07f, 2.20f, GNOKI);
         Kabe("Ie_GenkanTo", KX + 0.15f, KX + 1.85f, ZS - 0.05f, ZS + 0.05f, 0.12f, 2.20f,
-             "wood_beam.png", 0.84f, new Color(0.55f, 0.47f, 0.38f), "Koshi");
+             TX_SHITAMI, 0.84f, new Color(1.35f, 1.20f, 1.00f), "GTo", TM_SHITAMI);
         Menkabe("Ie_GenkanWaki", KX + 1.85f, X1, ZS - 0.07f, ZS + 0.07f, 0.06f, 2.20f);
         foreach (float x in new[] { KX, X1 })
             Box("Ie_GenkanHashira", new Vector3(x, 1.25f, ZS),
@@ -254,7 +266,7 @@ public static class NiwaIe {
             rise = 1.25f,
             // 反り(sori)と 軒先の はね上げ(tipLift)は 寺社や 地主の 家の 意匠。ふつうの 家は まっすぐ
             hipRun = 2.0f, tHip = 0.97f, sori = 1.0f, tipLift = 0.02f,
-            thick = 0.16f, texM = 1.2f, nx = 12, nz = 8, rings = 11,
+            thick = 0.16f, texM = TM_KAWARA, nx = 12, nz = 8, rings = 11,
         };
         var honyaT = new GameObject("Ie_Honya").transform;
         honyaT.SetParent(ie, false);
@@ -270,7 +282,7 @@ public static class NiwaIe {
         muki.localRotation = Quaternion.Euler(0f, 180f, 0f);
         HouseRoof.Shed(muki, "Ie_Geya", -X1 - 0.85f, -KX + 0.85f,
                        -ZM + 0.05f, -ZS + 0.85f,
-                       GNOKI + 0.55f, GNOKI + 0.05f, 1.2f, mKawaraM, mKiM);
+                       GNOKI + 0.55f, GNOKI + 0.05f, TM_KAWARA, mKawaraM, mKiM);
 
         // ========== 軒まわりの 造作
         // ★遠くから 家を「家」に 見せるのは 壁の 絵より **軒の 線**。
@@ -302,7 +314,7 @@ public static class NiwaIe {
             float y0 = YUKA + 0.30f, y1 = YUKA + 1.95f;
             Box("Ie_Tobukuro", new Vector3(X0 - 0.42f, (y0 + y1) * 0.5f, ZM - 0.16f),
                 new Vector3(0.84f, y1 - y0, 0.26f),
-                Fit("Koshi", "wood_beam.png", 0.84f, y1 - y0, 0.88f, koshiIro));
+                Fit("Koshi", TX_SHITAMI, 0.84f, y1 - y0, 0.88f, koshiIro, TM_SHITAMI));
             Box("Ie_TobukuroYa", new Vector3(X0 - 0.42f, y1 + 0.07f, ZM - 0.16f),
                 new Vector3(0.96f, 0.10f, 0.34f), mKiM);
         }
