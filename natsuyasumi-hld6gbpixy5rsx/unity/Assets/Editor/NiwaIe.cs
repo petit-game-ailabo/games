@@ -34,13 +34,13 @@ public static class NiwaIe {
     public const float AZ = 3.6f;          // 梁間の 半分（7.2m＝4間）
     public const float YUKA = 0.45f;       // 床の 高さ（民家は 床を 上げる）
     public const float NOKI = 3.15f;       // 軒げたの 高さ
-    public const float ENGAWA = 1.25f;     // 縁側の 出
+    public const float ENGAWA = 1.25f;     // 内縁（廊下）の はば
     public const float DOMA_X = 2.0f;      // これより 東（+X）が 土間
     const float KOSHI = 0.95f;             // 腰壁（下見板）の 天
     const float HASHIRA = 0.135f;          // 見せる 柱の ふとさ
     const float KEN = 1.8f;                // 柱の 間かく＝1間
-    /// <summary>縁側の いちばん 南の はし（庭がわ）。とびいしを ここまで つなぐ</summary>
-    public const float MINAMI = -AZ - ENGAWA;
+    /// <summary>南の 外がわの 面（ガラス戸の 線）。とびいしを ここまで つなぐ</summary>
+    public const float MINAMI = -AZ;
 
     static Material Mat(string name, string tex, Vector2 tiling, float rough, Color tint) {
         System.IO.Directory.CreateDirectory(DIR);
@@ -114,15 +114,18 @@ public static class NiwaIe {
              "stone.png", 0.95f, Color.white, "Ishi");
 
         // ---------- 床（座敷＝畳／土間＝土。土間は 床を 上げない）
-        Kabe("Ie_Tatami", -AX, DOMA_X, -AZ, AZ, YUKA - 0.06f, YUKA, "tatami.png", 0.95f,
+        Kabe("Ie_Tatami", -AX, DOMA_X, -AZ + ENGAWA, AZ, YUKA - 0.06f, YUKA, "tatami.png", 0.95f,
              Color.white, "Tatami");
         Kabe("Ie_Doma", DOMA_X, AX, -AZ, AZ, 0.02f, 0.10f, "ji_tsuchi.jpg", 1f,
              Color.white, "Doma");
-        // 縁側（南の そとがわ。ぼくなつ1で 従妹が クラリネットを 吹く ところ）
-        Kabe("Ie_Engawa", -AX, DOMA_X, -AZ - ENGAWA, -AZ, YUKA - 0.05f, YUKA,
+        // ★内縁（廊下）。**外に むきだしの 縁側では ない**（本人 2026-09-01
+        //   「障子も、直接外に触れるような場所じゃなくて、ガラスの引き戸があって、
+        //     廊下があって、そのなかにあるイメージ」）。
+        //   じっさい 障子は 紙なので 雨に さらせない。外から
+        //   **ガラスの 引き戸 → 廊下（内縁）→ 障子 → 座敷** が 正しい ならび。
+        //   前の 版は 縁側を 外に 出し、障子を 外壁の 線に 置いて いた＝まちがい
+        Kabe("Ie_Rouka", -AX, DOMA_X, -AZ, -AZ + ENGAWA, YUKA - 0.05f, YUKA,
              "wood_floor.png", 0.75f, Color.white, "Yuka");
-        Box("Ie_EngawaHari", new Vector3((-AX + DOMA_X) * 0.5f, YUKA - 0.12f, -AZ - ENGAWA + 0.06f),
-            new Vector3(DOMA_X + AX, 0.14f, 0.12f), mKiM);
 
         // ---------- 壁（真壁づくり＝柱と 貫が 外に 見える）
         // おく（北）と 東西は 土壁＋腰の 下見板。南は 障子＋土間の 入口
@@ -136,19 +139,40 @@ public static class NiwaIe {
         Menkabe("Ie_Nishi", -AX - 0.08f, -AX + 0.08f, -AZ, AZ);
         Menkabe("Ie_Higashi", AX - 0.08f, AX + 0.08f, -AZ, AZ);
 
-        // 南＝**障子の ならび**（座敷がわ）。腰板の 上に 障子、その 上に 小壁
-        Kabe("Ie_MinamiKoshi", -AX, DOMA_X, -AZ - 0.06f, -AZ + 0.06f, YUKA - 0.06f, YUKA + 0.28f,
+        // 南の 外がわ＝**ガラスの 引き戸**。腰板の 上に ガラス、その 上に 小壁
+        var mGarasu = Mat("IeGarasu", "shoji_paper.png", new Vector2(1f, 1f), 0.25f,
+                          new Color(0.78f, 0.86f, 0.88f, 0.42f));
+        mGarasu.SetFloat("_Surface", 1f); mGarasu.SetFloat("_Blend", 0f);
+        mGarasu.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        mGarasu.SetOverrideTag("RenderType", "Transparent");
+        mGarasu.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        mGarasu.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        mGarasu.SetInt("_ZWrite", 0);
+        mGarasu.renderQueue = 3000;
+        Kabe("Ie_MinamiKoshi", -AX, DOMA_X, -AZ - 0.06f, -AZ + 0.06f, YUKA - 0.06f, YUKA + 0.32f,
              "wood_beam.png", 0.88f, koshiIro, "Koshi");
         for (float x = -AX; x < DOMA_X - 0.01f; x += 0.9f) {
             float x1 = Mathf.Min(x + 0.9f, DOMA_X);
-            Kabe("Ie_Shoji", x + 0.03f, x1 - 0.03f, -AZ - 0.05f, -AZ + 0.05f,
-                 YUKA + 0.28f, YUKA + 2.08f, "shoji_paper.png", 0.90f, Color.white, "Shoji");
-            // 障子の 桟（たて）
-            Box("Ie_ShojiSan", new Vector3(x1, YUKA + 1.18f, -AZ - 0.07f),
+            Box("Ie_Garasu", new Vector3((x + x1) * 0.5f, YUKA + 1.16f, -AZ),
+                new Vector3(x1 - x - 0.07f, 1.62f, 0.05f), mGarasu);
+            Box("Ie_SashTate", new Vector3(x1, YUKA + 1.16f, -AZ - 0.05f),
+                new Vector3(0.06f, 1.70f, 0.07f), mKiM);
+        }
+        Box("Ie_SashUe", new Vector3((-AX + DOMA_X) * 0.5f, YUKA + 1.99f, -AZ - 0.05f),
+            new Vector3(DOMA_X + AX, 0.10f, 0.09f), mKiM);
+        Box("Ie_SashShita", new Vector3((-AX + DOMA_X) * 0.5f, YUKA + 0.34f, -AZ - 0.05f),
+            new Vector3(DOMA_X + AX, 0.09f, 0.09f), mKiM);
+        Kabe("Ie_MinamiKokabe", -AX, DOMA_X, -AZ - 0.06f, -AZ + 0.06f, YUKA + 2.04f, NOKI,
+             "plaster_wall.png", 0.96f, Color.white, "Kabe");
+        // 障子は **廊下の おく**（内がわの しきり）。ガラス戸ごしに 見える
+        for (float x = -AX; x < DOMA_X - 0.01f; x += 0.9f) {
+            float x1 = Mathf.Min(x + 0.9f, DOMA_X);
+            Kabe("Ie_Shoji", x + 0.03f, x1 - 0.03f, -AZ + ENGAWA - 0.04f, -AZ + ENGAWA + 0.04f,
+                 YUKA, YUKA + 1.80f, "shoji_paper.png", 0.90f, Color.white, "Shoji");
+            Box("Ie_ShojiSan", new Vector3(x1, YUKA + 0.90f, -AZ + ENGAWA - 0.05f),
                 new Vector3(0.05f, 1.80f, 0.05f), mKiM);
         }
-        Kabe("Ie_MinamiKokabe", -AX, DOMA_X, -AZ - 0.06f, -AZ + 0.06f, YUKA + 2.08f, NOKI,
-             "plaster_wall.png", 0.96f, Color.white, "Kabe");
+
         // 土間の 入口（引き戸を 半分 あける）
         Kabe("Ie_DomaKabe", DOMA_X, AX, -AZ - 0.06f, -AZ + 0.06f, 2.10f, NOKI,
              "plaster_wall.png", 0.96f, Color.white, "Kabe");
@@ -175,24 +199,24 @@ public static class NiwaIe {
             eave = 0.95f,          // 軒の 出。日本家屋の 見えかたは ここの 影で 決まる
             yEave = NOKI + 0.18f,
             rise = 1.55f,          // 棟は 地面から 4.88m
-            hipRun = 1.30f, tHip = 0.46f, sori = 1.30f, tipLift = 0.15f,
+            // ★本人 2026-09-01「地主の家みたいな豪華な瓦屋根だけど、一般人の家って
+            //   もっとしょぼくない？」→ **反り(sori)と 軒先の はね上げ(tipLift)は
+            //   寺社や 地主の 家の 意匠**。ふつうの 家は まっすぐ。
+            //   隅棟も ぐっと 短く して ほぼ 切妻に する
+            hipRun = 0.5f, tHip = 0.14f, sori = 1.0f, tipLift = 0.02f,
             thick = 0.18f, texM = 1.2f,
             nx = 12, nz = 8, rings = 11,
         };
         HouseRoof.Build(ie, opt, mKawaraM, mKiM, null);
 
-        // 縁側の 上の 庇（下屋）。深い 軒が 縁側に 影を 落とす
-        // ★HouseRoof.Shed は **zIn < zOut（z が ふえる 向き）**で 呼ぶ ことを 前提に
-        //   面の まわりを 決めて いる（BuildHouse は 縁側が +Z がわ）。
-        //   この 家は 南が -Z なので そのまま 呼ぶと **面が 裏返り、瓦の はずが
-        //   軒天の 板に 見える**（HouseRoof.cs の 警告どおりの 失敗を した）。
-        //   180°まわした 子の 中で 組んで、向きを そろえる
+        // ★縁側の 上の 庇は 廃止。内縁に した ので 母屋の 深い 軒（0.95m）が
+        //   そのまま ガラス戸を おおう。庇を かさねると 二重に なって 豪華に 見える
+        // ★HouseRoof.Shed は **zIn < zOut（zが ふえる 向き）**で 呼ぶ ことが 前提。
+        //   南が -Z の この 家で そのまま 呼ぶと **面が 裏返り、瓦の はずが 軒天の 板に 見える**。
+        //   180°まわした 子の 中で 組んで 向きを そろえる
         var muki = new GameObject("Ie_Muki").transform;
         muki.SetParent(ie, false);
         muki.localRotation = Quaternion.Euler(0f, 180f, 0f);
-        HouseRoof.Shed(muki, "Ie_Hisashi", -DOMA_X - 0.2f, AX + 0.2f,
-                       AZ + 0.05f, AZ + ENGAWA + 0.55f,
-                       YUKA + 2.32f, YUKA + 1.92f, 1.2f, mKawaraM, mKiM);
 
         // ---------- 作業場（おじちゃんは 陶芸家。ぼくなつ1の 設定）
         {
@@ -219,7 +243,7 @@ public static class NiwaIe {
         }
 
         // ---------- くつぬぎ石（縁側の 前）
-        Box("Ie_Kutsunugi", new Vector3(-1.2f, 0.14f, -AZ - ENGAWA - 0.35f),
+        Box("Ie_Kutsunugi", new Vector3(-1.2f, 0.14f, -AZ - 0.55f),
             new Vector3(1.1f, 0.28f, 0.7f), mIshi);
 
         if (mKawara == null || mYuka == null || mTatami == null || mDoma == null

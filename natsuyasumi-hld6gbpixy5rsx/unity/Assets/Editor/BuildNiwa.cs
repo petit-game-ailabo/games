@@ -90,7 +90,7 @@ public static class BuildNiwa {
         ie.SetParent(root, false);
         // ★母屋＝**ぼくなつ1の 空野家**に 合わせた ふつうの 民家（10.8 x 7.2m の 平屋）。
         //   NiwaIe が 南（-Z）を 向いて 組む ので まわさない。
-        //   縁側の 南ばしが z=4 に 来る 位置に 置く（棟 4.88m が 画面に 入る 距離を かせぐ）
+        //   ガラス戸の 面が z=4 に 来る 位置に 置く（棟が 画面に 入る 距離を かせぐ）
         ie.position = new Vector3(0f, 0f, 4f - NiwaIe.MINAMI);
         NiwaIe.Build(ie);
 
