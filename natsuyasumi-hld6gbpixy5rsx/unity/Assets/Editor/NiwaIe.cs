@@ -245,10 +245,11 @@ public static class NiwaIe {
             new Vector3(X1 - X0 + 0.5f, 0.18f, 0.18f), mKiM);
 
         // ========== 屋根
+        const float honyaEave = 0.85f;
         // 母屋＝寄棟。棟は 地面から 6.35m
         var honya = new HouseRoof.Opt {
             ax = (X1 - X0) * 0.5f, az = (ZN - ZM) * 0.5f,
-            eave = 0.85f,
+            eave = honyaEave,
             yEave = NOKI + 0.16f,
             rise = 1.25f,
             // 反り(sori)と 軒先の はね上げ(tipLift)は 寺社や 地主の 家の 意匠。ふつうの 家は まっすぐ
@@ -270,6 +271,41 @@ public static class NiwaIe {
         HouseRoof.Shed(muki, "Ie_Geya", -X1 - 0.85f, -KX + 0.85f,
                        -ZM + 0.05f, -ZS + 0.85f,
                        GNOKI + 0.55f, GNOKI + 0.05f, 1.2f, mKawaraM, mKiM);
+
+        // ========== 軒まわりの 造作
+        // ★遠くから 家を「家」に 見せるのは 壁の 絵より **軒の 線**。
+        //   25m先だと 画面は 73px/m なので、10cmの 樋でも 7px＝ちゃんと 見える。
+        //   雨樋・鼻隠し・垂木の 木口は どれも 細いが、**横に 通る 線**として 効く
+        {
+            float exZ = (ZM + ZN) * 0.5f;                     // 母屋の 屋根の まん中
+            float eaveS = exZ - (ZN - ZM) * 0.5f - honyaEave; // 南の 軒先
+            float eaveN = exZ + (ZN - ZM) * 0.5f + honyaEave;
+            float eaveX = (X1 - X0) * 0.5f + honyaEave;
+            float yG = NOKI + 0.16f - 0.24f;                  // 樋の 高さ（屋根の 下）
+            // 雨樋（南・北）
+            Box("Ie_Toi_S", new Vector3(0f, yG, eaveS + 0.05f),
+                new Vector3(eaveX * 2f, 0.11f, 0.12f), mKiM);
+            Box("Ie_Toi_N", new Vector3(0f, yG, eaveN - 0.05f),
+                new Vector3(eaveX * 2f, 0.11f, 0.12f), mKiM);
+            // 竪樋（四すみ。地面まで おろす）
+            foreach (float x in new[] { -eaveX + 0.2f, eaveX - 0.2f })
+                Box("Ie_Tatedoi", new Vector3(x, yG * 0.5f, eaveS + 0.05f),
+                    new Vector3(0.09f, yG, 0.09f), mKiM);
+            // 垂木の 木口（南の 軒の 下。45cm ごとの こまかい 影の リズム）
+            for (float x = -eaveX + 0.25f; x <= eaveX - 0.24f; x += 0.45f)
+                Box("Ie_Taruki", new Vector3(x, NOKI + 0.16f - 0.13f, eaveS + 0.16f),
+                    new Vector3(0.07f, 0.09f, 0.34f), mKiM);
+        }
+
+        // ========== 雨戸と 戸袋（ガラス戸の 西の はし）。昭和の 家の 顔
+        {
+            float y0 = YUKA + 0.30f, y1 = YUKA + 1.95f;
+            Box("Ie_Tobukuro", new Vector3(X0 - 0.42f, (y0 + y1) * 0.5f, ZM - 0.16f),
+                new Vector3(0.84f, y1 - y0, 0.26f),
+                Fit("Koshi", "wood_beam.png", 0.84f, y1 - y0, 0.88f, koshiIro));
+            Box("Ie_TobukuroYa", new Vector3(X0 - 0.42f, y1 + 0.07f, ZM - 0.16f),
+                new Vector3(0.96f, 0.10f, 0.34f), mKiM);
+        }
 
         // ========== くつぬぎ石（玄関の 前）
         Box("Ie_Kutsunugi", new Vector3(KX + 1.0f, 0.14f, ZS - 0.55f),

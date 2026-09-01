@@ -26,6 +26,8 @@ public static class NiwaJimen {
     static readonly string[] NUKI = {
         "Jimen", "JimenE", "MichiSoto", "TakadaiMichi", "Sora", "Satoyama", "YamaToi", "Kumo",
         "BLK_", "Marisa", "Kage", "Cam", "Sun", "Day", "Volume", "Takadai",
+        "Ie",     // ★家は L字。外接矩形で 敷くと 切りかき（空き地）が 暗く なる
+                  //   → BuildNiwa が Kaku() で 2つに 分けて 敷く
         "KiMiki", "KiHa", "KiAtari",   // 木は 塊なので 1本ずつ Ki() で 敷く
     };
 
@@ -109,6 +111,31 @@ public static class NiwaJimen {
         string l = n.ToLowerInvariant();
         foreach (var k in MARUI) if (l.Contains(k)) return true;
         return false;
+    }
+
+    /// <summary>四角い 影を 1つ 敷く（L字の 家など、外接矩形では 合わない もの）</summary>
+    public static void Kaku(Transform root, string name, float x0, float x1, float z0, float z1,
+                            float takasa) {
+        var mat = KageMat();
+        if (mat == null) return;
+        float w = x1 - x0, d = z1 - z0;
+        float cx = (x0 + x1) * 0.5f, cz = (z0 + z1) * 0.5f;
+        float nori = Mathf.Clamp(0.10f + takasa * 0.06f, 0.14f, 0.38f);
+        float koi = Mathf.Clamp(0.20f + takasa * 0.025f, 0.20f, 0.33f);
+        float h0 = NiwaJimenE.Takasa(cx, cz);
+        var go = new GameObject("Kage_" + name);
+        go.transform.SetParent(root, false);
+        go.transform.position = new Vector3(cx, h0 + 0.05f, cz);
+        var ms = Ita(w, d, nori, koi);
+        var vs = ms.vertices;
+        for (int i = 0; i < vs.Length; i++)
+            vs[i].y = NiwaJimenE.Takasa(cx + vs[i].x, cz + vs[i].z) - h0;
+        ms.vertices = vs; ms.RecalculateBounds();
+        go.AddComponent<MeshFilter>().sharedMesh = ms;
+        var mr = go.AddComponent<MeshRenderer>();
+        mr.sharedMaterial = mat;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
     }
 
     /// <summary>木 1本ぶんの 影。林は メッシュを 結合して しまう ので 別に 敷く。
