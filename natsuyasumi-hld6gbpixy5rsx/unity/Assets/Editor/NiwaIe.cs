@@ -107,7 +107,9 @@ public static class NiwaIe {
     //   土壁・障子紙 … 模様が ない ので 大きさは 自由
     const string TX_KAWARA = "shashin/ie_kawara.jpg", TX_KABE = "shashin/ie_kabe.jpg";
     const string TX_SHITAMI = "shashin/ie_shitami.jpg", TX_SHOJI = "shashin/ie_shoji.jpg";
+    const string TX_KI = "shashin/ie_ki.jpg";
     const float TM_KAWARA = 2.8f, TM_KABE = 2.0f, TM_SHITAMI = 1.4f, TM_SHOJI = 1.5f;
+    const float TM_KI = 0.55f;   // 柱・枠の 木（たて目。板 1まいを 切って 90°まわした もの）
 
     static Transform ROOT;
     static Material mKiM, mIshi, mGarasu;
@@ -132,14 +134,30 @@ public static class NiwaIe {
     /// <summary>土壁＋腰の 下見板の 面（真壁づくり）。
     /// 腰板は **柱より ぐっと 暗く**（柿渋や すすで 黒に 近い 焦茶）。同じ 明るさだと
     /// 板の すじが 見えて いても 暗い かたまりに しか 読めない</summary>
+    static int menKazu;
+    /// <summary>土壁＋腰の 下見板の 面（真壁づくり）。
+    /// ★汚し（本人 2026-09-01「小綺麗すぎるかも、もっと汚いイメージ」）
+    ///   ・**面ごとに 大きな しみ**：絵の 中の たてすじは 2mの タイルに おさまる ので、
+    ///     壁 1面を またぐ 汚れに ならない。面ごとに 明るさを ずらして 単調さを こわす
+    ///   ・**軒下の 黒ずみ**：雨だれが たまる ところ。上の 0.35mを 暗く する
+    ///   ・**2階は 下見板を 高く**（1.45m）。白い 面積が へって 昭和の 家に 近づく</summary>
     static void Menkabe(string nm, float x0, float x1, float z0, float z1,
-                        float yBottom, float yTop) {
-        float koshi = Mathf.Min(yBottom + 0.9f, yTop);
+                        float yBottom, float yTop, bool ni = false) {
+        float koshi = Mathf.Min(yBottom + (ni ? 1.45f : 0.9f), yTop);
+        // 面ごとの しみ（0.86〜1.0 の あいだで ばらす）
+        float shimi = 0.86f + 0.14f * Mathf.Abs(Mathf.Sin(menKazu * 2.399f));
+        menKazu++;
+        var iro = new Color(shimi, shimi, shimi);
         Kabe(nm + "_Koshi", x0, x1, z0, z1, yBottom, koshi, TX_SHITAMI, 0.88f,
-             koshiIro, "Koshi", TM_SHITAMI);
-        if (yTop > koshi + 0.01f)
-            Kabe(nm + "_Kabe", x0, x1, z0, z1, koshi, yTop, TX_KABE, 0.96f,
-                 Color.white, "Kabe", TM_KABE);
+             iro, "Koshi", TM_SHITAMI);
+        if (yTop > koshi + 0.01f) {
+            float sumi = Mathf.Max(koshi, yTop - 0.35f);      // 軒下の 黒ずみ
+            Kabe(nm + "_Kabe", x0, x1, z0, z1, koshi, sumi, TX_KABE, 0.96f,
+                 iro, "Kabe", TM_KABE);
+            if (sumi < yTop - 0.01f)
+                Kabe(nm + "_Amadare", x0, x1, z0, z1, sumi, yTop, TX_KABE, 0.96f,
+                     new Color(shimi * 0.62f, shimi * 0.60f, shimi * 0.56f), "Kabe", TM_KABE);
+        }
     }
 
     /// <summary>ガラスの 引き戸 1くぎり（腰板・ガラス・木の 桟・鴨居・敷居・小壁）</summary>
@@ -179,8 +197,13 @@ public static class NiwaIe {
     public static void Build(Transform ie) {
         ROOT = ie;
         fitCache.Clear();
+        menKazu = 0;
         var mKawaraM = Mat("IeKawaraMesh", TX_KAWARA, Vector2.one, 0.86f, Color.white);
-        mKiM = Mat("IeKiMesh", "wood_beam.png", Vector2.one, 0.80f, Color.white);
+        // ★柱・枠は **たて目の 木**。下見板を そのまま 貼ると 木目が よこに 走る ので、
+        //   板 1まいを 切りだして 90°まわした 絵を つかう。柱は 木より 黒い（本人）
+        mKiM = Mat("IeKi", TX_KI, new Vector2(1f / TM_KI, 1f / TM_KI), 0.85f, Color.white);
+        // 屋根の メッシュの 木口・軒天は 大きな 面なので 別の 貼りかた
+        var mKiYane = Mat("IeKiYane", TX_KI, Vector2.one, 0.85f, Color.white);
         mIshi = Mat("IeIshi", "stone.png", new Vector2(3f, 1.4f), 0.95f, Color.white);
         // ★写真の 下見板は もともと 明るさ42（かなり 暗い）。前の ドット絵むけの
         //   暗い 色補正(0.46,0.40,0.34)を のこすと 18＝まっ黒に なる
@@ -215,11 +238,11 @@ public static class NiwaIe {
         // ★**東の 壁は 切りかきの 反対がわ なので z=ZS から ZN まで 通しで 立つ**。
         //   ここが 通って いる ことで「箱が 2つ」では なく「1つの 家の くぼみ」に 見える
         Menkabe("Ie_Higashi1", X1 - 0.08f, X1 + 0.08f, ZS, ZN, 0.06f, DOSHI);
-        Menkabe("Ie_Higashi2", X1 - 0.08f, X1 + 0.08f, ZM, ZN, DOSHI, NOKI);
+        Menkabe("Ie_Higashi2", X1 - 0.08f, X1 + 0.08f, ZM, ZN, DOSHI, NOKI, true);
         Menkabe("Ie_Kita1", X0, X1, ZN - 0.08f, ZN + 0.08f, YUKA - 0.06f, DOSHI);
-        Menkabe("Ie_Kita2", X0, X1, ZN - 0.08f, ZN + 0.08f, DOSHI, NOKI);
+        Menkabe("Ie_Kita2", X0, X1, ZN - 0.08f, ZN + 0.08f, DOSHI, NOKI, true);
         Menkabe("Ie_Nishi1", X0 - 0.08f, X0 + 0.08f, ZM, ZN, YUKA - 0.06f, DOSHI);
-        Menkabe("Ie_Nishi2", X0 - 0.08f, X0 + 0.08f, ZM, ZN, DOSHI, NOKI);
+        Menkabe("Ie_Nishi2", X0 - 0.08f, X0 + 0.08f, ZM, ZN, DOSHI, NOKI, true);
         // 切りかきの 内がわの 壁（玄関の 西）
         Menkabe("Ie_Kirikaki", KX - 0.08f, KX + 0.08f, ZS, ZM, 0.06f, GNOKI);
 
@@ -230,7 +253,7 @@ public static class NiwaIe {
         GarasuDo("Ie_Dei", 0f, KX, ZM, YUKA, DOSHI);
         Menkabe("Ie_MinamiOku", KX, X1, ZM - 0.08f, ZM + 0.08f, 0.06f, DOSHI);
         // 2階の 南面：まどを 2つ（下屋の 屋根の 上に 出る）
-        Menkabe("Ie_Minami2", X0, X1, ZM - 0.08f, ZM + 0.08f, DOSHI, NOKI);
+        Menkabe("Ie_Minami2", X0, X1, ZM - 0.08f, ZM + 0.08f, DOSHI, NOKI, true);
         Mado2("Ie_Mado2a", X0 + 0.9f, X0 + 2.7f, ZM - 0.10f);
         Mado2("Ie_Mado2b", 1.2f, 3.0f, ZM - 0.10f);
 
@@ -284,7 +307,7 @@ public static class NiwaIe {
         var honyaT = new GameObject("Ie_Honya").transform;
         honyaT.SetParent(ie, false);
         honyaT.localPosition = new Vector3(0f, 0f, (ZM + ZN) * 0.5f);
-        HouseRoof.Build(honyaT, honya, mKawaraM, mKiM, null);
+        HouseRoof.Build(honyaT, honya, mKawaraM, mKiYane, null);
 
         // 玄関の 屋根＝**母屋の 壁に とりつく 下屋**（独立した 屋根に しない）。
         // ★HouseRoof.Shed は zIn < zOut（zが ふえる 向き）で 呼ぶ ことが 前提。
@@ -295,7 +318,7 @@ public static class NiwaIe {
         muki.localRotation = Quaternion.Euler(0f, 180f, 0f);
         HouseRoof.Shed(muki, "Ie_Geya", -X1 - 0.85f, -KX + 0.85f,
                        -ZM + 0.05f, -ZS + 0.85f,
-                       GNOKI + 0.55f, GNOKI + 0.05f, TM_KAWARA, mKawaraM, mKiM);
+                       GNOKI + 0.55f, GNOKI + 0.05f, TM_KAWARA, mKawaraM, mKiYane);
 
         // ========== 棟瓦と 隅棟
         // ★屋根が のっぺり 見える 理由の ひとつは **棟が ただの 折れ目**だから。
