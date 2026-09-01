@@ -375,7 +375,10 @@ public static class HouseRoof {
             Vector3 b3 = pts[i + 1] + R[i + 1] + uDn, b4 = pts[i + 1] + L[i + 1] + uDn;
             float w = halfW * 2f / texM, h = (up + down) / texM;
             mb.Quad(a1, a2, b2, b1, new Vector2(0, acc), new Vector2(w, acc), new Vector2(w, acc + step), new Vector2(0, acc + step), s);       // 上
-            mb.Quad(a4, b4, b1, a1, new Vector2(0, acc), new Vector2(0, acc + step), new Vector2(h, acc + step), new Vector2(h, acc), s);       // 左
+            // ★左の 側面は 巻きが 逆で **裏返って いた**（2026-09-02）。カメラ側が 左面に なる
+            //   南西の 隅棟だけ 側面が 消え、帯の 幅ぶん 屋根が すけて 木が 見えた
+            //   （本人「透明で奥の木が見える空間がある」）。右面と 同じ 向きに そろえる
+            mb.Quad(a1, b1, b4, a4, new Vector2(h, acc), new Vector2(h, acc + step), new Vector2(0, acc + step), new Vector2(0, acc), s);       // 左
             mb.Quad(a2, a3, b3, b2, new Vector2(0, acc), new Vector2(h, acc), new Vector2(h, acc + step), new Vector2(0, acc + step), s);       // 右
             mb.Quad(a3, a4, b4, b3, new Vector2(0, acc), new Vector2(w, acc), new Vector2(w, acc + step), new Vector2(0, acc + step), s);       // 下
             acc += step;
