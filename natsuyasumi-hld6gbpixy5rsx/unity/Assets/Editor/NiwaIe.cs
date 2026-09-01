@@ -108,11 +108,17 @@ public static class NiwaIe {
     const string TX_KAWARA = "shashin/ie_kawara.jpg", TX_KABE = "shashin/ie_kabe.jpg";
     const string TX_SHITAMI = "shashin/ie_shitami.jpg", TX_SHOJI = "shashin/ie_shoji.jpg";
     const string TX_KI = "shashin/ie_ki.jpg";
+    // ★古い 家の 材質（2026-09-02・本人の 参考写真）。make_ie_yogore.py で 写真から こしらえる。
+    //   本人「引き続ききれいでおしゃれすぎる…家自体が古いので黒しみとか、色あせた感じになるはず」
+    const string TX_KABE_Y = "shashin/ie_kabe_yogore.jpg";   // 1階の 漆喰＝黄ばみ＋黒しみ
+    const string TX_ITAKABE = "shashin/ie_itakabe.jpg";      // 2階の 色あせた たて板
+    const string TX_TOBUKURO = "shashin/ie_tobukuro.jpg";    // 戸袋の 平らな 板（下見板では ない）
+    const float TM_ITAKABE = 1.0f, TM_TOBUKURO = 2.5f;
     const float TM_KAWARA = 2.8f, TM_KABE = 2.0f, TM_SHITAMI = 1.4f, TM_SHOJI = 1.5f;
     const float TM_KI = 0.55f;   // 柱・枠の 木（たて目。板 1まいを 切って 90°まわした もの）
 
     static Transform ROOT;
-    static Material mKiM, mIshi, mGarasu;
+    static Material mKiM, mIshi, mGarasu, mToi;
     static Color koshiIro;
 
     static GameObject Box(string name, Vector3 c, Vector3 s, Material m) {
@@ -154,12 +160,20 @@ public static class NiwaIe {
         Kabe(nm + "_Koshi", x0, x1, z0, z1, yBottom, koshi, TX_SHITAMI, 0.88f,
              iro, "Koshi", TM_SHITAMI);
         if (yTop > koshi + 0.01f) {
+            // ★2階（腰板なし）は **色あせた たて板**、1階は 黄ばんだ 漆喰に 黒しみ
+            //   （本人の 参考写真 2026-09-02。D-153「2階は 全面モルタル」は この 写真で 上書き）
+            bool ita = koshiH <= 0f;
+            string tx = ita ? TX_ITAKABE : TX_KABE_Y;
+            float tm = ita ? TM_ITAKABE : TM_KABE;
+            string fk = ita ? "Ita" : "KabeY";
+            // 2階の 板は 軒の 影に 入る うえ 雨だれの 帯も かかる ので、絵より 明るく かけて つりあわせる
+            var kabeIro = ita ? new Color(shimi * 1.22f, shimi * 1.18f, shimi * 1.10f)
+                              : new Color(shimi * 0.96f, shimi * 0.92f, shimi * 0.84f);
             float sumi = Mathf.Max(koshi, yTop - 0.35f);      // 軒下の 黒ずみ
-            Kabe(nm + "_Kabe", x0, x1, z0, z1, koshi, sumi, TX_KABE, 0.96f,
-                 iro, "Kabe", TM_KABE);
+            Kabe(nm + "_Kabe", x0, x1, z0, z1, koshi, sumi, tx, 0.96f, kabeIro, fk, tm);
             if (sumi < yTop - 0.01f)
-                Kabe(nm + "_Amadare", x0, x1, z0, z1, sumi, yTop, TX_KABE, 0.96f,
-                     new Color(shimi * 0.62f, shimi * 0.60f, shimi * 0.56f), "Kabe", TM_KABE);
+                Kabe(nm + "_Amadare", x0, x1, z0, z1, sumi, yTop, tx, 0.96f,
+                     new Color(kabeIro.r * 0.62f, kabeIro.g * 0.60f, kabeIro.b * 0.56f), fk, tm);
         }
     }
 
@@ -180,12 +194,14 @@ public static class NiwaIe {
             new Vector3(x1 - x0, 0.09f, 0.09f), mKiM);
         if (yTop > yFloor + 1.92f)
             Kabe(nm + "_Kokabe", x0, x1, z - 0.06f, z + 0.06f, yFloor + 1.92f, yTop,
-                 TX_KABE, 0.96f, Color.white, "Kabe", TM_KABE);
+                 TX_KABE_Y, 0.96f, new Color(0.96f, 0.92f, 0.84f), "KabeY", TM_KABE);
     }
 
     /// <summary>2階の まど（腰高。ガラス＋木の 桟）</summary>
-    static void Mado2(string nm, float x0, float x1, float z) {
-        float y0 = DOSHI + 0.75f, y1 = DOSHI + 1.95f;
+    /// <param name="tobukuroGawa">戸袋を つける がわ（-1 西・+1 東）</param>
+    static void Mado2(string nm, float x0, float x1, float z, float tobukuroGawa) {
+        // ★軒に かくれすぎて いた ので 0.3m 下げる（本人 2026-09-02）。上に 壁を 0.6m のこす
+        float y0 = DOSHI + 0.45f, y1 = DOSHI + 1.55f;
         Box(nm + "_Garasu", new Vector3((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, z),
             new Vector3(x1 - x0, y1 - y0, 0.05f), mGarasu);
         Box(nm + "_WakuU", new Vector3((x0 + x1) * 0.5f, y1 + 0.05f, z - 0.05f),
@@ -195,13 +211,35 @@ public static class NiwaIe {
         for (float x = x0; x <= x1 + 0.01f; x += (x1 - x0) * 0.5f)
             Box(nm + "_WakuT", new Vector3(x, (y0 + y1) * 0.5f, z - 0.05f),
                 new Vector3(0.07f, y1 - y0, 0.08f), mKiM);
+        // 雨戸の 戸袋（まどの 外がわ。本人「この辺りに雨戸を格納してるはずでは」）。
+        // 壁に とりつく ものなので 浮き検査(NiwaJimen.Uki)は 名まえの Kabetsuki で よける
+        float tx0 = tobukuroGawa < 0f ? x0 - 0.88f : x1 + 0.08f;
+        float tx1 = tx0 + 0.80f, th = y1 - y0 + 0.16f;
+        Box("Ie_Kabetsuki_Tobukuro2", new Vector3((tx0 + tx1) * 0.5f, (y0 + y1) * 0.5f, z - 0.08f),
+            new Vector3(0.80f, th, 0.20f),
+            Fit("Tobukuro", TX_TOBUKURO, 0.80f, th, 0.80f, Color.white, TM_TOBUKURO));
+        Box("Ie_Kabetsuki_Tobukuro2Ya", new Vector3((tx0 + tx1) * 0.5f, y1 + 0.12f, z - 0.08f),
+            new Vector3(0.92f, 0.08f, 0.28f), mKiM);
     }
+
+    /// <summary>呼び樋（軒の 樋から 壁の 竪樋へ ななめに もどす 管）</summary>
+    static void Yobitoi(string nm, Vector3 a, Vector3 b) {
+        var go = Box(nm, (a + b) * 0.5f, new Vector3(0.09f, 0.09f, (b - a).magnitude + 0.06f), mToi);
+        go.transform.localRotation = Quaternion.LookRotation(b - a, Vector3.up);
+    }
+
+    /// <summary>下屋の 屋根の 面の 高さ（Shed に わたした 数と 同じ 式）</summary>
+    static float GeyaY(float z) =>
+        Mathf.Lerp(GNOKI + 0.55f, GNOKI + 0.05f, Mathf.InverseLerp(ZM - 0.05f, ZS - 0.85f, z));
 
     public static void Build(Transform ie) {
         ROOT = ie;
         fitCache.Clear();
         menKazu = 0;
-        var mKawaraM = Mat("IeKawaraMesh", TX_KAWARA, Vector2.one, 0.86f, Color.white);
+        // ★瓦は 参考写真の とおり **黒っぽい 灰**に（2026-09-02）。灰みどりだと 新しく 見える
+        var mKawaraM = Mat("IeKawaraMesh", TX_KAWARA, Vector2.one, 0.86f, new Color(0.80f, 0.80f, 0.82f));
+        // 雨樋＝銅の 茶（参考写真）。木の 絵に 茶を 強く かける
+        mToi = Mat("IeToi", TX_KI, Vector2.one, 0.60f, new Color(1.45f, 1.12f, 0.90f));   // くすんだ 銅
         // ★柱・枠は **たて目の 木**。下見板を そのまま 貼ると 木目が よこに 走る ので、
         //   板 1まいを 切りだして 90°まわした 絵を つかう。柱は 木より 黒い（本人）
         mKiM = Mat("IeKi", TX_KI, new Vector2(1f / TM_KI, 1f / TM_KI), 0.85f, Color.white);
@@ -257,8 +295,8 @@ public static class NiwaIe {
         Menkabe("Ie_MinamiOku", KX, X1, ZM - 0.08f, ZM + 0.08f, 0.06f, DOSHI);
         // 2階の 南面：まどを 2つ（下屋の 屋根の 上に 出る）
         Menkabe("Ie_Minami2", X0, X1, ZM - 0.08f, ZM + 0.08f, DOSHI, NOKI, 0f);
-        Mado2("Ie_Mado2a", X0 + 0.9f, X0 + 2.7f, ZM - 0.10f);
-        Mado2("Ie_Mado2b", 1.2f, 3.0f, ZM - 0.10f);
+        Mado2("Ie_Mado2a", X0 + 0.9f, X0 + 2.7f, ZM - 0.10f, -1f);
+        Mado2("Ie_Mado2b", 1.2f, 3.0f, ZM - 0.10f, +1f);
 
         // 障子は 廊下の おく（内がわの しきり）。ガラス戸ごしに 見える
         for (float x = X0; x < KX - 0.01f; x += 0.9f) {
@@ -271,8 +309,9 @@ public static class NiwaIe {
 
         // ========== 玄関（下屋。**平屋**。ここだけ 1階しか ない）
         Menkabe("Ie_GenkanKabe", KX, X1, ZS - 0.07f, ZS + 0.07f, 2.20f, GNOKI);
-        Kabe("Ie_GenkanTo", KX + 0.15f, KX + 1.85f, ZS - 0.05f, ZS + 0.05f, 0.12f, 2.20f,
-             TX_SHITAMI, 0.84f, new Color(1.35f, 1.20f, 1.00f), "GTo", TM_SHITAMI);
+        // ★玄関は **ガラスの 引き戸**（本人 2026-09-02「田舎の扉は引き戸のイメージ」）。
+        //   板戸を 1まい 立てて いた のを、縁がわと 同じ 建具に そろえる
+        GarasuDo("Ie_GenkanTo", KX + 0.15f, KX + 1.85f, ZS, 0.12f, 2.20f);
         Menkabe("Ie_GenkanWaki", KX + 1.85f, X1, ZS - 0.07f, ZS + 0.07f, 0.06f, 2.20f);
         foreach (float x in new[] { KX, X1 })
             Box("Ie_GenkanHashira", new Vector3(x, 1.25f, ZS),
@@ -344,54 +383,55 @@ public static class NiwaIe {
         }
 
         // ========== 棟瓦と 隅棟
-        // ★屋根が のっぺり 見える 理由の ひとつは **棟が ただの 折れ目**だから。
-        //   本ものは 棟に 瓦を 積むので、太い 線と その 影が 出る
-        {
-            float ax = honya.ax, az = honya.az, ev = honya.eave;
-            float yTop = honya.yEave + honya.rise;
-            float mx = ax - honya.hipRun;                 // 棟の 長さの 半分
-            float cz = (ZM + ZN) * 0.5f;
-            Box("Ie_Munegawara", new Vector3(0f, yTop + 0.11f, cz),
-                new Vector3(mx * 2f + 0.3f, 0.24f, 0.34f), mKawaraM);
-            // 隅棟＝棟の はしから 軒の かどへ 下る 4本
-            foreach (float sx in new[] { -1f, 1f })
-                foreach (float sz in new[] { -1f, 1f }) {
-                    var a = new Vector3(sx * mx, yTop + 0.06f, cz);
-                    var b = new Vector3(sx * (ax + ev) * 0.99f, honya.yEave + 0.10f,
-                                        cz + sz * (az + ev) * 0.99f);
-                    var go = Box("Ie_Sumimune", (a + b) * 0.5f,
-                                 new Vector3(0.26f, 0.18f, (b - a).magnitude), mKawaraM);
-                    go.transform.localRotation = Quaternion.LookRotation(b - a, Vector3.up);
-                }
-        }
+        // ★ここに 置いて いた まっすぐな 箱の 隅棟は **消した**（2026-09-02）。
+        //   HouseRoof が 屋根の 式なりに 隅棟(H_Sumimune)と 棟(H_Mune)を 作って いる のに
+        //   二重に 置き、しかも 軒先を 0.45m 下げた あとも 箱は 昔の 角の 高さ(yEave+0.10)を
+        //   目ざして いた ので、**角で 屋根の 上に 浮いた 棒**に なって いた
+        //   （本人「まだ梁が飛び出してる」）
 
-        // ========== 軒まわりの 造作
+        // ========== 軒まわりの 造作（雨樋・竪樋・垂木）
         // ★遠くから 家を「家」に 見せるのは 壁の 絵より **軒の 線**。
-        //   25m先だと 画面は 73px/m なので、10cmの 樋でも 7px＝ちゃんと 見える。
-        //   雨樋・鼻隠し・垂木の 木口は どれも 細いが、**横に 通る 線**として 効く
         {
             float exZ = (ZM + ZN) * 0.5f;                     // 母屋の 屋根の まん中
             float eaveS = exZ - (ZN - ZM) * 0.5f - honyaEave; // 南の 軒先
             float eaveN = exZ + (ZN - ZM) * 0.5f + honyaEave;
             float eaveX = (X1 - X0) * 0.5f + honyaEave;
-            // ★軒先の 高さは **屋根の 式から とる**（2026-09-02）。
-            //   軒の 反りを 直す ときに 軒先を 0.45m 下げた のに、樋と 垂木を もとの 高さの
-            //   まま のこして いた。屋根が 下がった ので 樋だけ 上に のこり、
-            //   **屋根を つきぬけた 棒**に 見えて いた（本人「上向きと下向きの2本の柱」）。
-            //   数字を 手で 2か所に 書くと こうなる。式から 引く
-            float yNoki = HouseRoof.Y(honya, -1f);            // 軒先の 高さ
-            float yG = yNoki - 0.13f;                         // 樋（軒先の すぐ 下）
-            // 雨樋（南・北）
-            Box("Ie_Toi_S", new Vector3(0f, yG, eaveS + 0.05f),
-                new Vector3(eaveX * 2f, 0.11f, 0.12f), mKiM);
-            Box("Ie_Toi_N", new Vector3(0f, yG, eaveN - 0.05f),
-                new Vector3(eaveX * 2f, 0.11f, 0.12f), mKiM);
-            // ★竪樋は 消した。軒先（壁から 0.9m 外）に 立てて いた ので
-            //   **空中に 浮いた 棒**に 見えて いた（本人「謎の棒が下に伸びてる」）
-            // 垂木の 木口（南の 軒の 下。45cm ごとの こまかい 影の リズム）
+            float yNoki = HouseRoof.Y(honya, -1f);            // 軒先の 高さ（屋根の 式から）
+            // ★雨樋は **軒瓦の 先の 下**に つるす（2026-09-02）。前は 軒先の 内がわ z+0.05 に
+            //   置いて いた ので、軒瓦を 0.27m 外へ 出した とたん 瓦の うしろに かくれた。
+            //   樋・呼び樋は 軒から つるす ものなので 浮き検査は Kabetsuki で よける
+            float yG = yNoki - 0.18f;
+            Box("Ie_Kabetsuki_Toi_S", new Vector3(0f, yG, eaveS + 0.22f),
+                new Vector3(eaveX * 2f + 0.1f, 0.11f, 0.12f), mToi);
+            Box("Ie_Kabetsuki_Toi_N", new Vector3(0f, yG, eaveN - 0.22f),
+                new Vector3(eaveX * 2f + 0.1f, 0.11f, 0.12f), mToi);
+            // 竪樋（西の 角）：呼び樋で 壁まで もどして から 下ろす。
+            // ★前に 軒先（壁から 0.9m 外）に 立てて 浮いた（本人「謎の棒」）。壁ぎわに 立てる
+            var wa = new Vector3(-eaveX + 0.06f, yG, eaveS + 0.22f);
+            var wb = new Vector3(X0 - 0.14f, yG - 0.20f, ZM - 0.14f);
+            Yobitoi("Ie_Kabetsuki_Yobitoi_W", wa, wb);
+            Box("Ie_Tatetoi_W", new Vector3(wb.x, (wb.y + 0.06f) * 0.5f, wb.z),
+                new Vector3(0.09f, wb.y - 0.06f, 0.09f), mToi);
+            // 東の はしは 下屋の 屋根の 上へ 落とす（実際の 家でも そう する）
+            float xE = eaveX - 0.30f, zE = eaveS + 0.22f;
+            float yGe = GeyaY(zE) + 0.04f;
+            Box("Ie_Tatetoi_E", new Vector3(xE, (yG + yGe) * 0.5f, zE),
+                new Vector3(0.09f, yG - yGe, 0.09f), mToi);
+            // 垂木の 木口（南の 軒の 下。45cm ごとの こまかい 影の リズム）。瓦の 先より 内に おさめる
             for (float x = -eaveX + 0.25f; x <= eaveX - 0.24f; x += 0.45f)
-                Box("Ie_Taruki", new Vector3(x, yNoki - 0.05f, eaveS + 0.18f),
+                Box("Ie_Taruki", new Vector3(x, yNoki - 0.05f, eaveS + 0.02f),
                     new Vector3(0.07f, 0.09f, 0.34f), mKiM);
+
+            // 下屋の 雨樋と 竪樋（玄関の 角の 柱に そわせて 下ろす）
+            float gz = ZS - 0.85f - 0.22f;                    // 下屋の 軒先の 外
+            float gy = GNOKI + 0.05f - 0.30f;                 // 軒瓦の 先の 下
+            Box("Ie_Kabetsuki_Toi_G", new Vector3(((KX - 0.85f) + (X1 + 0.85f)) * 0.5f, gy, gz),
+                new Vector3(X1 - KX + 1.7f + 0.1f, 0.11f, 0.12f), mToi);
+            var ga = new Vector3(X1 + 0.80f, gy, gz);
+            var gb = new Vector3(X1 + 0.14f, gy - 0.15f, ZS - 0.14f);
+            Yobitoi("Ie_Kabetsuki_Yobitoi_G", ga, gb);
+            Box("Ie_Tatetoi_G", new Vector3(gb.x, (gb.y + 0.06f) * 0.5f, gb.z),
+                new Vector3(0.09f, gb.y - 0.06f, 0.09f), mToi);
         }
 
         // ========== 雨戸と 戸袋（ガラス戸の 西の はし）。昭和の 家の 顔
@@ -407,10 +447,11 @@ public static class NiwaIe {
             Kabe("Ie_TobukuroShita", X0, X0 + 0.85f, ZM - 0.06f, ZM + 0.06f,
                  YUKA - 0.06f, y0 + 0.02f, TX_SHITAMI, 0.88f, koshiIro, "Koshi", TM_SHITAMI);
             Kabe("Ie_TobukuroUe", X0, X0 + 0.85f, ZM - 0.06f, ZM + 0.06f,
-                 y1 + 0.12f, DOSHI, TX_KABE, 0.96f, Color.white, "Kabe", TM_KABE);
+                 y1 + 0.12f, DOSHI, TX_KABE_Y, 0.96f, new Color(0.96f, 0.92f, 0.84f), "KabeY", TM_KABE);
             Box("Ie_Tobukuro", new Vector3(X0 + 0.42f, (y0 + y1) * 0.5f, ZM - 0.13f),
                 new Vector3(0.84f, y1 - y0, 0.22f),
-                Fit("Koshi", TX_SHITAMI, 0.84f, y1 - y0, 0.88f, koshiIro, TM_SHITAMI));
+                // ★戸袋は 下見板では なく **平らな 板**（本人「雨戸なので、木じゃなくて、もっと違う材質」）
+                Fit("Tobukuro", TX_TOBUKURO, 0.84f, y1 - y0, 0.80f, Color.white, TM_TOBUKURO));
             Box("Ie_TobukuroYa", new Vector3(X0 + 0.42f, y1 + 0.07f, ZM - 0.13f),
                 new Vector3(0.96f, 0.10f, 0.30f), mKiM);
         }

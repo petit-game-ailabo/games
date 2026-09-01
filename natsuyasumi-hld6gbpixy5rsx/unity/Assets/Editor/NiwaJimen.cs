@@ -125,6 +125,9 @@ public static class NiwaJimen {
         foreach (var r in rs) {
             var b = r.bounds;
             if (b.min.y <= 0.45f) continue;                 // 地めんに ついて いる
+            // 壁や 軒に とりつく もの（2階の 戸袋・雨樋・呼び樋）は 下に 支えが なくて よい。
+            // 置く がわが 名まえに Kabetsuki を 入れて 宣言する（黙って 通さない）
+            if (r.name.Contains("Kabetsuki")) continue;
             bool sasae = false;
             foreach (var o in rs) {
                 if (o == r) continue;

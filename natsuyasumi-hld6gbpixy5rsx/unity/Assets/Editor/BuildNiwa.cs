@@ -211,11 +211,8 @@ public static class BuildNiwa {
         KusaMure(-7.6f, 8.6f, 2.2f, 10, 1.5f, 2.4f);             // ぬしの木の 根もと
         KusaMure(8.4f, 11.5f, 1.6f, 6, 1.5f, 2.2f);
         KusaMure(0f, -9.5f, 14f, 16, 1.2f, 2.0f);                // 道ばた
-        foreach (var f in new[] { "flower_redA", "flower_yellowA", "flower_purpleA" })
-            for (int i = 0; i < 4; i++)
-                KenneyKit.Put(root, f,
-                    new Vector3(Random.Range(1.6f, 4.2f), 0.01f, Random.Range(3.2f, 5.2f)),
-                    Random.Range(0f, 360f), 2f);
+        // ★玄関の 前の チューリップは 消した（本人 2026-09-02「チューリップが埋まってるので消しておいて」）。
+        //   地めんの 起伏に 半分 うまって いた うえ、古い 家に 花壇は 似あわない
         KenneyKit.Put(root, "rock_smallA", new Vector3(-4.4f, 0f, 4.6f), 20f, 2f);
         KenneyKit.Put(root, "rock_smallB", new Vector3(6.2f, 0f, -4.2f), 200f, 2f);
         KenneyKit.Put(root, "log", new Vector3(9.2f, 0f, 6.5f), 75f, 2f);
