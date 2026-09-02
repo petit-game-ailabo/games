@@ -524,6 +524,13 @@ public static class BuildNiwa {
             for (int i = 0; i < hayashi.Suji.Count; i++)
                 mu.miki.Add(new NiwaMushi.Miki { pts = hayashi.Suji[i], rad = hayashi.Futo[i] });
             mu.font = uiFont;
+            {   // 足もとの 影の 材質（接地影と 同じ Niwa/Kage）
+                string kp = "Assets/Art/Materials/Niwa/MushiKage.mat";
+                var km = AssetDatabase.LoadAssetAtPath<Material>(kp);
+                if (km == null) { km = new Material(Shader.Find("Niwa/Kage")); AssetDatabase.CreateAsset(km, kp); }
+                km.shader = Shader.Find("Niwa/Kage");
+                mu.kageZairyo = km;
+            }
             int e_ari = 0;
             foreach (var e in NiwaMushi.Shurui()) {
                 string d = "Assets/Art/Sprites/mushi/" + e.id;
