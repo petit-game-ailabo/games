@@ -31,6 +31,8 @@ public class NiwaMushi : MonoBehaviour {
         public Perch perch;
         public float haba;         // 絵の 板の 大きさ(m)
         public bool hiru, yoru;    // 出る 時間帯
+        public float minPx = 26f;  // 画面で これより 小さく ならない。★飛ぶ 虫は 小さくて よい（動きで 気づける）
+        public int omomi = 2;      // 出やすさ
         public Texture2D yoko, ue, naname;
         // ★材質は **組み立て時に BuildNiwa が 作って わたす**（主人公と 同じ やりかた・D-172）。
         //   実行時の Shader.Find は ビルドに 無い シェーダで null → 黙って Lit に 落ちて 黒い 四角に なった
@@ -47,7 +49,8 @@ public class NiwaMushi : MonoBehaviour {
     public List<Shu> shu = new List<Shu>();
     public List<Miki> miki = new List<Miki>();
     public Font font;
-    public int kazu = 12;                              // 同時に 居る 数
+    public int kazu = 9;                               // 同時に 居る 数
+    public int soraKazu = 2;                           // そのうち 飛ぶ 虫は ここまで
     public float kouho = 18f;                          // 主人公から この 半径の 中に 湧かせる
     public const float JIMEN_UKI = 0.13f;              // 見た目の 地面板は 当たりより 約0.10 上。これより 下は 板に かくれる
     public float minPx = 26f;                          // 板が 画面で これより 小さく ならない（実測：12px は 読めない）
@@ -59,14 +62,16 @@ public class NiwaMushi : MonoBehaviour {
             // ★大きさ（D-176・2026-09-03）：**実物の 2.5倍を 基本**に して、画面で minPx を 割らない よう
             //   距離に 応じて 底上げする。4倍で 固定して いたら 本人「家のサイズからしたら虫ってもっと
             //   ちっちゃいよね」。近い 虫は 小さく、遠い 虫は 読める 大きさが のこる
-            new Shu { id = "semi",     name = "あぶらぜみ",     perch = Perch.Miki,    haba = 0.20f, hiru = true },
-            new Shu { id = "kabuto",   name = "かぶとむし",     perch = Perch.Miki,    haba = 0.26f, hiru = true, yoru = true },
-            new Shu { id = "kuwagata", name = "のこぎりくわがた", perch = Perch.Miki,  haba = 0.23f, hiru = true, yoru = true },
-            new Shu { id = "tonbo",    name = "しおからとんぼ", perch = Perch.Sora,    haba = 0.28f, hiru = true },
-            new Shu { id = "oniyanma", name = "おにやんま",     perch = Perch.Sora,    haba = 0.36f, hiru = true },
-            new Shu { id = "chou",     name = "あげはちょう",   perch = Perch.Sora,    haba = 0.30f, hiru = true },
-            new Shu { id = "batta",    name = "しょうりょうばった", perch = Perch.Kusa, haba = 0.20f, hiru = true },
-            new Shu { id = "hotaru",   name = "ほたる",         perch = Perch.Shigemi, haba = 0.06f, yoru = true },
+            // ★飛ぶ 虫は 最小 16px、同時 2匹まで（D-179・本人「大きすぎてうっとおしいかも」）。
+            //   動く ものは 目が 拾う ので 小さくて 足りる。数も 実際の 庭なみに
+            new Shu { id = "semi",     name = "あぶらぜみ",     perch = Perch.Miki,    haba = 0.20f, hiru = true, minPx = 26f, omomi = 3 },
+            new Shu { id = "kabuto",   name = "かぶとむし",     perch = Perch.Miki,    haba = 0.26f, hiru = true, yoru = true, minPx = 26f, omomi = 2 },
+            new Shu { id = "kuwagata", name = "のこぎりくわがた", perch = Perch.Miki,  haba = 0.23f, hiru = true, yoru = true, minPx = 26f, omomi = 2 },
+            new Shu { id = "tonbo",    name = "しおからとんぼ", perch = Perch.Sora,    haba = 0.28f, hiru = true, minPx = 16f, omomi = 2 },
+            new Shu { id = "oniyanma", name = "おにやんま",     perch = Perch.Sora,    haba = 0.36f, hiru = true, minPx = 18f, omomi = 1 },
+            new Shu { id = "chou",     name = "あげはちょう",   perch = Perch.Sora,    haba = 0.30f, hiru = true, minPx = 16f, omomi = 2 },
+            new Shu { id = "batta",    name = "しょうりょうばった", perch = Perch.Kusa, haba = 0.20f, hiru = true, minPx = 24f, omomi = 2 },
+            new Shu { id = "hotaru",   name = "ほたる",         perch = Perch.Shigemi, haba = 0.06f, yoru = true, minPx = 10f, omomi = 3 },
         };
     }
 
@@ -118,9 +123,12 @@ public class NiwaMushi : MonoBehaviour {
 
     void Waku() {
         if (ikiteru.Count >= kazu) return;
-        var cand = shu.FindAll(s => Deru(s) && s.Sekai != null);
+        int sora = ikiteru.FindAll(x => x.shu.perch == Perch.Sora).Count;
+        var cand = shu.FindAll(x => Deru(x) && x.Sekai != null && (x.perch != Perch.Sora || sora < soraKazu));
         if (cand.Count == 0) return;
-        var s = cand[Random.Range(0, cand.Count)];
+        int total = 0; foreach (var c in cand) total += c.omomi;
+        int roll = Random.Range(0, total); Shu s = cand[0];
+        foreach (var c in cand) { roll -= c.omomi; if (roll < 0) { s = c; break; } }
         Hiki h;
         if (!Basho(s, out h)) return;
         Oku(h);
@@ -269,7 +277,7 @@ public class NiwaMushi : MonoBehaviour {
         if (cam != null) {
             float d = Vector3.Distance(cam.transform.position, h.go.transform.position);
             float pxPerM = (Screen.height * 0.5f) / (Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * Mathf.Max(0.1f, d));
-            hb = Mathf.Max(hb, minPx / pxPerM);
+            hb = Mathf.Max(hb, Mathf.Min(minPx, h.shu.minPx) / pxPerM);
         }
         h.ita.localScale = new Vector3(hb * h.fx, hb, 1f);
     }
