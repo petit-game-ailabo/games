@@ -10,12 +10,16 @@ using UnityEngine.UI;
 //   5cmの 虫は 画面で 5px＝見えない うえ、幹に 溶けて 消える。魔理沙と 同じ「絵」の 側に 置く。
 //   絵は 本人が Codex で 作った リアルな 画像を 切りぬいて 色数を 落とした もの
 //   （make_mushi.py・Assets/Art/Sprites/mushi/<種>_<向き>.png）。
-// ★大きさは 実物の **2.5倍**。カブト 78mm → 0.2m。画面 98px/m で 20px＝読める。
-// ★向き：
-//   ・幹に とまる 虫（セミ・カブト・クワガタ）は **幹の 面に 貼りつける**（ビルボードに しない）。
-//     カメラは 正面固定 なので、幹の 手前がわ ±60° の どこかに 置けば 見える。
-//   ・飛ぶ 虫・草の 虫は ビルボード（MuraBillboard）。上から 見た 絵を 出す
-//   ・ホタルは 夜だけ。絵は 小さく、光の 点で 見せる
+// ★大きさ（D-173）：幹の 暗い 虫は 実物の 4倍、飛ぶ 虫は 3倍。2.5倍では 樹皮の 傷と 見わけが つかなかった。
+// ★向きと 動き（2026-09-02・本人「クワガタ？がカメラに対して斜めで トンボが正面って意味わからん。
+//   動きも、もっと虫ごとに特徴あるよね」）：
+//   ・幹の 虫は **上から 見た 絵（背中）を 頭を 上に して 樹皮に 貼る**。横向きの 絵を 幹の 面に
+//     貼ると、正面の カメラからは ななめに ゆがんで 見えた。カブト・クワガタは ゆっくり 這う、
+//     セミは とまりっぱなしで ときどき 飛びさる
+//   ・飛ぶ 虫は 板を **うしろに 寝かせて 上前方から 見た 形**に し、頭を 進む 向きに あわせる。
+//     上から 見た 絵を カメラ正面に 向けると 壁に 貼った 標本に なる。
+//     トンボ＝すっと 飛んで 空中で 止まる／オニヤンマ＝一直線に 往復／チョウ＝羽ばたき＋ふらつき
+//   ・バッタは じっと して いて ときどき 放物線で 跳ぶ
 // ★近づいたら 寄りカード（画面の 右下に 大きな 絵と 名まえ）。カメラは 寄れない ので ここで 見せる
 public class NiwaMushi : MonoBehaviour {
     public enum Perch { Miki, Sora, Kusa, Shigemi }
@@ -25,15 +29,14 @@ public class NiwaMushi : MonoBehaviour {
         public string id;          // ファイル名の 頭（semi/kabuto/…）
         public string name;        // ひらがな
         public Perch perch;
-        public float haba;         // 絵の 板の 大きさ(m)。実物の 2.5倍で 絵の 余白こみ
+        public float haba;         // 絵の 板の 大きさ(m)
         public bool hiru, yoru;    // 出る 時間帯
         public Texture2D yoko, ue, naname;
-        // ★材質は **組み立て時に BuildNiwa が 作って わたす**（主人公と 同じ やりかた）。
-        //   実行時に Shader.Find("Natsuyasumi/PixelSprite") すると、そのシェーダが ビルドに
-        //   入って いない 場面では null → 黙って Lit（不透明）に 落ち、透明の ところが
-        //   **黒い 四角**に なった（2026-09-02）
+        // ★材質は **組み立て時に BuildNiwa が 作って わたす**（主人公と 同じ やりかた・D-172）。
+        //   実行時の Shader.Find は ビルドに 無い シェーダで null → 黙って Lit に 落ちて 黒い 四角に なった
         public Material zairyo;
-        public Texture2D Sekai { get { return perch == Perch.Miki || perch == Perch.Kusa ? (yoko ?? ue) : (ue ?? yoko); } }
+        // 世界で 出す 絵：幹と 空は 上から（背中）、草は 横
+        public Texture2D Sekai { get { return perch == Perch.Kusa ? (yoko ?? ue) : (ue ?? yoko); } }
         public Texture2D Card { get { return naname ?? yoko ?? ue; } }
     }
 
@@ -49,9 +52,6 @@ public class NiwaMushi : MonoBehaviour {
     /// <summary>種の 台帳。絵は 組み立て時に BuildNiwa が 入れる</summary>
     public static List<Shu> Shurui() {
         return new List<Shu> {
-            // ★大きさは 実測で 決めた（2026-09-02）。2.5倍（カブト 0.26m）だと 幹の 上で 12px＝
-            //   樹皮の 傷と 見わけが つかなかった。チョウ（0.32m）は 30〜60px で 読めた。
-            //   幹に とまる 暗い 虫は 4倍、飛ぶ 虫は 3倍 を めやすに
             new Shu { id = "semi",     name = "あぶらぜみ",     perch = Perch.Miki,    haba = 0.34f, hiru = true },
             new Shu { id = "kabuto",   name = "かぶとむし",     perch = Perch.Miki,    haba = 0.42f, hiru = true, yoru = true },
             new Shu { id = "kuwagata", name = "のこぎりくわがた", perch = Perch.Miki,  haba = 0.38f, hiru = true, yoru = true },
@@ -65,7 +65,13 @@ public class NiwaMushi : MonoBehaviour {
 
     class Hiki {
         public Shu shu; public GameObject go; public Transform ita;
-        public Vector3 home; public float phase; public Light hikari;
+        public Vector3 home, pos, target; public float phase, wait, t;
+        public Light hikari;
+        // 幹の 虫
+        public Miki miki; public float kakudo, takasa, kakudoV, takasaV; public bool sakasa;
+        // 飛ぶ 虫・跳ぶ 虫
+        public Vector3 heading = Vector3.forward; public int mode; public Vector3 lineA, lineB;
+        public bool tobisaru; public float tobiT;
     }
     readonly List<Hiki> ikiteru = new List<Hiki>();
     readonly Dictionary<string, Material> zairyo = new Dictionary<string, Material>();
@@ -88,7 +94,8 @@ public class NiwaMushi : MonoBehaviour {
         ikiteru.RemoveAll(h => h.go == null);
         timer -= Time.deltaTime;
         if (timer <= 0f) { timer = 1.2f; Waku(); Kataduke(); }
-        foreach (var h in ikiteru) Ugoku(h);
+        var cam = Camera.main;
+        foreach (var h in ikiteru) if (h.go != null) Ugoku(h, cam);
         Card();
     }
 
@@ -100,9 +107,9 @@ public class NiwaMushi : MonoBehaviour {
         var cand = shu.FindAll(s => Deru(s) && s.Sekai != null);
         if (cand.Count == 0) return;
         var s = cand[Random.Range(0, cand.Count)];
-        Vector3 at; Quaternion rot;
-        if (!Basho(s, out at, out rot)) return;
-        Oku(s, at, rot);
+        Hiki h;
+        if (!Basho(s, out h)) return;
+        Oku(h);
     }
 
     /// <summary>時間帯が 変わって 出ない 虫に なったら 消す（朝に ホタルは いない）</summary>
@@ -112,8 +119,8 @@ public class NiwaMushi : MonoBehaviour {
 
     Vector3 Origin { get { return player != null ? player.position : transform.position; } }
 
-    bool Basho(Shu s, out Vector3 at, out Quaternion rot) {
-        at = Vector3.zero; rot = Quaternion.identity;
+    bool Basho(Shu s, out Hiki h) {
+        h = new Hiki { shu = s, phase = Random.value * 10f };
         var o = Origin;
         for (int i = 0; i < 10; i++) {
             switch (s.perch) {
@@ -124,22 +131,27 @@ public class NiwaMushi : MonoBehaviour {
                     float dm = new Vector2(m.pts[0].x - o.x, m.pts[0].z - o.z).magnitude;
                     if (dm > kouho * 0.6f) continue;
                     if (Random.value < dm / (kouho * 0.6f) * 0.7f) continue;
-                    // 手前がわ ±40°（正面固定の カメラから 見える 面）
-                    if (!MikiNi(m, Random.Range(-40f, 40f), Random.Range(0.9f, 1.9f), out at, out rot)) continue;
+                    h.miki = m; h.kakudo = Random.Range(-25f, 25f); h.takasa = Random.Range(0.9f, 1.9f);
+                    h.sakasa = Random.value < 0.35f;
+                    Quaternion rot;
+                    if (!MikiNi(h, out h.pos, out rot)) continue;
+                    h.home = h.pos;
                     return true;
                 }
                 case Perch.Sora: {
                     var c = Random.insideUnitCircle * kouho * 0.7f;
-                    at = new Vector3(o.x + c.x, 0f, o.z + c.y);
+                    var at = new Vector3(o.x + c.x, 0f, o.z + c.y);
                     if (!Jimen(ref at)) continue;
                     at.y += Random.Range(1.0f, 2.0f);
+                    h.home = h.pos = h.target = at;
                     return true;
                 }
                 case Perch.Kusa: {
                     var c = Random.insideUnitCircle * kouho * 0.6f;
-                    at = new Vector3(o.x + c.x, 0f, o.z + c.y);
+                    var at = new Vector3(o.x + c.x, 0f, o.z + c.y);
                     if (!Jimen(ref at)) continue;
-                    at.y += s.haba * 0.45f;
+                    at.y += s.haba * 0.40f;
+                    h.home = h.pos = at;
                     return true;
                 }
                 default: {   // Shigemi＝夜の しげみ。木の 根もとの まわり
@@ -148,7 +160,7 @@ public class NiwaMushi : MonoBehaviour {
                     var ne = m.pts[0];
                     if (new Vector2(ne.x - o.x, ne.z - o.z).magnitude > kouho) continue;
                     var c = Random.insideUnitCircle.normalized * Random.Range(0.8f, 2.2f);
-                    at = new Vector3(ne.x + c.x, ne.y + 0.2f + Random.Range(0.3f, 1.2f), ne.z + c.y);
+                    h.home = h.pos = new Vector3(ne.x + c.x, ne.y + 0.2f + Random.Range(0.3f, 1.2f), ne.z + c.y);
                     return true;
                 }
             }
@@ -157,21 +169,23 @@ public class NiwaMushi : MonoBehaviour {
     }
 
     /// <summary>幹の 面に 貼る 位置と 向き。角度は 手前(-Z)を 0° として 左右へ。
-    /// 背骨の 輪を その 高さで 補間して **実際の 芯と 半径**を つかう</summary>
-    bool MikiNi(Miki m, float kakudo, float takasa, out Vector3 at, out Quaternion rot) {
+    /// 背骨の 輪を その 高さで 補間して **実際の 芯と 半径**を つかう。
+    /// 板の 見える 面（local -Z）を 外へ 向け、絵の 上（頭）を 幹の 上へ（sakasa なら 下へ）</summary>
+    bool MikiNi(Hiki h, out Vector3 at, out Quaternion rot) {
         at = Vector3.zero; rot = Quaternion.identity;
-        if (m.pts == null || m.pts.Length < 2) return false;
-        float y = m.pts[0].y + 0.2f + takasa;          // pts[0] は 地めんの 0.2m 下
+        var m = h.miki;
+        if (m == null || m.pts == null || m.pts.Length < 2) return false;
+        float y = m.pts[0].y + 0.2f + h.takasa;          // pts[0] は 地めんの 0.2m 下
         int i = 0;
         while (i < m.pts.Length - 2 && m.pts[i + 1].y < y) i++;
         float t = Mathf.InverseLerp(m.pts[i].y, m.pts[i + 1].y, y);
         var shin = Vector3.Lerp(m.pts[i], m.pts[i + 1], t);
         float r = Mathf.Lerp(m.rad[i], m.rad[i + 1], t) + 0.02f;
-        float a = kakudo * Mathf.Deg2Rad;
+        float a = h.kakudo * Mathf.Deg2Rad;
         var soto = new Vector3(Mathf.Sin(a), 0f, -Mathf.Cos(a));   // 幹から 外へ
         at = shin + soto * r;
-        // 板の 見える 面（local -Z）を 外へ 向ける＝forward は 幹の 中へ。少し 上を 向かせて 日を うける
-        rot = Quaternion.LookRotation(-soto, Vector3.up) * Quaternion.Euler(-12f, 0f, 0f);
+        rot = Quaternion.LookRotation(-soto, Vector3.up);
+        if (h.sakasa) rot = rot * Quaternion.Euler(0f, 0f, 180f);
         return true;
     }
 
@@ -182,10 +196,11 @@ public class NiwaMushi : MonoBehaviour {
         return true;
     }
 
-    void Oku(Shu s, Vector3 at, Quaternion rot) {
+    void Oku(Hiki h) {
+        var s = h.shu;
         var go = new GameObject("Mushi_" + s.id);
         go.transform.SetParent(transform, false);
-        go.transform.position = at;
+        go.transform.position = h.pos;
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Ita";
         Destroy(quad.GetComponent<Collider>());
@@ -195,9 +210,14 @@ public class NiwaMushi : MonoBehaviour {
         r.sharedMaterial = Zairyo(s);
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         go.layer = 2;
-        if (s.perch == Perch.Miki) go.transform.rotation = rot;
-        else go.AddComponent<MuraBillboard>();
-        var h = new Hiki { shu = s, go = go, ita = quad.transform, home = at, phase = Random.value * 10f };
+        h.go = go; h.ita = quad.transform;
+        if (s.perch == Perch.Miki) { Quaternion rot; if (MikiNi(h, out h.pos, out rot)) { go.transform.position = h.pos; go.transform.rotation = rot; } }
+        if (s.perch == Perch.Sora) {
+            h.mode = 0; if (h.wait <= 0f) h.wait = Random.Range(0.5f, 2f);
+            if (h.heading.sqrMagnitude < 0.01f) { var d0 = Random.insideUnitCircle.normalized; h.heading = new Vector3(d0.x, 0f, d0.y); }
+            if (s.id == "oniyanma") { var d = new Vector2(h.heading.x, h.heading.z).normalized; h.lineA = h.home + new Vector3(d.x, 0f, d.y) * 4f; h.lineB = h.home - new Vector3(d.x, 0f, d.y) * 4f; h.target = h.lineA; }
+        }
+        if (s.perch == Perch.Kusa) { if (h.wait <= 0f) h.wait = Random.Range(2f, 8f); if (h.heading.sqrMagnitude < 0.01f) h.heading = Random.value < 0.5f ? Vector3.left : Vector3.right; }
         if (s.id == "hotaru") {
             var lg = new GameObject("Hikari");
             lg.transform.SetParent(go.transform, false);
@@ -213,49 +233,163 @@ public class NiwaMushi : MonoBehaviour {
         if (s.zairyo != null) return s.zairyo;
         Material m;
         if (zairyo.TryGetValue(s.id, out m) && m != null) return m;
-        var sh = Shader.Find("Natsuyasumi/PixelSprite") ?? Shader.Find("Universal Render Pipeline/Lit");
-        m = new Material(sh);
-        var t = s.Sekai;
-        m.SetTexture("_BaseMap", t); m.mainTexture = t;
-        if (m.HasProperty("_Cutoff")) m.SetFloat("_Cutoff", 0.45f);
-        if (m.HasProperty("_BreatheAmp")) m.SetFloat("_BreatheAmp", 0f);
-        if (m.HasProperty("_SwayAmp")) m.SetFloat("_SwayAmp", 0f);
-        if (m.HasProperty("_HoleIgnore")) m.SetFloat("_HoleIgnore", 1f);   // 主人公の まわりの 穴で 消さない
-        if (m.HasProperty("_Wrap")) m.SetFloat("_Wrap", 0.7f);
+        m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        m.mainTexture = s.Sekai;
+        m.SetFloat("_AlphaClip", 1f); m.SetFloat("_Cutoff", 0.45f); m.EnableKeyword("_ALPHATEST_ON");
         zairyo[s.id] = m;
         return m;
     }
 
-    // ---------------------------------------------------------------- 動き（最小）
-    void Ugoku(Hiki h) {
-        float t = Time.time + h.phase;
+    // ---------------------------------------------------------------- 動き（虫ごと）
+    void Ugoku(Hiki h, Camera cam) {
+        float dt = Time.deltaTime, t = Time.time + h.phase;
         switch (h.shu.perch) {
-            case Perch.Miki:
-                // とまって いる。ときどき ほんの 少し ずれる（生きて いる 気配だけ）
-                h.go.transform.position = h.home + h.go.transform.right * Mathf.Sin(t * 0.6f) * 0.01f
-                                                 + Vector3.up * Mathf.Sin(t * 0.9f) * 0.008f;
-                break;
-            case Perch.Sora:
-                // ただよう。トンボは すっと 止まって また 動く
-                h.go.transform.position = h.home + new Vector3(Mathf.Sin(t * 0.8f) * 1.2f,
-                                                               Mathf.Sin(t * 1.7f) * 0.25f,
-                                                               Mathf.Cos(t * 0.6f) * 0.9f);
-                break;
-            case Perch.Kusa:
-                // ときどき はねる
-                float hop = Mathf.Max(0f, Mathf.Sin(t * 2.2f)) * Mathf.Max(0f, Mathf.Sin(t * 0.37f));
-                h.go.transform.position = h.home + Vector3.up * hop * 0.25f;
-                break;
+            case Perch.Miki: MikiUgoki(h, dt, t); break;
+            case Perch.Sora: SoraUgoki(h, cam, dt, t); break;
+            case Perch.Kusa: KusaUgoki(h, cam, dt, t); break;
             default:
-                h.go.transform.position = h.home + new Vector3(Mathf.Sin(t * 0.5f) * 0.6f,
-                                                               Mathf.Sin(t * 0.9f) * 0.3f,
-                                                               Mathf.Cos(t * 0.4f) * 0.6f);
+                h.pos = h.home + new Vector3(Mathf.Sin(t * 0.5f) * 0.6f, Mathf.Sin(t * 0.9f) * 0.3f, Mathf.Cos(t * 0.4f) * 0.6f);
+                h.go.transform.position = h.pos;
+                if (cam != null) h.go.transform.rotation = Quaternion.Euler(0f, cam.transform.eulerAngles.y, 0f);
                 if (h.hikari != null) {
                     float k = Mathf.Pow(Mathf.Clamp01(Mathf.Sin(t * 1.6f) * 0.5f + 0.5f), 3f);
                     h.hikari.intensity = 0.2f + k * 2.0f;
                 }
                 break;
         }
+    }
+
+    /// <summary>幹の 虫。セミ＝とまりっぱなし、ときどき 飛びさる。カブト・クワガタ＝ゆっくり 這う</summary>
+    void MikiUgoki(Hiki h, float dt, float t) {
+        if (h.tobisaru) {
+            // セミが 飛びさる：ななめ 上へ 速く。1.2秒で 消す
+            h.tobiT += dt;
+            h.pos += (Vector3.up * 2.5f + h.heading * 4f) * dt;
+            h.go.transform.position = h.pos;
+            h.go.transform.rotation = Quaternion.Euler(0f, h.go.transform.eulerAngles.y, Mathf.Sin(t * 40f) * 25f);
+            if (h.tobiT > 1.2f) Destroy(h.go);
+            return;
+        }
+        Vector3 at; Quaternion rot;
+        if (h.shu.id == "semi") {
+            h.wait -= dt;
+            if (h.wait <= 0f) {
+                if (Random.value < 0.15f) { h.tobisaru = true; h.heading = -h.go.transform.forward; h.heading.y = 0f; h.heading.Normalize(); return; }
+                h.wait = Random.Range(6f, 14f);
+            }
+            // 気配だけ：ほんの 少し ふるえる
+            if (!MikiNi(h, out at, out rot)) return;
+            h.pos = at;
+            h.go.transform.position = at + h.go.transform.right * Mathf.Sin(t * 0.7f) * 0.004f;
+            h.go.transform.rotation = rot;
+            return;
+        }
+        // カブト・クワガタ：這う → 止まる → 這う。上下 0.8〜2.1m の あいだを ゆっくり
+        h.wait -= dt;
+        if (h.wait <= 0f) {
+            if (h.takasaV == 0f && h.kakudoV == 0f) {
+                if (Random.value < 0.25f) h.sakasa = !h.sakasa;     // たまに 向きを 変える
+                h.takasaV = (h.sakasa ? -1f : 1f) * Random.Range(0.03f, 0.07f);
+                h.kakudoV = Random.Range(-4f, 4f);
+                h.wait = Random.Range(3f, 7f);
+            } else { h.takasaV = 0f; h.kakudoV = 0f; h.wait = Random.Range(2f, 6f); }
+        }
+        h.takasa += h.takasaV * dt; h.kakudo += h.kakudoV * dt;
+        if (h.takasa < 0.8f) { h.takasa = 0.8f; h.sakasa = false; h.takasaV = Mathf.Abs(h.takasaV); }
+        if (h.takasa > 2.1f) { h.takasa = 2.1f; h.sakasa = true; h.takasaV = -Mathf.Abs(h.takasaV); }
+        h.kakudo = Mathf.Clamp(h.kakudo, -35f, 35f);
+        if (!MikiNi(h, out at, out rot)) return;
+        float yure = h.takasaV != 0f ? Mathf.Sin(t * 9f) * 3f : 0f;   // 這って いる あいだ わずかに ゆれる
+        h.pos = at;
+        h.go.transform.position = at;
+        h.go.transform.rotation = rot * Quaternion.Euler(0f, 0f, yure);
+    }
+
+    /// <summary>飛ぶ 虫。板は うしろに 寝かせ、頭を 進む 向きへ</summary>
+    void SoraUgoki(Hiki h, Camera cam, float dt, float t) {
+        var s = h.shu;
+        if (s.id == "tonbo") {
+            // すっと 飛んで、空中で ぴたっと 止まる（ホバリング）
+            if (h.mode == 0) {
+                h.wait -= dt;
+                h.pos = h.target + new Vector3(Mathf.Sin(t * 7f) * 0.02f, Mathf.Sin(t * 11f) * 0.03f, 0f);
+                if (h.wait <= 0f) {
+                    var c = Random.insideUnitCircle * Random.Range(1.5f, 4f);
+                    h.target = h.home + new Vector3(c.x, Random.Range(-0.4f, 0.6f), c.y);
+                    h.mode = 1;
+                }
+            } else {
+                var d = h.target - h.pos; float dist = d.magnitude;
+                float sp = Mathf.Clamp(dist * 4f, 0.8f, 5f);
+                if (dist > 0.001f) h.heading = Vector3.Lerp(h.heading, d.normalized, 8f * dt).normalized;
+                h.pos += (dist > 0.001f ? d.normalized : Vector3.zero) * Mathf.Min(sp * dt, dist);
+                if (dist < 0.05f) { h.mode = 0; h.wait = Random.Range(1f, 3.5f); h.target = h.pos; }
+            }
+        } else if (s.id == "oniyanma") {
+            // 一直線に 往復（同じ 道を 見まわる）
+            var d = h.target - h.pos; float dist = d.magnitude;
+            if (dist > 0.001f) h.heading = Vector3.Lerp(h.heading, d.normalized, 4f * dt).normalized;
+            h.pos += (dist > 0.001f ? d.normalized : Vector3.zero) * Mathf.Min(3.2f * dt, dist);
+            h.pos.y = Mathf.Lerp(h.pos.y, h.home.y + 0.6f + Mathf.Sin(t * 1.3f) * 0.15f, 2f * dt);
+            if (dist < 0.1f) h.target = (h.target == h.lineA) ? h.lineB : h.lineA;
+        } else {
+            // チョウ：ふらふら。向きを ちょくちょく 変え、上下に ひらひら
+            h.wait -= dt;
+            if (h.wait <= 0f) {
+                h.wait = Random.Range(0.4f, 1.2f);
+                var c = Random.insideUnitCircle.normalized;
+                var kibou = new Vector3(c.x, 0f, c.y);
+                var modori = h.home - h.pos; modori.y = 0f;
+                if (modori.magnitude > 4f) kibou = (kibou + modori.normalized * 1.5f).normalized;
+                h.target = kibou;
+            }
+            if (h.target.sqrMagnitude > 0.01f) h.heading = Vector3.Lerp(h.heading, h.target, 3f * dt).normalized;
+            h.pos += h.heading * 0.8f * dt;
+            h.pos.y = h.home.y + Mathf.Sin(t * 3.1f) * 0.25f + Mathf.Sin(t * 0.7f) * 0.3f;
+            float hane = 0.30f + 0.70f * Mathf.Abs(Mathf.Sin(t * 14f));       // 羽ばたき＝板の 横幅の 伸び縮み
+            h.ita.localScale = new Vector3(s.haba * hane, s.haba, 1f);
+        }
+        h.go.transform.position = h.pos;
+        h.go.transform.rotation = SoraMuki(h, cam);
+    }
+
+    /// <summary>飛ぶ 虫の 板の 向き：カメラに 向けた 板を うしろに 寝かせ（上前方から 見た 形）、
+    /// 絵の 上（頭）が 進む 向きに なるよう 板の 面内で まわす</summary>
+    Quaternion SoraMuki(Hiki h, Camera cam) {
+        float yaw = cam != null ? cam.transform.eulerAngles.y : 0f;
+        var camRot = Quaternion.Euler(0f, yaw, 0f);
+        var R = camRot * Vector3.right; var F = camRot * Vector3.forward;
+        float a = Vector3.Dot(h.heading, R), b = Vector3.Dot(h.heading, F);
+        // 板を 寝かせると 絵の 上（頭）は F（画面の おく）を 向く。進む 向き (a,b) に あわせて 面内で まわす
+        float roll = -Mathf.Atan2(a, b) * Mathf.Rad2Deg;
+        float lean = h.shu.id == "chou" ? 50f : 58f;
+        return camRot * Quaternion.Euler(-lean, 0f, roll);
+    }
+
+    /// <summary>草の 虫（バッタ）：じっと して、ときどき 放物線で 跳ぶ</summary>
+    void KusaUgoki(Hiki h, Camera cam, float dt, float t) {
+        if (h.mode == 0) {
+            h.wait -= dt;
+            if (h.wait <= 0f) {
+                if (Random.value < 0.4f) h.heading = -h.heading;
+                var kib = h.pos + h.heading * Random.Range(0.4f, 0.9f);
+                if (Jimen(ref kib)) { kib.y += h.shu.haba * 0.40f; h.target = kib; h.lineA = h.pos; h.mode = 1; h.t = 0f; }
+                else h.wait = 2f;
+            }
+        } else {
+            h.t += dt / 0.55f;
+            float k = Mathf.Clamp01(h.t);
+            h.pos = Vector3.Lerp(h.lineA, h.target, k) + Vector3.up * (4f * k * (1f - k)) * 0.45f;
+            if (k >= 1f) { h.mode = 0; h.wait = Random.Range(3f, 9f); h.home = h.pos; }
+        }
+        h.go.transform.position = h.pos;
+        float yaw = cam != null ? cam.transform.eulerAngles.y : 0f;
+        var camRot = Quaternion.Euler(0f, yaw, 0f);
+        // 横向きの 絵。進む 向きに 左右を あわせる（板を 裏がえす）
+        float side = Vector3.Dot(h.heading, camRot * Vector3.right) < 0f ? -1f : 1f;
+        h.ita.localScale = new Vector3(h.shu.haba * side, h.shu.haba, 1f);
+        float pitch = h.mode == 1 ? -Mathf.Sin(Mathf.Clamp01(h.t) * Mathf.PI) * 25f * side : 0f;   // 跳ぶ あいだ 前へ かたむく
+        h.go.transform.rotation = camRot * Quaternion.Euler(0f, 0f, pitch);
     }
 
     // ---------------------------------------------------------------- 寄りカード
@@ -292,6 +426,7 @@ public class NiwaMushi : MonoBehaviour {
         if (cardGrp == null || player == null) return;
         Hiki chikai = null; float best = 1.7f;
         foreach (var h in ikiteru) {
+            if (h.go == null) continue;
             float d = Vector3.Distance(h.go.transform.position, player.position + Vector3.up * 0.9f);
             if (d < best) { best = d; chikai = h; }
         }
@@ -306,11 +441,26 @@ public class NiwaMushi : MonoBehaviour {
     }
 
     // ---------------------------------------------------------------- 撮影用（-mushi）
+    // tour の テレポート(1.5s)の あと 2.0s で 置き、撮影(2.9s)の 直前 2.85s で 画面座標を ログ
+    int logGamen; bool debugOita;
+    void LateUpdate() {
+        if (debugMushi && !debugOita && Time.time >= 2.0f) { debugOita = true; DebugOki(); }
+        if (debugMushi && debugOita && logGamen == 0 && Time.time >= 2.85f) logGamen = 1;
+        if (logGamen <= 0) return;
+        var c = Camera.main; if (c == null) return;
+        var sb = new System.Text.StringBuilder();
+        foreach (var h in ikiteru) {
+            if (h.go == null) continue;
+            var p = h.go.transform.position; var sp = c.WorldToScreenPoint(p);
+            sb.Append(h.shu.id).Append(" w").Append(p.ToString("F1")).Append(" s(").Append((int)sp.x).Append(",").Append((int)(Screen.height - sp.y)).Append(",").Append(sp.z.ToString("F0")).Append(") ");
+        }
+        Debug.Log("[Probe] NiwaMushi gamen t=" + Time.time.ToString("F2") + " " + MuraCamFixed.PlaceName + " " + sb);
+        logGamen = -1;
+    }
+
     /// <summary>決まった 場所に 決まった 虫を 置く。撮って たしかめる ため</summary>
     void DebugOki() {
         Shu S(string id) { return shu.Find(x => x.id == id); }
-        Vector3 at; Quaternion rot;
-        // 主人公に 近く、カメラに 入って いる 幹を 近い 順に
         var cam = Camera.main; var o = Origin;
         var mieru = new List<Miki>();
         foreach (var m in miki) {
@@ -319,30 +469,32 @@ public class NiwaMushi : MonoBehaviour {
             mieru.Add(m);
         }
         mieru.Sort((p, q) => Vector3.Distance(p.pts[0], o).CompareTo(Vector3.Distance(q.pts[0], o)));
-        Debug.Log("[Probe] NiwaMushi mieru miki " + mieru.Count);
-        if (mieru.Count > 0 && S("semi") != null && MikiNi(mieru[0], -15f, 1.5f, out at, out rot)) Oku(S("semi"), at, rot);
-        if (mieru.Count > 0 && S("kabuto") != null && MikiNi(mieru[0], 20f, 1.0f, out at, out rot)) Oku(S("kabuto"), at, rot);
-        if (mieru.Count > 1 && S("kuwagata") != null && MikiNi(mieru[1], 0f, 1.3f, out at, out rot)) Oku(S("kuwagata"), at, rot);
-        if (S("tonbo") != null) { var p = new Vector3(-3f, 0f, 2f); if (Jimen(ref p)) Oku(S("tonbo"), p + Vector3.up * 1.5f, Quaternion.identity); }
-        if (S("chou") != null) { var p = new Vector3(3.5f, 0f, 1f); if (Jimen(ref p)) Oku(S("chou"), p + Vector3.up * 1.2f, Quaternion.identity); }
-        if (S("batta") != null) { var p = new Vector3(-1.5f, 0f, -1f); if (Jimen(ref p)) Oku(S("batta"), p + Vector3.up * 0.08f, Quaternion.identity); }
-        Debug.Log("[Probe] NiwaMushi debug oki " + ikiteru.Count + " miki=" + miki.Count);
-        logGamen = 3;
-    }
-    int logGamen;
-    bool debugOita;
-    void LateUpdate() {
-        if (debugMushi && !debugOita && Time.time >= 2.0f) { debugOita = true; DebugOki(); logGamen = 0; }
-        if (debugMushi && debugOita && logGamen == 0 && Time.time >= 2.85f) logGamen = 1;
-        if (logGamen <= 0) return;
-        if (--logGamen > 0) return;
-        var c = Camera.main; if (c == null) return;
-        var sb = new System.Text.StringBuilder();
-        foreach (var h in ikiteru) {
-            var p = h.go.transform.position; var sp = c.WorldToScreenPoint(p);
-            sb.Append(h.shu.id).Append(" w").Append(p.ToString("F1")).Append(" s(").Append((int)sp.x).Append(",").Append((int)(Screen.height - sp.y)).Append(",").Append(sp.z.ToString("F0")).Append(") ");
+        void MikiOki(string id, Miki m, float kakudo, float takasa, bool sakasa) {
+            var s = S(id); if (s == null || m == null) return;
+            var h = new Hiki { shu = s, miki = m, kakudo = kakudo, takasa = takasa, sakasa = sakasa, phase = Random.value * 10f, wait = 5f };
+            Quaternion rot;
+            if (!MikiNi(h, out h.pos, out rot)) return;
+            h.home = h.pos; Oku(h);
         }
-        Debug.Log("[Probe] NiwaMushi gamen t=" + Time.time.ToString("F2") + " " + MuraCamFixed.PlaceName + " " + sb);
-        logGamen = -1;
+        void SoraOki(string id, Vector3 p, Vector3 heading) {
+            var s = S(id); if (s == null) return;
+            if (!Jimen(ref p)) return;
+            var h = new Hiki { shu = s, phase = Random.value * 10f, heading = heading.normalized, wait = 9f };
+            h.home = h.pos = h.target = p + Vector3.up * 1.5f;
+            Oku(h);
+        }
+        if (mieru.Count > 0) { MikiOki("semi", mieru[0], -15f, 1.5f, false); MikiOki("kabuto", mieru[0], 18f, 1.0f, false); }
+        if (mieru.Count > 1) MikiOki("kuwagata", mieru[1], 0f, 1.3f, true);
+        SoraOki("tonbo", new Vector3(-3f, 0f, 2f), new Vector3(1f, 0f, 0.3f));
+        SoraOki("oniyanma", new Vector3(0.5f, 0f, 3.5f), new Vector3(-1f, 0f, 0f));
+        SoraOki("chou", new Vector3(3.5f, 0f, 1f), new Vector3(0.3f, 0f, -1f));
+        {
+            var s = S("batta");
+            if (s != null) {
+                var p = new Vector3(-1.5f, 0f, -1f);
+                if (Jimen(ref p)) { var h = new Hiki { shu = s, phase = 1f, wait = 9f, heading = Vector3.right }; h.home = h.pos = p + Vector3.up * s.haba * 0.4f; Oku(h); }
+            }
+        }
+        Debug.Log("[Probe] NiwaMushi debug oki " + ikiteru.Count + " miki=" + miki.Count + " mieru=" + mieru.Count);
     }
 }
