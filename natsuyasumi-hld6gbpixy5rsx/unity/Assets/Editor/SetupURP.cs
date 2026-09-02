@@ -116,6 +116,29 @@ public static class SetupURP {
             //   ざらざらに なった うえに ビルドが 何十MBも ふくらむ。
             //   取りこみかたは MegaKit.Setup が べつに 面倒を みる
             if (path.Contains("/megakit/")) continue;
+            // ★虫の 絵（/mushi/・2026-09-02）：Codex の 画像を 切りぬいた 512px の なめらかな 絵。
+            //   世界では 20〜40px に 縮めて つかう ので **ミップが 要る**（点フィルタだと ちらつく）。
+            //   18まい x 512² を 非圧縮に すると Web版が 18MB ふくらむ ので 圧縮の まま
+            if (path.Contains("/mushi/")) {
+                var tim = AssetImporter.GetAtPath(path) as TextureImporter;
+                if (tim == null) continue;
+                bool okm = tim.textureType == TextureImporterType.Default
+                           && tim.filterMode == FilterMode.Bilinear && tim.mipmapEnabled
+                           && tim.alphaIsTransparency && tim.wrapMode == TextureWrapMode.Clamp
+                           && tim.maxTextureSize == 512;
+                if (!okm) {
+                    tim.textureType = TextureImporterType.Default;
+                    tim.filterMode = FilterMode.Bilinear;
+                    tim.mipmapEnabled = true;
+                    tim.alphaIsTransparency = true;
+                    tim.wrapMode = TextureWrapMode.Clamp;
+                    tim.maxTextureSize = 512;
+                    tim.textureCompression = TextureImporterCompression.Compressed;
+                    tim.SaveAndReimport();
+                    Debug.Log("[SetupURP] mushi: " + path);
+                }
+                continue;
+            }
             // ★描き おこしの キャラ絵も 対象外（2026-08-30）。点フィルタだと 縮小で ぎざぎざに なる
             if (path.Contains("marisa_walk") || path.Contains("/tachie/")) {
                 var ti3 = AssetImporter.GetAtPath(path) as TextureImporter;

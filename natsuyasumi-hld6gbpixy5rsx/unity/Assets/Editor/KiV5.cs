@@ -57,6 +57,11 @@ public static class KiV5 {
             new Dictionary<int, List<CombineInstance>>();
         /// <summary>木の 根もと（x, ybase, z）と みきの ふとさ。接地の 影に つかう</summary>
         public readonly List<Vector4> Moto = new List<Vector4>();
+        // ★みきの 背骨（輪の 座標と 半径）。虫を **実際の 樹皮の 面**に 貼る ために のこす（2026-09-02）。
+        //   根もとの 座標と 太さだけ だと、みきは 輪ごとに ゆれて 曲がる ので 1.5mの 高さで
+        //   芯が 10cm 以上 ずれ、板が 樹皮の 中に うまって 見えなかった
+        public readonly List<Vector3[]> Suji = new List<Vector3[]>();
+        public readonly List<float[]> Futo = new List<float[]>();
         readonly List<Vector4> kanmuri = new List<Vector4>();   // 樹冠の まん中(xyz)と 半径
         int nowKey;
 
@@ -168,6 +173,7 @@ public static class KiV5 {
                                          Random.Range(-0.08f, 0.08f))).normalized;
             }
             Tube(pts, rad, 12);
+            Suji.Add(pts); Futo.Add(rad);
             var col = new GameObject("KiAtari");            // 当たりは カプセルで 別に
             col.transform.SetParent(root, false);
             col.transform.position = new Vector3(x, ybase + 1.7f, z);

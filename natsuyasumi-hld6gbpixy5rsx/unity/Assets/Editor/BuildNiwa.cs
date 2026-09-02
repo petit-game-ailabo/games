@@ -515,6 +515,41 @@ public static class BuildNiwa {
         Debug.Log("[Probe] Takadai いちばん急な傾斜 " + NiwaJimenE.TakadaiKeisha());
         hayashi.Katameru();
 
+        // ---- 虫（見せかたの 段・2026-09-02・D-171）。絵は Codex の 画像を 切りぬいた もの。
+        //   幹の 位置は hayashi.Moto から わたす（名まえで 場面を 探させない）
+        {
+            var mushiGO = new GameObject("Mushi");
+            mushiGO.transform.SetParent(root, false);
+            var mu = mushiGO.AddComponent<NiwaMushi>();
+            for (int i = 0; i < hayashi.Suji.Count; i++)
+                mu.miki.Add(new NiwaMushi.Miki { pts = hayashi.Suji[i], rad = hayashi.Futo[i] });
+            mu.font = uiFont;
+            int e_ari = 0;
+            foreach (var e in NiwaMushi.Shurui()) {
+                string d = "Assets/Art/Sprites/mushi/" + e.id;
+                e.yoko = AssetDatabase.LoadAssetAtPath<Texture2D>(d + "_yoko.png");
+                e.ue = AssetDatabase.LoadAssetAtPath<Texture2D>(d + "_ue.png");
+                e.naname = AssetDatabase.LoadAssetAtPath<Texture2D>(d + "_naname.png");
+                if (e.yoko != null || e.ue != null) e_ari++;
+                // 材質は ここで 作る（主人公 NiwaMarisa.mat と 同じ：Lit＋アルファ抜き・両面）
+                var tex = e.Sekai;
+                if (tex != null) {
+                    string mp = "Assets/Art/Materials/Niwa/Mushi_" + e.id + ".mat";
+                    var mm = AssetDatabase.LoadAssetAtPath<Material>(mp);
+                    if (mm == null) { mm = new Material(Shader.Find("Universal Render Pipeline/Lit")); AssetDatabase.CreateAsset(mm, mp); }
+                    mm.shader = Shader.Find("Universal Render Pipeline/Lit");
+                    mm.SetFloat("_AlphaClip", 1f); mm.SetFloat("_Cutoff", 0.45f);
+                    mm.EnableKeyword("_ALPHATEST_ON");
+                    mm.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
+                    mm.SetFloat("_Smoothness", 0.08f);
+                    mm.mainTexture = tex; mm.SetTexture("_BaseMap", tex);
+                    e.zairyo = mm;
+                }
+                mu.shu.Add(e);
+            }
+            Debug.Log("[Probe] NiwaMushi 種 " + e_ari + "/" + mu.shu.Count + " みき " + mu.miki.Count);
+        }
+
         // ---- 物を 地ばんに すわらせる（凸凹に した ぶん、y=0 のままだと 浮く／沈む）
         {
             string[] nuki = { "Jimen", "JimenE", "MichiSoto", "BLK_", "Sora", "Satoyama",
