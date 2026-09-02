@@ -532,9 +532,9 @@ public static class BuildNiwa {
                 e.naname = AssetDatabase.LoadAssetAtPath<Texture2D>(d + "_naname.png");
                 if (e.yoko != null || e.ue != null) e_ari++;
                 // 材質は ここで 作る（主人公 NiwaMarisa.mat と 同じ：Lit＋アルファ抜き・両面）
-                var tex = e.Sekai;
-                if (tex != null) {
-                    string mp = "Assets/Art/Materials/Niwa/Mushi_" + e.id + ".mat";
+                Material MushiMat(string nm, Texture2D tex) {
+                    if (tex == null) return null;
+                    string mp = "Assets/Art/Materials/Niwa/Mushi_" + nm + ".mat";
                     var mm = AssetDatabase.LoadAssetAtPath<Material>(mp);
                     if (mm == null) { mm = new Material(Shader.Find("Universal Render Pipeline/Lit")); AssetDatabase.CreateAsset(mm, mp); }
                     mm.shader = Shader.Find("Universal Render Pipeline/Lit");
@@ -543,8 +543,11 @@ public static class BuildNiwa {
                     mm.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
                     mm.SetFloat("_Smoothness", 0.08f);
                     mm.mainTexture = tex; mm.SetTexture("_BaseMap", tex);
-                    e.zairyo = mm;
+                    return mm;
                 }
+                e.zairyo = MushiMat(e.id, e.Sekai);
+                // 飛ぶ 虫の 横の 絵（真横に 進む とき）
+                if (e.perch == NiwaMushi.Perch.Sora && e.yoko != null) e.zairyoYoko = MushiMat(e.id + "_yoko", e.yoko);
                 mu.shu.Add(e);
             }
             Debug.Log("[Probe] NiwaMushi 種 " + e_ari + "/" + mu.shu.Count + " みき " + mu.miki.Count);

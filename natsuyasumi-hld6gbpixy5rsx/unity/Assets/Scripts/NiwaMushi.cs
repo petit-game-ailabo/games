@@ -34,7 +34,8 @@ public class NiwaMushi : MonoBehaviour {
         public Texture2D yoko, ue, naname;
         // ★材質は **組み立て時に BuildNiwa が 作って わたす**（主人公と 同じ やりかた・D-172）。
         //   実行時の Shader.Find は ビルドに 無い シェーダで null → 黙って Lit に 落ちて 黒い 四角に なった
-        public Material zairyo;
+        public Material zairyo;        // 世界で 出す 絵（Sekai）の 材質
+        public Material zairyoYoko;    // 飛ぶ 虫が 真横に 進む ときの 横の 絵（あれば）
         // 世界で 出す 絵：幹と 空は 上から（背中）、草は 横
         public Texture2D Sekai { get { return perch == Perch.Kusa ? (yoko ?? ue) : (ue ?? yoko); } }
         public Texture2D Card { get { return naname ?? yoko ?? ue; } }
@@ -353,11 +354,36 @@ public class NiwaMushi : MonoBehaviour {
         h.go.transform.rotation = SoraMuki(h, cam);
     }
 
+    /// <summary>飛ぶ 虫の 絵の 切りかえ：進む 向きが 画面の 左右に 近い ときは **横の 絵**を
+    /// 立てた 板に（進む 向きへ 裏がえす）、奥・手前に 近い ときは 上から 見た 絵を 寝かせて</summary>
+    bool SoraYoko(Hiki h, Camera cam, out float side) {
+        side = 1f;
+        var s = h.shu;
+        if (s.zairyoYoko == null) return false;
+        float yaw = cam != null ? cam.transform.eulerAngles.y : 0f;
+        var camRot = Quaternion.Euler(0f, yaw, 0f);
+        float a = Vector3.Dot(h.heading, camRot * Vector3.right), b = Vector3.Dot(h.heading, camRot * Vector3.forward);
+        bool yoko = Mathf.Abs(a) > Mathf.Abs(b) * 1.2f;     // 横に 進む ほうが はっきり 大きい とき
+        side = a < 0f ? 1f : -1f;                            // 絵は 頭が 左。右へ 進む なら 裏がえす
+        var r = h.ita.GetComponent<Renderer>();
+        var want = yoko ? s.zairyoYoko : s.zairyo;
+        if (r.sharedMaterial != want) r.sharedMaterial = want;
+        return yoko;
+    }
+
     /// <summary>飛ぶ 虫の 板の 向き：カメラに 向けた 板を うしろに 寝かせ（上前方から 見た 形）、
     /// 絵の 上（頭）が 進む 向きに なるよう 板の 面内で まわす</summary>
     Quaternion SoraMuki(Hiki h, Camera cam) {
         float yaw = cam != null ? cam.transform.eulerAngles.y : 0f;
         var camRot = Quaternion.Euler(0f, yaw, 0f);
+        float side;
+        if (SoraYoko(h, cam, out side)) {
+            // 横の 絵：立てた 板（ビルボード）。少し 前のめりに
+            var sc = h.ita.localScale; sc.x = Mathf.Abs(sc.x) * side; h.ita.localScale = sc;
+            return camRot * Quaternion.Euler(-8f, 0f, 0f);
+        } else {
+            var sc = h.ita.localScale; sc.x = Mathf.Abs(sc.x); h.ita.localScale = sc;
+        }
         var R = camRot * Vector3.right; var F = camRot * Vector3.forward;
         float a = Vector3.Dot(h.heading, R), b = Vector3.Dot(h.heading, F);
         // 板を 寝かせると 絵の 上（頭）は F（画面の おく）を 向く。進む 向き (a,b) に あわせて 面内で まわす
