@@ -238,7 +238,13 @@ public static class HouseRoof {
         // これが 無いと 壁と 屋根が 直に つながって「箱に 板を のせた」に 見える
         {
             var mm = new MB(1);
-            float y0 = o.yEave - 0.30f, y1 = o.yEave - 0.02f;
+            // ★軒桁の 天は **屋根の 裏より 下**に おく（2026-09-02）。yEave-0.02 で 決めうち して いたら、
+            //   軒を 下げた（eaveDrop）とたん 壁の すぐ 外で 屋根面が 桁より 低くなり、
+            //   **桁が 瓦の 上に 一本の 線として 出た**（本人「赤とオレンジのよく分からない段差」）。
+            //   桁の 外の 面（t=-0.09/eave）での 屋根の 裏の 高さから 引く
+            float tSoto = -0.09f / Mathf.Max(0.01f, o.eave);
+            float y1 = Mathf.Min(o.yEave - 0.02f, Y(o, tSoto) - o.thick - 0.02f);
+            float y0 = y1 - 0.28f;
             BoxTo(mm, new Vector3(-o.ax - 0.10f, y0, o.az - 0.09f),
                       new Vector3(o.ax + 0.10f, y1, o.az + 0.09f), o.texM, 0);
             BoxTo(mm, new Vector3(-o.ax - 0.10f, y0, -o.az - 0.09f),
