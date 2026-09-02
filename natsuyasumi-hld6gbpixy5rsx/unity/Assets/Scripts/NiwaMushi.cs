@@ -80,6 +80,9 @@ public class NiwaMushi : MonoBehaviour {
         public Vector3 heading = Vector3.forward; public int mode; public Vector3 lineA, lineB;
         public bool tobisaru; public float tobiT;
         public float fx = 1f;            // 板の 横の 倍率（羽ばたき・裏がえし）
+        public readonly List<Vector3> michi = new List<Vector3>();   // 飛ぶ 経路（トンボ・オニヤンマ）
+        public int michiI; public float hane = 1f; public bool shimmer;
+        public float takasaMe;           // チョウ：羽ばたいて 上がる／滑空で 下がる の 位相
         public Transform kage;           // 足もとの 影
         public bool kageLogged;
     }
@@ -226,7 +229,8 @@ public class NiwaMushi : MonoBehaviour {
         if (s.perch == Perch.Sora) {
             h.mode = 0; if (h.wait <= 0f) h.wait = Random.Range(0.5f, 2f);
             if (h.heading.sqrMagnitude < 0.01f) { var d0 = Random.insideUnitCircle.normalized; h.heading = new Vector3(d0.x, 0f, d0.y); }
-            if (s.id == "oniyanma") { var d = new Vector2(h.heading.x, h.heading.z).normalized; h.lineA = h.home + new Vector3(d.x, 0f, d.y) * 4f; h.lineB = h.home - new Vector3(d.x, 0f, d.y) * 4f; h.target = h.lineA; }
+            if (s.id == "tonbo") { h.mode = 0; h.target = h.pos; }
+            if (s.id == "oniyanma") { h.mode = 1; }
         }
         if (s.perch == Perch.Kusa) { if (h.wait <= 0f) h.wait = Random.Range(2f, 8f); if (h.heading.sqrMagnitude < 0.01f) h.heading = Random.value < 0.5f ? Vector3.left : Vector3.right; }
         if (s.id == "hotaru") {
@@ -378,51 +382,119 @@ public class NiwaMushi : MonoBehaviour {
         h.go.transform.rotation = rot * Quaternion.Euler(0f, 0f, yure);
     }
 
-    /// <summary>飛ぶ 虫。板は うしろに 寝かせ、頭を 進む 向きへ</summary>
+    /// <summary>飛ぶ 虫。板は うしろに 寝かせ、頭を 進む 向きへ。
+    /// ★種で 動きが ちがう（本人 2026-09-03「トンボがイマイチ。同じところを行ったり来たりで、
+    ///   羽ばたいてもない」）。しおからとんぼ＝**止まる→急に 飛ぶ→短く ホバリング→また 止まる**、
+    ///   おにやんま＝止まらず 決まった 道を 見まわる。羽は 速すぎて 見えない ので **ふるえ**で 出す</summary>
     void SoraUgoki(Hiki h, Camera cam, float dt, float t) {
         var s = h.shu;
-        if (s.id == "tonbo") {
-            // すっと 飛んで、空中で ぴたっと 止まる（ホバリング）
-            if (h.mode == 0) {
-                h.wait -= dt;
-                h.pos = h.target + new Vector3(Mathf.Sin(t * 7f) * 0.02f, Mathf.Sin(t * 11f) * 0.03f, 0f);
-                if (h.wait <= 0f) {
-                    var c = Random.insideUnitCircle * Random.Range(1.5f, 4f);
-                    h.target = h.home + new Vector3(c.x, Random.Range(-0.4f, 0.6f), c.y);
-                    h.mode = 1;
-                }
-            } else {
-                var d = h.target - h.pos; float dist = d.magnitude;
-                float sp = Mathf.Clamp(dist * 4f, 0.8f, 5f);
-                if (dist > 0.001f) h.heading = Vector3.Lerp(h.heading, d.normalized, 8f * dt).normalized;
-                h.pos += (dist > 0.001f ? d.normalized : Vector3.zero) * Mathf.Min(sp * dt, dist);
-                if (dist < 0.05f) { h.mode = 0; h.wait = Random.Range(1f, 3.5f); h.target = h.pos; }
-            }
-        } else if (s.id == "oniyanma") {
-            // 一直線に 往復（同じ 道を 見まわる）
-            var d = h.target - h.pos; float dist = d.magnitude;
-            if (dist > 0.001f) h.heading = Vector3.Lerp(h.heading, d.normalized, 4f * dt).normalized;
-            h.pos += (dist > 0.001f ? d.normalized : Vector3.zero) * Mathf.Min(3.2f * dt, dist);
-            h.pos.y = Mathf.Lerp(h.pos.y, h.home.y + 0.6f + Mathf.Sin(t * 1.3f) * 0.15f, 2f * dt);
-            if (dist < 0.1f) h.target = (h.target == h.lineA) ? h.lineB : h.lineA;
-        } else {
-            // チョウ：ふらふら。向きを ちょくちょく 変え、上下に ひらひら
-            h.wait -= dt;
-            if (h.wait <= 0f) {
-                h.wait = Random.Range(0.4f, 1.2f);
-                var c = Random.insideUnitCircle.normalized;
-                var kibou = new Vector3(c.x, 0f, c.y);
-                var modori = h.home - h.pos; modori.y = 0f;
-                if (modori.magnitude > 4f) kibou = (kibou + modori.normalized * 1.5f).normalized;
-                h.target = kibou;
-            }
-            if (h.target.sqrMagnitude > 0.01f) h.heading = Vector3.Lerp(h.heading, h.target, 3f * dt).normalized;
-            h.pos += h.heading * 0.8f * dt;
-            h.pos.y = h.home.y + Mathf.Sin(t * 3.1f) * 0.25f + Mathf.Sin(t * 0.7f) * 0.3f;
-            h.fx = 0.30f + 0.70f * Mathf.Abs(Mathf.Sin(t * 14f));       // 羽ばたき＝板の 横幅の 伸び縮み
-        }
+        h.shimmer = false;
+        h.fx = 1f;   // fx wa maiframe koko kara. (*= wo tsumikasaneru to 0 ni chijimu)
+        if (s.id == "tonbo") TonboUgoki(h, dt, t);
+        else if (s.id == "oniyanma") OniyanmaUgoki(h, dt, t);
+        else ChouUgoki(h, cam, dt, t);
         h.go.transform.position = h.pos;
         h.go.transform.rotation = SoraMuki(h, cam);
+        if (h.shimmer) h.fx *= 0.90f + 0.10f * Mathf.Abs(Mathf.Sin(t * 60f));   // 羽の ふるえ（60Hz の 明滅）
+    }
+
+    /// <summary>しおからとんぼ：止まる(0) → 飛ぶ(1・鋭角に 折れる 経路) → ホバリング(2) → 止まる</summary>
+    void TonboUgoki(Hiki h, float dt, float t) {
+        if (h.mode == 0) {                                   // 草さきに 止まって いる。羽は 動かない
+            h.wait -= dt;
+            h.pos = h.target + new Vector3(0f, Mathf.Sin(t * 5f) * 0.004f, 0f);
+            if (h.wait <= 0f) { Keiro(h, Random.Range(2, 5), 6f, 0.6f, 2.0f); h.mode = 1; }
+            return;
+        }
+        if (h.mode == 2) {                                   // 空中で ぴたっと 止まる
+            h.shimmer = true;
+            h.wait -= dt;
+            h.pos = h.target + new Vector3(Mathf.Sin(t * 9f) * 0.02f, Mathf.Sin(t * 13f) * 0.03f, Mathf.Cos(t * 7f) * 0.02f);
+            if (h.wait <= 0f) {
+                if (h.michiI < h.michi.Count) h.mode = 1;
+                else {                                         // 次の 止まり場所へ
+                    var p = h.home + new Vector3(Random.Range(-4f, 4f), 0f, Random.Range(-4f, 4f));
+                    if (Jimen(ref p)) { h.michi.Clear(); h.michi.Add(p + Vector3.up * (JIMEN_UKI + 0.35f)); h.michiI = 0; h.mode = 3; }
+                    else { Keiro(h, 2, 6f, 0.6f, 2.0f); h.mode = 1; }
+                }
+            }
+            return;
+        }
+        // 1＝経路を 飛ぶ、3＝止まり場所へ 飛ぶ。速く、目標の 手前で ぐっと ゆるむ
+        h.shimmer = true;
+        var goal = h.michi[Mathf.Min(h.michiI, h.michi.Count - 1)];
+        var d = goal - h.pos; float dist = d.magnitude;
+        float sp = Mathf.Clamp(dist * 5f, 1.0f, 5.5f);
+        if (dist > 0.001f) h.heading = Vector3.Lerp(h.heading, d.normalized, 14f * dt).normalized;   // 鋭角に 折れる
+        h.pos += (dist > 0.001f ? d.normalized : Vector3.zero) * Mathf.Min(sp * dt, dist);
+        if (dist < 0.06f) {
+            h.michiI++;
+            if (h.mode == 3) { h.mode = 0; h.wait = Random.Range(2f, 6f); h.target = h.pos; }
+            else if (Random.value < 0.6f || h.michiI >= h.michi.Count) { h.mode = 2; h.wait = Random.Range(0.5f, 1.5f); h.target = h.pos; }
+        }
+    }
+
+    /// <summary>おにやんま：止まらず、ゆるい 輪の 道を 見まわる。角で ときどき ホバリング</summary>
+    void OniyanmaUgoki(Hiki h, float dt, float t) {
+        h.shimmer = true;
+        if (h.michi.Count == 0) Keiro(h, Random.Range(4, 6), 6f, 1.6f, 2.4f);
+        if (h.mode == 2) {
+            h.wait -= dt;
+            h.pos = h.target + new Vector3(Mathf.Sin(t * 8f) * 0.03f, Mathf.Sin(t * 11f) * 0.04f, 0f);
+            if (h.wait <= 0f) h.mode = 1;
+            return;
+        }
+        var goal = h.michi[h.michiI % h.michi.Count];
+        var d = goal - h.pos; float dist = d.magnitude;
+        if (dist > 0.001f) h.heading = Vector3.Lerp(h.heading, d.normalized, 5f * dt).normalized;
+        h.pos += h.heading * Mathf.Min(3.5f * dt, dist + 0.01f);
+        h.pos.y = Mathf.Lerp(h.pos.y, goal.y + Mathf.Sin(t * 1.7f) * 0.12f, 2f * dt);
+        if (dist < 0.25f) {
+            h.michiI++;
+            if (h.michiI % h.michi.Count == 0 && Random.value < 0.5f) Keiro(h, Random.Range(4, 6), 6f, 1.6f, 2.4f);   // 輪を 引きなおす
+            if (Random.value < 0.3f) { h.mode = 2; h.wait = Random.Range(0.4f, 0.9f); h.target = h.pos; }
+        }
+    }
+
+    /// <summary>飛ぶ 経路を 引く：home の まわり 半径 r の 中に n 点。高さは 地めんから y0..y1</summary>
+    void Keiro(Hiki h, int n, float r, float y0, float y1) {
+        h.michi.Clear(); h.michiI = 0;
+        float a0 = Random.value * Mathf.PI * 2f;
+        for (int i = 0; i < n; i++) {
+            float a = a0 + i * Mathf.PI * 2f / n + Random.Range(-0.5f, 0.5f);
+            float rr = r * Random.Range(0.45f, 1f);
+            var p = h.home + new Vector3(Mathf.Cos(a) * rr, 0f, Mathf.Sin(a) * rr);
+            if (!Jimen(ref p)) p.y = h.home.y - 1f;
+            p.y += JIMEN_UKI + Random.Range(y0, y1);
+            h.michi.Add(p);
+        }
+    }
+
+    /// <summary>チョウ：頭は 上のまま（下を 向いて 羽ばたく 蝶は いない）。
+    /// 羽ばたいて 上がり、羽を 開いて 滑空しながら 下がる（下がる ときは 羽ばたきが へる）</summary>
+    void ChouUgoki(Hiki h, Camera cam, float dt, float t) {
+        h.wait -= dt;
+        if (h.wait <= 0f) {
+            h.wait = Random.Range(0.5f, 1.4f);
+            var c = Random.insideUnitCircle.normalized;
+            var kibou = new Vector3(c.x, 0f, c.y);
+            var modori = h.home - h.pos; modori.y = 0f;
+            if (modori.magnitude > 4f) kibou = (kibou + modori.normalized * 1.5f).normalized;
+            h.target = kibou;
+        }
+        if (h.target.sqrMagnitude > 0.01f) h.heading = Vector3.Lerp(h.heading, h.target, 2.5f * dt).normalized;
+        h.pos += h.heading * 0.8f * dt;
+        // 位相 0..1：前半 0.35 は 羽ばたいて 上がる、後半は 滑空して 下がる
+        h.takasaMe += dt / 1.8f;
+        if (h.takasaMe >= 1f) h.takasaMe -= 1f;
+        bool agaru = h.takasaMe < 0.35f;
+        float haneHz = agaru ? 15f : 5f;
+        float hiraki = agaru ? 0.25f : 0.60f;                                   // 滑空は 羽を 開き気味
+        h.hane = hiraki + (1f - hiraki) * Mathf.Abs(Mathf.Sin(t * haneHz));
+        float yMe = agaru ? Mathf.Lerp(-0.25f, 0.25f, h.takasaMe / 0.35f)
+                          : Mathf.Lerp(0.25f, -0.25f, (h.takasaMe - 0.35f) / 0.65f);
+        h.pos.y = h.home.y + yMe + Mathf.Sin(t * 0.7f) * 0.3f;
+        h.fx = h.hane;
     }
 
     /// <summary>飛ぶ 虫の 絵の 切りかえ：進む 向きが 画面の 左右に 近い ときは **横の 絵**を
@@ -452,13 +524,13 @@ public class NiwaMushi : MonoBehaviour {
             // 横の 絵：立てた 板（ビルボード）。少し 前のめりに
             h.fx = Mathf.Abs(h.fx) * side;
             return camRot * Quaternion.Euler(-8f, 0f, 0f);
-        } else {
-            h.fx = Mathf.Abs(h.fx);
         }
         var R = camRot * Vector3.right; var F = camRot * Vector3.forward;
         float a = Vector3.Dot(h.heading, R), b = Vector3.Dot(h.heading, F);
         // 板を 寝かせると 絵の 上（頭）は F（画面の おく）を 向く。進む 向き (a,b) に あわせて 面内で まわす
         float roll = -Mathf.Atan2(a, b) * Mathf.Rad2Deg;
+        // ★チョウは 頭を 下に しない（本人「下向きに羽ばたくことはないはず」）。手前へ 来る ときも 頭は 上
+        if (h.shu.id == "chou") roll = Mathf.Clamp(-Mathf.Atan2(a, Mathf.Abs(b)) * Mathf.Rad2Deg, -55f, 55f);
         // ★寝かせすぎると 板が 薄く 見える（本人「角度によって薄いね」）。45°で 止める
         float lean = h.shu.id == "chou" ? 40f : 45f;
         return camRot * Quaternion.Euler(-lean, 0f, roll);
