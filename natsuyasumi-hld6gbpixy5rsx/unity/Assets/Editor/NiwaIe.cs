@@ -382,6 +382,25 @@ public static class NiwaIe {
                       "m soto e " + (rg.min.z - rk.min.z).ToString("F3") + "m");
         }
 
+        // ========== 1階と 2階の 切れ目（2026-09-02）
+        // ★本人「2階と1階って、大体ものが違うよね？…1枚の板が1階から2階に繋がってるみたいだから、
+        //   そこが非連続に見えるようにしたい」。参考写真は 1階の 上に **瓦の 庇が ぐるり**と
+        //   回って いて、それが 階の 切れ目に なって いる。いまは 玄関の 下屋だけ。
+        //   縁がわの 上にも 浅い 庇を 回し、東西北の 壁には 胴差の 水切り板を つける
+        HouseRoof.Shed(muki, "Ie_Kabetsuki_Hisashi", -KX + 0.85f, -X0 + 0.30f,
+                       -ZM + 0.05f, -ZM + 0.75f,
+                       GNOKI + 0.30f, GNOKI + 0.12f, TM_KAWARA, mKawaraM, mKiYane);
+        nKawara += NiwaKawara.Geya(muki, "Ie_Kabetsuki_HisashiKawara", -KX + 0.85f, -X0 + 0.30f,
+                                   -ZM + 0.05f, -ZM + 0.75f,
+                                   GNOKI + 0.32f, GNOKI + 0.14f, mKawaraM, TM_KAWARA);
+        // 水切り（胴差の 上に のせる 板。2階の 板壁の 下ばを 受ける）
+        Box("Ie_Kabetsuki_Mizukiri_E", new Vector3(X1 + 0.11f, DOSHI - 0.02f, (ZM + ZN) * 0.5f),
+            new Vector3(0.07f, 0.14f, ZN - ZM + 0.22f), mKiM);
+        Box("Ie_Kabetsuki_Mizukiri_W", new Vector3(X0 - 0.11f, DOSHI - 0.02f, (ZM + ZN) * 0.5f),
+            new Vector3(0.07f, 0.14f, ZN - ZM + 0.22f), mKiM);
+        Box("Ie_Kabetsuki_Mizukiri_N", new Vector3(0f, DOSHI - 0.02f, ZN + 0.11f),
+            new Vector3(X1 - X0 + 0.22f, 0.14f, 0.07f), mKiM);
+
         // ========== 棟瓦と 隅棟
         // ★ここに 置いて いた まっすぐな 箱の 隅棟は **消した**（2026-09-02）。
         //   HouseRoof が 屋根の 式なりに 隅棟(H_Sumimune)と 棟(H_Mune)を 作って いる のに
