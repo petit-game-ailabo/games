@@ -97,7 +97,9 @@ os.makedirs(OUT, exist_ok=True)
 names = sorted(f for f in os.listdir(SRC) if f.lower().endswith(".png"))
 for f in names:
     im = Image.open(os.path.join(SRC, f))
-    im = key(im)
+    # API (background=transparent) no e wa mou nuketeiru. Magenta-key wa magenta haikei no toki dake
+    if im.mode == "RGBA" and im.getchannel("A").getextrema()[0] < 250: im = im.convert("RGBA")
+    else: im = key(im)
     im = trim(im)
     im = square(im, OUTPX)
     im = posterize(im, IRO)
