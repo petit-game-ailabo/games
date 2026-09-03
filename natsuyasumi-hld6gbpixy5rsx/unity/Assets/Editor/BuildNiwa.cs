@@ -9,6 +9,12 @@ using System.Collections.Generic;
 // 家=megakit(CC0)のジェッティの家／木・草・塀・門・飛び石=Kenney Nature Kit(CC0)。
 //   rebuild.ps1 -Only BuildNiwa.Build
 public static class BuildNiwa {
+    // ★地めんの 色（2026-09-03・本人「地面の色味が合ってなくて違和感」）。
+    //   画面で 測ると 草だけ 明るさ 0.59・彩度 0.55、木の葉 0.33/0.33、家 0.31/0.15。
+    //   草を 明るさ 0.45・彩度 0.40（色相は 葉と 同じ 80°）へ 寄せる 掛け算。地面の 材質 ぜんぶに かける
+    public static readonly Color JIMEN_IRO = new Color(0.78f, 0.80f, 0.90f);
+    // 土（道）は 青を のこすと 紫に 転ぶ ので 暖かい 掛け算に 分ける
+    public static readonly Color TSUCHI_IRO = new Color(0.80f, 0.76f, 0.66f);
 
     static Material MatT(string name, string tex, float tx, float ty) {
         string dir = "Assets/Art/Materials/Niwa";
@@ -61,6 +67,8 @@ public static class BuildNiwa {
         //   かけ算に なって 1タイル7cmに なり、ミップで つぶれて 単色の 板に 見えた
         var mGrass = MatT("NiwaGrassT", "ji_kusa.jpg", 1f, 1f);
         var mDirt  = MatT("NiwaDirtT",  "ji_tsuchi.jpg", 1f, 1f);
+        mGrass.SetColor("_BaseColor", JIMEN_IRO);
+        mDirt.SetColor("_BaseColor", TSUCHI_IRO);
         // ---- 地めんは **凸凹の あみ**（箱では ない・本人 2026-08-31）
         //   ふせ角10°の カメラは 高さだけ 6倍に 拡大して 映す（奥ゆき1m=21px / 高さ1m=121px）。
         //   20cmの 起伏でも 24px 動く。歩く ところ（庭の 踏み跡・家・道・高台）は 平ら
@@ -592,6 +600,9 @@ public static class BuildNiwa {
             var mE = new Material(Shader.Find("Universal Render Pipeline/Lit"));
             AssetDatabase.CreateAsset(mE, "Assets/Art/Materials/Niwa/NiwaJimenE.mat");
             mE.SetFloat("_Smoothness", 0.03f);
+            // JIMEN_IRO (D-180): grass measured val0.59/sat0.55 vs leaves val0.33/sat0.33, house val0.31.
+            // Pull the ground toward val0.45/sat0.40, hue 80deg like the leaves
+            mE.SetColor("_BaseColor", JIMEN_IRO);
             mE.mainTexture = jimenE;
             ita.GetComponent<Renderer>().sharedMaterial = mE;
             ita.GetComponent<Renderer>().shadowCastingMode =
