@@ -50,6 +50,7 @@ public static class KiV5 {
     /// <summary>林。何本でも 植えて から まとめて 1つの メッシュに する
     /// （木 1本ずつ 別の 物に すると 描画が 本数ぶん かかる）</summary>
     public class Hayashi {
+        public const float FUTOSA_BAI = 1.6f;
         readonly Transform root;
         readonly Dictionary<int, List<CombineInstance>> miki =
             new Dictionary<int, List<CombineInstance>>();
@@ -158,7 +159,9 @@ public static class KiV5 {
             kiX = x; kiZ = z; kanR = h * 0.38f;   // 枝の ひろがりの めやす
             kanmuri.Add(new Vector4(x, ybase + h * 0.74f, z, h * 0.42f));
             Moto.Add(new Vector4(x, ybase, z, futosa));
-            float r0 = futosa * 0.5f;
+            // ★幹は 1.6倍 太く（2026-09-03・本人「木の幹細すぎることに気づいた」）。
+            //   家を 実寸に した ので、直径 30cm前後の 幹が 棒に 見えて いた。7mの 木なら 直径 50〜70cm
+            float r0 = futosa * 0.5f * FUTOSA_BAI;
             // みきの 背骨＝輪 9つ。ゆるく 湾曲、根もとは ひろがり、上に いくほど 細い
             const int rings = 9;
             var pts = new Vector3[rings]; var rad = new float[rings];

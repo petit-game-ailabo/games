@@ -33,6 +33,7 @@ public class NiwaMushi : MonoBehaviour {
         public bool hiru, yoru;    // 出る 時間帯
         public float minPx = 26f;  // 画面で これより 小さく ならない。★飛ぶ 虫は 小さくて よい（動きで 気づける）
         public int omomi = 2;      // 出やすさ
+        public float yokoBai = 1f; // 板の 横の 倍率。セミは 絵が 縦長に 出た ので 横に 広げる（本人 2026-09-03）
         public Texture2D yoko, ue, naname;
         // ★材質は **組み立て時に BuildNiwa が 作って わたす**（主人公と 同じ やりかた・D-172）。
         //   実行時の Shader.Find は ビルドに 無い シェーダで null → 黙って Lit に 落ちて 黒い 四角に なった
@@ -64,7 +65,7 @@ public class NiwaMushi : MonoBehaviour {
             //   ちっちゃいよね」。近い 虫は 小さく、遠い 虫は 読める 大きさが のこる
             // ★飛ぶ 虫は 最小 16px、同時 2匹まで（D-179・本人「大きすぎてうっとおしいかも」）。
             //   動く ものは 目が 拾う ので 小さくて 足りる。数も 実際の 庭なみに
-            new Shu { id = "semi",     name = "あぶらぜみ",     perch = Perch.Miki,    haba = 0.20f, hiru = true, minPx = 26f, omomi = 3 },
+            new Shu { id = "semi",     name = "あぶらぜみ",     perch = Perch.Miki,    haba = 0.18f, hiru = true, minPx = 26f, omomi = 3, yokoBai = 1.35f },
             new Shu { id = "kabuto",   name = "かぶとむし",     perch = Perch.Miki,    haba = 0.26f, hiru = true, yoru = true, minPx = 26f, omomi = 2 },
             new Shu { id = "kuwagata", name = "のこぎりくわがた", perch = Perch.Miki,  haba = 0.23f, hiru = true, yoru = true, minPx = 26f, omomi = 2 },
             new Shu { id = "tonbo",    name = "しおからとんぼ", perch = Perch.Sora,    haba = 0.28f, hiru = true, minPx = 16f, omomi = 2 },
@@ -279,7 +280,7 @@ public class NiwaMushi : MonoBehaviour {
             float pxPerM = (Screen.height * 0.5f) / (Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * Mathf.Max(0.1f, d));
             hb = Mathf.Max(hb, Mathf.Min(minPx, h.shu.minPx) / pxPerM);
         }
-        h.ita.localScale = new Vector3(hb * h.fx, hb, 1f);
+        h.ita.localScale = new Vector3(hb * h.fx * h.shu.yokoBai, hb, 1f);
     }
 
     /// <summary>足もとの 影：飛ぶ 虫・草の 虫の 真下に 小さな 丸。空中の 位置は これで 読める

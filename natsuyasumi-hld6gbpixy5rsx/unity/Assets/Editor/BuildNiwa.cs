@@ -197,18 +197,20 @@ public static class BuildNiwa {
                Random.Range(6.0f, 7.6f), Random.Range(0.28f, 0.42f));
 
         // 竹（北西の かど・和の 気配）
-        for (int i = 0; i < 5; i++)
-            KenneyKit.Put(root, (i % 2 == 0) ? "crops_bambooStageB" : "crops_bambooStageA",
-                new Vector3(-10.2f + Random.Range(-0.5f, 0.5f), 0f, 12.5f + i * 0.55f),
-                Random.Range(0f, 360f), 4.2f);
+        // TakeV1 (2026-09-03): low-poly 5 bon -> yabu 26 bon. Green/yellow/dead mix, edge culms lean out
+        TakeV1.Mure(root, -10.6f, 13.4f, 2.4f, 1.9f, 26, (x, z) => NiwaJimenE.Takasa(x, z));
 
         // ---- 草・花（塀ぎわ・木の 根もと・玄関わき）
         string[] kusa = { "grass", "grass_large", "grass_leafs", "grass_leafsLarge" };
+        // Kusa1: photo grass card (kusa_kabu.png) when the picture exists, else the low-poly prop
+        void Kusa1(Vector3 at, float yaw, float scale) {
+            if (TakeV1.KusaKabu(root, at, yaw, 0.28f * scale)) return;
+            KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)], at, yaw, scale);
+        }
         void KusaMure(float cx, float cz, float r, int n, float s0, float s1) {
             for (int i = 0; i < n; i++) {
                 var d = Random.insideUnitCircle * r;
-                KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)],
-                    new Vector3(cx + d.x, 0.01f, cz + d.y), Random.Range(0f, 360f), Random.Range(s0, s1));
+                Kusa1(new Vector3(cx + d.x, 0.01f, cz + d.y), Random.Range(0f, 360f), Random.Range(s0, s1));
             }
         }
         for (float x = -10f; x <= 10f; x += 2.6f) KusaMure(x, -5.3f, 0.8f, 3, 1.4f, 2.2f);   // 南塀ぎわ
@@ -340,9 +342,7 @@ public static class BuildNiwa {
             // 上の かざり（草・岩・丸太）。すわらせ直しで 地ばんの 高さに のる
             for (int i2 = 0; i2 < 16; i2++) {
                 var d = Random.insideUnitCircle * 3.6f;
-                KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)],
-                    new Vector3(TX + d.x, 0f, TZ + d.y), Random.Range(0f, 360f),
-                    Random.Range(1.4f, 2.2f));
+                Kusa1(new Vector3(TX + d.x, 0f, TZ + d.y), Random.Range(0f, 360f), Random.Range(1.4f, 2.2f));
             }
             KenneyKit.Put(root, "rock_smallA", new Vector3(TX + 2.6f, 0f, TZ + 2.0f), 40f, 2.4f);
             KenneyKit.Put(root, "log", new Vector3(TX - 1.4f, 0f, TZ - 1.8f), 15f, 2.2f);
@@ -350,9 +350,8 @@ public static class BuildNiwa {
             for (int i2 = 0; i2 < 22; i2++) {
                 float a = Random.Range(0f, 360f) * Mathf.Deg2Rad;
                 float r = Random.Range(0.62f, 0.95f);
-                KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)],
-                    new Vector3(TX + Mathf.Cos(a) * 7.5f * r, 0f, TZ + Mathf.Sin(a) * 6.0f * r),
-                    Random.Range(0f, 360f), Random.Range(1.3f, 2.0f));
+                Kusa1(new Vector3(TX + Mathf.Cos(a) * 7.5f * r, 0f, TZ + Mathf.Sin(a) * 6.0f * r),
+                      Random.Range(0f, 360f), Random.Range(1.3f, 2.0f));
             }
             // 東の あそび場を 囲う（絵はがきの 外へ 出られない ように）
             Box(root, "BLK_HigashiN", new Vector3(24f, 3f, 20f), new Vector3(28f, 8f, 0.3f), null, false);
