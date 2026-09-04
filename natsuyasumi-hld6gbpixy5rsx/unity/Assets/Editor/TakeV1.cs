@@ -356,15 +356,22 @@ public static class TakeV1 {
             Quad(o + 1, o + 2, q + 1, q + 2, Vector3.up);   // 天端
             Quad(o + 2, o + 3, q + 2, q + 3, oku);          // 奥（庭の 土に うまる ぶん。念のため）
         }
-        // 両はしの 小口（進む 向きの 外へ）
+        // 両はしの 小口：小口だけの 頂点を 足す（表の 頂点を 使いまわすと u が 同じで 絵が 横に 流れ、縞に なった）
         var dir0 = (pts[1] - pts[0]); dir0.y = 0f; dir0.Normalize();
         var dirN = (pts[n - 1] - pts[n - 2]); dirN.y = 0f; dirN.Normalize();
-        { int o = 0; var nrm = Vector3.Cross(v[o + 1] - v[o + 0], v[o + 2] - v[o + 0]);
-          if (Vector3.Dot(nrm, -dir0) >= 0f) { tri.Add(o + 0); tri.Add(o + 1); tri.Add(o + 2); tri.Add(o + 0); tri.Add(o + 2); tri.Add(o + 3); }
-          else { tri.Add(o + 0); tri.Add(o + 2); tri.Add(o + 1); tri.Add(o + 0); tri.Add(o + 3); tri.Add(o + 2); } }
-        { int o = (n - 1) * 4; var nrm = Vector3.Cross(v[o + 1] - v[o + 0], v[o + 2] - v[o + 0]);
-          if (Vector3.Dot(nrm, dirN) >= 0f) { tri.Add(o + 0); tri.Add(o + 1); tri.Add(o + 2); tri.Add(o + 0); tri.Add(o + 2); tri.Add(o + 3); }
-          else { tri.Add(o + 0); tri.Add(o + 2); tri.Add(o + 1); tri.Add(o + 0); tri.Add(o + 3); tri.Add(o + 2); } }
+        void Koguchi(int o, Vector3 sotoMuki) {
+            int b0 = v.Count;
+            float uA = 0f, uB = (ATSU + KOUBAI) / 1.6f;
+            v.Add(v[o + 0]); uv.Add(new Vector2(uA, v[o + 0].y / 1.6f));
+            v.Add(v[o + 1]); uv.Add(new Vector2(uA, v[o + 1].y / 1.6f));
+            v.Add(v[o + 2]); uv.Add(new Vector2(uB, v[o + 2].y / 1.6f));
+            v.Add(v[o + 3]); uv.Add(new Vector2(uB, v[o + 3].y / 1.6f));
+            var nrm = Vector3.Cross(v[b0 + 1] - v[b0 + 0], v[b0 + 2] - v[b0 + 0]);
+            if (Vector3.Dot(nrm, sotoMuki) >= 0f) { tri.Add(b0 + 0); tri.Add(b0 + 1); tri.Add(b0 + 2); tri.Add(b0 + 0); tri.Add(b0 + 2); tri.Add(b0 + 3); }
+            else { tri.Add(b0 + 0); tri.Add(b0 + 2); tri.Add(b0 + 1); tri.Add(b0 + 0); tri.Add(b0 + 3); tri.Add(b0 + 2); }
+        }
+        Koguchi(0, -dir0);
+        Koguchi((n - 1) * 4, dirN);
         var m = new Mesh { name = "Ishigaki" };
         m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(tri, 0);
         m.RecalculateNormals(); m.RecalculateBounds();
@@ -463,7 +470,7 @@ public static class TakeV1 {
                 p.y = jimenY(p.x, p.z) + 0.05f + (h + ty) * Mathf.Lerp(0.08f, 1.0f, u);
                 float cs = Random.Range(0.48f, 0.78f) * Mathf.Lerp(1f, 0.8f, u);
                 cis.Add(new CombineInstance { mesh = mesh0,
-                    transform = Matrix4x4.TRS(p, Quaternion.Euler(Random.Range(-40f, 40f), Random.Range(0f, 360f), Random.Range(-40f, 40f)), new Vector3(cs, cs, 1f)) });
+                    transform = Matrix4x4.TRS(p, Quaternion.Euler(Random.Range(-25f, 25f), Random.Range(0f, 360f), Random.Range(-25f, 25f)), new Vector3(cs, cs, 1f)) });   // 刈りこんだ 生垣＝面は そろえめ
             }
         }
         // 天の 丸み：上に 平たい カードを 少し
@@ -487,7 +494,10 @@ public static class TakeV1 {
         mm.normals = ns;
         var hg = new GameObject("Ha"); hg.transform.SetParent(g.transform, false);
         hg.AddComponent<MeshFilter>().sharedMesh = mm;
-        hg.AddComponent<MeshRenderer>().sharedMaterial = mIkegakiHa;
+        var hmr = hg.AddComponent<MeshRenderer>(); hmr.sharedMaterial = mIkegakiHa;
+        // ★葉の 板は 影を 落とさない（2026-09-04・本人「ひとかたまりなので、こんなに影がはいるはずはない」）。
+        //   板どうしが 影を 落としあって 中が まだらに なって いた。影は 芯の 箱が 1つ 落とす
+        hmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
 
     // ---------------------------------------------------------------- 写真の 草むら

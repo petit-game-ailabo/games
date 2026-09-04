@@ -113,7 +113,7 @@ public static class BuildNiwa {
                 for (float x = seg[0]; x <= seg[1] + 0.01f; x += 0.7f) {
                     float xx = Mathf.Min(x, seg[1]);
                     pts.Add(new Vector3(xx, 0f, -6.05f));
-                    lo.Add(jy(xx, -6.6f) - 0.3f); hi.Add(jy(xx, -5.6f) + 0.06f);
+                    lo.Add(jy(xx, -6.6f) - 0.3f); hi.Add(jy(xx, -5.6f) + 0.02f);   // 天端は 庭の 面と そろえる（擁壁。塀では ない）
                     if (xx >= seg[1]) break;
                 }
                 TakeV1.Ishigaki(root, pts, lo, hi, Vector3.back);
@@ -121,10 +121,13 @@ public static class BuildNiwa {
             // 坂の 両わきの 石垣：道から 段まで、上の 線は 坂に そって 上がる
             foreach (float sx in new[] { -SW, SW }) {
                 var pts = new List<Vector3>(); var lo = new List<float>(); var hi = new List<float>();
-                for (float z = NiwaJimenE.SAKA_Z0 + 0.8f; z <= -5.6f + 0.01f; z += 0.5f) {   // saka ga 0.12m ijou no tokoro kara
+                // ★浮きと 崩れの 直し（2026-09-04・本人「入り口の石垣が浮いてる」「一番手前のテクスチャ崩れてる」）：
+                //   下は **外がわの 地めん**（x を 0.5 外）に そろえる（壁の 線の 上は 坂の 途中の 高さで、外は 道の 高さ）。
+                //   坂が 0.3m に なる ところから 始める（それより 手前は 帯が つぶれて 絵が 流れた）
+                for (float z = NiwaJimenE.SAKA_Z0 + 1.75f; z <= -5.6f + 0.01f; z += 0.5f) {
                     pts.Add(new Vector3(sx, 0f, z));
-                    lo.Add(jy(sx, z) - 0.3f);
-                    hi.Add(Mathf.Max(jy(sx + Mathf.Sign(sx) * 0.6f, z), jy(0f, z)) + 0.06f);
+                    lo.Add(Mathf.Min(jy(sx + Mathf.Sign(sx) * 0.5f, z), jy(sx, z)) - 0.3f);
+                    hi.Add(jy(0f, z) + 0.03f);
                 }
                 TakeV1.Ishigaki(root, pts, lo, hi, sx < 0f ? Vector3.right : Vector3.left);
             }
