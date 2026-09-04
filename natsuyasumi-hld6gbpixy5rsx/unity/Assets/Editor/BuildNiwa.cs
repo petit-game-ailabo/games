@@ -131,21 +131,27 @@ public static class BuildNiwa {
                 }
                 TakeV1.Ishigaki(root, pts, lo, hi, naka);
             }
-            // 東西北の 生垣：3本の 折れ線（西→北西の 角、東→北東の 角）。高さ 1.7m・厚み 0.9m
-            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> { new Vector3(-9.7f, 0f, -5.7f), new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f) }, 0.2f), 1.7f, 0.9f, naka, jy);
-            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> { new Vector3(9.7f, 0f, -5.7f), new Vector3(9.7f, 0f, 13.5f), new Vector3(5.8f, 0f, 13.5f) }, 0.2f), 1.7f, 0.9f, naka, jy);
-            // 庭の 中の 仕切り：縁がわの 西の 庭を 四ツ目垣で 区切る
-            var kaki = new TakeV1.Yabu(root);
-            TakeV1.Kaki(kaki, new Vector3(-9.2f, 0f, 1.2f), new Vector3(-6.0f, 0f, 1.2f), 0.95f, jy);
-            kaki.Katameru();
+            // 東西北の 生垣＝**1本の 折れ線で コの字**（2026-09-05・本人「生け垣が家の後ろに
+            //   配置されていない」）。前は 家の うしろ（x -5.8..5.8）が 空いて いた。
+            //   ★北の 線を z=13.5 の ままに すると 家の 北の 壁（z=13.0）に めりこむ
+            //     （生垣の 厚み 0.9＝13.05〜13.95）。z=14.4 へ 下げ、段の 平場も
+            //     NiwaJimenE.Dan で 15.4 まで 広げた。角は 折れ線なので 留め継ぎに なる
+            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> {
+                new Vector3(-9.7f, 0f, -5.7f), new Vector3(-9.7f, 0f, 14.4f),
+                new Vector3(9.7f, 0f, 14.4f), new Vector3(9.7f, 0f, -5.7f) }, 0.2f),
+                1.7f, 0.9f, naka, jy);
+            // ★四ツ目垣は やめた（2026-09-05・本人「家の左側に木の柵みたいなものがあるけど、
+            //   これはどういったもの？ここにあることは正解？」）。四ツ目垣は 庭の 中の 仕切り
+            //   （前庭と 裏庭を 分ける）なので、区切る ものが 無い ところに 1本だけ 立って いても
+            //   意味が 読めない。その 場所は 納屋に した
         }
 
         // ---- 見えない かべ（Kenney の 塀には あたりが 無い）
         Box(root, "BLK_S1", new Vector3(-5.85f, 1f, -6f), new Vector3(8.1f, 2f, 0.3f), null, false);
         Box(root, "BLK_S2", new Vector3( 5.85f, 1f, -6f), new Vector3(8.1f, 2f, 0.3f), null, false);
-        Box(root, "BLK_E",  new Vector3( 9.7f, 1f, 3.5f),  new Vector3(0.3f, 2f, 20f), null, false);
-        Box(root, "BLK_W",  new Vector3(-9.7f, 1f, 3.5f),  new Vector3(0.3f, 2f, 20f), null, false);
-        Box(root, "BLK_N",  new Vector3(0f, 1f, 13.5f),   new Vector3(20f, 2f, 0.3f), null, false);
+        Box(root, "BLK_E",  new Vector3( 9.7f, 1f, 3.9f),  new Vector3(0.3f, 2f, 21f), null, false);
+        Box(root, "BLK_W",  new Vector3(-9.7f, 1f, 3.9f),  new Vector3(0.3f, 2f, 21f), null, false);
+        Box(root, "BLK_N",  new Vector3(0f, 1f, 14.4f),   new Vector3(20f, 2f, 0.3f), null, false);
         // 道の 外がわ（散歩の はんい）
         Box(root, "BLK_Road", new Vector3(0f, 1f, -12.2f), new Vector3(80f, 2f, 0.3f), null, false);
         Box(root, "BLK_RoadE", new Vector3(39f, 1f, -9f), new Vector3(0.3f, 2f, 9f), null, false);
@@ -172,6 +178,12 @@ public static class BuildNiwa {
             // 高台から 北を 見た ときの 眺めを あける（背景の 山と 空を 見せる）
             //   ★塀の そとから（x>12）。7 から に したら 庭の 東の 木まで 消えた
             if (x > 11f && x < 36f && z > 4f && z < 24f && Random.value > 0.14f) return;
+            // ★竹やぶの 中には 木を 植えない（2026-09-05）。竹は 地下茎で 場所を 取るので
+            //   竹やぶと 雑木は くっきり 分かれる。混ぜると どちらにも 見えない
+            float bx1 = (x + 14.0f) / 8.0f, bz1 = (z - 18.5f) / 6.0f;
+            if (bx1 * bx1 + bz1 * bz1 < 1f) return;
+            float bx2 = (x + 6.4f) / 5.2f, bz2 = (z - 20.5f) / 4.2f;
+            if (bx2 * bx2 + bz2 * bz2 < 1f) return;
             hayashi.Ueru(x, y, z, h, futosa);
         }
         // ★高さは **画角に 入る 上限**から 決める（2026-08-31）。
@@ -181,9 +193,13 @@ public static class BuildNiwa {
         // ★本人 2026-08-31「手前からのカメラに固定…キャラより奥側の木はもっとあってもいい。
         //   逆にキャラより手前は最小限。高台とか青空の画像を見せたいから手前の木は無くていい」
         //   → カメラは いつも 南から 北を 見る。**奥（北）は 厚く、手前（南）は ほんの 数本**
-        Ki(-7.4f, 0.5f, 6.2f, 0.46f);                 // 庭の ぬし（セミの木）
-        Ki(7.6f, 2.4f, 5.6f, 0.34f);
-        Ki(-8.2f, -4.4f, 5.0f, 0.30f);
+        // ★庭の 木は **1本だけ**（2026-09-05・本人「庭に木が、しかも離れたところに生えてる。
+        //   これって普通？自分のイメージだと木は一本ぐらいだし、何かしら季節性のあるものを
+        //   植えるイメージ、梅とか桜とか」）。
+        //   調べ：田舎の 庭は「主木(しゅぼく) 1本 ＋ まわりの 屋敷林」。主木は 梅・柿・松が 多く、
+        //   南〜南西に 植えて 夏の 日ざしを さえぎる。3本を 離して 植えて いたのは 林の 置きかた。
+        //   → 母屋の 南西に 1本。低くて 幹が 太い＝年を とった 梅の 姿に する
+        Ki(-3.6f, 0.6f, 5.4f, 0.52f);                 // 庭の 主木（セミの木）
         // 西の 塀の そと（庭を 木立ちで はさむ）
         for (int i = 0; i < 13; i++) {
             if (Random.value < 0.15f) continue;
@@ -210,9 +226,16 @@ public static class BuildNiwa {
             Ki(hx + Random.Range(-1.5f, 1.5f), -16f - Random.Range(0f, 5f),
                Random.Range(6.0f, 7.6f), Random.Range(0.28f, 0.42f));
 
-        // 竹（北西の かど・和の 気配）
-        // TakeV1 (2026-09-03): low-poly 5 bon -> yabu 26 bon. Green/yellow/dead mix, edge culms lean out
-        TakeV1.Mure(root, -10.6f, 13.4f, 2.4f, 1.9f, 26, (x, z) => NiwaJimenE.Takasa(x, z));
+        // 竹（2026-09-05・本人「竹ってどの位置に生えてるのが正しい？イメージ的には裏山みたいな
+        //   ところに大量に生えてるイメージ。今は庭の端っこだけどここはあってる？」）。
+        //   調べ：モウソウチクは 江戸期に 植えられた **人が 植えた やぶ**。タケノコと 材を 取る ため
+        //   母屋の **裏（北〜北西）の 傾斜地**に まとめて 作る。地下茎で 広がる ので 庭の 中には
+        //   置かない（庭に 1株だけ 生える ことは 無い）。防風林も かねる。
+        //   → 庭の かどの 1かたまりは やめ、**生垣の そと・家の 裏**に 大きな やぶを 2つ
+        //   ★本数は **多いほうに 振る**（本人「大量に生えてるイメージ」）。放置竹林は
+        //     1平方mに 1本 前後。62本/75平方m で 撮ったら 遠目に 林と 見分けが つかなかった
+        TakeV1.Mure(root, -14.0f, 18.5f, 6.5f, 4.5f, 112, (x, z) => NiwaJimenE.Takasa(x, z));
+        TakeV1.Mure(root, -6.4f, 20.5f, 4.0f, 3.0f, 46, (x, z) => NiwaJimenE.Takasa(x, z));
 
         // ---- 草・花（塀ぎわ・木の 根もと・玄関わき）
         string[] kusa = { "grass", "grass_large", "grass_leafs", "grass_leafsLarge" };
@@ -240,11 +263,18 @@ public static class BuildNiwa {
         // 岩と 丸太は TakeV1（写真の 皮・岩はだの 絵）。キノコは 消した（本人 2026-09-03）
         {
             var mono = new TakeV1.Yabu(root);
-            TakeV1.Iwa(root, new Vector3(-4.4f, NiwaJimenE.Takasa(-4.4f, 4.6f), 4.6f), 0.9f, 20f);
-            TakeV1.Iwa(root, new Vector3(6.2f, NiwaJimenE.Takasa(6.2f, -4.2f), -4.2f), 0.7f, 200f);
+            // ★岩は **見えて いる 地面板（当たり＋0.05）の 上**に 置く（2026-09-05）。
+            //   当たりの 高さに 置いて いた ので 芝生に 黒い 三日月が 落ちて いるだけに 見えた
+            TakeV1.Iwa(root, new Vector3(-4.4f, NiwaJimenE.Takasa(-4.4f, 4.6f) + 0.10f, 4.6f), 0.9f, 20f);
+            TakeV1.Iwa(root, new Vector3(6.2f, NiwaJimenE.Takasa(6.2f, -4.2f) + 0.10f, -4.2f), 0.7f, 200f);
             TakeV1.Maruta(mono, new Vector3(9.2f, NiwaJimenE.Takasa(9.2f, 6.5f), 6.5f), 75f, 1.7f, 0.17f);
             mono.Katameru();
         }
+
+        // ---- 納屋（庭の 西）と 水まわり（家の 東）。2026-09-05・本人の 指示。
+        //   どちらも **地めんの 高さを 自分で 決めて** 置く ので、下の すわらせ直しからは 外す
+        NiwaNaya.Build(root);
+        NiwaMizu.Build(root);
 
         // ---- 遠景の 描き割り（絵はがき文法の 検証・2026-08-30 本人GO）：
         //   歩けないが 見える 遠景が「世界は 続いてる」を 作る。山なみ 2層＋入道雲。
@@ -364,7 +394,7 @@ public static class BuildNiwa {
             }
             {
                 var mono2 = new TakeV1.Yabu(root);
-                TakeV1.Iwa(root, new Vector3(TX + 2.6f, NiwaJimenE.Takasa(TX + 2.6f, TZ + 2.0f), TZ + 2.0f), 1.1f, 40f);
+                TakeV1.Iwa(root, new Vector3(TX + 2.6f, NiwaJimenE.Takasa(TX + 2.6f, TZ + 2.0f) + 0.10f, TZ + 2.0f), 1.1f, 40f);
                 TakeV1.Maruta(mono2, new Vector3(TX - 1.4f, NiwaJimenE.Takasa(TX - 1.4f, TZ - 1.8f), TZ - 1.8f), 15f, 1.9f, 0.19f);
                 mono2.Katameru();
             }
@@ -598,7 +628,8 @@ public static class BuildNiwa {
             string[] nuki = { "Jimen", "JimenE", "MichiSoto", "BLK_", "Sora", "Satoyama",
                               "YamaToi", "Kumo", "Cam", "Sun", "Day", "Volume", "Player",
                               "Takadai", "Kage", "KiMiki", "KiHa", "KiAtari",
-                              "Take", "Ishigaki", "Ikegaki", "Iwa", "Mushi", "Mise_", "Ie" };
+                              "Take", "Ishigaki", "Ikegaki", "Iwa", "Mushi", "Mise_", "Ie",
+                              "Naya", "Suido", "Hanadan" };
             int naosi = 0;
             for (int i = 0; i < root.childCount; i++) {
                 var t = root.GetChild(i);

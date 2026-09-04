@@ -32,6 +32,26 @@ public class MuraDay : MonoBehaviour {
                 if (float.TryParse(a.Substring(6), out h)) Hour = Mathf.Repeat(h, 24f);
             }
         }
+        // ★shot.ps1 の 引数を 庭でも 受ける（2026-09-05）。tools/shot.ps1 は
+        //   -tod/-clock/-day を **2語で** わたす（座敷の TimeOfDay 向けの 書きかた）。
+        //   ここで 読まないと 「-tod hiru で 撮った つもりが 朝6時の 絵」に なる
+        var av = System.Environment.GetCommandLineArgs();
+        for (int i = 0; i + 1 < av.Length; i++) {
+            if (av[i] == "-clock") {
+                float h2;
+                if (float.TryParse(av[i + 1], out h2)) Hour = Mathf.Repeat(h2, 24f);
+            } else if (av[i] == "-day") {
+                int d2;
+                if (int.TryParse(av[i + 1], out d2)) Day = Mathf.Clamp(d2, 1, 31);
+            } else if (av[i] == "-tod") {
+                switch (av[i + 1]) {
+                    case "asa":    Hour = 7.0f; break;
+                    case "hiru":   Hour = 12.0f; break;
+                    case "yugata": Hour = 18.0f; break;
+                    case "yoru":   Hour = 21.0f; break;
+                }
+            }
+        }
         chime = gameObject.AddComponent<AudioSource>();
         chime.clip = OtoGen.Chime();
         chime.spatialBlend = 0f; chime.volume = 0.5f;

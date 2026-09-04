@@ -15,7 +15,7 @@
 | `Editor/NiwaKawara.cs` | 軒瓦の一列（9点断面・垂れ） | `Ichimai` |
 | `Editor/NiwaJimenE.cs` | 地面の高さ関数と一枚絵の焼き | `Takasa(x,z)`＝高台 `Takadai`＋段 `Dan`。定数 `NH=0.6 SAKA_Z0/Z1/HABA TX TZ TH HABA=32`。`Yaku` `Ita` `Ami` `MichiAmi` |
 | `Editor/NiwaJimen.cs` | 接地の影・座らせ・浮き検査 | `Setchi` `Ki` `Uki(oya, 名)`（名に Kabetsuki を含む物は飛ばす） `Kaku` |
-| `Editor/TakeV1.cs` | 竹藪 `Mure`／四ツ目垣 `Kaki`／丸太 `Maruta`／岩 `Iwa`／石垣 `Ishigaki`／生垣 `Ikegaki`／折れ線 `Kizamu` `SotoHousen` | `Yabu` が筒メッシュの入れ物（材質 0緑1黄2茶3杭4皮） |
+| `Editor/TakeV1.cs` | 竹藪 `Mure`／丸太 `Maruta`／岩 `Iwa`／石垣 `Ishigaki`／生垣 `Ikegaki`／折れ線 `Kizamu` `SotoHousen`。四ツ目垣 `Kaki` は **呼ぶ人がいない**（D-199 で撤去） | `Yabu` が筒メッシュの入れ物（材質 0緑1黄2茶3杭4皮） |
 | `Editor/KiV5.cs` | 筒の木（幹16角・`Suji/Futo` 背骨・`FUTOSA_BAI`） | `new KiV5.Hayashi(root)` → `Ueru` → `Katameru` |
 | `Editor/NiwaNaya.cs` `NiwaMizu.cs` `NiwaBuhin.cs` | 納屋・水まわり(立水栓 `SUI`・ヒマワリ)・材質と箱の共通部品 | `Build(root)` |
 | `Editor/SetupURP.cs` | 取り込み規則（`/mushi/` `/shashin/`） | |
@@ -50,10 +50,15 @@
 ## 検証（数字→絵の順）
 
 ```
-unity/tools/rebuild.ps1 -Only NiwaAll.Win      # 組む＋Win ビルド
-niwa.exe -tour -hour=14 [-mushi]               # 撮影ツアー（Player.log に [Probe] と Uki の結果）
-unity/tools/rebuild.ps1 -Only NiwaAll.WinWeb   # 公開用（Web も焼く）
+unity/tools/rebuild.ps1 -Only NiwaAll.Win           # 組む＋Win ビルド
+unity/tools/shot.ps1 -tod hiru -at '-4.6,0.6'       # 庭を 1枚（-scene の既定が niwa）
+unity/tools/shot.ps1 -at '0,2' -fukan 20            # 真上から（家の裏・囲いはこれでしか見えない）
+unity/tools/shot.ps1 -day 18 -at '7.6,-1.8'         # 日づけを進める（ヒマワリの育ち）
+niwa.exe -tour -hour=14 [-mushi]                    # 撮影ツアー（Player.log に [Probe] と Uki）
+unity/tools/rebuild.ps1 -Only NiwaAll.WinWeb        # 公開用（Web も焼く）
 ```
+**exe は 3つある。** `shot.ps1 -scene` の既定は `niwa`（`Builds/niwa-win/niwa.exe`）。
+`mura` `zashiki` は別物。走らせた exe は毎回 `== player: ... ==` に出るので、絵が変なときは まずそこ。
 Player.log: `%USERPROFILE%/AppData/LocalLow/petit-game-ailabo/niwa/Player.log`。
 浮き・埋まりは `Uki` の行で確かめる。絵は最後に 1〜2枚、読む前に 960 幅へ縮める。
 
@@ -63,3 +68,5 @@ Player.log: `%USERPROFILE%/AppData/LocalLow/petit-game-ailabo/niwa/Player.log`�
 - 実行時 `Shader.Find` はビルドで失敗する。材質はビルド時にアセットで作る。
 - 筒の UV は継ぎ目に頂点を1つ余分に（sides+1）。
 - 段（`Dan`）で高さを変えたら、座らせ直しの `nuki` を確かめる。
+- 地面に置く物は **`Takasa` + 0.05 より上**（見えている地面は一枚絵の板 `JimenE`）。下だと丸ごと消える（D-201）。
+- 建てものの戸は **南（カメラがわ）**に向ける。カメラは南向き固定なので、東西の面は一生 真横（D-200）。

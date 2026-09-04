@@ -137,7 +137,11 @@ public static class NiwaJimenE {
         //   垣根が こわれて 見える。2.5m間かくで 振幅20cm・波長7.7mだと 段が 19cm＝
         //   塀の 高さ87cmの 2割。0.8 平らに すれば 段は 6cmに おさまる
         hira = Mathf.Max(hira, Hako(wx, wz, -10.2f, 10.2f, -6.7f, -5.3f, 1.0f) * 0.8f);
-        hira = Mathf.Max(hira, Hako(wx, wz, -10.2f, 10.2f, 12.8f, 14.2f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, -10.2f, 10.2f, 13.7f, 15.1f, 1.0f) * 0.8f);
+        // 建てものと 花壇の 足もと（2026-09-05）。凸凹の 上に 置くと 角が 浮く／沈む
+        hira = Mathf.Max(hira, Hako(wx, wz, -9.4f, -6.1f, 0.0f, 4.7f, 1.0f));    // 納屋
+        hira = Mathf.Max(hira, Hako(wx, wz, 6.75f, 9.25f, 0.25f, 3.15f, 1.0f));  // 花壇
+        hira = Mathf.Max(hira, Hako(wx, wz, 5.85f, 6.80f, 2.45f, 3.75f, 0.8f));  // 立水栓
         hira = Mathf.Max(hira, Hako(wx, wz, -10.4f, -9.0f, -7f, 14f, 1.0f) * 0.8f);
         hira = Mathf.Max(hira, Hako(wx, wz, 9.0f, 10.4f, -7f, 14f, 1.0f) * 0.8f);
         // 塀の そと（誰も 歩かない）は 大きく
@@ -182,7 +186,9 @@ public static class NiwaJimenE {
     public static float Dan(float wx, float wz) {
         // 平場：x -10.4..10.4、z -6..14.5。南は 0.25m で 立ちあがる（石垣）、ほかは 2m で なだらかに
         float sx = 1f - Fuchi(0f, 2.0f, Mathf.Max(-10.4f - wx, wx - 10.4f));
-        float sn = 1f - Fuchi(0f, 2.0f, wz - 14.5f);
+        // ★北の ふちは 生垣を 家の うしろ（z=14.4）へ まわした ぶん 広げた（2026-09-05）。
+        //   14.5 の ままだと 北の 生垣が 段の 斜面の 上に 立って 傾いて 見える
+        float sn = 1f - Fuchi(0f, 2.0f, wz - 15.4f);
         float ss = Fuchi(SAKA_Z1 - 0.25f, SAKA_Z1, wz);
         float hira = Mathf.Min(sx, Mathf.Min(sn, ss));
         // 坂：まん中の 帯だけ、直線で 上がる。横は 0.4m で 消す（坂の 両わきも 石垣）
@@ -430,6 +436,33 @@ public static class NiwaJimenE {
             Sen(mKoke, p3, p0, 0.35f, 0.50f, 0.7f);
         }
 
+        // 納屋・立水栓・花壇の まわり（2026-09-05）。**位置は 場面から 拾う**（数字を 二重に 持たない）
+        var tatemono = new List<Vector3>();
+        foreach (var nm in new[] { "Naya", "Suido", "Hanadan" }) {
+            var o = root.Find(nm);
+            if (o == null) continue;
+            Bounds b2 = default; bool ar2 = false;
+            foreach (var r in o.GetComponentsInChildren<Renderer>()) {
+                if (r == null || !r.enabled) continue;
+                if (!ar2) { b2 = r.bounds; ar2 = true; } else b2.Encapsulate(r.bounds);
+            }
+            if (!ar2) continue;
+            tatemono.Add(b2.center);
+            var c2 = new Vector2(b2.center.x, b2.center.z);
+            if (nm == "Naya") {
+                // 戸口の 前は 踏み かたまり、とびいしの 並びへ 通いみちが つく
+                var kuchi = new Vector2(NiwaNaya.Guchi.x, NiwaNaya.Guchi.z);
+                Maru(mDoro, kuchi, 0.85f, 0.9f, 0.85f);
+                Sen(mDoro, kuchi, new Vector2(1.7f, 0.1f), 0.32f, 0.50f, 0.62f);
+                Sen(mKoke, new Vector2(c2.x, c2.y + 1.9f), new Vector2(c2.x, c2.y - 1.9f), 0.35f, 0.5f, 0.5f);
+            } else if (nm == "Suido") {
+                Maru(mJari, c2, 0.72f, 0.70f, 0.90f);   // 水受けの まわりは 砂利
+                Maru(mKoke, c2, 1.05f, 0.90f, 0.55f);   // いつも 濡れて いる ので 苔
+            } else {
+                Maru(mDoro, c2, 1.75f, 0.70f, 0.80f);   // 花壇の まわりは 踏んだ 土
+            }
+        }
+
         // ★地ばんの 高さを 絵に 焼きこむ（2026-08-31）。
         //   なめらかな 起伏は **明るさでは ほとんど 見えない**。傾斜 5〜8%＝3〜5°なので
         //   真昼だと 明るさの ちがいは 0.3%。ふせ角10°では 自分を 隠しも しない。
@@ -462,6 +495,7 @@ public static class NiwaJimenE {
                                  .Append(q.size.ToString("F2"));
         foreach (var q in hei) sig.Append("|h").Append(q.center.ToString("F2"));
         sig.Append("|e").Append(ieAru ? ie.center.ToString("F2") + ie.size.ToString("F2") : "-");
+        foreach (var q in tatemono) sig.Append("|t").Append(q.ToString("F2"));
         foreach (var nm in new[] { "ji_kusa", "ji_tsuchi", "ji_jari", "ji_koke" }) {
             var fi = new System.IO.FileInfo("Assets/Art/Textures/" + nm + ".jpg");
             sig.Append("|m").Append(fi.Exists ? fi.Length : 0);

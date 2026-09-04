@@ -211,6 +211,24 @@ public static class SetupURP {
             // ★写真から 起こした 遠景の 描き割りも 対象外（2026-08-30）。
             //   点フィルタ＋ミップ無しだと 縮小で ちらつき、色の ノイズに 見える
             string fn = System.IO.Path.GetFileNameWithoutExtension(path);
+            // ★ヒマワリの 板（2026-09-05・make_himawari.py）。0.30mの 花を 192pxで 描いた もの
+            //   ＝画面では 縮んで 出る。点フィルタ＋ミップ無しだと 花びらの ふちが ちらつく。
+            //   1枚絵を 板に 貼るだけ なので 端は くり返さない（Clamp）
+            if (fn.StartsWith("himawari")) {
+                var tih = AssetImporter.GetAtPath(path) as TextureImporter;
+                if (tih != null && (tih.filterMode != FilterMode.Bilinear || !tih.mipmapEnabled
+                                    || tih.wrapMode != TextureWrapMode.Clamp)) {
+                    tih.textureType = TextureImporterType.Default;
+                    tih.filterMode = FilterMode.Bilinear;
+                    tih.mipmapEnabled = true;
+                    tih.alphaIsTransparency = true;
+                    tih.wrapMode = TextureWrapMode.Clamp;
+                    tih.textureCompression = TextureImporterCompression.Uncompressed;
+                    tih.SaveAndReimport();
+                    Debug.Log("[SetupURP] himawari: " + path);
+                }
+                continue;
+            }
             // kage_＝接地の影の ぼかし。点フィルタだと 輪が 階段に なる
             if (fn.StartsWith("satoyama") || fn.StartsWith("yama_") || fn.StartsWith("kumo")
                 || fn.StartsWith("kage_")) {

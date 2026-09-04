@@ -28,6 +28,74 @@ public class MuraMove : MonoBehaviour {
             if (a == "-noboru") { StartCoroutine(Noboru()); break; }
             if (a == "-repro") { StartCoroutine(Repro()); break; }
         }
+        // ★-at "x,z[,y]" で 主人公を そこへ 飛ばす（2026-09-05）。
+        //   AutoShot の -at は PlayerMove しか 見て いない ので、庭（MuraMove）では
+        //   だまって 効かず、**どこを 撮っても 同じ 絵**に なって いた
+        var av = System.Environment.GetCommandLineArgs();
+        for (int i = 0; i + 1 < av.Length; i++)
+            if (av[i] == "-at") { StartCoroutine(Tobu(av[i + 1])); break; }
+        // ★-fukan [size] で 俯瞰図を 開いた まま 撮る（2026-09-05）。
+        //   追従カメラは いつも 南から 北を 向く ので、**家の 裏は どうやっても 撮れない**。
+        //   囲い（生垣・石垣）や 物の 置き場所の 確かめは 俯瞰で やる
+        for (int i = 0; i < av.Length; i++)
+            if (av[i] == "-fukan") {
+                StartCoroutine(Fukan(i + 1 < av.Length ? av[i + 1] : null));
+                break;
+            }
+    }
+
+    System.Collections.IEnumerator Fukan(string ookisa) {
+        for (int i = 0; i < 20; i++) yield return null;      // -at の 移動を 先に 効かせる
+        if (cam == null) yield break;
+        float sz = 30f;
+        if (!string.IsNullOrEmpty(ookisa)) float.TryParse(ookisa, out sz);
+        sz = Mathf.Clamp(sz, 4f, 200f);
+        var fk = cam.GetComponent<MuraFukan>();
+        if (fk != null) {                                    // 村には 俯瞰エディタが ある
+            fk.size = sz; fk.height = Mathf.Max(sz + 12f, 40f);
+            fk.Set(true);
+        } else {
+            // 庭には MuraFukan が 無い ので、撮影の あいだだけ カメラを 真上から の
+            // 正射影に する。**囲いや 置き場所は これでしか 確かめられない**
+            //   （追従カメラは いつも 南から 北。家の 裏は 一生 写らない）
+            MuraCamFixed.Suspended = true;
+            var c = cam.GetComponent<Camera>();
+            if (c != null) {
+                c.orthographic = true;
+                c.orthographicSize = sz;
+                c.farClipPlane = Mathf.Max(c.farClipPlane, 300f);
+                var uac = c.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+                if (uac != null) uac.renderPostProcessing = false;   // 深度ぼかしで 全面 ぼける
+            }
+            RenderSettings.fog = false;
+            cam.position = new Vector3(0f, 90f, 4f);
+            cam.rotation = Quaternion.Euler(90f, 0f, 0f);    // 画面の 上が 北
+        }
+        Debug.Log("[MuraMove] -fukan size=" + sz + (fk != null ? " (MuraFukan)" : " (ortho)"));
+    }
+
+    /// <summary>撮影用の テレポート。地めんの 高さは 上から レイを 落として 拾う。
+    /// **層2（屋根・見えない かべ）は 拾わない**（屋根の 上に 立った 絵に なる）</summary>
+    System.Collections.IEnumerator Tobu(string at) {
+        yield return null;
+        var q = at.Split(',');
+        if (q.Length < 2) yield break;
+        float ax, az;
+        if (!float.TryParse(q[0], out ax) || !float.TryParse(q[1], out az)) yield break;
+        var to = new Vector3(ax, 0f, az);
+        float y;
+        if (q.Length > 2 && float.TryParse(q[2], out y)) to.y = y;
+        else {
+            RaycastHit gh;
+            to.y = Physics.Raycast(new Vector3(ax, 80f, az), Vector3.down, out gh, 200f,
+                                   ~(1 << 2), QueryTriggerInteraction.Ignore)
+                 ? gh.point.y + 0.1f : 1f;
+        }
+        cc.enabled = false;
+        transform.position = to;
+        Physics.SyncTransforms();
+        cc.enabled = true;
+        Debug.Log("[MuraMove] -at " + to.ToString("F2"));
     }
 
     /// <summary>本人の 報告を **歩いて** 再現する（テレポートの ツアーでは 出ない ものが ある）。

@@ -20,13 +20,26 @@ param(
   [string]$at = '', [string]$clock = '', [string]$play = '', [string]$playwait = '1',
   [int]$frames = 150, [string]$face = '', [string]$pose = '',
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
-  [string]$OutDir = '', [string]$day = ''
+  [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
+  [string]$fukan = ''
 )
 $ErrorActionPreference = 'Stop'
 
 $UNITY = Split-Path -Parent $PSScriptRoot                     # ...\unity
-$EXE   = Join-Path $UNITY 'Builds\win\natsuyasumi.exe'
+# There are THREE player builds here and they are easy to mix up. Shooting the
+# wrong one wastes a whole verification round (2026-09-05: the garden work was
+# checked against the August zashiki build and showed a tatami room).
+#   -scene niwa     Builds\niwa-win\niwa.exe      the garden (Niwa.unity)  <- default
+#   -scene mura     Builds\mura-win\mura.exe      the village
+#   -scene zashiki  Builds\win\natsuyasumi.exe    the old room scene
+switch ($scene) {
+  'niwa'    { $EXE = Join-Path $UNITY 'Builds\niwa-win\niwa.exe' }
+  'mura'    { $EXE = Join-Path $UNITY 'Builds\mura-win\mura.exe' }
+  'zashiki' { $EXE = Join-Path $UNITY 'Builds\win\natsuyasumi.exe' }
+  default   { throw "unknown -scene $scene (niwa / mura / zashiki)" }
+}
 if (-not (Test-Path $EXE)) { throw "player not built: $EXE  (run rebuild.ps1 first)" }
+Write-Output "== player: $EXE =="
 if ($OutDir -eq '') { $OutDir = Join-Path $env:TEMP 'natsuyasumi\shots' }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
@@ -53,6 +66,9 @@ if ($aibo) { $a += @('-aibo','1') }
 if ($jikan) { $a += @('-jikan','1') }
 if ($sumo -gt 0)  { $a += @('-sumo', "$sumo") }
 if ($at    -ne '') { $a += @('-at', $at) }
+# -fukan <size in metres> opens the top-down map and shoots that (garden scene only).
+# The follow camera always looks north, so the BACK of the house can only be checked here.
+if ($fukan -ne '') { $a += @('-fukan', $fukan) }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }
