@@ -218,8 +218,8 @@ public static class BuildNiwa {
         string[] kusa = { "grass", "grass_large", "grass_leafs", "grass_leafsLarge" };
         // Kusa1: photo grass card (kusa_kabu.png) when the picture exists, else the low-poly prop
         void Kusa1(Vector3 at, float yaw, float scale) {
-            if (TakeV1.KusaKabu(root, at, yaw, 0.28f * scale)) return;
-            KenneyKit.Put(root, kusa[Random.Range(0, kusa.Length)], at, yaw, scale);
+            // ★地めんの 草むらは 置かない（2026-09-04・本人「地面に生えてるちっちゃい草無くして」）。
+            //   黄色い 房が 点々と 散って 目ざわりだった。芝の 絵と 生垣・竹藪だけで 足りる
         }
         void KusaMure(float cx, float cz, float r, int n, float s0, float s1) {
             for (int i = 0; i < n; i++) {
