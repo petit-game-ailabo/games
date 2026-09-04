@@ -102,49 +102,37 @@ public static class BuildNiwa {
         ie.position = new Vector3(0f, NiwaJimenE.NH, 4f - NiwaIe.MINAMI);   // 段の 上（D-187）
         NiwaIe.Build(ie);
 
-        // ---- 屋敷の 囲い（2026-09-04・D-187）：南は 石垣＋斜めの 坂（門も 柵も 無し・開けっぱなし）、
-        //   東西北は 人の 背丈の 生垣。四ツ目垣は 庭の 中の 仕切りに 1本だけ
+        // ---- 屋敷の 囲い（2026-09-04・D-187〜D-191）：南は 石垣＋斜めの 坂（門も 柵も 無し）、
+        //   東西北は 刈りこんだ 生垣（塊）。四ツ目垣は 庭の 中の 仕切りに 1本だけ
         {
             System.Func<float, float, float> jy = (x, z) => NiwaJimenE.Takasa(x, z);
-            float NH = NiwaJimenE.NH, SW = NiwaJimenE.SAKA_HABA + 0.08f;
-            // 南の 石垣（坂の ところは 切る）。下は 地めんに 0.3m うめ、上は 段の 面 +0.06
-            foreach (var seg in new[] { new[] { -10.6f, -SW }, new[] { SW, 10.6f } }) {
-                var pts = new List<Vector3>(); var lo = new List<float>(); var hi = new List<float>();
-                for (float x = seg[0]; x <= seg[1] + 0.01f; x += 0.7f) {
-                    float xx = Mathf.Min(x, seg[1]);
-                    pts.Add(new Vector3(xx, 0f, -6.05f));
-                    lo.Add(jy(xx, -6.6f) - 0.3f); hi.Add(jy(xx, -5.6f) + 0.02f);   // 天端は 庭の 面と そろえる（擁壁。塀では ない）
-                    if (xx >= seg[1]) break;
+            var naka = new Vector3(0f, 0f, 4f);                         // 庭の 中（外向きを 決める）
+            float SW = NiwaJimenE.SAKA_HABA + 0.08f;
+            float zSakaMoto = NiwaJimenE.SAKA_Z0 + 1.75f;               // 坂が 0.3m に なる ところ
+            // ★石垣は 左右 それぞれ **1本の 折れ線**（坂脇→角→南）。角は 留め継ぎ（D-191）
+            foreach (float sgn in new[] { -1f, 1f }) {
+                var kado = new List<Vector3> {
+                    new Vector3(sgn * SW, 0f, zSakaMoto),
+                    new Vector3(sgn * SW, 0f, -6.05f),
+                    new Vector3(sgn * 10.6f, 0f, -6.05f),
+                };
+                var pts = TakeV1.Kizamu(kado, 0.5f);
+                var lo = new List<float>(); var hi = new List<float>();
+                foreach (var p in pts) {
+                    // 外がわ（庭から 遠い ほう）の 地めんに 下を そろえ、内がわ（坂か 庭）の 面に 天端を そろえる
+                    var toOut = p - naka; toOut.y = 0f; toOut.Normalize();
+                    bool yoko = Mathf.Abs(p.z - (-6.05f)) > 0.01f;      // 坂脇の 部分
+                    Vector3 soto = yoko ? new Vector3(sgn, 0f, 0f) : Vector3.back;
+                    Vector3 uchi = -soto;
+                    var po = p + soto * 0.5f; var pu = p + uchi * 0.45f;
+                    lo.Add(Mathf.Min(jy(po.x, po.z), jy(p.x, p.z)) - 0.3f);
+                    hi.Add(jy(pu.x, pu.z) + 0.02f);
                 }
-                TakeV1.Ishigaki(root, pts, lo, hi, Vector3.back);
+                TakeV1.Ishigaki(root, pts, lo, hi, naka);
             }
-            // 坂の 両わきの 石垣：道から 段まで、上の 線は 坂に そって 上がる
-            foreach (float sx in new[] { -SW, SW }) {
-                var pts = new List<Vector3>(); var lo = new List<float>(); var hi = new List<float>();
-                // ★浮きと 崩れの 直し（2026-09-04・本人「入り口の石垣が浮いてる」「一番手前のテクスチャ崩れてる」）：
-                //   下は **外がわの 地めん**（x を 0.5 外）に そろえる（壁の 線の 上は 坂の 途中の 高さで、外は 道の 高さ）。
-                //   坂が 0.3m に なる ところから 始める（それより 手前は 帯が つぶれて 絵が 流れた）
-                for (float z = NiwaJimenE.SAKA_Z0 + 1.75f; z <= -5.6f + 0.01f; z += 0.5f) {
-                    pts.Add(new Vector3(sx, 0f, z));
-                    lo.Add(Mathf.Min(jy(sx + Mathf.Sign(sx) * 0.5f, z), jy(sx, z)) - 0.3f);
-                    hi.Add(jy(0f, z) + 0.03f);
-                }
-                TakeV1.Ishigaki(root, pts, lo, hi, sx < 0f ? Vector3.right : Vector3.left);
-            }
-            // 東西北の 生垣（サザンカ・イヌマキ の つもり。高さ 1.7m・厚み 0.8m）
-            TakeV1.Ikegaki(root, new Vector3(-9.7f, 0f, -5.7f), new Vector3(-9.7f, 0f, 13.5f), 1.7f, 0.8f, jy);
-            TakeV1.Ikegaki(root, new Vector3(9.7f, 0f, -5.7f), new Vector3(9.7f, 0f, 13.5f), 1.7f, 0.8f, jy);
-            TakeV1.Ikegaki(root, new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f), 1.7f, 0.8f, jy);
-            TakeV1.Ikegaki(root, new Vector3(5.8f, 0f, 13.5f), new Vector3(9.7f, 0f, 13.5f), 1.7f, 0.8f, jy);
-            // 草原：庭と 道ばたに 短い 草を ばらまく（道・飛び石・家の 足もとは よける）
-            System.Func<float, float, bool> yoke = (x, z) =>
-                (Mathf.Abs(x) < 1.5f && z > -10f && z < 3f)                     // 門から 玄関への 踏み跡
-                || (x > -6.2f && x < 6.2f && z > 1.6f && z < 13.2f)            // 家の 足もと
-                || (z > -12.8f && z < -6.4f && Mathf.Abs(x) < 44f && Mathf.Abs(x) > 1.9f && z < -7.2f);  // 道の 上
-            int kh = TakeV1.KusaHara(root, -9.6f, 9.6f, -5.6f, 13.3f, 1.6f, jy, yoke);
-            kh += TakeV1.KusaHara(root, -16f, 16f, -13.5f, -6.3f, 0.9f, jy, yoke);
-            Debug.Log("[Probe] KusaHara " + kh + " kabu");
-
+            // 東西北の 生垣：3本の 折れ線（西→北西の 角、東→北東の 角）。高さ 1.7m・厚み 0.9m
+            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> { new Vector3(-9.7f, 0f, -5.7f), new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f) }, 0.5f), 1.7f, 0.9f, naka, jy);
+            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> { new Vector3(9.7f, 0f, -5.7f), new Vector3(9.7f, 0f, 13.5f), new Vector3(5.8f, 0f, 13.5f) }, 0.5f), 1.7f, 0.9f, naka, jy);
             // 庭の 中の 仕切り：縁がわの 西の 庭を 四ツ目垣で 区切る
             var kaki = new TakeV1.Yabu(root);
             TakeV1.Kaki(kaki, new Vector3(-9.2f, 0f, 1.2f), new Vector3(-6.0f, 0f, 1.2f), 0.95f, jy);
