@@ -72,3 +72,54 @@ def iwa(name, seed):
     print(name)
 
 iwa("iwa_hada.jpg", 7)
+
+
+# ---- dry stone wall (ishigaki.jpg): field stones packed tight (nozura-zumi), thin dark joints, grainy faces.
+#   Tiles horizontally and vertically. UV: 1 repeat = 1.6 m
+def ishigaki(name, seed):
+    import math
+    rnd = random.Random(seed)
+    W2, H2 = 512, 512
+    im = Image.new("RGB", (W2, H2), (82, 76, 66))
+    d = ImageDraw.Draw(im)
+    y = -20
+    while y < H2 + 40:
+        h = rnd.randint(64, 110)
+        x = -rnd.randint(0, 70)
+        while x < W2 + 60:
+            w = rnd.randint(70, 150)
+            base = rnd.choice([(126, 121, 112), (116, 112, 105), (134, 127, 116), (108, 106, 100), (122, 115, 104), (140, 134, 122)])
+            pts = []
+            cx, cy, rx, ry = x + w / 2, y + h / 2, w / 2 - 2, h / 2 - 2
+            n = rnd.randint(9, 14)
+            for k in range(n):
+                a = k / n * 2 * math.pi + rnd.uniform(-0.12, 0.12)
+                jr = rnd.uniform(0.90, 1.0)
+                pts.append((cx + math.cos(a) * rx * jr, cy + math.sin(a) * ry * jr))
+            d.polygon(pts, fill=base)
+            # subtle relief: a soft dark crescent at the bottom-right, light at the top-left
+            dk = tuple(int(c * 0.86) for c in base); lt = tuple(min(255, int(c * 1.07)) for c in base)
+            lo = [p for p in pts if p[1] > cy + ry * 0.35]
+            if len(lo) > 1: d.line(lo, fill=dk, width=5)
+            hi = [p for p in pts if p[1] < cy - ry * 0.35]
+            if len(hi) > 1: d.line(hi, fill=lt, width=3)
+            x += w + rnd.randint(2, 6)
+        y += h + rnd.randint(2, 6)
+    # grain on the faces
+    px = im.load()
+    for _ in range(90000):
+        x = rnd.randrange(W2); y2 = rnd.randrange(H2)
+        c = px[x, y2]; k = rnd.uniform(0.9, 1.1)
+        px[x, y2] = tuple(min(255, int(v * k)) for v in c)
+    im = im.filter(ImageFilter.GaussianBlur(0.7))
+    moss = Image.new("RGB", (W2, H2), (96, 116, 62))
+    m = Image.new("L", (W2, H2), 0); dm = ImageDraw.Draw(m)
+    for _ in range(18):
+        x = rnd.randrange(W2); y2 = rnd.randrange(H2 // 2, H2); r = rnd.randint(12, 34)
+        dm.ellipse([x - r, y2 - r, x + r, y2 + r], fill=rnd.randint(50, 110))
+    m = m.filter(ImageFilter.GaussianBlur(9))
+    im = Image.composite(moss, im, m)
+    im.save(os.path.join(OUT, name), quality=92)
+    print(name)
+
+ishigaki("ishigaki.jpg", 11)

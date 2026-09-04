@@ -317,6 +317,109 @@ public static class TakeV1 {
         var col = g.AddComponent<SphereCollider>(); col.radius = size * 0.42f; col.center = Vector3.zero;
     }
 
+    // ---------------------------------------------------------------- 石垣と 生垣（2026-09-04）
+    // ★本人「家の周りってぼくなつみたいに石垣じゃない？…人の身長ぐらいの草の塊みたいな壁」。
+    //   調べ：山あいの 家は 道との 段差を 野面積みの 石垣が 支え、横と 裏は 生垣（サザンカ・イヌマキ・
+    //   茶の木、1.5〜2m）か 屋敷林。四ツ目垣は 庭の 中の 仕切りで、外周には つかわない
+    static Material mIshigaki;
+    /// <summary>石垣：折れ線に そった 立った 帯。点ごとに 下と 上の 高さ。絵は 1.6m で 1くりかえし</summary>
+    public static void Ishigaki(Transform root, List<Vector3> pts, List<float> yShita, List<float> yUe, Vector3 omote) {
+        if (mIshigaki == null) mIshigaki = Mat("NiwaIshigaki", "ishigaki.jpg", false);
+        int n = pts.Count; if (n < 2) return;
+        var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+        float acc = 0f;
+        for (int i = 0; i < n; i++) {
+            if (i > 0) acc += Vector3.Distance(new Vector3(pts[i].x, 0f, pts[i].z), new Vector3(pts[i - 1].x, 0f, pts[i - 1].z));
+            v.Add(new Vector3(pts[i].x, yShita[i], pts[i].z)); uv.Add(new Vector2(acc / 1.6f, yShita[i] / 1.6f));
+            v.Add(new Vector3(pts[i].x, yUe[i], pts[i].z));    uv.Add(new Vector2(acc / 1.6f, yUe[i] / 1.6f));
+        }
+        for (int i = 0; i < n - 1; i++) {
+            int a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+            // おもてが omote を 向く ように 巻く
+            var nrm = Vector3.Cross(v[c] - v[a], v[b] - v[a]);
+            if (Vector3.Dot(nrm, omote) >= 0f) { tri.Add(a); tri.Add(c); tri.Add(b); tri.Add(b); tri.Add(c); tri.Add(d); }
+            else { tri.Add(a); tri.Add(b); tri.Add(c); tri.Add(b); tri.Add(d); tri.Add(c); }
+        }
+        var m = new Mesh { name = "Ishigaki" };
+        m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(tri, 0);
+        m.RecalculateNormals(); m.RecalculateBounds();
+        var g = new GameObject("Ishigaki");
+        g.transform.SetParent(root, false);
+        g.AddComponent<MeshFilter>().sharedMesh = m;
+        g.AddComponent<MeshRenderer>().sharedMaterial = mIshigaki;
+    }
+
+    static Material mIkegakiNaka, mIkegakiHa;
+    /// <summary>生垣：a→b に 高さ h・厚み atsumi。中は 暗い 箱（すけない）、表は 葉の カードを 密に</summary>
+    public static void Ikegaki(Transform root, Vector3 a, Vector3 b, float h, float atsumi, System.Func<float, float, float> jimenY) {
+        if (mIkegakiNaka == null) {
+            mIkegakiNaka = Mat("NiwaIkegakiNaka", "ki_ha.png", false);
+            mIkegakiNaka.color = new Color(0.16f, 0.22f, 0.10f);
+        }
+        if (mIkegakiHa == null) mIkegakiHa = Mat("NiwaIkegakiHa", "ki_ha.png", true);
+        var d = b - a; d.y = 0f; float len = d.magnitude; if (len < 0.2f) return;
+        var dir = d / len; var yoko = Vector3.Cross(Vector3.up, dir);
+        var g = new GameObject("Ikegaki");
+        g.transform.SetParent(root, false);
+        // 中の 箱（地めんに そって 何個かに 分ける）
+        int kazu = Mathf.Max(1, Mathf.RoundToInt(len / 3f));
+        float ins = 0.35f;   // hako wa ryouhashi wo hikkomeru (hashi no kuroi men ga mieta)
+        for (int i = 0; i < kazu; i++) {
+            var p0 = a + dir * (ins + (len - 2f * ins) * i / kazu); var p1 = a + dir * (ins + (len - 2f * ins) * (i + 1) / kazu);
+            var c = (p0 + p1) * 0.5f; c.y = (jimenY(p0.x, p0.z) + jimenY(p1.x, p1.z)) * 0.5f + h * 0.45f;
+            var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.DestroyImmediate(box.GetComponent<Collider>());
+            box.name = "Naka"; box.transform.SetParent(g.transform, false);
+            box.transform.position = c; box.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+            box.transform.localScale = new Vector3(atsumi * 0.7f, h * 0.8f, (len - 2f * ins) / kazu + 0.05f);
+            box.GetComponent<MeshRenderer>().sharedMaterial = mIkegakiNaka;
+        }
+        // 葉の カード：0.22m ごとに 3段、前後 2列。法線は 上＋外（片面が 黒く ならない）
+        var cis = new List<CombineInstance>();
+        var mesh0 = Quad();
+        for (float t = 0f; t <= len; t += 0.22f)
+            for (int dan = 0; dan < 3; dan++)
+                for (int retsu = -1; retsu <= 1; retsu += 2) {
+                    var p = a + dir * t + yoko * (retsu * atsumi * 0.45f);
+                    p.y = jimenY(p.x, p.z) + h * (0.18f + 0.36f * dan) + Random.Range(-0.08f, 0.08f);
+                    p += dir * Random.Range(-0.08f, 0.08f);
+                    float cs = Random.Range(0.42f, 0.60f);
+                    float yaw = Mathf.Atan2(yoko.x * retsu, yoko.z * retsu) * Mathf.Rad2Deg + Random.Range(-35f, 35f);
+                    cis.Add(new CombineInstance { mesh = mesh0,
+                        transform = Matrix4x4.TRS(p, Quaternion.Euler(Random.Range(-20f, 20f), yaw, Random.Range(-25f, 25f)), new Vector3(cs, cs, 1f)) });
+                }
+        // ue no fuki (flat cards) and both ends
+        for (float t = 0f; t <= len; t += 0.26f)
+            for (int retsu = -1; retsu <= 1; retsu += 2) {
+                var p = a + dir * t + yoko * (retsu * atsumi * 0.22f);
+                p.y = jimenY(p.x, p.z) + h * 0.97f + Random.Range(-0.05f, 0.05f);
+                float cs = Random.Range(0.45f, 0.6f);
+                cis.Add(new CombineInstance { mesh = mesh0,
+                    transform = Matrix4x4.TRS(p, Quaternion.Euler(90f + Random.Range(-20f, 20f), Random.Range(0f, 360f), 0f), new Vector3(cs, cs, 1f)) });
+            }
+        foreach (var e in new[] { a, b }) {
+            var f = (e == a) ? -dir : dir;
+            for (int dan = 0; dan < 3; dan++)
+                for (int k = -1; k <= 1; k++) {
+                    var p = e + f * 0.1f + yoko * (k * atsumi * 0.3f);
+                    p.y = jimenY(p.x, p.z) + h * (0.18f + 0.36f * dan);
+                    float cs = Random.Range(0.45f, 0.6f);
+                    float yaw = Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg + Random.Range(-30f, 30f);
+                    cis.Add(new CombineInstance { mesh = mesh0,
+                        transform = Matrix4x4.TRS(p, Quaternion.Euler(Random.Range(-15f, 15f), yaw, Random.Range(-20f, 20f)), new Vector3(cs, cs, 1f)) });
+                }
+        }
+        var mm = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+        mm.CombineMeshes(cis.ToArray(), true, true);
+        var ns = new Vector3[mm.vertexCount]; var vs = mm.vertices;
+        var mid = (a + b) * 0.5f;
+        for (int i = 0; i < ns.Length; i++) { var o = vs[i] - mid; o = Vector3.Project(o, yoko); ns[i] = (o.normalized * 0.6f + Vector3.up).normalized; }
+        mm.normals = ns;
+        var hg = new GameObject("Ha"); hg.transform.SetParent(g.transform, false);
+        hg.AddComponent<MeshFilter>().sharedMesh = mm;
+        hg.AddComponent<MeshRenderer>().sharedMaterial = mIkegakiHa;
+    }
+
     // ---------------------------------------------------------------- 写真の 草むら
     static Material mKusa;
     /// <summary>草むら 1株＝写真の 板を 十字に 2まい。絵（kusa_kabu.png）が 無ければ false（呼ぶ がわは ローポリで 代用）</summary>

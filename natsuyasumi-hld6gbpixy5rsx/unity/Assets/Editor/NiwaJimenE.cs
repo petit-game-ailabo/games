@@ -129,6 +129,7 @@ public static class NiwaJimenE {
         //   踏み跡を |x|<3.3 に したら **見えて いる 芝生の ほぼ 全部が 平ら**に なり、
         //   凸凹が まったく 出なかった
         hira = Mathf.Max(hira, Hako(wx, wz, -1.3f, 1.3f, -7.5f, 8.5f, 1.0f));   // 庭の 踏み跡
+        hira = Mathf.Max(hira, Hako(wx, wz, -2.2f, 2.2f, -10.5f, -5.5f, 0.8f));  // 門の 坂（段の ふちも）
         hira = Mathf.Max(hira, Hako(wx, wz, -6.5f, 6.5f, 1.5f, 13f, 1.2f));     // 家の 敷地（2階建て・南西を 切りかき）
         hira = Mathf.Max(hira, Hako(wx, wz, -44f, 44f, -12.6f, -6.6f, 1.2f) * 0.85f); // 道
         hira = Mathf.Max(hira, Hako(wx, wz, 10f, 32f, -8f, 12f, 2.5f));         // 高台
@@ -171,8 +172,27 @@ public static class NiwaJimenE {
     }
 
     /// <summary>地ばんの 高さ</summary>
+    // ---- 庭の 段（2026-09-04・本人「家の周りってぼくなつみたいに石垣じゃない？…入口がちょっと斜めの坂で、
+    //   石垣に囲まれつつ、入り口あたりは大きく開いてる」）。
+    //   山あいの 家は 道より 一段 高い 平場に 建ち、段差を 石垣が 支え、道からは 斜めの 坂で 上がる。
+    //   庭 ぜんぶを NH だけ 上げ、南の ふち（z=-6）は 石垣の ぶん 鋭く、東西北は 生垣の 中で ゆるく 落とす。
+    //   坂は |x|<1.6 で z -9.5→-6 を 直線で 上がる：0.6m/3.5m ＝ 9.7°（歩く 道の 上限 10°の 内）
+    public const float NH = 0.6f;                       // 段の 高さ
+    public const float SAKA_Z0 = -9.5f, SAKA_Z1 = -6.0f, SAKA_HABA = 1.6f;
+    public static float Dan(float wx, float wz) {
+        // 平場：x -10.4..10.4、z -6..14.5。南は 0.25m で 立ちあがる（石垣）、ほかは 2m で なだらかに
+        float sx = 1f - Fuchi(0f, 2.0f, Mathf.Max(-10.4f - wx, wx - 10.4f));
+        float sn = 1f - Fuchi(0f, 2.0f, wz - 14.5f);
+        float ss = Fuchi(SAKA_Z1 - 0.25f, SAKA_Z1, wz);
+        float hira = Mathf.Min(sx, Mathf.Min(sn, ss));
+        // 坂：まん中の 帯だけ、直線で 上がる。横は 0.4m で 消す（坂の 両わきも 石垣）
+        float saka = Mathf.Clamp01((wz - SAKA_Z0) / (SAKA_Z1 - SAKA_Z0)) * (1f - Fuchi(SAKA_HABA - 0.1f, SAKA_HABA + 0.3f, Mathf.Abs(wx)));
+        if (wz > SAKA_Z1) saka = 0f;
+        return NH * Mathf.Max(hira, saka);
+    }
+
     public static float Takasa(float wx, float wz) {
-        float taka = Takadai(wx, wz);
+        float taka = Takadai(wx, wz) + Dan(wx, wz);
         float a = Haba(wx, wz);
         if (a < 0.001f) return taka;
         // ★Fbm を そのまま つかっては いけない（2026-08-31）。

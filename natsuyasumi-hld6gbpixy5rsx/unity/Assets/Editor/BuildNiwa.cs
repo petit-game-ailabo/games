@@ -99,30 +99,49 @@ public static class BuildNiwa {
         // ★母屋＝**ぼくなつ1の 空野家**に 合わせた ふつうの 民家（10.8 x 7.2m の 平屋）。
         //   NiwaIe が 南（-Z）を 向いて 組む ので まわさない。
         //   ガラス戸の 面が z=4 に 来る 位置に 置く（棟が 画面に 入る 距離を かせぐ）
-        ie.position = new Vector3(0f, 0f, 4f - NiwaIe.MINAMI);
+        ie.position = new Vector3(0f, NiwaJimenE.NH, 4f - NiwaIe.MINAMI);   // 段の 上（D-187）
         NiwaIe.Build(ie);
 
-        // ---- 塀と 門：四ツ目垣と 冠木門（TakeV1・2026-09-03・本人「日本の田舎っぽいやつにしよう」）
+        // ---- 屋敷の 囲い（2026-09-04・D-187）：南は 石垣＋斜めの 坂（門も 柵も 無し・開けっぱなし）、
+        //   東西北は 人の 背丈の 生垣。四ツ目垣は 庭の 中の 仕切りに 1本だけ
         {
             System.Func<float, float, float> jy = (x, z) => NiwaJimenE.Takasa(x, z);
+            float NH = NiwaJimenE.NH, SW = NiwaJimenE.SAKA_HABA + 0.08f;
+            // 南の 石垣（坂の ところは 切る）。下は 地めんに 0.3m うめ、上は 段の 面 +0.06
+            foreach (var seg in new[] { new[] { -10.6f, -SW }, new[] { SW, 10.6f } }) {
+                var pts = new List<Vector3>(); var lo = new List<float>(); var hi = new List<float>();
+                for (float x = seg[0]; x <= seg[1] + 0.01f; x += 0.7f) {
+                    float xx = Mathf.Min(x, seg[1]);
+                    pts.Add(new Vector3(xx, 0f, -6.05f));
+                    lo.Add(jy(xx, -6.6f) - 0.3f); hi.Add(jy(xx, -5.6f) + 0.06f);
+                    if (xx >= seg[1]) break;
+                }
+                TakeV1.Ishigaki(root, pts, lo, hi, Vector3.back);
+            }
+            // 坂の 両わきの 石垣：道から 段まで、上の 線は 坂に そって 上がる
+            foreach (float sx in new[] { -SW, SW }) {
+                var pts = new List<Vector3>(); var lo = new List<float>(); var hi = new List<float>();
+                for (float z = NiwaJimenE.SAKA_Z0 + 0.8f; z <= -5.6f + 0.01f; z += 0.5f) {   // saka ga 0.12m ijou no tokoro kara
+                    pts.Add(new Vector3(sx, 0f, z));
+                    lo.Add(jy(sx, z) - 0.3f);
+                    hi.Add(Mathf.Max(jy(sx + Mathf.Sign(sx) * 0.6f, z), jy(0f, z)) + 0.06f);
+                }
+                TakeV1.Ishigaki(root, pts, lo, hi, sx < 0f ? Vector3.right : Vector3.left);
+            }
+            // 東西北の 生垣（サザンカ・イヌマキ の つもり。高さ 1.7m・厚み 0.8m）
+            TakeV1.Ikegaki(root, new Vector3(-9.7f, 0f, -5.7f), new Vector3(-9.7f, 0f, 13.5f), 1.7f, 0.8f, jy);
+            TakeV1.Ikegaki(root, new Vector3(9.7f, 0f, -5.7f), new Vector3(9.7f, 0f, 13.5f), 1.7f, 0.8f, jy);
+            TakeV1.Ikegaki(root, new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f), 1.7f, 0.8f, jy);
+            TakeV1.Ikegaki(root, new Vector3(5.8f, 0f, 13.5f), new Vector3(9.7f, 0f, 13.5f), 1.7f, 0.8f, jy);
+            // 庭の 中の 仕切り：縁がわの 西の 庭を 四ツ目垣で 区切る
             var kaki = new TakeV1.Yabu(root);
-            const float KH = 1.05f;
-            // 南（門を まん中に）: z=-6。すきま |x|<1.25 が 門
-            TakeV1.Kaki(kaki, new Vector3(-9.7f, 0f, -6f), new Vector3(-1.3f, 0f, -6f), KH, jy);
-            TakeV1.Kaki(kaki, new Vector3(1.3f, 0f, -6f), new Vector3(9.7f, 0f, -6f), KH, jy);
-            TakeV1.Mon(kaki, new Vector3(0f, 0f, -6f), 2.6f, Vector3.right, 2.0f, jy);
-            // 東西: x=±9.7、z -6..13.5
-            TakeV1.Kaki(kaki, new Vector3(-9.7f, 0f, -6f), new Vector3(-9.7f, 0f, 13.5f), KH, jy);
-            TakeV1.Kaki(kaki, new Vector3(9.7f, 0f, -6f), new Vector3(9.7f, 0f, 13.5f), KH, jy);
-            // 北（家の 両わきだけ）
-            TakeV1.Kaki(kaki, new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f), KH, jy);
-            TakeV1.Kaki(kaki, new Vector3(5.8f, 0f, 13.5f), new Vector3(9.7f, 0f, 13.5f), KH, jy);
+            TakeV1.Kaki(kaki, new Vector3(-9.2f, 0f, 1.2f), new Vector3(-6.0f, 0f, 1.2f), 0.95f, jy);
             kaki.Katameru();
         }
 
         // ---- 見えない かべ（Kenney の 塀には あたりが 無い）
-        Box(root, "BLK_S1", new Vector3(-5.6f, 1f, -6f), new Vector3(8.6f, 2f, 0.3f), null, false);
-        Box(root, "BLK_S2", new Vector3( 5.6f, 1f, -6f), new Vector3(8.6f, 2f, 0.3f), null, false);
+        Box(root, "BLK_S1", new Vector3(-5.85f, 1f, -6f), new Vector3(8.1f, 2f, 0.3f), null, false);
+        Box(root, "BLK_S2", new Vector3( 5.85f, 1f, -6f), new Vector3(8.1f, 2f, 0.3f), null, false);
         Box(root, "BLK_E",  new Vector3( 9.7f, 1f, 3.5f),  new Vector3(0.3f, 2f, 20f), null, false);
         Box(root, "BLK_W",  new Vector3(-9.7f, 1f, 3.5f),  new Vector3(0.3f, 2f, 20f), null, false);
         Box(root, "BLK_N",  new Vector3(0f, 1f, 13.5f),   new Vector3(20f, 2f, 0.3f), null, false);
@@ -362,7 +381,7 @@ public static class BuildNiwa {
 
         // ---- 主人公（マリサ 8方向スプライト・ライトを 受ける）
         var player = new GameObject("Player");
-        player.transform.position = new Vector3(0f, 0.3f, -1.5f);
+        player.transform.position = new Vector3(0f, NiwaJimenE.NH + 0.3f, -1.5f);
         var cc = player.AddComponent<CharacterController>();
         cc.height = 1.0f; cc.radius = 0.26f; cc.center = new Vector3(0f, 0.52f, 0f);
         cc.slopeLimit = 50f; cc.stepOffset = 0.35f;
@@ -405,8 +424,8 @@ public static class BuildNiwa {
 
         // ---- 撮影ツアーの たちば
         var tourNames = new[] { "にわ", "もんのそと", "たかだい", "にわのにし" };
-        var tourPos = new[] { new Vector3(0f, 0.3f, -1.5f), new Vector3(3f, 0.3f, -9.3f), new Vector3(NiwaJimenE.TX, NiwaJimenE.TH + 0.6f, NiwaJimenE.TZ),
-                                new Vector3(-9f, 0.5f, 6f) };
+        var tourPos = new[] { new Vector3(0f, NiwaJimenE.NH + 0.3f, -1.5f), new Vector3(3f, 0.3f, -9.3f), new Vector3(NiwaJimenE.TX, NiwaJimenE.TH + 0.6f, NiwaJimenE.TZ),
+                                new Vector3(-7.4f, NiwaJimenE.NH + 0.5f, 6f) };   // ikegaki no naka ni hairanai you 2.3m uchigawa
         var tour = new Transform[tourPos.Length];
         for (int i = 0; i < tourPos.Length; i++) {
             var g = new GameObject("Mise_" + tourNames[i]);
