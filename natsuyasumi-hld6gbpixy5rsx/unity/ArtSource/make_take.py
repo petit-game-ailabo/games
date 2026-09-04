@@ -161,7 +161,7 @@ ikegaki("ikegaki_hada.jpg", 21)
 # ---- hedge fur shell (ikegaki_ke.png, RGBA): sprigs of narrow leaves with transparency, colours sampled from the
 #   user's hedge photo (shashin/ikegaki.png). Tiles both ways. Drawn on 1..2 shells offset from the hedge core mesh
 #   so the silhouette breaks up like real foliage (2026-09-04).
-def ikegaki_ke(name, seed):
+def ikegaki_ke(name, seed, kazu=520):
     import math
     rnd = random.Random(seed)
     W2, H2 = 512, 512
@@ -182,7 +182,7 @@ def ikegaki_ke(name, seed):
         for dx in (-W2, 0, W2):
             for dy in (-H2, 0, H2):
                 d.polygon([(x + dx, y + dy) for x, y in pts], fill=col + (255,))
-    for _ in range(520):                       # sprigs
+    for _ in range(kazu):                      # sprigs
         cx = rnd.randrange(W2); cy = rnd.randrange(H2)
         base = rnd.uniform(0, math.pi * 2)
         for k in range(rnd.randint(4, 8)):
@@ -194,3 +194,4 @@ def ikegaki_ke(name, seed):
     print(name, "coverage", sum(1 for p in im.getdata() if p[3] > 0) / (W2 * H2))
 
 ikegaki_ke("ikegaki_ke.png", 31)
+ikegaki_ke("ikegaki_ke2.png", 32, 230)   # outer shell: sparser (nukekan)

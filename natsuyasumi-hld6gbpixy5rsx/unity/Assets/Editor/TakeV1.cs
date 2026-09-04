@@ -403,7 +403,7 @@ public static class TakeV1 {
         g.AddComponent<MeshRenderer>().sharedMaterial = mIshigaki;
     }
 
-    static Material mIkegaki, mIkegakiKe;
+    static Material mIkegaki, mIkegakiKe, mIkegakiKe2;
     /// <summary>生垣＝**1株ずつの 丸い 塊の 列**（2026-09-04・D-194）。
     /// ★本人「まだ一つの物体感がある」。1本の 連続した 押し出しだから そう 見えた。写真は 株ごとに
     ///   独立した 丸い 塊が 並んで 触れあって いる だけ。株ごとに 大きさを 変えた 塊（ゆがめた 球・下は 平ら）を
@@ -427,10 +427,13 @@ public static class TakeV1 {
         if (kabu.Count == 0) { kabu.Add(pts[0]); muki.Add(Vector3.forward); }
         var cv = new List<Vector3>(); var cuv = new List<Vector2>(); var ctri = new List<int>(); var cn = new List<Vector3>();
         var sv = new List<Vector3>(); var suv = new List<Vector2>(); var stri = new List<int>(); var sn = new List<Vector3>();
+        var sv2 = new List<Vector3>(); var suv2 = new List<Vector2>(); var stri2 = new List<int>(); var sn2 = new List<Vector3>();
         const int LA = 10, LO = 18;
         foreach (var (c0, dir) in Zip(kabu, muki)) {
             var yoko = Vector3.Cross(Vector3.up, dir);
-            float w = Random.Range(1.0f, 1.4f) * 0.5f, hh = h * Random.Range(0.88f, 1.12f), dd = atsumi * Random.Range(0.9f, 1.15f) * 0.5f;
+            // ★上は 平ら・横長（2026-09-04・本人「上って丸じゃなくて、もっと平ら」）。芯は 15% 小さく して 外側は シェルだけ
+            float w = Random.Range(1.2f, 1.6f) * 0.5f, hh = h * Random.Range(0.94f, 1.06f), dd = atsumi * Random.Range(0.95f, 1.15f) * 0.5f;
+            const float SHIN = 0.85f;
             var c = c0 + yoko * Random.Range(-0.12f, 0.12f);
             float g0 = jimenY(c.x, c.z);
             float seed = Random.Range(0f, 100f);
@@ -443,8 +446,11 @@ public static class TakeV1 {
                     float th = Mathf.PI * 2f * j / LO;
                     var nrm = new Vector3(Mathf.Sin(ph) * Mathf.Cos(th), Mathf.Cos(ph), Mathf.Sin(ph) * Mathf.Sin(th));
                     float bump = 0.86f + 0.14f * Mathf.PerlinNoise(seed + nrm.x * 2.2f + nrm.y * 1.3f, seed + nrm.z * 2.2f);
-                    var p = new Vector3(nrm.x * w * bump, nrm.y * hh * 0.55f * bump, nrm.z * dd * bump);
-                    p.y += hh * 0.5f;                                 // 中心を 高さの 半分に
+                    // 上半分は つぶす（刈りこんだ 天端）：ny を 0.5乗 で 持ち上げ、高さの 伸びを 0.42 に
+                    float ny = nrm.y >= 0f ? Mathf.Pow(nrm.y, 0.5f) : nrm.y;
+                    float yScale = nrm.y >= 0f ? 0.42f : 0.55f;
+                    var p = new Vector3(nrm.x * w * bump * SHIN, ny * hh * yScale * bump, nrm.z * dd * bump * SHIN);
+                    p.y += hh * 0.55f;                                // 中心を 高さの 55% に
                     if (p.y < 0.05f) p.y = 0.05f;                     // 下は 平ら
                     local.Add(p); lnrm.Add(nrm);
                     cuv.Add(new Vector2((float)j / LO * (w * 2f * Mathf.PI) / 1.0f, (float)(LA - i) / LA * hh / 1.0f));
@@ -462,18 +468,20 @@ public static class TakeV1 {
                     int a0 = b0 + i * (LO + 1) + j, a1 = a0 + 1, b1 = a0 + LO + 1, b2 = b1 + 1;
                     ctri.Add(a0); ctri.Add(b1); ctri.Add(a1); ctri.Add(a1); ctri.Add(b1); ctri.Add(b2);
                 }
-            // 毛の シェル 2まい（塊ごと・法線の 向きに ふくらませる）
-            foreach (float off in new[] { 0.07f, 0.15f }) {
-                int s0 = sv.Count;
+            // 毛の シェル 3まい（塊ごと・法線の 向きに ふくらませる）。外ほど まばら＝抜け感
+            foreach (float off in new[] { 0.06f, 0.14f, 0.24f }) {
+                bool soto = off > 0.2f;
+                var tv = soto ? sv2 : sv; var tuv = soto ? suv2 : suv; var ttri = soto ? stri2 : stri; var tn = soto ? sn2 : sn;
+                int s0 = tv.Count;
                 for (int k = 0; k < local.Count; k++) {
                     var nn = cn[b0 + k]; if (nn.y < -0.2f) nn.y = -0.2f;
-                    sv.Add(cv[b0 + k] + nn.normalized * off); sn.Add(cn[b0 + k]);
-                    suv.Add(cuv[b0 + k] * 2.0f + new Vector2(off * 4f, off * 6f));
+                    tv.Add(cv[b0 + k] + nn.normalized * off); tn.Add(cn[b0 + k]);
+                    tuv.Add(cuv[b0 + k] * 2.0f + new Vector2(off * 4f, off * 6f));
                 }
                 for (int i = 0; i < LA; i++)
                     for (int j = 0; j < LO; j++) {
                         int a0 = s0 + i * (LO + 1) + j, a1 = a0 + 1, b1 = a0 + LO + 1, b2 = b1 + 1;
-                        stri.Add(a0); stri.Add(b1); stri.Add(a1); stri.Add(a1); stri.Add(b1); stri.Add(b2);
+                        ttri.Add(a0); ttri.Add(b1); ttri.Add(a1); ttri.Add(a1); ttri.Add(b1); ttri.Add(b2);
                     }
             }
         }
@@ -489,6 +497,13 @@ public static class TakeV1 {
         kg.AddComponent<MeshFilter>().sharedMesh = sm;
         var kmr = kg.AddComponent<MeshRenderer>(); kmr.sharedMaterial = mIkegakiKe;
         kmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        if (mIkegakiKe2 == null) { mIkegakiKe2 = Mat("NiwaIkegakiKe2", Aru("ikegaki_ke2.png") ? "ikegaki_ke2.png" : "ikegaki_ke.png", true); mIkegakiKe2.SetFloat("_Cutoff", 0.45f); }
+        var sm2 = new Mesh { name = "IkegakiKeSoto", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+        sm2.SetVertices(sv2); sm2.SetUVs(0, suv2); sm2.SetTriangles(stri2, 0); sm2.SetNormals(sn2); sm2.RecalculateBounds();
+        var kg2 = new GameObject("IkegakiKeSoto"); kg2.transform.SetParent(g.transform, false);
+        kg2.AddComponent<MeshFilter>().sharedMesh = sm2;
+        var kmr2 = kg2.AddComponent<MeshRenderer>(); kmr2.sharedMaterial = mIkegakiKe2;
+        kmr2.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
 
     static IEnumerable<(Vector3, Vector3)> Zip(List<Vector3> a, List<Vector3> b) {
