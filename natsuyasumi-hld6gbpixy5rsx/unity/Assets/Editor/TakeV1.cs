@@ -232,7 +232,7 @@ public static class TakeV1 {
         return yabu;
     }
 
-    // ---------------------------------------------------------------- 四ツ目垣・冠木門・丸太・岩
+    // ---------------------------------------------------------------- 四ツ目垣・丸太・岩（冠木門と写真の草むらは 2026-09-05 に 消した＝未使用）
     // ★本人「柵はｍ柵じゃなくて日本の田舎っぽいやつにしよう」（2026-09-03）。
     //   田舎の 家の 庭の 囲いは **四ツ目垣**（杭に 竹の 貫を 2本 渡し、竹の 立子を 前後 交互に 結う）が 定番。
     //   門は 柱 2本に 冠木を 渡した **冠木門**（扉は 無い・田舎は 開けっぱなし）
@@ -259,17 +259,6 @@ public static class TakeV1 {
             p.y = jimenY(p.x, p.z) + 0.02f;
             y.Bou(p, p + Vector3.up * (takasa + Random.Range(-0.04f, 0.06f)), 0.018f, 0.015f, (Random.value < 0.8f) ? 1 : 2, 6);
         }
-    }
-
-    /// <summary>冠木門：柱 2本 ＋ 冠木。at＝門の まん中、haba＝柱の 間、muki＝柱を ならべる 向き</summary>
-    public static void Mon(Yabu y, Vector3 at, float haba, Vector3 muki, float takasa, System.Func<float, float, float> jimenY) {
-        muki.y = 0f; muki.Normalize();
-        var l = at - muki * (haba * 0.5f); var r = at + muki * (haba * 0.5f);
-        l.y = jimenY(l.x, l.z) - 0.05f; r.y = jimenY(r.x, r.z) - 0.05f;
-        y.Bou(l, l + Vector3.up * takasa, 0.09f, 0.08f, 3, 10);
-        y.Bou(r, r + Vector3.up * takasa, 0.09f, 0.08f, 3, 10);
-        var top = Vector3.up * (takasa - 0.10f);
-        y.Bou(l + top - muki * 0.25f, r + top + muki * 0.25f, 0.07f, 0.07f, 3, 8);
     }
 
     /// <summary>丸太：木の 皮の 筒を 横に。両はしが ふさがる よう まん中から 2本</summary>
@@ -521,35 +510,5 @@ public static class TakeV1 {
         }
         o.Add(kado[kado.Count - 1]);
         return o;
-    }
-
-    // ---------------------------------------------------------------- 写真の 草むら
-    static Material mKusa, mKusaHara;
-    /// <summary>草むら 1株＝写真の 板を 十字に 2まい。絵（kusa_kabu.png）が 無ければ false（呼ぶ がわは ローポリで 代用）</summary>
-    public static bool KusaKabu(Transform root, Vector3 at, float yaw, float takasa) {
-        if (!Aru("kusa_kabu.png")) return false;
-        if (mKusa == null) mKusa = Mat("NiwaKusaKabu", "kusa_kabu.png", true);
-        var g = new GameObject("KusaKabu");
-        g.transform.SetParent(root, false);
-        g.transform.position = at;
-        g.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-        for (int i = 0; i < 2; i++) {
-            var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            Object.DestroyImmediate(q.GetComponent<Collider>());
-            q.name = "Ita";
-            q.transform.SetParent(g.transform, false);
-            q.transform.localPosition = new Vector3(0f, takasa * 0.5f, 0f);
-            q.transform.localRotation = Quaternion.Euler(0f, i * 90f, 0f);
-            q.transform.localScale = new Vector3(takasa * 1.1f, takasa, 1f);
-            var mf = q.GetComponent<MeshFilter>();
-            // 法線は ぜんぶ 上（草の 板で 実証ずみ：横向きの 法線だと 片面が まっ黒に なる）
-            var m = Object.Instantiate(mf.sharedMesh);
-            var ns = new Vector3[m.vertexCount]; for (int k = 0; k < ns.Length; k++) ns[k] = Vector3.up;
-            m.normals = ns; mf.sharedMesh = m;
-            var mr = q.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = mKusa;
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        }
-        return true;
     }
 }

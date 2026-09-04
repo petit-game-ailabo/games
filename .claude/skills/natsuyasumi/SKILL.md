@@ -240,5 +240,6 @@ git config --local --add credential.helper store
 ## 台帳
 
 - `PLAN.md` … 作業の台帳。続きはここを読む
+- **`NIWA_MAP.md` … 庭のコード地図。庭を触るならまずこれ。地図→grep→該当の関数だけ読む。`sed` で丸ごと出さない**（利用制限対策 2026-09-05）
 - `DECISIONS.md` … 決めたこと
 - `REPLACE.md` / `CREDITS.md` … 素材と権利。**素材を足したら必ず両方に書く**
