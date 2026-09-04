@@ -21,7 +21,7 @@ param(
   [int]$frames = 150, [string]$face = '', [string]$pose = '',
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
-  [string]$fukan = ''
+  [string]$fukan = '', [switch]$motsu, [switch]$furu
 )
 $ErrorActionPreference = 'Stop'
 
@@ -69,6 +69,9 @@ if ($at    -ne '') { $a += @('-at', $at) }
 # -fukan <size in metres> opens the top-down map and shoots that (garden scene only).
 # The follow camera always looks north, so the BACK of the house can only be checked here.
 if ($fukan -ne '') { $a += @('-fukan', $fukan) }
+# Garden tools: -motsu starts holding the net and cage, -furu swings when a bug is in reach.
+if ($motsu) { $a += @('-motsu') }
+if ($furu)  { $a += @('-furu') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }

@@ -19,7 +19,8 @@
 | `Editor/KiV5.cs` | 筒の木（幹16角・`Suji/Futo` 背骨・`FUTOSA_BAI`） | `new KiV5.Hayashi(root)` → `Ueru` → `Katameru` |
 | `Editor/NiwaNaya.cs` `NiwaMizu.cs` `NiwaBuhin.cs` | 納屋・水まわり(立水栓 `SUI`・ヒマワリ)・材質と箱の共通部品 | `Build(root)` |
 | `Editor/SetupURP.cs` | 取り込み規則（`/mushi/` `/shashin/`） | |
-| `Scripts/NiwaMushi.cs` | 虫（種の表 `Shurui`・`Perch`・動き `*Ugoki`・影・寄りカード） | `-mushi` でデバッグ配置 |
+| `Scripts/NiwaMushi.cs` | 虫（種の表 `Shurui`・`Perch`・動き `*Ugoki`・影・寄りカード・建てものよけ `yoke`・つかまえ `AmiWoFuru`） | `-mushi` でデバッグ配置 |
+| `Scripts/NiwaDougu.cs` | 納屋の道具を取って外で使う（網・かご）。持ちものはカメラ基準で主人公のわきに置く | 台帳は `NiwaNaya.Dougu`。`-motsu`/`-furu` で撮影用の自動運転 |
 | `Scripts/MuraMove.cs` `MuraDay.cs` | 主人公の移動・`-tour` `-noboru`・`-hour=N` | |
 | `Scripts/NiwaHimawari.cs` | ヒマワリの水やり日数 | |
 | `Scripts/NiwaNayaNaka.cs` | 納屋の**屋内カメラ**（カメラ引きとり・手前の壁と屋根を消す・外を落とす） | 消す物は名前の頭で拾う（`NiwaNaya.Okunai`）。配線は BuildNiwa の「納屋の 屋内カメラ」節 |
@@ -73,3 +74,5 @@ Player.log: `%USERPROFILE%/AppData/LocalLow/petit-game-ailabo/niwa/Player.log`�
 - 屋内を見せるなら **カメラ引きとり＋手前の壁を消す＋外を落とす の3つで1組**（D-205）。中に入れるには壁1枚ずつに当たり。
 - **Volume の効果は `AssetDatabase.AddObjectToAsset` でサブアセットに**。忘れるとビルドでポストFXが丸ごと死ぬ（D-206。庭は1か月気づかなかった）。
 - 同じ高さの面を2枚重ねない（土間と基礎で床がまだらになった・D-207）。
+- 生垣は**線から 0.80m** ふくらむ（厚み0.9の半分ではない）。建てものとの間はそれを見込む（D-209）。
+- 屋内は物ごとに当たりを付けず「歩ける帯」を決める（D-210）。持ちものの近さ判定は **xz だけ**（D-211）。

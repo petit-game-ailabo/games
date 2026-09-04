@@ -136,8 +136,11 @@ public static class BuildNiwa {
             //   ★北の 線を z=13.5 の ままに すると 家の 北の 壁（z=13.0）に めりこむ
             //     （生垣の 厚み 0.9＝13.05〜13.95）。z=14.4 へ 下げ、段の 平場も
             //     NiwaJimenE.Dan で 15.4 まで 広げた。角は 折れ線なので 留め継ぎに なる
+            // ★西の 線だけ 0.35m 外へ（2026-09-05）。生垣は 線から **0.80m** ふくらむ
+            //   （芯の 半分 0.44 ＋ 毛の シェル 0.24 ＋ 横ゆらぎ 0.12）ので、-9.7 のままだと
+            //   納屋の 壁を 抜けて 中に 葉が 入って いた
             TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> {
-                new Vector3(-9.7f, 0f, -5.7f), new Vector3(-9.7f, 0f, 14.4f),
+                new Vector3(-10.05f, 0f, -5.7f), new Vector3(-10.05f, 0f, 14.4f),
                 new Vector3(9.7f, 0f, 14.4f), new Vector3(9.7f, 0f, -5.7f) }, 0.2f),
                 1.7f, 0.9f, naka, jy);
             // ★四ツ目垣は やめた（2026-09-05・本人「家の左側に木の柵みたいなものがあるけど、
@@ -150,7 +153,7 @@ public static class BuildNiwa {
         Box(root, "BLK_S1", new Vector3(-5.85f, 1f, -6f), new Vector3(8.1f, 2f, 0.3f), null, false);
         Box(root, "BLK_S2", new Vector3( 5.85f, 1f, -6f), new Vector3(8.1f, 2f, 0.3f), null, false);
         Box(root, "BLK_E",  new Vector3( 9.7f, 1f, 3.9f),  new Vector3(0.3f, 2f, 21f), null, false);
-        Box(root, "BLK_W",  new Vector3(-9.7f, 1f, 3.9f),  new Vector3(0.3f, 2f, 21f), null, false);
+        Box(root, "BLK_W",  new Vector3(-10.05f, 1f, 3.9f),  new Vector3(0.3f, 2f, 21f), null, false);
         Box(root, "BLK_N",  new Vector3(0f, 1f, 14.4f),   new Vector3(20f, 2f, 0.3f), null, false);
         // 道の 外がわ（散歩の はんい）
         Box(root, "BLK_Road", new Vector3(0f, 1f, -12.2f), new Vector3(80f, 2f, 0.3f), null, false);
@@ -199,7 +202,7 @@ public static class BuildNiwa {
         //   調べ：田舎の 庭は「主木(しゅぼく) 1本 ＋ まわりの 屋敷林」。主木は 梅・柿・松が 多く、
         //   南〜南西に 植えて 夏の 日ざしを さえぎる。3本を 離して 植えて いたのは 林の 置きかた。
         //   → 母屋の 南西に 1本。低くて 幹が 太い＝年を とった 梅の 姿に する
-        Ki(-3.6f, 0.6f, 5.4f, 0.52f);                 // 庭の 主木（セミの木）
+        Ki(-3.25f, 0.45f, 5.4f, 0.52f);               // 庭の 主木（セミの木）
         // 西の 塀の そと（庭を 木立ちで はさむ）
         for (int i = 0; i < 13; i++) {
             if (Random.value < 0.15f) continue;
@@ -603,6 +606,21 @@ public static class BuildNiwa {
             for (int i = 0; i < hayashi.Suji.Count; i++)
                 mu.miki.Add(new NiwaMushi.Miki { pts = hayashi.Suji[i], rad = hayashi.Futo[i] });
             mu.font = uiFont;
+            // ★建てものの 中には 湧かない・入らない（2026-09-05・本人「納屋の中、虫が入ってくる」）。
+            //   足もとの 箱を わたす。虫の 配置そのものの 作りこみは あと（PLAN）
+            System.Action<Transform, float> Yoke = (o, nobi) => {
+                if (o == null) return;
+                Bounds bb = default; bool ar = false;
+                foreach (var r in o.GetComponentsInChildren<Renderer>()) {
+                    if (r == null || !r.enabled) continue;
+                    if (!ar) { bb = r.bounds; ar = true; } else bb.Encapsulate(r.bounds);
+                }
+                if (!ar) return;
+                bb.Expand(new Vector3(nobi * 2f, 0f, nobi * 2f));
+                mu.yoke.Add(bb);
+            };
+            Yoke(ie, 1.1f);
+            Yoke(nayaT, 0.8f);
             {   // 足もとの 影の 材質（接地影と 同じ Niwa/Kage）
                 string kp = "Assets/Art/Materials/Niwa/MushiKage.mat";
                 var km = AssetDatabase.LoadAssetAtPath<Material>(kp);
@@ -636,7 +654,13 @@ public static class BuildNiwa {
                 if (e.perch == NiwaMushi.Perch.Sora && e.yoko != null) e.zairyoYoko = MushiMat(e.id + "_yoko", e.yoko);
                 mu.shu.Add(e);
             }
-            Debug.Log("[Probe] NiwaMushi 種 " + e_ari + "/" + mu.shu.Count + " みき " + mu.miki.Count);
+            Debug.Log("[Probe] NiwaMushi 種 " + e_ari + "/" + mu.shu.Count + " みき " + mu.miki.Count
+                      + " よけ " + mu.yoke.Count);
+
+            // ---- 納屋の 道具（網・かご）を 主人公と 虫に つなぐ
+            var dg = root.GetComponentInChildren<NiwaDougu>();
+            if (dg != null) { dg.player = player.transform; dg.mushi = mu; dg.font = uiFont; }
+            else Debug.LogError("[BuildNiwa] NiwaDougu が 場面に ない");
         }
 
         // ---- 物を 地ばんに すわらせる（凸凹に した ぶん、y=0 のままだと 浮く／沈む）

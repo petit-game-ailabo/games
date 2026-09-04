@@ -137,12 +137,12 @@ public static class NiwaJimenE {
         //   垣根が こわれて 見える。2.5m間かくで 振幅20cm・波長7.7mだと 段が 19cm＝
         //   塀の 高さ87cmの 2割。0.8 平らに すれば 段は 6cmに おさまる
         hira = Mathf.Max(hira, Hako(wx, wz, -10.2f, 10.2f, -6.7f, -5.3f, 1.0f) * 0.8f);
-        hira = Mathf.Max(hira, Hako(wx, wz, -10.2f, 10.2f, 13.7f, 15.1f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, -10.55f, 10.2f, 13.7f, 15.1f, 1.0f) * 0.8f);
         // 建てものと 花壇の 足もと（2026-09-05）。凸凹の 上に 置くと 角が 浮く／沈む
-        hira = Mathf.Max(hira, Hako(wx, wz, -9.4f, -6.1f, 0.0f, 4.7f, 1.0f));    // 納屋
+        hira = Mathf.Max(hira, Hako(wx, wz, -9.1f, -5.8f, 0.0f, 4.7f, 1.0f));    // 納屋
         hira = Mathf.Max(hira, Hako(wx, wz, 6.75f, 9.25f, 0.25f, 3.15f, 1.0f));  // 花壇
         hira = Mathf.Max(hira, Hako(wx, wz, 5.85f, 6.80f, 2.45f, 3.75f, 0.8f));  // 立水栓
-        hira = Mathf.Max(hira, Hako(wx, wz, -10.4f, -9.0f, -7f, 14f, 1.0f) * 0.8f);
+        hira = Mathf.Max(hira, Hako(wx, wz, -10.75f, -9.35f, -7f, 15f, 1.0f) * 0.8f);
         hira = Mathf.Max(hira, Hako(wx, wz, 9.0f, 10.4f, -7f, 14f, 1.0f) * 0.8f);
         // 塀の そと（誰も 歩かない）は 大きく
         float soto = 1f + Fuchi(12f, 26f, Mathf.Max(Mathf.Abs(wx), wz - 16f)) * 0.9f;
@@ -185,7 +185,8 @@ public static class NiwaJimenE {
     public const float SAKA_Z0 = -9.5f, SAKA_Z1 = -6.0f, SAKA_HABA = 1.6f;
     public static float Dan(float wx, float wz) {
         // 平場：x -10.4..10.4、z -6..14.5。南は 0.25m で 立ちあがる（石垣）、ほかは 2m で なだらかに
-        float sx = 1f - Fuchi(0f, 2.0f, Mathf.Max(-10.4f - wx, wx - 10.4f));
+        // 西だけ 0.35m 広い（生垣の 線を 外へ 寄せた ぶん・2026-09-05）
+        float sx = 1f - Fuchi(0f, 2.0f, Mathf.Max(-10.75f - wx, wx - 10.4f));
         // ★北の ふちは 生垣を 家の うしろ（z=14.4）へ まわした ぶん 広げた（2026-09-05）。
         //   14.5 の ままだと 北の 生垣が 段の 斜面の 上に 立って 傾いて 見える
         float sn = 1f - Fuchi(0f, 2.0f, wz - 15.4f);

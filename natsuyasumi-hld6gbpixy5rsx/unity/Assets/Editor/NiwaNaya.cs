@@ -27,7 +27,10 @@ using UnityEditor;
 //   入ると `NiwaNayaNaka` が カメラを 引きとり、南の 壁と 屋根を 消して 外を 落とす。
 public static class NiwaNaya {
     // ---- 世界での 置き場所（BuildNiwa から 参照する）
-    public const float CX = -7.75f, CZ = 2.30f;      // 小屋の まん中
+    // ★x は 生垣から 離す（2026-09-05・本人「生け垣も少し壁をすり抜けて、納屋の中に入ってる」）。
+    //   生垣は 株の 芯が 半分 0.44m ＋ 毛の シェル 0.24m ＋ 横ゆらぎ 0.12m ＝ **線から 0.80m** ふくらむ。
+    //   線を -10.05 へ 寄せ（BuildNiwa）、小屋を 東へ 0.30 動かして けらばとの すきまを 0.34m とった
+    public const float CX = -7.45f, CZ = 2.30f;      // 小屋の まん中
     public const float HX = 1.30f, HZ = 1.65f;       // 壁しんの 半分（東西 2.6m x 南北 3.3m）
     /// <summary>戸口の 前の 立ち位置（地面の 絵に 踏み跡を 描く）</summary>
     public static Vector3 Guchi { get { return new Vector3(CX + HX + 0.9f, 0f, CZ - 0.15f); } }
@@ -43,6 +46,7 @@ public static class NiwaNaya {
     const float DE = 0.42f;        // 軒の 出（南北）
     const float TO_H = 0.72f;      // 戸口の 半分（1.44m）
     const float TO_Y = 1.98f;      // 戸の 高さ
+    const float TAI = 0.50f;       // 中を 歩ける 帯の 半分（z 方向）
 
     const float TM_KAWARA = 2.8f, TM_ITA = 1.0f, TM_KI = 0.55f;
     const float TM_ISHI = 1.6f, TM_TO = 2.5f, TM_TAKE = 1.25f;
@@ -154,11 +158,45 @@ public static class NiwaNaya {
         // ---- 中の 道具
         Dougu(t);
 
+        // ---- 中は **左右だけ 歩ける 帯**（2026-09-05・本人「納屋の中当たり判定を細かくつけるのは
+        //      難しいと思うから、ほぼ左右移動だけで、上下はほとんど動けないぐらいの当たり判定でいいや」）。
+        //      道具 1つずつに 当たりを つけるのは 続かない ので、**通り道のほうを 決めて しまう**。
+        //      帯は 戸口の まん中（z=CZ）を 通る ので、東から そのまま 入れる
+        foreach (float sz in new[] { -1f, 1f }) {
+            var w = NiwaBuhin.Hako(t, "BLK_NayaOku",
+                new Vector3(0f, (DODAI + 1.7f) * 0.5f, sz * (TAI + 0.07f)),
+                new Vector3(HX * 2f, 1.7f, 0.14f), null, true);
+            w.GetComponent<Renderer>().enabled = false;
+        }
+
         // ---- 屋内の 見せかた（`NiwaNayaNaka`）。カメラ・ポストFX・主人公は
         //      場面の あとの ほうで できる ので **BuildNiwa が つなぐ**
         Okunai(g, t);
 
         return t;
+    }
+
+    /// <summary>取れる 道具の 台帳。主人公・虫・書体は BuildNiwa が つなぐ</summary>
+    static void Dougu(Transform ami, Transform kago) {
+        var g = new GameObject("Dougu");
+        g.transform.SetParent(ami.root, false);
+        var dd = g.AddComponent<NiwaDougu>();
+        dd.mono = new[] {
+            new NiwaDougu.Mono {
+                id = "ami", namae = "むしとりあみ", mi = ami,
+                oki = ami.position, okiKaiten = ami.eulerAngles,
+                // 右手。柄の もとを 腰に、先が 頭より 上へ 出る。
+                // ★傾きは **外へ**。内へ 倒すと 柄が 顔を 横切る（2026-09-05）
+                mochiOff = new Vector3(0.34f, 0.05f, 0.14f),
+                mochiKaiten = new Vector3(22f, -10f, 24f),
+            },
+            new NiwaDougu.Mono {
+                id = "kago", namae = "むしかご", mi = kago,
+                oki = kago.position, okiKaiten = kago.eulerAngles,
+                mochiOff = new Vector3(-0.28f, 0.30f, 0.10f),   // 左の 腰に さげる
+                mochiKaiten = new Vector3(0f, 14f, 8f),
+            },
+        };
     }
 
     /// <summary>中に 入った ときの しかけ。消す 物は **名まえの 頭で 拾う**
@@ -268,24 +306,28 @@ public static class NiwaNaya {
             NiwaBuhin.Hako(d, "Naya_TanaAshi", new Vector3(tx + sx, 0.95f, tz),
                            new Vector3(0.07f, 1.42f, 0.07f), mIta2);
 
-        // ---- 虫かご（上の 棚。木の わく に 竹の 立子）
+        // ---- 虫かご（上の 棚）。★**自分の 原点を もつ かたまり**に する。
+        //      取って 手に 持たせる ときに その場で まわせないと、納屋の 原点を 中心に
+        //      ぐるぐる まわって しまう（NiwaDougu が 位置と 向きを 毎フレーム 決める）
+        var kagoT = new GameObject("Naya_Mono_Kago").transform;
+        kagoT.SetParent(d, false);
+        kagoT.localPosition = new Vector3(-0.30f, 1.385f, 1.12f);
         {
-            float kx = -0.30f, ky = 1.365f, kz = 1.12f;
-            NiwaBuhin.Hako(d, "Naya_Kago_Soko", new Vector3(kx, ky + 0.02f, kz),
+            NiwaBuhin.Hako(kagoT, "Kago_Soko", new Vector3(0f, 0.02f, 0f),
                            new Vector3(0.24f, 0.04f, 0.20f), mIta2);
-            NiwaBuhin.Hako(d, "Naya_Kago_Ten", new Vector3(kx, ky + 0.30f, kz),
+            NiwaBuhin.Hako(kagoT, "Kago_Ten", new Vector3(0f, 0.30f, 0f),
                            new Vector3(0.24f, 0.04f, 0.20f), mIta2);
             for (int i = 0; i < 6; i++) {
                 float u = -0.10f + i * 0.04f;
                 foreach (float sz in new[] { -0.09f, 0.09f })
-                    NiwaBuhin.Bou(d, "Naya_Kago_Ko", new Vector3(kx + u, ky + 0.04f, kz + sz),
-                                  new Vector3(kx + u, ky + 0.28f, kz + sz), 0.006f, mTake);
+                    NiwaBuhin.Bou(kagoT, "Kago_Ko", new Vector3(u, 0.04f, sz),
+                                  new Vector3(u, 0.28f, sz), 0.006f, mTake);
             }
             foreach (float sx in new[] { -0.115f, 0.115f })
                 for (int i = 0; i < 4; i++) {
                     float u = -0.075f + i * 0.05f;
-                    NiwaBuhin.Bou(d, "Naya_Kago_Ko", new Vector3(kx + sx, ky + 0.04f, kz + u),
-                                  new Vector3(kx + sx, ky + 0.28f, kz + u), 0.006f, mTake);
+                    NiwaBuhin.Bou(kagoT, "Kago_Ko", new Vector3(sx, 0.04f, u),
+                                  new Vector3(sx, 0.28f, u), 0.006f, mTake);
                 }
         }
 
@@ -310,24 +352,27 @@ public static class NiwaNaya {
                           MatIro("NayaSaoMoto", new Color(0.34f, 0.30f, 0.26f), 0.20f));
         }
 
-        // ---- 虫取り網（戸口の わき。輪は 柄に 直角、網は その 先へ すぼまる）
+        // ---- 虫取り網。**柄の もとが 原点**の かたまり（+y が 柄の 向き）。
+        //      輪は 柄に 直角、網は 輪から 下へ 垂れる（柄の 向きに のばすと 電がさに 見えた）
+        var amiT = new GameObject("Naya_Mono_Ami").transform;
+        amiT.SetParent(d, false);
         {
             var a = new Vector3(0.86f, DODAI, -1.38f);
             var b = new Vector3(1.02f, 1.76f, -1.02f);
-            NiwaBuhin.Bou(d, "Naya_Ami_E", a, b, 0.014f, mTake);
             var dir = (b - a).normalized;
-            var wa = NiwaBuhin.Mesh1(d, "Naya_Ami_Wa", NiwaBuhin.Wa("NayaAmiWa", 0.155f, 0.010f),
-                                     mTetsu);
-            wa.transform.localPosition = b + dir * 0.02f;
-            wa.transform.localRotation = Quaternion.FromToRotation(Vector3.up, dir);
-            // ★網は 輪から **下へ 垂れる**。柄の 向きに のばして いたら 上へ 伸びて
-            //   電がさに 見えた（2026-09-05）。口を 輪に あわせ、袋は 重みで 下がる
-            var ami = NiwaBuhin.Mesh1(d, "Naya_Ami_Nuno",
+            amiT.localPosition = a;
+            amiT.localRotation = Quaternion.FromToRotation(Vector3.up, dir);
+            float len = (b - a).magnitude;
+            NiwaBuhin.Bou(amiT, "Ami_E", Vector3.zero, new Vector3(0f, len, 0f), 0.014f, mTake);
+            var wa = NiwaBuhin.Mesh1(amiT, "Ami_Wa", NiwaBuhin.Wa("NayaAmiWa", 0.155f, 0.010f), mTetsu);
+            wa.transform.localPosition = new Vector3(0f, len + 0.02f, 0f);
+            var ami = NiwaBuhin.Mesh1(amiT, "Ami_Nuno",
                                       NiwaBuhin.Tsutsu("NayaAmiNuno", 0.150f, 0.030f, 0.30f, false, 0.2f, 12),
                                       mNuno);
-            ami.transform.localPosition = b + dir * 0.02f;
+            ami.transform.localPosition = new Vector3(0f, len + 0.02f, 0f);
             ami.transform.localRotation = Quaternion.Euler(178f, 0f, 10f);
         }
+        Dougu(amiT, kagoT);
 
         // ---- 竹ぼうき（戸口の 内がわに 立てかける）
         Houki(d, new Vector3(1.08f, DODAI, 1.34f), new Vector3(1.16f, 1.52f, 1.02f));

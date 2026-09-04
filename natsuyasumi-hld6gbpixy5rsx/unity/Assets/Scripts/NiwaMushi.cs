@@ -57,6 +57,81 @@ public class NiwaMushi : MonoBehaviour {
     public float minPx = 26f;                          // 板が 画面で これより 小さく ならない（実測：12px は 読めない）
     public Material kageZairyo;                        // 足もとの 影（Niwa/Kage・BuildNiwa が わたす）
 
+    // ★建てものの 中に 入れない（2026-09-05・本人「納屋の中、虫が入ってくる」）。
+    //   湧く ところは 主人公の まわりに 円で とる ＋ 真下への レイで 地めんを 拾う だけ なので、
+    //   小屋の 土間も ただの「地めん」に 見えて いた。屋根は 層2 で レイに 出てこない ぶん よけい。
+    //   建てものの 足もとを 箱で わたして もらい、**湧くとき と 動くとき の 両方**で はじく。
+    //   （虫の 配置の 作りこみは あと。これは 建てものに 入らせない だけの 手当て）
+    public List<Bounds> yoke = new List<Bounds>();
+
+    /// <summary>建てものの 中か（高さは 見ない。xz だけ）</summary>
+    public bool Yoke(Vector3 p) {
+        for (int i = 0; i < yoke.Count; i++) {
+            var b = yoke[i];
+            if (p.x > b.min.x && p.x < b.max.x && p.z > b.min.z && p.z < b.max.z) return true;
+        }
+        return false;
+    }
+
+    /// <summary>建てものの 中なら いちばん 近い へりの 外へ 押しだす</summary>
+    Vector3 Osu(Vector3 p) {
+        for (int i = 0; i < yoke.Count; i++) {
+            var b = yoke[i];
+            if (p.x <= b.min.x || p.x >= b.max.x || p.z <= b.min.z || p.z >= b.max.z) continue;
+            float dl = p.x - b.min.x, dr = b.max.x - p.x, dd = p.z - b.min.z, du = b.max.z - p.z;
+            float m = Mathf.Min(Mathf.Min(dl, dr), Mathf.Min(dd, du));
+            if (m == dl) p.x = b.min.x - 0.05f;
+            else if (m == dr) p.x = b.max.x + 0.05f;
+            else if (m == dd) p.z = b.min.z - 0.05f;
+            else p.z = b.max.z + 0.05f;
+        }
+        return p;
+    }
+
+    // ---------------------------------------------------------------- つかまえる（NiwaDougu から）
+    Hiki Chikai(Vector3 p, float r) {
+        Hiki best = null; float bd = r;
+        foreach (var h in ikiteru) {
+            if (h.go == null || h.tobisaru) continue;
+            float d = Vector3.Distance(h.go.transform.position, p);
+            if (d < bd) { bd = d; best = h; }
+        }
+        return best;
+    }
+
+    /// <summary>いちばん 近い 虫の 名まえ（案内に つかう）。居なければ null</summary>
+    public string ChikaiNa(Vector3 p, float r) {
+        var h = Chikai(p, r);
+        return h != null ? h.shu.name : null;
+    }
+
+    /// <summary>あみを ふる。つかまえたら 名まえ／にげられたら ""／そもそも 居なければ null。
+    /// 飛ぶ 虫は にげやすい（見こみ 0.55）。とまって いる 虫は ほぼ 取れる（0.92）</summary>
+    public string AmiWoFuru(Vector3 p, float r) {
+        var h = Chikai(p, r);
+        if (h == null) return null;
+        bool tobu = h.shu.perch == Perch.Sora;
+        if (Random.value > (tobu ? 0.55f : 0.92f)) {
+            // にげる：幹の 虫は 飛びさり、ほかは 主人公と 逆へ ひとっ跳び
+            if (h.shu.perch == Perch.Miki) {
+                h.tobisaru = true; h.tobiT = 0f;
+                var d = h.go.transform.position - p; d.y = 0f;
+                h.heading = d.sqrMagnitude < 0.01f ? Vector3.forward : d.normalized;
+            } else {
+                var d = h.go.transform.position - p; d.y = 0f;
+                if (d.sqrMagnitude < 0.01f) d = Vector3.forward;
+                h.pos += d.normalized * 2.2f + Vector3.up * 0.3f;
+                h.home = h.pos; h.target = h.pos;
+                h.go.transform.position = h.pos;
+            }
+            return "";
+        }
+        string na = h.shu.name;
+        if (h.kage != null) Destroy(h.kage.gameObject);
+        Destroy(h.go);
+        return na;
+    }
+
     /// <summary>種の 台帳。絵は 組み立て時に BuildNiwa が 入れる</summary>
     public static List<Shu> Shurui() {
         return new List<Shu> {
@@ -164,6 +239,7 @@ public class NiwaMushi : MonoBehaviour {
                 case Perch.Sora: {
                     var c = Random.insideUnitCircle * kouho * 0.7f;
                     var at = new Vector3(o.x + c.x, 0f, o.z + c.y);
+                    if (Yoke(at)) continue;                     // 建てものの 中には 湧かない
                     if (!Jimen(ref at)) continue;
                     at.y += Random.Range(1.0f, 2.0f);
                     h.home = h.pos = h.target = at;
@@ -172,6 +248,7 @@ public class NiwaMushi : MonoBehaviour {
                 case Perch.Kusa: {
                     var c = Random.insideUnitCircle * kouho * 0.6f;
                     var at = new Vector3(o.x + c.x, 0f, o.z + c.y);
+                    if (Yoke(at)) continue;                     // 建てものの 中には 湧かない
                     if (!Jimen(ref at)) continue;
                     at.y += JIMEN_UKI + s.haba * 0.40f;
                     h.home = h.pos = at;
@@ -184,6 +261,7 @@ public class NiwaMushi : MonoBehaviour {
                     if (new Vector2(ne.x - o.x, ne.z - o.z).magnitude > kouho) continue;
                     var c = Random.insideUnitCircle.normalized * Random.Range(0.8f, 2.2f);
                     h.home = h.pos = new Vector3(ne.x + c.x, ne.y + 0.2f + Random.Range(0.3f, 1.2f), ne.z + c.y);
+                    if (Yoke(h.pos)) continue;
                     return true;
                 }
             }
@@ -332,7 +410,10 @@ public class NiwaMushi : MonoBehaviour {
         switch (h.shu.perch) {
             case Perch.Miki: MikiUgoki(h, dt, t); break;
             case Perch.Sora: SoraUgoki(h, cam, dt, t); break;
-            case Perch.Kusa: KusaUgoki(h, cam, dt, t); break;
+            case Perch.Kusa:
+                KusaUgoki(h, cam, dt, t);
+                if (Yoke(h.pos)) { h.pos = Osu(h.pos); h.go.transform.position = h.pos; }
+                break;
             default:
                 h.pos = h.home + new Vector3(Mathf.Sin(t * 0.5f) * 0.6f, Mathf.Sin(t * 0.9f) * 0.3f, Mathf.Cos(t * 0.4f) * 0.6f);
                 h.go.transform.position = h.pos;
@@ -402,6 +483,7 @@ public class NiwaMushi : MonoBehaviour {
         if (s.id == "tonbo") TonboUgoki(h, dt, t);
         else if (s.id == "oniyanma") OniyanmaUgoki(h, dt, t);
         else ChouUgoki(h, cam, dt, t);
+        h.pos = Osu(h.pos);                       // 建てものに 入りこんだら へりの 外へ
         h.go.transform.position = h.pos;
         h.go.transform.rotation = SoraMuki(h, cam);
         if (h.shimmer) h.fx *= 0.90f + 0.10f * Mathf.Abs(Mathf.Sin(t * 60f));   // 羽の ふるえ（60Hz の 明滅）
