@@ -133,6 +133,15 @@ public static class BuildNiwa {
             TakeV1.Ikegaki(root, new Vector3(9.7f, 0f, -5.7f), new Vector3(9.7f, 0f, 13.5f), 1.7f, 0.8f, jy);
             TakeV1.Ikegaki(root, new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f), 1.7f, 0.8f, jy);
             TakeV1.Ikegaki(root, new Vector3(5.8f, 0f, 13.5f), new Vector3(9.7f, 0f, 13.5f), 1.7f, 0.8f, jy);
+            // 草原：庭と 道ばたに 短い 草を ばらまく（道・飛び石・家の 足もとは よける）
+            System.Func<float, float, bool> yoke = (x, z) =>
+                (Mathf.Abs(x) < 1.5f && z > -10f && z < 3f)                     // 門から 玄関への 踏み跡
+                || (x > -6.2f && x < 6.2f && z > 1.6f && z < 13.2f)            // 家の 足もと
+                || (z > -12.8f && z < -6.4f && Mathf.Abs(x) < 44f && Mathf.Abs(x) > 1.9f && z < -7.2f);  // 道の 上
+            int kh = TakeV1.KusaHara(root, -9.6f, 9.6f, -5.6f, 13.3f, 1.6f, jy, yoke);
+            kh += TakeV1.KusaHara(root, -16f, 16f, -13.5f, -6.3f, 0.9f, jy, yoke);
+            Debug.Log("[Probe] KusaHara " + kh + " kabu");
+
             // 庭の 中の 仕切り：縁がわの 西の 庭を 四ツ目垣で 区切る
             var kaki = new TakeV1.Yabu(root);
             TakeV1.Kaki(kaki, new Vector3(-9.2f, 0f, 1.2f), new Vector3(-6.0f, 0f, 1.2f), 0.95f, jy);

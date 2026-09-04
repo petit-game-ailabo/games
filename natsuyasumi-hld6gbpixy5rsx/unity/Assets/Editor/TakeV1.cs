@@ -322,24 +322,49 @@ public static class TakeV1 {
     //   調べ：山あいの 家は 道との 段差を 野面積みの 石垣が 支え、横と 裏は 生垣（サザンカ・イヌマキ・
     //   茶の木、1.5〜2m）か 屋敷林。四ツ目垣は 庭の 中の 仕切りで、外周には つかわない
     static Material mIshigaki;
-    /// <summary>石垣：折れ線に そった 立った 帯。点ごとに 下と 上の 高さ。絵は 1.6m で 1くりかえし</summary>
+    /// <summary>石垣：折れ線に そった 帯。点ごとに 下と 上の 高さ。omote＝表の 向き（道の がわ）。
+    /// ★厚みを 持つ（2026-09-04・本人「石垣厚みないけど」）：表の 面＋天端（奥へ ATSU）＋両はしの 小口。
+    ///   表は 実物のように 少し うしろへ 傾ける（下より 上が 0.08 奥）。絵は 1.6m で 1くりかえし</summary>
     public static void Ishigaki(Transform root, List<Vector3> pts, List<float> yShita, List<float> yUe, Vector3 omote) {
         if (mIshigaki == null) mIshigaki = Mat("NiwaIshigaki", "ishigaki.jpg", false);
         int n = pts.Count; if (n < 2) return;
+        const float ATSU = 0.40f, KOUBAI = 0.08f;
+        omote.y = 0f; omote.Normalize();
+        var oku = -omote;
         var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+        // 点ごとに 4つ：表の 下(0)・表の 上(1)・天端の 奥(2)・奥の 下(3)
         float acc = 0f;
         for (int i = 0; i < n; i++) {
             if (i > 0) acc += Vector3.Distance(new Vector3(pts[i].x, 0f, pts[i].z), new Vector3(pts[i - 1].x, 0f, pts[i - 1].z));
-            v.Add(new Vector3(pts[i].x, yShita[i], pts[i].z)); uv.Add(new Vector2(acc / 1.6f, yShita[i] / 1.6f));
-            v.Add(new Vector3(pts[i].x, yUe[i], pts[i].z));    uv.Add(new Vector2(acc / 1.6f, yUe[i] / 1.6f));
+            var pb = new Vector3(pts[i].x, yShita[i], pts[i].z);
+            var pt = new Vector3(pts[i].x, yUe[i], pts[i].z) + oku * KOUBAI;
+            var pk = pt + oku * ATSU;
+            var pkb = pb + oku * (ATSU + KOUBAI);
+            v.Add(pb);  uv.Add(new Vector2(acc / 1.6f, yShita[i] / 1.6f));
+            v.Add(pt);  uv.Add(new Vector2(acc / 1.6f, yUe[i] / 1.6f));
+            v.Add(pk);  uv.Add(new Vector2(acc / 1.6f, yUe[i] / 1.6f + ATSU / 1.6f));
+            v.Add(pkb); uv.Add(new Vector2(acc / 1.6f, yShita[i] / 1.6f));
         }
-        for (int i = 0; i < n - 1; i++) {
-            int a = i * 2, b = a + 1, c = a + 2, d = a + 3;
-            // おもてが omote を 向く ように 巻く
+        void Quad(int a, int b, int c, int d, Vector3 muki) {   // a-b が 手前の 辺、c-d が 次の 点
             var nrm = Vector3.Cross(v[c] - v[a], v[b] - v[a]);
-            if (Vector3.Dot(nrm, omote) >= 0f) { tri.Add(a); tri.Add(c); tri.Add(b); tri.Add(b); tri.Add(c); tri.Add(d); }
+            if (Vector3.Dot(nrm, muki) >= 0f) { tri.Add(a); tri.Add(c); tri.Add(b); tri.Add(b); tri.Add(c); tri.Add(d); }
             else { tri.Add(a); tri.Add(b); tri.Add(c); tri.Add(b); tri.Add(d); tri.Add(c); }
         }
+        for (int i = 0; i < n - 1; i++) {
+            int o = i * 4, q = o + 4;
+            Quad(o + 0, o + 1, q + 0, q + 1, omote);        // 表
+            Quad(o + 1, o + 2, q + 1, q + 2, Vector3.up);   // 天端
+            Quad(o + 2, o + 3, q + 2, q + 3, oku);          // 奥（庭の 土に うまる ぶん。念のため）
+        }
+        // 両はしの 小口（進む 向きの 外へ）
+        var dir0 = (pts[1] - pts[0]); dir0.y = 0f; dir0.Normalize();
+        var dirN = (pts[n - 1] - pts[n - 2]); dirN.y = 0f; dirN.Normalize();
+        { int o = 0; var nrm = Vector3.Cross(v[o + 1] - v[o + 0], v[o + 2] - v[o + 0]);
+          if (Vector3.Dot(nrm, -dir0) >= 0f) { tri.Add(o + 0); tri.Add(o + 1); tri.Add(o + 2); tri.Add(o + 0); tri.Add(o + 2); tri.Add(o + 3); }
+          else { tri.Add(o + 0); tri.Add(o + 2); tri.Add(o + 1); tri.Add(o + 0); tri.Add(o + 3); tri.Add(o + 2); } }
+        { int o = (n - 1) * 4; var nrm = Vector3.Cross(v[o + 1] - v[o + 0], v[o + 2] - v[o + 0]);
+          if (Vector3.Dot(nrm, dirN) >= 0f) { tri.Add(o + 0); tri.Add(o + 1); tri.Add(o + 2); tri.Add(o + 0); tri.Add(o + 2); tri.Add(o + 3); }
+          else { tri.Add(o + 0); tri.Add(o + 2); tri.Add(o + 1); tri.Add(o + 0); tri.Add(o + 3); tri.Add(o + 2); } }
         var m = new Mesh { name = "Ishigaki" };
         m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(tri, 0);
         m.RecalculateNormals(); m.RecalculateBounds();
@@ -349,71 +374,116 @@ public static class TakeV1 {
         g.AddComponent<MeshRenderer>().sharedMaterial = mIshigaki;
     }
 
+    /// <summary>草原：短い 草の 板（十字）を ばらまいて、焼いた 地面の 絵に 起伏を 足す
+    /// （2026-09-04・本人「草の方はのっぺりしすぎじゃない？」）。
+    /// yoke が true を 返す ところには 置かない（道・家の 足もと）。24m ごとの 塊に まとめる</summary>
+    public static int KusaHara(Transform root, float x0, float x1, float z0, float z1, float mitsudo,
+                               System.Func<float, float, float> jimenY, System.Func<float, float, bool> yoke) {
+        if (!Aru("kusa_kabu.png")) return 0;
+        // field clumps: greener tint than the tall tufts (the photo has dry blades), and clustered by noise
+        if (mKusaHara == null) { mKusaHara = Mat("NiwaKusaHara", "kusa_kabu.png", true); mKusaHara.color = new Color(0.72f, 0.92f, 0.62f); }
+        int kazu = Mathf.RoundToInt((x1 - x0) * (z1 - z0) * mitsudo * 1.8f);
+        float seed = Random.Range(0f, 50f);
+        var dic = new Dictionary<int, List<CombineInstance>>();
+        var q = Quad();
+        int oita = 0;
+        for (int i = 0; i < kazu; i++) {
+            float x = Random.Range(x0, x1), z = Random.Range(z0, z1);
+            if (yoke != null && yoke(x, z)) continue;
+            if (Mathf.PerlinNoise(seed + x * 0.33f, seed + z * 0.33f) < 0.47f) continue;   // katamari ni suru
+            float h = Random.Range(0.11f, 0.34f);
+            var at = new Vector3(x, jimenY(x, z) + 0.10f + h * 0.5f, z);   // 地面板（当たり+0.10）の 上に 立てる
+            float yaw = Random.Range(0f, 360f);
+            int key = Mathf.FloorToInt(x / 24f) * 1000 + Mathf.FloorToInt(z / 24f);
+            if (!dic.TryGetValue(key, out var l)) dic[key] = l = new List<CombineInstance>();
+            for (int k = 0; k < 2; k++)
+                l.Add(new CombineInstance { mesh = q,
+                    transform = Matrix4x4.TRS(at, Quaternion.Euler(0f, yaw + k * 90f, 0f), new Vector3(h * 1.2f, h, 1f)) });
+            oita++;
+        }
+        foreach (var kv in dic) {
+            var mm = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mm.CombineMeshes(kv.Value.ToArray(), true, true);
+            var ns = new Vector3[mm.vertexCount]; for (int k = 0; k < ns.Length; k++) ns[k] = Vector3.up;
+            mm.normals = ns;
+            var g = new GameObject("KusaHara" + kv.Key);
+            g.transform.SetParent(root, false);
+            g.AddComponent<MeshFilter>().sharedMesh = mm;
+            var mr = g.AddComponent<MeshRenderer>(); mr.sharedMaterial = mKusaHara;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+        return oita;
+    }
+
     static Material mIkegakiNaka, mIkegakiHa;
-    /// <summary>生垣：a→b に 高さ h・厚み atsumi。中は 暗い 箱（すけない）、表は 葉の カードを 密に</summary>
+    /// <summary>生垣：a→b に 高さ h・厚み atsumi。中は 暗い 箱（すけない）、まわりに 葉の カードを **厚みの 中に ばらして** 置く。
+    /// ★のっぺり 直し（2026-09-04・本人「生け垣がのっぺりしてる」）：前は 前後 2列の 平面に 外向きで ならべて いた ので 板に 見えた。
+    ///   奥行き・向き・傾きを 大きく ばらし、長さ方向に ノイズで ふくらみを つけ、上端は 丸める</summary>
     public static void Ikegaki(Transform root, Vector3 a, Vector3 b, float h, float atsumi, System.Func<float, float, float> jimenY) {
         if (mIkegakiNaka == null) {
             mIkegakiNaka = Mat("NiwaIkegakiNaka", "ki_ha.png", false);
-            mIkegakiNaka.color = new Color(0.16f, 0.22f, 0.10f);
+            mIkegakiNaka.color = new Color(0.20f, 0.28f, 0.13f);   // ha no kage no iro (kuro dewa naku)
         }
         if (mIkegakiHa == null) mIkegakiHa = Mat("NiwaIkegakiHa", "ki_ha.png", true);
         var d = b - a; d.y = 0f; float len = d.magnitude; if (len < 0.2f) return;
         var dir = d / len; var yoko = Vector3.Cross(Vector3.up, dir);
         var g = new GameObject("Ikegaki");
         g.transform.SetParent(root, false);
-        // 中の 箱（地めんに そって 何個かに 分ける）
-        int kazu = Mathf.Max(1, Mathf.RoundToInt(len / 3f));
-        float ins = 0.35f;   // hako wa ryouhashi wo hikkomeru (hashi no kuroi men ga mieta)
+        float seed = Random.Range(0f, 100f);
+        // ふくらみ：長さ方向の ノイズ（±0.18m）と 高さの ゆらぎ（±0.12m）
+        System.Func<float, float> fukurami = t => (Mathf.PerlinNoise(seed + t * 0.7f, seed) - 0.5f) * 0.36f;
+        System.Func<float, float> takasaYure = t => (Mathf.PerlinNoise(seed + 7f + t * 0.5f, seed + 3f) - 0.5f) * 0.24f;
+        // 中の 箱（すけ止め。カードより 一まわり 小さく）
+        int kazu = Mathf.Max(1, Mathf.RoundToInt(len / 2.5f));
+        float ins = 0.35f;
         for (int i = 0; i < kazu; i++) {
             var p0 = a + dir * (ins + (len - 2f * ins) * i / kazu); var p1 = a + dir * (ins + (len - 2f * ins) * (i + 1) / kazu);
-            var c = (p0 + p1) * 0.5f; c.y = (jimenY(p0.x, p0.z) + jimenY(p1.x, p1.z)) * 0.5f + h * 0.45f;
+            var c = (p0 + p1) * 0.5f; c.y = (jimenY(p0.x, p0.z) + jimenY(p1.x, p1.z)) * 0.5f + h * 0.42f;
             var box = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Object.DestroyImmediate(box.GetComponent<Collider>());
             box.name = "Naka"; box.transform.SetParent(g.transform, false);
             box.transform.position = c; box.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
-            box.transform.localScale = new Vector3(atsumi * 0.7f, h * 0.8f, (len - 2f * ins) / kazu + 0.05f);
+            box.transform.localScale = new Vector3(atsumi * 0.5f, h * 0.72f, (len - 2f * ins) / kazu + 0.05f);
             box.GetComponent<MeshRenderer>().sharedMaterial = mIkegakiNaka;
         }
-        // 葉の カード：0.22m ごとに 3段、前後 2列。法線は 上＋外（片面が 黒く ならない）
         var cis = new List<CombineInstance>();
         var mesh0 = Quad();
-        for (float t = 0f; t <= len; t += 0.22f)
-            for (int dan = 0; dan < 3; dan++)
-                for (int retsu = -1; retsu <= 1; retsu += 2) {
-                    var p = a + dir * t + yoko * (retsu * atsumi * 0.45f);
-                    p.y = jimenY(p.x, p.z) + h * (0.18f + 0.36f * dan) + Random.Range(-0.08f, 0.08f);
-                    p += dir * Random.Range(-0.08f, 0.08f);
-                    float cs = Random.Range(0.42f, 0.60f);
-                    float yaw = Mathf.Atan2(yoko.x * retsu, yoko.z * retsu) * Mathf.Rad2Deg + Random.Range(-35f, 35f);
-                    cis.Add(new CombineInstance { mesh = mesh0,
-                        transform = Matrix4x4.TRS(p, Quaternion.Euler(Random.Range(-20f, 20f), yaw, Random.Range(-25f, 25f)), new Vector3(cs, cs, 1f)) });
-                }
-        // ue no fuki (flat cards) and both ends
-        for (float t = 0f; t <= len; t += 0.26f)
-            for (int retsu = -1; retsu <= 1; retsu += 2) {
-                var p = a + dir * t + yoko * (retsu * atsumi * 0.22f);
-                p.y = jimenY(p.x, p.z) + h * 0.97f + Random.Range(-0.05f, 0.05f);
-                float cs = Random.Range(0.45f, 0.6f);
+        // 葉の カード：0.16m ごとに、厚みの 中の どこか（前後 ±atsumi*0.55）、高さは 0〜h の ばらばら。
+        // 向きは 自由（外向きに そろえない）、傾きも 大きく。上端に 近い ほど 小さく＝丸く なる
+        int n = Mathf.RoundToInt(len / 0.16f);
+        for (int i = 0; i <= n; i++) {
+            float t = len * i / Mathf.Max(1, n);
+            float fk = fukurami(t), ty = takasaYure(t);
+            int perDan = 16;   // 6 dewa naka no hako ga sukete mieta
+            for (int k = 0; k < perDan; k++) {
+                float u = Random.value;                                  // 0=下 1=上
+                float side = Random.Range(-1f, 1f);
+                float dep = side * (atsumi * 0.55f + fk) * Mathf.Lerp(1f, 0.55f, u * u);   // 上ほど せまく＝丸い 天
+                var p = a + dir * (t + Random.Range(-0.1f, 0.1f)) + yoko * dep;
+                p.y = jimenY(p.x, p.z) + 0.05f + (h + ty) * Mathf.Lerp(0.08f, 1.0f, u);
+                float cs = Random.Range(0.48f, 0.78f) * Mathf.Lerp(1f, 0.8f, u);
                 cis.Add(new CombineInstance { mesh = mesh0,
-                    transform = Matrix4x4.TRS(p, Quaternion.Euler(90f + Random.Range(-20f, 20f), Random.Range(0f, 360f), 0f), new Vector3(cs, cs, 1f)) });
+                    transform = Matrix4x4.TRS(p, Quaternion.Euler(Random.Range(-40f, 40f), Random.Range(0f, 360f), Random.Range(-40f, 40f)), new Vector3(cs, cs, 1f)) });
             }
-        foreach (var e in new[] { a, b }) {
-            var f = (e == a) ? -dir : dir;
-            for (int dan = 0; dan < 3; dan++)
-                for (int k = -1; k <= 1; k++) {
-                    var p = e + f * 0.1f + yoko * (k * atsumi * 0.3f);
-                    p.y = jimenY(p.x, p.z) + h * (0.18f + 0.36f * dan);
-                    float cs = Random.Range(0.45f, 0.6f);
-                    float yaw = Mathf.Atan2(f.x, f.z) * Mathf.Rad2Deg + Random.Range(-30f, 30f);
-                    cis.Add(new CombineInstance { mesh = mesh0,
-                        transform = Matrix4x4.TRS(p, Quaternion.Euler(Random.Range(-15f, 15f), yaw, Random.Range(-20f, 20f)), new Vector3(cs, cs, 1f)) });
-                }
+        }
+        // 天の 丸み：上に 平たい カードを 少し
+        for (float t = 0f; t <= len; t += 0.3f) {
+            var p = a + dir * t + yoko * Random.Range(-atsumi * 0.3f, atsumi * 0.3f);
+            p.y = jimenY(p.x, p.z) + 0.05f + h + takasaYure(t) + Random.Range(0f, 0.08f);
+            float cs = Random.Range(0.4f, 0.55f);
+            cis.Add(new CombineInstance { mesh = mesh0,
+                transform = Matrix4x4.TRS(p, Quaternion.Euler(90f + Random.Range(-30f, 30f), Random.Range(0f, 360f), 0f), new Vector3(cs, cs, 1f)) });
         }
         var mm = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
         mm.CombineMeshes(cis.ToArray(), true, true);
+        // 法線：生垣の 芯線から 外へ＋上（片面が 黒く ならない・ふくらみに 陰影が つく）
         var ns = new Vector3[mm.vertexCount]; var vs = mm.vertices;
-        var mid = (a + b) * 0.5f;
-        for (int i = 0; i < ns.Length; i++) { var o = vs[i] - mid; o = Vector3.Project(o, yoko); ns[i] = (o.normalized * 0.6f + Vector3.up).normalized; }
+        for (int i = 0; i < ns.Length; i++) {
+            var rel = vs[i] - a; float t = Mathf.Clamp(Vector3.Dot(rel, dir), 0f, len);
+            var shin = a + dir * t; shin.y = jimenY(shin.x, shin.z) + h * 0.45f;
+            var o = vs[i] - shin; o.y *= 0.5f;
+            ns[i] = (o.sqrMagnitude < 1e-4f ? Vector3.up : (o.normalized * 0.8f + Vector3.up * 0.6f).normalized);
+        }
         mm.normals = ns;
         var hg = new GameObject("Ha"); hg.transform.SetParent(g.transform, false);
         hg.AddComponent<MeshFilter>().sharedMesh = mm;
@@ -421,7 +491,7 @@ public static class TakeV1 {
     }
 
     // ---------------------------------------------------------------- 写真の 草むら
-    static Material mKusa;
+    static Material mKusa, mKusaHara;
     /// <summary>草むら 1株＝写真の 板を 十字に 2まい。絵（kusa_kabu.png）が 無ければ false（呼ぶ がわは ローポリで 代用）</summary>
     public static bool KusaKabu(Transform root, Vector3 at, float yaw, float takasa) {
         if (!Aru("kusa_kabu.png")) return false;

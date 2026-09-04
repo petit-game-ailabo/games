@@ -122,4 +122,4 @@ def ishigaki(name, seed):
     im.save(os.path.join(OUT, name), quality=92)
     print(name)
 
-ishigaki("ishigaki.jpg", 11)
+# ishigaki("ishigaki.jpg", 11)   # 2026-09-04: replaced by the user Codex photo (shashin/ishigaki.jpg)
