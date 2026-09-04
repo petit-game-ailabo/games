@@ -107,24 +107,25 @@ public static class BuildNiwa {
         {
             System.Func<float, float, float> jy = (x, z) => NiwaJimenE.Takasa(x, z);
             var naka = new Vector3(0f, 0f, 4f);                         // 庭の 中（外向きを 決める）
-            float SW = NiwaJimenE.SAKA_HABA + 0.08f;
+            float SW = NiwaJimenE.SAKA_HABA + 0.38f;   // 板の 段（|x| 1.5→1.9）の 外に 立てる
             float zSakaMoto = NiwaJimenE.SAKA_Z0 + 1.75f;               // 坂が 0.3m に なる ところ
             // ★石垣は 左右 それぞれ **1本の 折れ線**（坂脇→角→南）。角は 留め継ぎ（D-191）
             foreach (float sgn in new[] { -1f, 1f }) {
+                const float ZK = -6.34f;                                  // 板の 段（z -6.25→-6.0）の 外
                 var kado = new List<Vector3> {
                     new Vector3(sgn * SW, 0f, zSakaMoto),
-                    new Vector3(sgn * SW, 0f, -6.05f),
-                    new Vector3(sgn * 10.6f, 0f, -6.05f),
+                    new Vector3(sgn * SW, 0f, ZK),
+                    new Vector3(sgn * 10.6f, 0f, ZK),
                 };
                 var pts = TakeV1.Kizamu(kado, 0.5f);
                 var lo = new List<float>(); var hi = new List<float>();
                 foreach (var p in pts) {
                     // 外がわ（庭から 遠い ほう）の 地めんに 下を そろえ、内がわ（坂か 庭）の 面に 天端を そろえる
                     var toOut = p - naka; toOut.y = 0f; toOut.Normalize();
-                    bool yoko = Mathf.Abs(p.z - (-6.05f)) > 0.01f;      // 坂脇の 部分
+                    bool yoko = Mathf.Abs(p.z - ZK) > 0.01f;            // 坂脇の 部分
                     Vector3 soto = yoko ? new Vector3(sgn, 0f, 0f) : Vector3.back;
                     Vector3 uchi = -soto;
-                    var po = p + soto * 0.5f; var pu = p + uchi * 0.45f;
+                    var po = p + soto * 0.5f; var pu = p + uchi * 0.75f;   // 内は 段の 上（板の 面）まで 入って 測る
                     lo.Add(Mathf.Min(jy(po.x, po.z), jy(p.x, p.z)) - 0.3f);
                     hi.Add(jy(pu.x, pu.z) + 0.02f);
                 }
@@ -228,8 +229,8 @@ public static class BuildNiwa {
         }
         for (float x = -10f; x <= 10f; x += 2.6f) KusaMure(x, -5.3f, 0.8f, 3, 1.4f, 2.2f);   // 南塀ぎわ
         for (float z = -4f; z <= 13f; z += 2.8f) {
-            KusaMure(-10.5f, z, 0.8f, 3, 1.4f, 2.2f);
-            KusaMure( 10.5f, z, 0.8f, 2, 1.4f, 2.0f);
+            KusaMure(-9.0f, z, 0.6f, 3, 1.4f, 2.2f);    // 生垣の 内がわ（外は 段の 斜面で 浮いた）
+            KusaMure( 9.0f, z, 0.6f, 2, 1.4f, 2.0f);
         }
         KusaMure(-7.6f, 8.6f, 2.2f, 10, 1.5f, 2.4f);             // ぬしの木の 根もと
         KusaMure(8.4f, 11.5f, 1.6f, 6, 1.5f, 2.2f);
@@ -590,9 +591,14 @@ public static class BuildNiwa {
 
         // ---- 物を 地ばんに すわらせる（凸凹に した ぶん、y=0 のままだと 浮く／沈む）
         {
+            // ★自分で 地めんの 高さを 決めて 置いた もの（結合メッシュは 原点に あるので、ここで
+            //   Takasa(0,0)＝段の 0.6 を 足されると **まるごと 0.6m 浮く**）は 外す（2026-09-04・本人
+            //   「地面を下げたせいで、浮いてる物体がある？」→ 石垣・生垣・竹・柵・丸太・岩が 浮いて いた。
+            //   石垣が 背高く 見えた（1.2m）のも これ）。座らせ直すのは y=0 で 置いた Kenney の 物だけ
             string[] nuki = { "Jimen", "JimenE", "MichiSoto", "BLK_", "Sora", "Satoyama",
                               "YamaToi", "Kumo", "Cam", "Sun", "Day", "Volume", "Player",
-                              "Takadai", "Kage", "KiMiki", "KiHa", "KiAtari" };
+                              "Takadai", "Kage", "KiMiki", "KiHa", "KiAtari",
+                              "Take", "Ishigaki", "Ikegaki", "Iwa", "Mushi", "Mise_", "Ie" };
             int naosi = 0;
             for (int i = 0; i < root.childCount; i++) {
                 var t = root.GetChild(i);
