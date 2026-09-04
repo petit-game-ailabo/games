@@ -86,11 +86,11 @@ def outline(im):
     g2 = g1.filter(ImageFilter.MaxFilter(3))        # +3px
     ring_dark = Image.composite(Image.new("L", im.size, 0), g1, inner)   # 内がわ 2px
     ring_light = Image.composite(Image.new("L", im.size, 0), g2, g1)     # その 外 1px
-    light = Image.new("RGBA", im.size, (236, 228, 200, 0))
-    light.putalpha(ring_light.point(lambda v: 170 if v else 0))
+    # 2026-09-03: the light halo is gone. It read as a white rim that does not exist in nature (user).
+    #   Readability on dark bark now comes from size (D-176) instead.
     dark = Image.new("RGBA", im.size, (28, 22, 24, 0))
     dark.putalpha(ring_dark.point(lambda v: 210 if v else 0))
-    return Image.alpha_composite(Image.alpha_composite(light, dark), im)
+    return Image.alpha_composite(dark, im)
 
 
 os.makedirs(OUT, exist_ok=True)

@@ -78,8 +78,13 @@ public static class KiV5 {
 
         // ---- 背骨に そって 輪を ならべ、面を 張る（関節の 段差が 出ない）
         void Tube(Vector3[] pts, float[] rad, int sides) {
-            int n = pts.Length;
-            var verts = new Vector3[n * sides + 1];
+            // ★継ぎ目の 直し（2026-09-03・本人「どの木も、木の手前から見ると縦線が入ったようになってる」）。
+            //   輪は sides 点で、最後の 面だけ u が 11/12→0 に もどる ので 絵が 逆向きに 詰まって
+            //   **縦の 線**に なって いた。しかも 輪の 0番は -Z（カメラの 正面）に 来る 作りだった。
+            //   → 輪を sides+1 点に して 最後の 点は 最初と 同じ 位置で u=1、法線は 両はしを そろえ、
+            //     0番の 角度を π ずらして 継ぎ目を うしろ（+Z）へ まわす
+            int n = pts.Length, sd = sides + 1;
+            var verts = new Vector3[n * sd + 1];
             var uv = new Vector2[verts.Length];
             var nrm = Vector3.Cross((pts[1] - pts[0]).normalized, Vector3.right);
             if (nrm.sqrMagnitude < 0.01f) nrm = Vector3.forward; else nrm = nrm.normalized;
@@ -88,32 +93,30 @@ public static class KiV5 {
                 var dir = (i == 0 ? pts[1] - pts[0]
                          : i == n - 1 ? pts[n - 1] - pts[n - 2]
                          : pts[i + 1] - pts[i - 1]).normalized;
-                nrm = (nrm - dir * Vector3.Dot(nrm, dir)).normalized;   // 前の 輪から 引きつぐ
+                nrm = (nrm - dir * Vector3.Dot(nrm, dir)).normalized;
                 var bin = Vector3.Cross(dir, nrm);
                 if (i > 0) vlen += (pts[i] - pts[i - 1]).magnitude;
-                for (int s = 0; s < sides; s++) {
-                    float a = s * Mathf.PI * 2f / sides;
-                    verts[i * sides + s] = pts[i] + (nrm * Mathf.Cos(a) + bin * Mathf.Sin(a)) * rad[i];
-                    uv[i * sides + s] = new Vector2((float)s / sides, vlen * 0.8f);
+                for (int s = 0; s <= sides; s++) {
+                    float a = s * Mathf.PI * 2f / sides + Mathf.PI;
+                    verts[i * sd + s] = pts[i] + (nrm * Mathf.Cos(a) + bin * Mathf.Sin(a)) * rad[i];
+                    uv[i * sd + s] = new Vector2((float)s / sides, vlen * 0.8f);
                 }
             }
-            verts[n * sides] = pts[n - 1];                              // 先端の ふさぎ
-            uv[n * sides] = new Vector2(0.5f, vlen * 0.8f + 0.2f);
+            verts[n * sd] = pts[n - 1];
+            uv[n * sd] = new Vector2(0.5f, vlen * 0.8f + 0.2f);
             var tris = new List<int>();
             for (int i = 0; i < n - 1; i++)
                 for (int s = 0; s < sides; s++) {
-                    int s2 = (s + 1) % sides;
-                    int a0 = i * sides + s, a1 = i * sides + s2;
-                    int b0 = (i + 1) * sides + s, b1 = (i + 1) * sides + s2;
+                    int a0 = i * sd + s, a1 = a0 + 1, b0 = (i + 1) * sd + s, b1 = b0 + 1;
                     tris.Add(a0); tris.Add(a1); tris.Add(b0);
                     tris.Add(a1); tris.Add(b1); tris.Add(b0);
                 }
-            for (int s = 0; s < sides; s++) {
-                int s2 = (s + 1) % sides;
-                tris.Add((n - 1) * sides + s); tris.Add(n * sides); tris.Add((n - 1) * sides + s2);
-            }
+            for (int s = 0; s < sides; s++) { tris.Add((n - 1) * sd + s); tris.Add(n * sd); tris.Add((n - 1) * sd + s + 1); }
             var mesh = new Mesh { vertices = verts, uv = uv, triangles = tris.ToArray() };
             mesh.RecalculateNormals();
+            var ns = mesh.normals;
+            for (int i = 0; i < n; i++) { var av = (ns[i * sd] + ns[i * sd + sides]).normalized; ns[i * sd] = av; ns[i * sd + sides] = av; }
+            mesh.normals = ns;
             Tsumu(miki, nowKey, new CombineInstance { mesh = mesh, transform = Matrix4x4.identity });
         }
 
@@ -175,7 +178,7 @@ public static class KiV5 {
                 dir = (dir + new Vector3(Random.Range(-0.08f, 0.08f), 0f,
                                          Random.Range(-0.08f, 0.08f))).normalized;
             }
-            Tube(pts, rad, 12);
+            Tube(pts, rad, 16);
             Suji.Add(pts); Futo.Add(rad);
             var col = new GameObject("KiAtari");            // 当たりは カプセルで 別に
             col.transform.SetParent(root, false);

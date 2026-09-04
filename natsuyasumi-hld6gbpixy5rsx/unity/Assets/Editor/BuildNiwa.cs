@@ -102,27 +102,22 @@ public static class BuildNiwa {
         ie.position = new Vector3(0f, 0f, 4f - NiwaIe.MINAMI);
         NiwaIe.Build(ie);
 
-        // ---- 塀と 門（Kenney。fence は 板が pivot から +Z*0.46 はなれて いる → 線に そろえる）
-        const float FS = 2.5f;                                   // 塀の 縮尺（高さ 0.87m）
-        void Fence(string piece, Vector3 linePos, float yaw) {
-            var rot = Quaternion.Euler(0f, yaw, 0f);
-            KenneyKit.Put(root, piece, linePos - rot * Vector3.forward * (0.46f * FS), yaw, FS);
-        }
-        // 南（門を まん中に）: z=-6。すきま |x|<1.25 が 門
-        for (float x = -9f; x <= 9.01f; x += FS) {
-            if (Mathf.Abs(x) < 1.3f) continue;
-            Fence("fence_simple", new Vector3(x, 0f, -6f), 0f);
-        }
-        KenneyKit.Put(root, "fence_gate", new Vector3(0f, 0f, -6f - 0.46f * FS), 0f, FS);
-        // 東西: x=±11.2、z -6..14
-        for (float z = -4.5f; z <= 12.51f; z += FS) {
-            Fence("fence_simple", new Vector3(-9.7f, 0f, z), 90f);
-            Fence("fence_simple", new Vector3( 9.7f, 0f, z), 270f);
-        }
-        // 北（家の 両わきだけ）
-        for (float x = -9f; x <= 9.01f; x += FS) {
-            if (Mathf.Abs(x) < 5.8f) continue;                   // 家の うしろは 家が 壁
-            Fence("fence_simple", new Vector3(x, 0f, 13.5f), 180f);
+        // ---- 塀と 門：四ツ目垣と 冠木門（TakeV1・2026-09-03・本人「日本の田舎っぽいやつにしよう」）
+        {
+            System.Func<float, float, float> jy = (x, z) => NiwaJimenE.Takasa(x, z);
+            var kaki = new TakeV1.Yabu(root);
+            const float KH = 1.05f;
+            // 南（門を まん中に）: z=-6。すきま |x|<1.25 が 門
+            TakeV1.Kaki(kaki, new Vector3(-9.7f, 0f, -6f), new Vector3(-1.3f, 0f, -6f), KH, jy);
+            TakeV1.Kaki(kaki, new Vector3(1.3f, 0f, -6f), new Vector3(9.7f, 0f, -6f), KH, jy);
+            TakeV1.Mon(kaki, new Vector3(0f, 0f, -6f), 2.6f, Vector3.right, 2.0f, jy);
+            // 東西: x=±9.7、z -6..13.5
+            TakeV1.Kaki(kaki, new Vector3(-9.7f, 0f, -6f), new Vector3(-9.7f, 0f, 13.5f), KH, jy);
+            TakeV1.Kaki(kaki, new Vector3(9.7f, 0f, -6f), new Vector3(9.7f, 0f, 13.5f), KH, jy);
+            // 北（家の 両わきだけ）
+            TakeV1.Kaki(kaki, new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f), KH, jy);
+            TakeV1.Kaki(kaki, new Vector3(5.8f, 0f, 13.5f), new Vector3(9.7f, 0f, 13.5f), KH, jy);
+            kaki.Katameru();
         }
 
         // ---- 見えない かべ（Kenney の 塀には あたりが 無い）
@@ -143,8 +138,7 @@ public static class BuildNiwa {
                 new Vector3(NiwaIe.GENKAN_X * (1f - i / 9f) + Random.Range(-0.2f, 0.2f),
                             0.02f, 2.0f - i * 1.15f),
                 Random.Range(-14f, 14f), 1.6f);
-                KenneyKit.Put(root, "pot_large", new Vector3(-3.4f, 0f, 4.2f), 30f, 2f);
-        KenneyKit.Put(root, "pot_small", new Vector3(-4.2f, 0f, 3.9f), 70f, 2f);
+        // 鉢は 消した（本人 2026-09-03「鉢もいらない」）
 
         // ---- 木（本人 2026-08-31「3Dで作った方の木で、葉っぱとかも作りこんでたやつを
         //   大量に配置してみてほしい」）。チューブ木v5＝KiV5（BuildMura から 取りだした）。
@@ -223,10 +217,14 @@ public static class BuildNiwa {
         KusaMure(0f, -9.5f, 14f, 16, 1.2f, 2.0f);                // 道ばた
         // ★玄関の 前の チューリップは 消した（本人 2026-09-02「チューリップが埋まってるので消しておいて」）。
         //   地めんの 起伏に 半分 うまって いた うえ、古い 家に 花壇は 似あわない
-        KenneyKit.Put(root, "rock_smallA", new Vector3(-4.4f, 0f, 4.6f), 20f, 2f);
-        KenneyKit.Put(root, "rock_smallB", new Vector3(6.2f, 0f, -4.2f), 200f, 2f);
-        KenneyKit.Put(root, "log", new Vector3(9.2f, 0f, 6.5f), 75f, 2f);
-        KenneyKit.Put(root, "mushroom_red", new Vector3(-8.6f, 0f, 7.2f), 0f, 1.6f);
+        // 岩と 丸太は TakeV1（写真の 皮・岩はだの 絵）。キノコは 消した（本人 2026-09-03）
+        {
+            var mono = new TakeV1.Yabu(root);
+            TakeV1.Iwa(root, new Vector3(-4.4f, NiwaJimenE.Takasa(-4.4f, 4.6f), 4.6f), 0.9f, 20f);
+            TakeV1.Iwa(root, new Vector3(6.2f, NiwaJimenE.Takasa(6.2f, -4.2f), -4.2f), 0.7f, 200f);
+            TakeV1.Maruta(mono, new Vector3(9.2f, NiwaJimenE.Takasa(9.2f, 6.5f), 6.5f), 75f, 1.7f, 0.17f);
+            mono.Katameru();
+        }
 
         // ---- 遠景の 描き割り（絵はがき文法の 検証・2026-08-30 本人GO）：
         //   歩けないが 見える 遠景が「世界は 続いてる」を 作る。山なみ 2層＋入道雲。
@@ -344,8 +342,12 @@ public static class BuildNiwa {
                 var d = Random.insideUnitCircle * 3.6f;
                 Kusa1(new Vector3(TX + d.x, 0f, TZ + d.y), Random.Range(0f, 360f), Random.Range(1.4f, 2.2f));
             }
-            KenneyKit.Put(root, "rock_smallA", new Vector3(TX + 2.6f, 0f, TZ + 2.0f), 40f, 2.4f);
-            KenneyKit.Put(root, "log", new Vector3(TX - 1.4f, 0f, TZ - 1.8f), 15f, 2.2f);
+            {
+                var mono2 = new TakeV1.Yabu(root);
+                TakeV1.Iwa(root, new Vector3(TX + 2.6f, NiwaJimenE.Takasa(TX + 2.6f, TZ + 2.0f), TZ + 2.0f), 1.1f, 40f);
+                TakeV1.Maruta(mono2, new Vector3(TX - 1.4f, NiwaJimenE.Takasa(TX - 1.4f, TZ - 1.8f), TZ - 1.8f), 15f, 1.9f, 0.19f);
+                mono2.Katameru();
+            }
             // 土手の ふちにも 草（切り口を やわらげる）
             for (int i2 = 0; i2 < 22; i2++) {
                 float a = Random.Range(0f, 360f) * Mathf.Deg2Rad;

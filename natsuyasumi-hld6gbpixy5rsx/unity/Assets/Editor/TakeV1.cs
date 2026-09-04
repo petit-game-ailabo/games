@@ -54,7 +54,7 @@ public static class TakeV1 {
     /// <summary>竹藪。何本でも 植えて から 色ごとに 1つの メッシュに まとめる</summary>
     public class Yabu {
         readonly Transform root;
-        readonly List<CombineInstance>[] kan = { new List<CombineInstance>(), new List<CombineInstance>(), new List<CombineInstance>() };
+        readonly List<CombineInstance>[] kan = { new List<CombineInstance>(), new List<CombineInstance>(), new List<CombineInstance>(), new List<CombineInstance>(), new List<CombineInstance>() };   // 0緑 1黄 2茶 3杭の木 4木の皮
         readonly List<CombineInstance> ha = new List<CombineInstance>();
         readonly List<Vector3> teppen = new List<Vector3>();     // 葉の 法線の もと（稈の 上の ほう）
         public int Kazu;
@@ -62,36 +62,45 @@ public static class TakeV1 {
         public Yabu(Transform root) { this.root = root; }
 
         void Tube(List<CombineInstance> dst, Vector3[] pts, float[] rad, int sides) {
-            int n = pts.Length;
-            var verts = new Vector3[n * sides + 1];
+            // ★継ぎ目の 直し（2026-09-03・本人「どの木も、木の手前から見ると縦線が入ったようになってる」）。
+            //   輪は sides 点で、最後の 面だけ u が 11/12→0 に もどる ので 絵が 逆向きに 詰まって
+            //   **縦の 線**に なって いた。しかも 輪の 0番は -Z（カメラの 正面）に 来る 作りだった。
+            //   → 輪を sides+1 点に して 最後の 点は 最初と 同じ 位置で u=1、法線は 両はしを そろえ、
+            //     0番の 角度を π ずらして 継ぎ目を うしろ（+Z）へ まわす
+            int n = pts.Length, sd = sides + 1;
+            var verts = new Vector3[n * sd + 1];
             var uv = new Vector2[verts.Length];
             var nrm = Vector3.Cross((pts[1] - pts[0]).normalized, Vector3.right);
             if (nrm.sqrMagnitude < 0.01f) nrm = Vector3.forward; else nrm = nrm.normalized;
             float vlen = 0f;
             for (int i = 0; i < n; i++) {
-                var dir = (i == 0 ? pts[1] - pts[0] : i == n - 1 ? pts[n - 1] - pts[n - 2] : pts[i + 1] - pts[i - 1]).normalized;
+                var dir = (i == 0 ? pts[1] - pts[0]
+                         : i == n - 1 ? pts[n - 1] - pts[n - 2]
+                         : pts[i + 1] - pts[i - 1]).normalized;
                 nrm = (nrm - dir * Vector3.Dot(nrm, dir)).normalized;
                 var bin = Vector3.Cross(dir, nrm);
                 if (i > 0) vlen += (pts[i] - pts[i - 1]).magnitude;
-                for (int s = 0; s < sides; s++) {
-                    float a = s * Mathf.PI * 2f / sides;
-                    verts[i * sides + s] = pts[i] + (nrm * Mathf.Cos(a) + bin * Mathf.Sin(a)) * rad[i];
-                    uv[i * sides + s] = new Vector2((float)s / sides, vlen * 0.8f);
+                for (int s = 0; s <= sides; s++) {
+                    float a = s * Mathf.PI * 2f / sides + Mathf.PI;
+                    verts[i * sd + s] = pts[i] + (nrm * Mathf.Cos(a) + bin * Mathf.Sin(a)) * rad[i];
+                    uv[i * sd + s] = new Vector2((float)s / sides, vlen * 0.8f);
                 }
             }
-            verts[n * sides] = pts[n - 1];
-            uv[n * sides] = new Vector2(0.5f, vlen * 0.8f + 0.2f);
+            verts[n * sd] = pts[n - 1];
+            uv[n * sd] = new Vector2(0.5f, vlen * 0.8f + 0.2f);
             var tris = new List<int>();
             for (int i = 0; i < n - 1; i++)
                 for (int s = 0; s < sides; s++) {
-                    int s2 = (s + 1) % sides;
-                    int a0 = i * sides + s, a1 = i * sides + s2, b0 = (i + 1) * sides + s, b1 = (i + 1) * sides + s2;
+                    int a0 = i * sd + s, a1 = a0 + 1, b0 = (i + 1) * sd + s, b1 = b0 + 1;
                     tris.Add(a0); tris.Add(a1); tris.Add(b0);
                     tris.Add(a1); tris.Add(b1); tris.Add(b0);
                 }
-            for (int s = 0; s < sides; s++) { int s2 = (s + 1) % sides; tris.Add((n - 1) * sides + s); tris.Add(n * sides); tris.Add((n - 1) * sides + s2); }
+            for (int s = 0; s < sides; s++) { tris.Add((n - 1) * sd + s); tris.Add(n * sd); tris.Add((n - 1) * sd + s + 1); }
             var mesh = new Mesh { vertices = verts, uv = uv, triangles = tris.ToArray() };
             mesh.RecalculateNormals();
+            var ns = mesh.normals;
+            for (int i = 0; i < n; i++) { var av = (ns[i * sd] + ns[i * sd + sides]).normalized; ns[i * sd] = av; ns[i * sd + sides] = av; }
+            mesh.normals = ns;
             dst.Add(new CombineInstance { mesh = mesh, transform = Matrix4x4.identity });
         }
 
@@ -107,6 +116,12 @@ public static class TakeV1 {
                                               new Vector3(cs, cs, 1f)),
                 });
             }
+        }
+
+        /// <summary>まっすぐな 棒（垣の 杭・貫・丸太に つかう）。iro は kan の 番号</summary>
+        public void Bou(Vector3 a, Vector3 b, float r0, float r1, int iro, int sides = 8) {
+            var mid = (a + b) * 0.5f;
+            Tube(kan[iro], new[] { a, mid, b }, new[] { r0, (r0 + r1) * 0.5f, r1 }, sides);
         }
 
         /// <summary>1本。iro 0=緑 1=黄ばみ 2=枯れ。soto＝藪の 外への 向き（xz）。katamuki＝傾きの 強さ 0..1</summary>
@@ -186,9 +201,9 @@ public static class TakeV1 {
         }
 
         public void Katameru() {
-            string[] kawa = { "take_kawa_midori.jpg", "take_kawa_ki.jpg", "take_kawa_cha.jpg" };
-            string[] nm = { "Midori", "Ki", "Cha" };
-            for (int i = 0; i < 3; i++)
+            string[] kawa = { "take_kawa_midori.jpg", "take_kawa_ki.jpg", "take_kawa_cha.jpg", "ie_ki.jpg", "ki_kawa.jpg" };
+            string[] nm = { "Midori", "Ki", "Cha", "KuiKi", "KiKawa" };
+            for (int i = 0; i < 5; i++)
                 if (kan[i].Count > 0) Katamari("TakeKan" + nm[i], kan[i], Mat("NiwaTakeKan" + nm[i], kawa[i], false), false);
             string haTex = Aru("take_ha.png") ? "take_ha.png" : "ki_ha.png";
             if (ha.Count > 0) Katamari("TakeHa", ha, Mat("NiwaTakeHa", haTex, true), true);
@@ -215,6 +230,91 @@ public static class TakeV1 {
         }
         yabu.Katameru();
         return yabu;
+    }
+
+    // ---------------------------------------------------------------- 四ツ目垣・冠木門・丸太・岩
+    // ★本人「柵はｍ柵じゃなくて日本の田舎っぽいやつにしよう」（2026-09-03）。
+    //   田舎の 家の 庭の 囲いは **四ツ目垣**（杭に 竹の 貫を 2本 渡し、竹の 立子を 前後 交互に 結う）が 定番。
+    //   門は 柱 2本に 冠木を 渡した **冠木門**（扉は 無い・田舎は 開けっぱなし）
+    /// <summary>四ツ目垣を a→b に。高さ takasa。地めんの 高さは jimenY で 拾う</summary>
+    public static void Kaki(Yabu y, Vector3 a, Vector3 b, float takasa, System.Func<float, float, float> jimenY) {
+        var d = b - a; d.y = 0f; float len = d.magnitude; if (len < 0.1f) return;
+        var dir = d / len; var yoko = Vector3.Cross(Vector3.up, dir);
+        int kui = Mathf.Max(1, Mathf.RoundToInt(len / 1.8f));
+        // 杭（木・少し 太い）
+        for (int i = 0; i <= kui; i++) {
+            var p = a + dir * (len * i / kui); p.y = jimenY(p.x, p.z) - 0.05f;
+            y.Bou(p, p + Vector3.up * (takasa + 0.12f), 0.055f, 0.045f, 3, 8);
+        }
+        // 貫（竹・2段）
+        foreach (float h in new[] { takasa * 0.40f, takasa * 0.80f }) {
+            var p0 = a; p0.y = jimenY(a.x, a.z) + h; var p1 = b; p1.y = jimenY(b.x, b.z) + h;
+            y.Bou(p0 - dir * 0.05f, p1 + dir * 0.05f, 0.024f, 0.024f, 1, 6);
+        }
+        // 立子（竹・前後 交互）
+        int n = Mathf.Max(1, Mathf.RoundToInt(len / 0.30f));
+        for (int i = 0; i <= n; i++) {
+            float t = (float)i / n;
+            var p = a + dir * (len * t) + yoko * ((i % 2 == 0) ? 0.03f : -0.03f);
+            p.y = jimenY(p.x, p.z) + 0.02f;
+            y.Bou(p, p + Vector3.up * (takasa + Random.Range(-0.04f, 0.06f)), 0.018f, 0.015f, (Random.value < 0.8f) ? 1 : 2, 6);
+        }
+    }
+
+    /// <summary>冠木門：柱 2本 ＋ 冠木。at＝門の まん中、haba＝柱の 間、muki＝柱を ならべる 向き</summary>
+    public static void Mon(Yabu y, Vector3 at, float haba, Vector3 muki, float takasa, System.Func<float, float, float> jimenY) {
+        muki.y = 0f; muki.Normalize();
+        var l = at - muki * (haba * 0.5f); var r = at + muki * (haba * 0.5f);
+        l.y = jimenY(l.x, l.z) - 0.05f; r.y = jimenY(r.x, r.z) - 0.05f;
+        y.Bou(l, l + Vector3.up * takasa, 0.09f, 0.08f, 3, 10);
+        y.Bou(r, r + Vector3.up * takasa, 0.09f, 0.08f, 3, 10);
+        var top = Vector3.up * (takasa - 0.10f);
+        y.Bou(l + top - muki * 0.25f, r + top + muki * 0.25f, 0.07f, 0.07f, 3, 8);
+    }
+
+    /// <summary>丸太：木の 皮の 筒を 横に。両はしが ふさがる よう まん中から 2本</summary>
+    public static void Maruta(Yabu y, Vector3 at, float yaw, float len, float r) {
+        var dir = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+        var c = at + Vector3.up * (r * 0.9f);
+        y.Bou(c, c + dir * (len * 0.5f), r, r * 0.92f, 4, 10);
+        y.Bou(c, c - dir * (len * 0.5f), r, r * 0.92f, 4, 10);
+    }
+
+    static Material mIwa;
+    /// <summary>岩：ゆがめた 球（下は 平ら）に 岩はだの 絵。size＝差しわたし(m)</summary>
+    public static void Iwa(Transform root, Vector3 at, float size, float yaw) {
+        if (mIwa == null) mIwa = Mat("NiwaIwa", "iwa_hada.jpg", false);
+        const int la = 7, lo = 12;
+        var v = new List<Vector3>(); var uv = new List<Vector2>();
+        float seed = Random.Range(0f, 100f);
+        for (int i = 0; i <= la; i++) {
+            float ph = Mathf.PI * i / la;                       // 0=上 π=下
+            for (int j = 0; j <= lo; j++) {
+                float th = Mathf.PI * 2f * j / lo;
+                var n = new Vector3(Mathf.Sin(ph) * Mathf.Cos(th), Mathf.Cos(ph), Mathf.Sin(ph) * Mathf.Sin(th));
+                float bump = 0.72f + 0.28f * Mathf.PerlinNoise(seed + n.x * 1.7f + n.y * 0.9f, seed + n.z * 1.7f);
+                var p = n * (size * 0.5f * bump);
+                p.y *= 0.62f;                                   // 平たい 岩
+                if (p.y < -size * 0.12f) p.y = -size * 0.12f;   // 下は 地めんに うまる
+                v.Add(p); uv.Add(new Vector2((float)j / lo * 2f, (float)i / la));
+            }
+        }
+        var tri = new List<int>();
+        for (int i = 0; i < la; i++)
+            for (int j = 0; j < lo; j++) {
+                int a0 = i * (lo + 1) + j, a1 = a0 + 1, b0 = a0 + lo + 1, b1 = b0 + 1;
+                tri.Add(a0); tri.Add(b0); tri.Add(a1); tri.Add(a1); tri.Add(b0); tri.Add(b1);
+            }
+        var m = new Mesh { name = "Iwa" };
+        m.SetVertices(v); m.SetUVs(0, uv); m.SetTriangles(tri, 0);
+        m.RecalculateNormals(); m.RecalculateBounds();
+        var g = new GameObject("Iwa");
+        g.transform.SetParent(root, false);
+        g.transform.position = at + Vector3.up * (size * 0.12f);
+        g.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+        g.AddComponent<MeshFilter>().sharedMesh = m;
+        g.AddComponent<MeshRenderer>().sharedMaterial = mIwa;
+        var col = g.AddComponent<SphereCollider>(); col.radius = size * 0.42f; col.center = Vector3.zero;
     }
 
     // ---------------------------------------------------------------- 写真の 草むら

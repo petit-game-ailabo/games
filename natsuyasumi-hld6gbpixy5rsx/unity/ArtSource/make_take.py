@@ -41,3 +41,34 @@ def make(name, base, dark, seed):
 make("take_kawa_midori.jpg", (112, 138, 74), (58, 72, 40), 1)
 make("take_kawa_ki.jpg",     (152, 142, 78), (86, 80, 44), 2)
 make("take_kawa_cha.jpg",    (128, 112, 88), (70, 62, 50), 3)
+
+
+# ---- rock surface (iwa_hada.jpg): grey-brown, blotches, cracks, a little moss. Spherical UV on a blob mesh.
+def iwa(name, seed):
+    rnd = random.Random(seed)
+    im = Image.new("RGB", (512, 512), (122, 118, 108))
+    d = ImageDraw.Draw(im)
+    for _ in range(900):
+        x = rnd.randrange(512); y = rnd.randrange(512); r = rnd.randint(4, 40)
+        k = rnd.uniform(0.78, 1.16)
+        col = tuple(min(255, int(c * k)) for c in (122, 118, 108))
+        d.ellipse([x - r, y - r // 2, x + r, y + r // 2], fill=col)
+    im = im.filter(ImageFilter.GaussianBlur(3))
+    d = ImageDraw.Draw(im)
+    for _ in range(40):                                        # cracks
+        x = rnd.randrange(512); y = rnd.randrange(512)
+        for _ in range(rnd.randint(3, 9)):
+            x2 = x + rnd.randint(-30, 30); y2 = y + rnd.randint(-30, 30)
+            d.line([(x, y), (x2, y2)], fill=(70, 66, 60), width=rnd.randint(1, 2)); x, y = x2, y2
+    moss = Image.new("RGB", (512, 512), (96, 118, 62))
+    m = Image.new("L", (512, 512), 0); dm = ImageDraw.Draw(m)
+    for _ in range(14):
+        x = rnd.randrange(512); y = rnd.randrange(512); r = rnd.randint(20, 70)
+        dm.ellipse([x - r, y - r, x + r, y + r], fill=rnd.randint(90, 170))
+    m = m.filter(ImageFilter.GaussianBlur(14))
+    im = Image.composite(moss, im, m)
+    im = im.filter(ImageFilter.GaussianBlur(0.6))
+    im.save(os.path.join(OUT, name), quality=92)
+    print(name)
+
+iwa("iwa_hada.jpg", 7)
