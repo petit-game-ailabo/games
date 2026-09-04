@@ -22,6 +22,7 @@
 | `Scripts/NiwaMushi.cs` | 虫（種の表 `Shurui`・`Perch`・動き `*Ugoki`・影・寄りカード） | `-mushi` でデバッグ配置 |
 | `Scripts/MuraMove.cs` `MuraDay.cs` | 主人公の移動・`-tour` `-noboru`・`-hour=N` | |
 | `Scripts/NiwaHimawari.cs` | ヒマワリの水やり日数 | |
+| `Scripts/NiwaNayaNaka.cs` | 納屋の**屋内カメラ**（カメラ引きとり・手前の壁と屋根を消す・外を落とす） | 消す物は名前の頭で拾う（`NiwaNaya.Okunai`）。配線は BuildNiwa の「納屋の 屋内カメラ」節 |
 | `ArtSource/make_take.py` `make_mushi.py` `make_kusaki.py` `make_himawari.py` `make_ie_yogore.py` | 絵の生成（写真は `Art/Textures/shashin/`＝本人が Codex で作った物） | |
 
 ## `BuildNiwa.Build()` の節（grep 用の見出し）
@@ -69,4 +70,6 @@ Player.log: `%USERPROFILE%/AppData/LocalLow/petit-game-ailabo/niwa/Player.log`�
 - 筒の UV は継ぎ目に頂点を1つ余分に（sides+1）。
 - 段（`Dan`）で高さを変えたら、座らせ直しの `nuki` を確かめる。
 - 地面に置く物は **`Takasa` + 0.05 より上**（見えている地面は一枚絵の板 `JimenE`）。下だと丸ごと消える（D-201）。
-- 建てものの戸は **南（カメラがわ）**に向ける。カメラは南向き固定なので、東西の面は一生 真横（D-200）。
+- 屋内を見せるなら **カメラ引きとり＋手前の壁を消す＋外を落とす の3つで1組**（D-205）。中に入れるには壁1枚ずつに当たり。
+- **Volume の効果は `AssetDatabase.AddObjectToAsset` でサブアセットに**。忘れるとビルドでポストFXが丸ごと死ぬ（D-206。庭は1か月気づかなかった）。
+- 同じ高さの面を2枚重ねない（土間と基礎で床がまだらになった・D-207）。

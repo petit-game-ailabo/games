@@ -16,8 +16,10 @@ public static class NiwaBuhin {
     static readonly Dictionary<string, Material> cache = new Dictionary<string, Material>();
 
     /// <summary>絵つきの 材質。tiling は 面の 大きさ÷1くりかえしの m。dither＝主人公の まわりを 抜く</summary>
+    /// <param name="toumei">0＝ふつう。0より 大きいと **すける**（虫とり網の 布など）</param>
     public static Material Mat(string name, string tex, Vector2 tiling, Color tint,
-                               bool sukashi = false, bool dither = false, float tsuya = 0.05f) {
+                               bool sukashi = false, bool dither = false, float tsuya = 0.05f,
+                               float toumei = 0f) {
         Material got;
         if (cache.TryGetValue(name, out got)) return got;
         System.IO.Directory.CreateDirectory(DIR);
@@ -48,6 +50,20 @@ public static class NiwaBuhin {
             m.SetFloat("_AlphaClip", 1f); m.SetFloat("_Cutoff", 0.5f);
             m.EnableKeyword("_ALPHATEST_ON");
             m.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
+        }
+        if (toumei > 0f) {
+            // すける 面（網）。不とうめいの あとに 描く ので 深度は 書かない
+            m.SetFloat("_Surface", 1f); m.SetFloat("_Blend", 0f);
+            m.SetFloat("_AlphaClip", 0f); m.DisableKeyword("_ALPHATEST_ON");
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.renderQueue = 3000;
+            var ct = tint; ct.a = toumei;
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", ct);
+            m.color = ct;
         }
         cache[name] = m;
         return m;

@@ -273,7 +273,7 @@ public static class BuildNiwa {
 
         // ---- 納屋（庭の 西）と 水まわり（家の 東）。2026-09-05・本人の 指示。
         //   どちらも **地めんの 高さを 自分で 決めて** 置く ので、下の すわらせ直しからは 外す
-        NiwaNaya.Build(root);
+        var nayaT = NiwaNaya.Build(root);
         NiwaMizu.Build(root);
 
         // ---- 遠景の 描き割り（絵はがき文法の 検証・2026-08-30 本人GO）：
@@ -548,7 +548,16 @@ public static class BuildNiwa {
         vol.isGlobal = true;
         var prof = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
         AssetDatabase.CreateAsset(prof, "Assets/Art/Materials/Niwa/NiwaPostFX.asset");
-        T AddFX<T>() where T : UnityEngine.Rendering.VolumeComponent { return prof.Add<T>(); }
+        // ★Volumeの 効果は **サブアセットとして 保存**しないと ビルドで まるごと 消える
+        //   （BuildZashiki は 直して あるのに 庭は 直し わすれて いた）。実機では 被写界深度も
+        //   ブルームも ヴィネットも 色調整も **1つも 効いて いなかった**（2026-09-05・
+        //   NiwaNayaNaka の TryGet が 両方 false を 返した のが 発見の きっかけ）
+        T AddFX<T>() where T : UnityEngine.Rendering.VolumeComponent {
+            var c = prof.Add<T>(true);
+            c.hideFlags = HideFlags.HideInHierarchy;
+            AssetDatabase.AddObjectToAsset(c, prof);
+            return c;
+        }
         var dof = AddFX<DepthOfField>();
         dof.mode.overrideState = true; dof.mode.value = DepthOfFieldMode.Bokeh;
         dof.focusDistance.overrideState = true; dof.focusDistance.value = 16f;
@@ -570,6 +579,17 @@ public static class BuildNiwa {
         vol.sharedProfile = prof;
         var focus = volGO.AddComponent<FocusOnPlayer>();
         focus.volume = vol; focus.target = player.transform;
+
+        // ---- 納屋の 屋内カメラ（2026-09-05）。カメラと ポストFXが できて から つなぐ
+        {
+            var naka = nayaT.GetComponent<NiwaNayaNaka>();
+            if (naka != null) {
+                naka.target = player.transform;
+                naka.cam = camGO.transform;
+                naka.fix = fix;
+                naka.vol = vol;
+            } else Debug.LogError("[BuildNiwa] NiwaNayaNaka が 納屋に ついて いない");
+        }
 
         Debug.Log("[Probe] Takadai いちばん急な傾斜 " + NiwaJimenE.TakadaiKeisha());
         hayashi.Katameru();
