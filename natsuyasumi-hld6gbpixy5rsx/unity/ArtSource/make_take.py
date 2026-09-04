@@ -156,3 +156,41 @@ def ikegaki(name, seed):
     print(name)
 
 ikegaki("ikegaki_hada.jpg", 21)
+
+
+# ---- hedge fur shell (ikegaki_ke.png, RGBA): sprigs of narrow leaves with transparency, colours sampled from the
+#   user's hedge photo (shashin/ikegaki.png). Tiles both ways. Drawn on 1..2 shells offset from the hedge core mesh
+#   so the silhouette breaks up like real foliage (2026-09-04).
+def ikegaki_ke(name, seed):
+    import math
+    rnd = random.Random(seed)
+    W2, H2 = 512, 512
+    src = Image.open(os.path.join(OUT, "ikegaki.png")).convert("RGB") if os.path.exists(os.path.join(OUT, "ikegaki.png")) else None
+    def iro():
+        if src is None: return (60, 96, 44)
+        x = rnd.randrange(src.width); y = rnd.randrange(src.height)
+        c = src.getpixel((x, y)); k = rnd.uniform(0.95, 1.25)
+        return tuple(min(255, int(v * k)) for v in c)
+    im = Image.new("RGBA", (W2, H2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    def ha(cx, cy, ln, wd, a, col):
+        pts = []
+        for i in range(8):
+            t = i / 8 * 2 * math.pi
+            px = math.cos(t) * ln; py = math.sin(t) * wd
+            pts.append((cx + px * math.cos(a) - py * math.sin(a), cy + px * math.sin(a) + py * math.cos(a)))
+        for dx in (-W2, 0, W2):
+            for dy in (-H2, 0, H2):
+                d.polygon([(x + dx, y + dy) for x, y in pts], fill=col + (255,))
+    for _ in range(520):                       # sprigs
+        cx = rnd.randrange(W2); cy = rnd.randrange(H2)
+        base = rnd.uniform(0, math.pi * 2)
+        for k in range(rnd.randint(4, 8)):
+            a = base + rnd.uniform(-0.9, 0.9)
+            ln = rnd.randint(9, 20); wd = rnd.randint(2, 4)
+            ox = math.cos(a) * ln * 0.9; oy = math.sin(a) * ln * 0.9
+            ha(cx + ox, cy + oy, ln, wd, a, iro())
+    im.save(os.path.join(OUT, name))
+    print(name, "coverage", sum(1 for p in im.getdata() if p[3] > 0) / (W2 * H2))
+
+ikegaki_ke("ikegaki_ke.png", 31)
