@@ -131,8 +131,8 @@ public static class BuildNiwa {
                 TakeV1.Ishigaki(root, pts, lo, hi, naka);
             }
             // 東西北の 生垣：3本の 折れ線（西→北西の 角、東→北東の 角）。高さ 1.7m・厚み 0.9m
-            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> { new Vector3(-9.7f, 0f, -5.7f), new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f) }, 0.5f), 1.7f, 0.9f, naka, jy);
-            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> { new Vector3(9.7f, 0f, -5.7f), new Vector3(9.7f, 0f, 13.5f), new Vector3(5.8f, 0f, 13.5f) }, 0.5f), 1.7f, 0.9f, naka, jy);
+            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> { new Vector3(-9.7f, 0f, -5.7f), new Vector3(-9.7f, 0f, 13.5f), new Vector3(-5.8f, 0f, 13.5f) }, 0.2f), 1.7f, 0.9f, naka, jy);
+            TakeV1.Ikegaki(root, TakeV1.Kizamu(new List<Vector3> { new Vector3(9.7f, 0f, -5.7f), new Vector3(9.7f, 0f, 13.5f), new Vector3(5.8f, 0f, 13.5f) }, 0.2f), 1.7f, 0.9f, naka, jy);
             // 庭の 中の 仕切り：縁がわの 西の 庭を 四ツ目垣で 区切る
             var kaki = new TakeV1.Yabu(root);
             TakeV1.Kaki(kaki, new Vector3(-9.2f, 0f, 1.2f), new Vector3(-6.0f, 0f, 1.2f), 0.95f, jy);

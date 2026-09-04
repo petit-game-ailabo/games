@@ -404,44 +404,58 @@ public static class TakeV1 {
     }
 
     static Material mIkegaki;
-    /// <summary>生垣：**刈りこんだ 面の 絵を 貼った、角の 丸い 塊**を 折れ線に そって のばす。
-    /// ★葉の カードを 何まいも 重ねる 方式は やめた（2026-09-04・本人「何個も草を重ねる方法自体をやめよう」）。
-    ///   刈りこまれた 生垣は 遠目には 1つの 面。断面は 7点（下は 垂直、上は 丸い）、長さ方向に 少し うねる。
-    ///   絵は 本人の 写真（ikegaki.png）が あれば それ、なければ 描いた 仮の 絵（ikegaki_hada.jpg）</summary>
+    /// <summary>生垣：面の 絵を 貼った **株ごとに ふくらむ 塊**を 折れ線に そって のばす。
+    /// ★のっぺり 直し 2度目（2026-09-04・本人の 参考写真：道ぞいの イヌマキの 生垣）。
+    ///   本物は 1株ごとに 20〜30cm ふくらみ、高さも 株ごとに 上下し、ふくらみの 谷が 暗く 落ちる。
+    ///   断面が 一定の 箱だと 平らに 見えた。→ 長さ方向に 株の ふくらみ（0.8〜1.1m おき）、
+    ///   断面は 樽型（腰で ふくらみ 根もとは すぼむ）、表面に こまかい 凹凸。陰影は メッシュの 法線から 出る</summary>
     public static void Ikegaki(Transform root, List<Vector3> pts, float h, float atsumi, Vector3 niwaNaka,
                                System.Func<float, float, float> jimenY) {
         if (mIkegaki == null) mIkegaki = Mat("NiwaIkegaki", Aru("ikegaki.png") ? "ikegaki.png" : "ikegaki_hada.jpg", false);
         int n = pts.Count; if (n < 2) return;
         float[] miter; var ns = SotoHousen(pts, niwaNaka, out miter);
-        // 断面（外から 内へ）：(横の 位置 -1..1 × 半分の 厚み, 高さの 割合)
-        float[] px = { -1f, -1f, -0.72f, 0f, 0.72f, 1f, 1f };
-        float[] py = { 0f, 0.80f, 0.96f, 1.0f, 0.96f, 0.80f, 0f };
+        // 断面（外から 内へ）：樽型。(横 -1..1 × 半分の 厚み, 高さの 割合)
+        // sokumen wa hobo suichoku, ue dake marui (sankou shashin). koshi ga haru to tawara ni mieta
+        float[] px = { -0.90f, -0.98f, -1.00f, -1.00f, -0.92f, -0.55f, 0f, 0.55f, 0.92f, 1.00f, 1.00f, 0.98f, 0.90f };
+        float[] py = { 0f, 0.20f, 0.45f, 0.72f, 0.88f, 0.97f, 1.0f, 0.97f, 0.88f, 0.72f, 0.45f, 0.20f, 0f };
         int np = px.Length;
+        // 株の ふくらみ：折れ線の 全長に そって 中心を 0.8〜1.1m おきに 置き、ガウスの 山を 足す
+        float zenchou = 0f;
+        for (int i = 1; i < n; i++) zenchou += Vector3.Distance(new Vector3(pts[i].x, 0f, pts[i].z), new Vector3(pts[i - 1].x, 0f, pts[i - 1].z));
+        var kabuC = new List<float>(); var kabuA = new List<float>(); var kabuW = new List<float>(); var kabuH = new List<float>();
+        for (float c = Random.Range(0.2f, 0.6f); c < zenchou; c += Random.Range(0.8f, 1.1f)) {
+            kabuC.Add(c); kabuA.Add(Random.Range(0.10f, 0.30f)); kabuW.Add(Random.Range(0.35f, 0.52f)); kabuH.Add(Random.Range(-0.12f, 0.16f));
+        }
+        System.Func<float, float> fukurami = t => { float f = 0f; for (int k = 0; k < kabuC.Count; k++) { float d = (t - kabuC[k]) / kabuW[k]; f += kabuA[k] * Mathf.Exp(-d * d); } return f; };
+        System.Func<float, float> takasaY = t => { float f = 0f; for (int k = 0; k < kabuC.Count; k++) { float d = (t - kabuC[k]) / kabuW[k]; f += kabuH[k] * Mathf.Exp(-d * d); } return f; };
+        float seed = Random.Range(0f, 100f);
         var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
-        float acc = 0f, seed = Random.Range(0f, 100f);
+        float acc = 0f;
         for (int i = 0; i < n; i++) {
             if (i > 0) acc += Vector3.Distance(new Vector3(pts[i].x, 0f, pts[i].z), new Vector3(pts[i - 1].x, 0f, pts[i - 1].z));
             float g0 = jimenY(pts[i].x, pts[i].z) + 0.05f;
-            float hh = h * (1f + (Mathf.PerlinNoise(seed + acc * 0.35f, seed) - 0.5f) * 0.10f);       // 高さの うねり ±5%
-            float at = atsumi * (1f + (Mathf.PerlinNoise(seed + 5f + acc * 0.5f, seed + 2f) - 0.5f) * 0.16f);
-            float vAcc = 0f;
+            float hh = h + takasaY(acc);
+            float at = atsumi + fukurami(acc) * 2f;                    // ふくらみは 両がわに
+            float vAcc = 0f; Vector3 prev = Vector3.zero;
             for (int k = 0; k < np; k++) {
                 var p = pts[i] + ns[i] * (miter[i] * px[k] * at * 0.5f);
                 p.y = g0 + py[k] * hh;
-                if (k > 0) { var q = pts[i] + ns[i] * (miter[i] * px[k - 1] * at * 0.5f); q.y = g0 + py[k - 1] * hh; vAcc += Vector3.Distance(p, q); }
+                // 表面の こまかい 凹凸（±3cm）。根もとと 天は 動かさない
+                float ara = (Mathf.PerlinNoise(seed + acc * 2.3f + k * 0.7f, seed + py[k] * 4f) - 0.5f) * 0.06f * Mathf.Sin(py[k] * Mathf.PI);
+                p += ns[i] * (ara * Mathf.Sign(px[k] == 0f ? 1f : px[k]));
+                if (k > 0) vAcc += Vector3.Distance(p, prev);
+                prev = p;
                 v.Add(p); uv.Add(new Vector2(acc / 1.0f, vAcc / 1.0f));
             }
         }
         for (int i = 0; i < n - 1; i++)
             for (int k = 0; k < np - 1; k++) {
                 int a = i * np + k, b = a + 1, c = a + np, d = c + 1;
-                // 外から 内へ まわる 断面 なので、(a,c,b) の 向きで 外を 向く
                 tri.Add(a); tri.Add(c); tri.Add(b); tri.Add(b); tri.Add(c); tri.Add(d);
             }
-        // 両はし：小口だけの 頂点を 足して 平らに 絵を 貼る（頂点を 使いまわすと 絵が 縞に 流れた）
+        // 両はし：小口だけの 頂点を 足して 平らに 絵を 貼る
         void Futa(int o, bool hajime) {
             int b0 = v.Count;
-            var c = v[o + 3];                                           // てっぺんの 点
             for (int k = 0; k < np; k++) {
                 var p = v[o + k];
                 v.Add(p); uv.Add(new Vector2((px[k] * atsumi * 0.5f + 0.6f) / 1.0f, (p.y - v[o].y) / 1.0f));

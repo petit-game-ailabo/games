@@ -125,35 +125,33 @@ def ishigaki(name, seed):
 # ishigaki("ishigaki.jpg", 11)   # 2026-09-04: replaced by the user Codex photo (shashin/ishigaki.jpg)
 
 
-# ---- clipped hedge surface (ikegaki_hada.jpg): dense small leaves in 4 greens, darker toward the bottom. Tiles both ways.
-#   1 repeat = 1.0 m. Placeholder until the user's photo (shashin/ikegaki.png) arrives.
+# ---- hedge surface (ikegaki_hada.jpg): needle-like foliage (Podocarpus / Kaizuka), dense, dark hollows.
+#   1 repeat = 1.0 m. Placeholder until the user's photo (shashin/ikegaki.png).
 def ikegaki(name, seed):
     import math
     rnd = random.Random(seed)
     W2, H2 = 512, 512
-    im = Image.new("RGB", (W2, H2), (34, 52, 26))
+    im = Image.new("RGB", (W2, H2), (22, 36, 18))
     d = ImageDraw.Draw(im)
-    greens = [(62, 96, 40), (78, 116, 48), (94, 132, 56), (110, 146, 66), (52, 84, 36), (124, 156, 74)]
-    for _ in range(9000):
-        x = rnd.randrange(-10, W2 + 10); y = rnd.randrange(-10, H2 + 10)
-        w = rnd.randint(7, 14); h = rnd.randint(4, 8); a = rnd.uniform(0, math.pi)
+    greens = [(46, 78, 34), (58, 94, 40), (72, 110, 48), (86, 124, 56), (40, 70, 30), (98, 134, 62), (64, 100, 44)]
+    # dark hollows first (soft blobs), then needle strokes on top
+    hollow = Image.new("L", (W2, H2), 0); dh = ImageDraw.Draw(hollow)
+    for _ in range(60):
+        x = rnd.randrange(W2); y = rnd.randrange(H2); r = rnd.randint(18, 50)
+        dh.ellipse([x - r, y - r, x + r, y + r], fill=rnd.randint(80, 200))
+    hollow = hollow.filter(ImageFilter.GaussianBlur(12))
+    for _ in range(26000):
+        x = rnd.randrange(-6, W2 + 6); y = rnd.randrange(-6, H2 + 6)
+        ln = rnd.randint(8, 18); a = rnd.uniform(-0.9, 0.9) + (math.pi / 2 if rnd.random() < 0.5 else 0)
         col = rnd.choice(greens)
-        # darker toward the bottom (shade of the leaves above)
-        k = 0.78 + 0.32 * (1 - y / H2)
+        hv = hollow.getpixel((x % W2, y % H2)) / 255.0
+        k = (1.02 - 0.55 * hv) * rnd.uniform(0.85, 1.12)
         col = tuple(min(255, int(c * k)) for c in col)
-        pts = []
-        for i in range(8):
-            t = i / 8 * 2 * math.pi
-            px = math.cos(t) * w; py = math.sin(t) * h
-            pts.append((x + px * math.cos(a) - py * math.sin(a), y + px * math.sin(a) + py * math.cos(a)))
-        d.polygon(pts, fill=col)
-        # tile wrap: draw again shifted for edges
-        if x < 20 or y < 20 or x > W2 - 20 or y > H2 - 20:
-            for dx in (-W2, 0, W2):
-                for dy in (-H2, 0, H2):
-                    if dx == 0 and dy == 0: continue
-                    d.polygon([(px2 + dx, py2 + dy) for px2, py2 in pts], fill=col)
-    im = im.filter(ImageFilter.GaussianBlur(0.5))
+        x2 = x + math.cos(a) * ln; y2 = y + math.sin(a) * ln
+        for dx in (-W2, 0, W2):
+            for dy in (-H2, 0, H2):
+                d.line([(x + dx, y + dy), (x2 + dx, y2 + dy)], fill=col, width=rnd.randint(1, 2))
+    im = im.filter(ImageFilter.GaussianBlur(0.4))
     im.save(os.path.join(OUT, name), quality=92)
     print(name)
 
