@@ -36,12 +36,6 @@ public class CharSprite : MonoBehaviour {
     [Tooltip("まばたきの 行（-1 なら 無し）")]
     public int blinkRow = -1;
 
-    /// <summary>歩きの 絵（8列x8行）。**走りとは べつの 画像**。
-    /// ★1枚に まとめると 18行＝6048px に なり、取りこみの 上限 4096 を こえて
-    ///   縮められる（2026-09-06）。だから 走り／歩きで 画像を 差しかえる。
-    /// null なら いままで どおり 走りの コマを ゆっくり 出す</summary>
-    public Texture2D arukiTex;
-    public int arukiRows = 8;
     [Tooltip("止まって いる ときに つかう 列（-1 なら いまの 向きの まま）")]
     public int idleCol = -1;
 
@@ -116,12 +110,8 @@ public class CharSprite : MonoBehaviour {
         if (walkSheet) {
             // ★新しい 絵：行が 歩きの 8コマ。止まって いれば 0コマめ（立ち）
             if (moving) {
-                bool hashiru = speed > runSpeed;
-                step += dt * (hashiru ? runCycleFps : walkCycleFps);
+                step += dt * (speed > runSpeed ? runCycleFps : walkCycleFps);
                 row = Mathf.FloorToInt(step) % Mathf.Max(1, cycleFrames);
-                // ★歩きは **べつの 絵**。前は 走りの コマを ゆっくり 出して いた ので
-                //   「歩いて いる」ように 見えなかった（PLAN の 未了 そのもの）
-                if (!hashiru && arukiTex != null) { Set(dir, row, arukiTex, arukiRows); return; }
             } else {
                 step = 0f;
                 row = (blinkRow >= 0 && blinkT > 0f) ? blinkRow : idleRow;
@@ -148,13 +138,9 @@ public class CharSprite : MonoBehaviour {
         Set(dir, row);
     }
 
-    void Set(int col, int row) { Set(col, row, null, 0); }
-
-    void Set(int col, int row, Texture betsu, int betsuRows) {
+    void Set(int col, int row) {
         if (target == null) return;
-        // ★絵を 差しかえる ときは **どの 絵かも 覚えて おく**。
-        //   コマ番号だけ だと 走り→歩きで 同じ 番号の とき 差しかわらない（2026-09-06）
-        int cell = (row * Cols + col) * 2 + (betsu != null ? 1 : 0);
+        int cell = row * Cols + col;
         if (cell == lastCell) return;      // 同じ コマなら 触らない
         lastCell = cell;
         target.GetPropertyBlock(mpb);
@@ -165,17 +151,14 @@ public class CharSprite : MonoBehaviour {
         //   まるめが となりの コマに はみ出し、**べつの 向きの 絵が すじに なって 出て いた**。
         //   1コマ 115x167px に たいして 半テクセルなので 見た目は 変わらない。
         //   ★アトラスを 手で 切るなら **どこでも 起きる**。コマを 足す ときは 必ず これ
-        var t = betsu != null ? betsu
-              : (target.sharedMaterial != null ? target.sharedMaterial.mainTexture : null);
+        var t = target.sharedMaterial != null ? target.sharedMaterial.mainTexture : null;
         float w = t != null ? t.width : 1024f, h = t != null ? t.height : 1024f;
-        int rows = (betsu != null && betsuRows > 0) ? betsuRows : Rows;
-        mpb.SetTexture("_BaseMap", t);
         float insetU = 0.5f / Mathf.Max(w, 1f), insetV = 0.5f / Mathf.Max(h, 1f);
 
         // 画像は 上が 0行め だが UV は 下が 0。y は ひっくり返す
         mpb.SetVector("_BaseMap_ST", new Vector4(
-            1f / Cols - insetU * 2f, 1f / rows - insetV * 2f,
-            col / (float)Cols + insetU, (rows - 1 - row) / (float)rows + insetV));
+            1f / Cols - insetU * 2f, 1f / Rows - insetV * 2f,
+            col / (float)Cols + insetU, (Rows - 1 - row) / (float)Rows + insetV));
         target.SetPropertyBlock(mpb);
     }
 }
