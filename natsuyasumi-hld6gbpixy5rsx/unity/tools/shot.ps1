@@ -13,6 +13,7 @@
 #   .\shot.ps1 -play tsuri -playwait 0 -shots 3   # capture DURING an activity
 #   .\shot.ps1 -face 4 -pose 2 -tag back-run      # pin sprite direction/pose
 #   .\shot.ps1 -sanD -tag 3d                       # hero sheet = 3D body + 2D head
+#   .\shot.ps1 -novroid -tag nov                   # hide the VRoid comparison model
 #   .\shot.ps1 -walk '1,0' -walkhold -run -shots 6 -gap 0.07   # run cycle
 param(
   [string]$tod = 'asa', [string]$tag = 'a', [int]$shots = 1, [double]$gap = 1.5,
@@ -23,7 +24,7 @@ param(
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
   [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$menu,
-  [switch]$sanD, [switch]$kyu, [switch]$vroid, [switch]$vrun
+  [switch]$sanD, [switch]$kyu, [switch]$novroid, [switch]$vrun
 )
 $ErrorActionPreference = 'Stop'
 
@@ -82,10 +83,10 @@ if ($menu)  { $a += @('-menu') }
 if ($sanD) { $a += @('-3d') }
 # -kyu : the old sprite sheet (marisa_walk). Default is now the redrawn run.
 if ($kyu) { $a += @('-kyu') }
-# -vroid : show the VRoid model next to the sprite for comparison
-if ($vroid) { $a += @('-vroid') }
+# The VRoid comparison model is ON by default; -novroid hides it. V key toggles in game.
+if ($novroid) { $a += @('-novroid') }
 # -vrun : force the VRoid model to always play the run clip (diagnostic)
-if ($vrun) { $a += @('-vroid','-vrun') }
+if ($vrun) { $a += @('-vrun') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }

@@ -20,15 +20,27 @@ public class NiwaVroid : MonoBehaviour {
     string ima = "";
 
     void Awake() {
-        // ★`-vroid` を つけた ときだけ 出す。ふだんの 絵づくりの じゃまを しない
-        bool dasu = false;
-        foreach (var a in System.Environment.GetCommandLineArgs())
-            if (a == "-vroid") dasu = true;
-        foreach (var a in System.Environment.GetCommandLineArgs())
+        // ★**既定で 出す。Vキーで 消せる。**
+        //   はじめ `-vroid` を つけた ときだけ に して いたが、
+        //   exe を そのまま 起ちあげると 引数が 無い ので **出て こなかった**（2026-09-06）。
+        //   見せる ものは 既定に する（D-224 と 同じ しくじり）
+        bool kesu = false;
+        foreach (var a in System.Environment.GetCommandLineArgs()) {
+            if (a == "-novroid") kesu = true;
             if (a == "-vrun") zutto = true;
-        if (!dasu) { gameObject.SetActive(false); return; }
-        Debug.Log("[NiwaVroid] 見くらべ用の モデルを 出す");
+        }
+        if (kesu) { gameObject.SetActive(false); return; }
+        Debug.Log("[NiwaVroid] 見くらべ用の モデルを 出す（Vキーで 消せる）");
     }
+
+    /// <summary>Vキーで 出したり 消したり</summary>
+    void Update() {
+        if (!Input.GetKeyDown(KeyCode.V)) return;
+        miseru = !miseru;
+        foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = miseru;
+    }
+
+    bool miseru = true;
 
     void Start() {
         if (target != null) mae = target.position;
