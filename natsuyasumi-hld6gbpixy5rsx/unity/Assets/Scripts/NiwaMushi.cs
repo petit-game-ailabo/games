@@ -55,6 +55,7 @@ public class NiwaMushi : MonoBehaviour {
     public float kouho = 18f;                          // 主人公から この 半径の 中に 湧かせる
     public const float JIMEN_UKI = 0.13f;              // 見た目の 地面板は 当たりより 約0.10 上。これより 下は 板に かくれる
     public float minPx = 26f;                          // 板が 画面で これより 小さく ならない（実測：12px は 読めない）
+    public float nigenai = 3.6f;                       // この 半径の 中に 主人公が いる あいだは 逃げない
     public Material kageZairyo;                        // 足もとの 影（Niwa/Kage・BuildNiwa が わたす）
 
     // ★建てものの 中に 入れない（2026-09-05・本人「納屋の中、虫が入ってくる」）。
@@ -345,9 +346,27 @@ public class NiwaMushi : MonoBehaviour {
     // ---------------------------------------------------------------- 動き（虫ごと）
     void Ugoku(Hiki h, Camera cam) {
         float dt = Time.deltaTime, t = Time.time + h.phase;
+        var mae = h.pos;
         Ugoku2(h, cam, dt, t);
+        // ★主人公が 近い あいだは **虫は 逃げない**（2026-09-05・本人「走って近づいても
+        //   逃げないでほしいな」）。虫がわに 逃げる 気は もともと 無いのに 逃げて 見えるのは、
+        //   ①セミが たまに 飛びさる ②飛ぶ 虫は 自分の 用で 動きつづける の 2つ。
+        //   ①は 別に 止め、②は **動いた ぶんを 減らして その場に 留める**。
+        //   止めるのでは なく 減らす（ぴたりと 止まると 置きものに 見える）
+        float ch = Chikasa(h.pos);
+        if (ch > 0f && h.go != null && !h.tobisaru) {
+            h.pos = Vector3.Lerp(mae, h.pos, 1f - 0.82f * ch);
+            h.go.transform.position = h.pos;
+        }
         Ookisa(h, cam);
         Kage(h);
+    }
+
+    /// <summary>主人公の 近さ 0（遠い）〜1（すぐそば）</summary>
+    float Chikasa(Vector3 p) {
+        if (player == null) return 0f;
+        float d = Vector3.Distance(p, player.position + Vector3.up * 0.7f);
+        return 1f - Mathf.Clamp01(d / nigenai);
     }
 
     /// <summary>板の 大きさ：基本は shu.haba。画面で minPx を 割るなら 距離で 底上げ</summary>
@@ -441,7 +460,11 @@ public class NiwaMushi : MonoBehaviour {
         if (h.shu.id == "semi") {
             h.wait -= dt;
             if (h.wait <= 0f) {
-                if (Random.value < 0.15f) { h.tobisaru = true; h.heading = -h.go.transform.forward; h.heading.y = 0f; h.heading.Normalize(); return; }
+                // ★主人公が そばに 居る あいだは 飛びさらない。**近づいた とたんに 逃げる**のが
+                //   いちばん 腹が 立つ（実際は たまたま この くじが 当たって いただけ）
+                if (Random.value < 0.15f && Chikasa(h.pos) <= 0f) {
+                    h.tobisaru = true; h.heading = -h.go.transform.forward; h.heading.y = 0f; h.heading.Normalize(); return;
+                }
                 h.wait = Random.Range(6f, 14f);
             }
             // 気配だけ：ほんの 少し ふるえる

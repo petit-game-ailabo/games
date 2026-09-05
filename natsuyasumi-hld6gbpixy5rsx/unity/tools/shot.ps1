@@ -21,7 +21,7 @@ param(
   [int]$frames = 150, [string]$face = '', [string]$pose = '',
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
-  [string]$fukan = '', [switch]$motsu, [switch]$furu
+  [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi
 )
 $ErrorActionPreference = 'Stop'
 
@@ -72,6 +72,8 @@ if ($fukan -ne '') { $a += @('-fukan', $fukan) }
 # Garden tools: -motsu starts holding the net and cage, -furu swings when a bug is in reach.
 if ($motsu) { $a += @('-motsu') }
 if ($furu)  { $a += @('-furu') }
+# -mushi puts bugs at fixed spots near the player (NiwaMushi debug placement).
+if ($mushi) { $a += @('-mushi') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }
