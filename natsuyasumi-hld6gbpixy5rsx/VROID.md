@@ -52,6 +52,30 @@ VRoid は どちらの 形式でも 書き出せる ので 両方 入れて あ�
 ★ここが 肝：**VRM は Humanoid として 入る**。だから
 **人型の アニメーションなら 何でも 着せられる**（リターゲット）。
 
+**読めて いるかは 絵では なく 数で たしかめる**（`Assets/Editor/VroidCheck.cs`）：
+
+```
+powershell -File tools/rebuild.ps1 -Only VroidCheck.Check
+```
+
+`AvatarSample_A.vrm`（VRoid の サンプル）で 実際に 通した 結果（2026-09-06）：
+
+```
+Humanoid ○ ボーン54  SkinnedMesh=3 三角形=29542  子=108
+なかみ: Material x15  Texture2D x27  Avatar x1  VRM10Expression x18
+        VRM10SpringBoneJoint x46  VRM10SpringBoneCollider x22
+```
+
+★**SpringBone が 46関節ぶん 入って いる**＝**髪と スカートが 自動で 揺れる**。
+  Meshy の ときに「髪が なびかない・スカートが 揺れない」で 詰まった 問題が ここでは 出ない。
+★三角形は 29,542。Meshy の 272,444 に くらべて 軽い。
+
+**サンプルモデルの 権利**（VRoidPreset A〜Z）：
+pixiv の 案内で **「営利・非営利を 問わず 誰でも 使用可・改変可・再配布可・
+クレジット表記 不要」**と 明記されて いる（CC0 では ないが 許諾されて いる）。
+ただし **VRM の meta には `avatarPermission: onlyAuthor` が 入って いる**ので、
+本番で つかうなら 本人が 一度 確認する こと。
+
 ### 3. 歩きの モーションを 用意する
 
 **VRoid には モーションは 入って いない。** べつに 用意して 着せる。
