@@ -89,8 +89,13 @@ public static class NiwaVroidSetup {
             st.motion = c;
             if (na == "Idle") sm.defaultState = st;
         }
+        // ★歩き／走りは **何とおりか 用意して 場で 切りかえる**。
+        //   本人「今の走り方歩き方はまるでジョジョ」。汎用リグの 既定は 男性的で 重い。
+        //   `Walk_Formal` と `Jog` の ほうが やわらかい はず なので 並べて 見くらべる
         Oku("Idle", "Idle_Loop");
         Oku("Walk", "Walk_Loop");
+        Oku("WalkFormal", "Walk_Formal_Loop");
+        Oku("Jog", "Jog_Fwd_Loop");
         Oku("Run", "Sprint_Loop");
         AssetDatabase.SaveAssets();
         return ctrl;

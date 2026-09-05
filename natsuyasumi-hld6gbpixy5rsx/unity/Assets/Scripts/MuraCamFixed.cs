@@ -55,7 +55,7 @@ public class MuraCamFixed : MonoBehaviour {
         // キー説明は 画面に 出しっぱなし（本人 2026-08-23）。俯瞰中は 俯瞰の 説明に ゆずる
         if (!Suspended)
             GUI.Label(new Rect(10, Screen.height - 30, 1400, 24),
-                "WASD=はしる  Shift=あるく  Space=しらべる/あそぶ  Z/J=ねる  V=3Dくらべ  " +
+                "WASD=はしる  Shift=あるく  Space=しらべる/あそぶ  Z/J=ねる  V=3Dくらべ  B=3Dうごき  " +
                 "H=+1時間  K=8日の夜(花火)  F2=ふかん図  F3=きょうできること  T=カメラ切替");
     }
 

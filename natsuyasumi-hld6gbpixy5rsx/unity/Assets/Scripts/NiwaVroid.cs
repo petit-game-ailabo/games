@@ -13,7 +13,19 @@ public class NiwaVroid : MonoBehaviour {
     public Transform target;               // 主人公
     public Animator anim;
     public Vector3 zure = new Vector3(0.9f, 0f, 0f);   // 右へ どれだけ
-    public string tomaru = "Idle", aruku = "Walk", hashiru = "Run";
+    public string tomaru = "Idle";
+
+    /// <summary>歩き／走りの 組み合わせ。**Bキーで 切りかえて 見くらべる**。
+    /// 汎用リグの 既定（Walk/Sprint）は 男性的で 重い ので、ほかも 並べる</summary>
+    static readonly string[,] KUMI = {
+        { "Walk",       "Run"  },   // もとの まま（重い）
+        { "WalkFormal", "Jog"  },   // やわらかい ほう
+        { "WalkFormal", "Run"  },
+        { "Walk",       "Jog"  },
+    };
+    int kumi = 1;                   // 既定は やわらかい ほう
+    string aruku { get { return KUMI[kumi, 0]; } }
+    string hashiru { get { return KUMI[kumi, 1]; } }
     public float arukuIjou = 0.15f, hashiruIjou = 3.4f;
 
     Vector3 mae;
@@ -35,9 +47,19 @@ public class NiwaVroid : MonoBehaviour {
 
     /// <summary>Vキーで 出したり 消したり</summary>
     void Update() {
+        if (Input.GetKeyDown(KeyCode.B)) {
+            kumi = (kumi + 1) % (KUMI.GetLength(0));
+            ima = "";                       // つぎの コマで かけ直す
+        }
         if (!Input.GetKeyDown(KeyCode.V)) return;
         miseru = !miseru;
         foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = miseru;
+    }
+
+    void OnGUI() {
+        if (!miseru) return;
+        GUI.Label(new Rect(10, 46, 700, 22),
+                  "B=3Dの うごきを かえる（いま " + aruku + " / " + hashiru + "）");
     }
 
     bool miseru = true;
