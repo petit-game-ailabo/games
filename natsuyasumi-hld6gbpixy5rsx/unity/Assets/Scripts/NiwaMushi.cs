@@ -706,8 +706,13 @@ public class NiwaMushi : MonoBehaviour {
         rt.pivot = new Vector2(0.5f, 0f); rt.anchoredPosition = new Vector2(0f, 12f); rt.sizeDelta = new Vector2(0f, 44f);
     }
 
+    /// <summary>寄りカードを 出さない（メニューを 開いて いる あいだ）。
+    /// uGUI の 板は OnGUI の 上に 出る ので、消さないと 帳面に かぶる</summary>
+    public static bool Kakusu;
+
     void Card() {
         if (cardGrp == null || player == null) return;
+        if (Kakusu) { cardAlpha = 0f; cardGrp.alpha = 0f; return; }
         Hiki chikai = null; float best = 1.7f;
         foreach (var h in ikiteru) {
             if (h.go == null) continue;

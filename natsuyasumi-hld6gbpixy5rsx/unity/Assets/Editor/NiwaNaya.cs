@@ -176,25 +176,21 @@ public static class NiwaNaya {
         return t;
     }
 
-    /// <summary>取れる 道具の 台帳。主人公・虫・書体は BuildNiwa が つなぐ</summary>
-    static void Dougu(Transform ami, Transform kago) {
+    /// <summary>取れる 道具の 台帳。主人公・虫・書体は BuildNiwa が つなぐ。
+    /// ★**あみと かごで ひとそろい**（1回 取れば 両方）。手に 出るのは あみだけ</summary>
+    static void Daicho(Transform ami) {
         var g = new GameObject("Dougu");
         g.transform.SetParent(ami.root, false);
         var dd = g.AddComponent<NiwaDougu>();
         dd.mono = new[] {
             new NiwaDougu.Mono {
-                id = "ami", namae = "むしとりあみ", mi = ami,
+                id = "mushitori", namae = "むしとりあみ",
+                totta = "むしとりあみと かごを てに いれた", mi = ami,
                 oki = ami.position, okiKaiten = ami.eulerAngles,
                 // 右手。柄の もとを 腰に、先が 頭より 上へ 出る。
                 // ★傾きは **外へ**。内へ 倒すと 柄が 顔を 横切る（2026-09-05）
                 mochiOff = new Vector3(0.34f, 0.05f, 0.14f),
                 mochiKaiten = new Vector3(22f, -10f, 24f),
-            },
-            new NiwaDougu.Mono {
-                id = "kago", namae = "むしかご", mi = kago,
-                oki = kago.position, okiKaiten = kago.eulerAngles,
-                mochiOff = new Vector3(-0.28f, 0.30f, 0.10f),   // 左の 腰に さげる
-                mochiKaiten = new Vector3(0f, 14f, 8f),
             },
         };
     }
@@ -223,6 +219,11 @@ public static class NiwaNaya {
         naka.camPos = new Vector3(CX - 0.20f, gy + 2.55f, CZ - 4.70f);
         naka.camLook = new Vector3(CX + 0.15f, gy + 0.95f, CZ + 0.20f);
         naka.camFov = 33f;
+        // 戸：ToB が 南へ 0.72 引かれて 北がわが 開く。外の 立ち位置は 開く ほうの 正面
+        naka.toB = toBT;
+        naka.toAke = 0.37f - 0.72f;
+        naka.toKabe = toKabeC;
+        naka.soto = new Vector3(CX + HX + 0.95f, gy + 0.10f, CZ + 0.22f);
 
         // 消す：南の 壁・屋根の 2面・棟・破風・妻・軒げた・戸の 上の 庇
         var kesu = new System.Collections.Generic.List<Renderer>();
@@ -265,14 +266,28 @@ public static class NiwaNaya {
                        new Vector3(0.16f, 0.07f, TO_H * 2f + 0.14f), mWaku);
         NiwaBuhin.Hako(t, "Naya_Kamoi", new Vector3(HX - 0.02f, TO_Y - 0.04f, 0f),
                        new Vector3(0.16f, 0.09f, TO_H * 2f + 0.14f), mWaku);
-        // 戸 2枚（外の 溝＝x が 大きい ほう / 内の 溝）。北がわの 1枚を 南へ 重ねて 開ける
+        // 戸 2枚。★**閉じた 位置**で 組む（開けるのは `NiwaNayaNaka`）。
+        //   南の 1枚（ToA）は 動かず、北の 1枚（ToB）が 南へ 引かれて 北がわが 開く
         float y0 = DODAI + 0.06f, y1 = TO_Y - 0.07f;
-        Ita1(t, "Naya_ToA", HX + 0.015f, -0.35f, 0.74f, y0, y1);     // 閉じて いる 1枚
-        Ita1(t, "Naya_ToB", HX - 0.045f, -0.31f, 0.74f, y0, y1);     // 引いて 重ねた 1枚
+        toAT = new GameObject("Naya_ToA").transform;
+        toAT.SetParent(t, false); toAT.localPosition = new Vector3(0f, 0f, -0.37f);
+        Ita1(toAT, "ToA", HX + 0.015f, 0f, 0.74f, y0, y1);
+        toBT = new GameObject("Naya_ToB").transform;
+        toBT.SetParent(t, false); toBT.localPosition = new Vector3(0f, 0f, 0.37f);
+        Ita1(toBT, "ToB", HX - 0.045f, 0f, 0.74f, y0, y1);
         // 引き手（黒い 小さな くぼみ）
-        NiwaBuhin.Hako(t, "Naya_Hikite", new Vector3(HX + 0.03f, 1.05f, -0.02f),
+        NiwaBuhin.Hako(toBT, "Hikite", new Vector3(HX + 0.03f, 1.05f, -0.30f),
                        new Vector3(0.02f, 0.13f, 0.05f), mTetsu);
+        // 閉じて いる あいだ 通れなく する かべ（開いたら `NiwaNayaNaka` が 切る）
+        var kb = NiwaBuhin.Hako(t, "BLK_NayaTo",
+                                new Vector3(HX, (DODAI + TO_Y) * 0.5f, 0f),
+                                new Vector3(0.14f, TO_Y - DODAI, TO_H * 2f), null, true);
+        kb.GetComponent<Renderer>().enabled = false;
+        toKabeC = kb.GetComponent<Collider>();
     }
+
+    static Transform toAT, toBT;
+    static Collider toKabeC;
 
     static void Ita1(Transform t, string name, float x, float zc, float haba, float y0, float y1) {
         NiwaBuhin.Hako(t, name, new Vector3(x, (y0 + y1) * 0.5f, zc),
@@ -306,31 +321,9 @@ public static class NiwaNaya {
             NiwaBuhin.Hako(d, "Naya_TanaAshi", new Vector3(tx + sx, 0.95f, tz),
                            new Vector3(0.07f, 1.42f, 0.07f), mIta2);
 
-        // ---- 虫かご（上の 棚）。★**自分の 原点を もつ かたまり**に する。
-        //      取って 手に 持たせる ときに その場で まわせないと、納屋の 原点を 中心に
-        //      ぐるぐる まわって しまう（NiwaDougu が 位置と 向きを 毎フレーム 決める）
-        var kagoT = new GameObject("Naya_Mono_Kago").transform;
-        kagoT.SetParent(d, false);
-        kagoT.localPosition = new Vector3(-0.30f, 1.385f, 1.12f);
-        {
-            NiwaBuhin.Hako(kagoT, "Kago_Soko", new Vector3(0f, 0.02f, 0f),
-                           new Vector3(0.24f, 0.04f, 0.20f), mIta2);
-            NiwaBuhin.Hako(kagoT, "Kago_Ten", new Vector3(0f, 0.30f, 0f),
-                           new Vector3(0.24f, 0.04f, 0.20f), mIta2);
-            for (int i = 0; i < 6; i++) {
-                float u = -0.10f + i * 0.04f;
-                foreach (float sz in new[] { -0.09f, 0.09f })
-                    NiwaBuhin.Bou(kagoT, "Kago_Ko", new Vector3(u, 0.04f, sz),
-                                  new Vector3(u, 0.28f, sz), 0.006f, mTake);
-            }
-            foreach (float sx in new[] { -0.115f, 0.115f })
-                for (int i = 0; i < 4; i++) {
-                    float u = -0.075f + i * 0.05f;
-                    NiwaBuhin.Bou(kagoT, "Kago_Ko", new Vector3(sx, 0.04f, u),
-                                  new Vector3(sx, 0.28f, u), 0.006f, mTake);
-                }
-        }
-
+        // ★虫かごは 置かない（2026-09-05・本人「納屋に虫かごはおかないかな。
+        //   網と籠はワンセットのアイテムとして拾えるようにしよう」）。かごは 物として 作らず、
+        //   中みは メニュー（`NiwaMenu`）で 見る
         // ---- 剪定ばさみ と 軍手（下の 棚）
         NiwaBuhin.HakoR(d, "Naya_Sentei", new Vector3(0.02f, 0.845f, 1.02f),
                         new Vector3(0.05f, 0.03f, 0.22f), new Vector3(0f, 24f, 0f), mTetsu);
@@ -372,7 +365,7 @@ public static class NiwaNaya {
             ami.transform.localPosition = new Vector3(0f, len + 0.02f, 0f);
             ami.transform.localRotation = Quaternion.Euler(178f, 0f, 10f);
         }
-        Dougu(amiT, kagoT);
+        Daicho(amiT);
 
         // ---- 竹ぼうき（戸口の 内がわに 立てかける）
         Houki(d, new Vector3(1.08f, DODAI, 1.34f), new Vector3(1.16f, 1.52f, 1.02f));

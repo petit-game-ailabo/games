@@ -142,8 +142,17 @@ public class MuraMove : MonoBehaviour {
         Application.Quit();
     }
 
+    // ---- 外から 動かす／止める（納屋へ 自動で 入る・メニューを 開いて いる あいだ）
+    /// <summary>入力を 受けつけない</summary>
+    public bool Tomeru;
+    /// <summary>世界の 向きで 歩かせる。Vector3.zero で 手を はなす</summary>
+    public void Ugokasu(Vector3 sekaiMuki) { simDir = sekaiMuki; }
+
     void Update() {
-        float h = Input.GetAxisRaw("Horizontal"), v = Input.GetAxisRaw("Vertical");
+        float h = 0f, v = 0f;
+        if (!Tomeru && simDir == Vector3.zero) {
+            h = Input.GetAxisRaw("Horizontal"); v = Input.GetAxisRaw("Vertical");
+        }
         bool any = Mathf.Abs(h) > 0.01f || Mathf.Abs(v) > 0.01f;
         // 入力の 組み合わせが 変わったら、いまの カメラで 基準を 取り直す
         if (any && (h != prevH || v != prevV) && cam != null) baseYaw = cam.eulerAngles.y;
@@ -152,6 +161,7 @@ public class MuraMove : MonoBehaviour {
         if (simDir != Vector3.zero) dir = simDir;   // 再現あるきは 世界の 向きで まっすぐ
         if (dir.sqrMagnitude > 1f) dir.Normalize();
         float spd = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ? walk : run;
+        if (simDir != Vector3.zero) spd = walk;      // 自動で 歩く ときは 走らない
         vy = cc.isGrounded ? -0.5f : vy - 9.8f * Time.deltaTime;
         cc.Move((dir * spd + Vector3.up * vy) * Time.deltaTime);
         if (sprite != null) sprite.Drive(dir, dir.magnitude * spd, false);

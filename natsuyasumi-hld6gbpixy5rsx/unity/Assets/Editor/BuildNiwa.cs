@@ -152,9 +152,14 @@ public static class BuildNiwa {
         // ---- 見えない かべ（Kenney の 塀には あたりが 無い）
         Box(root, "BLK_S1", new Vector3(-5.85f, 1f, -6f), new Vector3(8.1f, 2f, 0.3f), null, false);
         Box(root, "BLK_S2", new Vector3( 5.85f, 1f, -6f), new Vector3(8.1f, 2f, 0.3f), null, false);
-        Box(root, "BLK_E",  new Vector3( 9.7f, 1f, 3.9f),  new Vector3(0.3f, 2f, 21f), null, false);
-        Box(root, "BLK_W",  new Vector3(-10.05f, 1f, 3.9f),  new Vector3(0.3f, 2f, 21f), null, false);
-        Box(root, "BLK_N",  new Vector3(0f, 1f, 14.4f),   new Vector3(20f, 2f, 0.3f), null, false);
+        // ★かべは **生垣の 線では なく 内がわの 面**に 置く（2026-09-05・本人「生け垣に体がめり込む」）。
+        //   生垣は 線から 0.80m ふくらむ（D-209）ので、線に かべを 置くと 葉の 中まで 入れて しまう
+        Box(root, "BLK_E",  new Vector3( 8.90f, 1f, 3.5f),  new Vector3(0.3f, 2f, 20.2f), null, false);
+        Box(root, "BLK_W",  new Vector3(-9.25f, 1f, 3.5f),  new Vector3(0.3f, 2f, 20.2f), null, false);
+        Box(root, "BLK_N",  new Vector3(0f, 1f, 13.60f),   new Vector3(20f, 2f, 0.3f), null, false);
+        // ★家の 真裏と 生垣の あいだ（0.6m）には 入れない（本人 2026-09-05）。
+        //   通り抜けられない すきまに 入れると、出られなく なった ように 見える
+        Box(root, "BLK_IeUra", new Vector3(0f, 1f, 12.85f), new Vector3(13.6f, 2f, 0.3f), null, false);
         // 道の 外がわ（散歩の はんい）
         Box(root, "BLK_Road", new Vector3(0f, 1f, -12.2f), new Vector3(80f, 2f, 0.3f), null, false);
         Box(root, "BLK_RoadE", new Vector3(39f, 1f, -9f), new Vector3(0.3f, 2f, 9f), null, false);
@@ -590,6 +595,7 @@ public static class BuildNiwa {
                 naka.target = player.transform;
                 naka.cam = camGO.transform;
                 naka.fix = fix;
+                naka.mv = mv;               // 戸を 開けて 自動で 中へ 歩かせる
                 naka.vol = vol;
             } else Debug.LogError("[BuildNiwa] NiwaNayaNaka が 納屋に ついて いない");
         }
@@ -657,10 +663,17 @@ public static class BuildNiwa {
             Debug.Log("[Probe] NiwaMushi 種 " + e_ari + "/" + mu.shu.Count + " みき " + mu.miki.Count
                       + " よけ " + mu.yoke.Count);
 
-            // ---- 納屋の 道具（網・かご）を 主人公と 虫に つなぐ
+            // ---- 道具（虫とりの ひとそろい）と めにゅー
             var dg = root.GetComponentInChildren<NiwaDougu>();
-            if (dg != null) { dg.player = player.transform; dg.mushi = mu; dg.font = uiFont; }
-            else Debug.LogError("[BuildNiwa] NiwaDougu が 場面に ない");
+            var menuGO = new GameObject("Menu");
+            menuGO.transform.SetParent(root, false);
+            var mn = menuGO.AddComponent<NiwaMenu>();
+            mn.dougu = dg; mn.mushi = mu; mn.mv = mv; mn.font = uiFont;
+            if (dg != null) {
+                dg.player = player.transform; dg.mushi = mu; dg.font = uiFont;
+                dg.naya = nayaT.GetComponent<NiwaNayaNaka>();
+                dg.menu = mn;
+            } else Debug.LogError("[BuildNiwa] NiwaDougu が 場面に ない");
         }
 
         // ---- 物を 地ばんに すわらせる（凸凹に した ぶん、y=0 のままだと 浮く／沈む）
@@ -673,7 +686,7 @@ public static class BuildNiwa {
                               "YamaToi", "Kumo", "Cam", "Sun", "Day", "Volume", "Player",
                               "Takadai", "Kage", "KiMiki", "KiHa", "KiAtari",
                               "Take", "Ishigaki", "Ikegaki", "Iwa", "Mushi", "Mise_", "Ie",
-                              "Naya", "Suido", "Hanadan" };
+                              "Naya", "Suido", "Hanadan", "Dougu", "Menu" };
             int naosi = 0;
             for (int i = 0; i < root.childCount; i++) {
                 var t = root.GetChild(i);

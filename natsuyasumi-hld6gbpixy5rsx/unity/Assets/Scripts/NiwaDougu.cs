@@ -1,82 +1,76 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 納屋の 道具を **取って 外で つかう**（2026-09-05・第1弾＝虫とり網と 虫かご）。
+// 道具（2026-09-05・第1弾＝虫とりの ひとそろい）。スペース 1つで
+// 「納屋に はいる」「道具を とる」「虫を つかまえる」を まかなう。
 //
-// ★本人「実際に物を取って外で使えるようにしよう。外に虫がいるから、まずは虫かごと虫取り網かな」
-//
-// つくりの きまり
-//   ・**道具は 場面の 物 そのもの**を 持ちあげる（HUDの アイコンだけ、には しない）。
-//     納屋の 中で 見えて いた 網が そのまま 手に 移る ので「取った」が 絵で わかる。
-//   ・持って いる あいだは **カメラ基準で 主人公の わきに 置く**（親子づけ しない）。
-//     主人公は カメラを 向く 板なので、世界の 向きで つけると 裏に まわりこむ。
-//   ・スペースは **1つの キー**。近くの できごとの 中から 1つだけ えらんで 案内を 出す。
-//     （取る／しまう／あみを ふる。同時に 2つ 出さない）
-//   ・あみは 幹や 草の 虫は ほぼ 取れて、飛ぶ 虫は にげやすい（NiwaMushi.AmiWoFuru）。
+// ★本人「網と籠はワンセットのアイテムとして拾えるようにしよう。そのうえで、かごは表示しないように。
+//   網だけ表示しよう」
+// ★本人「虫取り網だけど、網と釣りざおを持ち帰るのってめんどくさいんだよね」
+//   → **持ち帰る 概念を なくす。** 一度 見つけたら ずっと 持って いる（`motta`）。
+//     手に 出るのは **その 場で つかう ものだけ**（外＝あみ／屋内＝手ぶら）。
+//     竿を 足す ときも 同じ：水べに 立った ときだけ 竿が 出る。
+//     どうぶつの森は 道具を 1つずつ 出して 手に 持ち、ぼくなつ2は 家の 中で あみが 消える。
+//     どちらも「入れものは 見せない・いま つかう ものだけ 見せる」で 共通して いる。
+// ★かご は 物として 作らない（持ち歩く 絵に しない）。中みは メニュー（`NiwaMenu`）で 見る。
 public class NiwaDougu : MonoBehaviour {
 
     [System.Serializable]
     public class Mono {
-        public string id;                 // "ami" / "kago"
-        public string namae;              // ひらがなの 名まえ
-        public Transform mi;              // 物ぜんたい（納屋の 中に 置いて ある）
-        public Vector3 oki;               // もとの 置き場所（world）
-        public Vector3 okiKaiten;         // もとの 向き
+        public string id;                 // "mushitori"
+        public string namae;              // 拾う ときの 名まえ
+        public string totta = "";         // 取った ときの ことば（空なら 名まえ＋「を てに いれた」）
+        public Transform mi;              // 手に 出す 見た目（あみ）
+        public Vector3 oki;               // 置いて ある ところ（world）
+        public Vector3 okiKaiten;
         public Vector3 mochiOff;          // 持った ときの ずらし（右・上・前）
-        public Vector3 mochiKaiten;       // 持った ときの 向き（カメラ基準）
-        [HideInInspector] public bool motteru;
+        public Vector3 mochiKaiten;
+        [HideInInspector] public bool motta;      // 見つけた（ずっと 持って いる）
     }
 
     public Mono[] mono;
     public Transform player;
     public NiwaMushi mushi;
+    public NiwaNayaNaka naya;
+    public NiwaMenu menu;
     public Font font;
 
-    public float todoku = 1.7f;        // 取る／しまう の 近さ
+    public float todoku = 1.7f;        // 取る の 近さ
     public float amiHaba = 1.6f;       // あみの とどく 長さ
     public float furuByou = 0.40f;     // ふり切るまで
 
-    readonly List<string> kago = new List<string>();   // つかまえた 虫（名まえ）
+    /// <summary>かごの 中み。メニューが 読む</summary>
+    public readonly List<string> Kago = new List<string>();
+
     float furu = -1f; bool sabaita;
     string fuki; float fukiT;
-
-    // ---- 撮影用（-motsu で はじめから 持つ／-furu で ときどき ふる）。
-    //      **自動運転は「上手に 遊ぶ」ように する**：一定間かくで 押させると
-    //      虫が いない ときに ばかり ふって、つかまえた 画が 一度も 撮れない
     bool autoFuru; float autoT;
+    bool autoHairu;                    // 撮影用：戸の 前に 来たら ひとりでに 入る
 
     void Start() {
         foreach (var a in System.Environment.GetCommandLineArgs()) {
-            if (a == "-motsu") foreach (var m in mono) m.motteru = true;
+            if (a == "-motsu") foreach (var m in mono) m.motta = true;
             if (a == "-furu") autoFuru = true;
+            if (a == "-hairu") autoHairu = true;
         }
     }
 
-    Mono Motteru(string id) {
-        foreach (var m in mono) if (m.id == id) return m.motteru ? m : null;
+    Mono Motta(string id) {
+        if (mono == null) return null;
+        foreach (var m in mono) if (m.id == id) return m.motta ? m : null;
         return null;
     }
 
-    /// <summary>床の 上での 近さ。★高さを 入れない こと。かごは 棚の 上（1.1m 高い）に ある ので、
-    /// 素の 距離で 見ると 目の 前に 立って いても とどかない</summary>
-    float Yoko(Vector3 a, Vector3 b) {
-        return new Vector2(a.x - b.x, a.z - b.z).magnitude;
-    }
+    /// <summary>床の 上での 近さ。★高さを 入れない（棚の 上の 物が とどかなく なる）</summary>
+    static float Yoko(Vector3 a, Vector3 b) { return new Vector2(a.x - b.x, a.z - b.z).magnitude; }
 
-    Mono ChikaiOki() {                  // 近くに 置いて ある 道具
+    /// <summary>まだ 見つけて いなくて 目の 前に ある 道具。**その 部屋に 居る ことが 要る**
+    /// （2026-09-05・本人「納屋の外から虫かごがとれちゃう」。壁ごしに 取れて いた）</summary>
+    Mono ChikaiOki() {
+        if (naya == null || !naya.Uchi) return null;
         Mono best = null; float bd = todoku;
         foreach (var m in mono) {
-            if (m == null || m.mi == null || m.motteru) continue;
-            float d = Yoko(player.position, m.oki);
-            if (d < bd) { bd = d; best = m; }
-        }
-        return best;
-    }
-
-    Mono ChikaiModosu() {               // 持って いて、もとの 場所の 近く
-        Mono best = null; float bd = todoku;
-        foreach (var m in mono) {
-            if (m == null || m.mi == null || !m.motteru) continue;
+            if (m == null || m.mi == null || m.motta) continue;
             float d = Yoko(player.position, m.oki);
             if (d < bd) { bd = d; best = m; }
         }
@@ -88,16 +82,17 @@ public class NiwaDougu : MonoBehaviour {
     /// <summary>いま スペースで できる こと。null なら 何も 出さない</summary>
     string Dekiru(out int shurui, out Mono taisho) {
         shurui = 0; taisho = null;
-        var ami = Motteru("ami");
-        if (ami != null && mushi != null && furu < 0f) {
+        if (menu != null && menu.Hiraiteru) return null;
+        bool soto = naya == null || !naya.Uchi;
+        var ami = Motta("mushitori");
+        if (ami != null && mushi != null && furu < 0f && soto) {
             string na = mushi.ChikaiNa(Te, amiHaba);
             if (na != null) { shurui = 3; return na + "を つかまえる"; }
         }
         var o = ChikaiOki();
         if (o != null) { shurui = 1; taisho = o; return o.namae + "を とる"; }
-        var b = ChikaiModosu();
-        if (b != null) { shurui = 2; taisho = b; return b.namae + "を しまう"; }
-        if (ami != null) { shurui = 4; return "あみを ふる"; }
+        if (naya != null && naya.HairuDekiru) { shurui = 2; return "なやに はいる"; }
+        if (ami != null && soto) { shurui = 4; return "あみを ふる"; }
         return null;
     }
 
@@ -112,17 +107,21 @@ public class NiwaDougu : MonoBehaviour {
         }
 
         // 撮影の 自動運転：**虫が とどく ところに 来たら** ふる
-        if (autoFuru && furu < 0f && mushi != null && Time.time > autoT) {
-            if (Motteru("ami") != null && mushi.ChikaiNa(Te, amiHaba) != null) {
-                furu = 0f; sabaita = false; autoT = Time.time + 0.9f;
-            }
+        if (autoFuru && furu < 0f && mushi != null && Time.time > autoT
+            && Motta("mushitori") != null && mushi.ChikaiNa(Te, amiHaba) != null) {
+            furu = 0f; sabaita = false; autoT = Time.time + 0.9f;
         }
+
+        if (autoHairu && naya != null && naya.HairuDekiru) naya.Hairu();
 
         if (Input.GetKeyDown(KeyCode.Space)) {
             int sh; Mono m;
             Dekiru(out sh, out m);
-            if (sh == 1) { m.motteru = true; Iu(m.namae + "を もった"); }
-            else if (sh == 2) { m.motteru = false; Modosu(m); Iu(m.namae + "を しまった"); }
+            if (sh == 1) {
+                m.motta = true;
+                Iu(string.IsNullOrEmpty(m.totta) ? m.namae + "を てに いれた" : m.totta);
+            }
+            else if (sh == 2) naya.Hairu();
             else if (sh == 3 || sh == 4) { furu = 0f; sabaita = false; }
         }
         Oku();
@@ -133,19 +132,14 @@ public class NiwaDougu : MonoBehaviour {
         string na = mushi.AmiWoFuru(Te, amiHaba);
         if (na == null) return;                       // そもそも 居ない：空ぶり
         if (na == "") { Iu("にげられた！"); return; }
-        if (Motteru("kago") == null) { Iu("かごが ないと 入れられない"); return; }
-        kago.Add(na);
+        Kago.Add(na);
         Iu(na + "を つかまえた！");
     }
 
     void Iu(string s) { fuki = s; fukiT = 2.4f; }
 
-    void Modosu(Mono m) {
-        m.mi.position = m.oki;
-        m.mi.rotation = Quaternion.Euler(m.okiKaiten);
-    }
-
-    /// <summary>持って いる 物を カメラ基準で わきに 置く。ふって いる あいだは 弧を えがく</summary>
+    /// <summary>手に 出す 物を カメラ基準で わきに 置く。★親子づけ しない
+    /// （主人公は カメラを 向く 板。世界の 向きで つけると 裏に まわりこむ）</summary>
     void Oku() {
         var cam = Camera.main;
         if (cam == null) return;
@@ -153,10 +147,17 @@ public class NiwaDougu : MonoBehaviour {
         if (migi.sqrMagnitude < 1e-4f) migi = Vector3.right;
         migi.Normalize();
         var mae = Vector3.Cross(Vector3.up, migi);    // カメラの 前（地面ぞい）
+        // ★屋内では 手ぶら（ぼくなつ2 も 家の 中では あみが 消える）。
+        //   寄った 屋内カメラの 画に 1.6mの 柄が 入ると 画面の 半分が 棒に なる
+        bool dasu = naya == null || !naya.Uchi;
         foreach (var m in mono) {
-            if (m == null || m.mi == null || !m.motteru) continue;
+            if (m == null || m.mi == null || !m.motta) continue;
+            if (!dasu) {                              // 置き場所へ 戻して おく（見えない ところ）
+                m.mi.position = m.oki; m.mi.rotation = Quaternion.Euler(m.okiKaiten);
+                continue;
+            }
             float yaw = 0f, pitch = 0f, sayuu = 0f;
-            if (m.id == "ami" && furu >= 0f) {
+            if (furu >= 0f) {
                 // ふり：うしろ → 前へ 弧。行きは 速く、もどりは ゆっくり
                 float k = Mathf.Clamp01(furu / furuByou);
                 float e = k < 0.55f ? Mathf.Sin(k / 0.55f * Mathf.PI * 0.5f)
@@ -173,33 +174,28 @@ public class NiwaDougu : MonoBehaviour {
         }
     }
 
+    /// <summary>影つきの 1行。★かげは **暗い 色で** 描く。同じ 色で 2回 描くと
+    /// 「字が 2重に 出て いる」に 見える（2026-09-05・本人の 指摘）</summary>
+    public static void Ichigyou(Rect r, string s) {
+        var c = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, 0.85f);
+        GUI.Label(new Rect(r.x + 2f, r.y + 2f, r.width, r.height), s);
+        GUI.color = new Color(1f, 0.97f, 0.86f);
+        GUI.Label(r, s);
+        GUI.color = c;
+    }
+
     void OnGUI() {
         if (font != null) GUI.skin.font = font;
+        if (menu != null && menu.Hiraiteru) return;
         int sh; Mono m;
         string d = Dekiru(out sh, out m);
-        if (d != null && furu < 0f) {
-            var r = new Rect(Screen.width / 2 - 230, Screen.height - 92, 460, 28);
-            GUI.Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), "スペース：" + d);
-            var c = GUI.color; GUI.color = new Color(1f, 0.97f, 0.86f);
-            GUI.Label(r, "スペース：" + d);
-            GUI.color = c;
-        }
-        if (fukiT > 0f) {
-            var r = new Rect(Screen.width / 2 - 240, Screen.height / 2 - 120, 480, 28);
-            GUI.Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), "『" + fuki + "』");
-            var c = GUI.color; GUI.color = new Color(1f, 0.97f, 0.86f);
-            GUI.Label(r, "『" + fuki + "』");
-            GUI.color = c;
-        }
-        // もちもの と かごの 中み
-        var sb = new System.Text.StringBuilder();
-        foreach (var mm in mono) if (mm != null && mm.motteru) sb.Append(sb.Length > 0 ? "・" : "").Append(mm.namae);
-        if (sb.Length > 0) GUI.Label(new Rect(14, 54, 460, 24), "もちもの：" + sb);
-        if (kago.Count > 0) {
-            var kinds = new List<string>();
-            foreach (var k in kago) if (!kinds.Contains(k)) kinds.Add(k);
-            GUI.Label(new Rect(14, 78, 620, 24),
-                      "かご " + kago.Count + "ひき（" + string.Join("・", kinds.ToArray()) + "）");
-        }
+        if (d != null && furu < 0f)
+            Ichigyou(new Rect(Screen.width / 2 - 230, Screen.height - 92, 460, 28), "スペース：" + d);
+        if (fukiT > 0f)
+            Ichigyou(new Rect(Screen.width / 2 - 240, Screen.height / 2 - 120, 480, 28), "『" + fuki + "』");
+        if (Motta("mushitori") != null)
+            Ichigyou(new Rect(14, 54, 460, 24),
+                     (Kago.Count > 0 ? "かご " + Kago.Count + "ひき　" : "") + "Ｍ：めにゅー");
     }
 }

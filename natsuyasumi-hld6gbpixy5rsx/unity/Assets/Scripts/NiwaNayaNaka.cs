@@ -2,26 +2,29 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
-// 納屋の 屋内カメラ（2026-09-05）。**屋内の 見せかたの 1つめ**。
+// 納屋の 出入りと 屋内の 見せかた（2026-09-05）。**屋内の 型の 1つめ**。
 //
 // ★本人「納屋の中に入ったら、外の景色は一気に暗くして視点が納屋の中だけになるのがいいかな。
 //   そのうえで、納屋の手前の壁とかが消えて、納屋の中だけ見えるとかどう？」
+// ★本人「納屋の扉が閉まっている状態で、近くでスペースキー押したら扉が開いて、
+//   操作しなくてもそのまま自動で納屋の中へ」
 //
-// やって いる ことは 3つ。どれか 1つでは 屋内に ならない。
+// 見せかたは 3つで 1組。どれか 1つでは 屋内に ならない。
 //   1. **カメラを 引きとる**（`MuraCamFixed.Suspended`）。追従カメラは 主人公の 15m 南に つく ので、
-//      小屋に 入ると **カメラが 壁の 中**に 入る。壁は ニアクリップの 向こうで 描かれず、
-//      画面が 家の 中の べつの 面で うまる（natsuyasumi スキル「カメラが 物に じゃまされる とき」）。
-//      → 小屋の 外・南に 台を 決めうちして、そこから 中を のぞく。
+//      小屋に 入ると **カメラが 壁の 中**に 入り、壁は ニアクリップの 向こうで 描かれず 画面が こわれる
+//      （natsuyasumi スキル「カメラが 物に じゃまされる とき」）。小屋の 南の 外に 台を 決めうち。
 //   2. **手前の 壁と 屋根を 消す**（`kesu`）。1 だけだと 南の 壁で 何も 見えない。
-//   3. **外を 落とす**（露出を 下げる ＋ ふちを 暗く ＋ 中に あかりを つける）。
-//      2 だけだと「屋根を はずした 模型」に 見える。外が 沈んで はじめて 中に 入った ことに なる。
+//   3. **外を 落とす**（露出 ＋ ヴィネット ＋ 中の あかり）。2 だけだと「屋根を はずした 模型」。
 //      露出は 画面ぜんぶに かかる ので、**中の あかりで 小屋だけ 押しもどす**のが 肝。
 //
-// 出入りは 0.3秒で 混ぜる。切りかえを 一瞬に すると 戸口を かすめる たびに 画面が 明滅する。
+// 出入りは **戸を 開けて 自動で 歩く**。戸口は 0.72m しか 開かない ので、自分で 通させると
+// かならず 引っかかる。出る ときは そのまま 東へ 歩けば よく、離れたら 戸は ひとりでに 閉まる。
+// 見た目の 混ぜは 0.30秒（一瞬に すると 戸口を かすめる たびに 画面が 明滅する）。
 public class NiwaNayaNaka : MonoBehaviour {
     public Transform target;             // 主人公
     public Transform cam;                // Main Camera
     public MuraCamFixed fix;
+    public MuraMove mv;
     public Volume vol;
     public Light akari;                  // 中の あかり（外に いる あいだは 0）
     public Renderer[] kesu;              // 中に いる あいだ 消す（南の 壁・屋根・妻・棟）
@@ -31,17 +34,41 @@ public class NiwaNayaNaka : MonoBehaviour {
     public Vector3 camPos, camLook;
     public float camFov = 33f;
 
+    [Header("戸")]
+    public Transform toB;                // 引く ほうの 戸（もう 1枚は 動かない）
+    public float toAke = -0.72f;         // 開けきった ときの localPosition.z
+    public Collider toKabe;              // 閉じて いる あいだ 通れなく する かべ
+    public Vector3 soto;                 // 戸口の 外の 立ち位置（world）
+    public float sotoTodoku = 2.2f;      // ここから 中に 入れる
+
     [Header("外の 落としかた")]
-    public float kurasa = -1.05f;        // 足す 露出（EV。-1.05 ≒ 明るさ 0.48ばい）
+    public float kurasa = -1.05f;        // 足す 露出（EV）
     public float vinet = 0.54f;          // ふちの 暗さ
     public float akarusa = 4.6f;         // 中の あかりの 強さ
     public float magari = 0.30f;         // 出入りに かける 秒
 
     float t;                             // 0=外 1=中
+    float aki;                           // 戸の 開きぐあい 0..1
+    bool jidou; float jidouT;            // 自動で 歩いて いる
+    float toShimeZ;
     bool osaeta, keshita;
     Vignette vig; ColorAdjustments ca;
     float vig0, exp0; bool fxAru;
     Camera camc;
+
+    /// <summary>いま 中に いる か（道具を 取れるかの 判定に つかう）</summary>
+    public bool Uchi { get { return target != null && naka.Contains(target.position); } }
+
+    /// <summary>外に いて 戸の 前に 立って いる か</summary>
+    public bool HairuDekiru {
+        get {
+            if (target == null || jidou || Uchi) return false;
+            return Vector3.Distance(target.position, soto) < sotoTodoku;
+        }
+    }
+
+    /// <summary>戸を 開けて 自動で 中へ</summary>
+    public void Hairu() { if (HairuDekiru) { jidou = true; jidouT = 0f; } }
 
     void Start() {
         camc = cam != null ? cam.GetComponent<Camera>() : null;
@@ -53,12 +80,12 @@ public class NiwaNayaNaka : MonoBehaviour {
         if (vig != null && ca != null) {
             vig0 = vig.intensity.value; exp0 = ca.postExposure.value; fxAru = true;
         }
+        if (toB != null) toShimeZ = toB.localPosition.z;
         Miseru(true);
         if (akari != null) akari.intensity = 0f;
-        Debug.Log("[Probe] NiwaNayaNaka vol=" + (vol != null)
-                  + " prof=" + (vol != null && vol.sharedProfile != null)
-                  + " vig=" + (vig != null) + " ca=" + (ca != null)
-                  + " kesu=" + (kesu != null ? kesu.Length : -1));
+        Debug.Log("[Probe] NiwaNayaNaka vig=" + (vig != null) + " ca=" + (ca != null)
+                  + " kesu=" + (kesu != null ? kesu.Length : -1)
+                  + " to=" + (toB != null) + " toKabe=" + (toKabe != null));
     }
 
     void OnDisable() { Modosu(); }
@@ -66,6 +93,7 @@ public class NiwaNayaNaka : MonoBehaviour {
     void Modosu() {
         if (fxAru) { vig.intensity.value = vig0; ca.postExposure.value = exp0; }
         if (osaeta) { MuraCamFixed.Suspended = false; osaeta = false; }
+        if (jidou && mv != null) { mv.Ugokasu(Vector3.zero); jidou = false; }
         Miseru(true);
         if (akari != null) akari.intensity = 0f;
     }
@@ -76,13 +104,37 @@ public class NiwaNayaNaka : MonoBehaviour {
         foreach (var r in kesu) if (r != null) r.enabled = v;
     }
 
+    void Update() {
+        if (target == null) return;
+        // ---- 戸：中に いる／入って いる さいちゅう／すぐ 前に 立って いる なら 開く
+        bool akeru = jidou || Uchi || Vector3.Distance(target.position, soto) < 1.2f;
+        aki = Mathf.MoveTowards(aki, akeru ? 1f : 0f, Time.deltaTime / 0.32f);
+        if (toB != null) {
+            var lp = toB.localPosition;
+            lp.z = Mathf.Lerp(toShimeZ, toAke, aki);
+            toB.localPosition = lp;
+        }
+        if (toKabe != null) toKabe.enabled = aki < 0.55f;
+
+        // ---- 自動で 中へ（戸が 開いてから 歩きだす）
+        if (!jidou) return;
+        jidouT += Time.deltaTime;
+        var yoko = new Vector3(naka.center.x - target.position.x, 0f, naka.center.z - target.position.z);
+        if (aki > 0.75f && mv != null)
+            mv.Ugokasu(yoko.sqrMagnitude < 0.09f ? Vector3.zero : yoko.normalized);
+        // 中の まん中まで 来たら 手を はなす。引っかかっても 4秒で あきらめる
+        if ((Uchi && yoko.magnitude < 0.55f) || jidouT > 4f) {
+            if (mv != null) mv.Ugokasu(Vector3.zero);
+            jidou = false;
+        }
+    }
+
     void LateUpdate() {
         if (target == null || cam == null) return;
         // 俯瞰（-fukan）は カメラを 正射影に して 自分で 動かす。じゃま しない
         if (camc != null && camc.orthographic) return;
 
-        bool uchi = naka.Contains(target.position);
-        t = Mathf.MoveTowards(t, uchi ? 1f : 0f, Time.deltaTime / Mathf.Max(0.05f, magari));
+        t = Mathf.MoveTowards(t, Uchi ? 1f : 0f, Time.deltaTime / Mathf.Max(0.05f, magari));
 
         // 壁は **早めに 消す**（カメラが 寄りきる 前に 消えて いないと 一瞬 壁で うまる）
         Miseru(t < 0.10f);
