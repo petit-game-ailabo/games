@@ -18,12 +18,12 @@ public class NiwaVroid : MonoBehaviour {
     /// <summary>歩き／走りの 組み合わせ。**Bキーで 切りかえて 見くらべる**。
     /// 汎用リグの 既定（Walk/Sprint）は 男性的で 重い ので、ほかも 並べる</summary>
     static readonly string[,] KUMI = {
-        { "Walk",       "Run"  },   // もとの まま（重い）
-        { "WalkFormal", "Jog"  },   // やわらかい ほう
-        { "WalkFormal", "Run"  },
-        { "Walk",       "Jog"  },
+        { "WalkF2K",    "Jog"  },   // BOOTH の 歩き（VRM むけ）＋ 軽い 駆け足
+        { "WalkFormal", "Jog"  },   // Quaternius の やわらかい ほう
+        { "Walk",       "Run"  },   // Quaternius の もとの まま（重い）
+        { "WalkF2K",    "Run"  },
     };
-    int kumi = 1;                   // 既定は やわらかい ほう
+    int kumi = 0;                   // 既定は BOOTH の 歩き
     string aruku { get { return KUMI[kumi, 0]; } }
     string hashiru { get { return KUMI[kumi, 1]; } }
     public float arukuIjou = 0.15f, hashiruIjou = 3.4f;
@@ -40,6 +40,7 @@ public class NiwaVroid : MonoBehaviour {
         foreach (var a in System.Environment.GetCommandLineArgs()) {
             if (a == "-novroid") kesu = true;
             if (a == "-vrun") zutto = true;
+            if (a == "-vwalk") zuttoAruku = true;
         }
         if (kesu) { gameObject.SetActive(false); return; }
         Debug.Log("[NiwaVroid] 見くらべ用の モデルを 出す（Vキーで 消せる）");
@@ -82,18 +83,20 @@ public class NiwaVroid : MonoBehaviour {
         Utsuru();
     }
 
-    bool zutto;      // -vrun ： ずっと 走らせる（動いて いるか たしかめる ため）
+    bool zutto;        // -vrun  ： ずっと 走らせる
+    bool zuttoAruku;   // -vwalk ： ずっと 歩かせる（見くらべの ため）
 
     void LateUpdate() {
         // ★ここで Kake を 呼んで、下でも 速さで Kake を 呼ぶと **毎フレーム 交互に なって
         //   クロスフェードが 再開し つづけ、時間が 進まない**（2026-09-06 実際に そうなった）。
         //   呼ぶのは 1フレームに 1回だけ に する
-        if (anim != null && zutto) {
-            if (Time.frameCount % 60 == 0) {
+        if (anim != null) {
+            if (Time.frameCount % 45 == 0) {
                 var st = anim.GetCurrentAnimatorStateInfo(0);
                 var hip = anim.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
-                Debug.Log("[NiwaVroid] t=" + st.normalizedTime.ToString("F2")
-                          + " Run?=" + st.IsName("Run")
+                Debug.Log("[NiwaVroid] ima=" + ima + " t=" + st.normalizedTime.ToString("F2")
+                          + " len=" + st.length.ToString("F2")
+                          + " WalkF2K?=" + st.IsName("WalkF2K")
                           + " anim.enabled=" + anim.enabled + " speed=" + anim.speed
                           + " timeScale=" + Time.timeScale + " dt=" + Time.deltaTime.ToString("F3")
                           + " updateMode=" + anim.updateMode + " culling=" + anim.cullingMode
@@ -113,7 +116,8 @@ public class NiwaVroid : MonoBehaviour {
             var q = Quaternion.LookRotation(v.normalized, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, q, 720f * Time.deltaTime);
         }
-        Kake(zutto ? hashiru : (spd <= arukuIjou ? tomaru : (spd >= hashiruIjou ? hashiru : aruku)));
+        Kake(zutto ? hashiru : zuttoAruku ? aruku
+             : (spd <= arukuIjou ? tomaru : (spd >= hashiruIjou ? hashiru : aruku)));
         Utsuru();
     }
 

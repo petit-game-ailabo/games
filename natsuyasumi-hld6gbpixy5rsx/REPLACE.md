@@ -122,3 +122,14 @@ Unity 公式「Happy Harvest - 2D Sample Project」が挙がった。**3つと�
 - いまは **VRoid の サンプル `AvatarSample_A`**（検証用）。**本番では 差しかえる**
 - 本人が VRoid Studio で 作った モデルを `.vrm` で 書き出して 置きかえる
 - ★`.vroid` は 編集用の 保存ファイルで **つかえない**。`.vrm` が 要る（VROID.md）
+
+## 主人公の 動き（BOOTH・fumi2kick・2026-09-06〜／検証用）
+
+- もと：『VRM お人形遊び』用 アニメーションデータ 詰め合わせ（無料）
+  https://booth.pm/ja/items/1655686
+- 規約：**商用・非商用 とも 可／クレジット 不要／別形式への 変換 可**
+- ★**リポジトリには 入れて いない。**生の `.anim` を 公開リポジトリに 置くのは
+  再配布に あたる おそれが ある ため。つかう ときは 各自 落として
+  `unity/ArtSource/ref/booth/` に 展開し、`anim/*.anim` を
+  `unity/Assets/Art/Models/anim/f2k/` へ うつす → `AnimNaosu.Naosu` を 回す
+- 中身：呼吸付きTポーズ／体ひねり／**歩き**／挨拶／振り向き／**体育座り**／**仰向け**／**寝転び**

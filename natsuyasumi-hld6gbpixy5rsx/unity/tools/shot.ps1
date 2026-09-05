@@ -24,7 +24,7 @@ param(
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
   [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$menu,
-  [switch]$sanD, [switch]$kyu, [switch]$novroid, [switch]$vrun
+  [switch]$sanD, [switch]$kyu, [switch]$novroid, [switch]$vrun, [switch]$vwalk
 )
 $ErrorActionPreference = 'Stop'
 
@@ -87,6 +87,8 @@ if ($kyu) { $a += @('-kyu') }
 if ($novroid) { $a += @('-novroid') }
 # -vrun : force the VRoid model to always play the run clip (diagnostic)
 if ($vrun) { $a += @('-vrun') }
+# -vwalk : force the VRoid model to always play the walk clip
+if ($vwalk) { $a += @('-vwalk') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }

@@ -49,6 +49,18 @@ public static class AnimNaosu {
         new Naoshi("Leg In-Out",          0.00f, 0.60f),
     };
 
+    /// <summary>BOOTH（fumi2kick）の 直しかた。あちらは **VRで 人形を 操る** 用途 なので
+    /// **腕を 横に ひらいた まま**（`Arm Down-Up` の 平均が -0.245。自然に 下ろすと -0.7〜-0.85）。
+    /// 下ろして 少しだけ 振る（2026-09-06 実測）</summary>
+    static readonly Naoshi[] NAOSHI_F2K = {
+        new Naoshi("Arm Down-Up",        -0.50f, 1.00f),   // 腕を 下ろす
+        new Naoshi("Shoulder Down-Up",   -0.12f, 0.80f),   // 肩も 少し 下げる
+        new Naoshi("Arm Front-Back",      0.00f, 1.15f),   // 前後の 振りは 少し 増やす
+        new Naoshi("Upper Leg In-Out",    0.00f, 0.85f),
+    };
+
+    static readonly string[] TAISHO_F2K = { "0002_Walk", "0005_Sit", "0006_LieBack", "0007_LieDown" };
+
     public static void Naosu() {
         if (!AssetDatabase.IsValidFolder(DIR)) {
             AssetDatabase.CreateFolder("Assets/Art/Models/anim", "naoshi");
@@ -103,6 +115,43 @@ public static class AnimNaosu {
             AssetDatabase.CreateAsset(dst, p);
             Debug.Log("[Probe] AnimNaosu: " + na + " 曲線 " + zenbu + " 本（直した " + naota + " 本）→ " + p);
         }
+        // ---- BOOTH（fumi2kick）の ぶん
+        if (!AssetDatabase.IsValidFolder("Assets/Art/Models/anim/f2k_naoshi")) {
+            AssetDatabase.CreateFolder("Assets/Art/Models/anim", "f2k_naoshi");
+        }
+        foreach (var na in TAISHO_F2K) {
+            var src = AssetDatabase.LoadAssetAtPath<AnimationClip>("Assets/Art/Models/anim/f2k/" + na + ".anim");
+            if (src == null) { Debug.LogWarning("[Probe] AnimNaosu: f2k が 無い " + na); continue; }
+            var dst = new AnimationClip { name = na, frameRate = src.frameRate };
+            AnimationUtility.SetAnimationClipSettings(dst, AnimationUtility.GetAnimationClipSettings(src));
+            int naota = 0, zenbu = 0;
+            foreach (var b2 in AnimationUtility.GetCurveBindings(src)) {
+                var cv = AnimationUtility.GetEditorCurve(src, b2);
+                if (cv == null) continue;
+                zenbu++;
+                float tasu = 0f, kake = 1f;
+                foreach (var n2 in NAOSHI_F2K) {
+                    if (b2.propertyName.Contains(n2.fukumu)) { tasu = n2.tasu; kake = n2.kakeru; naota++; break; }
+                }
+                if (tasu != 0f || kake != 1f) {
+                    var ks = cv.keys;
+                    float hei = 0f;
+                    foreach (var k in ks) hei += k.value;
+                    hei /= Mathf.Max(1, ks.Length);
+                    for (int i = 0; i < ks.Length; i++) {
+                        ks[i].value = hei + (ks[i].value - hei) * kake + tasu;
+                        ks[i].inTangent *= kake; ks[i].outTangent *= kake;
+                    }
+                    cv.keys = ks;
+                }
+                AnimationUtility.SetEditorCurve(dst, b2, cv);
+            }
+            var p2 = "Assets/Art/Models/anim/f2k_naoshi/" + na + ".anim";
+            AssetDatabase.DeleteAsset(p2);
+            AssetDatabase.CreateAsset(dst, p2);
+            Debug.Log("[Probe] AnimNaosu(f2k): " + na + " 曲線 " + zenbu + "（直した " + naota + "）→ " + p2);
+        }
+
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 

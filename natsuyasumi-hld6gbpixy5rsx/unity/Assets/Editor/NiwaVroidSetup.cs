@@ -97,6 +97,21 @@ public static class NiwaVroidSetup {
         // ★歩き／走りは **何とおりか 用意して 場で 切りかえる**。
         //   本人「今の走り方歩き方はまるでジョジョ」。汎用リグの 既定は 男性的で 重い。
         //   `Walk_Formal` と `Jog` の ほうが やわらかい はず なので 並べて 見くらべる
+        // ★BOOTH の 無料パック（fumi2kick）。**商用可・クレジット不要・変換可**。
+        //   VRChat/VRM むけ なので Quaternius より 体型が 近い はず
+        void OkuF2k(string na, string file) {
+            // 直した ものが あれば そちら（腕を 下ろした もの・D-234）
+            var c = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                "Assets/Art/Models/anim/f2k_naoshi/" + file + ".anim");
+            if (c == null) c = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                "Assets/Art/Models/anim/f2k/" + file + ".anim");
+            if (c == null) { Debug.LogWarning("[Probe] NiwaVroid: f2k が 無い " + file); return; }
+            var st = sm.AddState(na);
+            st.motion = c;
+        }
+        OkuF2k("WalkF2K", "0002_Walk");
+        OkuF2k("Sit", "0005_Sit");
+
         Oku("Idle", "Idle_Loop");
         Oku("Walk", "Walk_Loop");
         Oku("WalkFormal", "Walk_Formal_Loop");
