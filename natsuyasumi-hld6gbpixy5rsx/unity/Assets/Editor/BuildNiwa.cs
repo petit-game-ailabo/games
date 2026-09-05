@@ -457,6 +457,9 @@ public static class BuildNiwa {
         cs.idleCol = -1;                // 止まっても **向きは そのまま**
         cs.idleRow = 8; cs.blinkRow = 9;
         cs.walkCycleFps = 9f; cs.runCycleFps = 14f;
+        // ★歩きは 走りの スロー再生 では なく **べつの 絵**（D-225）
+        cs.arukiTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_aruki.png");
+        cs.arukiRows = 8;
         // ---- 足もとの 影（絵の 板は 影を 落とせない ので 別に 敷く）
         var kageGO = new GameObject("KageAshi");
         kageGO.transform.SetParent(root, false);
