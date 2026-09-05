@@ -15,11 +15,25 @@ public static class AnimSetup {
     public static void Setup() {
         var mi = AssetImporter.GetAtPath(FBX) as ModelImporter;
         if (mi == null) { Debug.LogError("[Probe] AnimSetup: FBX が ない " + FBX); return; }
+        bool naosuNe = false;
         // ★**`_Loop` の クリップに ループを 立てる。**
         //   FBX から 取りこんだ だけでは `loopTime` は 立たない ので、
         //   **1周 したら 最後の コマで 固まる**。本人「走りっぱなしだと 途中から モーションが なくなる」。
         //   `normalizedTime` は 1.0 を こえて 増えつづける ので 「動いて いる」ように 見えて
         //   気づきにくい（角度を 出して 初めて 分かる・2026-09-06）
+        // ★**パック同こんの 手順書（`Unity_Setup.png`）どおりに する。**
+        //   ここを 外して いた ので 骨の 軸が ずれ、**肩が 上がり 肘が 曲がった まま
+        //   カクカク 動く**に なって いた（本人「まるでジョジョ」・2026-09-06）。
+        //   1 Bake Axis Conversion を オン
+        //   2 Animation Type = Humanoid
+        //   3 Root Motion Node を rig の root に ／ `_Loop` は ループ
+        //   **素材に 手順書が 付いて いたら 先に 読む。**
+        // ★**Bake Axis Conversion は 入れては いけない。**手順書は Quaternius の
+        //   モデルを つかう 前提。**VRM に リターゲットすると 軸が 合わず 横倒しに なる**
+        //   （2026-09-06 実際に そうなった）。素材の 手順書は「その 素材だけで 完結する 場合」の 話。
+        if (mi.bakeAxisConversion) { mi.bakeAxisConversion = false; naosuNe = true; }
+        if (mi.motionNodeName != "root") { mi.motionNodeName = "root"; naosuNe = true; }
+
         var cl = mi.defaultClipAnimations;
         bool loopIru = false;
         for (int i = 0; i < cl.Length; i++) {
@@ -28,7 +42,7 @@ public static class AnimSetup {
         }
         if (loopIru) mi.clipAnimations = cl;
 
-        bool naosu = loopIru
+        bool naosu = loopIru || naosuNe
                      || mi.animationType != ModelImporterAnimationType.Human || !mi.importAnimation
                      || mi.materialImportMode != ModelImporterMaterialImportMode.None;
         if (naosu) {
@@ -38,7 +52,8 @@ public static class AnimSetup {
             mi.materialImportMode = ModelImporterMaterialImportMode.None;
             mi.resampleCurves = true;
             mi.SaveAndReimport();
-            Debug.Log("[Probe] AnimSetup: Humanoid に 直して 読みなおした");
+            Debug.Log("[Probe] AnimSetup: 読みなおした  bakeAxis=" + mi.bakeAxisConversion
+                      + " motionNode=" + mi.motionNodeName);
         } else {
             Debug.Log("[Probe] AnimSetup: すでに Humanoid");
         }
