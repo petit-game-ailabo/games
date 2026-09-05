@@ -448,6 +448,7 @@ public static class BuildNiwa {
         kae.target = quad.GetComponent<Renderer>();
         kae.futsu = marisa;
         kae.meshy = marisa3d;
+        kae.shin = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_codex.png");
         var cs = player.AddComponent<CharSprite>();
         cs.target = quad.GetComponent<Renderer>();
         cs.runSpeed = 3.4f;

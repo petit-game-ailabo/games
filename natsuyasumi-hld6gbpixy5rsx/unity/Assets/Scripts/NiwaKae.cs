@@ -1,8 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// 主人公の 絵を えらぶ。**既定は 手描きの 2D**（marisa_walk）。
-/// <c>-3d</c> を つけると 3Dの 体に 2Dの 頭を のせた もの（marisa_hybrid）に なる。
+/// 主人公の 絵を えらぶ。**既定は いままでの 2D**（marisa_walk）。
+/// <c>-shin</c> … Codex に 描きなおして もらった 走り（marisa_codex）
+/// <c>-3d</c>   … 3Dの 体に 2Dの 頭を のせた もの（marisa_hybrid・見くらべ用に 残して ある）
 ///
 /// ★2026-09-06：3Dは やめて 2Dに もどした。本人「歩くと 3Dと 2D崩れちゃうね。
 ///   2Dに戻して、できるだけ2Dの絵をキレイに使えるように作っていこうか」。
@@ -20,12 +21,14 @@ public class NiwaKae : MonoBehaviour {
     public Renderer target;
     public Texture2D futsu;             // 手描き 2D（marisa_walk）＝既定
     public Texture2D meshy;             // 3Dの 体＋2Dの 頭（marisa_hybrid）＝見くらべ用
+    public Texture2D shin;              // 描きなおした 走り（marisa_codex）
 
     void Awake() {
-        bool sanD = false;
-        foreach (var a in System.Environment.GetCommandLineArgs())
-            if (a == "-3d") sanD = true;
-        var t = sanD ? meshy : futsu;
+        Texture2D t = futsu;
+        foreach (var a in System.Environment.GetCommandLineArgs()) {
+            if (a == "-3d" && meshy != null) t = meshy;
+            if (a == "-shin" && shin != null) t = shin;
+        }
         if (t == null) t = futsu;
         if (t == null || target == null || target.sharedMaterial == null) return;
         target.sharedMaterial.mainTexture = t;

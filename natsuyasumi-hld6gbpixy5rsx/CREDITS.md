@@ -236,3 +236,26 @@ ZUN 氏のガイドライン上も、二次創作ブラウザゲームは無料�
 - もとの GLB は `unity/ArtSource/ref/meshy/`（gitignore・リポジトリに 入れない）。
 - ★表示を したくない場合は Meshy の 有料プラン（生成物が 自分の ものに なる）が 要る。
   **課金の 判断は 本人。こちらから 進めない。**
+
+## 主人公の 動き（Quaternius Universal Animation Library・2026-09-06〜）
+
+`unity/Assets/Art/Models/anim/AnimationLibrary_Unity_Standard.fbx`
+
+- 作：**Quaternius**（https://quaternius.com/）
+- 権利：**CC0 1.0 Universal（パブリックドメイン）**
+  https://creativecommons.org/publicdomain/zero/1.0/
+  同こんの `License.txt` に 明記。**表示の 義務は 無い**が 敬意として ここに 書く
+- 取得：OpenGameArt の 配布物
+  https://opengameart.org/content/universal-animation-library
+- つかいかた：Humanoid として 取りこみ、VRM（これも Humanoid）に リターゲットして 着せる
+
+## 主人公の 3Dモデル（VRoid サンプル・検証用）
+
+`unity/Assets/Art/Models/vroid/AvatarSample_A.vrm`（**リポジトリには 入れて いない**）
+
+- 作：pixiv VRoid Project（VRoidPreset A〜Z の 1つ）
+- 権利：pixiv の 案内で **営利・非営利を 問わず 使用可・改変可・再配布可・
+  クレジット表記 不要**（CC0 では ない が 許諾されて いる）
+- ★VRM の meta には `avatarPermission: onlyAuthor` が 入って いる。
+  **本番で つかうなら 本人が もう一度 確認する こと**
+- いまは **仕組みを 通す ための 検証用**。本番は 本人が 作った モデルに 差しかえる

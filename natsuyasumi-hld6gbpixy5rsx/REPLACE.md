@@ -109,3 +109,16 @@ Unity 公式「Happy Harvest - 2D Sample Project」が挙がった。**3つと�
 - 焼き直し：`ArtSource/ref/meshy/yaku_shisaku.py` 系（GLB → 8x10 シート）
 - ★差しかえる ときの 注意：**東方キャラの 権利とは 別の 話**。ここは あくまで
   「Meshy の 生成物を つかって いる」ことの 記録。キャラの 意匠の 話は 上の 欄。
+
+## 主人公の 動き（Quaternius・2026-09-06〜）
+
+- もと：Quaternius Universal Animation Library [Standard]（**CC0**）
+- 置き場：`unity/ArtSource/ref/quaternius-anim/`（gitignore）／
+  つかう FBX だけ `unity/Assets/Art/Models/anim/` へ
+- **CC0 なので 差しかえの 必要は 無い**。念のため 記録だけ 残す
+
+## 主人公の 3Dモデル（VRoid・2026-09-06〜）
+
+- いまは **VRoid の サンプル `AvatarSample_A`**（検証用）。**本番では 差しかえる**
+- 本人が VRoid Studio で 作った モデルを `.vrm` で 書き出して 置きかえる
+- ★`.vroid` は 編集用の 保存ファイルで **つかえない**。`.vrm` が 要る（VROID.md）

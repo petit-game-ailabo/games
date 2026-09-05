@@ -23,7 +23,7 @@ param(
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
   [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$menu,
-  [switch]$sanD
+  [switch]$sanD, [switch]$shin
 )
 $ErrorActionPreference = 'Stop'
 
@@ -80,6 +80,8 @@ if ($mushi) { $a += @('-mushi') }
 if ($menu)  { $a += @('-menu') }
 # Hero sheet is the hand-drawn 2D by default; -sanD shows the 3D-body/2D-head bake.
 if ($sanD) { $a += @('-3d') }
+# -shin : the redrawn front run frames (marisa_codex)
+if ($shin) { $a += @('-shin') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }
