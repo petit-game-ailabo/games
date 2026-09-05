@@ -23,7 +23,7 @@ param(
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
   [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$menu,
-  [switch]$sanD, [switch]$shin
+  [switch]$sanD, [switch]$kyu, [switch]$vroid, [switch]$vrun
 )
 $ErrorActionPreference = 'Stop'
 
@@ -80,8 +80,12 @@ if ($mushi) { $a += @('-mushi') }
 if ($menu)  { $a += @('-menu') }
 # Hero sheet is the hand-drawn 2D by default; -sanD shows the 3D-body/2D-head bake.
 if ($sanD) { $a += @('-3d') }
-# -shin : the redrawn front run frames (marisa_codex)
-if ($shin) { $a += @('-shin') }
+# -kyu : the old sprite sheet (marisa_walk). Default is now the redrawn run.
+if ($kyu) { $a += @('-kyu') }
+# -vroid : show the VRoid model next to the sprite for comparison
+if ($vroid) { $a += @('-vroid') }
+# -vrun : force the VRoid model to always play the run clip (diagnostic)
+if ($vrun) { $a += @('-vroid','-vrun') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }

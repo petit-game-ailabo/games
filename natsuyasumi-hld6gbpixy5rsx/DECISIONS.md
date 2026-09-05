@@ -516,3 +516,20 @@
   `Interact` `PickUp_Table` `Crouch_*` `Fixing_Kneeling` `Sitting_*` など 先々の 動作も ある）。
   ★`ModelImporter.importMaterials` は 新しい Unity に 無い。`materialImportMode` を つかう。
   つぎ：VRM に クリップを 着せて 8方向x10行に 焼き、2Dと 並べて どちらで 行くか 決める。
+- **D-229（2026-09-06）既定を 描きなおした 走りに。VRoid を すぐ 横に 立てて 見くらべる。**
+  本人「exe立ち上げを新しい画像に変えておいて。かつVroidを今のキャラの真横とかに乗せて
+  比較できるようにして」。
+  ・既定＝`marisa_codex`（描きなおした 正面の 走り）。いままでの 絵は `-kyu`。
+  ・`-vroid` で VRoid の モデルが 主人公の 右 0.9m に 立ち、速さに 合わせて
+    Idle／Walk／Sprint を 出す（`NiwaVroid` ＋ `NiwaVroidSetup`）。`-vrun` で ずっと 走る。
+  ・大きさは **板の 絵の 見た たけ（1.40m × 312/336 ＝ 1.30m）に あわせる**。
+    実測 1.57m → 倍率 0.830。
+  ・すじみち（AnimatorController）も **コードで 作る**。遷移は 作らず 3状態を 並べて `CrossFade`。
+  ★ここで 半日 溶かしかけた 罠：**`CrossFade` を 1フレームに 2回 呼ぶと、状態が 毎フレーム
+    入れかわって クロスフェードが 再開し つづけ、`normalizedTime` が 0.01 から 進まない**。
+    見た目は「アニメが 効いて いない」に なる が、`anim.enabled` も `speed` も `timeScale` も
+    ぜんぶ 正常に 見える ので 気づきにくい。**状態を 決めるのは 1フレームに 1回だけ。**
+    （はじめ Vrm10Instance の ControlRig が 上書きして いると 疑ったが、
+      `m_useControlRig` は 既定 false で ControlRig は 生成されて いなかった＝濡れ衣）
+  ★調べかた：`normalizedTime` と `IsName()` と ボーンの 角度を **数で 出す**。
+    絵を 見て「動いて いない」と 言って いる あいだは 原因に たどりつけなかった。

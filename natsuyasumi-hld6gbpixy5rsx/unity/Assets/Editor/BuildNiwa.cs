@@ -439,16 +439,21 @@ public static class BuildNiwa {
         sm.SetFloat("_AlphaClip", 1f); sm.SetFloat("_Cutoff", 0.5f);
         sm.EnableKeyword("_ALPHATEST_ON");
         sm.SetFloat("_Smoothness", 0.05f);
-        sm.mainTexture = marisa;
+        // ★既定は **描きなおした 走り**（D-228）。いままでの 絵は `-kyu` で 見られる
+        var marisaShin = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_codex.png");
+        sm.mainTexture = marisaShin != null ? marisaShin : marisa;
         quad.GetComponent<Renderer>().sharedMaterial = sm;
         quad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         quad.AddComponent<MuraBillboard>();
         // ★既定＝Meshy の 3D。`-kyu2d` で 前の 手描き 2Dに もどせる（見くらべ用）
+        // ★VRoid の モデルを すぐ 横に 立てる（`-vroid` の ときだけ 出る・D-229）
+        NiwaVroidSetup.Tateru(root, player.transform);
+
         var kae = player.AddComponent<NiwaKae>();
         kae.target = quad.GetComponent<Renderer>();
         kae.futsu = marisa;
         kae.meshy = marisa3d;
-        kae.shin = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_codex.png");
+        kae.shin = marisaShin;
         var cs = player.AddComponent<CharSprite>();
         cs.target = quad.GetComponent<Renderer>();
         cs.runSpeed = 3.4f;
@@ -691,7 +696,7 @@ public static class BuildNiwa {
             //   Takasa(0,0)＝段の 0.6 を 足されると **まるごと 0.6m 浮く**）は 外す（2026-09-04・本人
             //   「地面を下げたせいで、浮いてる物体がある？」→ 石垣・生垣・竹・柵・丸太・岩が 浮いて いた。
             //   石垣が 背高く 見えた（1.2m）のも これ）。座らせ直すのは y=0 で 置いた Kenney の 物だけ
-            string[] nuki = { "Jimen", "JimenE", "MichiSoto", "BLK_", "Sora", "Satoyama",
+            string[] nuki = { "Jimen", "JimenE", "MichiSoto", "BLK_", "Sora", "Satoyama", "VroidHikaku",
                               "YamaToi", "Kumo", "Cam", "Sun", "Day", "Volume", "Player",
                               "Takadai", "Kage", "KiMiki", "KiHa", "KiAtari",
                               "Take", "Ishigaki", "Ikegaki", "Iwa", "Mushi", "Mise_", "Ie",
