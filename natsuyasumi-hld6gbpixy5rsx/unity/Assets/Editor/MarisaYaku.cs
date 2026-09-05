@@ -51,6 +51,18 @@ public static class MarisaYaku {
         camGO.transform.position = mato - muki * Vector3.forward * 5f;
         camGO.transform.rotation = muki;
 
+        // ---- 光。**2回 撮って 割る**：①環境光だけ（＝素の 色）②光あり。
+        //   その 比を 2段に 落とすと セル調の 影に なる。3Dの なめらかな 陰影を
+        //   そのまま 焼くと「3Dの キャラを 貼りました」に 見える（2026-09-05）
+        var hiGO = new GameObject("YakuHikari") { hideFlags = HideFlags.DontSave };
+        var hikari = hiGO.AddComponent<Light>();
+        hikari.type = LightType.Directional;
+        hikari.intensity = 0.95f;
+        hikari.color = new Color(1f, 0.98f, 0.94f);
+        hikari.shadows = LightShadows.None;
+        hiGO.transform.rotation = Quaternion.Euler(28f, -34f, 0f);
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+
         var rt = new RenderTexture(CW * BAI, CH * BAI, 24, RenderTextureFormat.ARGB32) {
             antiAliasing = 8,
         };
@@ -68,13 +80,12 @@ public static class MarisaYaku {
                 // ★モデルの 顔は -Z、カメラも -Z 側に いる ので **col*45 が そのまま 正解**。
                 //   はじめ 180 を 足して いて、8方向 まるごと 裏返って いた（前が うしろ）
                 karada.root.localRotation = Quaternion.Euler(0f, col * 45f, 0f);
-                cam.Render();
-                var mae = RenderTexture.active;
-                RenderTexture.active = rt;
-                yomi.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
-                yomi.Apply(false);
-                RenderTexture.active = mae;
-                Haru(sheet, Chijimeru(yomi), col, row);
+                RenderSettings.ambientLight = Color.white; hikari.enabled = false;
+                var hira = Toru(cam, rt, yomi);
+                RenderSettings.ambientLight = new Color(0.62f, 0.62f, 0.68f);
+                hikari.enabled = true;
+                var akari = Toru(cam, rt, yomi);
+                Haru(sheet, Chijimeru(Nitone(hira, akari)), col, row);
             }
         }
         Fuchi(sheet);
@@ -84,6 +95,7 @@ public static class MarisaYaku {
         Kurabe(sheet, outDir + "/kurabe.png");
 
         cam.targetTexture = null;
+        Object.DestroyImmediate(hiGO);
         Object.DestroyImmediate(rt);
         Object.DestroyImmediate(yomi);
         Object.DestroyImmediate(sheet);
@@ -93,9 +105,36 @@ public static class MarisaYaku {
                   + (CW * COLS) + "x" + (CH * ROWS));
     }
 
+    static Color[] Toru(Camera cam, RenderTexture rt, Texture2D yomi) {
+        cam.Render();
+        var mae = RenderTexture.active;
+        RenderTexture.active = rt;
+        yomi.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+        yomi.Apply(false);
+        RenderTexture.active = mae;
+        return yomi.GetPixels();
+    }
+
+    /// <summary>2階調の 影。**光あり ÷ 素の 色** を しきいで 2段に 割る。
+    /// 影は すこし 青むらさきに 寄せる（黒く 落とすと 汚れて 見える）</summary>
+    static Color[] Nitone(Color[] hira, Color[] akari) {
+        var d = new Color[hira.Length];
+        var kage = new Color(0.72f, 0.70f, 0.80f);
+        for (int i = 0; i < hira.Length; i++) {
+            var f = hira[i];
+            if (f.a < 0.02f) { d[i] = new Color(0f, 0f, 0f, 0f); continue; }
+            float lf = f.r * 0.30f + f.g * 0.59f + f.b * 0.11f;
+            var l = akari[i];
+            float ll = l.r * 0.30f + l.g * 0.59f + l.b * 0.11f;
+            float k = lf > 0.01f ? ll / lf : 1f;
+            var mul = k > 0.86f ? Color.white : kage;
+            d[i] = new Color(f.r * mul.r, f.g * mul.g, f.b * mul.b, f.a);
+        }
+        return d;
+    }
+
     /// <summary>BAI倍で 焼いた ものを 1コマの 大きさへ。**アルファも 混ぜる**ので ふちが なめらか</summary>
-    static Color[] Chijimeru(Texture2D src) {
-        var s = src.GetPixels();
+    static Color[] Chijimeru(Color[] s) {
         var d = new Color[CW * CH];
         for (int y = 0; y < CH; y++)
             for (int x = 0; x < CW; x++) {
@@ -144,9 +183,9 @@ public static class MarisaYaku {
                 if (c.a < 0.5f) {
                     // 外がわ：2px 以内に 中みが あれば 線に する
                     bool chikai = false;
-                    for (int dy = -2; dy <= 2 && !chikai; dy++)
-                        for (int dx = -2; dx <= 2; dx++) {
-                            if (dx * dx + dy * dy > 5) continue;
+                    for (int dy = -3; dy <= 3 && !chikai; dy++)
+                        for (int dx = -3; dx <= 3; dx++) {
+                            if (dx * dx + dy * dy > 10) continue;
                             int nx = cx + dx, ny = cy + dy;
                             if (nx < 0 || ny < 0 || nx >= CW || ny >= CH) continue;   // コマを またがない
                             if (Naka(x + dx, y + dy)) { chikai = true; break; }

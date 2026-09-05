@@ -36,19 +36,33 @@ public static class MarisaV6 {
         public readonly Transform[] hiji = new Transform[2];   // 前腕
         public readonly Transform[] momo = new Transform[2];
         public readonly Transform[] hiza = new Transform[2];
-        public readonly Transform[] me = new Transform[2];     // 目（まばたきで つぶす）
+        public Renderer kao;                                   // 顔（まばたきは 絵の 差しかえ）
         public readonly List<Renderer> subete = new List<Renderer>();
     }
 
+    // ★材質は **Lit**。焼く ときに「まっ平ら」と「光あり」の 2回 撮って 割り算し、
+    //   2階調に 落とす（`MarisaYaku`）。Unlit だと 影が 出せず 紙に 見える
     static readonly Dictionary<string, Material> mats = new Dictionary<string, Material>();
-    static Material M(string name, Color c) {
+    static Material M(string name, Color c) { return Mat(name, c, null); }
+
+    /// <summary>絵を わたすと アルファで 抜く（顔・髪の カード）</summary>
+    public static Material Mat(string name, Color c, string tex) {
         Material m;
         if (mats.TryGetValue(name, out m)) return m;
-        var sh = Shader.Find("Universal Render Pipeline/Unlit");
-        if (sh == null) sh = Shader.Find("Unlit/Color");
+        var sh = Shader.Find("Universal Render Pipeline/Lit");
         m = new Material(sh) { name = name, hideFlags = HideFlags.DontSave };
         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
         m.color = c;
+        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0f);
+        if (tex != null) {
+            var t = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(
+                "Assets/Art/Textures/marisa/" + tex);
+            if (t == null) Debug.LogError("[MarisaV6] 絵が ない: " + tex);
+            m.SetTexture("_BaseMap", t); m.mainTexture = t;
+            m.SetFloat("_AlphaClip", 1f); m.SetFloat("_Cutoff", 0.5f);
+            m.EnableKeyword("_ALPHATEST_ON");
+            m.SetFloat("_Cull", (float)UnityEngine.Rendering.CullMode.Off);
+        }
         mats[name] = m;
         return m;
     }
@@ -139,45 +153,126 @@ public static class MarisaV6 {
         Bu(k, k.kubi, "KubiMi", PrimitiveType.Capsule,
            new Vector3(0f, 0.02f, 0f), new Vector3(0.06f, 0.03f, 0.06f), Vector3.zero, M("hada", HADA));
         k.atama = Ten(k.kubi, "Atama", new Vector3(0f, 0.05f, 0f));
-        Bu(k, k.atama, "Kao", PrimitiveType.Sphere,
-           new Vector3(0f, 0.105f, 0f), new Vector3(0.245f, 0.255f, 0.230f), Vector3.zero, M("hada", HADA));
-        // 髪：うしろの かたまり ＋ 前がみ ＋ 三つ編み 2本
-        Bu(k, k.atama, "KamiUshiro", PrimitiveType.Sphere,
-           new Vector3(0f, 0.10f, 0.030f), new Vector3(0.258f, 0.265f, 0.240f), Vector3.zero, M("kami", KAMI));
-        Bu(k, k.atama, "Maegami", PrimitiveType.Sphere,
-           new Vector3(0f, 0.170f, -0.026f), new Vector3(0.245f, 0.125f, 0.215f), Vector3.zero, M("kami", KAMI));
-        Bu(k, k.atama, "KamiNaga", PrimitiveType.Capsule,
-           new Vector3(0f, -0.03f, 0.055f), new Vector3(0.225f, 0.125f, 0.145f), Vector3.zero, M("kami", KAMI));
+        // ★頭は **なめらかな 玉**。目・まゆ・口は 形で 作らず **絵を 貼る**。
+        //   アニメ調の 3Dは どれも そう（ギルティギアXrd・VRoid・MMD）。
+        //   はじめ 目を 小さな 玉で 置いたら「点が 2つ 付いた 人形」に なった（2026-09-05）
+        var rH = new Vector3(0.122f, 0.128f, 0.115f);
+        Tama(k, k.atama, "Kao", new Vector3(0f, 0.105f, 0f), rH, M("hada", HADA));
+        // 顔の 絵（頭より ほんの 少し 外の 面に 貼る）
+        // ★面を せまく とる ほど 絵が 大きく 出る。±46度・±32度だと 目が 10pxに なり
+        //   「点が 2つ」に 見えた（2026-09-05）。顔の 見える ぶんだけに しぼる
+        k.kao = Men(k, k.atama, "KaoE", new Vector3(0f, 0.105f, 0f), rH * 1.012f,
+                    -37f, 37f, -30f, 20f, Mat("kao", Color.white, "marisa_kao.png"));
+        // 髪：うしろ・横 2本・前がみ。ぜんぶ **絵を 貼った 板**
+        Ita(k, k.atama, "KamiUshiro", new Vector3(0f, 0.075f, 0.075f), new Vector3(0f, 0f, 0f),
+            0.255f, 0.33f, 0.085f, Mat("kamiu", Color.white, "marisa_ushirogami.png"));
         for (int i = 0; i < 2; i++) {
             float sx = i == 0 ? -1f : 1f;
-            Bu(k, k.atama, "Mitsuami", PrimitiveType.Capsule,
-               new Vector3(sx * 0.128f, -0.05f, -0.018f), new Vector3(0.058f, 0.115f, 0.058f),
-               new Vector3(8f, 0f, sx * -7f), M("kamik", KAMIK));
+            Ita(k, k.atama, "KamiYoko", new Vector3(sx * 0.108f, 0.075f, 0.006f),
+                new Vector3(0f, sx * 74f, sx * -7f), 0.115f, 0.315f, 0.022f,
+                Mat("kamiy", Color.white, "marisa_yokogami.png"));
         }
-        // 目（まばたきで z を つぶす）
-        for (int i = 0; i < 2; i++) {
-            float sx = i == 0 ? -1f : 1f;
-            k.me[i] = Bu(k, k.atama, "Me" + i, PrimitiveType.Sphere,
-                         new Vector3(sx * 0.060f, 0.098f, -0.112f), new Vector3(0.046f, 0.066f, 0.03f),
-                         Vector3.zero, M("me", ME));
-        }
-        // 口（小さな 線）
-        Bu(k, k.atama, "Kuchi", PrimitiveType.Cube,
-           new Vector3(0f, 0.040f, -0.115f), new Vector3(0.028f, 0.008f, 0.02f), Vector3.zero, M("me", ME));
+        // 前がみは **おでこに かかる 帯**。上へ 広げすぎると 帽子の 下に 隠れて 1本も 見えない
+        Men(k, k.atama, "Maegami", new Vector3(0f, 0.105f, 0f), rH * 1.06f,
+            -72f, 72f, 4f, 46f, Mat("kamim", Color.white, "marisa_maegami.png"));
 
         // ---- 帽子（とんがり＋つば＋白い 帯）
         // ★つばは **小さめ・少し 上向き**。r=0.30（差しわたし 0.6m）だと ふせ角10度の カメラから
         //   顔が まるごと 隠れた（2026-09-05）。魔理沙の 帽子は 大きいが、絵では 顔が 見えて いる
-        k.boushi = Ten(k.atama, "Boushi", new Vector3(0f, 0.215f, 0.012f));
+        k.boushi = Ten(k.atama, "Boushi", new Vector3(0f, 0.222f, 0.014f));
         k.boushi.localRotation = Quaternion.Euler(-9f, 0f, 0f);                  // 少し 上向き
-        Sube(k, k.boushi, "Tsuba", 0.235f, 0.225f, -0.024f, M("kuro", KURO));    // つば
-        Sube(k, k.boushi, "Yama", 0.150f, 0.028f, 0.245f, M("kuro", KURO));      // とんがり
-        Sube(k, k.boushi, "Obi", 0.157f, 0.150f, 0.036f, M("shiro", SHIRO));     // 白い 帯
+        Sube(k, k.boushi, "Tsuba", 0.205f, 0.196f, -0.022f, M("kuro", KURO));    // つば
+        Sube(k, k.boushi, "Yama", 0.136f, 0.026f, 0.215f, M("kuro", KURO));      // とんがり
+        Sube(k, k.boushi, "Obi", 0.143f, 0.137f, 0.032f, M("shiro", SHIRO));     // 白い 帯
         // リボン（うしろ）
         Bu(k, k.boushi, "Ribbon", PrimitiveType.Cube,
            new Vector3(0f, 0.048f, 0.140f), new Vector3(0.150f, 0.072f, 0.035f),
            new Vector3(0f, 0f, 12f), M("shiro", SHIRO));
         return k;
+    }
+
+    /// <summary>なめらかな 玉（半径を 軸ごとに 変える）</summary>
+    static void Tama(Karada k, Transform oya, string na, Vector3 at, Vector3 r, Material m) {
+        const int la = 12, lo = 18;
+        var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+        for (int i = 0; i <= la; i++) {
+            float ph = Mathf.PI * (0.5f - i / (float)la);
+            for (int j = 0; j <= lo; j++) {
+                float th = Mathf.PI * 2f * j / lo;
+                v.Add(new Vector3(Mathf.Cos(ph) * Mathf.Sin(th) * r.x, Mathf.Sin(ph) * r.y,
+                                  Mathf.Cos(ph) * Mathf.Cos(th) * r.z));
+                uv.Add(new Vector2(j / (float)lo, 1f - i / (float)la));
+            }
+        }
+        for (int i = 0; i < la; i++)
+            for (int j = 0; j < lo; j++) {
+                int a0 = i * (lo + 1) + j;
+                tri.Add(a0); tri.Add(a0 + lo + 1); tri.Add(a0 + 1);
+                tri.Add(a0 + 1); tri.Add(a0 + lo + 1); tri.Add(a0 + lo + 2);
+            }
+        Oku(k, oya, na, at, Vector3.zero, v, uv, tri, m);
+    }
+
+    /// <summary>球の 一部を 切りとった 面（顔・前がみ）。ヨー/ピッチの 範囲に 絵を 1枚 貼る。
+    /// ★平らな 板に 貼ると 斜めから 見た とき「シールを 貼った」に 見える。曲げる のが 肝</summary>
+    static Renderer Men(Karada k, Transform oya, string na, Vector3 at, Vector3 r,
+                        float y0, float y1, float p0, float p1, Material m) {
+        const int n = 12;
+        var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+        for (int i = 0; i <= n; i++) {
+            float tp = i / (float)n, ph = Mathf.Lerp(p0, p1, tp) * Mathf.Deg2Rad;
+            for (int j = 0; j <= n; j++) {
+                float ty = j / (float)n, yw = Mathf.Lerp(y0, y1, ty) * Mathf.Deg2Rad;
+                v.Add(new Vector3(Mathf.Cos(ph) * Mathf.Sin(yw) * r.x, Mathf.Sin(ph) * r.y,
+                                  -Mathf.Cos(ph) * Mathf.Cos(yw) * r.z));
+                uv.Add(new Vector2(ty, tp));
+            }
+        }
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) {
+                int a0 = i * (n + 1) + j;
+                tri.Add(a0); tri.Add(a0 + 1); tri.Add(a0 + n + 1);
+                tri.Add(a0 + 1); tri.Add(a0 + n + 2); tri.Add(a0 + n + 1);
+            }
+        return Oku(k, oya, na, at, Vector3.zero, v, uv, tri, m);
+    }
+
+    /// <summary>曲げた 板（横・うしろの 髪）。はば w・たけ h、まん中を mage だけ 手前へ</summary>
+    static void Ita(Karada k, Transform oya, string na, Vector3 at, Vector3 kai,
+                    float w, float h, float mage, Material m) {
+        const int n = 8;
+        var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+        for (int i = 0; i <= n; i++) {
+            float tx = i / (float)n, x = (tx - 0.5f) * w;
+            float z = mage * (1f - 4f * (tx - 0.5f) * (tx - 0.5f));
+            for (int j = 0; j <= 1; j++) {
+                v.Add(new Vector3(x, -j * h, z));
+                uv.Add(new Vector2(tx, 1f - j));
+            }
+        }
+        for (int i = 0; i < n; i++) {
+            int a0 = i * 2;
+            tri.Add(a0); tri.Add(a0 + 1); tri.Add(a0 + 2);
+            tri.Add(a0 + 1); tri.Add(a0 + 3); tri.Add(a0 + 2);
+        }
+        Oku(k, oya, na, at, kai, v, uv, tri, m);
+    }
+
+    static Renderer Oku(Karada k, Transform oya, string na, Vector3 at, Vector3 kai,
+                        List<Vector3> v, List<Vector2> uv, List<int> tri, Material m) {
+        var mesh = new Mesh { name = na, hideFlags = HideFlags.DontSave };
+        mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tri, 0);
+        mesh.RecalculateNormals(); mesh.RecalculateBounds();
+        var g = new GameObject(na) { hideFlags = HideFlags.DontSave };
+        g.transform.SetParent(oya, false);
+        g.transform.localPosition = at;
+        g.transform.localRotation = Quaternion.Euler(kai);
+        g.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var r = g.AddComponent<MeshRenderer>();
+        r.sharedMaterial = m;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        k.subete.Add(r);
+        return r;
     }
 
     /// <summary>すぼまった 円すい台。r0＝下、r1＝上、h＝高さ（負なら 下へ 伸びる）</summary>
@@ -236,17 +331,18 @@ public static class MarisaV6 {
             k.hiza[i].localRotation = Quaternion.identity;
             k.kata[i].localRotation = Quaternion.identity;
             k.hiji[i].localRotation = Quaternion.identity;
-            var s = k.me[i].localScale; s.y = 0.062f; k.me[i].localScale = s;
         }
+        // まばたきは **絵の 差しかえ**（形は さわらない）
+        if (k.kao != null)
+            k.kao.sharedMaterial = row == 9
+                ? Mat("kaoT", Color.white, "marisa_kao_tojiru.png")
+                : Mat("kao", Color.white, "marisa_kao.png");
 
         if (row >= 8) {                                   // 立ち／目とじ
             for (int i = 0; i < 2; i++) {
                 float sx = i == 0 ? -1f : 1f;
                 k.kata[i].localRotation = Quaternion.Euler(4f, 0f, sx * -7f);
                 k.hiji[i].localRotation = Quaternion.Euler(10f, 0f, 0f);
-            }
-            if (row == 9) for (int i = 0; i < 2; i++) {    // まばたき＝目を つぶす
-                var s = k.me[i].localScale; s.y = 0.008f; k.me[i].localScale = s;
             }
             return;
         }
