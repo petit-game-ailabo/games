@@ -15,7 +15,21 @@ public static class AnimSetup {
     public static void Setup() {
         var mi = AssetImporter.GetAtPath(FBX) as ModelImporter;
         if (mi == null) { Debug.LogError("[Probe] AnimSetup: FBX が ない " + FBX); return; }
-        bool naosu = mi.animationType != ModelImporterAnimationType.Human || !mi.importAnimation
+        // ★**`_Loop` の クリップに ループを 立てる。**
+        //   FBX から 取りこんだ だけでは `loopTime` は 立たない ので、
+        //   **1周 したら 最後の コマで 固まる**。本人「走りっぱなしだと 途中から モーションが なくなる」。
+        //   `normalizedTime` は 1.0 を こえて 増えつづける ので 「動いて いる」ように 見えて
+        //   気づきにくい（角度を 出して 初めて 分かる・2026-09-06）
+        var cl = mi.defaultClipAnimations;
+        bool loopIru = false;
+        for (int i = 0; i < cl.Length; i++) {
+            bool wa = cl[i].name.EndsWith("_Loop") || cl[i].name.Contains("Idle");
+            if (cl[i].loopTime != wa) { cl[i].loopTime = wa; loopIru = true; }
+        }
+        if (loopIru) mi.clipAnimations = cl;
+
+        bool naosu = loopIru
+                     || mi.animationType != ModelImporterAnimationType.Human || !mi.importAnimation
                      || mi.materialImportMode != ModelImporterMaterialImportMode.None;
         if (naosu) {
             mi.animationType = ModelImporterAnimationType.Human;
@@ -39,7 +53,9 @@ public static class AnimSetup {
             if (a is AnimationClip c && !c.name.StartsWith("__preview__")) cl.Add(c);
             if (a is Avatar v) av = v;
         }
-        Debug.Log("[Probe] AnimClip " + cl.Count + " 本  avatar=" +
+        int wa2 = 0;
+        foreach (var c in cl) if (c.isLooping) wa2++;
+        Debug.Log("[Probe] AnimClip " + cl.Count + " 本（うち ループ " + wa2 + " 本）  avatar=" +
                   (av == null ? "なし" : (av.isHuman ? "Humanoid ○" : "Humanoid ×")));
         cl.Sort((x, y) => string.CompareOrdinal(x.name, y.name));
         var sb = new StringBuilder();
