@@ -80,11 +80,16 @@ public static class NiwaVroidSetup {
         var sm = ctrl.layers[0].stateMachine;
 
         void Oku(string na, string clipNa) {
-            AnimationClip c;
-            if (!clips.TryGetValue(clipNa, out c)) {
+            // ★**筋値を 直した もの**が あれば そちらを つかう（`AnimNaosu`）。
+            //   汎用リグの まま だと 肩が 上がり 肘が 曲がる（体型の ちがい・D-233）
+            var naoshi = AssetDatabase.LoadAssetAtPath<AnimationClip>(
+                "Assets/Art/Models/anim/naoshi/" + clipNa + ".anim");
+            AnimationClip c = naoshi;
+            if (c == null && !clips.TryGetValue(clipNa, out c)) {
                 Debug.LogWarning("[Probe] NiwaVroid: クリップが 無い " + clipNa);
                 return;
             }
+            if (naoshi != null) Debug.Log("[Probe] NiwaVroid: 直した クリップを つかう " + clipNa);
             var st = sm.AddState(na);
             st.motion = c;
             if (na == "Idle") sm.defaultState = st;
