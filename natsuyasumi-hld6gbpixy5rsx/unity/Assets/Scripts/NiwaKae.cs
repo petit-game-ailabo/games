@@ -1,8 +1,13 @@
 using UnityEngine;
 
 /// <summary>
-/// 主人公の 絵を えらぶ。**既定は Meshy の 3Dを 焼いた もの**（2026-09-05・D-221）。
-/// <c>-kyu2d</c> を つけると 前の 手描き 2D（marisa_walk）に もどる。
+/// 主人公の 絵を えらぶ。**既定は 手描きの 2D**（marisa_walk）。
+/// <c>-3d</c> を つけると 3Dの 体に 2Dの 頭を のせた もの（marisa_hybrid）に なる。
+///
+/// ★2026-09-06：3Dは やめて 2Dに もどした。本人「歩くと 3Dと 2D崩れちゃうね。
+///   2Dに戻して、できるだけ2Dの絵をキレイに使えるように作っていこうか」。
+///   3Dの 体に 2Dの 頭を のせる やりかたは、止まって いる あいだは 成りたつが
+///   **歩くと 頭と 体の 動きが 合わず 崩れる**（頭は 2Dの コマ・体は 3Dの 焼き）。
 ///
 /// ★引数を つけない で 起ちあげた ときに 切りかわって いないと 意味が ない。
 ///   はじめ 逆（既定＝2D・<c>-meshy</c> で 3D）に して いて、本人が
@@ -13,15 +18,15 @@ using UnityEngine;
 /// </summary>
 public class NiwaKae : MonoBehaviour {
     public Renderer target;
-    public Texture2D futsu;             // 前の 手描き 2D（marisa_walk）
-    public Texture2D meshy;             // Meshy の 3Dを 焼いた もの（marisa_meshy）
+    public Texture2D futsu;             // 手描き 2D（marisa_walk）＝既定
+    public Texture2D meshy;             // 3Dの 体＋2Dの 頭（marisa_hybrid）＝見くらべ用
 
     void Awake() {
-        bool modoru = false;
+        bool sanD = false;
         foreach (var a in System.Environment.GetCommandLineArgs())
-            if (a == "-kyu2d") modoru = true;
-        var t = modoru ? futsu : meshy;
-        if (t == null) t = futsu;       // 焼いた 絵が 無い ときは 前のに 落ちる
+            if (a == "-3d") sanD = true;
+        var t = sanD ? meshy : futsu;
+        if (t == null) t = futsu;
         if (t == null || target == null || target.sharedMaterial == null) return;
         target.sharedMaterial.mainTexture = t;
         Debug.Log("[NiwaKae] キャラ絵 = " + t.name + " (" + t.width + "x" + t.height + ")");
