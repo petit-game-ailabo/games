@@ -140,7 +140,7 @@ public static class SetupURP {
                 continue;
             }
             // ★描き おこしの キャラ絵も 対象外（2026-08-30）。点フィルタだと 縮小で ぎざぎざに なる
-            if (path.Contains("marisa_walk") || path.Contains("/tachie/")) {
+            if (path.Contains("marisa_walk") || path.Contains("marisa_meshy") || path.Contains("/tachie/")) {
                 var ti3 = AssetImporter.GetAtPath(path) as TextureImporter;
                 if (ti3 == null) continue;
                 // ★ここを まちがえると 絵が ぼける（2026-08-30・本人「まだ解像度が下がってる」）

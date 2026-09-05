@@ -220,3 +220,19 @@ ZUN 氏のガイドライン上も、二次創作ブラウザゲームは無料�
 
 `unity/Assets/Art/Textures/shashin/` 以下（地面・木の 葉と 幹・家の 壁と 瓦と 木）と 虫の 絵の もとは、
 本人が Codex(OpenAI) で 生成した もの（2026-09-02 記録）。外部の 写真は ふくまない。
+
+## 主人公の 3Dモデル（Meshy・2026-09-05〜）
+
+`unity/Assets/Art/Sprites/marisa_meshy.png`（8方向x10状態の スプライトシート）は、
+**Meshy AI の image-to-3D で 作った 3Dモデルを こちらで 8方向に 焼いた もの**。
+
+- ツール：Meshy（https://www.meshy.ai/）／**無料プラン**
+- **無料プランの 生成物は CC BY 4.0** ＝ 商用利用は 可だが **Meshy の 表示が 必要**
+  https://help.meshy.ai/en/articles/9992001-can-i-use-my-generated-assets-for-commercial-projects
+- **表示（この まま 配布物にも 載せる）：**
+  > 3D model generated with Meshy (https://www.meshy.ai/) — CC BY 4.0
+
+- 焼いた もの（スプライト）は 派生物 なので **同じ 表示義務が かかる**。
+- もとの GLB は `unity/ArtSource/ref/meshy/`（gitignore・リポジトリに 入れない）。
+- ★表示を したくない場合は Meshy の 有料プラン（生成物が 自分の ものに なる）が 要る。
+  **課金の 判断は 本人。こちらから 進めない。**

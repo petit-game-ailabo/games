@@ -99,3 +99,13 @@ Unity 公式「Happy Harvest - 2D Sample Project」が挙がった。**3つと�
 `unity/Assets/Art/Textures/shashin/`（地面 ji_*・木 ki_*・家 ie_*）と、その 加工物（ie_kabe_yogore など）は
 **すべて 本人が Codex(OpenAI) で 生成した 画像**。撮影した 写真では ない。
 本人「今までのものもすべてcodex」。商用利用の 条件は 上の 虫の 欄と 同じ（本人 確認 待ち）。
+
+## 主人公の 3Dモデル（Meshy・2026-09-05〜）
+
+- もと：**Meshy AI（無料プラン）の image-to-3D**。入力は `unity/ArtSource/marisa_tachie_source.png`
+- 権利：**CC BY 4.0**。商用可だが **Meshy の 表示が 必要**（`CREDITS.md` に 文面）
+- 入って いる もの：`unity/Assets/Art/Sprites/marisa_meshy.png`（焼いた スプライトのみ）
+  もとの GLB は `unity/ArtSource/ref/meshy/`（gitignore）
+- 焼き直し：`ArtSource/ref/meshy/yaku_shisaku.py` 系（GLB → 8x10 シート）
+- ★差しかえる ときの 注意：**東方キャラの 権利とは 別の 話**。ここは あくまで
+  「Meshy の 生成物を つかって いる」ことの 記録。キャラの 意匠の 話は 上の 欄。

@@ -12,6 +12,7 @@
 #   .\shot.ps1 -at '0,-2,0.1' -cam '10,24,180'    # indoors (3rd value = height)
 #   .\shot.ps1 -play tsuri -playwait 0 -shots 3   # capture DURING an activity
 #   .\shot.ps1 -face 4 -pose 2 -tag back-run      # pin sprite direction/pose
+#   .\shot.ps1 -kyu2d -tag old2d                  # hero sheet = old hand-drawn 2D
 #   .\shot.ps1 -walk '1,0' -walkhold -run -shots 6 -gap 0.07   # run cycle
 param(
   [string]$tod = 'asa', [string]$tag = 'a', [int]$shots = 1, [double]$gap = 1.5,
@@ -21,7 +22,8 @@ param(
   [int]$frames = 150, [string]$face = '', [string]$pose = '',
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
-  [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$menu
+  [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$menu,
+  [switch]$kyu2d
 )
 $ErrorActionPreference = 'Stop'
 
@@ -76,6 +78,8 @@ if ($furu)  { $a += @('-furu') }
 if ($mushi) { $a += @('-mushi') }
 # -menu opens the menu screen by itself after 8 s (so the cage has something in it).
 if ($menu)  { $a += @('-menu') }
+# Hero sheet is the Meshy 3D bake by default; -kyu2d goes back to the old hand-drawn 2D.
+if ($kyu2d) { $a += @('-kyu2d') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }

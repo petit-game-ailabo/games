@@ -424,7 +424,11 @@ public static class BuildNiwa {
         var cc = player.AddComponent<CharacterController>();
         cc.height = 1.0f; cc.radius = 0.26f; cc.center = new Vector3(0f, 0.52f, 0f);
         cc.slopeLimit = 50f; cc.stepOffset = 0.35f;
+        // ★既定は **Meshy の 3Dを 焼いた シート**（D-221）。前の 手描き 2Dは `-kyu2d` で もどる。
+        //   材質に 入れる 絵も こちらに して おく（NiwaKae は 起動時に 上書きする だけ なので、
+        //   ここが 2Dの ままだと 一瞬 前の 絵が 出る）
         var marisa = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_walk.png");
+        var marisa3d = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Sprites/marisa_meshy.png");
         var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         quad.name = "Mi"; quad.transform.SetParent(player.transform, false);
         quad.transform.localPosition = new Vector3(0f, 0.66f, 0f);
@@ -435,10 +439,15 @@ public static class BuildNiwa {
         sm.SetFloat("_AlphaClip", 1f); sm.SetFloat("_Cutoff", 0.5f);
         sm.EnableKeyword("_ALPHATEST_ON");
         sm.SetFloat("_Smoothness", 0.05f);
-        sm.mainTexture = marisa;
+        sm.mainTexture = marisa3d != null ? marisa3d : marisa;
         quad.GetComponent<Renderer>().sharedMaterial = sm;
         quad.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         quad.AddComponent<MuraBillboard>();
+        // ★既定＝Meshy の 3D。`-kyu2d` で 前の 手描き 2Dに もどせる（見くらべ用）
+        var kae = player.AddComponent<NiwaKae>();
+        kae.target = quad.GetComponent<Renderer>();
+        kae.futsu = marisa;
+        kae.meshy = marisa3d;
         var cs = player.AddComponent<CharSprite>();
         cs.target = quad.GetComponent<Renderer>();
         cs.runSpeed = 3.4f;

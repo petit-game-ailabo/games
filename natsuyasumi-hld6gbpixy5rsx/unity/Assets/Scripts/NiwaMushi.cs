@@ -168,6 +168,9 @@ public class NiwaMushi : MonoBehaviour {
         public Transform kage;           // 足もとの 影
         public bool kageLogged;
     }
+    /// <summary>これ 以上の はばを 「大きい 甲虫」と みなす（かぶと0.26・くわがた0.23・せみ0.18）</summary>
+    const float OOKII = 0.22f;
+
     readonly List<Hiki> ikiteru = new List<Hiki>();
     readonly Dictionary<string, Material> zairyo = new Dictionary<string, Material>();
     Transform player;
@@ -230,10 +233,31 @@ public class NiwaMushi : MonoBehaviour {
                     float dm = new Vector2(m.pts[0].x - o.x, m.pts[0].z - o.z).magnitude;
                     if (dm > kouho * 0.6f) continue;
                     if (Random.value < dm / (kouho * 0.6f) * 0.7f) continue;
+                    // ★1本の 幹に 何匹も 湧かせない（2026-09-05・本人「1つの木にクワガタとか
+                    //   カブトムシが2匹も3匹もいるのおかしい。木に対して虫のサイズが大きいから、
+                    //   虫同士が重なってる」）。絵の 板は 0.18〜0.26m ある のに 幹は それと
+                    //   同じくらいの 太さ しか ない ので、同じ 幹に 2匹 置くと ほぼ 必ず 重なる。
+                    //   ・同じ 幹は **2匹まで**
+                    //   ・かぶと／くわがた（大きい 甲虫）は **1本に 1匹**
+                    int onaji = 0; bool ookiiga = false;
+                    foreach (var e in ikiteru) {
+                        if (e.go == null || e.shu.perch != Perch.Miki || e.miki != m) continue;
+                        onaji++;
+                        if (e.shu.haba >= OOKII) ookiiga = true;
+                    }
+                    if (onaji >= 2) continue;
+                    if (ookiiga && s.haba >= OOKII) continue;
                     h.miki = m; h.kakudo = Random.Range(-20f, 20f); h.takasa = Random.Range(0.9f, 1.9f);
                     h.sakasa = Random.value < 0.35f;
                     Quaternion rot;
                     if (!MikiNi(h, out h.pos, out rot)) continue;
+                    // 2匹めは **絵の はばの 和 より 近くに 置かない**（高さも 角度も これで まとめて 見る）
+                    bool chikasugi = false;
+                    foreach (var e in ikiteru) {
+                        if (e.go == null || e.shu.perch != Perch.Miki || e.miki != m) continue;
+                        if (Vector3.Distance(e.pos, h.pos) < (e.shu.haba + s.haba) * 0.95f) { chikasugi = true; break; }
+                    }
+                    if (chikasugi) continue;
                     h.home = h.pos;
                     return true;
                 }
@@ -772,8 +796,12 @@ public class NiwaMushi : MonoBehaviour {
             h.home = h.pos = h.target = p + Vector3.up * 1.5f;
             Oku(h);
         }
-        if (mieru.Count > 0) { MikiOki("semi", mieru[0], -15f, 1.5f, false); MikiOki("kabuto", mieru[0], 18f, 1.0f, false); }
-        if (mieru.Count > 1) MikiOki("kuwagata", mieru[1], 0f, 1.3f, true);
+        // ★1本の 幹に 2匹 置かない（2026-09-05）。ここは 前まで semi と kabuto を
+        //   どちらも mieru[0] に 置いて いて、**撮ると 重なって 見えて いた**。
+        //   湧かせる ほう（Basho）と 同じ 決まりに そろえる
+        if (mieru.Count > 0) MikiOki("semi",     mieru[0], -15f, 1.5f, false);
+        if (mieru.Count > 1) MikiOki("kabuto",   mieru[1],  18f, 1.15f, false);
+        if (mieru.Count > 2) MikiOki("kuwagata", mieru[2],   0f, 1.3f, true);
         SoraOki("tonbo", new Vector3(-3f, 0f, 2f), new Vector3(1f, 0f, 0.3f));
         SoraOki("oniyanma", new Vector3(0.5f, 0f, 3.5f), new Vector3(-1f, 0f, 0f));
         SoraOki("chou", new Vector3(3.5f, 0f, 1f), new Vector3(0.3f, 0f, -1f));
