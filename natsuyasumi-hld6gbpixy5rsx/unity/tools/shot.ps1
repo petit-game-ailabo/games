@@ -21,7 +21,7 @@ param(
   [int]$frames = 150, [string]$face = '', [string]$pose = '',
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
-  [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$hairu, [switch]$menu
+  [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$menu
 )
 $ErrorActionPreference = 'Stop'
 
@@ -74,8 +74,6 @@ if ($motsu) { $a += @('-motsu') }
 if ($furu)  { $a += @('-furu') }
 # -mushi puts bugs at fixed spots near the player (NiwaMushi debug placement).
 if ($mushi) { $a += @('-mushi') }
-# -hairu walks into the shed on its own once the door is in reach.
-if ($hairu) { $a += @('-hairu') }
 # -menu opens the menu screen by itself after 8 s (so the cage has something in it).
 if ($menu)  { $a += @('-menu') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.

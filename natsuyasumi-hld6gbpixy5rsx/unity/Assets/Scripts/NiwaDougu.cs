@@ -45,13 +45,11 @@ public class NiwaDougu : MonoBehaviour {
     float furu = -1f; bool sabaita;
     string fuki; float fukiT;
     bool autoFuru; float autoT;
-    bool autoHairu;                    // 撮影用：戸の 前に 来たら ひとりでに 入る
 
     void Start() {
         foreach (var a in System.Environment.GetCommandLineArgs()) {
             if (a == "-motsu") foreach (var m in mono) m.motta = true;
             if (a == "-furu") autoFuru = true;
-            if (a == "-hairu") autoHairu = true;
         }
     }
 
@@ -91,7 +89,6 @@ public class NiwaDougu : MonoBehaviour {
         }
         var o = ChikaiOki();
         if (o != null) { shurui = 1; taisho = o; return o.namae + "を とる"; }
-        if (naya != null && naya.HairuDekiru) { shurui = 2; return "なやに はいる"; }
         if (ami != null && soto) { shurui = 4; return "あみを ふる"; }
         return null;
     }
@@ -112,8 +109,6 @@ public class NiwaDougu : MonoBehaviour {
             furu = 0f; sabaita = false; autoT = Time.time + 0.9f;
         }
 
-        if (autoHairu && naya != null && naya.HairuDekiru) naya.Hairu();
-
         if (Input.GetKeyDown(KeyCode.Space)) {
             int sh; Mono m;
             Dekiru(out sh, out m);
@@ -121,7 +116,6 @@ public class NiwaDougu : MonoBehaviour {
                 m.motta = true;
                 Iu(string.IsNullOrEmpty(m.totta) ? m.namae + "を てに いれた" : m.totta);
             }
-            else if (sh == 2) naya.Hairu();
             else if (sh == 3 || sh == 4) { furu = 0f; sabaita = false; }
         }
         Oku();

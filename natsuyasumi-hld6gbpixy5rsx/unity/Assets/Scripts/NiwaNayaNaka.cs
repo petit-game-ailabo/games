@@ -17,14 +17,16 @@ using UnityEngine.Rendering.Universal;
 //   3. **外を 落とす**（露出 ＋ ヴィネット ＋ 中の あかり）。2 だけだと「屋根を はずした 模型」。
 //      露出は 画面ぜんぶに かかる ので、**中の あかりで 小屋だけ 押しもどす**のが 肝。
 //
-// 出入りは **戸を 開けて 自動で 歩く**。戸口は 0.72m しか 開かない ので、自分で 通させると
-// かならず 引っかかる。出る ときは そのまま 東へ 歩けば よく、離れたら 戸は ひとりでに 閉まる。
+// 戸は **近づいたら ひとりでに 開く**（2026-09-05・本人「納屋の入り口でスペースキー押して
+// 扉開けるのめんどくさいから無くして」）。スペースを 出入りに 使うと、道具を 取る／虫を つかまえる
+// と ならんで しまい「いま 何が 起きるか」が 読めなく なる。
+// **開いた 戸口は 0.86m** ある ので 自分で 歩いて 通れる（0.72m だと 引っかかった）。
+// 中の 帯（BLK_NayaOku）も 戸口の 手前で 切って あり、まっすぐ 入れる。
 // 見た目の 混ぜは 0.30秒（一瞬に すると 戸口を かすめる たびに 画面が 明滅する）。
 public class NiwaNayaNaka : MonoBehaviour {
     public Transform target;             // 主人公
     public Transform cam;                // Main Camera
     public MuraCamFixed fix;
-    public MuraMove mv;
     public Volume vol;
     public Light akari;                  // 中の あかり（外に いる あいだは 0）
     public Renderer[] kesu;              // 中に いる あいだ 消す（南の 壁・屋根・妻・棟）
@@ -39,7 +41,7 @@ public class NiwaNayaNaka : MonoBehaviour {
     public float toAke = -0.72f;         // 開けきった ときの localPosition.z
     public Collider toKabe;              // 閉じて いる あいだ 通れなく する かべ
     public Vector3 soto;                 // 戸口の 外の 立ち位置（world）
-    public float sotoTodoku = 2.2f;      // ここから 中に 入れる
+    public float sotoTodoku = 1.9f;      // ここまで 近づいたら 戸が 開く
 
     [Header("外の 落としかた")]
     public float kurasa = -1.05f;        // 足す 露出（EV）
@@ -49,7 +51,6 @@ public class NiwaNayaNaka : MonoBehaviour {
 
     float t;                             // 0=外 1=中
     float aki;                           // 戸の 開きぐあい 0..1
-    bool jidou; float jidouT;            // 自動で 歩いて いる
     float toShimeZ;
     bool osaeta, keshita;
     Vignette vig; ColorAdjustments ca;
@@ -58,17 +59,6 @@ public class NiwaNayaNaka : MonoBehaviour {
 
     /// <summary>いま 中に いる か（道具を 取れるかの 判定に つかう）</summary>
     public bool Uchi { get { return target != null && naka.Contains(target.position); } }
-
-    /// <summary>外に いて 戸の 前に 立って いる か</summary>
-    public bool HairuDekiru {
-        get {
-            if (target == null || jidou || Uchi) return false;
-            return Vector3.Distance(target.position, soto) < sotoTodoku;
-        }
-    }
-
-    /// <summary>戸を 開けて 自動で 中へ</summary>
-    public void Hairu() { if (HairuDekiru) { jidou = true; jidouT = 0f; } }
 
     void Start() {
         camc = cam != null ? cam.GetComponent<Camera>() : null;
@@ -93,7 +83,6 @@ public class NiwaNayaNaka : MonoBehaviour {
     void Modosu() {
         if (fxAru) { vig.intensity.value = vig0; ca.postExposure.value = exp0; }
         if (osaeta) { MuraCamFixed.Suspended = false; osaeta = false; }
-        if (jidou && mv != null) { mv.Ugokasu(Vector3.zero); jidou = false; }
         Miseru(true);
         if (akari != null) akari.intensity = 0f;
     }
@@ -106,27 +95,17 @@ public class NiwaNayaNaka : MonoBehaviour {
 
     void Update() {
         if (target == null) return;
-        // ---- 戸：中に いる／入って いる さいちゅう／すぐ 前に 立って いる なら 開く
-        bool akeru = jidou || Uchi || Vector3.Distance(target.position, soto) < 1.2f;
+        // ---- 戸：中に いる か、戸口の 前に 来たら 開く。離れたら 閉まる
+        bool akeru = Uchi || Vector3.Distance(target.position, soto) < sotoTodoku;
         aki = Mathf.MoveTowards(aki, akeru ? 1f : 0f, Time.deltaTime / 0.32f);
         if (toB != null) {
             var lp = toB.localPosition;
             lp.z = Mathf.Lerp(toShimeZ, toAke, aki);
             toB.localPosition = lp;
         }
-        if (toKabe != null) toKabe.enabled = aki < 0.55f;
-
-        // ---- 自動で 中へ（戸が 開いてから 歩きだす）
-        if (!jidou) return;
-        jidouT += Time.deltaTime;
-        var yoko = new Vector3(naka.center.x - target.position.x, 0f, naka.center.z - target.position.z);
-        if (aki > 0.75f && mv != null)
-            mv.Ugokasu(yoko.sqrMagnitude < 0.09f ? Vector3.zero : yoko.normalized);
-        // 中の まん中まで 来たら 手を はなす。引っかかっても 4秒で あきらめる
-        if ((Uchi && yoko.magnitude < 0.55f) || jidouT > 4f) {
-            if (mv != null) mv.Ugokasu(Vector3.zero);
-            jidou = false;
-        }
+        // ★かべを 切るのは **開ききる 前**に する（歩きながら 近づくので、
+        //   開ききってから 切ると 一度 戸口に ぶつかって 足が 止まる）
+        if (toKabe != null) toKabe.enabled = aki < 0.35f;
     }
 
     void LateUpdate() {

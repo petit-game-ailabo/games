@@ -44,7 +44,10 @@ public static class NiwaNaya {
     const float MUNE = 3.20f;      // 棟
     const float YNOKI = 2.16f;     // 軒先（z=±(HZ+DE)）
     const float DE = 0.42f;        // 軒の 出（南北）
-    const float TO_H = 0.72f;      // 戸口の 半分（1.44m）
+    // ★戸口は **開いた ときに 0.86m** 通れる 広さ（2026-09-05）。0.72m だと 主人公の
+    //   当たり（半径0.26）が すりぬけるのに 気を つかい、戸口で つっかえた
+    const float TO_H = 0.86f;      // 戸口の 半分（1.72m）
+    const float TO_W = 0.88f;      // 引き戸 1枚の はば
     const float TO_Y = 1.98f;      // 戸の 高さ
     const float TAI = 0.50f;       // 中を 歩ける 帯の 半分（z 方向）
 
@@ -162,10 +165,12 @@ public static class NiwaNaya {
         //      難しいと思うから、ほぼ左右移動だけで、上下はほとんど動けないぐらいの当たり判定でいいや」）。
         //      道具 1つずつに 当たりを つけるのは 続かない ので、**通り道のほうを 決めて しまう**。
         //      帯は 戸口の まん中（z=CZ）を 通る ので、東から そのまま 入れる
+        //      ★帯は **戸口の 手前で 切る**。戸口いっぱいまで のばすと、入った とたん 横の かべに
+        //      あたって 足が 止まる。東の 0.7m は 戸口の 土間＝自由に 動ける
         foreach (float sz in new[] { -1f, 1f }) {
             var w = NiwaBuhin.Hako(t, "BLK_NayaOku",
-                new Vector3(0f, (DODAI + 1.7f) * 0.5f, sz * (TAI + 0.07f)),
-                new Vector3(HX * 2f, 1.7f, 0.14f), null, true);
+                new Vector3(-0.35f, (DODAI + 1.7f) * 0.5f, sz * (TAI + 0.07f)),
+                new Vector3(HX * 2f - 0.70f, 1.7f, 0.14f), null, true);
             w.GetComponent<Renderer>().enabled = false;
         }
 
@@ -221,7 +226,7 @@ public static class NiwaNaya {
         naka.camFov = 33f;
         // 戸：ToB が 南へ 0.72 引かれて 北がわが 開く。外の 立ち位置は 開く ほうの 正面
         naka.toB = toBT;
-        naka.toAke = 0.37f - 0.72f;
+        naka.toAke = -TO_W * 0.5f + 0.02f;      // 南の 1枚に ほぼ 重ねる＝北がわが 0.86m 開く
         naka.toKabe = toKabeC;
         naka.soto = new Vector3(CX + HX + 0.95f, gy + 0.10f, CZ + 0.22f);
 
@@ -270,13 +275,13 @@ public static class NiwaNaya {
         //   南の 1枚（ToA）は 動かず、北の 1枚（ToB）が 南へ 引かれて 北がわが 開く
         float y0 = DODAI + 0.06f, y1 = TO_Y - 0.07f;
         toAT = new GameObject("Naya_ToA").transform;
-        toAT.SetParent(t, false); toAT.localPosition = new Vector3(0f, 0f, -0.37f);
-        Ita1(toAT, "ToA", HX + 0.015f, 0f, 0.74f, y0, y1);
+        toAT.SetParent(t, false); toAT.localPosition = new Vector3(0f, 0f, -TO_W * 0.5f);
+        Ita1(toAT, "ToA", HX + 0.015f, 0f, TO_W, y0, y1);
         toBT = new GameObject("Naya_ToB").transform;
-        toBT.SetParent(t, false); toBT.localPosition = new Vector3(0f, 0f, 0.37f);
-        Ita1(toBT, "ToB", HX - 0.045f, 0f, 0.74f, y0, y1);
+        toBT.SetParent(t, false); toBT.localPosition = new Vector3(0f, 0f, TO_W * 0.5f);
+        Ita1(toBT, "ToB", HX - 0.045f, 0f, TO_W, y0, y1);
         // 引き手（黒い 小さな くぼみ）
-        NiwaBuhin.Hako(toBT, "Hikite", new Vector3(HX + 0.03f, 1.05f, -0.30f),
+        NiwaBuhin.Hako(toBT, "Hikite", new Vector3(HX + 0.03f, 1.05f, -0.34f),
                        new Vector3(0.02f, 0.13f, 0.05f), mTetsu);
         // 閉じて いる あいだ 通れなく する かべ（開いたら `NiwaNayaNaka` が 切る）
         var kb = NiwaBuhin.Hako(t, "BLK_NayaTo",

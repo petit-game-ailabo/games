@@ -595,7 +595,6 @@ public static class BuildNiwa {
                 naka.target = player.transform;
                 naka.cam = camGO.transform;
                 naka.fix = fix;
-                naka.mv = mv;               // 戸を 開けて 自動で 中へ 歩かせる
                 naka.vol = vol;
             } else Debug.LogError("[BuildNiwa] NiwaNayaNaka が 納屋に ついて いない");
         }
