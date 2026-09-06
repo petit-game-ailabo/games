@@ -15,6 +15,15 @@ using UnityEngine;
 ///   遷移は 作らず、3つの 状態を 並べて `CrossFade` で 切りかえる（`NiwaVroid`）。
 /// </summary>
 public static class NiwaVroidSetup {
+    /// <summary>★**公開する ビルドには 入れない**（2026-09-07・D-254）。
+    /// VRoid の 見くらべ用モデルは **開発の 道具**で、出すもの では ない。
+    /// ・`NiwaVroid` は **既定で 見える**（D-229）。WebGL には 引数が 無い ので
+    ///   `-novroid` が 効かず、**公開ページに VRoid が 並んで 立つ**。
+    /// ・`.vrm` の meta は `avatarPermission: onlyAuthor`。**公開に のせるのは 権利の 話**（VROID.md）。
+    /// ・入れると .data が **53MB → 92MB**（+38MB）に なる。
+    /// `BuildNiwaPlayer.WebPublish` が これを 立てて 場面を 作りなおす。</summary>
+    public static bool Nuku;
+
     const string VRM = "Assets/Art/Models/vroid/AvatarSample_A.vrm";
     const string FBX = "Assets/Art/Models/anim/AnimationLibrary_Unity_Standard.fbx";
     const string CTRL = "Assets/Art/Materials/Niwa/NiwaVroid.controller";
@@ -23,6 +32,10 @@ public static class NiwaVroidSetup {
     const float MITAKE = 1.40f * 312f / 336f;
 
     public static GameObject Tateru(Transform oya, Transform player) {
+        if (Nuku) {
+            Debug.Log("[Probe] NiwaVroid: 公開ビルドなので 置かない");
+            return null;
+        }
         var pf = AssetDatabase.LoadAssetAtPath<GameObject>(VRM);
         if (pf == null) {
             Debug.Log("[Probe] NiwaVroid: モデルが 無い ので 置かない (" + VRM + ")");
