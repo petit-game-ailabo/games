@@ -16,6 +16,19 @@ public static class BuildNiwaPlayer {
         if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
     }
 
+    /// <summary>★公開用の Web ビルド（2026-09-07・D-254）。
+    /// **VRoid の 見くらべモデルを 抜いた 場面**を 作って から 焼き、
+    /// そのあと **もとの 場面に 戻す**（手もとの exe は 見くらべを つかう）。
+    /// `Web()` を そのまま 回すと **公開ページに VRoid が 立つ**ので、公開は こちらを つかう。</summary>
+    public static void WebPublish() {
+        NiwaVroidSetup.Nuku = true;
+        BuildNiwa.Build();
+        NiwaVroidSetup.Nuku = false;
+        Web();
+        BuildNiwa.Build();          // 手もと用に もどす
+        Debug.Log("[Probe] WebPublish: 場面を もとに もどした");
+    }
+
     public static void Web() {
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
         PlayerSettings.WebGL.decompressionFallback = false;
