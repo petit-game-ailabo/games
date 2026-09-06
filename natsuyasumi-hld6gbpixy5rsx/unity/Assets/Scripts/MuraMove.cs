@@ -21,9 +21,11 @@ public class MuraMove : MonoBehaviour {
 
     Vector3 simDir;                      // 再現あるき（-repro）が 入力の かわりに 入れる
     bool simHashiru;                     // -aruku を 走りの 速さで
+    Vector3 maeIchi;                     // 1つ前の 場所（実際に 進んだ 量を 出す）
 
     void Start() {
         cc = GetComponent<CharacterController>();
+        maeIchi = transform.position;
         foreach (var a in System.Environment.GetCommandLineArgs()) {
             if (a == "-tour") { StartCoroutine(Tour()); break; }
             if (a == "-noboru") { StartCoroutine(Noboru()); break; }
@@ -182,7 +184,22 @@ public class MuraMove : MonoBehaviour {
         if (simDir != Vector3.zero) spd = simHashiru ? run : walk;   // -hashiru なら 走り
         vy = cc.isGrounded ? -0.5f : vy - 9.8f * Time.deltaTime;
         cc.Move((dir * spd + Vector3.up * vy) * Time.deltaTime);
-        if (sprite != null) sprite.Drive(dir, dir.magnitude * spd, false);
+
+        // ★絵は **入力では なく 実際に 進んだ 量**で 決める（2026-09-06・D-238）。
+        //   本人「後ろ向きで走ってるとき、壁にあたったら立ち止まってほしい。
+        //   あと、キーを離したときも立ち止まってほしい」。
+        //   入力で 決めると、壁を 押した まま **その場で 走りつづける**。
+        //   壁ぞい すべりの ときも、絵の 向きが **すべって いる 向き**に そろう。
+        var susunda = transform.position - maeIchi;
+        maeIchi = transform.position;
+        susunda.y = 0f;                                  // 落ちる ぶんは 数えない
+        float nagasa = susunda.magnitude;
+        float jissai = nagasa / Mathf.Max(Time.deltaTime, 1e-4f);
+        // ★しきい値。**壁に あたると ここを 下まわる。**
+        //   小さすぎると 段差の ゆれで 絵が ちらつき、大きすぎると 歩きが 止まる
+        const float TOMARU = 0.25f;                      // m/秒（歩き 2.6 の 1割）
+        Vector3 mieru = jissai > TOMARU ? susunda / nagasa : Vector3.zero;
+        if (sprite != null) sprite.Drive(mieru, jissai, false);
     }
 
     System.Collections.IEnumerator Noboru() {
