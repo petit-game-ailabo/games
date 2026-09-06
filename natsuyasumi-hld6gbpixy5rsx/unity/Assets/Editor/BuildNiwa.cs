@@ -470,6 +470,7 @@ public static class BuildNiwa {
         // ★fps では なく **1歩の 秒**で 持つ。コマ数が 向きで ちがっても 足どりが 変わらない
         cs.runStrideSec = 0.286f;    // 4.4m/秒 で 歩はば 1.26m
         cs.walkStrideSec = 0.40f;    // 2.6m/秒 で 歩はば 1.04m
+        kae.chars = cs;              // N キーの 切りかえで コマ数も 変える（D-245）
         // ---- 足もとの 影（絵の 板は 影を 落とせない ので 別に 敷く）
         var kageGO = new GameObject("KageAshi");
         kageGO.transform.SetParent(root, false);

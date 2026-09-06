@@ -18,6 +18,13 @@ using UnityEngine;
 /// <see cref="CharSprite"/> の 計算は さわらなくて よい。
 /// </summary>
 public class NiwaKae : MonoBehaviour {
+    /// <summary>★N キーで **その場で 見くらべ**（2026-09-06・D-245）。
+    /// 数えたら **古い 正面（8枚・14fps・1コマの 変化 1775）は、本人が いいと 言った
+    /// 奥むき（3024）より さらに 落ちついて いる**。
+    /// 64枚 たのむ まえに、**もう 手もとに ある 絵**を 見て もらう。
+    /// ★コマ数も いっしょに 変える。古い 絵は 8コマ・新しい 絵は 6コマ。
+    ///   絵だけ 変えると **使って いない 行を 出して しまう**</summary>
+    public CharSprite chars;
     public Renderer target;
     public Texture2D futsu;             // 手描き 2D（marisa_walk）＝既定
     public Texture2D meshy;             // 3Dの 体＋2Dの 頭（marisa_hybrid）＝見くらべ用
@@ -31,7 +38,24 @@ public class NiwaKae : MonoBehaviour {
         }
         if (t == null) t = futsu;
         if (t == null || target == null || target.sharedMaterial == null) return;
+        Kiru(t);
+    }
+
+    void Kiru(Texture2D t) {
+        if (t == null || target == null || target.sharedMaterial == null) return;
+        ima = t;
         target.sharedMaterial.mainTexture = t;
-        Debug.Log("[NiwaKae] キャラ絵 = " + t.name + " (" + t.width + "x" + t.height + ")");
+        if (chars != null && chars.cycleFramesCol != null && chars.cycleFramesCol.Length > 0)
+            chars.cycleFramesCol[0] = (shin != null && t == shin) ? 6 : 8;
+        Debug.Log("[NiwaKae] キャラ絵 = " + t.name + " (" + t.width + "x" + t.height
+                  + ") 正面の コマ数 " + (chars != null && chars.cycleFramesCol != null
+                     && chars.cycleFramesCol.Length > 0 ? chars.cycleFramesCol[0] : -1));
+    }
+
+    Texture2D ima;
+
+    void Update() {
+        if (!Input.GetKeyDown(KeyCode.N)) return;
+        Kiru(ima == shin && futsu != null ? futsu : (shin != null ? shin : futsu));
     }
 }
