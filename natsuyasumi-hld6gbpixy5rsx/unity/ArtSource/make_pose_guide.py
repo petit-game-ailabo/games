@@ -1,134 +1,157 @@
-# 走りの コマの「下敷き」を 作る（2026-09-06）。
+# 走りの コマの「下敷き」を 作る（2026-09-06 二版）。
 #
-# WHY: いまの 正面の 走り 8コマは **上半身が ぜんぶ 同じで 脚だけ ちがう**。
-#      高さも 全コマ y22..332 で 固定＝**上下の はずみが ゼロ**。
-#      腕も 髪も 動いて いない。つまり「走って いる 絵が 8枚」では なく
-#      「立ち絵の 脚だけ 差しかえた ものが 8枚」だった。
+# ★一版（沈み ありの 8コマ）は **やめた。**
+#   本人「沈みはいらない、そんな走り方してる人間はいないよ。人の走り方はそんなに
+#   上がったり下がったりしない」。そのとおり で、走りの 重心の 上下は 身長の 3%ほど。
+#   しかも **正面からは ほとんど 見えない**。一版に 書いた 98/96/101/104 は
+#   **横から見た 走りの 教科書図**で、正面には 効かない うえに 漫画的に なる。
 #
-#      絵を たのむ ときに「走って いる 感じで」と 言うと また 同じ ものが 来る。
-#      走りの コマは **決まった 構造**が ある ので、それを 絵にして 渡す。
+# 二版の 考えかた：**上下は ほぼ 動かさない。動きは 脚・腕・ひねりで 出す。**
+#   正面の 走りで 実際に 目に 見える のは この 4つ：
+#     ① どちらの ひざが 上がって いるか と その 高さ
+#     ② どちらの 腕が 前か（脚と 逆）・肘は 直角ちかく
+#     ③ 肩の線と 腰の線の ひねり（逆向き）
+#     ④ 髪と スカートの 遅れ
+#   ★奥ゆき：前に 出た 脚は **手前＝大きく 低く**、後ろの 脚は **奥＝小さく 高く**。
+#     正面の 走りは これが 主役。左右の 開きでは ない。
 #
-# 走り 1歩＝4コマ。2歩で 8コマ（左右で 役目が 入れかわる だけ・鏡では ない）
-#   1 コンタクト … 足が 地に つく。体は 中くらいの 高さ
-#   2 ダウン     … 体が **いちばん 低い**。ささえる ひざが 深く 曲がる
-#   3 パッシング … 体が 上がる とちゅう。うしろの 脚が よこを 通る
-#   4 アップ     … 体が **いちばん 高い**。**両足とも 地から はなれる**
+# 1歩＝6コマ。2歩で 12コマ（左右で 役目が 入れかわる だけ・鏡では ない）
+#   1 接地   … 足の 裏が 地に つく
+#   2 支持   … 体重が その 足の 真上に 乗る
+#   3 通過   … ふり脚の ひざが ささえ脚の 横を 通る（左右の 差が いちばん 小さい）
+#   4 蹴り   … かかとが 浮き、ささえ脚が 後ろへ 伸びきる。ふり脚の ひざが 前で 高い
+#   5 浮き   … **両足とも 地から はなれる。頭が いちばん 高い（といっても 6px）**
+#   6 降り   … ふり足が 前で 下へ おりて くる。次の 接地の 直前
 #
-# 正面の 走りは 横と ちがう：
-#   ・脚の 前後は **奥ゆき**に なる → 前の 足は **大きく 低く**、うしろの 足は **小さく 高く**
-#   ・腕は 体の 前を よこぎる。前に 出た 腕は **大きく** 見える
-#   ・肩の 線と 腰の 線は **逆に かたむく**
+# ★8コマ(1歩4コマ)から 12コマ(1歩6コマ)へ 増やす 理由：
+#   沈みを 無くすと **上下動が 動きを 運ばなく なる**。脚と 腕だけで つなぐ には
+#   1歩4コマでは 足りない（実測：となりの コマとの 差が 最大÷最小 2.66倍＝D-235）。
 #
 # run: python unity/ArtSource/make_pose_guide.py
 import os
-import math
 from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CW, CH = 224, 336
-COLS, ROWS = 4, 2
+COLS, ROWS = 4, 3
 JIMEN = 332                    # 地めんの 線
+ATAMA = 22                     # 立ち絵の 頭の てっぺん。**ここより 下がらない**
+KOSHI = 200                    # 腰の 線（そろえる ための ものさし）
 SEN = (40, 40, 48)
 USUI = (150, 160, 175)
-AKA = (200, 60, 60)
-AO = (60, 110, 200)
+AKA = (200, 60, 60)            # 右脚
+AO = (60, 110, 200)            # 腕
 
-# コマごと：(名まえ, 頭の てっぺんの y, 手前の脚, おくの脚, 手前の腕, おくの腕)
-#   脚・腕の 値は -1..+1（+1＝いちばん 手前／前）
+# (名まえ, 頭の y, 右脚, 左脚, 左腕, 右腕)
+#   脚 = (ひざの 高さ h, 地に ついて いるか)
+#     h=+1.0 … ひざが 胸の 高さまで 上がる（正面からは **手前に 出て 大きく 見える**）
+#     h= 0.0 … まっすぐ 立った 状態
+#     h=-0.4 … うしろへ 伸びきる（正面からは **奥＝小さく 見える**）
+#   腕 = -1..+1（+1＝前へ ふり出す）。**脚と 逆。**肘は つねに 直角ちかく
+#
+# ★正面の 走りで いちばん 目に つくのは **ひざの 高さの 差**。
+#   左右に 開くのでは なく、**片方の ひざが 上がって 手前に 出る**。
 KOMA = [
-    ("1 contact R", 22, +0.9, -0.9, -0.8, +0.8),
-    ("2 down R",    27, +0.4, -0.7, -0.4, +0.4),
-    ("3 passing R", 18, -0.1, +0.1, +0.0, +0.0),
-    ("4 up R",      13, -0.8, +0.9, +0.7, -0.7),
-    ("5 contact L", 22, -0.9, +0.9, +0.8, -0.8),
-    ("6 down L",    27, -0.7, +0.4, +0.4, -0.4),
-    ("7 passing L", 18, +0.1, -0.1, +0.0, +0.0),
-    ("8 up L",      13, +0.9, -0.8, -0.7, +0.7),
+    #  名まえ        頭   右脚(h, oku, 接地)      左脚(h, oku, 接地)      左腕   右腕
+    ("1 setchi R",   22, (+0.10, +0.55, True),  (+0.15, -0.85, False), +0.85, -0.85),
+    ("2 shiji R",    21, ( 0.00, +0.10, True),  (+0.35, -0.45, False), +0.55, -0.55),
+    ("3 tsuuka R",   20, (-0.10, -0.15, True),  (+0.60, +0.05, False), +0.15, -0.15),
+    ("4 keri R",     19, (-0.35, -0.60, True),  (+0.85, +0.55, False), -0.35, +0.35),
+    ("5 uki R",      16, (-0.20, -0.85, False), (+0.65, +0.85, False), -0.75, +0.75),
+    ("6 ori R",      18, (+0.30, -0.55, False), (+0.20, +0.90, False), -0.55, +0.55),
+    ("7 setchi L",   22, (+0.15, -0.85, False), (+0.10, +0.55, True),  -0.85, +0.85),
+    ("8 shiji L",    21, (+0.35, -0.45, False), ( 0.00, +0.10, True),  -0.55, +0.55),
+    ("9 tsuuka L",   20, (+0.60, +0.05, False), (-0.10, -0.15, True),  -0.15, +0.15),
+    ("10 keri L",    19, (+0.85, +0.55, False), (-0.35, -0.60, True),  +0.35, -0.35),
+    ("11 uki L",     16, (+0.65, +0.85, False), (-0.20, -0.85, False), +0.75, -0.75),
+    ("12 ori L",     18, (+0.20, +0.90, False), (+0.30, -0.55, False), +0.55, -0.55),
 ]
 
 
-def hito(d, cx, atama_y, ashiA, ashiB, udeA, udeB, uku):
-    """棒人間 1体。ashi/ude は -1..+1（+1＝手前へ 出て いる）"""
-    # ★実寸に 合わせる。立ち絵は 頭 y22..足 y332＝たけ 310px。
-    #   ここを 合わせないと 「下敷き」に ならない（2026-09-06）
+def hito(d, cx, atama_y, ashiR, ashiL, udeL, udeR, uku):
     atama_r = 27
     kubi = atama_y + atama_r * 2 + 2
     kata = kubi + 12
-    koshi = atama_y + 178
-    hiza_len, sune_len = 66, 66
+    koshi = atama_y + (KOSHI - ATAMA)
+    momo, sune = 66, 66
 
-    # 肩と 腰は **逆に かたむく**
-    katak = (udeA - udeB) * 5.0
-    koshik = (ashiA - ashiB) * -5.0
+    katak = (udeL - udeR) * -5.0
+    koshik = (ashiR[1] - ashiL[1]) * -5.0
 
-    # 頭・胴
     d.ellipse([cx - atama_r, atama_y, cx + atama_r, atama_y + atama_r * 2], outline=SEN, width=4)
     d.line([(cx, kubi), (cx, koshi)], fill=SEN, width=6)
     d.line([(cx - 30, kata - katak), (cx + 30, kata + katak)], fill=SEN, width=5)
     d.line([(cx - 22, koshi - koshik), (cx + 22, koshi + koshik)], fill=SEN, width=5)
 
-    def ashi(t, iro, futo):
-        """t=+1 手前(大きく 低く) / t=-1 おく(小さく 高く)"""
-        sg = 1.0 if iro is AKA else -1.0
-        hx = cx + sg * 16
+    def ashi(a, iro, sg, futo):
+        h, oku, setti = a
+        hx = cx + sg * 18
         hy = koshi + koshik * sg
-        # 手前ほど 大きく 見える＝長く 描く
-        bai = 1.0 + 0.22 * t
-        # ひざの 位置：前に 出す ほど 手前(下)へ
-        kx = hx + sg * 6 + t * 10
-        ky = hy + hiza_len * bai * (1.0 - 0.18 * abs(t))
-        fx = kx + t * 16
-        fy = ky + sune_len * bai
-        fy = min(fy, JIMEN - uku)
-        d.line([(hx, hy), (kx, ky)], fill=iro, width=int(futo * bai))
-        d.line([(kx, ky), (fx, fy)], fill=iro, width=int(futo * bai))
-        d.ellipse([fx - 11 * bai, fy - 6, fx + 11 * bai, fy + 6], fill=iro)
-        return fy
+        # ★2つを 分けて 持つ：**h＝ひざの 高さ**、**oku＝手前か 奥か**。
+        #   分けないと「ひざは 上がって いるが 体の うしろ」（＝降りの コマの 後ろ脚）が 描けず、
+        #   接地・支持・降り が 同じ 絵に なる（一版は 実際 そう なった）
+        bai = 1.0 + 0.45 * oku
+        kx = hx - sg * 12 * max(h, 0.0) + oku * 6
+        ky = hy + momo * bai * (1.0 - 0.80 * max(h, 0.0)) + 10 * max(-h, 0.0)
+        fx = kx + sg * 2 + 16 * max(h, 0.0) + oku * 6
+        fy = ky + sune * bai * (1.0 - 0.35 * max(h, 0.0)) + 8 * max(-h, 0.0)
+        if setti:
+            fy = JIMEN
+            fx = kx + sg * 2
+        else:
+            fy = min(fy, JIMEN - max(uku, 6))
+        w = max(4, int(futo * bai))
+        d.line([(hx, hy), (kx, ky)], fill=iro, width=w)
+        d.line([(kx, ky), (fx, fy)], fill=iro, width=max(3, w - 2))
+        kr = 5 + 10 * max(h, 0.0) * bai
+        d.ellipse([kx - kr, ky - kr, kx + kr, ky + kr], fill=iro)
+        r = 10 * bai
+        d.ellipse([fx - r, fy - 6 * bai, fx + r, fy + 6 * bai], fill=iro)
+        if setti:
+            d.line([(fx - 20, JIMEN + 4), (fx + 20, JIMEN + 4)], fill=iro, width=4)
 
-    def ude(t, iro, sg):
+    def ude(t, sg):
         sx = cx + sg * 30
         sy = kata + katak * sg
         bai = 1.0 + 0.22 * t
-        ex = sx + sg * 4 + t * 14
-        ey = sy + 52 * bai
-        wx = ex - sg * 10 + t * 12
-        wy = ey + 46 * bai * (1.0 - 0.25 * abs(t))
-        d.line([(sx, sy), (ex, ey)], fill=iro, width=int(7 * bai))
-        d.line([(ex, ey), (wx, wy)], fill=iro, width=int(7 * bai))
-        d.ellipse([wx - 7, wy - 7, wx + 7, wy + 7], fill=iro)
+        ex = sx + sg * 3
+        ey = sy + 52
+        wx = ex - sg * 16 + t * 20
+        wy = ey - 8 - t * 22
+        d.line([(sx, sy), (ex, ey)], fill=AO, width=int(7 * bai))
+        d.line([(ex, ey), (wx, wy)], fill=AO, width=int(7 * bai))
+        d.ellipse([wx - 7, wy - 7, wx + 7, wy + 7], fill=AO)
 
-    ude(udeA, AO, -1)
-    ude(udeB, AO, +1)
-    ashi(ashiA, AKA, 11)
-    ashi(ashiB, USUI, 10)
+    ude(udeL, -1)
+    ude(udeR, +1)
+    # ★奥の 脚から 先に 描く。手前の 脚が 上に 重なる
+    if ashiR[1] < ashiL[1]:
+        ashi(ashiR, USUI, +1, 11); ashi(ashiL, AKA, -1, 11)
+    else:
+        ashi(ashiL, USUI, -1, 11); ashi(ashiR, AKA, +1, 11)
 
 
 def main():
-    W, H = CW * COLS, CH * ROWS
-    im = Image.new("RGB", (W, H), (252, 252, 250))
-    d = ImageDraw.Draw(im)
-    for i, (nm, ay, aA, aB, uA, uB) in enumerate(KOMA):
-        ox = (i % COLS) * CW
-        oy = (i // COLS) * CH
-        c = ImageDraw.Draw(im)
-        # わく
-        c.rectangle([ox, oy, ox + CW - 1, oy + CH - 1], outline=(210, 212, 216))
-        # 地めん
-        c.line([(ox, oy + JIMEN), (ox + CW, oy + JIMEN)], fill=(190, 190, 195), width=2)
-        # 立ち の 高さ（くらべる ため）
-        c.line([(ox, oy + 22), (ox + CW, oy + 22)], fill=(225, 228, 232), width=1)
-        uku = (22 - ay) if ay < 22 else 0          # アップの コマは 足が 浮く
+    im = Image.new("RGB", (CW * COLS, CH * ROWS), (252, 252, 250))
+    for i, (nm, ay, aR, aL, uL, uR) in enumerate(KOMA):
+        uku = ATAMA - ay if ay < ATAMA else 0     # 頭が 上がった ぶん 足も 浮く
         sub = Image.new("RGB", (CW, CH), (252, 252, 250))
         sd = ImageDraw.Draw(sub)
-        sd.line([(0, JIMEN), (CW, JIMEN)], fill=(120, 170, 120), width=2)
-        sd.line([(0, 22), (CW, 22)], fill=(228, 230, 234), width=1)
-        hito(sd, CW // 2, ay, aA, aB, uA, uB, uku)
+        # ★ものさしの 線。**12コマ ぜんぶ この 線に 合わせる**
+        sd.line([(0, JIMEN), (CW, JIMEN)], fill=(90, 150, 90), width=3)     # 地めん
+        sd.line([(0, ATAMA), (CW, ATAMA)], fill=(200, 80, 80), width=2)     # 頭（これより 下がらない）
+        sd.line([(0, KOSHI), (CW, KOSHI)], fill=(210, 190, 120), width=2)   # 腰
+        hito(sd, CW // 2, ay, aR, aL, uL, uR, uku)
         sd.text((6, CH - 26), nm, fill=(30, 30, 30))
-        sd.text((6, CH - 14), "atama y=%d / jimen y=332 / uki=%dpx" % (ay, uku), fill=(120, 120, 128))
-        im.paste(sub, (ox, oy))
+        setti = ("R" if aR[2] else "") + ("L" if aL[2] else "")
+        sd.text((6, CH - 14), "hiza R%+.2f L%+.2f / oku R%+.2f L%+.2f / jimen=%s"
+                % (aR[0], aL[0], aR[1], aL[1], setti if setti else "nashi"),
+                fill=(120, 120, 128))
+        sd.rectangle([0, 0, CW - 1, CH - 1], outline=(205, 208, 212))
+        im.paste(sub, ((i % COLS) * CW, (i // COLS) * CH))
     p = os.path.join(HERE, "hashiri_guide.png")
     im.save(p)
-    print("かいた:", p, im.size)
+    print("かいた:", p, im.size, "（1歩6コマ x 2歩＝12コマ）")
 
 
 if __name__ == "__main__":
