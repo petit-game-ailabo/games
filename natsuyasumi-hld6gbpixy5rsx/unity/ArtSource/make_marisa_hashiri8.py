@@ -87,7 +87,14 @@ def main():
         nw = max(1, int(round((d['r'] - d['l'] + 1) * b)))
         nh = max(1, int(round((d['b'] - d['t'] + 1) * b)))
         piece = piece.resize((nw, nh), Image.LANCZOS)
-        oy = int(round(TSUBA_Y - (d['ty'] - d['t']) * b))   # ★帽子の つばで そろえる
+        # ★地に ついて いる コマは **足を きっちり 地めんに 置く**。
+        #   帽子で そろえた ままだと 数px 沈んだり 浮いたり する（実測 330〜337。
+        #   337 は コマの たけ 336 を こえて **足が 1px 切れる**）。
+        #   浮きの コマだけ 帽子で そろえる＝浮きが そのまま 残る
+        if tsuku[i]:
+            oy = JIMEN - nh
+        else:
+            oy = int(round(TSUBA_Y - (d['ty'] - d['t']) * b))
         # ★横は **帽子の つばの まん中**で そろえる。体ぜんぶの まん中だと
         #   足を 前に 出した コマで 体が 横に ずれる
         ox = int(round(CW * 0.5 - (d['cx'] - d['l']) * b))
