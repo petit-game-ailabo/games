@@ -464,9 +464,9 @@ public static class BuildNiwa {
         cs.idleRow = 8; cs.blinkRow = 9;
         cs.walkCycleFps = 9f; cs.runCycleFps = 14f;
         // ★向きごとの コマ数（2026-09-06・D-241）。**描きなおせた 向きから 増える。**
-        //   正面は 12コマの うち **ひざを 上げない 6コマ**だけ つかう（D-242〜D-244）。
+        //   正面は 12コマの うち 四版の 8コマ（D-248）。ほかの 7方向は まだ 古い 絵。
         //   ほかの 7方向は まだ 古い 8コマ
-        cs.cycleFramesCol = new[] { 6, 8, 8, 8, 8, 8, 8, 8 };
+        cs.cycleFramesCol = new[] { 8, 8, 8, 8, 8, 8, 8, 8 };
         // ★fps では なく **1歩の 秒**で 持つ。コマ数が 向きで ちがっても 足どりが 変わらない
         cs.runStrideSec = 0.286f;    // 4.4m/秒 で 歩はば 1.26m
         cs.walkStrideSec = 0.40f;    // 2.6m/秒 で 歩はば 1.04m

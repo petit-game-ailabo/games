@@ -46,7 +46,7 @@ public class NiwaKae : MonoBehaviour {
         ima = t;
         target.sharedMaterial.mainTexture = t;
         if (chars != null && chars.cycleFramesCol != null && chars.cycleFramesCol.Length > 0)
-            chars.cycleFramesCol[0] = (shin != null && t == shin) ? 6 : 8;
+            chars.cycleFramesCol[0] = 8;   // 四版は 古い 絵と 同じ 8コマ（D-248）
         Debug.Log("[NiwaKae] キャラ絵 = " + t.name + " (" + t.width + "x" + t.height
                   + ") 正面の コマ数 " + (chars != null && chars.cycleFramesCol != null
                      && chars.cycleFramesCol.Length > 0 ? chars.cycleFramesCol[0] : -1));
