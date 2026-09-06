@@ -20,6 +20,7 @@ public class MuraMove : MonoBehaviour {
     float baseYaw; float prevH, prevV;
 
     Vector3 simDir;                      // 再現あるき（-repro）が 入力の かわりに 入れる
+    bool simHashiru;                     // -aruku を 走りの 速さで
 
     void Start() {
         cc = GetComponent<CharacterController>();
@@ -34,6 +35,23 @@ public class MuraMove : MonoBehaviour {
         var av = System.Environment.GetCommandLineArgs();
         for (int i = 0; i + 1 < av.Length; i++)
             if (av[i] == "-at") { StartCoroutine(Tobu(av[i + 1])); break; }
+        // ★-aruku "x,z" で **自動で 進ませた まま 撮る**（2026-09-06・D-235）。
+        //   AutoShot の -walk / -run は **PlayerMove しか 見て いない**。庭の 足は
+        //   MuraMove なので だまって 空ぶりし、`PlayerMove が 見つからない` と
+        //   出るだけ だった＝**走りの アニメを 一度も 実機で 撮れて いなかった**。
+        //   （立ったまま の 絵を 見て「走りを 撮った」と 思って いた）
+        //   -hashiru を つけると 走りの 速さ（CharSprite の runSpeed 3.4 を 超える）
+        for (int i = 0; i < av.Length; i++) {
+            if (av[i] == "-hashiru") simHashiru = true;
+            if (av[i] == "-aruku" && i + 1 < av.Length) {
+                var q = av[i + 1].Split(',');
+                if (q.Length >= 2) {
+                    simDir = new Vector3(float.Parse(q[0]), 0f, float.Parse(q[1]));
+                    if (simDir.sqrMagnitude > 0f) simDir.Normalize();
+                }
+            }
+        }
+        Debug.Log("[AutoShot] MuraMove -aruku " + simDir + " hashiru=" + simHashiru);
         // ★-fukan [size] で 俯瞰図を 開いた まま 撮る（2026-09-05）。
         //   追従カメラは いつも 南から 北を 向く ので、**家の 裏は どうやっても 撮れない**。
         //   囲い（生垣・石垣）や 物の 置き場所の 確かめは 俯瞰で やる
@@ -161,7 +179,7 @@ public class MuraMove : MonoBehaviour {
         if (simDir != Vector3.zero) dir = simDir;   // 再現あるきは 世界の 向きで まっすぐ
         if (dir.sqrMagnitude > 1f) dir.Normalize();
         float spd = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ? walk : run;
-        if (simDir != Vector3.zero) spd = walk;      // 自動で 歩く ときは 走らない
+        if (simDir != Vector3.zero) spd = simHashiru ? run : walk;   // -hashiru なら 走り
         vy = cc.isGrounded ? -0.5f : vy - 9.8f * Time.deltaTime;
         cc.Move((dir * spd + Vector3.up * vy) * Time.deltaTime);
         if (sprite != null) sprite.Drive(dir, dir.magnitude * spd, false);

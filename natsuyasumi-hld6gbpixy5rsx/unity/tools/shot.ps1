@@ -24,7 +24,8 @@ param(
   [switch]$run, [switch]$walkhold, [string]$walksec = '2.0',
   [string]$OutDir = '', [string]$day = '', [string]$scene = 'niwa',
   [string]$fukan = '', [switch]$motsu, [switch]$furu, [switch]$mushi, [switch]$menu,
-  [switch]$sanD, [switch]$kyu, [switch]$novroid, [switch]$vrun, [switch]$vwalk
+  [switch]$sanD, [switch]$kyu, [switch]$novroid, [switch]$vrun, [switch]$vwalk,
+  [string]$aruku = '', [switch]$hashiru
 )
 $ErrorActionPreference = 'Stop'
 
@@ -89,6 +90,10 @@ if ($novroid) { $a += @('-novroid') }
 if ($vrun) { $a += @('-vrun') }
 # -vwalk : force the VRoid model to always play the walk clip
 if ($vwalk) { $a += @('-vwalk') }
+# -aruku "x,z" : drive the garden player (MuraMove) so the walk/run cells actually play.
+# AutoShot's -walk only knows PlayerMove, which the garden does not use.
+if ($aruku -ne '') { $a += @('-aruku', $aruku) }
+if ($hashiru)      { $a += @('-hashiru') }
 # When -clock is used we must NOT pass -tod: a later -tod pins the discrete preset again.
 if ($clock -ne '') { $a += @('-clock', $clock) } else { $a += @('-tod', $tod) }
 if ($play  -ne '') { $a += @('-play', $play, '-playwait', $playwait) }

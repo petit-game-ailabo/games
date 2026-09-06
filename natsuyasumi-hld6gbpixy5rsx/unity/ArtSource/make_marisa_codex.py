@@ -78,8 +78,31 @@ def main():
     for i, w in enumerate(waku):
         print("コマ%d" % (i + 1), w, "たけ", (w[3] - w[1] + 1) if w else "-")
 
-    # ★倍率は 8コマ 共通。たけの 中央値を 312 に する
-    takasa = [w[3] - w[1] + 1 for w in waku if w]
+    # ★**行ごとの 大きさの ずれを 取る**（2026-09-06・D-235）
+    #   もらった 絵は **下の 行(2歩め)が 3.5%ほど 大きく 描かれて いた**。
+    #   8コマ 共通の 倍率だけ だと それが そのまま 残り、
+    #   **1歩おきに 背が 6px 伸び縮みして「ガタガタ」に 見える**（実測）。
+    #   ★大きさの ものさしは **帽子の つばから 足もとまで**。
+    #     bbox の たけは 浮きの コマで 変わる ので つかえない。
+    #     つば＝上から 35% の 中で いちばん 横に 広い 行（頭の てっぺんは リボンで ぶれる）
+    def joutai(w):
+        x0, y0, x1, y1 = w
+        sub = fg[y0:y1 + 1, x0:x1 + 1]
+        ue = sub[:max(1, int((y1 - y0 + 1) * 0.35)), :]
+        tsuba = y0 + int(np.argmax(ue.sum(1)))
+        return y1 - tsuba
+
+    hosei = []
+    for ri in range(len(rows)):
+        js = [joutai(w) for w in waku[ri * 4:(ri + 1) * 4] if w]
+        hosei.append(float(np.mean(js)))
+        print("行%d つばから足もと 平均 %.1f" % (ri + 1, hosei[-1]))
+    moto0 = hosei[0]
+    hosei = [moto0 / h for h in hosei]
+    print("行ごとの 直し 倍率", ["%.4f" % h for h in hosei])
+
+    # ★倍率は 直したあとの たけの 中央値を 312 に する
+    takasa = [(w[3] - w[1] + 1) * hosei[i // 4] for i, w in enumerate(waku) if w]
     bai = TAKE / float(np.median(takasa))
     print("倍率 %.4f（たけの 中央値 %.0f → %.0f）" % (bai, np.median(takasa), TAKE))
 
@@ -96,12 +119,13 @@ def main():
             if w is None:
                 continue
             x0, y0, x1, y1 = w
+            b = bai * hosei[ri]          # ★その 行の 直しを かける
             piece = src.crop((x0, y0, x1 + 1, y1 + 1))
-            nw = max(1, int(round((x1 - x0 + 1) * bai)))
-            nh = max(1, int(round((y1 - y0 + 1) * bai)))
+            nw = max(1, int(round((x1 - x0 + 1) * b)))
+            nh = max(1, int(round((y1 - y0 + 1) * b)))
             piece = piece.resize((nw, nh), Image.LANCZOS)
             # 縦：地めんからの ずれを そのまま 持ちこむ＝**はずみが 残る**
-            sita = JIMEN - int(round((jimen - y1) * bai))
+            sita = JIMEN - int(round((jimen - y1) * b))
             ox = int(round(CW * 0.5 - nw * 0.5))
             oy = sita - nh
             out.alpha_composite(piece, (i * CW + ox, oy))
