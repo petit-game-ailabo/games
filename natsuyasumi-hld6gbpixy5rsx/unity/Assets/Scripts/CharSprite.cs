@@ -31,6 +31,14 @@ public class CharSprite : MonoBehaviour {
     public float runCycleFps = 14f;
     [Tooltip("うごきの コマ数（行0から この 数だけ つかう）")]
     public int cycleFrames = 8;
+    /// <summary>★**向きごとに コマ数を 変えられる**（2026-09-06・D-241）。
+    /// 8方向を 一度に 描きなおすのは 無理 なので、**直った 向きから 順に コマ数が 増える**。
+    /// 空 または 0 の ところは `cycleFrames` を つかう。</summary>
+    public int[] cycleFramesCol;
+    /// <summary>★コマ数が 向きで ちがっても **足どり（1歩の 秒）は そろえる**。
+    /// fps を 直に 持つと、6コマの 向きと 8コマの 向きで 走る 速さが 変わって しまう。
+    /// 0 いかなら 昔どおり `walkCycleFps` / `runCycleFps` を つかう。</summary>
+    public float runStrideSec = 0f, walkStrideSec = 0f;
     [Tooltip("止まって いる ときの 行")]
     public int idleRow = 0;
     [Tooltip("まばたきの 行（-1 なら 無し）")]
@@ -110,8 +118,20 @@ public class CharSprite : MonoBehaviour {
         if (walkSheet) {
             // ★新しい 絵：行が 歩きの 8コマ。止まって いれば 0コマめ（立ち）
             if (moving) {
-                step += dt * (speed > runSpeed ? runCycleFps : walkCycleFps);
-                row = Mathf.FloorToInt(step) % Mathf.Max(1, cycleFrames);
+                int kazu = cycleFrames;
+                if (cycleFramesCol != null && dir < cycleFramesCol.Length && cycleFramesCol[dir] > 0)
+                    kazu = cycleFramesCol[dir];
+                float ss = speed > runSpeed ? runStrideSec : walkStrideSec;
+                if (ss > 0f) {
+                    // ★step は **1周（＝2歩）を 1 とした 位相**。コマ数では 数えない。
+                    //   こうしないと 向きを 変えた とたんに 足どりが とぶ
+                    step += dt / (2f * ss);
+                    if (step >= 1f) step -= Mathf.Floor(step);
+                    row = Mathf.Clamp(Mathf.FloorToInt(step * kazu), 0, kazu - 1);
+                } else {
+                    step += dt * (speed > runSpeed ? runCycleFps : walkCycleFps);
+                    row = Mathf.FloorToInt(step) % Mathf.Max(1, kazu);
+                }
             } else {
                 step = 0f;
                 row = (blinkRow >= 0 && blinkT > 0f) ? blinkRow : idleRow;
