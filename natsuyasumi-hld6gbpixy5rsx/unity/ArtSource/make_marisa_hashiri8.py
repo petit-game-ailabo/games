@@ -1,8 +1,10 @@
 # 四版の 走り 8コマ（4列x2行）を シートに 入れる（2026-09-06・D-248）。
 #
 # 二版（12コマ）との ちがい：
-#  ★**両足が 浮く コマが 無い**ので、縦は **足もとを 地に つける**だけで よい。
-#    二版は ひざを 抱えた コマが あった ので 帽子で そろえる 必要が あった。
+#  ★五版から **浮きの コマが 2枚 入った**（実測 15〜17px）。
+#    足もとで そろえると **浮きが 消えて、しかも 体が 15px 沈む**。
+#    → 縦は **帽子の つば**で そろえ、**地に ついて いる コマの 足が 332 に 来る**ように 置く。
+#    浮きの コマの 足は そのぶん 上に 残る。
 #  ★大きさは **黒い 帽子の つばの 差し渡し**で そろえる。
 #    つばは 円 なので どの 向きから 見ても 横はばが 変わらない＝**向きを またいでも つかえる**。
 #    実測：もらった 8コマの つばは 217〜218px（ブレ 0.5%）。すでに そろって いる。
@@ -60,14 +62,23 @@ def main():
                 x = np.nonzero(k[y])[0]
                 if len(x) > 3 and int(x.max() - x.min() + 1) > haba:
                     haba, tsuba, sx = int(x.max() - x.min() + 1), y, (int(x.min()), int(x.max()))
-            K.append(dict(n=ri * 4 + ci + 1, x0=x0, y0=y0, t=t, b=b, tw=haba,
+            K.append(dict(n=ri * 4 + ci + 1, x0=x0, y0=y0, t=t, b=b, tw=haba, ty=tsuba,
                           cx=(sx[0] + sx[1]) / 2.0, l=int(xs.min()), r=int(xs.max())))
     tw = np.array([d['tw'] for d in K], float)
     hosei = tw.mean() / tw
     print("つばの はば %d〜%d（ブレ %.1f%%）" % (tw.min(), tw.max(), (tw.max() / tw.min() - 1) * 100))
-    take = np.array([(d['b'] - d['t'] + 1) for d in K], float) * hosei
+    # ★地に ついて いる コマ＝その 行の いちばん 下から 5px 以内
+    jimen = {}
+    for d in K:
+        jimen[d['y0']] = max(jimen.get(d['y0'], 0), d['b'])
+    tsuku = [d['b'] >= jimen[d['y0']] - 5 for d in K]
+    print("地に ついて いる コマ:", [i + 1 for i, t in enumerate(tsuku) if t])
+    take = np.array([(d['b'] - d['t'] + 1) for i, d in enumerate(K) if tsuku[i]], float)            * np.array([hosei[i] for i in range(len(K)) if tsuku[i]])
     bai = TAKE / float(np.median(take))
-    print("倍率 %.4f" % bai)
+    # ★つばから 足もとまで（地に ついて いる コマの 中央値）で つばの 基準を 決める
+    tb = np.median([(K[i]['b'] - K[i]['ty']) * hosei[i] * bai for i in range(len(K)) if tsuku[i]])
+    TSUBA_Y = JIMEN - tb
+    print("倍率 %.4f  つばの 基準 y=%.0f" % (bai, TSUBA_Y))
 
     sheet = Image.open(os.path.join(SPR, "marisa_codex.png")).convert("RGBA")
     for i, d in enumerate(K):
@@ -76,7 +87,7 @@ def main():
         nw = max(1, int(round((d['r'] - d['l'] + 1) * b)))
         nh = max(1, int(round((d['b'] - d['t'] + 1) * b)))
         piece = piece.resize((nw, nh), Image.LANCZOS)
-        oy = JIMEN - nh                                   # ★足もとを 地に つける
+        oy = int(round(TSUBA_Y - (d['ty'] - d['t']) * b))   # ★帽子の つばで そろえる
         # ★横は **帽子の つばの まん中**で そろえる。体ぜんぶの まん中だと
         #   足を 前に 出した コマで 体が 横に ずれる
         ox = int(round(CW * 0.5 - (d['cx'] - d['l']) * b))
