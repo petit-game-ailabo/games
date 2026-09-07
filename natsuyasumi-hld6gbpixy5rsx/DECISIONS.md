@@ -884,3 +884,24 @@
     `NiwaKae` が **主人公の シートを 3枚（marisa_walk／marisa_hybrid／marisa_codex）**
     参照して いる ぶんが 効いて いる はず。`marisa_hybrid`（3Dの体＋2Dの頭・D-223）は
     見くらべ用 なので **公開ビルドからは 外せる**。
+- **D-255（2026-09-07）Web公開を 止めた（凍結）。ソースは 何も 消して いない。**
+  本人「一旦全部非公開にしておいて。見れるのはローカルだけ。いったん凍結しようと思う」。
+  ★**「全部」の 範囲を 先に 確かめた。**この リポジトリの GitHub Pages は
+    なつやすみ の ほかに **`day00001`〜`day00030` の 30本**も 配信して いる。
+    Pages 自体を 止めると **30本 ぜんぶが 落ちる**ので、
+    **なつやすみの 3つ だけ**を 消す ことを 確認して から やった。
+  消した もの（main から。**55ファイル**）：
+  | フォルダ | 中身 |
+  | --- | --- |
+  | `niwa-web` | 庭（いちばん 新しい） |
+  | `unity-web` | 座敷 |
+  | `mura-web` | 箱の村 |
+  **`day000XX` には 一切 触って いない。**
+  ★**消したのは 焼いた もの だけ。**場面も 絵も 道具も そのまま なので、
+    戻す ときは 焼き直して push する だけ：
+  ```
+  powershell -File tools/rebuild.ps1 -Only BuildNiwaPlayer.WebPublish   # 庭（VRoid 抜き）
+  powershell -File tools/rebuild.ps1 -Only BuildPlayerWeb.Build         # 座敷
+  powershell -File tools/rebuild.ps1 -Only BuildMuraPlayer.Web          # 村
+  ```
+  ★手もとの exe は **そのまま 動く**（`Builds/niwa-win/niwa.exe`）。
